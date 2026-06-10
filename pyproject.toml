@@ -39,6 +39,21 @@ dev = [
 ]
 
 # ============================================================================
+# uv resolver overrides — security pins for transitive deps.
+# Each entry must reference a CVE / advisory and be revisited when the
+# upstream chain catches up.
+# ============================================================================
+[tool.uv]
+# Override transitive deps when upstream upper-pins a vulnerable version.
+# Each entry must reference a CVE / advisory and be revisited when the
+# upstream chain catches up.
+override-dependencies = [
+    # PYSEC-2026-175/177/178/179 in pyjwt 2.12.1 (pulled by semgrep -> mcp,
+    # which upper-pins <2.13). Fix line is 2.13.0. Recheck on semgrep bumps.
+    "pyjwt>=2.13.0",
+]
+
+# ============================================================================
 # pytest — maximum strictness.
 # Policy: ANY warning fails the test run. New filterwarnings ignores require a
 # one-line justification comment naming the upstream library / issue.
