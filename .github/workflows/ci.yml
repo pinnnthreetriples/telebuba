@@ -3,8 +3,19 @@ name: CI
 on:
   pull_request:
     branches: [main]
+    paths-ignore:
+      - '.mex/**'
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
   push:
     branches: [main]
+    paths-ignore:
+      - '.mex/**'
+      - '**.md'
+      - '.gitignore'
+      - 'LICENSE'
+  workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -35,6 +46,12 @@ jobs:
           python-version: ${{ env.PYTHON_VERSION }}
           enable-cache: true
 
+      - name: Cache pre-commit envs
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/pre-commit
+          key: pre-commit-${{ runner.os }}-${{ hashFiles('.pre-commit-config.yaml') }}
+
       - name: Sync dependencies
         run: uv sync --frozen
 
@@ -42,12 +59,17 @@ jobs:
         run: uv run pre-commit run --all-files --show-diff-on-failure
 
   # ---------------------------------------------------------------------------
-  # Tests under the strict config from pyproject.toml:
-  #   warnings → errors, asyncio strict, xfail strict, branch cov ≥ 90 %.
+  # Tests under the strict config from pyproject.toml.
+  # Hypothesis profile depends on the trigger:
+  #   PR / workflow_dispatch → dev (50 examples, fast feedback)
+  #   push to main           → strict (200 examples)
+  # The nightly workflow runs the extended profile separately.
   # ---------------------------------------------------------------------------
   test:
     name: pytest (strict)
     runs-on: ubuntu-latest
+    env:
+      HYPOTHESIS_PROFILE: ${{ github.event_name == 'pull_request' && 'dev' || 'strict' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -62,7 +84,9 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pytest
-        run: uv run pytest
+        # --maxfail caps log noise when a single bad import cascades into
+        # many warning-as-error failures. Diagnostic info is preserved.
+        run: uv run pytest --maxfail=10
 
       - name: Upload coverage HTML report
         if: always()
@@ -97,9 +121,10 @@ jobs:
 
   # ---------------------------------------------------------------------------
   # Heavier SAST scan. Only on push to main — too slow for every PR.
+  # The full ruleset is in the nightly workflow.
   # ---------------------------------------------------------------------------
   semgrep:
-    name: semgrep (SAST)
+    name: semgrep (SAST, auto)
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:

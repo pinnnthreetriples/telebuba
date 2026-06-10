@@ -3,18 +3,19 @@
 Test policy: see `.mex/context/conventions.md` rule 7 (Test Coverage).
 All knobs that affect pass/fail live in `pyproject.toml [tool.pytest.ini_options]`.
 This file is for fixtures and Hypothesis profile registration only.
+
+Profile selection: set `HYPOTHESIS_PROFILE` to `dev` | `strict` | `extended`.
+Defaults to `strict` (CI on main, local runs). CI on PR sets `dev`; nightly
+sets `extended`.
 """
 
 from __future__ import annotations
 
+import os
+
 from hypothesis import HealthCheck, Verbosity, settings
 
-# Strict Hypothesis profile — used in CI and by default locally.
-# - deadline=None: async tests on Windows are jittery; we keep accuracy over speed
-# - max_examples=200: more than the default 100, still fast for unit tests
-# - derandomize=False: keep randomness; reproducibility comes from the seed printed on failure
-# - print_blob=True: full reproducer blob on failure
-# - report_multiple_bugs=True: surface every bug per run, not just the first
+# Strict profile — default. Used locally and on push to main.
 settings.register_profile(
     "strict",
     deadline=None,
@@ -25,7 +26,22 @@ settings.register_profile(
     verbosity=Verbosity.normal,
 )
 
-# Dev profile — fewer examples for fast inner loop.
-settings.register_profile("dev", parent=settings.get_profile("strict"), max_examples=50)
+# Dev profile — fast inner loop and PR runs.
+settings.register_profile(
+    "dev",
+    parent=settings.get_profile("strict"),
+    max_examples=50,
+)
 
-settings.load_profile("strict")
+# Extended profile — nightly. Higher chance of surfacing rare bugs.
+settings.register_profile(
+    "extended",
+    parent=settings.get_profile("strict"),
+    max_examples=2000,
+)
+
+_profile = os.environ.get("HYPOTHESIS_PROFILE", "strict")
+if _profile not in {"strict", "dev", "extended"}:
+    msg = f"Unknown HYPOTHESIS_PROFILE: {_profile!r} (expected: strict | dev | extended)"
+    raise RuntimeError(msg)
+settings.load_profile(_profile)

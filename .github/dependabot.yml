@@ -1,0 +1,14 @@
+version: 2
+updates:
+  # Keep GitHub Actions pinned versions current. Catches the Node-20 → Node-24
+  # deprecation that CI annotations have been warning about, and similar.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    groups:
+      actions:
+        patterns:
+          - "*"
