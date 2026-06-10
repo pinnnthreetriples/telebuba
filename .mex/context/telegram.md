@@ -32,6 +32,23 @@ last_updated: 2026-06-10
 - Session files are credentials — never log their contents, never commit them.
 - A single session file must not be opened by two clients at once. The factory in `core/telegram_client.py` is the only safe entry point.
 
+## Device fingerprints
+
+- One immutable device fingerprint is stored per `account_id` in SQLite table `device_fingerprints`.
+- `core/device_fingerprint.py` generates the random desktop profile only when no saved row exists.
+- `core/telegram_client.py` first prepares a `TelegramClientProfile` Pydantic schema, then passes its device fields into `TelegramClient`.
+- Device fields sent to Telethon: `device_model`, `system_version`, `app_version`, `lang_code`, `system_lang_code`.
+- Existing device fingerprint rows are never updated by the fingerprint helper; duplicate inserts return the saved row.
+
+## Session checks
+
+- Session checks live in `core/telegram_client.py` as `check_telegram_session()`.
+- The helper returns `TelegramSessionCheckResult`, never raw Telethon objects or raw dicts.
+- It uses the saved device fingerprint and `receive_updates=False`.
+- It never deletes `.session` files. Deletion/recovery decisions belong above the gateway.
+- Permanent statuses: `alive`, `unauthorized`, `session_error`, `account_error`.
+- Temporary/non-delete statuses: `network_error`, `proxy_error`, `flood_wait`, `unknown_error`.
+
 ## Proxies (python-socks)
 
 - One proxy (SOCKS5 or HTTP) per account. Every Telethon client is constructed with that proxy via `python-socks`. Without a per-account IP, Telegram bans.

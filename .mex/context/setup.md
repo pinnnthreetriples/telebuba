@@ -33,15 +33,16 @@ last_updated: 2026-06-10
 1. `uv sync` — installs the full stack from `pyproject.toml` into `.venv`.
 2. Copy `.env.example` → `.env` and fill in keys (see below).
 3. `uv run pre-commit install` — installs the git hooks (already wired on this machine; new clones need to run it once).
-4. [TO BE DETERMINED — DB init command, once `core/db.py` exists.]
+4. SQLite tables are created lazily by `core/db.py` on first DB access.
 5. `uv run python main.py` — starts NiceGUI + scheduler.
 
 ## Environment Variables
 
-- `TG_API_ID` (required) — Telegram API id from my.telegram.org.
-- `TG_API_HASH` (required) — Telegram API hash.
+- `TELEGRAM_API_ID` (required) — Telegram API id from my.telegram.org.
+- `TELEGRAM_API_HASH` (required) — Telegram API hash.
+- `TELEBUBA_DB_PATH` (optional) — SQLite file path, default `telebuba.db`.
+- `TELEBUBA_SESSION_DIR` (optional) — Telethon session directory, default `sessions`.
 - `GEMINI_API_KEY` (required) — key for httpx → Gemini comment generation.
-- `DATABASE_URL` (required) — SQLite URL, e.g. `sqlite:///./telebuba.db`.
 - `SENTRY_DSN` (optional) — if set, errors are sent to Sentry; otherwise local-only.
 - `LOG_LEVEL` (optional) — loguru level, default INFO.
 - `PROXY_<account_id>` or whatever storage format — [TO BE DETERMINED, decide alongside the account model].
