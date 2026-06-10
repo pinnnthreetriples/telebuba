@@ -56,12 +56,9 @@ telebuba/
 ├── schemas/                      Pydantic models; shared types, no behavior, no I/O
 │   ├── __init__.py
 │   └── <domain>.py               one file per domain (accounts.py, warming.py, ...)
-├── features/                     user-facing features; one file = one feature
+├── features/                     user-facing features; one file = one feature (planned: accounts, warming, logs, comments, ...)
 │   ├── __init__.py
-│   ├── accounts.py               NiceGUI page + handlers for account management
-│   ├── warming.py                NiceGUI page + APScheduler registrations for warming
-│   ├── logs.py                   NiceGUI Logs page (polls the SQLite `logs` table)
-│   └── <new_feature>.py          new features land as NEW files, never edits of existing ones
+│   └── <feature>.py              new features land as NEW files, never edits of existing ones
 └── tests/                        mirrors source tree; pytest
     ├── conftest.py
     ├── core/
@@ -103,6 +100,8 @@ main.py
 | any module outside `core/config.py`          | `os.environ`, raw `dotenv`                            | Rule 3 — config only via `core/config.py` |
 | `schemas/*`                                  | `core/*`, `features/*`, any I/O library               | Rule 5 — schemas are pure data, no behavior |
 | `core/*`                                     | `features/*`                                          | Rule 5 — core does not know about features |
+
+Rule numbers reference the canonical list in `context/conventions.md`. AGENTS.md mirrors the same 10 rules with the same numbering.
 
 ## Data Crossing Layers
 

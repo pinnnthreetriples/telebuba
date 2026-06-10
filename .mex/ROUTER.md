@@ -22,6 +22,12 @@ edges:
     condition: when emitting, querying, or displaying log entries
   - target: context/kanban.md
     condition: always at session start — protocol for the GitHub Project board (pick work, move issues)
+  - target: context/skills.md
+    condition: when deciding whether to invoke a skill (default or matt-pocock)
+  - target: context/rtk.md
+    condition: when running a shell command and the global rtk hook is uncertain
+  - target: context/ci.md
+    condition: when modifying workflows, debugging red CI, or planning a heavy check
   - target: patterns/INDEX.md
     condition: when starting a task — check the pattern index for a matching pattern
 last_updated: 2026-06-10
@@ -29,9 +35,7 @@ last_updated: 2026-06-10
 
 # Session Bootstrap
 
-If you have not already read `AGENTS.md`, read it now — project identity, stack, file map, non-negotiables, commands.
-
-Then read this file fully, then load `state/active.md` for the live picture of what works, what is missing, and known issues.
+`AGENTS.md` is always loaded (via root `CLAUDE.md` → `@.mex/AGENTS.md`). After this file, load `state/active.md` for the live picture (working / not built / known issues / open decisions) and `context/kanban.md` for the board protocol.
 
 ## Routing Table
 
@@ -47,6 +51,9 @@ Then read this file fully, then load `state/active.md` for the live picture of w
 | Anything Telethon / Telegram-related | `context/telegram.md` |
 | Anything scheduled / warming-related | `context/warming.md` |
 | Anything log-related (file / SQLite table / Logs page) | `context/logging.md` |
+| Deciding whether / when to invoke a skill | `context/skills.md` |
+| Modifying workflows / debugging CI | `context/ci.md` |
+| Shell command policy (rtk wrapper) | `context/rtk.md` |
 | Any specific task | check `patterns/INDEX.md` for a matching pattern |
 
 ## Behavioural Contract

@@ -36,7 +36,19 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - Open: where to store the `account_id → proxy` mapping. See `context/telegram.md`.
 
 ## Open Decisions
-- Project purpose / "why" — not documented (deliberately deferred).
-- Pagination strategy for the NiceGUI Logs page.
-- Whether APScheduler's own jobstore points at the same SQLite file.
-- **Mutation testing (`mutmut`)** — consider adding once `core/warming.py` and `core/telegram_client.py` stabilize. Not added preemptively because mutmut needs real source + tests covering it to produce signal; running it on the current placeholder code is noise. When ready: `uv add --dev mutmut`, target critical modules only (`--paths-to-mutate=core/warming.py` etc.), run nightly or via `workflow_dispatch`, never gate PR merges on it.
+
+Authoritative list of architectural unknowns. Context files may carry `[TO BE DETERMINED]` markers; this section is the single index of all of them.
+
+### Architecture / design (must be resolved before related code is written)
+- **DB init command** — what command bootstraps `telebuba.db` after `core/db.py` lands. (`context/setup.md`, Step 4)
+- **`account_id → proxy` mapping storage** — `.env` line per account, separate table, JSON column? Decide alongside the account model. (`context/telegram.md`, `context/setup.md`)
+- **Account lifecycle enum** — likely `created` / `verified` / `warming` / `active` / `banned`. Canonical list + on which row it lives. (`context/telegram.md`)
+- **Shared scheduler handle** — where `AsyncIOScheduler` is exposed so non-warming features can register jobs without `from features.warming`. Probably `core/scheduler.py`. (`context/warming.md`)
+- **APScheduler jobstore** — in-memory + DB-tracked, or APScheduler's own SQLAlchemy jobstore pointing at `telebuba.db`. (`context/warming.md`)
+- **Human-like activity tuning** — jitter strategy around scheduled times, per-account daily quotas, which actions count as warming vs active. (`context/warming.md`)
+- **`log_event` signature** — exact kwargs of the `core/logging.py` helper. Locked in when `core/logging.py` ships. (`context/logging.md`)
+- **NiceGUI Logs page pagination** — limit + offset strategy on the SQLite `logs` query. (`context/logging.md`)
+
+### Tooling / process
+- **Project purpose / "why"** — deliberately deferred; not documented anywhere.
+- **Mutation testing (`mutmut`)** — consider adding once `core/warming.py` and `core/telegram_client.py` stabilize. Needs real source + tests to produce signal. When ready: `uv add --dev mutmut`, target critical modules (`--paths-to-mutate=core/warming.py`), run nightly or via `workflow_dispatch`, never gate PR merges on it.
