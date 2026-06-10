@@ -1,0 +1,165 @@
+[project]
+name = "telebuba"
+version = "0.1.0"
+description = "Telegram account farm manager: creates accounts, warms them up, generates AI comments."
+requires-python = ">=3.13"
+dependencies = [
+    "anyio>=4.13.0",
+    "apscheduler>=3.11.2",
+    "httpx>=0.28.1",
+    "loguru>=0.7.3",
+    "nicegui>=3.13.0",
+    "pydantic>=2.13.4",
+    "python-dotenv>=1.2.2",
+    "python-socks>=2.8.1",
+    "sentry-sdk>=2.62.0",
+    "sqlalchemy>=2.0.50",
+    "structlog>=26.1.0",
+    "telethon>=1.43.2",
+]
+
+[dependency-groups]
+dev = [
+    "aislop>=0.11.0",
+    "bandit>=1.9.4",
+    "deptry>=0.25.1",
+    "factory-boy>=3.3.3",
+    "hypothesis>=6.155.2",
+    "pip-audit>=2.10.0",
+    "pre-commit>=4.6.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "pytest-cov>=7.1.0",
+    "radon>=6.0.1",
+    "respx>=0.23.1",
+    "ruff>=0.15.16",
+    "semgrep>=1.165.0",
+    "ty>=0.0.47",
+    "vulture>=2.16",
+]
+
+# ============================================================================
+# pytest — maximum strictness.
+# Policy: ANY warning fails the test run. New filterwarnings ignores require a
+# one-line justification comment naming the upstream library / issue.
+# ============================================================================
+[tool.pytest.ini_options]
+minversion = "9.0"
+testpaths = ["tests"]
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--tb=short",
+    "--showlocals",
+    "--cov=core",
+    "--cov=features",
+    "--cov=schemas",
+    "--cov-branch",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-fail-under=90",
+    "--hypothesis-show-statistics",
+]
+filterwarnings = [
+    "error",
+    # Add narrow ignores here as: 'ignore::DeprecationWarning:<module>'
+    # Every entry must carry a comment explaining WHY it cannot be fixed upstream.
+]
+asyncio_mode = "strict"
+xfail_strict = true
+log_cli = true
+log_cli_level = "INFO"
+
+# ============================================================================
+# coverage — branch coverage, 90% floor, no skip-covered cheating.
+# ============================================================================
+[tool.coverage.run]
+branch = true
+source = ["core", "features", "schemas"]
+parallel = true
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = false
+exclude_also = [
+    "pragma: no cover",
+    "if TYPE_CHECKING:",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+    "@(typing\\.)?overload",
+]
+
+# ============================================================================
+# ruff — select ALL, ignore only what conflicts with formatter or our policy.
+# Tests get narrow exceptions for asserts and magic values.
+# ============================================================================
+[tool.ruff]
+target-version = "py313"
+line-length = 100
+extend-exclude = [".venv", "build", "dist"]
+
+[tool.ruff.lint]
+select = ["ALL"]
+ignore = [
+    # docstrings — we do not write them unless WHY is non-obvious
+    "D100", "D101", "D102", "D103", "D104", "D105", "D106", "D107",
+    "D203",   # incompatible with D211
+    "D213",   # incompatible with D212
+    # formatter conflicts (ruff team's own recommendation)
+    "COM812",
+    "ISC001",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = [
+    "S101",      # asserts are the whole point of tests
+    "PLR2004",   # magic values are normal in test data
+    "ANN",       # type annotations not required on fixtures / test functions
+    "SLF001",    # accessing private members is fair game in tests
+]
+"conftest.py" = ["ANN", "S101"]
+
+[tool.ruff.lint.pydocstyle]
+convention = "google"
+
+[tool.ruff.lint.flake8-pytest-style]
+fixture-parentheses = false
+mark-parentheses = false
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+# ============================================================================
+# ty — Astral type checker (pre-1.0). Strict defaults; revisit when ty stabilizes.
+# ============================================================================
+[tool.ty.src]
+include = ["core", "features", "schemas", "tests", "main.py"]
+
+[tool.ty.rules]
+# treat every unresolved or possibly-unbound name as an error
+possibly-unresolved-reference = "error"
+unresolved-import = "error"
+
+# ============================================================================
+# bandit — scan source code; tests are excluded because asserts/test data
+# trip false positives.
+# ============================================================================
+[tool.bandit]
+exclude_dirs = ["tests", ".venv"]
+skips = []
+
+# ============================================================================
+# deptry — flag unused / missing / transitive dependencies.
+# ============================================================================
+[tool.deptry]
+known_first_party = ["core", "features", "schemas"]
+
+# ============================================================================
+# vulture — dead code detector. Higher confidence = fewer false positives.
+# ============================================================================
+[tool.vulture]
+min_confidence = 80
+paths = ["core", "features", "schemas"]

@@ -1,0 +1,54 @@
+# Pre-commit policy: see .mex/context/conventions.md.
+# Run all hooks manually: uv run pre-commit run --all-files
+# Update pinned revs:    uv run pre-commit autoupdate
+
+default_language_version:
+  python: python3.13
+
+repos:
+  # --- generic hygiene -------------------------------------------------------
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: detect-private-key
+      - id: mixed-line-ending
+        args: [--fix=lf]
+
+  # --- secrets in the diff (catches API keys, tokens, .env leaks) ------------
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.21.2
+    hooks:
+      - id: gitleaks
+
+  # --- ruff: lint + format ---------------------------------------------------
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.16
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+
+  # --- bandit: SAST on source (tests are excluded via pyproject.toml) --------
+  - repo: https://github.com/PyCQA/bandit
+    rev: 1.9.4
+    hooks:
+      - id: bandit
+        args: [-c, pyproject.toml]
+        additional_dependencies: ["bandit[toml]"]
+
+  # --- ty: Astral type checker (pre-1.0, run from local venv) ----------------
+  - repo: local
+    hooks:
+      - id: ty
+        name: ty (Astral type check)
+        entry: uv run ty check
+        language: system
+        types: [python]
+        pass_filenames: false
