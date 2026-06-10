@@ -1,11 +1,17 @@
-"""Entrypoint stub. Real NiceGUI + scheduler bootstrap lands with the first feature."""
+"""NiceGUI entrypoint."""
 
 from __future__ import annotations
 
+from nicegui import ui
+
+from core.config import settings
+from features.accounts import register_accounts_page
+
 
 def main() -> None:
-    raise NotImplementedError
+    register_accounts_page()
+    ui.run(title="Telebuba", port=settings.ui_port, reload=False)
 
 
-if __name__ == "__main__":
+if __name__ in {"__main__", "__mp_main__"}:
     main()

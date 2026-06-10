@@ -43,7 +43,7 @@ Single-process async runtime — NiceGUI hosts the event loop, no separate front
 
 ```
 telebuba/
-├── main.py                       NiceGUI entrypoint: starts UI + scheduler, registers features
+├── main.py                       NiceGUI entrypoint: starts UI, registers features
 ├── pyproject.toml                uv project + locked deps
 ├── .env                          secrets (gitignored)
 ├── .env.example                  template, committed
@@ -59,8 +59,9 @@ telebuba/
 ├── services/                     business logic — pure, reusable, no UI, no I/O directly (planned)
 │   ├── __init__.py
 │   └── <domain>.py               warming algorithm, FloodWait policy, comment generation, ... — callable from features AND scheduler
-├── features/                     UI-thin handlers; one file = one feature; delegates business logic to services/ (planned)
+├── features/                     UI-thin handlers; one file = one feature; delegates business logic to services/
 │   ├── __init__.py
+│   ├── accounts.py               NiceGUI accounts page — currently does its own orchestration (predates services/, refactor planned)
 │   └── <feature>.py              NEW files only — never edits of existing ones
 └── tests/                        mirrors source tree; pytest
     ├── conftest.py
@@ -119,9 +120,12 @@ Inside a single function or module, regular Python data structures are fine.
 
 ## Key Components
 
+- **`main.py`** — registers NiceGUI pages and runs the app on `settings.ui_port`.
 - **`core/config.py`** — typed settings (Pydantic + python-dotenv). Nested namespaces per feature (`settings.warming`, `settings.gemini`, ...). Single source of truth for tunables and secrets.
-- **`core/db.py`** — SQLAlchemy engine/session + helpers. The only path to persistent storage. Takes and returns schemas. Splits into `core/repositories/<aggregate>.py` once tables ≥ 5.
-- **`core/telegram_client.py`** — Telethon factory + `execute(action: BaseAction)` entry point. Per-account proxy via python-socks. Action types are Pydantic schemas (`schemas/telegram_actions.py`), not raw method calls.
+- **`core/db.py`** — SQLAlchemy engine/session + helpers. Currently persists `accounts` and `device_fingerprints`; more tables coming. Splits into `core/repositories/<aggregate>.py` once tables ≥ 5.
+- **`core/telegram_client.py`** — Telethon factory + `execute(action: BaseAction)` entry point (planned). Per-account proxy via python-socks. Action types are Pydantic schemas (`schemas/telegram_actions.py`), not raw method calls. Currently exposes client construction + `check_telegram_session()`.
+- **`core/tdata_import.py`** — opentele2 adapter. Only place opentele2 is imported. Safe-extracts `tdata.zip` and writes Telethon `.session` files.
+- **`features/accounts.py`** — NiceGUI accounts page: table, filters, add-account dialog with `.session` and `tdata.zip` upload, session-check actions. Predates the services/ layer.
 - **`core/logging.py`** — loguru file sink + structlog → SQLite `logs` + Sentry init. The only place these are imported.
 - **`schemas/*.py`** — Pydantic models flowing between UI, services, core, and DB. Also: `schemas/telegram_actions.py` declares each Telegram action as a typed Pydantic class.
 - **`services/*.py`** — pure business logic: warming algorithm, FloodWait/retry policy, comment generation orchestration. Called from `features/` (UI) and from `features/warming.py`'s scheduler registrations. UI-agnostic.

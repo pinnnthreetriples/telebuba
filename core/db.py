@@ -1,12 +1,25 @@
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, cast
+from contextlib import suppress
+from datetime import UTC, datetime
+from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import Column, MetaData, String, Table, create_engine, insert, select
+from sqlalchemy import (
+    BigInteger,
+    Column,
+    MetaData,
+    String,
+    Table,
+    create_engine,
+    insert,
+    select,
+    update,
+)
 from sqlalchemy.exc import IntegrityError
 
 from core.config import settings
+from schemas.accounts import AccountCreate, AccountList, AccountRead, AccountStatus
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 if TYPE_CHECKING:
@@ -14,6 +27,9 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from sqlalchemy.engine import Engine
+    from sqlalchemy.sql import Select
+
+    from schemas.telegram_session import TelegramSessionCheckResult
 
 
 _metadata = MetaData()
@@ -27,6 +43,22 @@ _device_fingerprints = Table(
     Column("app_version", String, nullable=False),
     Column("lang_code", String, nullable=False),
     Column("system_lang_code", String, nullable=False),
+)
+_accounts = Table(
+    "accounts",
+    _metadata,
+    Column("account_id", String, primary_key=True),
+    Column("label", String, nullable=True),
+    Column("session_name", String, nullable=True),
+    Column("status", String, nullable=False),
+    Column("user_id", BigInteger, nullable=True),
+    Column("phone", String, nullable=True),
+    Column("username", String, nullable=True),
+    Column("first_name", String, nullable=True),
+    Column("last_name", String, nullable=True),
+    Column("last_checked_at", String, nullable=True),
+    Column("created_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
 )
 
 
@@ -70,6 +102,31 @@ def _row_to_device_fingerprint(mapping: Mapping[str, object]) -> DeviceFingerpri
     )
 
 
+def _now_iso() -> str:
+    return datetime.now(UTC).isoformat()
+
+
+def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
+    return AccountRead(
+        account_id=str(mapping["account_id"]),
+        label=_optional_str(mapping.get("label")),
+        session_name=_optional_str(mapping.get("session_name")),
+        status=cast("AccountStatus", mapping["status"]),
+        user_id=_optional_int(mapping.get("user_id")),
+        phone=_optional_str(mapping.get("phone")),
+        username=_optional_str(mapping.get("username")),
+        first_name=_optional_str(mapping.get("first_name")),
+        last_name=_optional_str(mapping.get("last_name")),
+        last_checked_at=_optional_str(mapping.get("last_checked_at")),
+        created_at=str(mapping["created_at"]),
+        updated_at=str(mapping["updated_at"]),
+        device_platform=_optional_str(mapping.get("device_platform")),
+        device_model=_optional_str(mapping.get("device_model")),
+        device_system_version=_optional_str(mapping.get("device_system_version")),
+        device_app_version=_optional_str(mapping.get("device_app_version")),
+    )
+
+
 def _fetch_device_fingerprint(account_id: str) -> DeviceFingerprint | None:
     statement = select(_device_fingerprints).where(_device_fingerprints.c.account_id == account_id)
     with _get_engine().connect() as connection:
@@ -98,3 +155,124 @@ async def insert_device_fingerprint(profile: DeviceFingerprint) -> DeviceFingerp
         if existing is None:
             raise
         return existing
+
+
+def _account_select_statement() -> Select[tuple[Any, ...]]:
+    return select(
+        _accounts.c.account_id,
+        _accounts.c.label,
+        _accounts.c.session_name,
+        _accounts.c.status,
+        _accounts.c.user_id,
+        _accounts.c.phone,
+        _accounts.c.username,
+        _accounts.c.first_name,
+        _accounts.c.last_name,
+        _accounts.c.last_checked_at,
+        _accounts.c.created_at,
+        _accounts.c.updated_at,
+        _device_fingerprints.c.platform.label("device_platform"),
+        _device_fingerprints.c.device_model.label("device_model"),
+        _device_fingerprints.c.system_version.label("device_system_version"),
+        _device_fingerprints.c.app_version.label("device_app_version"),
+    ).select_from(
+        _accounts.outerjoin(
+            _device_fingerprints,
+            _accounts.c.account_id == _device_fingerprints.c.account_id,
+        ),
+    )
+
+
+def _fetch_account(account_id: str) -> AccountRead | None:
+    statement = _account_select_statement().where(_accounts.c.account_id == account_id)
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).mappings().first()
+    if row is None:
+        return None
+    return _row_to_account(cast("Mapping[str, object]", row))
+
+
+async def fetch_account(account_id: str) -> AccountRead | None:
+    return await asyncio.to_thread(_fetch_account, account_id)
+
+
+def _create_account(data: AccountCreate) -> AccountRead:
+    now = _now_iso()
+    values = {
+        "account_id": data.account_id,
+        "label": data.label,
+        "session_name": data.session_name,
+        "status": "new",
+        "created_at": now,
+        "updated_at": now,
+    }
+    with _get_engine().begin() as connection, suppress(IntegrityError):
+        connection.execute(insert(_accounts).values(**values))
+    account = _fetch_account(data.account_id)
+    if account is None:
+        msg = f"Account was not persisted: {data.account_id}"
+        raise RuntimeError(msg)
+    return account
+
+
+async def create_account(data: AccountCreate) -> AccountRead:
+    return await asyncio.to_thread(_create_account, data)
+
+
+def _list_accounts() -> AccountList:
+    statement = _account_select_statement().order_by(_accounts.c.created_at.desc())
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return AccountList(
+        accounts=[_row_to_account(cast("Mapping[str, object]", row)) for row in rows],
+    )
+
+
+async def list_accounts() -> AccountList:
+    return await asyncio.to_thread(_list_accounts)
+
+
+def _update_account_from_session_check(result: TelegramSessionCheckResult) -> AccountRead:
+    now = _now_iso()
+    values: dict[str, object] = {
+        "status": result.status,
+        "last_checked_at": now,
+        "updated_at": now,
+    }
+    if result.status == "alive":
+        values.update(
+            {
+                "user_id": result.user_id,
+                "phone": result.phone,
+                "username": result.username,
+                "first_name": result.first_name,
+                "last_name": result.last_name,
+            },
+        )
+
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_accounts).where(_accounts.c.account_id == result.account_id).values(**values),
+        )
+
+    account = _fetch_account(result.account_id)
+    if account is None:
+        msg = f"Account not found: {result.account_id}"
+        raise RuntimeError(msg)
+    return account
+
+
+async def update_account_from_session_check(result: TelegramSessionCheckResult) -> AccountRead:
+    return await asyncio.to_thread(_update_account_from_session_check, result)
+
+
+def _optional_str(value: object) -> str | None:
+    if value is None:
+        return None
+    return str(value)
+
+
+def _optional_int(value: object) -> int | None:
+    if value is None:
+        return None
+    return int(cast("int | str", value))
