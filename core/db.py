@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import json
 from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -8,6 +9,7 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import (
     BigInteger,
     Column,
+    Integer,
     MetaData,
     String,
     Table,
@@ -21,6 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from core.config import settings
 from schemas.accounts import AccountCreate, AccountList, AccountRead, AccountStatus
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
+from schemas.logs import LogEntry, LogEventInput, LogLevel, LogStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -59,6 +62,17 @@ _accounts = Table(
     Column("last_checked_at", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+)
+_logs = Table(
+    "logs",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("created_at", String, nullable=False),
+    Column("level", String, nullable=False),
+    Column("status", String, nullable=False),
+    Column("account_id", String, nullable=True),
+    Column("event", String, nullable=False),
+    Column("extra", String, nullable=False),
 )
 
 
@@ -276,3 +290,69 @@ def _optional_int(value: object) -> int | None:
     if value is None:
         return None
     return int(cast("int | str", value))
+
+
+_STATUS_BY_LEVEL: dict[LogLevel, LogStatus] = {
+    "INFO": "success",
+    "WARNING": "warning",
+    "ERROR": "error",
+}
+
+
+def _insert_log_row(event: LogEventInput) -> LogEntry:
+    values = {
+        "created_at": _now_iso(),
+        "level": event.level,
+        "status": _STATUS_BY_LEVEL[event.level],
+        "account_id": event.account_id,
+        "event": event.event,
+        "extra": json.dumps(event.extra, default=str, sort_keys=True),
+    }
+    with _get_engine().begin() as connection:
+        result = connection.execute(insert(_logs).values(**values))
+    primary_key = result.inserted_primary_key
+    if primary_key is None:
+        msg = "Insert into logs returned no primary key"
+        raise RuntimeError(msg)
+    inserted_id = int(primary_key[0])
+    return LogEntry(
+        id=inserted_id,
+        created_at=str(values["created_at"]),
+        level=event.level,
+        status=_STATUS_BY_LEVEL[event.level],
+        account_id=event.account_id,
+        event=event.event,
+        extra=event.extra,
+    )
+
+
+async def insert_log_row(event: LogEventInput) -> LogEntry:
+    """Persist one log event into the SQLite ``logs`` table and return the row."""
+    return await asyncio.to_thread(_insert_log_row, event)
+
+
+def _list_recent_logs(limit: int) -> list[LogEntry]:
+    statement = select(_logs).order_by(_logs.c.id.desc()).limit(limit)
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    entries: list[LogEntry] = []
+    for row in rows:
+        raw_extra = row["extra"]
+        extra: dict[str, object] = json.loads(raw_extra) if raw_extra else {}
+        entries.append(
+            LogEntry(
+                id=int(cast("int | str", row["id"])),
+                created_at=str(row["created_at"]),
+                level=cast("LogLevel", row["level"]),
+                status=cast("LogStatus", row["status"]),
+                account_id=_optional_str(row["account_id"]),
+                event=str(row["event"]),
+                extra=extra,
+            ),
+        )
+    return entries
+
+
+async def list_recent_logs(limit: int = 100) -> list[LogEntry]:
+    """Return the latest log entries (newest first). Used by the future Logs page."""
+    return await asyncio.to_thread(_list_recent_logs, limit)

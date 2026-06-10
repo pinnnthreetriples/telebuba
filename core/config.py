@@ -17,6 +17,12 @@ class Settings(BaseModel):
     telegram_connection_retries: int = Field(default=3, ge=0)
     telegram_retry_delay_seconds: int = Field(default=2, ge=0)
     telegram_request_retries: int = Field(default=3, ge=0)
+    # Logging — flat for now; nested namespaces in issue #6.
+    log_path: Path = Path("debug.log")
+    log_level: str = Field(default="INFO")
+    log_rotation: str = Field(default="10 MB")
+    log_retention: int = Field(default=10, ge=1)
+    sentry_dsn: str = ""
 
 
 def load_settings() -> Settings:
@@ -31,6 +37,11 @@ def load_settings() -> Settings:
         telegram_connection_retries=int(os.environ.get("TELEGRAM_CONNECTION_RETRIES", "3")),
         telegram_retry_delay_seconds=int(os.environ.get("TELEGRAM_RETRY_DELAY_SECONDS", "2")),
         telegram_request_retries=int(os.environ.get("TELEGRAM_REQUEST_RETRIES", "3")),
+        log_path=Path(os.environ.get("TELEBUBA_LOG_PATH", "debug.log")),
+        log_level=os.environ.get("TELEBUBA_LOG_LEVEL", "INFO"),
+        log_rotation=os.environ.get("TELEBUBA_LOG_ROTATION", "10 MB"),
+        log_retention=int(os.environ.get("TELEBUBA_LOG_RETENTION", "10")),
+        sentry_dsn=os.environ.get("SENTRY_DSN", ""),
     )
 
 
