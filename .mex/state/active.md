@@ -19,6 +19,7 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - `ruff` configured with `select = ["ALL"]` + minimal ignores; `ty` strict imports/references; `bandit`, `deptry`, `vulture` wired in pyproject.
 - `.pre-commit-config.yaml` installed and verified end-to-end (13 hooks: generic hygiene + gitleaks + ruff + ruff-format + bandit + ty). `pre-commit install` ran — git hook is wired in `.git/hooks/pre-commit`.
 - `main.py` replaced with a minimal valid stub that satisfies the non-negotiables (no `print`, return type annotation, `from __future__ import annotations`). Real NiceGUI bootstrap lands with the first feature.
+- `.claude/skills/` populated with 10 matt-pocock skills (tdd, diagnose, prototype, grill-with-docs, zoom-out, improve-codebase-architecture, to-prd, to-issues, setup-matt-pocock-skills, git-guardrails-claude-code). Triggers documented in `.mex/AGENTS.md` → Agent Skills.
 
 ## Not Yet Built
 - `core/config.py`, `core/db.py`, `core/telegram_client.py`, `core/logging.py`.

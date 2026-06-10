@@ -62,7 +62,7 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
 - `sqlalchemy` and `telethon` must not be imported in `features/*.py`.
 - **Why:** one place to enforce session lifecycle, rate limits, proxy config, and FloodWait handling — features cannot bypass it.
 
-### 7. Test Coverage (maximum strictness)
+### 7. Test Coverage (maximum strictness — prefer `/tdd` skill)
 - Every new feature ships with `tests/test_*.py` using fixtures from `conftest.py`.
 - Tests run via `pytest`. Green tests = done. **Strictness is configured, not optional** — see `pyproject.toml [tool.pytest.ini_options]`.
 - Hard pytest policy (enforced by config):

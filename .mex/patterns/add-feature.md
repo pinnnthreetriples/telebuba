@@ -33,7 +33,7 @@ Read `context/conventions.md` for the structural rules. Key constraints:
 2. **Create the feature file.** `features/<name>.py` exposes a NiceGUI page or component and the async handlers that drive it. Handlers accept and return your Pydantic models.
 3. **Use core helpers.** Any DB access → `core/db.py`. Any Telegram I/O → `core/telegram_client.py`. Any config → `core/config.py`. Any logging → `core/logging.py`.
 4. **Wire it in.** Register the page/route once at app startup. [VERIFY AFTER FIRST IMPLEMENTATION — exact registration site once `main.py` exists.]
-5. **Add the test.** `tests/features/test_<name>.py` covering at least: happy path, one validation failure, one core-helper failure.
+5. **Add the test — prefer `/tdd`.** Use the `tdd` skill to drive the implementation red-green-refactor when the behaviour can be expressed as a test first. Cover at least: happy path, one validation failure, one core-helper failure. The test lives in `tests/features/test_<name>.py`.
 6. **Run `uv run pytest`.** Must pass before the feature is considered done.
 
 ## Gotchas

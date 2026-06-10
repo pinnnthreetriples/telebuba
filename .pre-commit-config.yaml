@@ -5,6 +5,13 @@
 default_language_version:
   python: python3.13
 
+# Vendored content — do not reformat. Re-cloning from upstream would
+# otherwise produce noisy diffs against our own hook outputs.
+exclude: |
+  (?x)^(
+    \.claude/skills/.*
+  )$
+
 repos:
   # --- generic hygiene -------------------------------------------------------
   - repo: https://github.com/pre-commit/pre-commit-hooks
