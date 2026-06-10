@@ -57,5 +57,14 @@ After meaningful work, run GROW:
 - **Orient:** create or update a `patterns/` runbook if this can recur.
 - **Write:** bump `last_updated` on changed files; `mex log` when rationale matters.
 
+## Default Skills (apply silently — do not announce or re-invoke each turn)
+
+These are global skills the user has set as defaults. Every session applies them without being asked.
+
+- **`karpathy-guidelines`** — coding behaviour: surface assumptions, prefer the minimum code, surgical changes only, transform tasks into verifiable goals. Applies to every write/review/refactor action.
+- **`caveman`** — communication style: drop filler, articles, pleasantries; keep code, commands, errors, technical terms exact. Default to brief. Expand only when clarity, safety, or the user explicitly asks for detail.
+
+Other skills (`handoff`, `verify`, `code-review`, etc.) are triggered on demand — see `~/.claude/skills/` for the full installed set.
+
 ## Navigation
 Read `ROUTER.md` at session start before any task. Live project state lives in `state/active.md`. Work is picked from the GitHub Project board — protocol in `context/kanban.md` (load this every session too).
