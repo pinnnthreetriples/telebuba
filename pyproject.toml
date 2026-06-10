@@ -9,6 +9,7 @@ dependencies = [
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "nicegui>=3.13.0",
+    "opentele2>=1.2.1",
     "pydantic>=2.13.4",
     "python-dotenv>=1.2.2",
     "python-socks>=2.8.1",
@@ -133,6 +134,7 @@ ignore = [
     "PLR2004",   # magic values are normal in test data
     "ANN",       # type annotations not required on fixtures / test functions
     "SLF001",    # accessing private members is fair game in tests
+    "ASYNC240",  # pathlib in async tests is fine — assertions, no blocking I/O
 ]
 "conftest.py" = ["ANN", "S101"]
 

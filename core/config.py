@@ -12,6 +12,7 @@ class Settings(BaseModel):
     telegram_api_hash: str = ""
     database_path: Path = Path("telebuba.db")
     session_dir: Path = Path("sessions")
+    ui_port: int = Field(default=8080, ge=1, le=65535)
     telegram_timeout_seconds: int = Field(default=20, ge=1)
     telegram_connection_retries: int = Field(default=3, ge=0)
     telegram_retry_delay_seconds: int = Field(default=2, ge=0)
@@ -25,6 +26,7 @@ def load_settings() -> Settings:
         telegram_api_hash=os.environ.get("TELEGRAM_API_HASH", ""),
         database_path=Path(os.environ.get("TELEBUBA_DB_PATH", "telebuba.db")),
         session_dir=Path(os.environ.get("TELEBUBA_SESSION_DIR", "sessions")),
+        ui_port=int(os.environ.get("TELEBUBA_PORT", "8080")),
         telegram_timeout_seconds=int(os.environ.get("TELEGRAM_TIMEOUT_SECONDS", "20")),
         telegram_connection_retries=int(os.environ.get("TELEGRAM_CONNECTION_RETRIES", "3")),
         telegram_retry_delay_seconds=int(os.environ.get("TELEGRAM_RETRY_DELAY_SECONDS", "2")),

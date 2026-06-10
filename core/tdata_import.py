@@ -1,0 +1,187 @@
+"""Adapter wrapping opentele2 — converts uploaded ``tdata.zip`` payloads.
+
+Output: Telethon ``.session`` files in the configured sessions directory.
+
+This is the ONLY place ``opentele2`` is imported. Features and other ``core``
+modules talk to this module exclusively through the Pydantic schemas in
+``schemas/tdata.py``.
+
+Security guarantees:
+
+- the zip is extracted into a private ``tempfile.mkdtemp`` directory; never into
+  the project tree or the sessions directory directly.
+- before extraction, every entry is validated: total uncompressed size, count,
+  no absolute paths, no ``..`` components, no zip-encoded POSIX symlinks.
+- the temp directory is wiped on every code path, including exceptions.
+- only the resulting ``.session`` files survive in the configured sessions dir.
+"""
+
+from __future__ import annotations
+
+import io
+import logging
+import shutil
+import tempfile
+import zipfile
+from contextlib import suppress
+from pathlib import Path, PurePosixPath
+
+from opentele2.api import UseCurrentSession
+from opentele2.td import TDesktop
+
+from schemas.tdata import (
+    TdataAccountSummary,
+    TdataConvertRequest,
+    TdataConvertResult,
+    TdataConvertStatus,
+)
+
+logger = logging.getLogger(__name__)
+
+# Hard safety limits — anything above these is refused outright.
+MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024  # 500 MiB total uncompressed payload
+MAX_FILE_COUNT = 50_000  # max entries in the zip
+MAX_PATH_DEPTH = 32  # nested directory depth cap
+
+_POSIX_CREATE_SYSTEM = 3
+_POSIX_MODE_MASK = 0o170000
+_POSIX_SYMLINK_MODE = 0o120000
+
+
+def _is_unsafe_entry(name: str) -> bool:
+    """Return True if a zip entry name is unsafe (path traversal, absolute, ...)."""
+    p = PurePosixPath(name.replace("\\", "/"))
+    if p.is_absolute():
+        return True
+    parts = p.parts
+    if any(part == ".." for part in parts):
+        return True
+    if any(":" in part for part in parts):  # windows-style drive fragments
+        return True
+    return len(parts) > MAX_PATH_DEPTH
+
+
+def _is_symlink_entry(info: zipfile.ZipInfo) -> bool:
+    """Return True if the zip entry is a POSIX symlink."""
+    if info.create_system != _POSIX_CREATE_SYSTEM:
+        return False
+    mode = (info.external_attr >> 16) & _POSIX_MODE_MASK
+    return mode == _POSIX_SYMLINK_MODE
+
+
+def _safe_extract_zip(content: bytes, dest: Path) -> TdataConvertStatus | None:
+    """Validate the zip and extract into ``dest``.
+
+    Returns None on success, or a non-ok ``TdataConvertStatus`` on rejection.
+    """
+    try:
+        zf = zipfile.ZipFile(io.BytesIO(content))
+    except zipfile.BadZipFile:
+        return "invalid_zip"
+
+    with zf:
+        infos = zf.infolist()
+        if len(infos) > MAX_FILE_COUNT:
+            return "too_many_files"
+        total = 0
+        for info in infos:
+            if _is_unsafe_entry(info.filename):
+                return "unsafe_path"
+            if _is_symlink_entry(info):
+                return "symlinks_not_allowed"
+            total += info.file_size
+            if total > MAX_UNCOMPRESSED_BYTES:
+                return "zip_too_large"
+        zf.extractall(dest)
+    return None
+
+
+def _find_tdata_dir(root: Path) -> Path | None:
+    """Locate the ``tdata`` directory inside ``root``. Top-level first, then nested."""
+    if (root / "tdata").is_dir():
+        return root / "tdata"
+    for sub in sorted(p for p in root.rglob("tdata") if p.is_dir()):
+        return sub
+    return None
+
+
+async def convert_tdata_zip(
+    req: TdataConvertRequest,
+    sessions_dir: Path,
+    *,
+    tmp_base: Path | None = None,
+) -> TdataConvertResult:
+    """Convert a tdata.zip payload into Telethon ``.session`` files.
+
+    Args:
+        req: validated upload payload.
+        sessions_dir: where to write the resulting ``.session`` files. Created if absent.
+        tmp_base: optional directory under which the private temp dir is created.
+            Useful for tests; defaults to the OS temp dir.
+
+    Returns:
+        ``TdataConvertResult`` with status and, on success, the list of accounts
+        whose session files were written.
+    """
+    # These filesystem ops are one-shot, user-initiated, and microsecond-fast.
+    # Wrapping them in to_thread would add complexity for no measurable gain.
+    sessions_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240
+    tmp_dir = Path(
+        tempfile.mkdtemp(
+            prefix="tdata_import_",
+            dir=str(tmp_base) if tmp_base is not None else None,
+        ),
+    )
+    try:
+        reject = _safe_extract_zip(req.content, tmp_dir)
+        if reject is not None:
+            return TdataConvertResult(status=reject)
+
+        tdata_dir = _find_tdata_dir(tmp_dir)
+        if tdata_dir is None:
+            return TdataConvertResult(status="tdata_not_found")
+
+        try:
+            td = TDesktop(basePath=str(tdata_dir))
+        except Exception as exc:
+            logger.exception("TDesktop load failed")
+            return TdataConvertResult(
+                status="conversion_error",
+                error=f"TDesktop load failed: {exc}",
+            )
+
+        if td.accountsCount == 0:
+            return TdataConvertResult(status="no_accounts")
+
+        summaries: list[TdataAccountSummary] = []
+        for index, account in enumerate(td.accounts):
+            user_id: int | None = None
+            with suppress(Exception):
+                user_id = account.UserId
+
+            session_name = f"{user_id or f'tdata_{index}'}.session"
+            session_path = sessions_dir / session_name
+
+            try:
+                client = await account.ToTelethon(
+                    session=str(session_path),
+                    flag=UseCurrentSession,
+                )
+            except Exception as exc:
+                logger.exception("ToTelethon failed for user_id=%s", user_id)
+                return TdataConvertResult(
+                    status="conversion_error",
+                    error=f"ToTelethon failed for user_id={user_id}: {exc}",
+                    accounts=summaries,
+                )
+
+            with suppress(Exception):
+                await client.disconnect()
+
+            summaries.append(
+                TdataAccountSummary(user_id=user_id, session_path=str(session_path)),
+            )
+
+        return TdataConvertResult(status="ok", accounts=summaries)
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
