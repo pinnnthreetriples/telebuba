@@ -60,9 +60,35 @@ Report to the user:
 
 ### Step 2 — Pick work
 
-- If the user names an issue (`"do #12"`, `"work on the warming task"`), use it.
-- Otherwise, list `Ready` items sorted by `Priority` and ask the user to confirm before starting.
-- Never auto-start a `Backlog` item — that column means "not scoped yet".
+The agent is allowed to **promote items from `Backlog` → `Ready` itself**, then pick from `Ready`. The promotion is not automatic — it requires the agent to judge that the item is actionable.
+
+#### 2a. Try `Ready` first
+
+- If `Ready` already has items, list them sorted by `Priority` (P0 → P2) and either:
+  - take the issue the user named (`"do #12"`), or
+  - propose the top-priority `Ready` item and start once confirmed.
+
+#### 2b. Otherwise, scope from `Backlog`
+
+If `Ready` is empty (or the user explicitly says "look at backlog"), walk `Backlog` items and decide for each: **is this item actionable in a single session without further user input?**
+
+An item is **actionable** if all of these hold:
+- It has a clear "done when…" — either written in the body, or unambiguously inferable from the title plus our context files.
+- It does not depend on an unresolved `Open Decision` in `state/active.md`.
+- It does not depend on another open issue that is still `Backlog` / `In progress`.
+- It fits in roughly one session of work (rough size ≤ `L`).
+
+For each actionable item:
+- Move it to `Ready` (option id `61e4505c`) with a one-line comment on the issue: `Promoted to Ready: <one-line rationale>`.
+- If `Priority` is unset, set it (`P0` only if blocking, default `P2`).
+
+For non-actionable items, leave them in `Backlog` and surface the blocker to the user: "`#N` needs `<X>` decided / `#M` merged first — leaving in Backlog."
+
+Then run 2a with the freshly populated `Ready`.
+
+#### 2c. Empty board
+
+If both `Ready` and `Backlog` are empty, tell the user. Do not invent work.
 
 ### Step 3 — Move to `In progress`
 
@@ -140,12 +166,21 @@ Pass one of the `STATUS_*` constants above as the option id.
 
 (`--project telebuba` adds it to project #2 in `Backlog` by default.)
 
+### Leave the promotion-rationale comment when moving Backlog → Ready
+
+```bash
+"D:/gh.exe" issue comment <ISSUE_NUMBER> --repo pinnnthreetriples/telebuba \
+  --body "Promoted to Ready: <one-line rationale>"
+```
+
 ## Rules
 
 - **One `In progress` item per session.** If something is already there from a previous session, surface it and ask before starting something new.
 - **Move on time, not in batches.** Move to `In progress` *before* starting work; move to `In review` *when the PR is opened*, not later.
 - **Never close an issue without merging a PR.** If the work turns out to be wrong / unneeded, move back to `Backlog` with a comment, do not delete.
 - **Refresh the board on session resume.** State printed at the start of a session can be stale by the time the agent acts — re-list before moving.
+- **Promoting Backlog → Ready is a judgement, not a mass action.** Promote one item at a time, with a one-line rationale comment. Never batch-promote the whole backlog.
+- **If the user says "just do something" with an empty `Ready`, the agent scopes from `Backlog` first.** It does not silently invent tasks outside the board.
 
 ## What does NOT belong on the board
 
