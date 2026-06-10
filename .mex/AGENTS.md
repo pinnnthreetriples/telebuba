@@ -58,4 +58,4 @@ After meaningful work, run GROW:
 - **Write:** bump `last_updated` on changed files; `mex log` when rationale matters.
 
 ## Navigation
-Read `ROUTER.md` at session start before any task. Live project state lives in `state/active.md`.
+Read `ROUTER.md` at session start before any task. Live project state lives in `state/active.md`. Work is picked from the GitHub Project board — protocol in `context/kanban.md` (load this every session too).

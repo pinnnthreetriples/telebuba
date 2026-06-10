@@ -38,3 +38,4 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - Project purpose / "why" — not documented (deliberately deferred).
 - Pagination strategy for the NiceGUI Logs page.
 - Whether APScheduler's own jobstore points at the same SQLite file.
+- **Mutation testing (`mutmut`)** — consider adding once `core/warming.py` and `core/telegram_client.py` stabilize. Not added preemptively because mutmut needs real source + tests covering it to produce signal; running it on the current placeholder code is noise. When ready: `uv add --dev mutmut`, target critical modules only (`--paths-to-mutate=core/warming.py` etc.), run nightly or via `workflow_dispatch`, never gate PR merges on it.

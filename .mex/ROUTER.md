@@ -20,6 +20,8 @@ edges:
     condition: when working with scheduled warming jobs or APScheduler
   - target: context/logging.md
     condition: when emitting, querying, or displaying log entries
+  - target: context/kanban.md
+    condition: always at session start — protocol for the GitHub Project board (pick work, move issues)
   - target: patterns/INDEX.md
     condition: when starting a task — check the pattern index for a matching pattern
 last_updated: 2026-06-10
@@ -36,6 +38,7 @@ Then read this file fully, then load `state/active.md` for the live picture of w
 | Task type | Load |
 |-----------|------|
 | Current project state (always first) | `state/active.md` |
+| Picking work / moving board items (always at session start) | `context/kanban.md` |
 | Understanding how the system works | `context/architecture.md` |
 | Working with a specific technology | `context/stack.md` |
 | Writing or reviewing code | `context/conventions.md` |
@@ -48,9 +51,11 @@ Then read this file fully, then load `state/active.md` for the live picture of w
 
 ## Behavioural Contract
 
+**Session start (run once before any task):** load `state/active.md` and `context/kanban.md`. Report what is in `In progress` and `Ready` on the board. Pick work per the kanban protocol.
+
 For every task, follow this loop:
 
-1. **CONTEXT** — Load the relevant context file(s) from the routing table above. Check `patterns/INDEX.md` for a matching pattern. If one exists, follow it. Narrate what you load: "Loading architecture context..."
+1. **CONTEXT** — Move the board item to `In progress` (kanban Step 3). Load the relevant context file(s) from the routing table above. Check `patterns/INDEX.md` for a matching pattern. If one exists, follow it. Narrate what you load: "Loading architecture context..."
 2. **BUILD** — Do the work. If a pattern exists, follow its Steps. If you are about to deviate from an established pattern, say so before writing any code — state the deviation and why.
 3. **VERIFY** — Load `context/conventions.md` and run the Verify Checklist item by item. State each item and whether the output passes. Do not summarise — enumerate explicitly.
 4. **DEBUG** — If verification fails or something breaks, check `patterns/INDEX.md` for a debug pattern. Follow it. Fix the issue and re-run VERIFY.
@@ -59,3 +64,4 @@ For every task, follow this loop:
    - **Record:** Update `state/active.md` (Working / Not Yet Built / Known Issues). Update any `context/` file whose facts changed.
    - **Orient:** If this task can recur and no pattern exists, create one in `patterns/` using `patterns/README.md`, then add it to `patterns/INDEX.md`.
    - **Write:** Bump `last_updated` in every scaffold file you changed. Run `mex log --type decision "..."` when the why matters.
+   - **Board:** Move the issue to `In review` when the PR is open, and to `Done` after the merge. See `context/kanban.md` for the exact commands.
