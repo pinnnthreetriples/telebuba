@@ -21,23 +21,25 @@ telebuba/
 ├── .env.example            template — planned, not present
 ├── core/                   shared infrastructure — only layer touching third-party SDKs (planned)
 ├── schemas/                Pydantic models; shared types, no behavior (planned)
-├── features/               one file per user-facing feature; never imports another feature (planned)
+├── services/               pure business logic — warming, FloodWait policy, comments. Callable from UI AND scheduler (planned)
+├── features/               UI-thin handlers; one file per feature; delegates logic to services (planned)
 └── tests/                  mirrors source tree; canary test only today
 ```
 
 Files marked `planned` do not exist yet — see `state/active.md` for the live picture.
 
 ## Non-Negotiables (one-line each — full text in `context/conventions.md`)
-1. **Feature Isolation** — one file per feature in `features/`; never modify existing feature files; no cross-feature imports.
+1. **Feature Isolation (UI-thin)** — one file per feature in `features/`; UI handlers only; business logic delegates to `services/`. No cross-feature imports.
 2. **Pydantic Boundaries** — all inter-layer data through Pydantic models in `schemas/`; no raw `dict`/`tuple`/`list`; public funcs return models or `None`.
 3. **No Hardcoded Values** — tunables in `core/config.py`, secrets in `.env` via `core/config.py`.
 4. **Logging Only** — no `print()`; all logging via `core/logging.py`.
-5. **Layer Isolation** — `features/` → `core/` + `schemas/`; `core/` → `schemas/` + third-party; `schemas/` → `pydantic` + `typing` only. Full matrix in `context/architecture.md`.
-6. **Gateways** — DB only via `core/db.py`; Telegram only via `core/telegram_client.py`; `sqlalchemy` and `telethon` forbidden in `features/*.py`.
-7. **Test Coverage (strict)** — every feature ships a pytest test; warnings → errors; branch coverage ≥ 90 %; prefer `/tdd` skill.
+5. **Layer Isolation (4 layers)** — `features/` → `services/` + `core/` + `schemas/`; `services/` → other `services/` + `core/` + `schemas/`; `core/` → `schemas/` + third-party; `schemas/` → `pydantic` + `typing` only. Matrix in `context/architecture.md`.
+6. **Gateways** — DB only via `core/db.py`; Telegram only via `core/telegram_client.execute(action)` with typed action schemas. `sqlalchemy` / `telethon` forbidden in `services/` and `features/`.
+7. **Test Coverage (strict)** — every feature AND service ships a pytest test; warnings → errors; branch coverage ≥ 90 %; prefer `/tdd` skill.
 8. **Async + Type Safety** — type hints everywhere; `from __future__ import annotations`; I/O is `async def`; `raise X(...) from e`.
 9. **Device Fingerprint Immutable** — one profile per account, created at registration, never mutated.
-10. **Configuration-Driven** — all limits / delays / proxies through `core/config.py`; no magic numbers in code.
+10. **Configuration-Driven** — all limits / delays / proxies through `core/config.py`; nested namespaces (`settings.warming`, `settings.gemini`, ...); no magic numbers.
+11. **Services Layer** — all business logic lives in `services/<domain>.py`. Features are 3-line delegators. Services are callable from UI AND APScheduler without duplication.
 
 ## Commands
 - Install: `uv sync`

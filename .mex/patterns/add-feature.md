@@ -22,19 +22,21 @@ last_updated: 2026-06-10
 
 ## Context
 
-Read `context/conventions.md` for the structural rules. Key constraints:
-- One new file in `features/<name>.py`. Do not edit existing feature files.
-- No imports from other `features/*.py`. Shared logic goes in `core/` or `schemas/`.
+Read `context/conventions.md` and `context/services.md` first. Key constraints:
+- A "feature" = UI + a service. Both files are NEW. Existing feature/service files are never edited.
+- `features/<name>.py` is **UI-thin** (NiceGUI page + 3-line handlers). All business logic lives in `services/<domain>.py`.
+- No imports from other `features/*.py`.
 - All function inputs/outputs are Pydantic models in `schemas/`.
 
 ## Steps
 
-1. **Schema first.** Add `schemas/<name>.py` (or extend an existing schema file only if it is conceptually the same domain). Define the request/response models the feature will use at its boundaries.
-2. **Create the feature file.** `features/<name>.py` exposes a NiceGUI page or component and the async handlers that drive it. Handlers accept and return your Pydantic models.
-3. **Use core helpers.** Any DB access → `core/db.py`. Any Telegram I/O → `core/telegram_client.py`. Any config → `core/config.py`. Any logging → `core/logging.py`.
-4. **Wire it in.** Register the page/route once at app startup. [VERIFY AFTER FIRST IMPLEMENTATION — exact registration site once `main.py` exists.]
-5. **Add the test — prefer `/tdd`.** Use the `tdd` skill to drive the implementation red-green-refactor when the behaviour can be expressed as a test first. Cover at least: happy path, one validation failure, one core-helper failure. The test lives in `tests/features/test_<name>.py`.
-6. **Run `uv run pytest`.** Must pass before the feature is considered done.
+1. **Schema first.** Add `schemas/<domain>.py` (or extend an existing one only if the same domain). Define request/response models the feature and service will use at their boundaries. Also extend `schemas/telegram_actions.py` if a new Telegram action is needed (see `patterns/add-telegram-task.md`).
+2. **Service first.** Add `services/<domain>.py` with the business logic. Pure async functions taking and returning Pydantic models. Delegates I/O to `core/*` (DB, telegram executor, http, logging). See `patterns/add-service.md` for the service-specific protocol.
+3. **Test the service.** `tests/services/test_<domain>.py` — happy path + at least one failure path. Mock `core/*` adapters. Prefer `/tdd` skill.
+4. **Create the feature file.** `features/<name>.py` exposes a NiceGUI page or component and 3-line async handlers: validate → call service → render. Handlers accept and return Pydantic models. **No business logic here.**
+5. **Wire it in.** Register the page/route once at app startup. [VERIFY AFTER FIRST IMPLEMENTATION — exact registration site once `main.py` exists.]
+6. **Test the feature.** `tests/features/test_<name>.py` — mock the service; verify the handler validates, delegates, and renders correctly. Do NOT re-test the service logic here.
+7. **Run `uv run pytest`.** Strict mode must pass (warnings → errors, coverage ≥ 90 %).
 
 ## Gotchas
 
@@ -44,11 +46,13 @@ Read `context/conventions.md` for the structural rules. Key constraints:
 
 ## Verify
 
-- [ ] New file under `features/`, not an edit of an existing one
+- [ ] New files under `features/` AND `services/`, not edits of existing ones
 - [ ] No `from features.<other>` imports
-- [ ] All handler signatures use Pydantic models from `schemas/`
-- [ ] No `print`, no inline secrets, no literal tunables
-- [ ] `tests/features/test_<name>.py` exists and `uv run pytest` passes
+- [ ] `features/<name>.py` handler bodies are ≤ 5 lines each (validate → call service → render)
+- [ ] No `sqlalchemy` / `telethon` / `nicegui` import in the service
+- [ ] All function signatures use Pydantic models from `schemas/`
+- [ ] No `print`, no inline secrets, no literal tunables; config via `settings.<namespace>.<field>`
+- [ ] `tests/services/test_<domain>.py` AND `tests/features/test_<name>.py` exist; `uv run pytest` passes
 
 ## Debug
 

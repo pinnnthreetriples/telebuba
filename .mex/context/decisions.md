@@ -19,6 +19,57 @@ last_updated: 2026-06-10
 
 ## Decision Log
 
+### Introduce `services/` layer between `features/` and `core/`
+**Date:** 2026-06-10
+**Status:** Active
+**Decision:** All business logic moves to `services/<domain>.py`. `features/` becomes UI-thin (NiceGUI page + 3-line handlers that call services). `core/` stays infrastructure-only.
+**Reasoning:** Without `services/`, business logic ended up in `features/` and was duplicated across UI handlers and APScheduler jobs. Cross-feature calls would require breaking Rule 1 (no cross-feature imports). With `services/`, the same code path is reused by both UI and scheduler with no duplication. Also makes domain logic UI-agnostic (NiceGUI swappable later).
+**Alternatives considered:**
+- *Logic in `features/`* (rejected — duplication and Rule 1 violations as soon as two features share logic).
+- *Logic in `core/`* (rejected — core is for infrastructure adapters, not domain rules; mixing the two makes both harder to test).
+- *Single `services.py` module* (rejected — same god-module problem we banned for features; one file per domain).
+**Consequences:** `services/` is the new home of every algorithm. Tests target services directly with mocked `core/*` adapters. Rule 11 added. Layer matrix in architecture.md grows from 3 to 4 layers.
+
+### Typed Telegram actions + central executor
+**Date:** 2026-06-10
+**Status:** Active
+**Decision:** Every Telegram action is a Pydantic class in `schemas/telegram_actions.py` (`JoinChannel`, `PostComment`, `UpdateProfile`, ...). Services and features call `core.telegram_client.execute(account_id, action)`; the executor pattern-matches on `action_type` and dispatches to the right Telethon method.
+**Reasoning:** Direct `client.send_message(...)` calls scatter Telethon knowledge across services, make mocking painful, and bypass the central point for rate limits / FloodWait / proxy / outbox. Typed actions give validation at the boundary, audit-friendly logs, and testability without touching Telethon.
+**Alternatives considered:**
+- *Direct Telethon calls from services* (rejected — see above).
+- *String-based action registry* (rejected — loses type safety, defeats the purpose).
+**Consequences:** New `schemas/telegram_actions.py`. `core/telegram_client.py` exposes one entry point. Services compose actions; they do not orchestrate Telethon.
+
+### Outbox pattern for non-trivial Telegram actions
+**Date:** 2026-06-10
+**Status:** Active
+**Decision:** Services persist Telegram **intents** (rows in a `telegram_outbox` SQLite table) via `core/db.py`. A worker (APScheduler job or `services/telegram_outbox.py`) picks them up and calls `execute`. Survives crashes; idempotent via `dedupe_key`. Trivial reads bypass the outbox.
+**Reasoning:** Accounts cost money — a crash mid-warming must not lose state or double-act. Synchronous calls offer no recovery story. An outbox gives at-least-once semantics with explicit dedupe, plus a natural place to enforce per-account rate limits and FloodWait backoff.
+**Alternatives considered:**
+- *Synchronous calls with retries in-memory* (rejected — does not survive a process restart).
+- *External queue (Redis/RabbitMQ)* (rejected — overkill at ~50 accounts; violates "no broker" decision).
+**Consequences:** New `telegram_outbox` table in `core/db.py`. New `services/telegram_outbox.py` worker. Services that need writes go through the outbox; reads do not. Schema and retry policy: TBD.
+
+### Config namespaces — nested Pydantic settings instead of one flat blob
+**Date:** 2026-06-10
+**Status:** Active
+**Decision:** `core/config.py` exposes a `Settings` with **nested namespaces**: `settings.warming`, `settings.gemini`, `settings.telegram`, `settings.sentry`, etc. Each namespace is its own Pydantic model owned by one domain.
+**Reasoning:** A single flat `Settings` becomes a 200-field god-object as features grow, and every service ends up importing everything. Namespaces let each service take only the slice it needs (`settings.warming`) and keep config evolution per-domain.
+**Alternatives considered:**
+- *Flat `Settings`* (rejected — bloat, leaks, harder to test).
+- *Per-module config files* (rejected — fragments `.env` loading; pydantic-settings handles nested cleanly).
+**Consequences:** Type signature changes — services accept `WarmingSettings` not full `Settings`. `.env` keys use double-underscore convention (`WARMING__MAX_PER_DAY=50`).
+
+### Split `core/db.py` into repositories once tables ≥ 5
+**Date:** 2026-06-10
+**Status:** Active (deferred trigger)
+**Decision:** While the schema has < 5 tables, all DB helpers live in `core/db.py`. Once we cross 5 tables, split into `core/repositories/<aggregate>.py` (one repository per aggregate root: `accounts`, `warming_runs`, `logs`, `telegram_outbox`, ...).
+**Reasoning:** A monolithic `core/db.py` is fine at small scale and avoids premature partitioning. As tables proliferate, it becomes a god-module mirroring the feature-isolation problem we already banned. The repository pattern keeps each aggregate's queries colocated.
+**Alternatives considered:**
+- *Always one file* (rejected — known to break down at scale).
+- *Repositories from day one* (rejected — premature; defer until concrete pain).
+**Consequences:** Trigger: 5 tables. When triggered, `core/db.py` becomes a barrel re-export for backwards compatibility (one cycle) then is deleted. Until trigger, no action.
+
 ### Astral toolchain (uv + ruff + ty) instead of legacy Python tooling
 **Date:** 2026-06-10
 **Status:** Active

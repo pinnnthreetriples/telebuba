@@ -26,11 +26,11 @@ last_updated: 2026-06-10
 
 Each rule states the rule, then a one-line **Why** where it is not obvious.
 
-### 1. Feature Isolation
-- Every feature is its own file in `features/`.
+### 1. Feature Isolation (UI layer)
+- Every feature is its own file in `features/`. **UI-thin** — NiceGUI page + click handlers only. All business logic delegates to `services/`.
 - Existing feature files are never modified to add behavior — create a new file.
 - No imports between `features/*.py`. `features/accounts.py` must not import `features/warming.py`.
-- **Why:** keeps "add a feature" a pure additive change; prevents the slow drift of a god-module; lets agents work on different features without merge conflicts.
+- **Why:** keeps "add a feature" a pure additive change; prevents the slow drift of a god-module; lets agents work on different features without merge conflicts. Thin UI means we can swap NiceGUI for CLI/REST later without rewriting domain logic.
 
 ### 2. Pydantic Boundaries
 - All data crossing layers passes through Pydantic models in `schemas/`.
@@ -48,19 +48,19 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
 - All logging through `core/logging.py` (loguru + SQLite `logs` table; Sentry in prod).
 - See `context/logging.md` for the full three-tier setup.
 
-### 5. Layer Isolation
-- `features/*.py` imports `core/*` and `schemas/*` only.
-- `features/*.py` never imports `sqlalchemy`, `telethon`, or another `features/*.py`.
-- `core/*.py` imports `schemas/*` (shared types), stdlib, and third-party SDKs. Never `features/*`.
+### 5. Layer Isolation (4 layers + shared types)
+- `features/*.py` imports `services/*`, `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon / another feature.
+- `services/*.py` imports other `services/*` (composition allowed), `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon directly / `nicegui` / `features/*`.
+- `core/*.py` imports `schemas/*` (shared types), stdlib, and third-party SDKs. Never `services/*` or `features/*`.
 - `schemas/*.py` imports only `pydantic` and `typing`.
-- **Why:** `schemas/` is a shared-types layer, not a downstream layer — all layers may import types; types must not import layers. Keeps `core/db.py` capable of returning ready-made Pydantic models so features do not write the same ORM→Pydantic mapper repeatedly.
+- **Why:** `schemas/` is a shared-types layer, not a downstream layer — all layers may import types; types must not import layers. The `services/` layer is what makes business logic UI-agnostic and reusable from both NiceGUI handlers and APScheduler jobs.
 - Full import matrix: `context/architecture.md`.
 
 ### 6. Database & Telegram Client Gateways
-- Database access only through `core/db.py`.
-- Telegram client only through `core/telegram_client.py`.
-- `sqlalchemy` and `telethon` must not be imported in `features/*.py`.
-- **Why:** one place to enforce session lifecycle, rate limits, proxy config, and FloodWait handling — features cannot bypass it.
+- Database access only through `core/db.py` (splits into `core/repositories/<aggregate>.py` once tables ≥ 5).
+- Telegram actions only through `core/telegram_client.execute(action)` — `action` is a Pydantic class from `schemas/telegram_actions.py` (e.g. `JoinChannel`, `PostComment`, `UpdateProfile`). No direct `client.send_message(...)` from services or features.
+- `sqlalchemy` and `telethon` must not be imported in `services/*.py` or `features/*.py`.
+- **Why:** one place to enforce session lifecycle, rate limits, proxy config, FloodWait handling, and outbox/retry policy. Declarative actions are also testable without mocking Telethon.
 
 ### 7. Test Coverage (maximum strictness — prefer `/tdd` skill)
 - Every new feature ships with `tests/test_*.py` using fixtures from `conftest.py`.
@@ -86,18 +86,29 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
 
 ### 10. Configuration-Driven
 - All parameters (limits, delays, proxy settings) come from `core/config.py`.
+- `core/config.py` uses **nested namespaces** — `settings.warming`, `settings.gemini`, `settings.telegram`, etc. Each domain owns its slice; no one mega-`Settings` blob.
 - No magic numbers in code.
+
+### 11. Services Layer (NEW)
+- All business logic — warming algorithm, FloodWait/retry policy, comment generation, account state transitions — lives in `services/<domain>.py`. NOT in `features/` (UI-thin) and NOT in `core/` (infra-only).
+- Services are async, take and return Pydantic models, and may compose freely with other services.
+- A feature handler is a 3-liner: validate input, call a service, render result. Anything longer = logic leaking out of the service.
+- **Why:** business logic must be callable from both NiceGUI handlers (`features/`) AND APScheduler jobs (`features/warming.py` registrations) without duplication. If logic lives in `features/warming.py`, calling it from `features/accounts.py` would require a cross-feature import (Rule 1 violation). Services solve this cleanly.
 
 ## Pre-Commit Checklist
 
 Run this checklist explicitly before presenting any code or committing:
 
 - [ ] No imports between `features/*.py`?
+- [ ] Business logic lives in `services/`, NOT in `features/` (handlers stay UI-thin)?
+- [ ] No `sqlalchemy` / `telethon` import outside `core/*`?
+- [ ] Telegram actions go through `core/telegram_client.execute(action)`, not raw method calls?
 - [ ] Every function has type hints?
 - [ ] Every public function returns a Pydantic model (or `None`)?
 - [ ] No `print()`?
 - [ ] No hardcoded values?
-- [ ] Test exists for the new feature?
+- [ ] Config via `settings.<namespace>.<field>`, not flat `settings.<field>`?
+- [ ] Test exists for the new feature AND the new service?
 - [ ] `uv run pytest` passes with zero warnings and coverage ≥ 90%?
 
 ## Naming

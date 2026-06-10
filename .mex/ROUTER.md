@@ -10,6 +10,8 @@ edges:
     condition: when working with specific technologies or making tech decisions
   - target: context/conventions.md
     condition: when writing or reviewing code
+  - target: context/services.md
+    condition: when writing or reviewing any business logic — services/ is where it lives
   - target: context/decisions.md
     condition: when making an architectural choice or understanding why something is built a certain way
   - target: context/setup.md
@@ -46,6 +48,7 @@ last_updated: 2026-06-10
 | Understanding how the system works | `context/architecture.md` |
 | Working with a specific technology | `context/stack.md` |
 | Writing or reviewing code | `context/conventions.md` |
+| Writing or reviewing business logic | `context/services.md` |
 | Making a design decision | `context/decisions.md` |
 | Setting up or running the project | `context/setup.md` |
 | Anything Telethon / Telegram-related | `context/telegram.md` |
@@ -56,14 +59,33 @@ last_updated: 2026-06-10
 | Shell command policy (rtk wrapper) | `context/rtk.md` |
 | Any specific task | check `patterns/INDEX.md` for a matching pattern |
 
+## Methodology — Vertical Slice + Hexagonal (4 layers)
+
+Every code change MUST land in the right layer. Before writing a single line, the agent declares which layer is changing and why.
+
+```
+features/    UI-thin handlers (NiceGUI). Validate → call service → render. Max ~5 lines per handler.
+services/    Business logic. Async, Pydantic at edges, no SDK imports, no UI. Composes other services.
+core/        Infrastructure (db, telegram_client, config, logging). Only place sqlalchemy/telethon/loguru live.
+schemas/     Pure Pydantic types. No project imports. The data contract.
+```
+
+**Hard layer check before writing code (mandatory):**
+1. Where does this code belong? (One of: features / services / core / schemas.) Name the file path.
+2. What does it import? Cross-check against `context/architecture.md` Allowed/Forbidden Imports.
+3. Is the input/output a Pydantic model from `schemas/`? If not, fix that first.
+4. Would the same logic be called from a scheduler / CLI / test? If yes, it MUST be in `services/`, not `features/`.
+
+If any check fails, STOP and re-plan. Do not "just write it and refactor later" — that is how the layers rot.
+
 ## Behavioural Contract
 
 **Session start (run once before any task):** load `state/active.md` and `context/kanban.md`. Report what is in `In progress` and `Ready` on the board. Pick work per the kanban protocol.
 
 For every task, follow this loop:
 
-1. **CONTEXT** — Move the board item to `In progress` (kanban Step 3). Load the relevant context file(s) from the routing table above. Check `patterns/INDEX.md` for a matching pattern. If one exists, follow it. Narrate what you load: "Loading architecture context..."
-2. **BUILD** — Do the work. If a pattern exists, follow its Steps. If you are about to deviate from an established pattern, say so before writing any code — state the deviation and why.
+1. **CONTEXT** — Move the board item to `In progress` (kanban Step 3). Load the relevant context file(s) from the routing table above. **Always include `context/services.md` if the task involves any business logic.** Check `patterns/INDEX.md` for a matching pattern. If one exists, follow it. Narrate what you load: "Loading architecture context..."
+2. **BUILD** — Run the **Hard layer check** above. State which layer the code belongs to and what it imports. THEN write the code. If you are about to deviate from an established pattern or layer rule, say so before writing any code — state the deviation and why.
 3. **VERIFY** — Load `context/conventions.md` and run the Verify Checklist item by item. State each item and whether the output passes. Do not summarise — enumerate explicitly.
 4. **DEBUG** — If verification fails or something breaks, check `patterns/INDEX.md` for a debug pattern. Follow it. Fix the issue and re-run VERIFY.
 5. **GROW** — After meaningful work, run this binary checklist:

@@ -29,10 +29,14 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - `schemas/telegram_session.py` defines Pydantic schemas for session check requests/results.
 
 ## Not Yet Built
-- `core/logging.py`.
-- `features/` (accounts, warming, comment generation, logs page, etc.).
+- `core/logging.py` (loguru + structlog + Sentry + SQLite `logs` table).
+- `core/config.py` — refactor to **nested namespaces** (`settings.telegram`, `settings.warming`, `settings.gemini`, ...). Current shape is flat.
+- `core/telegram_client.execute(action)` — typed-action dispatcher. Current file has client construction + `check_telegram_session()` only; raw method calls are not yet replaced by typed actions.
+- `services/` — entire layer (warming, accounts, comments, telegram_outbox worker). None exists today; methodology requires all business logic here.
+- `schemas/telegram_actions.py` — typed Telegram action classes (`JoinChannel`, `PostComment`, `UpdateProfile`, ...).
+- `features/` — UI-thin handlers (accounts, warming, comments, logs page).
 - Real NiceGUI entrypoint in `main.py`.
-- SQLAlchemy models beyond `device_fingerprints` (including the `logs` table).
+- SQLAlchemy models beyond `device_fingerprints`: `logs`, `telegram_outbox`, `accounts`, etc.
 - APScheduler wiring (either a `core/scheduler.py` or owned by `features/warming.py`).
 - `.env.example`.
 - AI provider integration — Gemini API planned (`GEMINI_API_KEY` reserved).
@@ -53,6 +57,10 @@ Authoritative list of architectural unknowns. Context files may carry `[TO BE DE
 - **Human-like activity tuning** — jitter strategy around scheduled times, per-account daily quotas, which actions count as warming vs active. (`context/warming.md`)
 - **`log_event` signature** — exact kwargs of the `core/logging.py` helper. Locked in when `core/logging.py` ships. (`context/logging.md`)
 - **NiceGUI Logs page pagination** — limit + offset strategy on the SQLite `logs` query. (`context/logging.md`)
+- **`core/telegram_client.execute(action)` signature** — exact return shape (`ActionResult` union? per-action result schema?). (`context/telegram.md`)
+- **Initial `schemas/telegram_actions.py` action set** — which actions ship in the first cut (likely `JoinChannel`, `PostComment`, `UpdateProfile`, `LeaveChannel`). (`context/telegram.md`)
+- **`telegram_outbox` table schema** — columns, indexes, retry/backoff policy, `dedupe_key` generation, worker owner module. (`context/telegram.md`)
+- **`core/db.py` → repositories split trigger** — when to break into `core/repositories/<aggregate>.py`. Current rule: ≥ 5 tables. (`context/architecture.md`)
 
 ### Tooling / process
 - **Project purpose / "why"** — deliberately deferred; not documented anywhere.
