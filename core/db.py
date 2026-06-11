@@ -23,7 +23,7 @@ from sqlalchemy.exc import IntegrityError
 from core.config import settings
 from schemas.accounts import AccountCreate, AccountList, AccountRead, AccountStatus
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
-from schemas.logs import LogEntry, LogEventInput, LogLevel, LogStatus
+from schemas.logs import LogEntry, LogEventInput, LogFilter, LogLevel, LogStatus
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -356,3 +356,34 @@ def _list_recent_logs(limit: int) -> list[LogEntry]:
 async def list_recent_logs(limit: int = 100) -> list[LogEntry]:
     """Return the latest log entries (newest first). Used by the future Logs page."""
     return await asyncio.to_thread(_list_recent_logs, limit)
+
+
+def _list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
+    statement = select(_logs).order_by(_logs.c.id.desc()).limit(log_filter.limit)
+    if log_filter.status != "all":
+        statement = statement.where(_logs.c.status == log_filter.status)
+    if log_filter.account_id:
+        statement = statement.where(_logs.c.account_id == log_filter.account_id)
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    entries: list[LogEntry] = []
+    for row in rows:
+        raw_extra = row["extra"]
+        extra: dict[str, object] = json.loads(raw_extra) if raw_extra else {}
+        entries.append(
+            LogEntry(
+                id=int(cast("int | str", row["id"])),
+                created_at=str(row["created_at"]),
+                level=cast("LogLevel", row["level"]),
+                status=cast("LogStatus", row["status"]),
+                account_id=_optional_str(row["account_id"]),
+                event=str(row["event"]),
+                extra=extra,
+            ),
+        )
+    return entries
+
+
+async def list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
+    """Return the latest log entries that match the filter (newest first)."""
+    return await asyncio.to_thread(_list_filtered_logs, log_filter)
