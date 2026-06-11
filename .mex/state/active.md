@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-06-10
+last_updated: 2026-06-11
 ---
 
 # Active State
@@ -30,11 +30,16 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - `schemas/accounts.py` defines Pydantic account schemas, table rows, filters, summaries, and session-health statuses (`new`, `alive`, `unauthorized`, `session_error`, `account_error`, `flood_wait`, `network_error`, `proxy_error`, `unknown_error`).
 - `schemas/device_fingerprint.py` defines Pydantic schemas for device fingerprints and Telegram client profiles.
 - `schemas/telegram_session.py` defines Pydantic schemas for session check requests/results.
+- Account proxies are stored per account in SQLite table `account_proxies`; `services.accounts`
+  exposes save/delete proxy operations and `core.telegram_client.py` applies saved proxies to
+  every Telethon client via python-socks.
+- Account profile editing is user-facing from the accounts page and goes through
+  `services.accounts.update_account_profile()` -> typed `UpdateProfile` action ->
+  `core.telegram_client.execute()`, then persists the local first/last/username/bio snapshot.
 
 ## Not Yet Built
 - `core/logging.py` (loguru + structlog + Sentry + SQLite `logs` table).
 - `core/config.py` — refactor to **nested namespaces** (`settings.telegram`, `settings.warming`, `settings.gemini`, ...). Current shape is flat.
-- `core/telegram_client.execute(action)` — typed-action dispatcher. Current file has client construction + `check_telegram_session()` only; raw method calls are not yet replaced by typed actions.
 - `services/` — entire layer (warming, accounts, comments, telegram_outbox worker). None exists today; methodology requires all business logic here.
 - `schemas/telegram_actions.py` — typed Telegram action classes (`JoinChannel`, `PostComment`, `UpdateProfile`, ...).
 - `features/accounts.py` — already implemented, but predates the services/ layer; orchestration lives in the feature file directly. Refactor to extract `services/accounts.py` is tracked separately.
@@ -47,14 +52,12 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 
 ## Known Issues
 - `aislop --version` fails on Windows due to a space in the Python path — call via `uv run python -m aislop` instead.
-- Open: where to store the `account_id → proxy` mapping. See `context/telegram.md`.
 
 ## Open Decisions
 
 Authoritative list of architectural unknowns. Context files may carry `[TO BE DETERMINED]` markers; this section is the single index of all of them.
 
 ### Architecture / design (must be resolved before related code is written)
-- **`account_id → proxy` mapping storage** — `.env` line per account, separate table, JSON column? Decide alongside the account model. (`context/telegram.md`, `context/setup.md`)
 - **Account lifecycle enum beyond session health** — session health is stored on `accounts.status`; business lifecycle (`created` / `verified` / `warming` / `active` / `banned`) still needs a canonical list + column decision. (`context/telegram.md`)
 - **Shared scheduler handle** — where `AsyncIOScheduler` is exposed so non-warming features can register jobs without `from features.warming`. Probably `core/scheduler.py`. (`context/warming.md`)
 - **APScheduler jobstore** — in-memory + DB-tracked, or APScheduler's own SQLAlchemy jobstore pointing at `telebuba.db`. (`context/warming.md`)

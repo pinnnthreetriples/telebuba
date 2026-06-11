@@ -28,15 +28,25 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import create_account, list_accounts, update_account_from_session_check
+from core.db import (
+    create_account,
+    list_accounts,
+    update_account_from_session_check,
+    update_account_profile_snapshot,
+    upsert_account_proxy,
+)
+from core.db import (
+    delete_account_proxy as delete_account_proxy_row,
+)
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from core.tdata_import import convert_tdata_zip
-from core.telegram_client import check_telegram_session
+from core.telegram_client import check_telegram_session, execute
 from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
     AccountFilter,
+    AccountProfileUpdateRequest,
     AccountRead,
     AccountSessionFileImport,
     AccountsTableState,
@@ -45,9 +55,11 @@ from schemas.accounts import (
     AccountTableRow,
     health_for_status,
 )
+from schemas.telegram_actions import UpdateProfile
 from schemas.telegram_session import TelegramSessionCheckRequest
 
 if TYPE_CHECKING:
+    from schemas.proxy import AccountProxyDelete, AccountProxyRead, AccountProxyUpsert
     from schemas.tdata import TdataConvertRequest
 
 
@@ -139,6 +151,55 @@ async def check_account_session(data: AccountCheckRequest) -> AccountRead:
     return await update_account_from_session_check(result)
 
 
+async def save_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
+    proxy = await upsert_account_proxy(data)
+    await log_event(
+        "INFO",
+        "account_proxy_saved",
+        account_id=data.account_id,
+        extra={
+            "proxy_type": proxy.proxy_type,
+            "host": proxy.host,
+            "port": proxy.port,
+            "has_username": proxy.username is not None,
+            "has_password": proxy.has_password,
+        },
+    )
+    return proxy
+
+
+async def delete_account_proxy(data: AccountProxyDelete) -> None:
+    await delete_account_proxy_row(data)
+    await log_event("INFO", "account_proxy_deleted", account_id=data.account_id)
+
+
+async def update_account_profile(data: AccountProfileUpdateRequest) -> AccountRead:
+    result = await execute(
+        data.account_id,
+        UpdateProfile(
+            first_name=data.first_name,
+            last_name=data.last_name,
+            username=data.username,
+            bio=data.bio,
+        ),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    account = await update_account_profile_snapshot(data)
+    await log_event(
+        "INFO",
+        "account_profile_updated",
+        account_id=data.account_id,
+        extra={
+            "has_last_name": data.last_name is not None,
+            "has_username": data.username is not None,
+            "has_bio": data.bio is not None,
+        },
+    )
+    return account
+
+
 async def load_accounts_table(data: AccountFilter) -> AccountsTableState:
     accounts = await list_accounts()
     filtered = [account for account in accounts.accounts if _matches_filter(account, data)]
@@ -203,7 +264,15 @@ def _to_table_row(account: AccountRead) -> AccountTableRow:
         telegram=_telegram_label(account),
         session=account.session_name or account.account_id,
         device=_device_label(account),
+        proxy=_proxy_label(account),
         last_checked=_format_last_checked(account.last_checked_at),
+        first_name=account.first_name,
+        last_name=account.last_name,
+        username=account.username,
+        bio=account.bio,
+        proxy_type=account.proxy_type,
+        proxy_host=account.proxy_host,
+        proxy_port=account.proxy_port,
     )
 
 
@@ -274,3 +343,9 @@ def _device_label(account: AccountRead) -> str:
         )
         or "-"
     )
+
+
+def _proxy_label(account: AccountRead) -> str:
+    if not account.proxy_type or not account.proxy_host or account.proxy_port is None:
+        return "-"
+    return f"{account.proxy_type} {account.proxy_host}:{account.proxy_port}"

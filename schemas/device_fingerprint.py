@@ -28,3 +28,8 @@ class TelegramClientProfile(BaseModel):
     session_path: str = Field(min_length=1)
     receive_updates: bool
     device: DeviceFingerprint
+    proxy_type: str | None = None
+    proxy_host: str | None = None
+    proxy_port: int | None = Field(default=None, ge=1, le=65_535)
+    proxy_username: str | None = None
+    proxy_password: str | None = None

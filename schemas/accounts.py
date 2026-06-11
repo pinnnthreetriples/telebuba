@@ -46,6 +46,11 @@ class AccountRead(BaseModel):
     device_model: str | None = None
     device_system_version: str | None = None
     device_app_version: str | None = None
+    bio: str | None = None
+    proxy_type: str | None = None
+    proxy_host: str | None = None
+    proxy_port: int | None = None
+    proxy_status: str | None = None
 
 
 class AccountList(BaseModel):
@@ -59,6 +64,14 @@ class AccountFilter(BaseModel):
 
 class AccountCheckRequest(BaseModel):
     account_id: str = Field(min_length=1)
+
+
+class AccountProfileUpdateRequest(BaseModel):
+    account_id: str = Field(min_length=1)
+    first_name: str = Field(min_length=1)
+    last_name: str | None = None
+    username: str | None = None
+    bio: str | None = None
 
 
 class AccountSummary(BaseModel):
@@ -98,7 +111,15 @@ class AccountTableRow(BaseModel):
     telegram: str
     session: str
     device: str
+    proxy: str
     last_checked: str
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    bio: str | None = None
+    proxy_type: str | None = None
+    proxy_host: str | None = None
+    proxy_port: int | None = None
 
 
 class AccountsTableState(BaseModel):
