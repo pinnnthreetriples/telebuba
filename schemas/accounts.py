@@ -71,6 +71,24 @@ class AccountSummary(BaseModel):
 
 AccountHealth = Literal["ok", "warn", "fail"]
 
+_PERMANENT_STATUSES: frozenset[AccountStatus] = frozenset(
+    {"unauthorized", "session_error", "account_error"},
+)
+
+
+def health_for_status(status: AccountStatus) -> AccountHealth:
+    """Map an ``AccountStatus`` to a coarse traffic-light health value.
+
+    - ``ok`` — alive (green).
+    - ``fail`` — permanent: unauthorized, session_error, account_error (red).
+    - ``warn`` — everything else: new + temporary issues (amber).
+    """
+    if status == "alive":
+        return "ok"
+    if status in _PERMANENT_STATUSES:
+        return "fail"
+    return "warn"
+
 
 class AccountTableRow(BaseModel):
     account_id: str
