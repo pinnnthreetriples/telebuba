@@ -71,6 +71,7 @@ addopts = [
     "--cov=core",
     "--cov=features",
     "--cov=schemas",
+    "--cov=services",
     "--cov-branch",
     "--cov-report=term-missing",
     "--cov-report=html",
@@ -92,7 +93,7 @@ log_cli_level = "INFO"
 # ============================================================================
 [tool.coverage.run]
 branch = true
-source = ["core", "features", "schemas"]
+source = ["core", "features", "schemas", "services"]
 parallel = true
 
 [tool.coverage.report]
@@ -153,7 +154,7 @@ indent-style = "space"
 # ty — Astral type checker (pre-1.0). Strict defaults; revisit when ty stabilizes.
 # ============================================================================
 [tool.ty.src]
-include = ["core", "features", "schemas", "tests", "main.py"]
+include = ["core", "features", "schemas", "services", "tests", "main.py"]
 
 [tool.ty.rules]
 # treat every unresolved or possibly-unbound name as an error
@@ -172,11 +173,11 @@ skips = []
 # deptry — flag unused / missing / transitive dependencies.
 # ============================================================================
 [tool.deptry]
-known_first_party = ["core", "features", "schemas"]
+known_first_party = ["core", "features", "schemas", "services"]
 
 # ============================================================================
 # vulture — dead code detector. Higher confidence = fewer false positives.
 # ============================================================================
 [tool.vulture]
 min_confidence = 80
-paths = ["core", "features", "schemas"]
+paths = ["core", "features", "schemas", "services"]
