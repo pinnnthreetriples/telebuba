@@ -36,3 +36,32 @@ class LogEntry(BaseModel):
     account_id: str | None
     event: str = Field(min_length=1)
     extra: dict[str, object] = Field(default_factory=dict)
+
+
+LogStatusFilter = Literal["all", "success", "warning", "error"]
+
+
+class LogFilter(BaseModel):
+    """Caller-supplied filter for the Logs page."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: LogStatusFilter = "all"
+    account_id: str = ""
+    limit: int = Field(default=200, ge=1, le=1000)
+
+
+class LogsSummary(BaseModel):
+    """Counters shown above the Logs table — computed over the filtered window."""
+
+    total: int = Field(ge=0)
+    success: int = Field(ge=0)
+    warning: int = Field(ge=0)
+    error: int = Field(ge=0)
+
+
+class LogsPageState(BaseModel):
+    """Everything the Logs page renders in one go."""
+
+    entries: list[LogEntry] = Field(default_factory=list)
+    summary: LogsSummary
