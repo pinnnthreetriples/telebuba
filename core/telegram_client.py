@@ -6,10 +6,14 @@ from typing import TYPE_CHECKING
 from anyio import Path
 from python_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
 from telethon import TelegramClient, errors
+from telethon.tl.functions.account import UpdateProfileRequest
+from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 
 from core.config import settings
 from core.device_fingerprint import get_or_create_device_fingerprint
+from core.logging import log_event
 from schemas.device_fingerprint import TelegramClientProfile, TelegramClientRequest
+from schemas.telegram_actions import ActionResult
 from schemas.telegram_session import (
     SessionCheckStatus,
     TelegramSessionCheckRequest,
@@ -18,6 +22,8 @@ from schemas.telegram_session import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from schemas.telegram_actions import TelegramAction
 
 
 def _session_path(request: TelegramClientRequest) -> str:
@@ -202,3 +208,94 @@ def _optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+async def execute(account_id: str, action: TelegramAction) -> ActionResult:
+    """Dispatch a typed Telegram action against ``account_id``.
+
+    The only entry point for Telethon calls from outside ``core/``. Builds the
+    account's client (with proxy + device fingerprint), runs the action,
+    catches ``FloodWaitError`` separately, logs every outcome, and returns a
+    typed ``ActionResult`` — never raises Telethon errors upward.
+    """
+    request = TelegramClientRequest(account_id=account_id)
+    async with telegram_client(request) as client:
+        try:
+            await client.connect()
+            message_id = await _dispatch_action(client, action)
+        except errors.FloodWaitError as exc:
+            await log_event(
+                "WARNING",
+                f"telegram_{action.action_type}_flood_wait",
+                account_id=account_id,
+                extra={"seconds": exc.seconds},
+            )
+            return ActionResult(
+                status="flood_wait",
+                action_type=action.action_type,
+                account_id=account_id,
+                flood_wait_seconds=exc.seconds,
+            )
+        except Exception as exc:  # noqa: BLE001 — Telethon throws diverse errors; classify and report.
+            await log_event(
+                "ERROR",
+                f"telegram_{action.action_type}_failed",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__, "message": str(exc)},
+            )
+            return ActionResult(
+                status="failed",
+                action_type=action.action_type,
+                account_id=account_id,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
+
+    await log_event(
+        "INFO",
+        f"telegram_{action.action_type}",
+        account_id=account_id,
+        extra=_action_log_extra(action),
+    )
+    return ActionResult(
+        status="ok",
+        action_type=action.action_type,
+        account_id=account_id,
+        message_id=message_id,
+    )
+
+
+async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:
+    """Run one action against an already-connected client. Returns message_id if any."""
+    # Telethon resolves usernames / chat refs at runtime; ty insists on the
+    # narrow InputChannel union, so the str/int passthrough needs an ignore.
+    if action.action_type == "join_channel":
+        await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+        return None
+    if action.action_type == "leave_channel":
+        await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+        return None
+    if action.action_type == "post_comment":
+        message = await client.send_message(action.chat_id, action.text)
+        return int(getattr(message, "id", 0)) or None
+    if action.action_type == "update_profile":
+        await client(
+            UpdateProfileRequest(
+                first_name=action.first_name,
+                last_name=action.last_name or "",
+            ),
+        )
+        return None
+    msg = f"Unsupported action_type: {action.action_type}"
+    raise ValueError(msg)
+
+
+def _action_log_extra(action: TelegramAction) -> dict[str, object]:
+    """Compact summary of an action for log extras — no payload secrets."""
+    if action.action_type in {"join_channel", "leave_channel"}:
+        return {"channel": getattr(action, "channel", "")}
+    if action.action_type == "post_comment":
+        return {"chat_id": getattr(action, "chat_id", 0)}
+    if action.action_type == "update_profile":
+        return {"has_last_name": getattr(action, "last_name", None) is not None}
+    return {}
