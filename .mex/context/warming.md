@@ -15,34 +15,62 @@ edges:
     condition: when deciding where job code lives vs UI code
   - target: patterns/add-warming-job.md
     condition: when adding a new scheduled warming task
-last_updated: 2026-06-10
+last_updated: 2026-06-12
 ---
 
-# Warming (APScheduler)
+# Warming (per-account asyncio loops)
 
-## Where the scheduler lives
+## Runtime model (decided at first implementation)
 
-- A single `AsyncIOScheduler` instance is created once at app startup and shared with NiceGUI's event loop. Owner module: `features/warming.py`.
-- Other features must NOT spin up their own scheduler. If a feature needs scheduled work, it registers a job on the shared scheduler at startup or through a `core/` helper — without importing `features/warming.py`.
-- [TO BE DETERMINED — populate after first implementation: where the shared scheduler handle is exposed so other features can register without crossing the no-cross-feature-import rule. Likely `core/scheduler.py`.]
+Warming is a **continuous randomised loop per account**, not a fixed-schedule cron job:
+`cycle → sleep 12-30h → cycle …`. So instead of APScheduler we run one
+`asyncio.Task` per warming account, owned by `services/warming.py` in the module-level
+`_RUNTIME: dict[str, asyncio.Task]`.
 
-## Job design rules
+- `start_warming(account_id)` sets state `active` and creates the loop task.
+- `stop_warming(account_id)` cancels the task and resets state to `idle`.
+- The loop wrapper `_warming_loop` calls the testable `run_one_cycle`, then sleeps a
+  random 12-30h, updating `warming_account_state` (next_run_at, last_cycle_at, cycle count).
 
-- Jobs are async functions that take a Pydantic model (typically an account identifier or job spec schema) and return a result model.
-- Jobs are idempotent — APScheduler may fire late or twice; check state before acting.
-- Jobs must not raise to the scheduler. Catch, log a business event via `core/logging.py`, and let the scheduler reschedule cleanly.
-- Long-running jobs must `await` cooperatively so they do not block the NiceGUI event loop.
+APScheduler / `core/scheduler.py` is **only** needed if a future feature wants real cron
+scheduling — warming does not. This resolves the old "shared scheduler handle" and
+"jobstore" open decisions for the warming domain.
+
+## Cycle design rules
+
+- `run_one_cycle(WarmingCycleRequest)` is the pure, testable unit — it returns a
+  `WarmingCycleResult` and performs no infinite sleeps (delays come from `settings.warming`,
+  set to 0 in tests).
+- All Telegram I/O goes through `core.telegram_client.execute(account_id, action)` with
+  typed actions (`SetOnline`, `JoinChannel`, `ReadChannel`, `ReactToPost`, `SendDirectMessage`).
+- A `flood_wait` result short-circuits the cycle; the loop then parks the account in the
+  `flood_wait` state until the next scheduled cycle.
+- The loop body never raises to the task: `_warming_loop` catches everything, logs
+  `warming_loop_crashed` via `core/logging.py`, and sets state `error`.
 
 ## Persistence
 
-- Job definitions live in code; runtime job state (next run, last result) lives in SQLite via SQLAlchemy.
-- [TO BE DETERMINED — populate after first implementation: whether APScheduler's own jobstore points at the same SQLite DB or stays in-memory with our DB tracking schedule state.]
+- Channels: `warming_channels` (unlimited, deduped). Settings: `warming_settings`
+  (singleton row — inter-account-chat toggle, reactions toggle, Gemini API key + model).
+  Per-account runtime: `warming_account_state` (state, cycles_completed, last_event,
+  last_cycle_at, next_run_at).
+- The Gemini key is entered in the UI and stored in `warming_settings`; `settings.gemini`
+  only supplies defaults (env `GEMINI__API_KEY`) and non-secret tunables.
 
-## Human-like activity
+## Human-like activity (decided)
 
-[TO BE DETERMINED — populate after first implementation. Decide jitter strategy (random delays around scheduled time), per-account daily quotas, and which activities count as warming vs active use.]
+All in `settings.warming`, no magic numbers in code:
+- Per-action pause 10-30s; "typing" 5-30s; "reading posts" 8-45s.
+- Random 1-3 channels per cycle (`channels_per_cycle_min/max`).
+- Reaction probability per read (default 0.6) using a configurable emoji set; reactions
+  target a random recent post.
+- Post-cycle sleep 12-30h with per-account startup jitter.
+- Inter-account chat (opt-in): when ≥2 accounts are warming and a Gemini key is set, the
+  sender DMs a random warming peer (that has a known `user_id`) a Gemini-generated line.
+- Per-account daily quotas are a future refinement.
 
 ## What does NOT belong here
 
-- No direct Telegram calls inline in this file — go through `core/telegram_client.py`.
-- No scheduling logic spread across multiple feature files — registrations live here (or via `core/scheduler.py` once it exists).
+- No direct Telegram calls inline — go through `core/telegram_client.py`.
+- No business logic in `features/warming.py` — it is UI-thin and delegates to
+  `services/warming.py`.

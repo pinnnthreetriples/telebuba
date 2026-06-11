@@ -39,6 +39,38 @@ class UpdateProfile(BaseModel):
     bio: str | None = None
 
 
+class SetOnline(BaseModel):
+    """Flip the account's presence — warming uses it to look "active"."""
+
+    action_type: Literal["set_online"] = "set_online"
+    online: bool = True
+
+
+class ReadChannel(BaseModel):
+    """Fetch recent posts and mark them read — emulates a human reading a feed."""
+
+    action_type: Literal["read_channel"] = "read_channel"
+    channel: str = Field(min_length=1)
+    message_limit: int = Field(default=15, ge=1, le=100)
+
+
+class ReactToPost(BaseModel):
+    """React to a random recent post with one of the candidate emojis."""
+
+    action_type: Literal["react_to_post"] = "react_to_post"
+    channel: str = Field(min_length=1)
+    reactions: list[str] = Field(min_length=1)
+    message_limit: int = Field(default=20, ge=1, le=100)
+
+
+class SendDirectMessage(BaseModel):
+    """Send a private message to another account — drives inter-account chat."""
+
+    action_type: Literal["send_dm"] = "send_dm"
+    user_id: int
+    text: str = Field(min_length=1)
+
+
 class SetProfilePhoto(BaseModel):
     action_type: Literal["set_profile_photo"] = "set_profile_photo"
     filename: str = Field(min_length=1)
@@ -69,6 +101,10 @@ TelegramAction = Annotated[
     | LeaveChannel
     | PostComment
     | UpdateProfile
+    | SetOnline
+    | ReadChannel
+    | ReactToPost
+    | SendDirectMessage
     | SetProfilePhoto
     | PostStory
     | AddProfileMusic,

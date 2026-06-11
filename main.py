@@ -8,11 +8,13 @@ from core.config import settings
 from core.logging import setup_logging
 from features.accounts import register_accounts_page
 from features.logs import register_logs_page
+from features.warming import register_warming_page
 
 
 def main() -> None:
     setup_logging()
     register_accounts_page()
+    register_warming_page()
     register_logs_page()
     ui.run(title="Telebuba", port=settings.ui.port, reload=False)
 

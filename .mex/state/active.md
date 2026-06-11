@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-06-11
+last_updated: 2026-06-12
 ---
 
 # Active State
@@ -36,19 +36,40 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - Account profile editing is user-facing from the accounts page and goes through
   `services.accounts.update_account_profile()` -> typed `UpdateProfile` action ->
   `core.telegram_client.execute()`, then persists the local first/last/username/bio snapshot.
+- **Warming module (full vertical slice).**
+  - `schemas/warming.py` — kanban/board/cycle/settings models + `WarmingState`
+    lifecycle (`idle`/`active`/`sleeping`/`flood_wait`/`error`) and `warming_health`
+    traffic-light mapping. `schemas/gemini.py` — Gemini request/result.
+  - `schemas/telegram_actions.py` — extended with `SetOnline`, `ReadChannel`,
+    `ReactToPost`, `SendDirectMessage`; `core.telegram_client._dispatch_action`
+    handles all four (online toggle, read-history ack, random-post reaction, DM).
+  - `core/gemini.py` — the only httpx-to-Google gateway; returns typed `GeminiResult`,
+    never raises.
+  - `core/db.py` — new tables `warming_channels`, `warming_settings` (singleton row,
+    holds Gemini key), `warming_account_state`, with async helpers.
+  - `services/warming.py` — the engine: channel parsing (unlimited links), per-account
+    `run_one_cycle` (online → join → read → maybe react → optional Gemini inter-account
+    DM → offline) with humanized pauses, FloodWait short-circuit, and a per-account
+    `asyncio` loop task (`_RUNTIME`) sleeping 12-30h between cycles.
+  - `features/warming.py` — `/warming` page: drag-and-drop kanban (Idle ↔ Warming
+    starts/stops the loop), unlimited channel manager, Gemini key + chat/reactions
+    toggles, and a live colour-coded (green/amber/red) activity log with CSS pulse/fade
+    animations. `main.py` registers it; Accounts/Logs headers link to it.
+- `core/config.py` already uses **nested namespaces**; now also exposes
+  `settings.warming` (delays/limits/default reactions) and `settings.gemini`.
+- `core/logging.py` (loguru + Sentry + SQLite `logs`) and the Logs page are live.
 
 ## Not Yet Built
-- `core/logging.py` (loguru + structlog + Sentry + SQLite `logs` table).
-- `core/config.py` — refactor to **nested namespaces** (`settings.telegram`, `settings.warming`, `settings.gemini`, ...). Current shape is flat.
-- `services/` — entire layer (warming, accounts, comments, telegram_outbox worker). None exists today; methodology requires all business logic here.
-- `schemas/telegram_actions.py` — typed Telegram action classes (`JoinChannel`, `PostComment`, `UpdateProfile`, ...).
 - `features/accounts.py` — already implemented, but predates the services/ layer; orchestration lives in the feature file directly. Refactor to extract `services/accounts.py` is tracked separately.
-- Additional `features/` pages — warming, comments, logs page.
-- Real NiceGUI entrypoint for non-accounts pages in `main.py`.
-- SQLAlchemy models beyond `accounts` + `device_fingerprints`: `logs`, `telegram_outbox`, etc.
-- APScheduler wiring (either a `core/scheduler.py` or owned by `features/warming.py`).
-- `.env.example`.
-- AI provider integration — Gemini API planned (`GEMINI_API_KEY` reserved).
+- Additional `features/` pages — comments page.
+- `services/comments.py` and `services/telegram_outbox.py` (outbox worker) — not started.
+- SQLAlchemy models beyond the current 7 tables (`accounts`, `device_fingerprints`,
+  `account_proxies`, `logs`, `warming_channels`, `warming_settings`,
+  `warming_account_state`): `telegram_outbox`, etc. **Repository split trigger reached**
+  (≥ 5 tables) — `core/db.py` should be broken into `core/repositories/<aggregate>.py`.
+- APScheduler / `core/scheduler.py` — deliberately **not** used for warming (see note
+  below); still needed if a future feature wants true cron scheduling.
+- Comment-generation use of Gemini (only inter-account chat uses it today).
 
 ## Known Issues
 - `aislop --version` fails on Windows due to a space in the Python path — call via `uv run python -m aislop` instead.
@@ -58,10 +79,9 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 Authoritative list of architectural unknowns. Context files may carry `[TO BE DETERMINED]` markers; this section is the single index of all of them.
 
 ### Architecture / design (must be resolved before related code is written)
-- **Account lifecycle enum beyond session health** — session health is stored on `accounts.status`; business lifecycle (`created` / `verified` / `warming` / `active` / `banned`) still needs a canonical list + column decision. (`context/telegram.md`)
-- **Shared scheduler handle** — where `AsyncIOScheduler` is exposed so non-warming features can register jobs without `from features.warming`. Probably `core/scheduler.py`. (`context/warming.md`)
-- **APScheduler jobstore** — in-memory + DB-tracked, or APScheduler's own SQLAlchemy jobstore pointing at `telebuba.db`. (`context/warming.md`)
-- **Human-like activity tuning** — jitter strategy around scheduled times, per-account daily quotas, which actions count as warming vs active. (`context/warming.md`)
+- **Account lifecycle enum beyond session health** — session health is stored on `accounts.status`; warming lifecycle now lives separately in `warming_account_state.state` (`idle`/`active`/`sleeping`/`flood_wait`/`error`). A unified business lifecycle (`created` / `verified` / `active` / `banned`) is still undecided. (`context/telegram.md`)
+- **RESOLVED — warming runtime model.** Warming is a continuous randomised loop, so each account runs an `asyncio.Task` owned by `services/warming.py` (`_RUNTIME`), not an APScheduler job. A shared `core/scheduler.py` is only needed if a future feature wants real cron scheduling. (`context/warming.md`)
+- **RESOLVED — human-like activity tuning.** Per-action 10-30s jitter, 5-30s "typing", 8-45s "reading", random 1-3 channels/cycle, configurable reaction probability, and a 12-30h post-cycle sleep — all in `settings.warming`. Per-account daily quotas remain a future refinement. (`context/warming.md`)
 - **`log_event` signature** — exact kwargs of the `core/logging.py` helper. Locked in when `core/logging.py` ships. (`context/logging.md`)
 - **NiceGUI Logs page pagination** — limit + offset strategy on the SQLite `logs` query. (`context/logging.md`)
 - **`core/telegram_client.execute(action)` signature** — exact return shape (`ActionResult` union? per-action result schema?). (`context/telegram.md`)

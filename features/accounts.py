@@ -327,6 +327,9 @@ def _build_header() -> _ToolbarButtons:  # pragma: no cover
             ui.link("Accounts", "/").classes(
                 "text-sm font-medium text-slate-900 no-underline",
             )
+            ui.link("Warming", "/warming").classes(
+                "text-sm text-slate-600 hover:text-slate-900 no-underline",
+            )
             ui.link("Logs", "/logs").classes(
                 "text-sm text-slate-600 hover:text-slate-900 no-underline",
             )
