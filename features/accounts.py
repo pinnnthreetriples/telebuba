@@ -7,7 +7,7 @@ interaction live in the service layer.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from nicegui import ui
 
@@ -15,6 +15,7 @@ from schemas.accounts import (
     AccountCheckRequest,
     AccountFilter,
     AccountSessionFileImport,
+    health_for_status,
 )
 from schemas.tdata import TdataConvertRequest
 from services.accounts import (
@@ -92,6 +93,12 @@ _ACTIONS_TEMPLATE = """
 </q-td>
 """
 
+_NOTIFY_TYPE_BY_HEALTH: dict[str, Literal["positive", "warning", "negative"]] = {
+    "ok": "positive",
+    "warn": "warning",
+    "fail": "negative",
+}
+
 
 def register_accounts_page() -> None:  # pragma: no cover
     @ui.page("/", title="Telebuba")
@@ -156,10 +163,23 @@ async def _render_accounts_page() -> None:  # pragma: no cover  # noqa: C901, PL
         if not account_id:
             ui.notify("Could not resolve account id", type="negative")
             return
-        ui.notify(f"Checking {account_id}…", type="ongoing")
-        await check_account_session(AccountCheckRequest(account_id=account_id))
-        await refresh()
-        ui.notify(f"Checked {account_id}", type="positive")
+        spinner = ui.notification(
+            f"Checking {account_id}…",
+            spinner=True,
+            timeout=None,
+            close_button=False,
+        )
+        try:
+            account = await check_account_session(
+                AccountCheckRequest(account_id=account_id),
+            )
+            await refresh()
+        finally:
+            spinner.dismiss()
+        ui.notify(
+            f"{account_id}: {account.status}",
+            type=_NOTIFY_TYPE_BY_HEALTH[health_for_status(account.status)],
+        )
 
     async def open_add_dialog() -> None:
         await _open_add_dialog(refresh)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -19,6 +20,7 @@ from schemas.accounts import (
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
+    _format_last_checked,
     add_account,
     check_account_session,
     import_account_session,
@@ -44,6 +46,34 @@ def _isolate_runtime(
     setup_logging()
     yield
     reset_logging_for_tests()
+
+
+@pytest.mark.parametrize(
+    ("offset_seconds", "expected"),
+    [
+        (0, "0s ago"),
+        (45, "45s ago"),
+        (60, "1m ago"),
+        (90, "1m ago"),
+        (3_600, "1h ago"),
+        (3_600 * 5, "5h ago"),
+        (86_400, "1d ago"),
+        (86_400 * 7, "7d ago"),
+    ],
+)
+def test_format_last_checked_relative(offset_seconds: int, expected: str) -> None:
+    now = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
+    moment = now - timedelta(seconds=offset_seconds)
+    assert _format_last_checked(moment.isoformat(), now=now) == expected
+
+
+def test_format_last_checked_never_for_empty() -> None:
+    assert _format_last_checked(None) == "never"
+    assert _format_last_checked("") == "never"
+
+
+def test_format_last_checked_passes_through_garbage() -> None:
+    assert _format_last_checked("not-a-date") == "not-a-date"
 
 
 @pytest.mark.asyncio

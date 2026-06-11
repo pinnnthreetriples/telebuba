@@ -23,6 +23,7 @@ take this module's public functions directly.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -36,13 +37,13 @@ from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
     AccountFilter,
-    AccountHealth,
     AccountRead,
     AccountSessionFileImport,
     AccountsTableState,
     AccountStatus,
     AccountSummary,
     AccountTableRow,
+    health_for_status,
 )
 from schemas.telegram_session import TelegramSessionCheckRequest
 
@@ -198,25 +199,44 @@ def _to_table_row(account: AccountRead) -> AccountTableRow:
         account_id=account.account_id,
         label=account.label or account.account_id,
         status=_status_label(account.status),
-        health=_health_for(account.status),
+        health=health_for_status(account.status),
         telegram=_telegram_label(account),
         session=account.session_name or account.account_id,
         device=_device_label(account),
-        last_checked=account.last_checked_at or "never",
+        last_checked=_format_last_checked(account.last_checked_at),
     )
 
 
-def _health_for(status: AccountStatus) -> AccountHealth:
-    """Map an ``AccountStatus`` to a coarse traffic-light health value.
+_SECONDS_PER_MINUTE = 60
+_SECONDS_PER_HOUR = 3600
+_SECONDS_PER_DAY = 86_400
 
-    Used by the UI for the colored status badge: green for working accounts,
-    amber for retry-soon situations, red for permanent failures.
+
+def _format_last_checked(iso_value: str | None, now: datetime | None = None) -> str:
+    """Render an ISO-8601 timestamp as a compact relative string for the UI.
+
+    Returns "never" when ``iso_value`` is empty. Otherwise produces
+    ``Ns ago`` / ``Nm ago`` / ``Nh ago`` / ``Nd ago``. Falls back to the
+    raw string if parsing fails — we never want a single bad row to break
+    the whole table.
     """
-    if status == "alive":
-        return "ok"
-    if status in _PERMANENT_ISSUES:
-        return "fail"
-    return "warn"
+    if not iso_value:
+        return "never"
+    try:
+        moment = datetime.fromisoformat(iso_value)
+    except ValueError:
+        return iso_value
+    if moment.tzinfo is None:
+        moment = moment.replace(tzinfo=UTC)
+    reference = now or datetime.now(UTC)
+    seconds = max(0, int((reference - moment).total_seconds()))
+    if seconds < _SECONDS_PER_MINUTE:
+        return f"{seconds}s ago"
+    if seconds < _SECONDS_PER_HOUR:
+        return f"{seconds // _SECONDS_PER_MINUTE}m ago"
+    if seconds < _SECONDS_PER_DAY:
+        return f"{seconds // _SECONDS_PER_HOUR}h ago"
+    return f"{seconds // _SECONDS_PER_DAY}d ago"
 
 
 def _status_label(status: AccountStatus) -> str:
