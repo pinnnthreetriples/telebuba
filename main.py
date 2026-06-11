@@ -12,7 +12,7 @@ from features.accounts import register_accounts_page
 def main() -> None:
     setup_logging()
     register_accounts_page()
-    ui.run(title="Telebuba", port=settings.ui_port, reload=False)
+    ui.run(title="Telebuba", port=settings.ui.port, reload=False)
 
 
 if __name__ in {"__main__", "__mp_main__"}:

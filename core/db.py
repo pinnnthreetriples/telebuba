@@ -93,7 +93,7 @@ def configure_database(database_path: Path) -> None:
 
 def _get_engine() -> Engine:
     if _state.engine is None:
-        database_path = _state.database_path or settings.database_path
+        database_path = _state.database_path or settings.db.path
         database_path.parent.mkdir(parents=True, exist_ok=True)
         _state.engine = create_engine(
             f"sqlite:///{database_path}",
