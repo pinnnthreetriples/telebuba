@@ -41,6 +41,21 @@ def register_logs_page() -> None:  # pragma: no cover
 async def _render_logs_page() -> None:  # pragma: no cover
     ui.query("body").classes("bg-slate-50 text-slate-950")
 
+    with (
+        ui.row().classes(
+            "w-full items-center justify-between px-4 py-2 bg-white "
+            "text-slate-950 border-b border-slate-200",
+        ),
+        ui.row().classes("items-center gap-4"),
+    ):
+        ui.label("Telebuba").classes("text-lg font-semibold")
+        ui.link("Accounts", "/").classes(
+            "text-sm text-slate-600 hover:text-slate-900 no-underline",
+        )
+        ui.link("Logs", "/logs").classes(
+            "text-sm font-medium text-slate-900 no-underline",
+        )
+
     with ui.column().classes("w-full max-w-[1400px] mx-auto p-4 gap-3"):
         ui.label("Logs").classes("text-lg font-semibold")
 
