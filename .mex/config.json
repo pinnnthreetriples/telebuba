@@ -1,6 +1,7 @@
 {
   "aiTools": [
-    "claude"
+    "claude",
+    "codex"
   ],
   "scaffold_id": "7653bd14-bcff-4c7f-897f-51bb60f2af56",
   "scaffold_name": "telebuba",
