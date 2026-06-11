@@ -48,18 +48,18 @@ def setup_logging() -> None:
 
     logger.remove()  # drop loguru's default stderr sink
     logger.add(
-        settings.log_path,
-        rotation=settings.log_rotation,
-        retention=settings.log_retention,
-        level=settings.log_level,
+        settings.logging.path,
+        rotation=settings.logging.rotation,
+        retention=settings.logging.retention,
+        level=settings.logging.level,
         enqueue=True,
         backtrace=True,
         diagnose=False,  # avoid leaking variable values into the file
     )
 
-    if settings.sentry_dsn:
+    if settings.logging.sentry_dsn:
         sentry_sdk.init(
-            dsn=settings.sentry_dsn,
+            dsn=settings.logging.sentry_dsn,
             traces_sample_rate=0.0,
             send_default_pii=False,
         )

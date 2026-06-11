@@ -46,7 +46,7 @@ async def test_import_account_session_saves_file_and_creates_account(
 ) -> None:
     configure_database(tmp_path / "telebuba.db")
     session_dir = tmp_path / "sessions"
-    monkeypatch.setattr("features.accounts.settings.session_dir", session_dir)
+    monkeypatch.setattr("features.accounts.settings.telegram.session_dir", session_dir)
 
     account = await import_account_session(
         AccountSessionFileImport(

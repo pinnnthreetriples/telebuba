@@ -23,11 +23,11 @@ def _isolate_logging(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> Iterator[None]:
-    monkeypatch.setattr(settings, "log_path", tmp_path / "debug.log")
-    monkeypatch.setattr(settings, "log_rotation", "1 MB")
-    monkeypatch.setattr(settings, "log_retention", 2)
-    monkeypatch.setattr(settings, "log_level", "INFO")
-    monkeypatch.setattr(settings, "sentry_dsn", "")
+    monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
+    monkeypatch.setattr(settings.logging, "rotation", "1 MB")
+    monkeypatch.setattr(settings.logging, "retention", 2)
+    monkeypatch.setattr(settings.logging, "level", "INFO")
+    monkeypatch.setattr(settings.logging, "sentry_dsn", "")
     configure_database(tmp_path / "logs.db")
     reset_logging_for_tests()
     setup_logging()
@@ -80,14 +80,14 @@ async def test_extra_defaults_to_empty_dict() -> None:
 async def test_writes_to_loguru_file() -> None:
     await log_event("INFO", "first_event", account_id="acc-x")
 
-    contents = settings.log_path.read_text(encoding="utf-8")
+    contents = settings.logging.path.read_text(encoding="utf-8")
     assert "first_event" in contents
     assert "acc-x" in contents
 
 
 @pytest.mark.asyncio
 async def test_error_calls_sentry_when_dsn_set(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "sentry_dsn", "https://fake@sentry.example/0")
+    monkeypatch.setattr(settings.logging, "sentry_dsn", "https://fake@sentry.example/0")
     reset_logging_for_tests()
     with patch("core.logging.sentry_sdk.init") as mock_init:
         setup_logging()
@@ -117,7 +117,7 @@ async def test_error_skips_sentry_when_dsn_unset() -> None:
 
 @pytest.mark.asyncio
 async def test_info_never_calls_sentry_even_with_dsn(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings, "sentry_dsn", "https://fake@sentry.example/0")
+    monkeypatch.setattr(settings.logging, "sentry_dsn", "https://fake@sentry.example/0")
     reset_logging_for_tests()
     with patch("core.logging.sentry_sdk.init"):
         setup_logging()

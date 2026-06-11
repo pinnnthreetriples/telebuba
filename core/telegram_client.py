@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 
 def _session_path(request: TelegramClientRequest) -> str:
     session_name = request.session_name or request.account_id
-    return str(settings.session_dir / session_name)
+    return str(settings.telegram.session_dir / session_name)
 
 
 async def prepare_telegram_client_profile(
@@ -51,25 +51,25 @@ async def prepare_session_check_profile(
 
 
 async def _ensure_session_dir() -> None:
-    await Path(settings.session_dir).mkdir(parents=True, exist_ok=True)
+    await Path(settings.telegram.session_dir).mkdir(parents=True, exist_ok=True)
 
 
 def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
     device = profile.device
     return TelegramClient(
         profile.session_path,
-        settings.telegram_api_id,
-        settings.telegram_api_hash,
+        settings.telegram.api_id,
+        settings.telegram.api_hash,
         device_model=device.device_model,
         system_version=device.system_version,
         app_version=device.app_version,
         lang_code=device.lang_code,
         system_lang_code=device.system_lang_code,
         receive_updates=profile.receive_updates,
-        timeout=settings.telegram_timeout_seconds,
-        connection_retries=settings.telegram_connection_retries,
-        retry_delay=settings.telegram_retry_delay_seconds,
-        request_retries=settings.telegram_request_retries,
+        timeout=settings.telegram.timeout_seconds,
+        connection_retries=settings.telegram.connection_retries,
+        retry_delay=settings.telegram.retry_delay_seconds,
+        request_retries=settings.telegram.request_retries,
     )
 
 

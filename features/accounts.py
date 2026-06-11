@@ -71,7 +71,7 @@ async def add_account(data: AccountCreate) -> AccountRead:
 async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     filename = _session_filename(data.filename)
     session_name = Path(filename).stem
-    session_path = settings.session_dir / filename
+    session_path = settings.telegram.session_dir / filename
     await asyncio.to_thread(_write_session_file, session_path, data.content)
     return await add_account(
         AccountCreate(account_id=session_name, label=data.label, session_name=session_name),
@@ -85,7 +85,7 @@ async def import_account_tdata(data: TdataConvertRequest) -> list[AccountRead]:
     Returns the post-check ``AccountRead`` rows. Raises ``ValueError`` with a human-readable
     message when the conversion itself failed.
     """
-    result = await convert_tdata_zip(data, settings.session_dir)
+    result = await convert_tdata_zip(data, settings.telegram.session_dir)
     if result.status != "ok":
         msg = f"tdata import failed: {result.status}"
         if result.error:

@@ -43,6 +43,7 @@ htmlcov/
 # AI agent caches / per-machine config
 .serena/
 .aislop/
+.agents/
 .codex/
 .friday/
 .specify/
