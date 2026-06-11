@@ -129,9 +129,9 @@ async def list_channels() -> WarmingChannelList:
     return await list_warming_channels()
 
 
-async def add_channels(request: AddChannelsRequest) -> WarmingChannelList:
+async def add_channels(data: AddChannelsRequest) -> WarmingChannelList:
     """Parse a free-form blob of links/usernames and persist each unique one."""
-    parsed = _parse_channels(request.raw)
+    parsed = _parse_channels(data.raw)
     channels = await list_warming_channels()
     for channel in parsed:
         channels = await add_warming_channel(channel)
@@ -139,9 +139,9 @@ async def add_channels(request: AddChannelsRequest) -> WarmingChannelList:
     return channels
 
 
-async def remove_channel(request: RemoveChannelRequest) -> WarmingChannelList:
-    channels = await remove_warming_channel(request.channel)
-    await log_event("INFO", "warming_channel_removed", extra={"channel": request.channel})
+async def remove_channel(data: RemoveChannelRequest) -> WarmingChannelList:
+    channels = await remove_warming_channel(data.channel)
+    await log_event("INFO", "warming_channel_removed", extra={"channel": data.channel})
     return channels
 
 
@@ -164,11 +164,11 @@ async def load_settings() -> WarmingSettings:
     return _mask_settings(await load_warming_settings())
 
 
-async def save_settings(request: WarmingSettingsUpdate) -> WarmingSettings:
+async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
     secret = await save_warming_settings(
-        inter_account_chat=request.inter_account_chat,
-        reactions_enabled=request.reactions_enabled,
-        gemini_api_key=request.gemini_api_key,
+        inter_account_chat=data.inter_account_chat,
+        reactions_enabled=data.reactions_enabled,
+        gemini_api_key=data.gemini_api_key,
     )
     await log_event(
         "INFO",
@@ -287,24 +287,24 @@ async def _current_card(account_id: str) -> WarmingAccountState:
 # --------------------------------------------------------------------------- #
 
 
-async def start_warming(request: StartWarmingRequest) -> WarmingAccountState:
+async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
     """Move an account into the warming column and kick off its loop task."""
-    await _set_state(request.account_id, "active", last_event="queued")
-    existing = _RUNTIME.get(request.account_id)
+    await _set_state(data.account_id, "active", last_event="queued")
+    existing = _RUNTIME.get(data.account_id)
     if existing is None or existing.done():
-        _RUNTIME[request.account_id] = asyncio.create_task(_warming_loop(request.account_id))
-    await log_event("INFO", "warming_started", account_id=request.account_id)
-    return await _current_card(request.account_id)
+        _RUNTIME[data.account_id] = asyncio.create_task(_warming_loop(data.account_id))
+    await log_event("INFO", "warming_started", account_id=data.account_id)
+    return await _current_card(data.account_id)
 
 
-async def stop_warming(request: StopWarmingRequest) -> WarmingAccountState:
+async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
     """Cancel an account's loop task and return it to the idle column."""
-    task = _RUNTIME.pop(request.account_id, None)
+    task = _RUNTIME.pop(data.account_id, None)
     if task is not None and not task.done():
         task.cancel()
-    await _set_state(request.account_id, "idle", last_event="stopped")
-    await log_event("INFO", "warming_stopped", account_id=request.account_id)
-    return await _current_card(request.account_id)
+    await _set_state(data.account_id, "idle", last_event="stopped")
+    await log_event("INFO", "warming_stopped", account_id=data.account_id)
+    return await _current_card(data.account_id)
 
 
 # --------------------------------------------------------------------------- #
@@ -348,9 +348,9 @@ async def _read_and_react(
     return reads, reactions, False
 
 
-async def run_one_cycle(request: WarmingCycleRequest) -> WarmingCycleResult:
+async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:
     """Perform exactly one warming pass for an account. The testable core."""
-    account_id = request.account_id
+    account_id = data.account_id
     secret = await load_warming_settings()
     channels = (await list_warming_channels()).channels
     if not channels:
