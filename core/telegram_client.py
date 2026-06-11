@@ -1,27 +1,40 @@
 from __future__ import annotations
 
+import mimetypes
 import random
-from contextlib import asynccontextmanager
+from contextlib import asynccontextmanager, suppress
+from io import BytesIO
 from typing import TYPE_CHECKING
 
 from anyio import Path
 from python_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
-from telethon import TelegramClient, errors
+from telethon import TelegramClient, errors, utils
 from telethon.tl.functions.account import (
+    SaveMusicRequest,
     UpdateProfileRequest,
     UpdateStatusRequest,
     UpdateUsernameRequest,
 )
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.functions.messages import SendReactionRequest
-from telethon.tl.types import ReactionEmoji
+from telethon.tl.functions.photos import UploadProfilePhotoRequest
+from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
+from telethon.tl.types import (
+    DocumentAttributeAudio,
+    InputMediaUploadedDocument,
+    InputMediaUploadedPhoto,
+    InputPrivacyValueAllowAll,
+    InputPrivacyValueAllowCloseFriends,
+    InputPrivacyValueAllowContacts,
+    ReactionEmoji,
+)
 
 from core.config import settings
 from core.db import fetch_account_proxy_settings
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from schemas.device_fingerprint import TelegramClientProfile, TelegramClientRequest
-from schemas.telegram_actions import ActionResult
+from schemas.telegram_actions import ActionResult, AddProfileMusic, PostStory, SetProfilePhoto
 from schemas.telegram_session import (
     SessionCheckStatus,
     TelegramSessionCheckRequest,
@@ -30,6 +43,8 @@ from schemas.telegram_session import (
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
+
+    from telethon.tl.types import TypeInputMedia, TypeInputPrivacyRule
 
     from schemas.telegram_actions import (
         ReactToPost,
@@ -360,6 +375,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
     elif action.action_type == "send_dm":
         message = await client.send_message(action.user_id, action.text)
         message_id = int(getattr(message, "id", 0)) or None
+    elif action.action_type in {"set_profile_photo", "post_story", "add_profile_music"}:
+        message_id = await _dispatch_profile_media_action(client, action)
     else:
         msg = f"Unsupported action_type: {action.action_type}"
         raise ValueError(msg)
@@ -414,20 +431,129 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     return message_id
 
 
+async def _dispatch_profile_media_action(
+    client: TelegramClient,
+    action: TelegramAction,
+) -> int | None:
+    if isinstance(action, SetProfilePhoto):
+        await _set_profile_photo(client, action.filename, action.content)
+        return None
+    if isinstance(action, PostStory):
+        return await _post_story(client, action)
+    if isinstance(action, AddProfileMusic):
+        await _add_profile_music(client, action)
+        return None
+    msg = f"Unsupported profile media action_type: {action.action_type}"
+    raise ValueError(msg)
+
+
+async def _set_profile_photo(client: TelegramClient, filename: str, content: bytes) -> None:
+    uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
+    await client(UploadProfilePhotoRequest(file=uploaded))
+
+
+async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
+    peer = await client.get_input_entity("me")
+    await client(CanSendStoryRequest(peer=peer))
+    media = await _story_media(client, action.filename, action.content, action.media_kind)
+    result = await client(
+        SendStoryRequest(
+            peer=peer,
+            media=media,
+            privacy_rules=_story_privacy_rules(action.privacy_preset),
+            caption=action.caption or "",
+            period=action.period_seconds,
+            noforwards=action.protect_content,
+        ),
+    )
+    story_id = getattr(result, "id", None)
+    return story_id if isinstance(story_id, int) else None
+
+
+async def _story_media(
+    client: TelegramClient,
+    filename: str,
+    content: bytes,
+    media_kind: str,
+) -> TypeInputMedia:
+    uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
+    if media_kind == "image":
+        return InputMediaUploadedPhoto(file=uploaded)
+    attributes, mime_type = utils.get_attributes(
+        _named_bytes(filename, content),
+        mime_type=mimetypes.guess_type(filename)[0] or "video/mp4",
+        supports_streaming=True,
+    )
+    return InputMediaUploadedDocument(
+        file=uploaded,
+        mime_type=mime_type,
+        attributes=attributes,
+    )
+
+
+def _story_privacy_rules(preset: str) -> list[TypeInputPrivacyRule]:
+    if preset == "public":
+        return [InputPrivacyValueAllowAll()]
+    if preset == "close_friends":
+        return [InputPrivacyValueAllowCloseFriends()]
+    return [InputPrivacyValueAllowContacts()]
+
+
+async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) -> None:
+    attributes, mime_type = utils.get_attributes(
+        _named_bytes(action.filename, action.content),
+        attributes=[
+            DocumentAttributeAudio(
+                duration=0,
+                title=action.title,
+                performer=action.performer,
+            ),
+        ],
+        mime_type=mimetypes.guess_type(action.filename)[0] or "audio/mpeg",
+    )
+    message = await client.send_file(
+        "me",
+        _named_bytes(action.filename, action.content),
+        file_name=action.filename,
+        attributes=attributes,
+        mime_type=mime_type,
+    )
+    document = getattr(message, "document", None)
+    if document is None:
+        msg = "Telegram did not return an audio document"
+        raise ValueError(msg)
+    await client(SaveMusicRequest(id=utils.get_input_document(document)))
+    message_id = getattr(message, "id", None)
+    if isinstance(message_id, int):
+        with suppress(Exception):
+            await client.delete_messages("me", [message_id], revoke=True)
+
+
+def _named_bytes(filename: str, content: bytes) -> BytesIO:
+    stream = BytesIO(content)
+    stream.name = filename
+    return stream
+
+
 def _action_log_extra(action: TelegramAction) -> dict[str, object]:
     """Compact summary of an action for log extras — no payload secrets."""
+    extra: dict[str, object]
     if action.action_type in {"join_channel", "leave_channel", "read_channel", "react_to_post"}:
-        return {"channel": getattr(action, "channel", "")}
-    if action.action_type == "post_comment":
-        return {"chat_id": getattr(action, "chat_id", 0)}
-    if action.action_type == "set_online":
-        return {"online": getattr(action, "online", None)}
-    if action.action_type == "send_dm":
-        return {"user_id": getattr(action, "user_id", 0)}
-    if action.action_type == "update_profile":
-        return {
+        extra = {"channel": getattr(action, "channel", "")}
+    elif action.action_type == "post_comment":
+        extra = {"chat_id": getattr(action, "chat_id", 0)}
+    elif action.action_type == "set_online":
+        extra = {"online": getattr(action, "online", None)}
+    elif action.action_type == "send_dm":
+        extra = {"user_id": getattr(action, "user_id", 0)}
+    elif action.action_type == "update_profile":
+        extra = {
             "has_last_name": getattr(action, "last_name", None) is not None,
             "has_username": getattr(action, "username", None) is not None,
             "has_bio": getattr(action, "bio", None) is not None,
         }
-    return {}
+    elif action.action_type in {"set_profile_photo", "post_story", "add_profile_music"}:
+        extra = {"filename": getattr(action, "filename", "")}
+    else:
+        extra = {}
+    return extra

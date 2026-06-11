@@ -9,10 +9,11 @@ from core.db import (
     fetch_account_proxy,
     fetch_account_proxy_settings,
     list_accounts,
+    update_account_proxy_check,
     upsert_account_proxy,
 )
 from schemas.accounts import AccountCreate
-from schemas.proxy import AccountProxyDelete, AccountProxyUpsert
+from schemas.proxy import AccountProxyCheckUpdate, AccountProxyDelete, AccountProxyUpsert
 
 
 @pytest.mark.asyncio
@@ -43,6 +44,37 @@ async def test_upsert_account_proxy_returns_masked_read_model(tmp_path) -> None:
     accounts = await list_accounts()
     assert accounts.accounts[0].proxy_type == "socks5"
     assert accounts.accounts[0].proxy_host == "127.0.0.1"
+
+
+@pytest.mark.asyncio
+async def test_update_account_proxy_check_persists_exit_country(tmp_path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-check"))
+    await upsert_account_proxy(
+        AccountProxyUpsert(
+            account_id="acc-check",
+            proxy_type="socks5",
+            host="127.0.0.1",
+            port=9050,
+        ),
+    )
+
+    proxy = await update_account_proxy_check(
+        AccountProxyCheckUpdate(
+            account_id="acc-check",
+            status="tcp_working",
+            exit_ip="45.130.253.155",
+            country_code="NL",
+            country_name="Netherlands",
+        ),
+    )
+    accounts = await list_accounts()
+
+    assert proxy.status == "tcp_working"
+    assert proxy.exit_ip == "45.130.253.155"
+    assert proxy.country_code == "NL"
+    assert accounts.accounts[0].proxy_exit_ip == "45.130.253.155"
+    assert accounts.accounts[0].proxy_country_name == "Netherlands"
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ import asyncio
 import json
 from contextlib import suppress
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Literal, cast
 
 from sqlalchemy import (
     BigInteger,
@@ -33,6 +33,7 @@ from schemas.accounts import (
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 from schemas.logs import LogEntry, LogEventInput, LogFilter, LogLevel, LogStatus
 from schemas.proxy import (
+    AccountProxyCheckUpdate,
     AccountProxyDelete,
     AccountProxyRead,
     AccountProxySettings,
@@ -53,7 +54,7 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from sqlalchemy.engine import Engine
+    from sqlalchemy.engine import Connection, Engine
     from sqlalchemy.sql import Select
 
     from schemas.telegram_session import TelegramSessionCheckResult
@@ -100,6 +101,9 @@ _account_proxies = Table(
     Column("status", String, nullable=False),
     Column("last_checked_at", String, nullable=True),
     Column("last_error", String, nullable=True),
+    Column("exit_ip", String, nullable=True),
+    Column("country_code", String, nullable=True),
+    Column("country_name", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
 )
@@ -180,10 +184,32 @@ def _get_engine() -> Engine:
 def _ensure_sqlite_schema(engine: Engine) -> None:
     """Tiny additive migration hook for local SQLite files created before new columns."""
     with engine.begin() as connection:
-        rows = connection.exec_driver_sql("PRAGMA table_info(accounts)").mappings().all()
-        existing = {str(row["name"]) for row in rows}
-        if "bio" not in existing:
+        account_columns = _sqlite_columns(connection, "accounts")
+        if "bio" not in account_columns:
             connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN bio VARCHAR")
+        proxy_columns = _sqlite_columns(connection, "account_proxies")
+        if "exit_ip" not in proxy_columns:
+            connection.exec_driver_sql("ALTER TABLE account_proxies ADD COLUMN exit_ip VARCHAR")
+        if "country_code" not in proxy_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE account_proxies ADD COLUMN country_code VARCHAR",
+            )
+        if "country_name" not in proxy_columns:
+            connection.exec_driver_sql(
+                "ALTER TABLE account_proxies ADD COLUMN country_name VARCHAR",
+            )
+
+
+def _sqlite_columns(
+    connection: Connection,
+    table_name: Literal["accounts", "account_proxies"],
+) -> set[str]:
+    statement = {
+        "accounts": "PRAGMA table_info(accounts)",
+        "account_proxies": "PRAGMA table_info(account_proxies)",
+    }[table_name]
+    rows = connection.exec_driver_sql(statement).mappings().all()
+    return {str(row["name"]) for row in rows}
 
 
 def _row_to_device_fingerprint(mapping: Mapping[str, object]) -> DeviceFingerprint:
@@ -225,6 +251,11 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         proxy_host=_optional_str(mapping.get("proxy_host")),
         proxy_port=_optional_int(mapping.get("proxy_port")),
         proxy_status=_optional_str(mapping.get("proxy_status")),
+        proxy_last_checked_at=_optional_str(mapping.get("proxy_last_checked_at")),
+        proxy_last_error=_optional_str(mapping.get("proxy_last_error")),
+        proxy_exit_ip=_optional_str(mapping.get("proxy_exit_ip")),
+        proxy_country_code=_optional_str(mapping.get("proxy_country_code")),
+        proxy_country_name=_optional_str(mapping.get("proxy_country_name")),
     )
 
 
@@ -239,6 +270,9 @@ def _row_to_account_proxy(mapping: Mapping[str, object]) -> AccountProxyRead:
         status=cast("ProxyStatus", mapping["status"]),
         last_checked_at=_optional_str(mapping.get("last_checked_at")),
         last_error=_optional_str(mapping.get("last_error")),
+        exit_ip=_optional_str(mapping.get("exit_ip")),
+        country_code=_optional_str(mapping.get("country_code")),
+        country_name=_optional_str(mapping.get("country_name")),
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -307,6 +341,11 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _account_proxies.c.host.label("proxy_host"),
         _account_proxies.c.port.label("proxy_port"),
         _account_proxies.c.status.label("proxy_status"),
+        _account_proxies.c.last_checked_at.label("proxy_last_checked_at"),
+        _account_proxies.c.last_error.label("proxy_last_error"),
+        _account_proxies.c.exit_ip.label("proxy_exit_ip"),
+        _account_proxies.c.country_code.label("proxy_country_code"),
+        _account_proxies.c.country_name.label("proxy_country_name"),
     ).select_from(
         _accounts.outerjoin(
             _device_fingerprints,
@@ -406,6 +445,9 @@ def _upsert_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
         "status": "unknown",
         "last_checked_at": None,
         "last_error": None,
+        "exit_ip": None,
+        "country_code": None,
+        "country_name": None,
         "updated_at": now,
     }
     existing = _fetch_account_proxy_settings(data.account_id)
@@ -447,6 +489,37 @@ def _delete_account_proxy(data: AccountProxyDelete) -> None:
 
 async def delete_account_proxy(data: AccountProxyDelete) -> None:
     await asyncio.to_thread(_delete_account_proxy, data)
+
+
+def _update_account_proxy_check(data: AccountProxyCheckUpdate) -> AccountProxyRead:
+    now = _now_iso()
+    values: dict[str, object | None] = {
+        "status": data.status,
+        "last_checked_at": now,
+        "last_error": data.last_error,
+        "exit_ip": data.exit_ip,
+        "country_code": data.country_code,
+        "country_name": data.country_name,
+        "updated_at": now,
+    }
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_account_proxies)
+            .where(_account_proxies.c.account_id == data.account_id)
+            .values(**values),
+        )
+    if result.rowcount == 0:
+        msg = f"Proxy not found for account: {data.account_id}"
+        raise ValueError(msg)
+    proxy = _fetch_account_proxy(data.account_id)
+    if proxy is None:
+        msg = f"Proxy not found for account: {data.account_id}"
+        raise ValueError(msg)
+    return proxy
+
+
+async def update_account_proxy_check(data: AccountProxyCheckUpdate) -> AccountProxyRead:
+    return await asyncio.to_thread(_update_account_proxy_check, data)
 
 
 def _update_account_profile_snapshot(data: AccountProfileUpdateRequest) -> AccountRead:

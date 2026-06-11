@@ -71,6 +71,31 @@ class SendDirectMessage(BaseModel):
     text: str = Field(min_length=1)
 
 
+class SetProfilePhoto(BaseModel):
+    action_type: Literal["set_profile_photo"] = "set_profile_photo"
+    filename: str = Field(min_length=1)
+    content: bytes = Field(min_length=1)
+
+
+class PostStory(BaseModel):
+    action_type: Literal["post_story"] = "post_story"
+    filename: str = Field(min_length=1)
+    content: bytes = Field(min_length=1)
+    media_kind: Literal["image", "video"]
+    caption: str | None = Field(default=None, max_length=1024)
+    privacy_preset: Literal["contacts", "close_friends", "public"] = "contacts"
+    period_seconds: int = Field(default=86_400, ge=21_600, le=86_400)
+    protect_content: bool = False
+
+
+class AddProfileMusic(BaseModel):
+    action_type: Literal["add_profile_music"] = "add_profile_music"
+    filename: str = Field(min_length=1)
+    content: bytes = Field(min_length=1)
+    title: str | None = Field(default=None, min_length=1)
+    performer: str | None = Field(default=None, min_length=1)
+
+
 TelegramAction = Annotated[
     JoinChannel
     | LeaveChannel
@@ -79,7 +104,10 @@ TelegramAction = Annotated[
     | SetOnline
     | ReadChannel
     | ReactToPost
-    | SendDirectMessage,
+    | SendDirectMessage
+    | SetProfilePhoto
+    | PostStory
+    | AddProfileMusic,
     Field(discriminator="action_type"),
 ]
 
