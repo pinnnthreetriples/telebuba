@@ -69,10 +69,14 @@ class AccountSummary(BaseModel):
     never_checked: int
 
 
+AccountHealth = Literal["ok", "warn", "fail"]
+
+
 class AccountTableRow(BaseModel):
     account_id: str
     label: str
     status: str
+    health: AccountHealth
     telegram: str
     session: str
     device: str

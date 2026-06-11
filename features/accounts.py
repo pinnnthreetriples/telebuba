@@ -45,14 +45,52 @@ _STATUS_OPTIONS = [
     "proxy_error",
     "unknown_error",
 ]
+
+
+def _col(
+    name: str,
+    label: str,
+    field: str,
+    *,
+    sortable: bool = True,
+    align: str = "left",
+) -> dict[str, object]:
+    return {"name": name, "label": label, "field": field, "sortable": sortable, "align": align}
+
+
 _TABLE_COLUMNS = [
-    {"name": "label", "label": "Account", "field": "label", "sortable": True},
-    {"name": "status", "label": "Status", "field": "status", "sortable": True},
-    {"name": "telegram", "label": "Telegram", "field": "telegram", "sortable": True},
-    {"name": "session", "label": "Session", "field": "session", "sortable": True},
-    {"name": "device", "label": "Device", "field": "device", "sortable": True},
-    {"name": "last_checked", "label": "Checked", "field": "last_checked", "sortable": True},
+    _col("label", "Account", "label"),
+    _col("status", "Status", "status"),
+    _col("telegram", "Telegram", "telegram"),
+    _col("session", "Session", "session"),
+    _col("device", "Device", "device"),
+    _col("last_checked", "Checked", "last_checked"),
+    _col("actions", "", "account_id", sortable=False, align="right"),
 ]
+
+_STATUS_BADGE_TEMPLATE = """
+<q-td :props="props">
+  <q-chip
+    :color="{ok: 'positive', warn: 'warning', fail: 'negative'}[props.row.health] || 'grey-5'"
+    text-color="white"
+    dense
+    :label="props.row.status"
+  />
+</q-td>
+"""
+
+_ACTIONS_TEMPLATE = """
+<q-td :props="props">
+  <q-btn
+    dense round flat
+    icon="refresh"
+    color="primary"
+    @click="() => $parent.$emit('check_one', props.row.account_id)"
+  >
+    <q-tooltip>Check this account</q-tooltip>
+  </q-btn>
+</q-td>
+"""
 
 
 def register_accounts_page() -> None:  # pragma: no cover
@@ -61,7 +99,8 @@ def register_accounts_page() -> None:  # pragma: no cover
         await _render_accounts_page()
 
 
-async def _render_accounts_page() -> None:  # pragma: no cover
+# NiceGUI page glue: wiring is naturally long, logic stays in services/.
+async def _render_accounts_page() -> None:  # pragma: no cover  # noqa: C901, PLR0915
     selected_ids: set[str] = set()
 
     ui.query("body").classes("bg-slate-50 text-slate-950")
@@ -89,6 +128,8 @@ async def _render_accounts_page() -> None:  # pragma: no cover
             pagination=_TABLE_PAGE_SIZE,
             on_select=lambda event: _remember_selection(event.selection, selected_ids),
         ).classes("w-full")
+        table.add_slot("body-cell-status", _STATUS_BADGE_TEMPLATE)
+        table.add_slot("body-cell-actions", _ACTIONS_TEMPLATE)
 
     async def refresh() -> None:
         state = await load_accounts_table(
@@ -109,6 +150,16 @@ async def _render_accounts_page() -> None:  # pragma: no cover
     async def check_all() -> None:
         await _check_accounts({str(row["account_id"]) for row in table.rows})
         await refresh()
+
+    async def check_one(event: object) -> None:
+        account_id = _account_id_from_event(event)
+        if not account_id:
+            ui.notify("Could not resolve account id", type="negative")
+            return
+        ui.notify(f"Checking {account_id}…", type="ongoing")
+        await check_account_session(AccountCheckRequest(account_id=account_id))
+        await refresh()
+        ui.notify(f"Checked {account_id}", type="positive")
 
     async def open_add_dialog() -> None:
         await _open_add_dialog(refresh)
@@ -131,6 +182,7 @@ async def _render_accounts_page() -> None:  # pragma: no cover
     buttons.check_all.on("click", check_all_from_event)
     query_input.on("update:model-value", refresh_from_event)
     status_select.on("update:model-value", refresh_from_event)
+    table.on("check_one", check_one)
 
     await refresh()
 
@@ -224,10 +276,15 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
         ui.upload(
             label="Upload tdata.zip",
             multiple=False,
-            max_file_size=100_000_000,
+            # Telegram Desktop tdata can be hundreds of MB with cached emoji
+            # and user_data — generous cap to fit a real archive.
+            max_file_size=1_000_000_000,
             auto_upload=True,
             on_upload=handle_tdata_upload,
-            on_rejected=lambda _event: ui.notify("tdata zip rejected", type="warning"),
+            on_rejected=lambda _event: ui.notify(
+                "tdata zip rejected (must be a .zip, max 1 GB)",
+                type="warning",
+            ),
         ).props('accept=".zip"').classes("w-full")
 
         with ui.row().classes("w-full justify-end gap-2"):
@@ -257,3 +314,15 @@ def _set_metric(element: Label, label: str, value: int) -> None:  # pragma: no c
 def _remember_selection(selection: list[dict[str, object]], selected_ids: set[str]) -> None:
     selected_ids.clear()
     selected_ids.update(str(row["account_id"]) for row in selection)
+
+
+def _account_id_from_event(event: object) -> str:
+    """Extract the account_id payload from a Quasar custom event arg.
+
+    NiceGUI surfaces the Vue ``$emit`` payload as ``event.args`` (str when only
+    one arg was emitted; list when multiple). Be tolerant of both shapes.
+    """
+    args = getattr(event, "args", event)
+    if isinstance(args, list) and args:
+        args = args[0]
+    return str(args) if args is not None else ""

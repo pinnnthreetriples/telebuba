@@ -36,6 +36,7 @@ from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
     AccountFilter,
+    AccountHealth,
     AccountRead,
     AccountSessionFileImport,
     AccountsTableState,
@@ -197,11 +198,25 @@ def _to_table_row(account: AccountRead) -> AccountTableRow:
         account_id=account.account_id,
         label=account.label or account.account_id,
         status=_status_label(account.status),
+        health=_health_for(account.status),
         telegram=_telegram_label(account),
         session=account.session_name or account.account_id,
         device=_device_label(account),
         last_checked=account.last_checked_at or "never",
     )
+
+
+def _health_for(status: AccountStatus) -> AccountHealth:
+    """Map an ``AccountStatus`` to a coarse traffic-light health value.
+
+    Used by the UI for the colored status badge: green for working accounts,
+    amber for retry-soon situations, red for permanent failures.
+    """
+    if status == "alive":
+        return "ok"
+    if status in _PERMANENT_ISSUES:
+        return "fail"
+    return "warn"
 
 
 def _status_label(status: AccountStatus) -> str:
