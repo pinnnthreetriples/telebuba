@@ -2,9 +2,9 @@
 
 Output: Telethon ``.session`` files in the configured sessions directory.
 
-This is the ONLY place ``opentele2`` is imported. Features and other ``core``
-modules talk to this module exclusively through the Pydantic schemas in
-``schemas/tdata.py``.
+This is the ONLY place ``opentele2`` is imported, and it is imported lazily
+inside conversion execution. Features and other ``core`` modules talk to this
+module exclusively through the Pydantic schemas in ``schemas/tdata.py``.
 
 Security guarantees:
 
@@ -18,6 +18,7 @@ Security guarantees:
 
 from __future__ import annotations
 
+import importlib
 import io
 import logging
 import shutil
@@ -25,9 +26,7 @@ import tempfile
 import zipfile
 from contextlib import suppress
 from pathlib import Path, PurePosixPath
-
-from opentele2.api import UseCurrentSession
-from opentele2.td import TDesktop
+from typing import Any
 
 from schemas.tdata import (
     TdataAccountSummary,
@@ -46,6 +45,18 @@ MAX_PATH_DEPTH = 32  # nested directory depth cap
 _POSIX_CREATE_SYSTEM = 3
 _POSIX_MODE_MASK = 0o170000
 _POSIX_SYMLINK_MODE = 0o120000
+TDesktop: Any | None = None
+UseCurrentSession: Any = object()
+
+
+def _opentele2_runtime() -> tuple[Any, Any]:
+    global TDesktop, UseCurrentSession  # noqa: PLW0603 - cache lazy imports for conversion runs.
+    if TDesktop is None:
+        api_module = importlib.import_module("opentele2.api")
+        td_module = importlib.import_module("opentele2.td")
+        TDesktop = td_module.TDesktop
+        UseCurrentSession = api_module.UseCurrentSession
+    return TDesktop, UseCurrentSession
 
 
 def _is_unsafe_entry(name: str) -> bool:
@@ -141,8 +152,9 @@ async def convert_tdata_zip(
         if tdata_dir is None:
             return TdataConvertResult(status="tdata_not_found")
 
+        tdesktop_factory, use_current_session = _opentele2_runtime()
         try:
-            td = TDesktop(basePath=str(tdata_dir))
+            td = tdesktop_factory(basePath=str(tdata_dir))
         except Exception as exc:
             logger.exception("TDesktop load failed")
             return TdataConvertResult(
@@ -165,7 +177,7 @@ async def convert_tdata_zip(
             try:
                 client = await account.ToTelethon(
                     session=str(session_path),
-                    flag=UseCurrentSession,
+                    flag=use_current_session,
                 )
             except Exception as exc:
                 logger.exception("ToTelethon failed for user_id=%s", user_id)

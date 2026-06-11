@@ -18,20 +18,29 @@ from schemas.accounts import (
     AccountSessionFileImport,
     health_for_status,
 )
-from schemas.proxy import AccountProxyDelete, AccountProxyUpsert
+from schemas.profile_media import (
+    AccountProfileMusicUpload,
+    AccountProfilePhotoUpload,
+    AccountStoryUpload,
+)
+from schemas.proxy import AccountProxyCheckRequest, AccountProxyDelete, AccountProxyUpsert
 from schemas.tdata import TdataConvertRequest
 from services.accounts import (
+    add_account_profile_music,
+    check_account_proxy,
     check_account_session,
     delete_account_proxy,
     import_account_session,
     import_account_tdata,
     load_accounts_table,
+    post_account_story,
     save_account_proxy,
+    set_account_profile_photo,
     update_account_profile,
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import Awaitable, Callable, Mapping
 
     from nicegui.elements.button import Button
     from nicegui.elements.label import Label
@@ -83,6 +92,48 @@ _STATUS_BADGE_TEMPLATE = """
     dense
     :label="props.row.status"
   />
+</q-td>
+"""
+
+_PROXY_TEMPLATE = """
+<q-td :props="props">
+  <div v-if="props.row.proxy_host" class="column q-gutter-xs">
+    <div class="row items-center no-wrap q-gutter-xs">
+      <q-chip
+        v-if="props.row.proxy_status === 'tcp_working'"
+        dense
+        square
+        color="positive"
+        text-color="white"
+        label="Working"
+      />
+      <q-chip
+        v-else-if="props.row.proxy_status === 'failed'"
+        dense
+        square
+        color="negative"
+        text-color="white"
+        label="Failed"
+      />
+      <q-chip
+        v-else
+        dense
+        square
+        color="grey-6"
+        text-color="white"
+        label="Unknown"
+      />
+      <span class="text-weight-medium">{{ props.row.proxy }}</span>
+    </div>
+    <div
+      v-if="props.row.proxy_country_name || props.row.proxy_country_code || props.row.proxy_exit_ip"
+      class="text-caption text-grey-7"
+    >
+      {{ props.row.proxy_country_name || props.row.proxy_country_code || '' }}
+      <span v-if="props.row.proxy_exit_ip"> · {{ props.row.proxy_exit_ip }}</span>
+    </div>
+  </div>
+  <q-chip v-else dense outline square color="grey-6" label="No proxy" />
 </q-td>
 """
 
@@ -158,6 +209,7 @@ async def _render_accounts_page() -> None:  # pragma: no cover  # noqa: C901, PL
             on_select=lambda event: _remember_selection(event.selection, selected_ids),
         ).classes("w-full")
         table.add_slot("body-cell-status", _STATUS_BADGE_TEMPLATE)
+        table.add_slot("body-cell-proxy", _PROXY_TEMPLATE)
         table.add_slot("body-cell-actions", _ACTIONS_TEMPLATE)
 
     async def refresh() -> None:
@@ -356,49 +408,152 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
     dialog.open()
 
 
-async def _open_profile_dialog(
+async def _open_profile_dialog(  # noqa: PLR0915
     row: dict[str, object],
     refresh: Callable[[], Awaitable[None]],
 ) -> None:  # pragma: no cover
     account_id = str(row["account_id"])
-    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-96 max-w-full"):
+    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[560px] max-w-full"):
         ui.label("Edit profile").classes("text-base font-semibold")
-        first_name = ui.input("First name", value=str(row.get("first_name") or "")).props(
-            "dense outlined",
-        )
-        last_name = ui.input("Last name", value=str(row.get("last_name") or "")).props(
-            "dense outlined clearable",
-        )
-        username = ui.input("Username", value=str(row.get("username") or "")).props(
-            "dense outlined clearable prefix=@",
-        )
-        bio = ui.textarea("Bio", value=str(row.get("bio") or "")).props("dense outlined")
-
-        async def save() -> None:
-            name = (first_name.value or "").strip()
-            if not name:
-                ui.notify("First name is required", type="warning")
-                return
-            try:
-                await update_account_profile(
-                    AccountProfileUpdateRequest(
-                        account_id=account_id,
-                        first_name=name,
-                        last_name=(last_name.value or "").strip(),
-                        username=(username.value or "").strip().removeprefix("@"),
-                        bio=(bio.value or "").strip(),
-                    ),
+        with ui.tabs().classes("w-full") as tabs:
+            text_tab = ui.tab("Text")
+            photo_tab = ui.tab("Photo")
+            story_tab = ui.tab("Story")
+            music_tab = ui.tab("Music")
+        with ui.tab_panels(tabs, value=text_tab).classes("w-full"):
+            with ui.tab_panel(text_tab).classes("gap-3"):
+                first_name = ui.input("First name", value=str(row.get("first_name") or "")).props(
+                    "dense outlined",
                 )
-            except ValueError as exc:
-                ui.notify(str(exc), type="negative")
-                return
-            dialog.close()
-            ui.notify("Profile updated", type="positive")
-            await refresh()
+                last_name = ui.input("Last name", value=str(row.get("last_name") or "")).props(
+                    "dense outlined clearable",
+                )
+                username = ui.input("Username", value=str(row.get("username") or "")).props(
+                    "dense outlined clearable prefix=@",
+                )
+                bio = ui.textarea("Bio", value=str(row.get("bio") or "")).props("dense outlined")
 
-        with ui.row().classes("w-full justify-end gap-2"):
-            ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip("Cancel")
-            ui.button(icon="save", color="primary", on_click=save).tooltip("Save profile")
+                async def save() -> None:
+                    name = (first_name.value or "").strip()
+                    if not name:
+                        ui.notify("First name is required", type="warning")
+                        return
+                    try:
+                        await update_account_profile(
+                            AccountProfileUpdateRequest(
+                                account_id=account_id,
+                                first_name=name,
+                                last_name=(last_name.value or "").strip(),
+                                username=(username.value or "").strip().removeprefix("@"),
+                                bio=(bio.value or "").strip(),
+                            ),
+                        )
+                    except ValueError as exc:
+                        ui.notify(str(exc), type="negative")
+                        return
+                    ui.notify("Profile updated", type="positive")
+                    await refresh()
+
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip(
+                        "Cancel",
+                    )
+                    ui.button(icon="save", color="primary", on_click=save).tooltip("Save profile")
+
+            with ui.tab_panel(photo_tab).classes("gap-3"):
+
+                async def handle_photo_upload(event: UploadEventArguments) -> None:
+                    try:
+                        await set_account_profile_photo(
+                            AccountProfilePhotoUpload(
+                                account_id=account_id,
+                                filename=event.file.name,
+                                content=await event.file.read(),
+                            ),
+                        )
+                    except ValueError as exc:
+                        ui.notify(str(exc), type="negative")
+                        return
+                    ui.notify("Profile photo updated", type="positive")
+
+                ui.upload(
+                    label="Upload profile photo",
+                    multiple=False,
+                    max_file_size=10_000_000,
+                    auto_upload=True,
+                    on_upload=handle_photo_upload,
+                    on_rejected=lambda _event: ui.notify("Profile photo rejected", type="warning"),
+                ).props('accept=".jpg,.jpeg,.png,.webp"').classes("w-full")
+
+            with ui.tab_panel(story_tab).classes("gap-3"):
+                story_kind = ui.select(
+                    {"image": "Image", "video": "Video"},
+                    value="image",
+                    label="Media",
+                ).props("dense outlined")
+                story_privacy = ui.select(
+                    {"contacts": "Contacts", "close_friends": "Close friends", "public": "Public"},
+                    value="contacts",
+                    label="Privacy",
+                ).props("dense outlined")
+                story_caption = ui.textarea("Caption").props("dense outlined")
+                protect_story = ui.checkbox("Protect content", value=False)
+
+                async def handle_story_upload(event: UploadEventArguments) -> None:
+                    try:
+                        await post_account_story(
+                            AccountStoryUpload(
+                                account_id=account_id,
+                                filename=event.file.name,
+                                content=await event.file.read(),
+                                media_kind=story_kind.value,
+                                caption=(story_caption.value or "").strip() or None,
+                                privacy_preset=story_privacy.value,
+                                protect_content=bool(protect_story.value),
+                            ),
+                        )
+                    except ValueError as exc:
+                        ui.notify(str(exc), type="negative")
+                        return
+                    ui.notify("Story posted", type="positive")
+
+                ui.upload(
+                    label="Upload story media",
+                    multiple=False,
+                    max_file_size=100_000_000,
+                    auto_upload=True,
+                    on_upload=handle_story_upload,
+                    on_rejected=lambda _event: ui.notify("Story media rejected", type="warning"),
+                ).props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov"').classes("w-full")
+
+            with ui.tab_panel(music_tab).classes("gap-3"):
+                music_title = ui.input("Title").props("dense outlined clearable")
+                music_performer = ui.input("Performer").props("dense outlined clearable")
+
+                async def handle_music_upload(event: UploadEventArguments) -> None:
+                    try:
+                        await add_account_profile_music(
+                            AccountProfileMusicUpload(
+                                account_id=account_id,
+                                filename=event.file.name,
+                                content=await event.file.read(),
+                                title=(music_title.value or "").strip() or None,
+                                performer=(music_performer.value or "").strip() or None,
+                            ),
+                        )
+                    except ValueError as exc:
+                        ui.notify(str(exc), type="negative")
+                        return
+                    ui.notify("Profile music added", type="positive")
+
+                ui.upload(
+                    label="Upload music",
+                    multiple=False,
+                    max_file_size=30_000_000,
+                    auto_upload=True,
+                    on_upload=handle_music_upload,
+                    on_rejected=lambda _event: ui.notify("Music rejected", type="warning"),
+                ).props('accept=".mp3,.m4a"').classes("w-full")
     dialog.open()
 
 
@@ -407,7 +562,7 @@ async def _open_proxy_dialog(
     refresh: Callable[[], Awaitable[None]],
 ) -> None:  # pragma: no cover
     account_id = str(row["account_id"])
-    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-96 max-w-full"):
+    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[460px] max-w-full"):
         ui.label("Proxy settings").classes("text-base font-semibold")
         proxy_type = ui.select(
             ["socks5", "http"],
@@ -420,6 +575,12 @@ async def _open_proxy_dialog(
         )
         username = ui.input("Username").props("dense outlined clearable")
         password = ui.input("Password").props("dense outlined clearable type=password")
+        with ui.column().classes(
+            "w-full gap-1 rounded border border-slate-200 bg-slate-50 px-3 py-2",
+        ):
+            status_label = ui.label(_proxy_dialog_status(row)).classes("text-sm font-medium")
+            geo_label = ui.label(_proxy_dialog_geo(row)).classes("text-xs text-slate-600")
+            error_label = ui.label(_proxy_dialog_error(row)).classes("text-xs text-red-600")
 
         async def save() -> None:
             host_value = (host.value or "").strip()
@@ -444,6 +605,37 @@ async def _open_proxy_dialog(
             ui.notify("Proxy saved", type="positive")
             await refresh()
 
+        async def check_proxy() -> None:
+            spinner = ui.notification(
+                "Checking proxy route...",
+                spinner=True,
+                timeout=None,
+                close_button=False,
+            )
+            try:
+                proxy = await check_account_proxy(AccountProxyCheckRequest(account_id=account_id))
+            except ValueError as exc:
+                ui.notify(str(exc), type="warning")
+                return
+            finally:
+                spinner.dismiss()
+            checked_row = {
+                "proxy_status": proxy.status,
+                "proxy_last_checked_at": proxy.last_checked_at,
+                "proxy_last_error": proxy.last_error,
+                "proxy_exit_ip": proxy.exit_ip,
+                "proxy_country_code": proxy.country_code,
+                "proxy_country_name": proxy.country_name,
+            }
+            status_label.set_text(_proxy_dialog_status(checked_row))
+            geo_label.set_text(_proxy_dialog_geo(checked_row))
+            error_label.set_text(_proxy_dialog_error(checked_row))
+            ui.notify(
+                "Proxy works" if proxy.status == "tcp_working" else "Proxy failed",
+                type="positive" if proxy.status == "tcp_working" else "negative",
+            )
+            await refresh()
+
         async def remove() -> None:
             await delete_account_proxy(AccountProxyDelete(account_id=account_id))
             dialog.close()
@@ -453,6 +645,9 @@ async def _open_proxy_dialog(
         with ui.row().classes("w-full justify-between gap-2"):
             ui.button(icon="delete", color="negative", on_click=remove).tooltip("Remove proxy")
             with ui.row().classes("gap-2"):
+                ui.button(icon="travel_explore", color="primary", on_click=check_proxy).tooltip(
+                    "Check proxy",
+                )
                 ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip("Cancel")
                 ui.button(icon="save", color="primary", on_click=save).tooltip("Save proxy")
     dialog.open()
@@ -504,3 +699,30 @@ def _row_from_event(event: object) -> dict[str, object]:
 def _proxy_port_value(row: dict[str, object]) -> int:
     value = row.get("proxy_port")
     return value if isinstance(value, int) else 1080
+
+
+def _proxy_dialog_status(row: Mapping[str, object]) -> str:
+    status = str(row.get("proxy_status") or "unknown")
+    labels = {
+        "tcp_working": "Status: working",
+        "failed": "Status: failed",
+        "unknown": "Status: not checked",
+    }
+    checked_at = str(row.get("proxy_last_checked_at") or "").strip()
+    suffix = f" | checked {checked_at}" if checked_at else ""
+    return f"{labels.get(status, 'Status: not checked')}{suffix}"
+
+
+def _proxy_dialog_geo(row: Mapping[str, object]) -> str:
+    parts = [
+        str(row.get("proxy_country_name") or "").strip(),
+        str(row.get("proxy_country_code") or "").strip(),
+        str(row.get("proxy_exit_ip") or "").strip(),
+    ]
+    value = " | ".join(part for part in parts if part)
+    return f"Route: {value}" if value else "Route: no country/IP yet"
+
+
+def _proxy_dialog_error(row: Mapping[str, object]) -> str:
+    error = str(row.get("proxy_last_error") or "").strip()
+    return f"Error: {error}" if error else ""
