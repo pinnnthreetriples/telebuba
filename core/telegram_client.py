@@ -6,10 +6,11 @@ from typing import TYPE_CHECKING
 from anyio import Path
 from python_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
 from telethon import TelegramClient, errors
-from telethon.tl.functions.account import UpdateProfileRequest
+from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 
 from core.config import settings
+from core.db import fetch_account_proxy_settings
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from schemas.device_fingerprint import TelegramClientProfile, TelegramClientRequest
@@ -36,11 +37,17 @@ async def prepare_telegram_client_profile(
 ) -> TelegramClientProfile:
     await _ensure_session_dir()
     device = await get_or_create_device_fingerprint(request.account_id)
+    proxy = await fetch_account_proxy_settings(request.account_id)
     return TelegramClientProfile(
         account_id=request.account_id,
         session_path=_session_path(request),
         receive_updates=request.receive_updates,
         device=device,
+        proxy_type=proxy.proxy_type if proxy else None,
+        proxy_host=proxy.host if proxy else None,
+        proxy_port=proxy.port if proxy else None,
+        proxy_username=proxy.username if proxy else None,
+        proxy_password=proxy.password if proxy else None,
     )
 
 
@@ -62,6 +69,24 @@ async def _ensure_session_dir() -> None:
 
 def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
     device = profile.device
+    proxy = _proxy_config(profile)
+    if proxy is not None:
+        return TelegramClient(
+            profile.session_path,
+            settings.telegram.api_id,
+            settings.telegram.api_hash,
+            device_model=device.device_model,
+            system_version=device.system_version,
+            app_version=device.app_version,
+            lang_code=device.lang_code,
+            system_lang_code=device.system_lang_code,
+            receive_updates=profile.receive_updates,
+            timeout=settings.telegram.timeout_seconds,
+            connection_retries=settings.telegram.connection_retries,
+            retry_delay=settings.telegram.retry_delay_seconds,
+            request_retries=settings.telegram.request_retries,
+            proxy=proxy,
+        )
     return TelegramClient(
         profile.session_path,
         settings.telegram.api_id,
@@ -222,6 +247,19 @@ def _optional_str(value: object) -> str | None:
     return str(value)
 
 
+def _proxy_config(profile: TelegramClientProfile) -> dict[str, object] | None:
+    if not profile.proxy_type or not profile.proxy_host or profile.proxy_port is None:
+        return None
+    return {
+        "proxy_type": profile.proxy_type,
+        "addr": profile.proxy_host,
+        "port": profile.proxy_port,
+        "rdns": True,
+        "username": profile.proxy_username,
+        "password": profile.proxy_password,
+    }
+
+
 async def execute(account_id: str, action: TelegramAction) -> ActionResult:
     """Dispatch a typed Telegram action against ``account_id``.
 
@@ -295,8 +333,11 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
             UpdateProfileRequest(
                 first_name=action.first_name,
                 last_name=action.last_name or "",
+                about=action.bio,
             ),
         )
+        if action.username is not None:
+            await client(UpdateUsernameRequest(username=action.username))
         return None
     msg = f"Unsupported action_type: {action.action_type}"
     raise ValueError(msg)
@@ -309,5 +350,9 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:
     if action.action_type == "post_comment":
         return {"chat_id": getattr(action, "chat_id", 0)}
     if action.action_type == "update_profile":
-        return {"has_last_name": getattr(action, "last_name", None) is not None}
+        return {
+            "has_last_name": getattr(action, "last_name", None) is not None,
+            "has_username": getattr(action, "username", None) is not None,
+            "has_bio": getattr(action, "bio", None) is not None,
+        }
     return {}

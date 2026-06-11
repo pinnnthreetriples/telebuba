@@ -9,11 +9,13 @@ from typing import TYPE_CHECKING, Any, cast
 from sqlalchemy import (
     BigInteger,
     Column,
+    ForeignKey,
     Integer,
     MetaData,
     String,
     Table,
     create_engine,
+    delete,
     insert,
     select,
     update,
@@ -21,9 +23,23 @@ from sqlalchemy import (
 from sqlalchemy.exc import IntegrityError
 
 from core.config import settings
-from schemas.accounts import AccountCreate, AccountList, AccountRead, AccountStatus
+from schemas.accounts import (
+    AccountCreate,
+    AccountList,
+    AccountProfileUpdateRequest,
+    AccountRead,
+    AccountStatus,
+)
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 from schemas.logs import LogEntry, LogEventInput, LogFilter, LogLevel, LogStatus
+from schemas.proxy import (
+    AccountProxyDelete,
+    AccountProxyRead,
+    AccountProxySettings,
+    AccountProxyUpsert,
+    ProxyStatus,
+    ProxyType,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -59,7 +75,23 @@ _accounts = Table(
     Column("username", String, nullable=True),
     Column("first_name", String, nullable=True),
     Column("last_name", String, nullable=True),
+    Column("bio", String, nullable=True),
     Column("last_checked_at", String, nullable=True),
+    Column("created_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
+)
+_account_proxies = Table(
+    "account_proxies",
+    _metadata,
+    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
+    Column("proxy_type", String, nullable=False),
+    Column("host", String, nullable=False),
+    Column("port", Integer, nullable=False),
+    Column("username", String, nullable=True),
+    Column("password", String, nullable=True),
+    Column("status", String, nullable=False),
+    Column("last_checked_at", String, nullable=True),
+    Column("last_error", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
 )
@@ -82,6 +114,7 @@ class _DatabaseState:
 
 
 _state = _DatabaseState()
+_MASK_PASSTHROUGH_LENGTH = 2
 
 
 def configure_database(database_path: Path) -> None:
@@ -101,7 +134,17 @@ def _get_engine() -> Engine:
             future=True,
         )
         _metadata.create_all(_state.engine)
+        _ensure_sqlite_schema(_state.engine)
     return _state.engine
+
+
+def _ensure_sqlite_schema(engine: Engine) -> None:
+    """Tiny additive migration hook for local SQLite files created before new columns."""
+    with engine.begin() as connection:
+        rows = connection.exec_driver_sql("PRAGMA table_info(accounts)").mappings().all()
+        existing = {str(row["name"]) for row in rows}
+        if "bio" not in existing:
+            connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN bio VARCHAR")
 
 
 def _row_to_device_fingerprint(mapping: Mapping[str, object]) -> DeviceFingerprint:
@@ -131,6 +174,7 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         username=_optional_str(mapping.get("username")),
         first_name=_optional_str(mapping.get("first_name")),
         last_name=_optional_str(mapping.get("last_name")),
+        bio=_optional_str(mapping.get("bio")),
         last_checked_at=_optional_str(mapping.get("last_checked_at")),
         created_at=str(mapping["created_at"]),
         updated_at=str(mapping["updated_at"]),
@@ -138,6 +182,36 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         device_model=_optional_str(mapping.get("device_model")),
         device_system_version=_optional_str(mapping.get("device_system_version")),
         device_app_version=_optional_str(mapping.get("device_app_version")),
+        proxy_type=_optional_str(mapping.get("proxy_type")),
+        proxy_host=_optional_str(mapping.get("proxy_host")),
+        proxy_port=_optional_int(mapping.get("proxy_port")),
+        proxy_status=_optional_str(mapping.get("proxy_status")),
+    )
+
+
+def _row_to_account_proxy(mapping: Mapping[str, object]) -> AccountProxyRead:
+    return AccountProxyRead(
+        account_id=str(mapping["account_id"]),
+        proxy_type=cast("ProxyType", mapping["proxy_type"]),
+        host=str(mapping["host"]),
+        port=_required_int(mapping["port"]),
+        username=_mask_username(_optional_str(mapping.get("username"))),
+        has_password=bool(mapping.get("password")),
+        status=cast("ProxyStatus", mapping["status"]),
+        last_checked_at=_optional_str(mapping.get("last_checked_at")),
+        last_error=_optional_str(mapping.get("last_error")),
+        updated_at=str(mapping["updated_at"]),
+    )
+
+
+def _row_to_account_proxy_settings(mapping: Mapping[str, object]) -> AccountProxySettings:
+    return AccountProxySettings(
+        account_id=str(mapping["account_id"]),
+        proxy_type=cast("ProxyType", mapping["proxy_type"]),
+        host=str(mapping["host"]),
+        port=_required_int(mapping["port"]),
+        username=_optional_str(mapping.get("username")),
+        password=_optional_str(mapping.get("password")),
     )
 
 
@@ -182,6 +256,7 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.username,
         _accounts.c.first_name,
         _accounts.c.last_name,
+        _accounts.c.bio,
         _accounts.c.last_checked_at,
         _accounts.c.created_at,
         _accounts.c.updated_at,
@@ -189,10 +264,17 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _device_fingerprints.c.device_model.label("device_model"),
         _device_fingerprints.c.system_version.label("device_system_version"),
         _device_fingerprints.c.app_version.label("device_app_version"),
+        _account_proxies.c.proxy_type.label("proxy_type"),
+        _account_proxies.c.host.label("proxy_host"),
+        _account_proxies.c.port.label("proxy_port"),
+        _account_proxies.c.status.label("proxy_status"),
     ).select_from(
         _accounts.outerjoin(
             _device_fingerprints,
             _accounts.c.account_id == _device_fingerprints.c.account_id,
+        ).outerjoin(
+            _account_proxies,
+            _accounts.c.account_id == _account_proxies.c.account_id,
         ),
     )
 
@@ -246,6 +328,125 @@ async def list_accounts() -> AccountList:
     return await asyncio.to_thread(_list_accounts)
 
 
+def _fetch_account_proxy(account_id: str) -> AccountProxyRead | None:
+    statement = select(_account_proxies).where(_account_proxies.c.account_id == account_id)
+    with _get_engine().begin() as connection:
+        row = connection.execute(statement).mappings().first()
+    if row is None:
+        return None
+    return _row_to_account_proxy(cast("Mapping[str, object]", row))
+
+
+async def fetch_account_proxy(account_id: str) -> AccountProxyRead | None:
+    return await asyncio.to_thread(_fetch_account_proxy, account_id)
+
+
+def _fetch_account_proxy_settings(account_id: str) -> AccountProxySettings | None:
+    statement = select(_account_proxies).where(_account_proxies.c.account_id == account_id)
+    with _get_engine().begin() as connection:
+        row = connection.execute(statement).mappings().first()
+    if row is None:
+        return None
+    return _row_to_account_proxy_settings(cast("Mapping[str, object]", row))
+
+
+async def fetch_account_proxy_settings(account_id: str) -> AccountProxySettings | None:
+    return await asyncio.to_thread(_fetch_account_proxy_settings, account_id)
+
+
+def _upsert_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
+    if _fetch_account(data.account_id) is None:
+        msg = f"Account not found: {data.account_id}"
+        raise ValueError(msg)
+    now = _now_iso()
+    values: dict[str, object | None] = {
+        "proxy_type": data.proxy_type,
+        "host": data.host.strip(),
+        "port": data.port,
+        "username": data.username.strip() if data.username else None,
+        "status": "unknown",
+        "last_checked_at": None,
+        "last_error": None,
+        "updated_at": now,
+    }
+    existing = _fetch_account_proxy_settings(data.account_id)
+    with _get_engine().begin() as connection:
+        if existing is None:
+            connection.execute(
+                insert(_account_proxies).values(
+                    account_id=data.account_id,
+                    password=data.password,
+                    created_at=now,
+                    **values,
+                ),
+            )
+        else:
+            if data.password is not None:
+                values["password"] = data.password
+            connection.execute(
+                update(_account_proxies)
+                .where(_account_proxies.c.account_id == data.account_id)
+                .values(**values),
+            )
+    proxy = _fetch_account_proxy(data.account_id)
+    if proxy is None:
+        msg = f"Proxy was not persisted: {data.account_id}"
+        raise RuntimeError(msg)
+    return proxy
+
+
+async def upsert_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
+    return await asyncio.to_thread(_upsert_account_proxy, data)
+
+
+def _delete_account_proxy(data: AccountProxyDelete) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_account_proxies).where(_account_proxies.c.account_id == data.account_id),
+        )
+
+
+async def delete_account_proxy(data: AccountProxyDelete) -> None:
+    await asyncio.to_thread(_delete_account_proxy, data)
+
+
+def _update_account_profile_snapshot(data: AccountProfileUpdateRequest) -> AccountRead:
+    values: dict[str, object | None] = {
+        "first_name": data.first_name,
+        "updated_at": _now_iso(),
+    }
+    if data.last_name is not None:
+        values["last_name"] = data.last_name
+    if data.username is not None:
+        values["username"] = data.username
+    if data.bio is not None:
+        values["bio"] = data.bio
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_accounts).where(_accounts.c.account_id == data.account_id).values(**values),
+        )
+    if result.rowcount == 0:
+        msg = f"Account not found: {data.account_id}"
+        raise ValueError(msg)
+    account = _fetch_account(data.account_id)
+    if account is None:
+        msg = f"Account not found: {data.account_id}"
+        raise ValueError(msg)
+    return account
+
+
+async def update_account_profile_snapshot(data: AccountProfileUpdateRequest) -> AccountRead:
+    return await asyncio.to_thread(_update_account_profile_snapshot, data)
+
+
+def _mask_username(username: str | None) -> str | None:
+    if not username:
+        return None
+    if len(username) <= _MASK_PASSTHROUGH_LENGTH:
+        return f"{username[0]}*"
+    return f"{username[0]}***{username[-1]}"
+
+
 def _update_account_from_session_check(result: TelegramSessionCheckResult) -> AccountRead:
     now = _now_iso()
     values: dict[str, object] = {
@@ -284,6 +485,15 @@ def _optional_str(value: object) -> str | None:
     if value is None:
         return None
     return str(value)
+
+
+def _required_int(value: object) -> int:
+    if isinstance(value, int):
+        return value
+    if isinstance(value, str):
+        return int(value)
+    msg = f"Expected integer-compatible value, got {type(value).__name__}"
+    raise TypeError(msg)
 
 
 def _optional_int(value: object) -> int | None:

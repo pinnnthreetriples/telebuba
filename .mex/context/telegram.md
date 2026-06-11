@@ -19,7 +19,7 @@ edges:
     condition: when the Telegram call is being scheduled, not direct
   - target: patterns/add-telegram-task.md
     condition: when adding any new Telethon-using feature
-last_updated: 2026-06-10
+last_updated: 2026-06-11
 ---
 
 # Telegram (Telethon) Integration
@@ -38,7 +38,7 @@ last_updated: 2026-06-10
 class TelegramAction(BaseModel): ...   # base; discriminator on action_type
 class JoinChannel(TelegramAction):     action_type: Literal["join_channel"]; channel: str
 class PostComment(TelegramAction):     action_type: Literal["post_comment"]; chat_id: int; text: str
-class UpdateProfile(TelegramAction):   action_type: Literal["update_profile"]; first_name: str; last_name: str | None
+class UpdateProfile(TelegramAction):   action_type: Literal["update_profile"]; first_name: str; last_name: str | None; username: str | None; bio: str | None
 ```
 
 The executor pattern-matches on `action_type` and calls the right Telethon method. Benefits:
@@ -85,7 +85,9 @@ Telegram actions cost money (accounts can be banned). Mid-flight crashes must no
 ## Proxies (python-socks)
 
 - One proxy (SOCKS5 or HTTP) per account. Every Telethon client is constructed with that proxy via `python-socks`. Without a per-account IP, Telegram bans.
-- The `account_id → proxy` mapping is stored in the DB; on-disk format is [TO BE DETERMINED — decide alongside the account model].
+- The `account_id → proxy` mapping is stored in SQLite table `account_proxies`.
+  Read models mask username/password presence; raw password is only used inside core gateways
+  when constructing the Telethon proxy config.
 - Proxy timeouts are logged as `WARNING` through `core/logging.py`.
 
 ## Rate limits and FloodWaitError

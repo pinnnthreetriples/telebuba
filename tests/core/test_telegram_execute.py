@@ -8,7 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from telethon import errors
-from telethon.tl.functions.account import UpdateProfileRequest
+from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 
 from core import telegram_client as telegram_client_module
@@ -132,10 +132,14 @@ async def test_execute_update_profile_dispatches_request(
 
     _patch_client(monkeypatch, FakeClient())
 
-    result = await execute("acc-4", UpdateProfile(first_name="Alice", last_name="L"))
+    result = await execute(
+        "acc-4",
+        UpdateProfile(first_name="Alice", last_name="L", username="alice", bio="Bio"),
+    )
 
     assert result.status == "ok"
     assert any(isinstance(req, UpdateProfileRequest) for req in captured)
+    assert any(isinstance(req, UpdateUsernameRequest) for req in captured)
 
 
 @pytest.mark.asyncio

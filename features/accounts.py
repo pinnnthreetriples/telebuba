@@ -7,22 +7,27 @@ interaction live in the service layer.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING, Literal, cast
 
 from nicegui import ui
 
 from schemas.accounts import (
     AccountCheckRequest,
     AccountFilter,
+    AccountProfileUpdateRequest,
     AccountSessionFileImport,
     health_for_status,
 )
+from schemas.proxy import AccountProxyDelete, AccountProxyUpsert
 from schemas.tdata import TdataConvertRequest
 from services.accounts import (
     check_account_session,
+    delete_account_proxy,
     import_account_session,
     import_account_tdata,
     load_accounts_table,
+    save_account_proxy,
+    update_account_profile,
 )
 
 if TYPE_CHECKING:
@@ -65,6 +70,7 @@ _TABLE_COLUMNS = [
     _col("telegram", "Telegram", "telegram"),
     _col("session", "Session", "session"),
     _col("device", "Device", "device"),
+    _col("proxy", "Proxy", "proxy"),
     _col("last_checked", "Checked", "last_checked"),
     _col("actions", "", "account_id", sortable=False, align="right"),
 ]
@@ -89,6 +95,22 @@ _ACTIONS_TEMPLATE = """
     @click="() => $parent.$emit('check_one', props.row.account_id)"
   >
     <q-tooltip>Check this account</q-tooltip>
+  </q-btn>
+  <q-btn
+    dense round flat
+    icon="manage_accounts"
+    color="primary"
+    @click="() => $parent.$emit('edit_profile', props.row)"
+  >
+    <q-tooltip>Edit profile</q-tooltip>
+  </q-btn>
+  <q-btn
+    dense round flat
+    icon="vpn_key"
+    color="primary"
+    @click="() => $parent.$emit('edit_proxy', props.row)"
+  >
+    <q-tooltip>Proxy settings</q-tooltip>
   </q-btn>
 </q-td>
 """
@@ -184,6 +206,20 @@ async def _render_accounts_page() -> None:  # pragma: no cover  # noqa: C901, PL
     async def open_add_dialog() -> None:
         await _open_add_dialog(refresh)
 
+    async def open_profile_dialog(event: object) -> None:
+        row = _row_from_event(event)
+        if not row:
+            ui.notify("Could not resolve account", type="negative")
+            return
+        await _open_profile_dialog(row, refresh)
+
+    async def open_proxy_dialog(event: object) -> None:
+        row = _row_from_event(event)
+        if not row:
+            ui.notify("Could not resolve account", type="negative")
+            return
+        await _open_proxy_dialog(row, refresh)
+
     async def refresh_from_event(_event: object = None) -> None:
         await refresh()
 
@@ -196,6 +232,12 @@ async def _render_accounts_page() -> None:  # pragma: no cover  # noqa: C901, PL
     async def open_add_dialog_from_event(_event: object = None) -> None:
         await open_add_dialog()
 
+    async def open_profile_dialog_from_event(event: object) -> None:
+        await open_profile_dialog(event)
+
+    async def open_proxy_dialog_from_event(event: object) -> None:
+        await open_proxy_dialog(event)
+
     buttons.refresh.on("click", refresh_from_event)
     buttons.add.on("click", open_add_dialog_from_event)
     buttons.check_selected.on("click", check_selected_from_event)
@@ -203,6 +245,8 @@ async def _render_accounts_page() -> None:  # pragma: no cover  # noqa: C901, PL
     query_input.on("update:model-value", refresh_from_event)
     status_select.on("update:model-value", refresh_from_event)
     table.on("check_one", check_one)
+    table.on("edit_profile", open_profile_dialog_from_event)
+    table.on("edit_proxy", open_proxy_dialog_from_event)
 
     await refresh()
 
@@ -312,6 +356,108 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
     dialog.open()
 
 
+async def _open_profile_dialog(
+    row: dict[str, object],
+    refresh: Callable[[], Awaitable[None]],
+) -> None:  # pragma: no cover
+    account_id = str(row["account_id"])
+    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-96 max-w-full"):
+        ui.label("Edit profile").classes("text-base font-semibold")
+        first_name = ui.input("First name", value=str(row.get("first_name") or "")).props(
+            "dense outlined",
+        )
+        last_name = ui.input("Last name", value=str(row.get("last_name") or "")).props(
+            "dense outlined clearable",
+        )
+        username = ui.input("Username", value=str(row.get("username") or "")).props(
+            "dense outlined clearable prefix=@",
+        )
+        bio = ui.textarea("Bio", value=str(row.get("bio") or "")).props("dense outlined")
+
+        async def save() -> None:
+            name = (first_name.value or "").strip()
+            if not name:
+                ui.notify("First name is required", type="warning")
+                return
+            try:
+                await update_account_profile(
+                    AccountProfileUpdateRequest(
+                        account_id=account_id,
+                        first_name=name,
+                        last_name=(last_name.value or "").strip(),
+                        username=(username.value or "").strip().removeprefix("@"),
+                        bio=(bio.value or "").strip(),
+                    ),
+                )
+            except ValueError as exc:
+                ui.notify(str(exc), type="negative")
+                return
+            dialog.close()
+            ui.notify("Profile updated", type="positive")
+            await refresh()
+
+        with ui.row().classes("w-full justify-end gap-2"):
+            ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip("Cancel")
+            ui.button(icon="save", color="primary", on_click=save).tooltip("Save profile")
+    dialog.open()
+
+
+async def _open_proxy_dialog(
+    row: dict[str, object],
+    refresh: Callable[[], Awaitable[None]],
+) -> None:  # pragma: no cover
+    account_id = str(row["account_id"])
+    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-96 max-w-full"):
+        ui.label("Proxy settings").classes("text-base font-semibold")
+        proxy_type = ui.select(
+            ["socks5", "http"],
+            value=str(row.get("proxy_type") or "socks5"),
+            label="Type",
+        ).props("dense outlined")
+        host = ui.input("Host", value=str(row.get("proxy_host") or "")).props("dense outlined")
+        port = ui.number("Port", value=_proxy_port_value(row), min=1, max=65_535).props(
+            "dense outlined",
+        )
+        username = ui.input("Username").props("dense outlined clearable")
+        password = ui.input("Password").props("dense outlined clearable type=password")
+
+        async def save() -> None:
+            host_value = (host.value or "").strip()
+            if not host_value:
+                ui.notify("Proxy host is required", type="warning")
+                return
+            try:
+                await save_account_proxy(
+                    AccountProxyUpsert(
+                        account_id=account_id,
+                        proxy_type=proxy_type.value,
+                        host=host_value,
+                        port=int(port.value or 0),
+                        username=(username.value or "").strip() or None,
+                        password=(password.value or "").strip() or None,
+                    ),
+                )
+            except ValueError as exc:
+                ui.notify(str(exc), type="negative")
+                return
+            dialog.close()
+            ui.notify("Proxy saved", type="positive")
+            await refresh()
+
+        async def remove() -> None:
+            await delete_account_proxy(AccountProxyDelete(account_id=account_id))
+            dialog.close()
+            ui.notify("Proxy removed", type="positive")
+            await refresh()
+
+        with ui.row().classes("w-full justify-between gap-2"):
+            ui.button(icon="delete", color="negative", on_click=remove).tooltip("Remove proxy")
+            with ui.row().classes("gap-2"):
+                ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip("Cancel")
+                ui.button(icon="save", color="primary", on_click=save).tooltip("Save proxy")
+    dialog.open()
+
+
 async def _check_accounts(account_ids: set[str]) -> None:  # pragma: no cover
     if not account_ids:
         ui.notify("No accounts selected", type="warning")
@@ -346,3 +492,15 @@ def _account_id_from_event(event: object) -> str:
     if isinstance(args, list) and args:
         args = args[0]
     return str(args) if args is not None else ""
+
+
+def _row_from_event(event: object) -> dict[str, object]:
+    args = getattr(event, "args", event)
+    if isinstance(args, list) and args:
+        args = args[0]
+    return cast("dict[str, object]", args) if isinstance(args, dict) else {}
+
+
+def _proxy_port_value(row: dict[str, object]) -> int:
+    value = row.get("proxy_port")
+    return value if isinstance(value, int) else 1080

@@ -35,6 +35,8 @@ class UpdateProfile(BaseModel):
     action_type: Literal["update_profile"] = "update_profile"
     first_name: str = Field(min_length=1)
     last_name: str | None = None
+    username: str | None = None
+    bio: str | None = None
 
 
 TelegramAction = Annotated[

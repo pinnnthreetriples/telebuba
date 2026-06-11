@@ -14,18 +14,24 @@ from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
     AccountFilter,
+    AccountProfileUpdateRequest,
     AccountSessionFileImport,
     AccountStatus,
 )
+from schemas.proxy import AccountProxyDelete, AccountProxyUpsert
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
+from schemas.telegram_actions import ActionResult, UpdateProfile
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
     _format_last_checked,
     add_account,
     check_account_session,
+    delete_account_proxy,
     import_account_session,
     import_account_tdata,
     load_accounts_table,
+    save_account_proxy,
+    update_account_profile,
 )
 
 if TYPE_CHECKING:
@@ -227,6 +233,122 @@ async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPa
     assert state.summary.alive == 1
     assert state.rows[0].telegram == "@checked"
     assert state.rows[0].health == "ok"
+
+
+@pytest.mark.asyncio
+async def test_save_and_delete_account_proxy_updates_table_row() -> None:
+    await add_account(AccountCreate(account_id="account-proxy"))
+
+    proxy = await save_account_proxy(
+        AccountProxyUpsert(
+            account_id="account-proxy",
+            proxy_type="socks5",
+            host="127.0.0.1",
+            port=9050,
+            username="alice",
+            password="secret",  # noqa: S106 - test fixture value, not a real credential.
+        ),
+    )
+    with_proxy = await load_accounts_table(AccountFilter())
+
+    assert proxy.username == "a***e"
+    assert with_proxy.rows[0].proxy == "socks5 127.0.0.1:9050"
+
+    await delete_account_proxy(AccountProxyDelete(account_id="account-proxy"))
+    without_proxy = await load_accounts_table(AccountFilter())
+
+    assert without_proxy.rows[0].proxy == "-"
+
+
+@pytest.mark.asyncio
+async def test_update_account_profile_executes_action_and_persists_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+    await add_account(AccountCreate(account_id="account-profile"))
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.execute", fake_execute)
+
+    account = await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile",
+            first_name="Alice",
+            last_name="L",
+            username="alice",
+            bio="Bio",
+        ),
+    )
+
+    assert account.first_name == "Alice"
+    assert account.last_name == "L"
+    assert account.username == "alice"
+    assert account.bio == "Bio"
+    assert captured
+
+
+@pytest.mark.asyncio
+async def test_update_account_profile_can_clear_optional_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+    await add_account(AccountCreate(account_id="account-profile-clear"))
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.execute", fake_execute)
+    await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile-clear",
+            first_name="Alice",
+            last_name="L",
+            username="alice",
+            bio="Bio",
+        ),
+    )
+
+    account = await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile-clear",
+            first_name="Alice",
+            last_name="",
+            username="",
+            bio="",
+        ),
+    )
+
+    assert account.last_name == ""
+    assert account.username == ""
+    assert account.bio == ""
+    assert isinstance(captured[-1], UpdateProfile)
+    assert captured[-1].username == ""
+
+
+@pytest.mark.asyncio
+async def test_update_account_profile_surfaces_action_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await add_account(AccountCreate(account_id="account-profile-fail"))
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="update_profile",
+            account_id=account_id,
+            error_message="boom",
+        )
+
+    monkeypatch.setattr("services.accounts.execute", fake_execute)
+
+    with pytest.raises(ValueError, match="boom"):
+        await update_account_profile(
+            AccountProfileUpdateRequest(account_id="account-profile-fail", first_name="Alice"),
+        )
 
 
 @pytest.mark.asyncio

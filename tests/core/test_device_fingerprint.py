@@ -7,7 +7,12 @@ from python_socks import ProxyConnectionError
 from telethon import errors
 
 import features
-from core.db import configure_database, insert_device_fingerprint
+from core.db import (
+    configure_database,
+    create_account,
+    insert_device_fingerprint,
+    upsert_account_proxy,
+)
 from core.device_fingerprint import (
     generate_random_device_fingerprint,
     get_or_create_device_fingerprint,
@@ -18,11 +23,13 @@ from core.telegram_client import (
     prepare_telegram_client_profile,
     telegram_client,
 )
+from schemas.accounts import AccountCreate
 from schemas.device_fingerprint import (
     DeviceFingerprint,
     TelegramClientProfile,
     TelegramClientRequest,
 )
+from schemas.proxy import AccountProxyUpsert
 from schemas.telegram_session import TelegramSessionCheckRequest
 
 if TYPE_CHECKING:
@@ -73,6 +80,36 @@ async def test_telegram_client_profile_uses_saved_fingerprint(tmp_path: Path, mo
     assert first.device == second.device
     assert first.session_path == str(tmp_path / "sessions" / "account-2")
     assert first.receive_updates is False
+
+
+@pytest.mark.asyncio
+async def test_telegram_client_profile_includes_saved_proxy(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
+    await create_account(AccountCreate(account_id="account-proxy"))
+    await upsert_account_proxy(
+        AccountProxyUpsert(
+            account_id="account-proxy",
+            proxy_type="socks5",
+            host="127.0.0.1",
+            port=9050,
+            username="alice",
+            password="secret",  # noqa: S106 - test fixture value, not a real credential.
+        ),
+    )
+
+    profile = await prepare_telegram_client_profile(
+        TelegramClientRequest(account_id="account-proxy"),
+    )
+
+    assert profile.proxy_type == "socks5"
+    assert profile.proxy_host == "127.0.0.1"
+    assert profile.proxy_port == 9050
+    assert profile.proxy_username == "alice"
+    assert profile.proxy_password == "secret"  # noqa: S105 - test fixture value.
 
 
 def test_generate_random_device_fingerprint_supports_desktop_platforms(monkeypatch) -> None:
@@ -139,6 +176,48 @@ def test_create_telegram_client_passes_device_profile(monkeypatch) -> None:
             "retry_delay": 2,
             "request_retries": 3,
         },
+    }
+
+
+def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
+    captured = {}
+
+    class FakeTelegramClient:
+        def __init__(self, _session_path: str, _api_id: int, _api_hash: str, **kwargs) -> None:
+            captured.update(kwargs)
+
+    monkeypatch.setattr("core.telegram_client.TelegramClient", FakeTelegramClient)
+
+    client_profile = DeviceFingerprint(
+        account_id="account-3",
+        platform="windows",
+        device_model="Desktop",
+        system_version="Windows 11",
+        app_version="5.4.0 x64",
+        lang_code="en",
+        system_lang_code="en-US",
+    )
+    create_telegram_client(
+        TelegramClientProfile(
+            account_id="account-3",
+            session_path="sessions/account-3",
+            receive_updates=True,
+            device=client_profile,
+            proxy_type="http",
+            proxy_host="proxy.local",
+            proxy_port=8080,
+            proxy_username="bob",
+            proxy_password="pw",  # noqa: S106 - test fixture value, not a real credential.
+        ),
+    )
+
+    assert captured["proxy"] == {
+        "proxy_type": "http",
+        "addr": "proxy.local",
+        "port": 8080,
+        "rdns": True,
+        "username": "bob",
+        "password": "pw",
     }
 
 
