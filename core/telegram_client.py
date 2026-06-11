@@ -1,13 +1,20 @@
 from __future__ import annotations
 
+import random
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from anyio import Path
 from python_socks import ProxyConnectionError, ProxyError, ProxyTimeoutError
 from telethon import TelegramClient, errors
-from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRequest
+from telethon.tl.functions.account import (
+    UpdateProfileRequest,
+    UpdateStatusRequest,
+    UpdateUsernameRequest,
+)
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
+from telethon.tl.functions.messages import SendReactionRequest
+from telethon.tl.types import ReactionEmoji
 
 from core.config import settings
 from core.db import fetch_account_proxy_settings
@@ -24,7 +31,17 @@ from schemas.telegram_session import (
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
-    from schemas.telegram_actions import TelegramAction
+    from schemas.telegram_actions import (
+        ReactToPost,
+        ReadChannel,
+        TelegramAction,
+        UpdateProfile,
+    )
+
+
+# SystemRandom: non-cryptographic jitter/selection, but avoids the module-level
+# `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
+_rng = random.SystemRandom()
 
 
 def _session_path(request: TelegramClientRequest) -> str:
@@ -316,39 +333,97 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:
 
 
 async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:
-    """Run one action against an already-connected client. Returns message_id if any."""
+    """Run one action against an already-connected client. Returns message_id if any.
+
+    Single exit point keeps the branch count linting-friendly as the action set
+    grows; the per-action body is delegated to small helpers where it is more
+    than a one-liner.
+    """
     # Telethon resolves usernames / chat refs at runtime; ty insists on the
     # narrow InputChannel union, so the str/int passthrough needs an ignore.
+    message_id: int | None = None
     if action.action_type == "join_channel":
         await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-        return None
-    if action.action_type == "leave_channel":
+    elif action.action_type == "leave_channel":
         await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-        return None
-    if action.action_type == "post_comment":
+    elif action.action_type == "post_comment":
         message = await client.send_message(action.chat_id, action.text)
-        return int(getattr(message, "id", 0)) or None
-    if action.action_type == "update_profile":
-        await client(
-            UpdateProfileRequest(
-                first_name=action.first_name,
-                last_name=action.last_name or "",
-                about=action.bio,
-            ),
-        )
-        if action.username is not None:
-            await client(UpdateUsernameRequest(username=action.username))
+        message_id = int(getattr(message, "id", 0)) or None
+    elif action.action_type == "update_profile":
+        await _dispatch_update_profile(client, action)
+    elif action.action_type == "set_online":
+        await client(UpdateStatusRequest(offline=not action.online))
+    elif action.action_type == "read_channel":
+        await _dispatch_read_channel(client, action)
+    elif action.action_type == "react_to_post":
+        message_id = await _dispatch_react_to_post(client, action)
+    elif action.action_type == "send_dm":
+        message = await client.send_message(action.user_id, action.text)
+        message_id = int(getattr(message, "id", 0)) or None
+    else:
+        msg = f"Unsupported action_type: {action.action_type}"
+        raise ValueError(msg)
+    return message_id
+
+
+async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
+    await client(
+        UpdateProfileRequest(
+            first_name=action.first_name,
+            last_name=action.last_name or "",
+            about=action.bio,
+        ),
+    )
+    if action.username is not None:
+        await client(UpdateUsernameRequest(username=action.username))
+
+
+async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> None:
+    """Fetch recent posts and mark them read — the "reading a feed" emulation."""
+    messages = await client.get_messages(action.channel, limit=action.message_limit)
+    # get_messages(limit=...) returns an iterable TotalList; the stub union also
+    # admits a single Message / None for the by-id form, which we never use here.
+    max_id = max(
+        (int(getattr(message, "id", 0)) for message in messages),  # ty: ignore[not-iterable]
+        default=0,
+    )
+    if max_id:
+        await client.send_read_acknowledge(action.channel, max_id=max_id)
+
+
+async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> int | None:
+    """React to a random recent post with a random candidate emoji."""
+    messages = await client.get_messages(action.channel, limit=action.message_limit)
+    candidates = [
+        int(getattr(m, "id", 0))
+        for m in messages  # ty: ignore[not-iterable]
+        if getattr(m, "id", None)
+    ]
+    if not candidates:
         return None
-    msg = f"Unsupported action_type: {action.action_type}"
-    raise ValueError(msg)
+    message_id = _rng.choice(candidates)
+    emoji = _rng.choice(action.reactions)
+    peer = await client.get_input_entity(action.channel)
+    await client(
+        SendReactionRequest(
+            peer=peer,
+            msg_id=message_id,
+            reaction=[ReactionEmoji(emoticon=emoji)],
+        ),
+    )
+    return message_id
 
 
 def _action_log_extra(action: TelegramAction) -> dict[str, object]:
     """Compact summary of an action for log extras — no payload secrets."""
-    if action.action_type in {"join_channel", "leave_channel"}:
+    if action.action_type in {"join_channel", "leave_channel", "read_channel", "react_to_post"}:
         return {"channel": getattr(action, "channel", "")}
     if action.action_type == "post_comment":
         return {"chat_id": getattr(action, "chat_id", 0)}
+    if action.action_type == "set_online":
+        return {"online": getattr(action, "online", None)}
+    if action.action_type == "send_dm":
+        return {"user_id": getattr(action, "user_id", 0)}
     if action.action_type == "update_profile":
         return {
             "has_last_name": getattr(action, "last_name", None) is not None,
