@@ -14,6 +14,7 @@ from schemas.accounts import (
     AccountCreate,
     AccountFilter,
     AccountSessionFileImport,
+    AccountStatus,
 )
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -57,6 +58,8 @@ async def test_add_account_creates_fingerprint_and_table_row() -> None:
     assert state.summary.never_checked == 1
     assert state.rows[0].label == "Main"
     assert state.rows[0].device != "-"
+    # A freshly added account has not been checked yet -> warn (amber).
+    assert state.rows[0].health == "warn"
 
 
 @pytest.mark.asyncio
@@ -193,3 +196,45 @@ async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPa
     assert account.status == "alive"
     assert state.summary.alive == 1
     assert state.rows[0].telegram == "@checked"
+    assert state.rows[0].health == "ok"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("status", "expected_health"),
+    [
+        ("alive", "ok"),
+        ("new", "warn"),
+        ("flood_wait", "warn"),
+        ("network_error", "warn"),
+        ("proxy_error", "warn"),
+        ("unknown_error", "warn"),
+        ("unauthorized", "fail"),
+        ("session_error", "fail"),
+        ("account_error", "fail"),
+    ],
+)
+async def test_health_taxonomy_matches_status(
+    monkeypatch: pytest.MonkeyPatch,
+    status: AccountStatus,
+    expected_health: str,
+) -> None:
+    """Every AccountStatus maps to exactly one of ok / warn / fail."""
+    await add_account(AccountCreate(account_id="acc-h"))
+    if status == "new":
+        state = await load_accounts_table(AccountFilter())
+        assert state.rows[0].health == expected_health
+        return
+
+    async def fake_check(_request: object) -> TelegramSessionCheckResult:
+        return TelegramSessionCheckResult(
+            account_id="acc-h",
+            session_path="sessions/acc-h",
+            status=status,
+            is_temporary=status not in {"alive", "unauthorized", "session_error", "account_error"},
+        )
+
+    monkeypatch.setattr("services.accounts.check_telegram_session", fake_check)
+    await check_account_session(AccountCheckRequest(account_id="acc-h"))
+    state = await load_accounts_table(AccountFilter())
+    assert state.rows[0].health == expected_health

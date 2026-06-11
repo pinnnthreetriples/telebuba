@@ -93,6 +93,18 @@ async def check_telegram_session(
     request: TelegramSessionCheckRequest,
 ) -> TelegramSessionCheckResult:
     profile = await prepare_session_check_profile(request)
+    if settings.telegram.api_id == 0 or not settings.telegram.api_hash:
+        return TelegramSessionCheckResult(
+            account_id=profile.account_id,
+            session_path=profile.session_path,
+            status="session_error",
+            is_temporary=False,
+            error_type="MissingCredentials",
+            error_message=(
+                "TELEGRAM__API_ID / TELEGRAM__API_HASH are not set in .env — "
+                "fill them in to enable session checks."
+            ),
+        )
     client = create_telegram_client(profile)
     result: TelegramSessionCheckResult
     try:
