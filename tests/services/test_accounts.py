@@ -18,19 +18,39 @@ from schemas.accounts import (
     AccountSessionFileImport,
     AccountStatus,
 )
-from schemas.proxy import AccountProxyDelete, AccountProxyUpsert
+from schemas.profile_media import (
+    AccountProfileMusicUpload,
+    AccountProfilePhotoUpload,
+    AccountStoryUpload,
+)
+from schemas.proxy import (
+    AccountProxyCheckRequest,
+    AccountProxyDelete,
+    AccountProxyUpsert,
+    ProxyCheckResult,
+)
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
-from schemas.telegram_actions import ActionResult, UpdateProfile
+from schemas.telegram_actions import (
+    ActionResult,
+    AddProfileMusic,
+    PostStory,
+    SetProfilePhoto,
+    UpdateProfile,
+)
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
     _format_last_checked,
     add_account,
+    add_account_profile_music,
+    check_account_proxy,
     check_account_session,
     delete_account_proxy,
     import_account_session,
     import_account_tdata,
     load_accounts_table,
+    post_account_story,
     save_account_proxy,
+    set_account_profile_photo,
     update_account_profile,
 )
 
@@ -252,12 +272,54 @@ async def test_save_and_delete_account_proxy_updates_table_row() -> None:
     with_proxy = await load_accounts_table(AccountFilter())
 
     assert proxy.username == "a***e"
-    assert with_proxy.rows[0].proxy == "socks5 127.0.0.1:9050"
+    assert with_proxy.rows[0].proxy == "SOCKS5 127.0.0.1:9050"
 
     await delete_account_proxy(AccountProxyDelete(account_id="account-proxy"))
     without_proxy = await load_accounts_table(AccountFilter())
 
     assert without_proxy.rows[0].proxy == "-"
+
+
+@pytest.mark.asyncio
+async def test_check_account_proxy_persists_route_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await add_account(AccountCreate(account_id="account-proxy-check"))
+    await save_account_proxy(
+        AccountProxyUpsert(
+            account_id="account-proxy-check",
+            proxy_type="socks5",
+            host="127.0.0.1",
+            port=9050,
+        ),
+    )
+
+    async def fake_check(_proxy: object) -> ProxyCheckResult:
+        return ProxyCheckResult(
+            status="tcp_working",
+            exit_ip="45.130.253.155",
+            country_code="NL",
+            country_name="Netherlands",
+        )
+
+    monkeypatch.setattr("services.accounts.check_proxy_connectivity", fake_check)
+
+    proxy = await check_account_proxy(AccountProxyCheckRequest(account_id="account-proxy-check"))
+    state = await load_accounts_table(AccountFilter())
+
+    assert proxy.status == "tcp_working"
+    assert proxy.exit_ip == "45.130.253.155"
+    assert state.rows[0].proxy_status == "tcp_working"
+    assert state.rows[0].proxy_country_code == "NL"
+    assert state.rows[0].proxy_country_name == "Netherlands"
+
+
+@pytest.mark.asyncio
+async def test_check_account_proxy_requires_saved_proxy() -> None:
+    await add_account(AccountCreate(account_id="account-without-proxy"))
+
+    with pytest.raises(ValueError, match="Proxy not found"):
+        await check_account_proxy(AccountProxyCheckRequest(account_id="account-without-proxy"))
 
 
 @pytest.mark.asyncio
@@ -348,6 +410,96 @@ async def test_update_account_profile_surfaces_action_failure(
     with pytest.raises(ValueError, match="boom"):
         await update_account_profile(
             AccountProfileUpdateRequest(account_id="account-profile-fail", first_name="Alice"),
+        )
+
+
+@pytest.mark.asyncio
+async def test_set_account_profile_photo_executes_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="set_profile_photo", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.execute", fake_execute)
+
+    result = await set_account_profile_photo(
+        AccountProfilePhotoUpload(
+            account_id="account-photo",
+            filename="avatar.jpg",
+            content=b"jpg",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], SetProfilePhoto)
+
+
+@pytest.mark.asyncio
+async def test_post_account_story_executes_story_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="post_story", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.execute", fake_execute)
+
+    result = await post_account_story(
+        AccountStoryUpload(
+            account_id="account-story",
+            filename="story.mp4",
+            content=b"mp4",
+            media_kind="video",
+            caption="Story",
+            privacy_preset="public",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], PostStory)
+    assert captured[0].privacy_preset == "public"
+
+
+@pytest.mark.asyncio
+async def test_add_account_profile_music_executes_music_action(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="add_profile_music", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.execute", fake_execute)
+
+    result = await add_account_profile_music(
+        AccountProfileMusicUpload(
+            account_id="account-music",
+            filename="track.mp3",
+            content=b"mp3",
+            title="Track",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], AddProfileMusic)
+    assert captured[0].title == "Track"
+
+
+@pytest.mark.asyncio
+async def test_profile_media_rejects_wrong_extension() -> None:
+    with pytest.raises(ValueError, match="profile photo must be one of"):
+        await set_account_profile_photo(
+            AccountProfilePhotoUpload(
+                account_id="account-photo",
+                filename="avatar.gif",
+                content=b"gif",
+            ),
         )
 
 

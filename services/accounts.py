@@ -30,9 +30,11 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     create_account,
+    fetch_account_proxy_settings,
     list_accounts,
     update_account_from_session_check,
     update_account_profile_snapshot,
+    update_account_proxy_check,
     upsert_account_proxy,
 )
 from core.db import (
@@ -40,6 +42,7 @@ from core.db import (
 )
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
+from core.proxy_check import check_proxy_connectivity
 from core.tdata_import import convert_tdata_zip
 from core.telegram_client import check_telegram_session, execute
 from schemas.accounts import (
@@ -55,16 +58,37 @@ from schemas.accounts import (
     AccountTableRow,
     health_for_status,
 )
-from schemas.telegram_actions import UpdateProfile
+from schemas.proxy import AccountProxyCheckUpdate
+from schemas.telegram_actions import (
+    ActionResult,
+    AddProfileMusic,
+    PostStory,
+    SetProfilePhoto,
+    UpdateProfile,
+)
 from schemas.telegram_session import TelegramSessionCheckRequest
 
 if TYPE_CHECKING:
-    from schemas.proxy import AccountProxyDelete, AccountProxyRead, AccountProxyUpsert
+    from schemas.profile_media import (
+        AccountProfileMusicUpload,
+        AccountProfilePhotoUpload,
+        AccountStoryUpload,
+    )
+    from schemas.proxy import (
+        AccountProxyCheckRequest,
+        AccountProxyDelete,
+        AccountProxyRead,
+        AccountProxyUpsert,
+    )
     from schemas.tdata import TdataConvertRequest
 
 
 _PERMANENT_ISSUES = {"unauthorized", "session_error", "account_error"}
 _TEMPORARY_ISSUES = {"flood_wait", "network_error", "proxy_error", "unknown_error"}
+_PROFILE_PHOTO_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp"}
+_STORY_IMAGE_SUFFIXES = _PROFILE_PHOTO_SUFFIXES
+_STORY_VIDEO_SUFFIXES = {".mp4", ".mov"}
+_PROFILE_MUSIC_SUFFIXES = {".mp3", ".m4a"}
 
 
 async def add_account(data: AccountCreate) -> AccountRead:
@@ -173,6 +197,37 @@ async def delete_account_proxy(data: AccountProxyDelete) -> None:
     await log_event("INFO", "account_proxy_deleted", account_id=data.account_id)
 
 
+async def check_account_proxy(data: AccountProxyCheckRequest) -> AccountProxyRead:
+    proxy = await fetch_account_proxy_settings(data.account_id)
+    if proxy is None:
+        msg = f"Proxy not found for account: {data.account_id}"
+        raise ValueError(msg)
+    result = await check_proxy_connectivity(proxy)
+    saved = await update_account_proxy_check(
+        AccountProxyCheckUpdate(
+            account_id=data.account_id,
+            status=result.status,
+            last_error=result.last_error,
+            exit_ip=result.exit_ip,
+            country_code=result.country_code,
+            country_name=result.country_name,
+        ),
+    )
+    await log_event(
+        "INFO" if saved.status == "tcp_working" else "WARNING",
+        "account_proxy_checked",
+        account_id=data.account_id,
+        extra={
+            "status": saved.status,
+            "exit_ip": saved.exit_ip,
+            "country_code": saved.country_code,
+            "country_name": saved.country_name,
+            "last_error": saved.last_error,
+        },
+    )
+    return saved
+
+
 async def update_account_profile(data: AccountProfileUpdateRequest) -> AccountRead:
     result = await execute(
         data.account_id,
@@ -200,6 +255,103 @@ async def update_account_profile(data: AccountProfileUpdateRequest) -> AccountRe
     return account
 
 
+async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionResult:
+    _validate_upload(
+        filename=data.filename,
+        content=data.content,
+        max_bytes=settings.profile_media.photo_max_bytes,
+        allowed_suffixes=_PROFILE_PHOTO_SUFFIXES,
+        label="profile photo",
+    )
+    result = await execute(
+        data.account_id,
+        SetProfilePhoto(filename=data.filename, content=data.content),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    await log_event(
+        "INFO",
+        "account_profile_photo_updated",
+        account_id=data.account_id,
+        extra={"filename": data.filename},
+    )
+    return result
+
+
+async def post_account_story(data: AccountStoryUpload) -> ActionResult:
+    max_bytes = (
+        settings.profile_media.story_image_max_bytes
+        if data.media_kind == "image"
+        else settings.profile_media.story_video_max_bytes
+    )
+    allowed_suffixes = (
+        _STORY_IMAGE_SUFFIXES if data.media_kind == "image" else _STORY_VIDEO_SUFFIXES
+    )
+    _validate_upload(
+        filename=data.filename,
+        content=data.content,
+        max_bytes=max_bytes,
+        allowed_suffixes=allowed_suffixes,
+        label=f"story {data.media_kind}",
+    )
+    result = await execute(
+        data.account_id,
+        PostStory(
+            filename=data.filename,
+            content=data.content,
+            media_kind=data.media_kind,
+            caption=data.caption,
+            privacy_preset=data.privacy_preset,
+            period_seconds=data.period_seconds,
+            protect_content=data.protect_content,
+        ),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    await log_event(
+        "INFO",
+        "account_story_posted",
+        account_id=data.account_id,
+        extra={
+            "filename": data.filename,
+            "media_kind": data.media_kind,
+            "privacy_preset": data.privacy_preset,
+        },
+    )
+    return result
+
+
+async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionResult:
+    _validate_upload(
+        filename=data.filename,
+        content=data.content,
+        max_bytes=settings.profile_media.music_max_bytes,
+        allowed_suffixes=_PROFILE_MUSIC_SUFFIXES,
+        label="profile music",
+    )
+    result = await execute(
+        data.account_id,
+        AddProfileMusic(
+            filename=data.filename,
+            content=data.content,
+            title=data.title,
+            performer=data.performer,
+        ),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    await log_event(
+        "INFO",
+        "account_profile_music_added",
+        account_id=data.account_id,
+        extra={"filename": data.filename, "has_title": data.title is not None},
+    )
+    return result
+
+
 async def load_accounts_table(data: AccountFilter) -> AccountsTableState:
     accounts = await list_accounts()
     filtered = [account for account in accounts.accounts if _matches_filter(account, data)]
@@ -223,6 +375,27 @@ def _session_filename(filename: str) -> str:
 def _write_session_file(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
+
+
+def _validate_upload(
+    *,
+    filename: str,
+    content: bytes,
+    max_bytes: int,
+    allowed_suffixes: set[str],
+    label: str,
+) -> None:
+    if not content:
+        msg = f"{label} file is empty"
+        raise ValueError(msg)
+    if len(content) > max_bytes:
+        msg = f"{label} file is too large"
+        raise ValueError(msg)
+    suffix = Path(filename).suffix.lower()
+    if suffix not in allowed_suffixes:
+        allowed = ", ".join(sorted(allowed_suffixes))
+        msg = f"{label} must be one of: {allowed}"
+        raise ValueError(msg)
 
 
 def _matches_filter(account: AccountRead, data: AccountFilter) -> bool:
@@ -273,6 +446,12 @@ def _to_table_row(account: AccountRead) -> AccountTableRow:
         proxy_type=account.proxy_type,
         proxy_host=account.proxy_host,
         proxy_port=account.proxy_port,
+        proxy_status=account.proxy_status,
+        proxy_last_checked_at=account.proxy_last_checked_at,
+        proxy_last_error=account.proxy_last_error,
+        proxy_exit_ip=account.proxy_exit_ip,
+        proxy_country_code=account.proxy_country_code,
+        proxy_country_name=account.proxy_country_name,
     )
 
 
@@ -348,4 +527,4 @@ def _device_label(account: AccountRead) -> str:
 def _proxy_label(account: AccountRead) -> str:
     if not account.proxy_type or not account.proxy_host or account.proxy_port is None:
         return "-"
-    return f"{account.proxy_type} {account.proxy_host}:{account.proxy_port}"
+    return f"{account.proxy_type.upper()} {account.proxy_host}:{account.proxy_port}"

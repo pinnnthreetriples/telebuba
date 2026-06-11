@@ -51,6 +51,11 @@ class AccountRead(BaseModel):
     proxy_host: str | None = None
     proxy_port: int | None = None
     proxy_status: str | None = None
+    proxy_last_checked_at: str | None = None
+    proxy_last_error: str | None = None
+    proxy_exit_ip: str | None = None
+    proxy_country_code: str | None = None
+    proxy_country_name: str | None = None
 
 
 class AccountList(BaseModel):
@@ -120,6 +125,12 @@ class AccountTableRow(BaseModel):
     proxy_type: str | None = None
     proxy_host: str | None = None
     proxy_port: int | None = None
+    proxy_status: str | None = None
+    proxy_last_checked_at: str | None = None
+    proxy_last_error: str | None = None
+    proxy_exit_ip: str | None = None
+    proxy_country_code: str | None = None
+    proxy_country_name: str | None = None
 
 
 class AccountsTableState(BaseModel):

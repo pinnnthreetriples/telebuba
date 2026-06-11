@@ -35,6 +35,9 @@ class AccountProxyRead(BaseModel):
     status: ProxyStatus
     last_checked_at: str | None = None
     last_error: str | None = None
+    exit_ip: str | None = None
+    country_code: str | None = None
+    country_name: str | None = None
     updated_at: str
 
 
@@ -50,3 +53,15 @@ class AccountProxySettings(BaseModel):
 class ProxyCheckResult(BaseModel):
     status: ProxyStatus
     last_error: str | None = None
+    exit_ip: str | None = None
+    country_code: str | None = None
+    country_name: str | None = None
+
+
+class AccountProxyCheckUpdate(BaseModel):
+    account_id: str = Field(min_length=1)
+    status: ProxyStatus
+    last_error: str | None = None
+    exit_ip: str | None = None
+    country_code: str | None = None
+    country_name: str | None = None
