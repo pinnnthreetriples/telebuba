@@ -169,6 +169,8 @@ async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) 
 async def test_check_telegram_session_returns_alive(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.telegram_client.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.telegram_client.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(authorized=True)
     monkeypatch.setattr("core.telegram_client.create_telegram_client", lambda _: fake_client)
 
@@ -185,6 +187,8 @@ async def test_check_telegram_session_returns_alive(tmp_path: Path, monkeypatch)
 async def test_check_telegram_session_returns_unauthorized(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.telegram_client.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.telegram_client.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(authorized=False)
     monkeypatch.setattr("core.telegram_client.create_telegram_client", lambda _: fake_client)
 
@@ -215,6 +219,8 @@ async def test_check_telegram_session_classifies_errors(
 ) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.telegram_client.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.telegram_client.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(connect_error=exc)
     monkeypatch.setattr("core.telegram_client.create_telegram_client", lambda _: fake_client)
 
