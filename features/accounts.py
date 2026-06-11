@@ -154,7 +154,14 @@ def _build_header() -> _ToolbarButtons:  # pragma: no cover
         "w-full items-center justify-between px-4 py-2 bg-white "
         "text-slate-950 border-b border-slate-200",
     ):
-        ui.label("Accounts").classes("text-lg font-semibold")
+        with ui.row().classes("items-center gap-4"):
+            ui.label("Telebuba").classes("text-lg font-semibold")
+            ui.link("Accounts", "/").classes(
+                "text-sm font-medium text-slate-900 no-underline",
+            )
+            ui.link("Logs", "/logs").classes(
+                "text-sm text-slate-600 hover:text-slate-900 no-underline",
+            )
         with ui.row().classes("items-center gap-2"):
             refresh_button = ui.button(icon="refresh", color="grey-8")
             refresh_button.tooltip("Refresh")
