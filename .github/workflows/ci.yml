@@ -21,6 +21,11 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# Supply-chain hardening: drop default write scopes; every job opts in to what
+# it actually needs. None of the jobs below post comments or push code, so
+# read-all is sufficient.
+permissions: read-all
+
 env:
   PYTHON_VERSION: "3.13"
   UV_VERSION: "0.10.9"

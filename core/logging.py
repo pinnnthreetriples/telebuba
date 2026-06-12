@@ -113,6 +113,10 @@ async def log_event(
 
     ``extra`` is an open key/value bag. Keep payloads compact — large blobs
     bloat the ``logs`` table.
+
+    Best-effort: a failure in any tier (e.g. SQLite write error) is logged
+    to loguru but never raised to the caller, so business operations cannot
+    be broken by a logging fault.
     """
     payload = LogEventInput(
         level=level,
@@ -128,6 +132,12 @@ async def log_event(
         extra=payload.extra,
     )
 
-    await insert_log_row(payload)
+    try:
+        await insert_log_row(payload)
+    except Exception as exc:  # noqa: BLE001 — logging must never break callers.
+        logger.warning("log_persist_failed event={event} error={error}", event=event, error=exc)
 
-    _send_to_sentry(payload)
+    try:
+        _send_to_sentry(payload)
+    except Exception as exc:  # noqa: BLE001 — Sentry SDK can hiccup; swallow.
+        logger.warning("sentry_send_failed event={event} error={error}", event=event, error=exc)

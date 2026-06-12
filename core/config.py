@@ -1,22 +1,26 @@
-"""Project settings — nested Pydantic models, one namespace per domain.
+"""Project settings — typed pydantic-settings, one nested namespace per domain.
 
 Env keys use a double-underscore separator: ``TELEGRAM__API_ID``,
-``LOGGING__SENTRY_DSN``, etc. The convention matches the one ``pydantic-settings``
-uses by default, so a future migration to ``BaseSettings`` stays trivial.
+``LOGGING__SENTRY_DSN``, ``WARMING__REACTION_PROBABILITY``, etc.
+
+Validation runs at import time. A misconfigured ``.env`` raises a clear
+``ValidationError`` instead of producing a half-initialised app with silent
+defaults.
 
 See ``.env.example`` for the full list of supported keys.
 """
 
 from __future__ import annotations
 
-import os
 from pathlib import Path
 
-from dotenv import load_dotenv
-from pydantic import BaseModel, Field
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
-class TelegramSettings(BaseModel):
+class TelegramSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="TELEGRAM__", extra="ignore")
+
     api_id: int = Field(default=0, ge=0)
     api_hash: str = ""
     session_dir: Path = Path("sessions")
@@ -26,29 +30,41 @@ class TelegramSettings(BaseModel):
     request_retries: int = Field(default=3, ge=0)
 
 
-class UiSettings(BaseModel):
+class UiSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="UI__", extra="ignore")
+
     port: int = Field(default=8080, ge=1, le=65535)
 
 
-class DbSettings(BaseModel):
+class DbSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="DB__", extra="ignore")
+
     path: Path = Path("telebuba.db")
 
 
-class ProxySettings(BaseModel):
+class ProxySettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PROXY__", extra="ignore")
+
     check_host: str = Field(default="ip-api.com", min_length=1)
     check_path: str = Field(default="/json?fields=status,message,query,country,countryCode")
     check_port: int = Field(default=80, ge=1, le=65535)
     check_timeout_seconds: float = Field(default=8.0, gt=0)
 
 
-class ProfileMediaSettings(BaseModel):
+class ProfileMediaSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="PROFILE_MEDIA__", extra="ignore")
+
     photo_max_bytes: int = Field(default=10_000_000, ge=1)
     story_image_max_bytes: int = Field(default=10_000_000, ge=1)
     story_video_max_bytes: int = Field(default=100_000_000, ge=1)
     music_max_bytes: int = Field(default=30_000_000, ge=1)
+    # .session files = effective credentials. Cap to deter accidental large uploads.
+    session_max_bytes: int = Field(default=5_000_000, ge=1)
 
 
-class LoggingSettings(BaseModel):
+class LoggingSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="LOGGING__", extra="ignore")
+
     path: Path = Path("debug.log")
     level: str = Field(default="INFO")
     rotation: str = Field(default="10 MB")
@@ -56,8 +72,10 @@ class LoggingSettings(BaseModel):
     sentry_dsn: str = ""
 
 
-class WarmingSettings(BaseModel):
+class WarmingSettings(BaseSettings):
     """Tunables for the warming engine — all delays/limits live here, no magic numbers."""
+
+    model_config = SettingsConfigDict(env_prefix="WARMING__", extra="ignore")
 
     action_delay_min_seconds: float = Field(default=10.0, ge=0.0)
     action_delay_max_seconds: float = Field(default=30.0, ge=0.0)
@@ -76,9 +94,20 @@ class WarmingSettings(BaseModel):
     default_reactions: list[str] = Field(
         default_factory=lambda: ["👍", "🔥", "❤️", "😁", "🎉", "👏", "🤔", "🙏"],
     )
+    # Channel guardrails. Service layer enforces these limits.
+    max_channels_total: int = Field(default=500, ge=1)
+    max_channels_per_add: int = Field(default=50, ge=1)
+    max_channel_length: int = Field(default=120, ge=1)
+    # Gemini DM payload guardrails — protect the recipient from junk output.
+    chat_message_max_chars: int = Field(default=300, ge=1)
+    chat_message_max_lines: int = Field(default=4, ge=1)
+    # Graceful stop budget when cancelling a per-account loop task.
+    stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
 
 
-class GeminiSettings(BaseModel):
+class GeminiSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="GEMINI__", extra="ignore")
+
     api_key: str = ""
     model: str = Field(default="gemini-2.5-flash")
     base_url: str = Field(default="https://generativelanguage.googleapis.com/v1beta")
@@ -87,7 +116,9 @@ class GeminiSettings(BaseModel):
     max_output_tokens: int = Field(default=120, ge=1, le=2048)
 
 
-class Settings(BaseModel):
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(extra="ignore")
+
     telegram: TelegramSettings = Field(default_factory=TelegramSettings)
     ui: UiSettings = Field(default_factory=UiSettings)
     db: DbSettings = Field(default_factory=DbSettings)
@@ -99,50 +130,14 @@ class Settings(BaseModel):
 
 
 def load_settings() -> Settings:
-    load_dotenv()
-    return Settings(
-        telegram=TelegramSettings(
-            api_id=int(os.environ.get("TELEGRAM__API_ID", "0")),
-            api_hash=os.environ.get("TELEGRAM__API_HASH", ""),
-            session_dir=Path(os.environ.get("TELEGRAM__SESSION_DIR", "sessions")),
-            timeout_seconds=int(os.environ.get("TELEGRAM__TIMEOUT_SECONDS", "20")),
-            connection_retries=int(os.environ.get("TELEGRAM__CONNECTION_RETRIES", "3")),
-            retry_delay_seconds=int(os.environ.get("TELEGRAM__RETRY_DELAY_SECONDS", "2")),
-            request_retries=int(os.environ.get("TELEGRAM__REQUEST_RETRIES", "3")),
-        ),
-        ui=UiSettings(port=int(os.environ.get("UI__PORT", "8080"))),
-        db=DbSettings(path=Path(os.environ.get("DB__PATH", "telebuba.db"))),
-        proxy=ProxySettings(
-            check_host=os.environ.get("PROXY__CHECK_HOST", "ip-api.com"),
-            check_path=os.environ.get(
-                "PROXY__CHECK_PATH",
-                "/json?fields=status,message,query,country,countryCode",
-            ),
-            check_port=int(os.environ.get("PROXY__CHECK_PORT", "80")),
-            check_timeout_seconds=float(os.environ.get("PROXY__CHECK_TIMEOUT_SECONDS", "8.0")),
-        ),
-        profile_media=ProfileMediaSettings(
-            photo_max_bytes=int(os.environ.get("PROFILE_MEDIA__PHOTO_MAX_BYTES", "10000000")),
-            story_image_max_bytes=int(
-                os.environ.get("PROFILE_MEDIA__STORY_IMAGE_MAX_BYTES", "10000000"),
-            ),
-            story_video_max_bytes=int(
-                os.environ.get("PROFILE_MEDIA__STORY_VIDEO_MAX_BYTES", "100000000"),
-            ),
-            music_max_bytes=int(os.environ.get("PROFILE_MEDIA__MUSIC_MAX_BYTES", "30000000")),
-        ),
-        logging=LoggingSettings(
-            path=Path(os.environ.get("LOGGING__PATH", "debug.log")),
-            level=os.environ.get("LOGGING__LEVEL", "INFO"),
-            rotation=os.environ.get("LOGGING__ROTATION", "10 MB"),
-            retention=int(os.environ.get("LOGGING__RETENTION", "10")),
-            sentry_dsn=os.environ.get("LOGGING__SENTRY_DSN", ""),
-        ),
-        gemini=GeminiSettings(
-            api_key=os.environ.get("GEMINI__API_KEY", ""),
-            model=os.environ.get("GEMINI__MODEL", "gemini-2.5-flash"),
-        ),
-    )
+    """Load + validate settings. Each nested model reads its own env prefix."""
+    # Loading .env happens once via pydantic-settings dotenv source when present.
+    # We still trigger an explicit dotenv load to support the case where the test
+    # suite mutates os.environ after import (matches the pre-refactor behaviour).
+    from dotenv import load_dotenv  # noqa: PLC0415 - keep import-time side-effects bounded.
+
+    load_dotenv(override=False)
+    return Settings()
 
 
 settings = load_settings()

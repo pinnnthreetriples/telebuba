@@ -5,17 +5,16 @@ description = "Telegram account farm manager: creates accounts, warms them up, g
 requires-python = ">=3.13"
 dependencies = [
     "anyio>=4.13.0",
-    "apscheduler>=3.11.2",
     "httpx>=0.28.1",
     "loguru>=0.7.3",
     "nicegui>=3.13.0",
     "opentele2>=1.2.1",
     "pydantic>=2.13.4",
+    "pydantic-settings>=2.11.0",
     "python-dotenv>=1.2.2",
     "python-socks>=2.8.1",
     "sentry-sdk>=2.62.0",
     "sqlalchemy>=2.0.50",
-    "structlog>=26.1.0",
     "telethon>=1.43.2",
 ]
 

@@ -12,6 +12,9 @@ concurrency:
   group: ${{ github.workflow }}
   cancel-in-progress: true
 
+# Supply-chain hardening: drop default write scopes.
+permissions: read-all
+
 env:
   PYTHON_VERSION: "3.13"
   UV_VERSION: "0.10.9"

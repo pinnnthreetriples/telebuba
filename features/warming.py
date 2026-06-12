@@ -16,6 +16,7 @@ feature pages — it is exercised manually, the logic it calls is unit-tested.
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 
@@ -147,6 +148,12 @@ async def _render_settings_card() -> None:  # pragma: no cover
             .props("dense outlined clearable")
             .classes("w-full")
         )
+        clear_key_checkbox = ui.checkbox("Clear stored key", value=False)
+        model_input = (
+            ui.input(label="Gemini model", value=current.gemini_model)
+            .props("dense outlined")
+            .classes("w-full")
+        )
         chat_switch = ui.switch("Accounts chat with each other", value=current.inter_account_chat)
         reactions_switch = ui.switch("Put reactions on posts", value=current.reactions_enabled)
         status = ui.label(
@@ -155,14 +162,19 @@ async def _render_settings_card() -> None:  # pragma: no cover
 
         async def on_save() -> None:
             raw_key = (key_input.value or "").strip()
+            raw_model = (model_input.value or "").strip()
             updated = await save_settings(
                 WarmingSettingsUpdate(
                     inter_account_chat=bool(chat_switch.value),
                     reactions_enabled=bool(reactions_switch.value),
                     gemini_api_key=raw_key or None,
+                    gemini_model=raw_model or None,
+                    clear_gemini_key=bool(clear_key_checkbox.value),
                 ),
             )
             key_input.value = ""
+            clear_key_checkbox.value = False
+            model_input.value = updated.gemini_model
             status.set_text(_settings_status(updated.gemini_model, has_key=updated.has_gemini_key))
             ui.notify("Settings saved", type="positive")
 
@@ -320,15 +332,24 @@ async def _render_activity_log() -> None:  # pragma: no cover
         with ui.row().classes("w-full items-center gap-2"):
             ui.icon("bolt").classes("text-amber-500")
             ui.label("Live activity").classes("text-base font-semibold")
+            ui.space()
+            warming_only_switch = ui.switch("Warming only", value=True).props("dense")
         log_box = ui.column().classes("w-full gap-1 max-h-80 overflow-auto")
 
         async def refresh_log() -> None:
-            state = await load_logs_page(LogFilter(limit=_LOG_LIMIT))
+            # Pull more than _LOG_LIMIT when filtering so the warming-only view
+            # is not empty after a burst of unrelated events.
+            limit = _LOG_LIMIT * 4 if warming_only_switch.value else _LOG_LIMIT
+            state = await load_logs_page(LogFilter(limit=limit))
+            entries = state.entries
+            if warming_only_switch.value:
+                entries = [entry for entry in entries if entry.event.startswith("warming_")]
+                entries = entries[:_LOG_LIMIT]
             log_box.clear()
             with log_box:
-                if not state.entries:
+                if not entries:
                     ui.label("Waiting for activity…").classes("text-xs text-slate-400")
-                for entry in state.entries:
+                for entry in entries:
                     border = _LOG_ROW_BORDER.get(entry.status, "border-slate-300")
                     with ui.row().classes(
                         f"tb-log-row w-full items-center gap-2 pl-2 border-l-4 {border}",
@@ -345,5 +366,6 @@ async def _render_activity_log() -> None:  # pragma: no cover
                                 "text-[11px] text-slate-400 truncate",
                             )
 
+        warming_only_switch.on_value_change(lambda _e: asyncio.create_task(refresh_log()))
         await refresh_log()
         ui.timer(_LOG_POLL_SECONDS, refresh_log)
