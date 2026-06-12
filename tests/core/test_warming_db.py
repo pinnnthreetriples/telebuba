@@ -131,3 +131,41 @@ async def test_warming_state_upsert_inserts_then_updates() -> None:
 
     states = await list_warming_states()
     assert [record.account_id for record in states] == ["acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_settings_join_enabled_defaults_on_and_roundtrips() -> None:
+    secret = await load_warming_settings()
+    assert secret.join_enabled is True
+
+    saved = await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=True,
+        join_enabled=False,
+        gemini_api_key=None,
+    )
+
+    assert saved.join_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_warming_state_persists_proxy_snapshot_and_daily_fields() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    record = await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            proxy_snapshot="socks5://1.2.3.4:1080",
+            daily_actions=7,
+            daily_count_date="2026-06-12",
+        ),
+    )
+
+    assert record.proxy_snapshot == "socks5://1.2.3.4:1080"
+    assert record.daily_actions == 7
+    assert record.daily_count_date == "2026-06-12"
+
+    again = await fetch_warming_state("acc-1")
+    assert again is not None
+    assert again.daily_actions == 7

@@ -7,6 +7,7 @@ service boundary so the engine is exercised with no real network or sleeps.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -22,11 +23,14 @@ from core.db import (
     fetch_warming_state,
     save_warming_settings,
     update_account_from_session_check,
+    update_account_proxy_check,
+    upsert_account_proxy,
     upsert_warming_state,
 )
 from core.logging import reset_logging_for_tests, setup_logging
-from schemas.accounts import AccountCreate
+from schemas.accounts import AccountCreate, AccountRead
 from schemas.gemini import GeminiResult
+from schemas.proxy import AccountProxyCheckUpdate, AccountProxyUpsert
 from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.warming import (
@@ -36,6 +40,7 @@ from schemas.warming import (
     StopWarmingRequest,
     WarmingCycleRequest,
     WarmingSettingsUpdate,
+    WarmingStateRecord,
     WarmingStateWrite,
 )
 from services import warming
@@ -298,6 +303,7 @@ async def test_start_and_stop_warming_manage_the_task(monkeypatch: pytest.Monkey
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(warming, "_warming_loop", fake_loop)
+    monkeypatch.setattr(settings.warming, "enforce_readiness", False)
     await create_account(AccountCreate(account_id="acc-1"))
 
     started = await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
@@ -618,6 +624,7 @@ async def test_shutdown_warming_runtime_cancels_all(monkeypatch: pytest.MonkeyPa
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(warming, "_warming_loop", fake_loop)
+    monkeypatch.setattr(settings.warming, "enforce_readiness", False)
     await create_account(AccountCreate(account_id="acc-1"))
     await create_account(AccountCreate(account_id="acc-2"))
     await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
@@ -649,3 +656,332 @@ async def test_run_loop_iteration_transitions_to_flood_on_flood_wait(
     assert record is not None
     assert record.state == "flood_wait"
     assert record.flood_wait_seconds == 17
+
+
+# --------------------------------------------------------------------------- #
+# Readiness gate + proxy snapshot
+# --------------------------------------------------------------------------- #
+
+
+def _account(**overrides: object) -> AccountRead:
+    base: dict[str, object] = {
+        "account_id": "acc-1",
+        "status": "alive",
+        "created_at": "2026-06-12T00:00:00+00:00",
+        "updated_at": "2026-06-12T00:00:00+00:00",
+    }
+    base.update(overrides)
+    return AccountRead.model_validate(base)
+
+
+async def _seed_ready_account(account_id: str = "acc-1") -> None:
+    await create_account(AccountCreate(account_id=account_id))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id=account_id,
+            session_path=account_id,
+            status="alive",
+            is_temporary=False,
+            user_id=111,
+        ),
+    )
+    await upsert_account_proxy(
+        AccountProxyUpsert(account_id=account_id, proxy_type="socks5", host="1.2.3.4", port=1080),
+    )
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(
+            account_id=account_id,
+            status="tcp_working",
+            exit_ip="9.9.9.9",
+            country_code="US",
+        ),
+    )
+    await _seed_channel()
+
+
+def test_evaluate_readiness_ready() -> None:
+    account = _account(proxy_host="1.2.3.4", proxy_status="tcp_working")
+    readiness = warming.evaluate_readiness(account, 3)
+    assert readiness.ready is True
+    assert readiness.reasons == []
+
+
+def test_evaluate_readiness_collects_all_blockers() -> None:
+    account = _account(status="new")  # no proxy, no channels
+    readiness = warming.evaluate_readiness(account, 0)
+    assert readiness.ready is False
+    assert any("session" in reason for reason in readiness.reasons)
+    assert "no proxy" in readiness.reasons
+    assert "no channels" in readiness.reasons
+
+
+def test_evaluate_readiness_flags_failed_proxy() -> None:
+    account = _account(proxy_host="1.2.3.4", proxy_status="failed")
+    readiness = warming.evaluate_readiness(account, 1)
+    assert "proxy failed" in readiness.reasons
+
+
+def test_proxy_snapshot_none_without_proxy() -> None:
+    assert warming._proxy_snapshot(_account()) is None
+
+
+def test_proxy_snapshot_formats_with_country() -> None:
+    account = _account(
+        proxy_type="socks5",
+        proxy_host="1.2.3.4",
+        proxy_port=1080,
+        proxy_country_code="US",
+    )
+    assert warming._proxy_snapshot(account) == "socks5://1.2.3.4:1080 (US)"
+
+
+@pytest.mark.asyncio
+async def test_start_warming_blocks_not_ready_account() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))  # new, no proxy/channels
+    with pytest.raises(warming.WarmingNotReadyError) as excinfo:
+        await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    assert excinfo.value.reasons
+    assert "acc-1" not in warming._RUNTIME
+
+
+@pytest.mark.asyncio
+async def test_start_warming_ready_account_records_proxy_snapshot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_loop(_account_id: str) -> None:
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(warming, "_warming_loop", fake_loop)
+    await _seed_ready_account("acc-1")
+
+    card = await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    assert card.state == "active"
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.proxy_snapshot is not None
+    assert "1.2.3.4" in record.proxy_snapshot
+
+
+@pytest.mark.asyncio
+async def test_load_board_attaches_readiness() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))  # not ready
+
+    board = await warming.load_board()
+
+    card = board.idle[0]
+    assert card.readiness is not None
+    assert card.readiness.ready is False
+
+
+# --------------------------------------------------------------------------- #
+# Quiet hours
+# --------------------------------------------------------------------------- #
+
+
+def test_in_quiet_hours_disabled_when_equal() -> None:
+    assert warming._in_quiet_hours(datetime(2026, 6, 12, 3, tzinfo=UTC), 5, 5) is False
+
+
+def test_in_quiet_hours_non_wrapping_window() -> None:
+    assert warming._in_quiet_hours(datetime(2026, 6, 12, 2, tzinfo=UTC), 1, 5)
+    assert not warming._in_quiet_hours(datetime(2026, 6, 12, 6, tzinfo=UTC), 1, 5)
+
+
+def test_in_quiet_hours_wrapping_midnight() -> None:
+    assert warming._in_quiet_hours(datetime(2026, 6, 12, 23, tzinfo=UTC), 23, 7)
+    assert warming._in_quiet_hours(datetime(2026, 6, 12, 2, tzinfo=UTC), 23, 7)
+    assert not warming._in_quiet_hours(datetime(2026, 6, 12, 12, tzinfo=UTC), 23, 7)
+
+
+def test_quiet_hours_end_at_rolls_to_next_day() -> None:
+    end = warming._quiet_hours_end_at(datetime(2026, 6, 12, 23, 30, tzinfo=UTC), 7)
+    assert end == datetime(2026, 6, 13, 7, 0, tzinfo=UTC)
+
+
+def test_quiet_hours_end_at_same_day_when_ahead() -> None:
+    end = warming._quiet_hours_end_at(datetime(2026, 6, 12, 2, 0, tzinfo=UTC), 7)
+    assert end == datetime(2026, 6, 12, 7, 0, tzinfo=UTC)
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_parks_during_quiet_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "quiet_hours_enabled", True)
+    monkeypatch.setattr(warming, "_in_quiet_hours", lambda *_args: True)
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "quiet hours"
+    assert recorder.actions == []  # no Telegram I/O during quiet hours
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "sleeping"
+    assert record.next_run_at is not None
+
+
+# --------------------------------------------------------------------------- #
+# Daily counters
+# --------------------------------------------------------------------------- #
+
+
+def test_roll_daily_resets_on_new_day() -> None:
+    record = WarmingStateRecord(
+        account_id="a",
+        state="sleeping",
+        updated_at="t",
+        daily_actions=5,
+        daily_count_date="2026-06-11",
+    )
+    assert warming._roll_daily(record, "2026-06-12") == (0, "2026-06-12")
+
+
+def test_roll_daily_keeps_same_day() -> None:
+    record = WarmingStateRecord(
+        account_id="a",
+        state="sleeping",
+        updated_at="t",
+        daily_actions=5,
+        daily_count_date="2026-06-12",
+    )
+    assert warming._roll_daily(record, "2026-06-12") == (5, "2026-06-12")
+
+
+def test_roll_daily_handles_missing_record() -> None:
+    assert warming._roll_daily(None, "2026-06-12") == (0, "2026-06-12")
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_parks_when_daily_cap_reached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "max_daily_actions", 3)
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+    today = datetime.now(UTC).date().isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            daily_actions=3,
+            daily_count_date=today,
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "daily limit"
+    assert recorder.actions == []
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "sleeping"
+    assert record.next_run_at is not None
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_increments_daily_counter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.run_loop_iteration("acc-1")
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.daily_count_date == datetime.now(UTC).date().isoformat()
+    # One channel per cycle: join + read = 2 actions.
+    assert record.daily_actions == 2
+
+
+# --------------------------------------------------------------------------- #
+# Disabled actions (join toggle)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_join_when_join_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        join_enabled=False,
+        gemini_api_key="",
+    )
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.channels_joined == 0
+    assert "join_channel" not in recorder.types()
+    assert "read_channel" in recorder.types()
+
+
+# --------------------------------------------------------------------------- #
+# next_run_at timing (restart respects the existing schedule)
+# --------------------------------------------------------------------------- #
+
+
+def test_seconds_until_future_and_past() -> None:
+    now = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
+    future = (now + timedelta(seconds=120)).isoformat()
+    assert warming._seconds_until(future, now) == pytest.approx(120)
+    past = (now - timedelta(seconds=50)).isoformat()
+    assert warming._seconds_until(past, now) == 0.0
+
+
+def test_seconds_until_invalid_and_naive() -> None:
+    now = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
+    assert warming._seconds_until("not-a-date", now) == 0.0
+    # Naive timestamp is treated as UTC rather than crashing.
+    assert warming._seconds_until("2026-06-12T00:01:00", now) == pytest.approx(60)
+
+
+def test_initial_delay_respects_future_next_run() -> None:
+    now = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
+    record = WarmingStateRecord(
+        account_id="a",
+        state="sleeping",
+        updated_at="t",
+        next_run_at=(now + timedelta(seconds=3600)).isoformat(),
+    )
+    assert warming._initial_delay_seconds(record, now) == pytest.approx(3600)
+
+
+def test_initial_delay_uses_jitter_without_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "startup_jitter_max_seconds", 4.0)
+    value = warming._initial_delay_seconds(None, datetime(2026, 6, 12, 0, 0, tzinfo=UTC))
+    assert 0.0 <= value <= 4.0
+
+
+def test_loop_sleep_respects_future_next_run() -> None:
+    now = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
+    record = WarmingStateRecord(
+        account_id="a",
+        state="sleeping",
+        updated_at="t",
+        next_run_at=(now + timedelta(seconds=900)).isoformat(),
+    )
+    assert warming._loop_sleep_seconds(record, now) == pytest.approx(900)
+
+
+def test_loop_sleep_falls_back_without_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "cycle_sleep_min_hours", 1.0)
+    monkeypatch.setattr(settings.warming, "cycle_sleep_max_hours", 1.0)
+    value = warming._loop_sleep_seconds(None, datetime(2026, 6, 12, 0, 0, tzinfo=UTC))
+    assert value == pytest.approx(3600)

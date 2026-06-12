@@ -76,6 +76,7 @@ class WarmingSettings(BaseModel):
 
     inter_account_chat: bool = False
     reactions_enabled: bool = True
+    join_enabled: bool = True
     has_gemini_key: bool = False
     gemini_model: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
@@ -86,6 +87,7 @@ class WarmingSettingsSecret(BaseModel):
 
     inter_account_chat: bool
     reactions_enabled: bool
+    join_enabled: bool = True
     gemini_api_key: str
     gemini_model: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
@@ -105,9 +107,21 @@ class WarmingSettingsUpdate(BaseModel):
 
     inter_account_chat: bool = False
     reactions_enabled: bool = True
+    join_enabled: bool = True
     gemini_api_key: str | None = None
     gemini_model: str | None = None
     clear_gemini_key: bool = False
+
+
+class WarmingReadiness(BaseModel):
+    """Pre-start verdict for an account: can it safely begin warming?
+
+    ``reasons`` is empty iff ``ready`` is True — each entry is a short,
+    human-readable blocker (``"session new"``, ``"no proxy"``, ``"no channels"``).
+    """
+
+    ready: bool
+    reasons: list[str] = Field(default_factory=list)
 
 
 class WarmingStateRecord(BaseModel):
@@ -128,6 +142,9 @@ class WarmingStateRecord(BaseModel):
     stopped_at: str | None = None
     flood_wait_seconds: int | None = Field(default=None, ge=0)
     flood_wait_until: str | None = None
+    proxy_snapshot: str | None = None
+    daily_actions: int = Field(default=0, ge=0)
+    daily_count_date: str | None = None
 
 
 class WarmingStateWrite(BaseModel):
@@ -147,6 +164,9 @@ class WarmingStateWrite(BaseModel):
     stopped_at: str | None = None
     flood_wait_seconds: int | None = Field(default=None, ge=0)
     flood_wait_until: str | None = None
+    proxy_snapshot: str | None = None
+    daily_actions: int = Field(default=0, ge=0)
+    daily_count_date: str | None = None
 
 
 class WarmingAccountState(BaseModel):
@@ -169,6 +189,10 @@ class WarmingAccountState(BaseModel):
     stopped_at: str | None = None
     flood_wait_seconds: int | None = Field(default=None, ge=0)
     flood_wait_until: str | None = None
+    proxy_snapshot: str | None = None
+    daily_actions: int = Field(default=0, ge=0)
+    daily_count_date: str | None = None
+    readiness: WarmingReadiness | None = None
 
 
 class WarmingBoardState(BaseModel):

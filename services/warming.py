@@ -58,6 +58,7 @@ from schemas.warming import (
     WarmingChannelList,
     WarmingCycleRequest,
     WarmingCycleResult,
+    WarmingReadiness,
     WarmingSettings,
     WarmingSettingsSecret,
     WarmingSettingsUpdate,
@@ -116,6 +117,87 @@ def _account_lock(account_id: str) -> asyncio.Lock:
         lock = asyncio.Lock()
         _ACCOUNT_LOCKS[account_id] = lock
     return lock
+
+
+# --------------------------------------------------------------------------- #
+# Scheduling helpers (pure) — quiet hours, daily budget, next-run timing.
+# --------------------------------------------------------------------------- #
+
+
+def _seconds_until(next_run_at_iso: str, now: datetime) -> float:
+    """Seconds from ``now`` until an ISO timestamp, never negative.
+
+    Corrupt/naive timestamps degrade to ``0.0`` so the loop runs now rather than
+    crashing or sleeping forever.
+    """
+    try:
+        target = datetime.fromisoformat(next_run_at_iso)
+    except ValueError:
+        return 0.0
+    if target.tzinfo is None:
+        target = target.replace(tzinfo=UTC)
+    return max(0.0, (target - now).total_seconds())
+
+
+def _in_quiet_hours(now: datetime, start_hour: int, end_hour: int) -> bool:
+    """True when ``now``'s UTC hour falls in the ``[start, end)`` window.
+
+    ``start == end`` means "no window" (always False). The window wraps midnight
+    when ``start > end`` (e.g. 23→7).
+    """
+    if start_hour == end_hour:
+        return False
+    hour = now.hour
+    if start_hour < end_hour:
+        return start_hour <= hour < end_hour
+    return hour >= start_hour or hour < end_hour
+
+
+def _quiet_hours_end_at(now: datetime, end_hour: int) -> datetime:
+    """The next UTC datetime at ``end_hour:00`` strictly after ``now``."""
+    candidate = now.replace(hour=end_hour, minute=0, second=0, microsecond=0)
+    if candidate <= now:
+        candidate += timedelta(days=1)
+    return candidate
+
+
+def _next_utc_midnight(now: datetime) -> datetime:
+    return (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+
+
+def _roll_daily(record: WarmingStateRecord | None, today: str) -> tuple[int, str]:
+    """Return ``(count, date)`` for today, resetting the counter on a new day."""
+    if record is None or record.daily_count_date != today:
+        return 0, today
+    return record.daily_actions, today
+
+
+def _proxy_snapshot(account: AccountRead) -> str | None:
+    """Freeze which proxy an account started warming with, for later diagnosis."""
+    if not account.proxy_host:
+        return None
+    base = f"{account.proxy_type or 'proxy'}://{account.proxy_host}:{account.proxy_port}"
+    if account.proxy_country_code:
+        base = f"{base} ({account.proxy_country_code})"
+    return base
+
+
+def evaluate_readiness(account: AccountRead, channel_count: int) -> WarmingReadiness:
+    """Decide whether an account can safely start warming, from last-known state.
+
+    Uses the persisted account/proxy snapshot (no live network) so the board can
+    show a badge cheaply and ``start_warming`` can refuse broken accounts.
+    """
+    reasons: list[str] = []
+    if account.status != "alive":
+        reasons.append(f"session {account.status}")
+    if not account.proxy_host:
+        reasons.append("no proxy")
+    elif account.proxy_status == "failed":
+        reasons.append("proxy failed")
+    if channel_count <= 0:
+        reasons.append("no channels")
+    return WarmingReadiness(ready=not reasons, reasons=reasons)
 
 
 # --------------------------------------------------------------------------- #
@@ -227,6 +309,7 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
     return WarmingSettings(
         inter_account_chat=secret.inter_account_chat,
         reactions_enabled=secret.reactions_enabled,
+        join_enabled=secret.join_enabled,
         has_gemini_key=bool(secret.gemini_api_key),
         gemini_model=secret.gemini_model,
         updated_at=secret.updated_at,
@@ -249,6 +332,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
     secret = await save_warming_settings(
         inter_account_chat=data.inter_account_chat,
         reactions_enabled=data.reactions_enabled,
+        join_enabled=data.join_enabled,
         gemini_api_key=api_key,
         gemini_model=data.gemini_model,
     )
@@ -258,6 +342,7 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         extra={
             "inter_account_chat": secret.inter_account_chat,
             "reactions_enabled": secret.reactions_enabled,
+            "join_enabled": secret.join_enabled,
             "has_gemini_key": bool(secret.gemini_api_key),
             "gemini_model": secret.gemini_model,
         },
@@ -270,7 +355,12 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
 # --------------------------------------------------------------------------- #
 
 
-def _to_card(account: AccountRead, record: WarmingStateRecord | None) -> WarmingAccountState:
+def _to_card(
+    account: AccountRead,
+    record: WarmingStateRecord | None,
+    *,
+    readiness: WarmingReadiness | None = None,
+) -> WarmingAccountState:
     state: WarmingState = record.state if record else "idle"
     return WarmingAccountState(
         account_id=account.account_id,
@@ -290,6 +380,10 @@ def _to_card(account: AccountRead, record: WarmingStateRecord | None) -> Warming
         stopped_at=record.stopped_at if record else None,
         flood_wait_seconds=record.flood_wait_seconds if record else None,
         flood_wait_until=record.flood_wait_until if record else None,
+        proxy_snapshot=record.proxy_snapshot if record else None,
+        daily_actions=record.daily_actions if record else 0,
+        daily_count_date=record.daily_count_date if record else None,
+        readiness=readiness,
     )
 
 
@@ -298,10 +392,12 @@ async def load_board() -> WarmingBoardState:
     records = {record.account_id: record for record in await list_warming_states()}
     channels = await list_warming_channels()
     masked = await load_settings()
+    channel_count = len(channels.channels)
     idle: list[WarmingAccountState] = []
     warming: list[WarmingAccountState] = []
     for account in accounts.accounts:
-        card = _to_card(account, records.get(account.account_id))
+        readiness = evaluate_readiness(account, channel_count)
+        card = _to_card(account, records.get(account.account_id), readiness=readiness)
         (warming if is_warming(card.state) else idle).append(card)
     return WarmingBoardState(
         idle=idle,
@@ -334,6 +430,9 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     stopped_at: str | None | _Sentinel = _SENTINEL,
     flood_wait_seconds: int | None | _Sentinel = _SENTINEL,
     flood_wait_until: str | None | _Sentinel = _SENTINEL,
+    proxy_snapshot: str | None | _Sentinel = _SENTINEL,
+    daily_actions: int | _Sentinel = _SENTINEL,
+    daily_count_date: str | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateRecord:
     current = await fetch_warming_state(account_id)
     cycles = current.cycles_completed if current else 0
@@ -371,6 +470,9 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
                 "str | None",
                 _resolve(flood_wait_until, "flood_wait_until"),
             ),
+            proxy_snapshot=cast("str | None", _resolve(proxy_snapshot, "proxy_snapshot")),
+            daily_actions=cast("int", _resolve(daily_actions, "daily_actions") or 0),
+            daily_count_date=cast("str | None", _resolve(daily_count_date, "daily_count_date")),
         ),
     )
 
@@ -406,6 +508,9 @@ async def _current_card(account_id: str) -> WarmingAccountState:
         stopped_at=record.stopped_at if record else None,
         flood_wait_seconds=record.flood_wait_seconds if record else None,
         flood_wait_until=record.flood_wait_until if record else None,
+        proxy_snapshot=record.proxy_snapshot if record else None,
+        daily_actions=record.daily_actions if record else 0,
+        daily_count_date=record.daily_count_date if record else None,
     )
 
 
@@ -418,6 +523,17 @@ class UnknownAccountError(ValueError):
     """Raised when start/stop is called for an account that does not exist."""
 
 
+class WarmingNotReadyError(ValueError):
+    """Raised when ``start_warming`` refuses a not-ready account.
+
+    Carries the structured ``reasons`` so the UI can show them to the user.
+    """
+
+    def __init__(self, reasons: list[str]) -> None:
+        self.reasons = reasons
+        super().__init__("; ".join(reasons) or "account not ready")
+
+
 async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
     """Move an account into the warming column and kick off its loop task."""
     async with _account_lock(data.account_id):
@@ -425,6 +541,17 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if account is None:
             msg = f"Unknown account: {data.account_id}"
             raise UnknownAccountError(msg)
+        if settings.warming.enforce_readiness:
+            channel_count = len((await list_warming_channels()).channels)
+            readiness = evaluate_readiness(account, channel_count)
+            if not readiness.ready:
+                await log_event(
+                    "WARNING",
+                    "warming_start_blocked",
+                    account_id=data.account_id,
+                    extra={"reasons": readiness.reasons},
+                )
+                raise WarmingNotReadyError(readiness.reasons)
         await _set_state(
             data.account_id,
             "active",
@@ -434,6 +561,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             last_error=None,
             flood_wait_seconds=None,
             flood_wait_until=None,
+            proxy_snapshot=_proxy_snapshot(account),
         )
         existing = _RUNTIME.get(data.account_id)
         if existing is None or existing.done():
@@ -627,19 +755,20 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
         flooded = False
 
         for channel in chosen:
-            join_result = await execute(account_id, JoinChannel(channel=channel.channel))
-            if join_result.status == "ok":
-                joined += 1
-            elif join_result.status == "failed":
-                failures += 1
-                last_failed_action = "join"
-                last_failed_channel = channel.channel
-            elif join_result.status == "flood_wait":
-                flooded, flood_seconds, flood_until = _classify_flood(join_result)
-                last_failed_action = "join"
-                last_failed_channel = channel.channel
-                break
-            await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
+            if secret.join_enabled:
+                join_result = await execute(account_id, JoinChannel(channel=channel.channel))
+                if join_result.status == "ok":
+                    joined += 1
+                elif join_result.status == "failed":
+                    failures += 1
+                    last_failed_action = "join"
+                    last_failed_channel = channel.channel
+                elif join_result.status == "flood_wait":
+                    flooded, flood_seconds, flood_until = _classify_flood(join_result)
+                    last_failed_action = "join"
+                    last_failed_channel = channel.channel
+                    break
+                await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
 
             (
                 channel_reads,
@@ -814,20 +943,62 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     """Run one iteration of the warming loop (cycle + state transitions).
 
     Extracted from ``_warming_loop`` so it can be tested without the infinite
-    ``while True`` wrapper. Updates DB state but does NOT sleep — the sleep
-    interval is returned indirectly via ``result.flood_wait_seconds`` /
-    ``next_run_at`` written to state.
+    ``while True`` wrapper. Updates DB state but does NOT sleep — it writes
+    ``next_run_at``, the single source of truth the loop reads to time the next
+    cycle (so a restart resumes the existing schedule instead of firing early).
+
+    Two gates run before the cycle: quiet hours (park until the window ends) and
+    the per-account daily action budget (park until UTC midnight).
     """
+    now = datetime.now(UTC)
+    warm = settings.warming
+    record = await fetch_warming_state(account_id)
+
+    if warm.quiet_hours_enabled and _in_quiet_hours(
+        now,
+        warm.quiet_hours_start,
+        warm.quiet_hours_end,
+    ):
+        next_run = _quiet_hours_end_at(now, warm.quiet_hours_end).isoformat()
+        await _set_state(
+            account_id,
+            "sleeping",
+            last_event="quiet_hours",
+            next_run_at=next_run,
+            heartbeat_at=now.isoformat(),
+        )
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
+
+    daily_count, daily_date = _roll_daily(record, now.date().isoformat())
+    if warm.max_daily_actions > 0 and daily_count >= warm.max_daily_actions:
+        next_run = _next_utc_midnight(now).isoformat()
+        await _set_state(
+            account_id,
+            "sleeping",
+            last_event="daily_limit",
+            next_run_at=next_run,
+            heartbeat_at=now.isoformat(),
+            daily_actions=daily_count,
+            daily_count_date=daily_date,
+        )
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="daily limit")
+
     await _set_state(
         account_id,
         "active",
         last_event="cycle_started",
-        heartbeat_at=_now_iso(),
+        heartbeat_at=now.isoformat(),
         last_error=None,
+        daily_actions=daily_count,
+        daily_count_date=daily_date,
     )
     result = await run_one_cycle(WarmingCycleRequest(account_id=account_id))
 
-    warm = settings.warming
+    actions_done = (
+        result.channels_joined + result.channels_read + result.reactions_sent + result.messages_sent
+    )
+    new_daily = daily_count + actions_done
+
     if result.status == "flood_wait" and result.flood_wait_seconds:
         sleep_seconds = float(result.flood_wait_seconds)
     else:
@@ -858,27 +1029,51 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
         last_error=result.detail,
         flood_wait_seconds=result.flood_wait_seconds,
         flood_wait_until=result.flood_wait_until,
+        daily_actions=new_daily,
+        daily_count_date=daily_date,
     )
-    # Persist sleep target on the result for tests / external schedulers.
-    result_with_sleep = result.model_copy(update={"flood_wait_until": next_run})
-    return result_with_sleep if result.status == "flood_wait" else result
+    return result
+
+
+def _loop_sleep_seconds(record: WarmingStateRecord | None, now: datetime) -> float:
+    """Seconds to wait before the next cycle, from the persisted ``next_run_at``.
+
+    Falls back to a fresh randomised 12-30h sleep only if the schedule is missing
+    (it never should be after ``run_loop_iteration`` writes one).
+    """
+    if record is not None and record.next_run_at is not None:
+        return _seconds_until(record.next_run_at, now)
+    warm = settings.warming
+    return _rng.uniform(
+        warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
+        warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
+    )
+
+
+def _initial_delay_seconds(record: WarmingStateRecord | None, now: datetime) -> float:
+    """Delay before the first cycle after (re)starting a loop.
+
+    Honours a persisted future ``next_run_at`` so a restart resumes the existing
+    schedule; a fresh account (no schedule yet) only waits a short startup jitter.
+    """
+    if record is not None and record.next_run_at is not None:
+        return _seconds_until(record.next_run_at, now)
+    return _rng.uniform(0.0, settings.warming.startup_jitter_max_seconds)
 
 
 async def _warming_loop(account_id: str) -> None:  # pragma: no cover - long-running task
-    """Run cycles forever with 12-30h sleeps in between. Never raises to caller."""
+    """Run cycles forever, timing each from the persisted ``next_run_at``.
+
+    Never raises to the caller. On (re)start it respects an existing schedule so
+    an app restart does not turn parked accounts into an activity spike.
+    """
     try:
-        await _human_pause(0.0, settings.warming.startup_jitter_max_seconds)
+        record = await fetch_warming_state(account_id)
+        await asyncio.sleep(_initial_delay_seconds(record, datetime.now(UTC)))
         while True:
-            result = await run_loop_iteration(account_id)
-            warm = settings.warming
-            if result.status == "flood_wait" and result.flood_wait_seconds:
-                sleep_seconds = float(result.flood_wait_seconds)
-            else:
-                sleep_seconds = _rng.uniform(
-                    warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
-                    warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
-                )
-            await asyncio.sleep(sleep_seconds)
+            await run_loop_iteration(account_id)
+            record = await fetch_warming_state(account_id)
+            await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
     except asyncio.CancelledError:
         raise
     except Exception as exc:  # noqa: BLE001 - a background loop must never crash silently.
