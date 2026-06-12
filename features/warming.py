@@ -4,11 +4,16 @@ UI-thin per non-negotiable #1: every handler validates input, calls a
 ``services.warming`` function, and re-renders. No business logic here.
 
 Layout:
-- **Settings** — Gemini API key, inter-account chat toggle, reactions toggle.
-- **Channels** — add unlimited links/usernames, list with per-row delete.
+- **Settings** — Gemini API key + model only.
+- **Features** — on/off toggles for what warming accounts may do (auto-saved).
+- **Channels** — add unlimited links/usernames; existing ones shown in a table.
 - **Kanban** — drag accounts between *Idle* and *Warming*; dropping into the
   Warming column starts the loop, dropping back into Idle stops it.
 - **Activity log** — live, colour-coded (green/amber/red) feed of warming events.
+
+Anti-flicker: the board and the log only re-render when their content actually
+changes (a content signature is compared each poll), so an idle page does no DOM
+work and does not blink.
 
 Everything below is excluded from coverage (``pragma: no cover``) like the other
 feature pages — it is exercised manually, the logic it calls is unit-tested.
@@ -18,7 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, cast
 
 from nicegui import ui
 
@@ -42,7 +47,10 @@ from services.warming import (
 )
 
 if TYPE_CHECKING:
-    from schemas.warming import WarmingAccountState, WarmingBoardState
+    from collections.abc import Callable, Coroutine
+
+    from schemas.logs import LogEntry
+    from schemas.warming import WarmingAccountState, WarmingBoardState, WarmingSettings
 
 _BOARD_POLL_SECONDS = 4.0
 _LOG_POLL_SECONDS = 2.0
@@ -81,11 +89,6 @@ _WARMING_CSS = """
     100% { box-shadow: 0 0 0 0 rgba(34,197,94,0); }
 }
 .tb-active { animation: tb-pulse-ring 1.8s infinite; }
-@keyframes tb-fade-in {
-    from { opacity: 0; transform: translateY(-4px); }
-    to { opacity: 1; transform: translateY(0); }
-}
-.tb-log-row { animation: tb-fade-in 0.35s ease-out; }
 .tb-dropzone { transition: background-color 0.2s ease, border-color 0.2s ease; }
 """
 
@@ -120,16 +123,34 @@ async def _render_warming_page() -> None:  # pragma: no cover
     with ui.column().classes("w-full max-w-[1400px] mx-auto p-4 gap-4"):
         ui.label("Account warming").classes("text-xl font-semibold")
         with ui.row().classes("w-full gap-4 items-start flex-wrap"):
-            await _render_settings_card()
+            await _render_config_cards()
             await _render_channels_card()
+
+        initial = await load_board()
+        holder: dict[str, object] = {"board": initial, "sig": _board_signature(initial)}
 
         @ui.refreshable
         async def render_board() -> None:
+            _render_board(cast("WarmingBoardState", holder["board"]), drag, force_reload)
+
+        async def reload(*, force: bool = False) -> None:
             board = await load_board()
-            _render_board(board, drag, render_board.refresh)
+            signature = _board_signature(board)
+            # Skip the DOM rebuild when nothing changed — this is what stops the
+            # Idle column from blinking every poll.
+            if not force and signature == holder["sig"]:
+                return
+            holder["board"] = board
+            holder["sig"] = signature
+            render_board.refresh()
+
+        def force_reload() -> asyncio.Task[None]:
+            # Returned (not discarded) so the task keeps a strong reference and
+            # is not garbage-collected mid-flight.
+            return asyncio.create_task(reload(force=True))
 
         await render_board()
-        ui.timer(_BOARD_POLL_SECONDS, render_board.refresh)
+        ui.timer(_BOARD_POLL_SECONDS, reload)
 
         await _render_activity_log()
 
@@ -138,9 +159,68 @@ def _settings_status(model: str, *, has_key: bool) -> str:  # pragma: no cover
     return f"Model {model} · AI key {'set' if has_key else 'missing'}"
 
 
-async def _render_settings_card() -> None:  # pragma: no cover
+def _feature_switch(
+    label: str,
+    description: str,
+    *,
+    value: bool,
+    on_toggle: Callable[[], Coroutine[Any, Any, None]],
+) -> ui.switch:  # pragma: no cover
+    """A labelled toggle with a sub-caption that auto-saves on change."""
+    switch = ui.switch(label, value=value)
+    ui.label(description).classes("text-xs text-slate-400 ml-10 -mt-2")
+    switch.on_value_change(lambda _e: asyncio.create_task(on_toggle()))
+    return switch
+
+
+async def _render_config_cards() -> None:  # pragma: no cover
     board = await load_board()
     current = board.settings
+    refs: dict[str, ui.switch] = {}
+
+    async def persist(*, key: str | None, model: str | None, clear: bool) -> WarmingSettings:
+        # Always send the full settings payload so saving one card never clobbers
+        # the other: toggles pass key/model=None (preserve), the API card passes
+        # the live toggle values read from ``refs``.
+        return await save_settings(
+            WarmingSettingsUpdate(
+                inter_account_chat=bool(refs["chat"].value),
+                reactions_enabled=bool(refs["reactions"].value),
+                join_enabled=bool(refs["join"].value),
+                gemini_api_key=key,
+                gemini_model=model,
+                clear_gemini_key=clear,
+            ),
+        )
+
+    async def on_toggle() -> None:
+        await persist(key=None, model=None, clear=False)
+        ui.notify("Features updated", type="positive")
+
+    with ui.card().classes("w-[420px] p-4 gap-2"):
+        ui.label("Features").classes("text-base font-semibold")
+        ui.label("What warming accounts are allowed to do — saved instantly.").classes(
+            "text-xs text-slate-500",
+        )
+        refs["chat"] = _feature_switch(
+            "Accounts chat with each other",
+            "AI-written DMs between your warming accounts (needs a Gemini key).",
+            value=current.inter_account_chat,
+            on_toggle=on_toggle,
+        )
+        refs["reactions"] = _feature_switch(
+            "Put reactions on posts",
+            "Occasionally react to recent posts in joined channels.",
+            value=current.reactions_enabled,
+            on_toggle=on_toggle,
+        )
+        refs["join"] = _feature_switch(
+            "Join new channels",
+            "Let accounts join channels from your list — the riskiest action.",
+            value=current.join_enabled,
+            on_toggle=on_toggle,
+        )
+
     placeholder = "key is set" if current.has_gemini_key else "paste key to enable AI chat"
     with ui.card().classes("w-[420px] p-4 gap-3"):
         ui.label("Settings").classes("text-base font-semibold")
@@ -155,9 +235,6 @@ async def _render_settings_card() -> None:  # pragma: no cover
             .props("dense outlined")
             .classes("w-full")
         )
-        chat_switch = ui.switch("Accounts chat with each other", value=current.inter_account_chat)
-        reactions_switch = ui.switch("Put reactions on posts", value=current.reactions_enabled)
-        join_switch = ui.switch("Join new channels", value=current.join_enabled)
         status = ui.label(
             _settings_status(current.gemini_model, has_key=current.has_gemini_key),
         ).classes("text-xs text-slate-500")
@@ -165,15 +242,10 @@ async def _render_settings_card() -> None:  # pragma: no cover
         async def on_save() -> None:
             raw_key = (key_input.value or "").strip()
             raw_model = (model_input.value or "").strip()
-            updated = await save_settings(
-                WarmingSettingsUpdate(
-                    inter_account_chat=bool(chat_switch.value),
-                    reactions_enabled=bool(reactions_switch.value),
-                    join_enabled=bool(join_switch.value),
-                    gemini_api_key=raw_key or None,
-                    gemini_model=raw_model or None,
-                    clear_gemini_key=bool(clear_key_checkbox.value),
-                ),
+            updated = await persist(
+                key=raw_key or None,
+                model=raw_model or None,
+                clear=bool(clear_key_checkbox.value),
             )
             key_input.value = ""
             clear_key_checkbox.value = False
@@ -184,6 +256,19 @@ async def _render_settings_card() -> None:  # pragma: no cover
         ui.button("Save settings", icon="save", on_click=on_save).props("color=primary").classes(
             "w-full",
         )
+
+
+_CHANNEL_DELETE_SLOT = """
+<q-td :props="props" class="text-right">
+    <q-btn flat dense round icon="delete" color="grey-7"
+           @click="() => $parent.$emit('delete', props.row)" />
+</q-td>
+"""
+
+
+def _fmt_date(iso: str) -> str:  # pragma: no cover
+    """Render an ISO timestamp as ``YYYY-MM-DD HH:MM`` for the table cell."""
+    return iso[:16].replace("T", " ") if len(iso) >= 16 else iso  # noqa: PLR2004
 
 
 async def _render_channels_card() -> None:  # pragma: no cover
@@ -201,17 +286,35 @@ async def _render_channels_card() -> None:  # pragma: no cover
             .props("dense outlined autogrow")
             .classes("w-full")
         )
-        channels_box = ui.column().classes("w-full gap-1 max-h-64 overflow-auto")
+        columns = [
+            {"name": "channel", "label": "Channel", "field": "channel", "align": "left"},
+            {"name": "added", "label": "Added", "field": "added", "align": "left"},
+            {"name": "actions", "label": "", "field": "actions", "align": "right"},
+        ]
+        # Quasar diffs rows by ``row_key`` and updates in place — no flicker on
+        # add/delete, unlike clearing and rebuilding a column of divs.
+        table = (
+            ui.table(columns=columns, rows=[], row_key="channel", pagination=0)
+            .props("flat dense hide-bottom")
+            .classes("w-full")
+            .style("max-height: 16rem")
+        )
+        table.add_slot("body-cell-actions", _CHANNEL_DELETE_SLOT)
 
         async def refresh_list() -> None:
-            channels = await load_board()
-            count_badge.set_text(str(channels.channel_count))
-            channels_box.clear()
-            with channels_box:
-                if not channels.channels.channels:
-                    ui.label("No channels yet").classes("text-xs text-slate-400")
-                for channel in channels.channels.channels:
-                    _render_channel_row(channel.channel, refresh_list)
+            board = await load_board()
+            count_badge.set_text(str(board.channel_count))
+            table.rows = [
+                {"channel": channel.channel, "added": _fmt_date(channel.created_at)}
+                for channel in board.channels.channels
+            ]
+            table.update()
+
+        async def on_delete(event) -> None:  # noqa: ANN001
+            await remove_channel(RemoveChannelRequest(channel=event.args["channel"]))
+            await refresh_list()
+
+        table.on("delete", on_delete)
 
         async def on_add() -> None:
             raw = (channels_input.value or "").strip()
@@ -229,19 +332,32 @@ async def _render_channels_card() -> None:  # pragma: no cover
         await refresh_list()
 
 
-def _render_channel_row(channel: str, refresh_list) -> None:  # noqa: ANN001 # pragma: no cover
-    with ui.row().classes(
-        "w-full items-center justify-between px-2 py-1 rounded bg-slate-50 border border-slate-200",
-    ):
-        ui.label(channel).classes("text-sm truncate")
+def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma: no cover
+    """A hashable digest of everything the board renders.
 
-        async def on_delete() -> None:
-            await remove_channel(RemoveChannelRequest(channel=channel))
-            await refresh_list()
-
-        ui.button(icon="delete", on_click=on_delete).props("flat dense color=grey-7").classes(
-            "shrink-0",
-        )
+    The poll loop compares this between ticks and only rebuilds the DOM when it
+    changes, so a quiet board never blinks.
+    """
+    cards = (*board.idle, *board.warming)
+    return (
+        board.channel_count,
+        board.active_count,
+        tuple(
+            (
+                card.account_id,
+                card.state,
+                card.health,
+                card.cycles_completed,
+                card.last_event,
+                card.next_run_at,
+                card.last_error,
+                None
+                if card.readiness is None
+                else (card.readiness.ready, tuple(card.readiness.reasons)),
+            )
+            for card in cards
+        ),
+    )
 
 
 def _render_board(board: WarmingBoardState, drag: dict[str, str | None], refresh) -> None:  # noqa: ANN001 # pragma: no cover
@@ -337,6 +453,20 @@ def _render_card(  # pragma: no cover
             )
 
 
+def _render_log_row(entry: LogEntry) -> None:  # pragma: no cover
+    border = _LOG_ROW_BORDER.get(entry.status, "border-slate-300")
+    with ui.row().classes(f"w-full items-center gap-2 pl-2 border-l-4 {border}"):
+        ui.label(entry.created_at[11:19]).classes("text-[11px] text-slate-400 w-16 shrink-0")
+        ui.label(entry.account_id or "—").classes(
+            "text-[11px] text-slate-500 w-28 shrink-0 truncate",
+        )
+        ui.label(entry.event).classes("text-xs font-medium truncate")
+        if entry.extra:
+            ui.label(json.dumps(entry.extra, ensure_ascii=False)).classes(
+                "text-[11px] text-slate-400 truncate",
+            )
+
+
 async def _render_activity_log() -> None:  # pragma: no cover
     with ui.card().classes("w-full p-4 gap-2"):
         with ui.row().classes("w-full items-center gap-2"):
@@ -345,6 +475,7 @@ async def _render_activity_log() -> None:  # pragma: no cover
             ui.space()
             warming_only_switch = ui.switch("Warming only", value=True).props("dense")
         log_box = ui.column().classes("w-full gap-1 max-h-80 overflow-auto")
+        seen: dict[str, object] = {"sig": None}
 
         async def refresh_log() -> None:
             # Pull more than _LOG_LIMIT when filtering so the warming-only view
@@ -354,27 +485,19 @@ async def _render_activity_log() -> None:  # pragma: no cover
             entries = state.entries
             if warming_only_switch.value:
                 entries = [entry for entry in entries if entry.event.startswith("warming_")]
-                entries = entries[:_LOG_LIMIT]
+            entries = entries[:_LOG_LIMIT]
+            # Only rebuild when the visible set of entries changed — otherwise the
+            # feed re-mounts every poll and visibly blinks.
+            signature = (warming_only_switch.value, tuple(entry.id for entry in entries))
+            if signature == seen["sig"]:
+                return
+            seen["sig"] = signature
             log_box.clear()
             with log_box:
                 if not entries:
                     ui.label("Waiting for activity…").classes("text-xs text-slate-400")
                 for entry in entries:
-                    border = _LOG_ROW_BORDER.get(entry.status, "border-slate-300")
-                    with ui.row().classes(
-                        f"tb-log-row w-full items-center gap-2 pl-2 border-l-4 {border}",
-                    ):
-                        ui.label(entry.created_at[11:19]).classes(
-                            "text-[11px] text-slate-400 w-16 shrink-0",
-                        )
-                        ui.label(entry.account_id or "—").classes(
-                            "text-[11px] text-slate-500 w-28 shrink-0 truncate",
-                        )
-                        ui.label(entry.event).classes("text-xs font-medium truncate")
-                        if entry.extra:
-                            ui.label(json.dumps(entry.extra, ensure_ascii=False)).classes(
-                                "text-[11px] text-slate-400 truncate",
-                            )
+                    _render_log_row(entry)
 
         warming_only_switch.on_value_change(lambda _e: asyncio.create_task(refresh_log()))
         await refresh_log()
