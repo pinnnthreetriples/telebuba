@@ -10,6 +10,7 @@ from core.config import settings
 from core.db import (
     add_warming_channel,
     configure_database,
+    create_account,
     fetch_warming_state,
     list_warming_channels,
     list_warming_states,
@@ -18,6 +19,7 @@ from core.db import (
     save_warming_settings,
     upsert_warming_state,
 )
+from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
 
 if TYPE_CHECKING:
@@ -105,6 +107,8 @@ async def test_save_settings_can_clear_key_with_empty_string() -> None:
 
 @pytest.mark.asyncio
 async def test_warming_state_upsert_inserts_then_updates() -> None:
+    # Parent account row required now FK is enforced.
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     assert await fetch_warming_state("acc-1") is None
 
     inserted = await upsert_warming_state(

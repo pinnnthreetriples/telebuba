@@ -16,6 +16,7 @@ from sqlalchemy import (
     Table,
     create_engine,
     delete,
+    event,
     insert,
     select,
     update,
@@ -146,6 +147,14 @@ _warming_account_state = Table(
     Column("last_cycle_at", String, nullable=True),
     Column("next_run_at", String, nullable=True),
     Column("updated_at", String, nullable=False),
+    Column("last_error", String, nullable=True),
+    Column("last_action", String, nullable=True),
+    Column("last_channel", String, nullable=True),
+    Column("heartbeat_at", String, nullable=True),
+    Column("started_at", String, nullable=True),
+    Column("stopped_at", String, nullable=True),
+    Column("flood_wait_seconds", Integer, nullable=True),
+    Column("flood_wait_until", String, nullable=True),
 )
 
 _WARMING_SETTINGS_ID = 1
@@ -171,13 +180,23 @@ def _get_engine() -> Engine:
     if _state.engine is None:
         database_path = _state.database_path or settings.db.path
         database_path.parent.mkdir(parents=True, exist_ok=True)
-        _state.engine = create_engine(
+        engine = create_engine(
             f"sqlite:///{database_path}",
             connect_args={"check_same_thread": False},
             future=True,
         )
-        _metadata.create_all(_state.engine)
-        _ensure_sqlite_schema(_state.engine)
+
+        # SQLite ignores ForeignKey constraints unless this PRAGMA is set on
+        # every connection. Without it, orphan rows are silently allowed.
+        @event.listens_for(engine, "connect")
+        def _enable_sqlite_fk(dbapi_connection: Any, _connection_record: object) -> None:  # noqa: ANN401 - SQLAlchemy hands us the raw DBAPI handle.
+            cursor = dbapi_connection.cursor()
+            cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.close()
+
+        _state.engine = engine
+        _metadata.create_all(engine)
+        _ensure_sqlite_schema(engine)
     return _state.engine
 
 
@@ -198,17 +217,36 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE account_proxies ADD COLUMN country_name VARCHAR",
             )
+        warming_state_columns = _sqlite_columns(connection, "warming_account_state")
+        # Each entry is (column_name, sql_type) — additive only, never destructive.
+        _warming_state_new_columns: tuple[tuple[str, str], ...] = (
+            ("last_error", "VARCHAR"),
+            ("last_action", "VARCHAR"),
+            ("last_channel", "VARCHAR"),
+            ("heartbeat_at", "VARCHAR"),
+            ("started_at", "VARCHAR"),
+            ("stopped_at", "VARCHAR"),
+            ("flood_wait_seconds", "INTEGER"),
+            ("flood_wait_until", "VARCHAR"),
+        )
+        for column_name, column_type in _warming_state_new_columns:
+            if column_name not in warming_state_columns:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE warming_account_state ADD COLUMN {column_name} {column_type}",
+                )
 
 
 def _sqlite_columns(
     connection: Connection,
-    table_name: Literal["accounts", "account_proxies"],
+    table_name: Literal["accounts", "account_proxies", "warming_account_state"],
 ) -> set[str]:
-    statement = {
-        "accounts": "PRAGMA table_info(accounts)",
-        "account_proxies": "PRAGMA table_info(account_proxies)",
-    }[table_name]
-    rows = connection.exec_driver_sql(statement).mappings().all()
+    # Whitelist of allowed table names — table_name is not user input but kept
+    # narrow so ``exec_driver_sql`` can never see anything unexpected.
+    allowed = ("accounts", "account_proxies", "warming_account_state")
+    if table_name not in allowed:
+        msg = f"unsupported table {table_name!r}"
+        raise ValueError(msg)
+    rows = connection.exec_driver_sql(f"PRAGMA table_info({table_name})").mappings().all()
     return {str(row["name"]) for row in rows}
 
 
@@ -808,13 +846,16 @@ def _save_warming_settings(
     inter_account_chat: bool,
     reactions_enabled: bool,
     gemini_api_key: str | None,
+    gemini_model: str | None = None,
 ) -> WarmingSettingsSecret:
     current = _load_warming_settings()
     new_key = current.gemini_api_key if gemini_api_key is None else gemini_api_key
+    new_model = gemini_model or current.gemini_model
     values: dict[str, object] = {
         "inter_account_chat": int(inter_account_chat),
         "reactions_enabled": int(reactions_enabled),
         "gemini_api_key": new_key,
+        "gemini_model": new_model,
         "updated_at": _now_iso(),
     }
     with _get_engine().begin() as connection:
@@ -831,13 +872,19 @@ async def save_warming_settings(
     inter_account_chat: bool,
     reactions_enabled: bool,
     gemini_api_key: str | None,
+    gemini_model: str | None = None,
 ) -> WarmingSettingsSecret:
-    """Persist warming settings. ``gemini_api_key=None`` leaves the stored key intact."""
+    """Persist warming settings.
+
+    ``gemini_api_key=None`` leaves the stored key intact; empty string clears it.
+    ``gemini_model=None`` or empty leaves the stored model intact.
+    """
     return await asyncio.to_thread(
         _save_warming_settings,
         inter_account_chat=inter_account_chat,
         reactions_enabled=reactions_enabled,
         gemini_api_key=gemini_api_key,
+        gemini_model=gemini_model,
     )
 
 
@@ -850,6 +897,14 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         last_cycle_at=_optional_str(mapping.get("last_cycle_at")),
         next_run_at=_optional_str(mapping.get("next_run_at")),
         updated_at=str(mapping["updated_at"]),
+        last_error=_optional_str(mapping.get("last_error")),
+        last_action=_optional_str(mapping.get("last_action")),
+        last_channel=_optional_str(mapping.get("last_channel")),
+        heartbeat_at=_optional_str(mapping.get("heartbeat_at")),
+        started_at=_optional_str(mapping.get("started_at")),
+        stopped_at=_optional_str(mapping.get("stopped_at")),
+        flood_wait_seconds=_optional_int(mapping.get("flood_wait_seconds")),
+        flood_wait_until=_optional_str(mapping.get("flood_wait_until")),
     )
 
 
@@ -888,6 +943,14 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "last_cycle_at": data.last_cycle_at,
         "next_run_at": data.next_run_at,
         "updated_at": now,
+        "last_error": data.last_error,
+        "last_action": data.last_action,
+        "last_channel": data.last_channel,
+        "heartbeat_at": data.heartbeat_at,
+        "started_at": data.started_at,
+        "stopped_at": data.stopped_at,
+        "flood_wait_seconds": data.flood_wait_seconds,
+        "flood_wait_until": data.flood_wait_until,
     }
     with _get_engine().begin() as connection:
         exists = connection.execute(

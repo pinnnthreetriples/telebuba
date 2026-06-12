@@ -10,7 +10,7 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 
 ## Working
 - `pyproject.toml` + `uv.lock` resolved; `.venv` on Python 3.13.13.
-- Full stack installed and import-verified: nicegui, sqlalchemy, telethon, python-socks, apscheduler, httpx, python-dotenv, pydantic, loguru, structlog, sentry-sdk, anyio.
+- Full stack installed and import-verified: nicegui, sqlalchemy, telethon, python-socks, httpx, python-dotenv, pydantic, pydantic-settings, loguru, sentry-sdk, anyio. (apscheduler/structlog removed — unused; warming uses raw asyncio.Task, logging uses loguru.)
 - Dev toolchain installed and CLI-verified: ruff, ty, pytest+asyncio+cov, hypothesis, bandit, pip-audit, semgrep, deptry, vulture, radon, pre-commit, respx, factory-boy, aislop.
 - `.gitignore` covers `.env`, `*.session`, `*.db`, `*.log`, tool caches.
 - `pyproject.toml` configured for maximum test strictness: `filterwarnings=["error"]`, `--strict-markers`, `--strict-config`, `xfail_strict`, `asyncio_mode=strict`, branch coverage with `--cov-fail-under=90`.
@@ -18,9 +18,9 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - `ruff` configured with `select = ["ALL"]` + minimal ignores; `ty` strict imports/references; `bandit`, `deptry`, `vulture` wired in pyproject.
 - `.pre-commit-config.yaml` installed and verified end-to-end (13 hooks: generic hygiene + gitleaks + ruff + ruff-format + bandit + ty). `pre-commit install` ran — git hook is wired in `.git/hooks/pre-commit`.
 - `.claude/skills/` populated with 10 matt-pocock skills (tdd, diagnose, prototype, grill-with-docs, zoom-out, improve-codebase-architecture, to-prd, to-issues, setup-matt-pocock-skills, git-guardrails-claude-code). Triggers documented in `.mex/AGENTS.md` → Agent Skills.
-- `main.py` is the NiceGUI entrypoint; it registers the accounts page and runs on `TELEBUBA_PORT` / `settings.ui_port` (default `8080`) with reload disabled for predictable local runs.
-- `core/config.py` provides typed settings for Telegram API credentials, SQLite DB path, session dir, UI port, and Telethon retry/timeouts.
-- `core/db.py` lazily initializes SQLite via SQLAlchemy and persists accounts in `accounts` plus immutable per-account device fingerprints in `device_fingerprints`.
+- `main.py` is the NiceGUI entrypoint; it registers accounts/warming/logs pages and runs on `UI__PORT` (default `8080`, validated via `pydantic-settings`) with reload disabled for predictable local runs. Startup hook calls `services.warming.reconcile_warming_runtime()` to re-attach per-account loops after a restart; shutdown hook cancels them gracefully.
+- `core/config.py` uses **`pydantic-settings`** (nested `BaseSettings`, one namespace per domain). All knobs read from typed env: `TELEGRAM__*`, `UI__*`, `DB__*`, `PROXY__*`, `PROFILE_MEDIA__*`, `LOGGING__*`, `WARMING__*`, `GEMINI__*`. A misconfigured `.env` raises a clear `ValidationError` at import time.
+- `core/db.py` lazily initializes SQLite via SQLAlchemy and persists accounts in `accounts` plus immutable per-account device fingerprints in `device_fingerprints`. **`PRAGMA foreign_keys=ON`** is now wired on every new connection via SQLAlchemy `event.listens_for(engine, "connect")`, so orphan rows are rejected. Additive migration adds `last_error/last_action/last_channel/heartbeat_at/started_at/stopped_at/flood_wait_seconds/flood_wait_until` to existing `warming_account_state` tables.
 - `core/device_fingerprint.py` generates one random desktop device profile per account and returns the saved profile on later calls.
 - `core/telegram_client.py` prepares a Pydantic client profile, then creates Telethon clients with the saved device fingerprint.
 - `core/telegram_client.py` checks Telegram sessions via `check_telegram_session()` and returns typed statuses without deleting session files.
@@ -57,10 +57,11 @@ This file is the only place that should change after every task. `ROUTER.md` sta
     animations. `main.py` registers it; Accounts/Logs headers link to it.
 - `core/config.py` already uses **nested namespaces**; now also exposes
   `settings.warming` (delays/limits/default reactions) and `settings.gemini`.
-- `core/logging.py` (loguru + Sentry + SQLite `logs`) and the Logs page are live.
+- `core/logging.py` (loguru + Sentry + SQLite `logs`) and the Logs page are live. `log_event` is **best-effort**: a failure writing to SQLite `logs` or sending to Sentry is logged via loguru and swallowed, so business operations cannot be broken by a logging fault.
+- **Service-layer `.session` upload guardrails.** `services/accounts.import_account_session` rejects empty/oversize uploads (configurable via `PROFILE_MEDIA__SESSION_MAX_BYTES`) and `_write_session_file` best-effort-chmods to `0600` on POSIX. UI no longer the only line of defence.
+- **`services/warming` hardening** (critical-analysis sweep): explicit `try/finally` around `SetOnline(True/False)` so an account never stays online forever; `failed` action-statuses are surfaced (cycle returns `status="failed"` if every action failed); `FloodWait` propagates `flood_wait_seconds`/`flood_wait_until` through `WarmingCycleResult` and into `warming_account_state`; per-account `asyncio.Lock` on start/stop; `start_warming` raises `UnknownAccountError` for missing accounts; `stop_warming` `await`s task cancel with timeout; `reconcile_warming_runtime` rebuilds `_RUNTIME` on startup; channel input is regex-validated and bounded by `WARMING__MAX_CHANNELS_TOTAL/PER_ADD/LENGTH`; Gemini DM text is sanitised (strip control chars, cap chars+lines) before send; `gemini_model` editable from UI; UI gained explicit Clear-key checkbox and warming-only activity filter.
 
 ## Not Yet Built
-- `features/accounts.py` — already implemented, but predates the services/ layer; orchestration lives in the feature file directly. Refactor to extract `services/accounts.py` is tracked separately.
 - Additional `features/` pages — comments page.
 - `services/comments.py` and `services/telegram_outbox.py` (outbox worker) — not started.
 - SQLAlchemy models beyond the current 7 tables (`accounts`, `device_fingerprints`,

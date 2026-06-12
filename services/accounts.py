@@ -23,6 +23,7 @@ take this module's public functions directly.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -109,6 +110,16 @@ async def add_account(data: AccountCreate) -> AccountRead:
 
 
 async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
+    # Service-layer guardrail: ``.session`` files are effectively credentials.
+    # The UI may attempt to validate size first, but a CLI / scheduler caller
+    # can bypass that — re-check here.
+    max_bytes = settings.profile_media.session_max_bytes
+    if not data.content:
+        msg = "Session file is empty"
+        raise ValueError(msg)
+    if len(data.content) > max_bytes:
+        msg = f"Session file is too large (>{max_bytes} bytes)"
+        raise ValueError(msg)
     filename = _session_filename(data.filename)
     session_name = Path(filename).stem
     session_path = settings.telegram.session_dir / filename
@@ -375,6 +386,11 @@ def _session_filename(filename: str) -> str:
 def _write_session_file(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_bytes(content)
+    # Best-effort chmod 0600. ``os.chmod`` on Windows only affects the read-only
+    # bit, so the protection is mainly relevant on POSIX. We swallow OSError to
+    # keep imports working on systems where chmod is unavailable.
+    with suppress(OSError):
+        path.chmod(0o600)
 
 
 def _validate_upload(

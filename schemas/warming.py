@@ -95,7 +95,10 @@ class WarmingSettingsUpdate(BaseModel):
     """Caller-supplied settings change from the UI.
 
     ``gemini_api_key`` semantics: ``None`` leaves the stored key untouched, an
-    empty string clears it, any other value replaces it.
+    empty string clears it, any other value replaces it. Same applies to
+    ``gemini_model`` — ``None`` keeps current value, non-empty overrides.
+    An explicit ``clear_gemini_key`` flag is provided so the UI can clear the
+    stored key without ambiguity.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -103,6 +106,8 @@ class WarmingSettingsUpdate(BaseModel):
     inter_account_chat: bool = False
     reactions_enabled: bool = True
     gemini_api_key: str | None = None
+    gemini_model: str | None = None
+    clear_gemini_key: bool = False
 
 
 class WarmingStateRecord(BaseModel):
@@ -115,6 +120,14 @@ class WarmingStateRecord(BaseModel):
     last_cycle_at: str | None = None
     next_run_at: str | None = None
     updated_at: str = Field(min_length=1)
+    last_error: str | None = None
+    last_action: str | None = None
+    last_channel: str | None = None
+    heartbeat_at: str | None = None
+    started_at: str | None = None
+    stopped_at: str | None = None
+    flood_wait_seconds: int | None = Field(default=None, ge=0)
+    flood_wait_until: str | None = None
 
 
 class WarmingStateWrite(BaseModel):
@@ -126,6 +139,14 @@ class WarmingStateWrite(BaseModel):
     last_event: str | None = None
     last_cycle_at: str | None = None
     next_run_at: str | None = None
+    last_error: str | None = None
+    last_action: str | None = None
+    last_channel: str | None = None
+    heartbeat_at: str | None = None
+    started_at: str | None = None
+    stopped_at: str | None = None
+    flood_wait_seconds: int | None = Field(default=None, ge=0)
+    flood_wait_until: str | None = None
 
 
 class WarmingAccountState(BaseModel):
@@ -140,6 +161,14 @@ class WarmingAccountState(BaseModel):
     last_cycle_at: str | None = None
     next_run_at: str | None = None
     updated_at: str | None = None
+    last_error: str | None = None
+    last_action: str | None = None
+    last_channel: str | None = None
+    heartbeat_at: str | None = None
+    started_at: str | None = None
+    stopped_at: str | None = None
+    flood_wait_seconds: int | None = Field(default=None, ge=0)
+    flood_wait_until: str | None = None
 
 
 class WarmingBoardState(BaseModel):
@@ -165,7 +194,7 @@ class WarmingCycleRequest(BaseModel):
     account_id: str = Field(min_length=1)
 
 
-CycleStatus = Literal["ok", "skipped", "flood_wait", "error"]
+CycleStatus = Literal["ok", "skipped", "flood_wait", "error", "failed"]
 
 
 class WarmingCycleResult(BaseModel):
@@ -178,3 +207,8 @@ class WarmingCycleResult(BaseModel):
     reactions_sent: int = Field(default=0, ge=0)
     messages_sent: int = Field(default=0, ge=0)
     detail: str | None = None
+    flood_wait_seconds: int | None = Field(default=None, ge=0)
+    flood_wait_until: str | None = None
+    failures: int = Field(default=0, ge=0)
+    last_failed_action: str | None = None
+    last_failed_channel: str | None = None
