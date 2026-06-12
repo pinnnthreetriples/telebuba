@@ -32,6 +32,7 @@ from schemas.warming import (
 )
 from services.logs import load_logs_page
 from services.warming import (
+    WarmingNotReadyError,
     add_channels,
     load_board,
     remove_channel,
@@ -156,6 +157,7 @@ async def _render_settings_card() -> None:  # pragma: no cover
         )
         chat_switch = ui.switch("Accounts chat with each other", value=current.inter_account_chat)
         reactions_switch = ui.switch("Put reactions on posts", value=current.reactions_enabled)
+        join_switch = ui.switch("Join new channels", value=current.join_enabled)
         status = ui.label(
             _settings_status(current.gemini_model, has_key=current.has_gemini_key),
         ).classes("text-xs text-slate-500")
@@ -167,6 +169,7 @@ async def _render_settings_card() -> None:  # pragma: no cover
                 WarmingSettingsUpdate(
                     inter_account_chat=bool(chat_switch.value),
                     reactions_enabled=bool(reactions_switch.value),
+                    join_enabled=bool(join_switch.value),
                     gemini_api_key=raw_key or None,
                     gemini_model=raw_model or None,
                     clear_gemini_key=bool(clear_key_checkbox.value),
@@ -280,7 +283,10 @@ def _render_column(  # noqa: PLR0913 # pragma: no cover
         if not account_id:
             return
         if key == "warming":
-            await start_warming(StartWarmingRequest(account_id=account_id))
+            try:
+                await start_warming(StartWarmingRequest(account_id=account_id))
+            except WarmingNotReadyError as exc:
+                ui.notify(f"Cannot start: {'; '.join(exc.reasons)}", type="negative")
         else:
             await stop_warming(StopWarmingRequest(account_id=account_id))
         refresh()
@@ -325,6 +331,10 @@ def _render_card(  # pragma: no cover
         if card.last_event:
             meta = f"{meta} · {card.last_event}"
         ui.label(meta).classes("text-[11px] text-slate-500 truncate")
+        if card.readiness and not card.readiness.ready:
+            ui.label(f"not ready: {', '.join(card.readiness.reasons)}").classes(
+                "text-[11px] text-red-600 truncate",
+            )
 
 
 async def _render_activity_log() -> None:  # pragma: no cover

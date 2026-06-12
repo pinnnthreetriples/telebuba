@@ -133,6 +133,7 @@ _warming_settings = Table(
     Column("id", Integer, primary_key=True),
     Column("inter_account_chat", Integer, nullable=False),
     Column("reactions_enabled", Integer, nullable=False),
+    Column("join_enabled", Integer, nullable=True),
     Column("gemini_api_key", String, nullable=False),
     Column("gemini_model", String, nullable=False),
     Column("updated_at", String, nullable=False),
@@ -155,6 +156,9 @@ _warming_account_state = Table(
     Column("stopped_at", String, nullable=True),
     Column("flood_wait_seconds", Integer, nullable=True),
     Column("flood_wait_until", String, nullable=True),
+    Column("proxy_snapshot", String, nullable=True),
+    Column("daily_actions", Integer, nullable=True),
+    Column("daily_count_date", String, nullable=True),
 )
 
 _WARMING_SETTINGS_ID = 1
@@ -228,21 +232,36 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
             ("stopped_at", "VARCHAR"),
             ("flood_wait_seconds", "INTEGER"),
             ("flood_wait_until", "VARCHAR"),
+            ("proxy_snapshot", "VARCHAR"),
+            ("daily_actions", "INTEGER"),
+            ("daily_count_date", "VARCHAR"),
         )
         for column_name, column_type in _warming_state_new_columns:
             if column_name not in warming_state_columns:
                 connection.exec_driver_sql(
                     f"ALTER TABLE warming_account_state ADD COLUMN {column_name} {column_type}",
                 )
+        warming_settings_columns = _sqlite_columns(connection, "warming_settings")
+        if "join_enabled" not in warming_settings_columns:
+            # Default 1 (enabled) so accounts created before this column keep
+            # joining channels — a NULL would otherwise read as "disabled".
+            connection.exec_driver_sql(
+                "ALTER TABLE warming_settings ADD COLUMN join_enabled INTEGER DEFAULT 1",
+            )
 
 
 def _sqlite_columns(
     connection: Connection,
-    table_name: Literal["accounts", "account_proxies", "warming_account_state"],
+    table_name: Literal[
+        "accounts",
+        "account_proxies",
+        "warming_account_state",
+        "warming_settings",
+    ],
 ) -> set[str]:
     # Whitelist of allowed table names — table_name is not user input but kept
     # narrow so ``exec_driver_sql`` can never see anything unexpected.
-    allowed = ("accounts", "account_proxies", "warming_account_state")
+    allowed = ("accounts", "account_proxies", "warming_account_state", "warming_settings")
     if table_name not in allowed:
         msg = f"unsupported table {table_name!r}"
         raise ValueError(msg)
@@ -805,9 +824,13 @@ async def remove_warming_channel(channel: str) -> WarmingChannelList:
 
 
 def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSettingsSecret:
+    # ``join_enabled`` is nullable for rows created before the column existed —
+    # treat a missing/NULL value as enabled so they keep their old behaviour.
+    join_raw = mapping.get("join_enabled")
     return WarmingSettingsSecret(
         inter_account_chat=bool(mapping["inter_account_chat"]),
         reactions_enabled=bool(mapping["reactions_enabled"]),
+        join_enabled=True if join_raw is None else bool(join_raw),
         gemini_api_key=str(mapping["gemini_api_key"]),
         gemini_model=str(mapping["gemini_model"]),
         updated_at=str(mapping["updated_at"]),
@@ -819,6 +842,7 @@ def _default_warming_settings_values() -> dict[str, object]:
         "id": _WARMING_SETTINGS_ID,
         "inter_account_chat": 0,
         "reactions_enabled": 1,
+        "join_enabled": 1,
         "gemini_api_key": settings.gemini.api_key,
         "gemini_model": settings.gemini.model,
         "updated_at": _now_iso(),
@@ -845,6 +869,7 @@ def _save_warming_settings(
     *,
     inter_account_chat: bool,
     reactions_enabled: bool,
+    join_enabled: bool = True,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
 ) -> WarmingSettingsSecret:
@@ -854,6 +879,7 @@ def _save_warming_settings(
     values: dict[str, object] = {
         "inter_account_chat": int(inter_account_chat),
         "reactions_enabled": int(reactions_enabled),
+        "join_enabled": int(join_enabled),
         "gemini_api_key": new_key,
         "gemini_model": new_model,
         "updated_at": _now_iso(),
@@ -871,6 +897,7 @@ async def save_warming_settings(
     *,
     inter_account_chat: bool,
     reactions_enabled: bool,
+    join_enabled: bool = True,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
 ) -> WarmingSettingsSecret:
@@ -883,6 +910,7 @@ async def save_warming_settings(
         _save_warming_settings,
         inter_account_chat=inter_account_chat,
         reactions_enabled=reactions_enabled,
+        join_enabled=join_enabled,
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
     )
@@ -905,6 +933,9 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         stopped_at=_optional_str(mapping.get("stopped_at")),
         flood_wait_seconds=_optional_int(mapping.get("flood_wait_seconds")),
         flood_wait_until=_optional_str(mapping.get("flood_wait_until")),
+        proxy_snapshot=_optional_str(mapping.get("proxy_snapshot")),
+        daily_actions=_optional_int(mapping.get("daily_actions")) or 0,
+        daily_count_date=_optional_str(mapping.get("daily_count_date")),
     )
 
 
@@ -951,6 +982,9 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "stopped_at": data.stopped_at,
         "flood_wait_seconds": data.flood_wait_seconds,
         "flood_wait_until": data.flood_wait_until,
+        "proxy_snapshot": data.proxy_snapshot,
+        "daily_actions": data.daily_actions,
+        "daily_count_date": data.daily_count_date,
     }
     with _get_engine().begin() as connection:
         exists = connection.execute(

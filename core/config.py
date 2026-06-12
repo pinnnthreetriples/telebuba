@@ -103,6 +103,17 @@ class WarmingSettings(BaseSettings):
     chat_message_max_lines: int = Field(default=4, ge=1)
     # Graceful stop budget when cancelling a per-account loop task.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
+    # Refuse to start warming an account that is not ready (dead session, no
+    # proxy, no channels). Set False to bypass the pre-start gate.
+    enforce_readiness: bool = True
+    # Quiet hours (UTC): when enabled, an account performs no actions inside the
+    # [start, end) hour window and parks until it ends. start == end disables it.
+    quiet_hours_enabled: bool = False
+    quiet_hours_start: int = Field(default=0, ge=0, le=23)
+    quiet_hours_end: int = Field(default=0, ge=0, le=23)
+    # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
+    # When the day's count reaches the cap the account parks until UTC midnight.
+    max_daily_actions: int = Field(default=0, ge=0)
 
 
 class GeminiSettings(BaseSettings):

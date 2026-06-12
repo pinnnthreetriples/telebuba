@@ -47,13 +47,22 @@ scheduling — warming does not. This resolves the old "shared scheduler handle"
   `flood_wait` state until the next scheduled cycle.
 - The loop body never raises to the task: `_warming_loop` catches everything, logs
   `warming_loop_crashed` via `core/logging.py`, and sets state `error`.
+- `run_loop_iteration` is the single writer of `next_run_at`; `_warming_loop` only ever
+  sleeps `_seconds_until(record.next_run_at)`. So a restart resumes the persisted schedule
+  instead of firing a cycle immediately (no activity spike on app restart).
+- Two gates run before each cycle: quiet hours (`settings.warming.quiet_hours_*`, UTC, park
+  until the window ends) and the per-account daily action budget
+  (`settings.warming.max_daily_actions`, park until UTC midnight). Both default to off.
+- `start_warming` refuses a not-ready account when `settings.warming.enforce_readiness` is on
+  (`evaluate_readiness`: alive session, configured/working proxy, ≥1 channel) and freezes a
+  `proxy_snapshot` on the state row. The board shows readiness per card.
 
 ## Persistence
 
 - Channels: `warming_channels` (unlimited, deduped). Settings: `warming_settings`
-  (singleton row — inter-account-chat toggle, reactions toggle, Gemini API key + model).
+  (singleton row — inter-account-chat toggle, reactions toggle, join toggle, Gemini key + model).
   Per-account runtime: `warming_account_state` (state, cycles_completed, last_event,
-  last_cycle_at, next_run_at).
+  last_cycle_at, next_run_at, proxy_snapshot, daily_actions, daily_count_date, …).
 - The Gemini key is entered in the UI and stored in `warming_settings`; `settings.gemini`
   only supplies defaults (env `GEMINI__API_KEY`) and non-secret tunables.
 
@@ -67,7 +76,7 @@ All in `settings.warming`, no magic numbers in code:
 - Post-cycle sleep 12-30h with per-account startup jitter.
 - Inter-account chat (opt-in): when ≥2 accounts are warming and a Gemini key is set, the
   sender DMs a random warming peer (that has a known `user_id`) a Gemini-generated line.
-- Per-account daily quotas are a future refinement.
+- Per-account daily action budget via `settings.warming.max_daily_actions` (0 = off).
 
 ## What does NOT belong here
 
