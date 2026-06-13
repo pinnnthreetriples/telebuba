@@ -519,7 +519,11 @@ async def _open_profile_dialog(  # noqa: PLR0915
                     label="Медиа",
                 ).props("dense outlined")
                 story_privacy = ui.select(
-                    {"contacts": "Контакты", "close_friends": "Близкие друзья", "public": "Публично"},
+                    {
+                        "contacts": "Контакты",
+                        "close_friends": "Близкие друзья",
+                        "public": "Публично",
+                    },
                     value="contacts",
                     label="Приватность",
                 ).props("dense outlined")
@@ -550,7 +554,9 @@ async def _open_profile_dialog(  # noqa: PLR0915
                     max_file_size=100_000_000,
                     auto_upload=True,
                     on_upload=handle_story_upload,
-                    on_rejected=lambda _event: ui.notify("Медиа для сторис отклонено", type="warning"),
+                    on_rejected=lambda _event: ui.notify(
+                        "Медиа для сторис отклонено", type="warning"
+                    ),
                 ).props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov"').classes("w-full")
 
             with ui.tab_panel(music_tab).classes("gap-3"):

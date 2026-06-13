@@ -104,7 +104,9 @@ exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
-    "@(typing\.)?overload",
+    # TOML literal (single-quoted): backslashes are literal, so a rebase/reformat
+    # can't corrupt the regex escape into invalid TOML (which breaks `uv sync`).
+    '@(typing\.)?overload',
 ]
 
 # ============================================================================
@@ -135,6 +137,9 @@ ignore = [
     "ANN",       # type annotations not required on fixtures / test functions
     "SLF001",    # accessing private members is fair game in tests
     "ASYNC240",  # pathlib in async tests is fine — assertions, no blocking I/O
+    "RUF001",    # Russian UI strings asserted in tests — Cyrillic is intentional
+    "RUF002",
+    "RUF003",
 ]
 "conftest.py" = ["ANN", "S101"]
 # Russian-language UI strings — Cyrillic letters are intentional, not confusables.
