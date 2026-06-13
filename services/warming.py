@@ -22,6 +22,7 @@ import random
 import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final, cast
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.config import settings
 from core.db import (
@@ -38,6 +39,7 @@ from core.db import (
 )
 from core.gemini import generate_text
 from core.logging import log_event
+from core.phone_geo import timezone_for_phone
 from core.telegram_client import execute
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import (
@@ -1105,6 +1107,22 @@ async def _recover_from_quarantine(
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
 
 
+async def _local_now(account_id: str, now: datetime) -> datetime:
+    """Return ``now`` in the account's local timezone (from its phone number).
+
+    Quiet hours are evaluated in the account's local time rather than UTC. Falls
+    back to ``now`` when the number has no resolvable timezone.
+    """
+    account = await fetch_account(account_id)
+    tz_name = timezone_for_phone(account.phone) if account else None
+    if tz_name is None:
+        return now
+    try:
+        return now.astimezone(ZoneInfo(tz_name))
+    except ZoneInfoNotFoundError:
+        return now
+
+
 async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     """Run one iteration of the warming loop (cycle + state transitions).
 
@@ -1124,20 +1142,18 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     if record is not None and record.state == "quarantine":
         return await _recover_from_quarantine(account_id, record, now)
 
-    if controls.quiet_hours_enabled and _in_quiet_hours(
-        now,
-        controls.quiet_hours_start,
-        controls.quiet_hours_end,
-    ):
-        next_run = _quiet_hours_end_at(now, controls.quiet_hours_end).isoformat()
-        await _set_state(
-            account_id,
-            "sleeping",
-            last_event="quiet_hours",
-            next_run_at=next_run,
-            heartbeat_at=now.isoformat(),
-        )
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
+    if controls.quiet_hours_enabled:
+        local_now = await _local_now(account_id, now)
+        if _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
+            next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
+            await _set_state(
+                account_id,
+                "sleeping",
+                last_event="quiet_hours",
+                next_run_at=next_run,
+                heartbeat_at=now.isoformat(),
+            )
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
 
     daily_count, daily_date = _roll_daily(record, now.date().isoformat())
     if controls.max_daily_actions > 0 and daily_count >= controls.max_daily_actions:

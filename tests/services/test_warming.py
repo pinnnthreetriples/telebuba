@@ -1019,6 +1019,31 @@ async def test_run_loop_iteration_parks_during_quiet_hours(
     assert record.next_run_at is not None
 
 
+@pytest.mark.asyncio
+async def test_local_now_converts_to_account_timezone() -> None:
+    await create_account(AccountCreate(account_id="acc-tz"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-tz",
+            session_path="acc-tz",
+            status="alive",
+            is_temporary=False,
+            phone="+12025550123",
+        ),
+    )
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    local = await warming._local_now("acc-tz", now)
+    assert str(local.tzinfo) == "America/New_York"
+    assert local.utcoffset() != now.utcoffset()
+
+
+@pytest.mark.asyncio
+async def test_local_now_falls_back_to_utc_without_phone() -> None:
+    await create_account(AccountCreate(account_id="acc-nophone"))
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    assert await warming._local_now("acc-nophone", now) == now
+
+
 # --------------------------------------------------------------------------- #
 # Daily counters
 # --------------------------------------------------------------------------- #

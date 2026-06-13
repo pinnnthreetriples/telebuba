@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.db import configure_database
+from core.db import (
+    configure_database,
+    update_account_from_session_check,
+    update_account_proxy_check,
+)
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import (
     AccountCheckRequest,
@@ -25,6 +29,7 @@ from schemas.profile_media import (
 )
 from schemas.proxy import (
     AccountProxyCheckRequest,
+    AccountProxyCheckUpdate,
     AccountProxyDelete,
     AccountProxyUpsert,
     ProxyCheckResult,
@@ -45,6 +50,7 @@ from services.accounts import (
     check_account_proxy,
     check_account_session,
     delete_account_proxy,
+    evaluate_account_geo,
     import_account_session,
     import_account_tdata,
     load_accounts_table,
@@ -542,3 +548,35 @@ async def test_health_taxonomy_matches_status(
     await check_account_session(AccountCheckRequest(account_id="acc-h"))
     state = await load_accounts_table(AccountFilter())
     assert state.rows[0].health == expected_health
+
+
+@pytest.mark.asyncio
+async def test_evaluate_account_geo_flags_mismatch() -> None:
+    await add_account(AccountCreate(account_id="acc-1"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-1",
+            session_path="acc-1",
+            status="alive",
+            is_temporary=False,
+            phone="+77011234567",
+        ),
+    )
+    await save_account_proxy(
+        AccountProxyUpsert(account_id="acc-1", proxy_type="socks5", host="h", port=1080),
+    )
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(account_id="acc-1", status="tcp_working", country_code="US"),
+    )
+
+    verdict = await evaluate_account_geo("acc-1")
+
+    assert verdict.status == "mismatch"
+    assert verdict.phone_country == "KZ"
+    assert verdict.proxy_country == "US"
+
+
+@pytest.mark.asyncio
+async def test_evaluate_account_geo_unknown_for_missing_account() -> None:
+    verdict = await evaluate_account_geo("ghost")
+    assert verdict.status == "unknown"
