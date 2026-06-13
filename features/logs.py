@@ -19,21 +19,36 @@ if TYPE_CHECKING:
     from nicegui.elements.label import Label
 
 
-_STATUS_OPTIONS = ["all", "success", "warning", "error"]
+_STATUS_OPTIONS = {
+    "all": "Все",
+    "success": "Успех",
+    "warning": "Предупреждение",
+    "error": "Ошибка",
+}
+_STATUS_LABEL_RU = {
+    "success": "Успех",
+    "warning": "Предупреждение",
+    "error": "Ошибка",
+}
+_LEVEL_LABEL_RU = {
+    "INFO": "Инфо",
+    "WARNING": "Предупреждение",
+    "ERROR": "Ошибка",
+}
 _POLL_INTERVAL_SECONDS = 3.0
 _TABLE_PAGE_SIZE = 25
 _TABLE_COLUMNS = [
-    {"name": "created_at", "label": "Time", "field": "created_at", "sortable": True},
-    {"name": "level", "label": "Level", "field": "level", "sortable": True},
-    {"name": "status", "label": "Status", "field": "status", "sortable": True},
-    {"name": "account_id", "label": "Account", "field": "account_id", "sortable": True},
-    {"name": "event", "label": "Event", "field": "event", "sortable": True},
-    {"name": "extra", "label": "Extra", "field": "extra"},
+    {"name": "created_at", "label": "Время", "field": "created_at", "sortable": True},
+    {"name": "level", "label": "Уровень", "field": "level", "sortable": True},
+    {"name": "status", "label": "Статус", "field": "status", "sortable": True},
+    {"name": "account_id", "label": "Аккаунт", "field": "account_id", "sortable": True},
+    {"name": "event", "label": "Событие", "field": "event", "sortable": True},
+    {"name": "extra", "label": "Данные", "field": "extra"},
 ]
 
 
 def register_logs_page() -> None:  # pragma: no cover
-    @ui.page("/logs", title="Telebuba — Logs")
+    @ui.page("/logs", title="Telebuba — Логи")
     async def logs_page() -> None:
         await _render_logs_page()
 
@@ -49,27 +64,27 @@ async def _render_logs_page() -> None:  # pragma: no cover
         ui.row().classes("items-center gap-4"),
     ):
         ui.label("Telebuba").classes("text-lg font-semibold")
-        ui.link("Accounts", "/").classes(
+        ui.link("Аккаунты", "/").classes(
             "text-sm text-slate-600 hover:text-slate-900 no-underline",
         )
-        ui.link("Warming", "/warming").classes(
+        ui.link("Прогрев", "/warming").classes(
             "text-sm text-slate-600 hover:text-slate-900 no-underline",
         )
-        ui.link("Logs", "/logs").classes(
+        ui.link("Логи", "/logs").classes(
             "text-sm font-medium text-slate-900 no-underline",
         )
 
     with ui.column().classes("w-full max-w-[1400px] mx-auto p-4 gap-3"):
-        ui.label("Logs").classes("text-lg font-semibold")
+        ui.label("Логи").classes("text-lg font-semibold")
 
         with ui.row().classes("w-full items-center gap-3"):
-            total_label = _metric_label("Total", "0")
-            success_label = _metric_label("Success", "0")
-            warning_label = _metric_label("Warning", "0")
-            error_label = _metric_label("Error", "0")
+            total_label = _metric_label("Всего", "0")
+            success_label = _metric_label("Успех", "0")
+            warning_label = _metric_label("Предупреждения", "0")
+            error_label = _metric_label("Ошибки", "0")
 
         with ui.row().classes("w-full items-center gap-2"):
-            account_input = ui.input(placeholder="account_id").props("dense outlined clearable")
+            account_input = ui.input(placeholder="ID аккаунта").props("dense outlined clearable")
             account_input.classes("w-64")
             status_select = ui.select(_STATUS_OPTIONS, value="all").props("dense outlined")
             status_select.classes("w-40")
@@ -90,10 +105,10 @@ async def _render_logs_page() -> None:  # pragma: no cover
         )
         table.rows = [_to_row_dict(entry) for entry in state.entries]
         table.update()
-        _set_metric(total_label, "Total", state.summary.total)
-        _set_metric(success_label, "Success", state.summary.success)
-        _set_metric(warning_label, "Warning", state.summary.warning)
-        _set_metric(error_label, "Error", state.summary.error)
+        _set_metric(total_label, "Всего", state.summary.total)
+        _set_metric(success_label, "Успех", state.summary.success)
+        _set_metric(warning_label, "Предупреждения", state.summary.warning)
+        _set_metric(error_label, "Ошибки", state.summary.error)
 
     async def refresh_from_event(_event: object = None) -> None:
         await refresh()
@@ -109,11 +124,11 @@ def _to_row_dict(entry: LogEntry) -> dict[str, object]:  # pragma: no cover
     return {
         "id": entry.id,
         "created_at": entry.created_at,
-        "level": entry.level,
-        "status": entry.status,
-        "account_id": entry.account_id or "-",
-        "event": entry.event,
-        "extra": json.dumps(entry.extra, default=str, sort_keys=True),
+        "level": _LEVEL_LABEL_RU.get(entry.level, entry.level),
+        "status": _STATUS_LABEL_RU.get(entry.status, entry.status),
+        "account_id": entry.account_id or "—",
+        "event": entry.event.replace("_", " "),
+        "extra": json.dumps(entry.extra, default=str, ensure_ascii=False, sort_keys=True),
     }
 
 
