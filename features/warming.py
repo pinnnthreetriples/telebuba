@@ -63,11 +63,11 @@ _HEALTH_DOT = {
     "idle": "bg-slate-400",
 }
 _STATE_LABEL = {
-    "idle": "Idle",
-    "active": "Warming",
-    "sleeping": "Sleeping",
-    "flood_wait": "Flood wait",
-    "error": "Error",
+    "idle": "Простой",
+    "active": "Прогрев",
+    "sleeping": "Сон",
+    "flood_wait": "Flood-ожидание",
+    "error": "Ошибка",
 }
 _STATE_BADGE = {
     "idle": "text-slate-600 bg-slate-100",
@@ -82,6 +82,23 @@ _LOG_ROW_BORDER = {
     "error": "border-red-500",
 }
 
+# Readiness reasons are produced (in English) by ``services.warming`` and are
+# also written to logs/tests; translate them here at the UI edge only.
+_READINESS_REASON_RU = {
+    "no proxy": "нет прокси",
+    "proxy failed": "прокси не работает",
+    "no channels": "нет каналов",
+}
+
+
+def _ru_reason(reason: str) -> str:  # pragma: no cover
+    if reason in _READINESS_REASON_RU:
+        return _READINESS_REASON_RU[reason]
+    if reason.startswith("session "):
+        return f"сессия: {reason[len('session ') :]}"
+    return reason
+
+
 _WARMING_CSS = """
 @keyframes tb-pulse-ring {
     0% { box-shadow: 0 0 0 0 rgba(34,197,94,0.45); }
@@ -94,7 +111,7 @@ _WARMING_CSS = """
 
 
 def register_warming_page() -> None:  # pragma: no cover
-    @ui.page("/warming", title="Telebuba — Warming")
+    @ui.page("/warming", title="Telebuba — Прогрев")
     async def warming_page() -> None:
         await _render_warming_page()
 
@@ -108,9 +125,9 @@ def _build_header() -> None:  # pragma: no cover
         ui.row().classes("items-center gap-4"),
     ):
         ui.label("Telebuba").classes("text-lg font-semibold")
-        ui.link("Accounts", "/").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
-        ui.link("Warming", "/warming").classes("text-sm font-medium text-slate-900 no-underline")
-        ui.link("Logs", "/logs").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
+        ui.link("Аккаунты", "/").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
+        ui.link("Прогрев", "/warming").classes("text-sm font-medium text-slate-900 no-underline")
+        ui.link("Логи", "/logs").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
 
 
 async def _render_warming_page() -> None:  # pragma: no cover
@@ -121,7 +138,7 @@ async def _render_warming_page() -> None:  # pragma: no cover
     drag: dict[str, str | None] = {"account_id": None}
 
     with ui.column().classes("w-full max-w-[1400px] mx-auto p-4 gap-4"):
-        ui.label("Account warming").classes("text-xl font-semibold")
+        ui.label("Прогрев аккаунтов").classes("text-xl font-semibold")
         with ui.row().classes("w-full gap-4 items-start flex-wrap"):
             await _render_config_cards()
             await _render_channels_card()
@@ -156,7 +173,7 @@ async def _render_warming_page() -> None:  # pragma: no cover
 
 
 def _settings_status(model: str, *, has_key: bool) -> str:  # pragma: no cover
-    return f"Model {model} · AI key {'set' if has_key else 'missing'}"
+    return f"Модель {model} · AI-ключ {'задан' if has_key else 'нет'}"
 
 
 def _feature_switch(
@@ -195,43 +212,43 @@ async def _render_config_cards() -> None:  # pragma: no cover
 
     async def on_toggle() -> None:
         await persist(key=None, model=None, clear=False)
-        ui.notify("Features updated", type="positive")
+        ui.notify("Функции обновлены", type="positive")
 
     with ui.card().classes("w-[420px] p-4 gap-2"):
-        ui.label("Features").classes("text-base font-semibold")
-        ui.label("What warming accounts are allowed to do — saved instantly.").classes(
+        ui.label("Функции").classes("text-base font-semibold")
+        ui.label("Что разрешено делать аккаунтам на прогреве — сохраняется сразу.").classes(
             "text-xs text-slate-500",
         )
         refs["chat"] = _feature_switch(
-            "Accounts chat with each other",
-            "AI-written DMs between your warming accounts (needs a Gemini key).",
+            "Аккаунты переписываются друг с другом",
+            "ИИ-сообщения между вашими аккаунтами на прогреве (нужен ключ Gemini).",
             value=current.inter_account_chat,
             on_toggle=on_toggle,
         )
         refs["reactions"] = _feature_switch(
-            "Put reactions on posts",
-            "Occasionally react to recent posts in joined channels.",
+            "Ставить реакции на посты",
+            "Иногда реагировать на свежие посты в каналах.",
             value=current.reactions_enabled,
             on_toggle=on_toggle,
         )
         refs["join"] = _feature_switch(
-            "Join new channels",
-            "Let accounts join channels from your list — the riskiest action.",
+            "Вступать в новые каналы",
+            "Разрешить вступать в каналы из вашего списка — самое рискованное действие.",
             value=current.join_enabled,
             on_toggle=on_toggle,
         )
 
-    placeholder = "key is set" if current.has_gemini_key else "paste key to enable AI chat"
+    placeholder = "ключ задан" if current.has_gemini_key else "вставьте ключ для ИИ-чата"
     with ui.card().classes("w-[420px] p-4 gap-3"):
-        ui.label("Settings").classes("text-base font-semibold")
+        ui.label("Настройки").classes("text-base font-semibold")
         key_input = (
-            ui.input(label="Gemini API key", placeholder=placeholder, password=True)
+            ui.input(label="API-ключ Gemini", placeholder=placeholder, password=True)
             .props("dense outlined clearable")
             .classes("w-full")
         )
-        clear_key_checkbox = ui.checkbox("Clear stored key", value=False)
+        clear_key_checkbox = ui.checkbox("Удалить сохранённый ключ", value=False)
         model_input = (
-            ui.input(label="Gemini model", value=current.gemini_model)
+            ui.input(label="Модель Gemini", value=current.gemini_model)
             .props("dense outlined")
             .classes("w-full")
         )
@@ -251,11 +268,11 @@ async def _render_config_cards() -> None:  # pragma: no cover
             clear_key_checkbox.value = False
             model_input.value = updated.gemini_model
             status.set_text(_settings_status(updated.gemini_model, has_key=updated.has_gemini_key))
-            ui.notify("Settings saved", type="positive")
+            ui.notify("Настройки сохранены", type="positive")
 
-        ui.button("Save settings", icon="save", on_click=on_save).props("color=primary").classes(
-            "w-full",
-        )
+        ui.button("Сохранить настройки", icon="save", on_click=on_save).props(
+            "color=primary",
+        ).classes("w-full")
 
 
 _CHANNEL_DELETE_SLOT = """
@@ -274,21 +291,21 @@ def _fmt_date(iso: str) -> str:  # pragma: no cover
 async def _render_channels_card() -> None:  # pragma: no cover
     with ui.card().classes("w-[420px] p-4 gap-3"):
         with ui.row().classes("w-full items-center justify-between"):
-            ui.label("Channels").classes("text-base font-semibold")
+            ui.label("Каналы").classes("text-base font-semibold")
             count_badge = ui.label("0").classes(
                 "text-xs px-2 py-1 rounded bg-slate-100 text-slate-700",
             )
         channels_input = (
             ui.textarea(
-                label="Add channels",
-                placeholder="@channel, https://t.me/channel — one per line or comma-separated",
+                label="Добавить каналы",
+                placeholder="@channel, https://t.me/channel — по одному в строке или через запятую",
             )
             .props("dense outlined autogrow")
             .classes("w-full")
         )
         columns = [
-            {"name": "channel", "label": "Channel", "field": "channel", "align": "left"},
-            {"name": "added", "label": "Added", "field": "added", "align": "left"},
+            {"name": "channel", "label": "Канал", "field": "channel", "align": "left"},
+            {"name": "added", "label": "Добавлен", "field": "added", "align": "left"},
             {"name": "actions", "label": "", "field": "actions", "align": "right"},
         ]
         # Quasar diffs rows by ``row_key`` and updates in place — no flicker on
@@ -319,14 +336,14 @@ async def _render_channels_card() -> None:  # pragma: no cover
         async def on_add() -> None:
             raw = (channels_input.value or "").strip()
             if not raw:
-                ui.notify("Enter at least one channel", type="warning")
+                ui.notify("Введите хотя бы один канал", type="warning")
                 return
             result = await add_channels(AddChannelsRequest(raw=raw))
             channels_input.value = ""
             await refresh_list()
-            ui.notify(f"{len(result.channels)} channels total", type="positive")
+            ui.notify(f"Всего каналов: {len(result.channels)}", type="positive")
 
-        ui.button("Add channels", icon="add", on_click=on_add).props("color=primary").classes(
+        ui.button("Добавить каналы", icon="add", on_click=on_add).props("color=primary").classes(
             "w-full",
         )
         await refresh_list()
@@ -363,7 +380,7 @@ def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma:
 def _render_board(board: WarmingBoardState, drag: dict[str, str | None], refresh) -> None:  # noqa: ANN001 # pragma: no cover
     with ui.row().classes("w-full gap-4 items-stretch flex-wrap"):
         _render_column(
-            "Idle",
+            "Простой",
             "idle",
             board.idle,
             "border-slate-300",
@@ -371,7 +388,7 @@ def _render_board(board: WarmingBoardState, drag: dict[str, str | None], refresh
             refresh,
         )
         _render_column(
-            f"Warming · {board.active_count} active",
+            f"Прогрев · активно: {board.active_count}",
             "warming",
             board.warming,
             "border-green-400",
@@ -402,7 +419,8 @@ def _render_column(  # noqa: PLR0913 # pragma: no cover
             try:
                 await start_warming(StartWarmingRequest(account_id=account_id))
             except WarmingNotReadyError as exc:
-                ui.notify(f"Cannot start: {'; '.join(exc.reasons)}", type="negative")
+                reasons = "; ".join(_ru_reason(reason) for reason in exc.reasons)
+                ui.notify(f"Нельзя запустить: {reasons}", type="negative")
         else:
             await stop_warming(StopWarmingRequest(account_id=account_id))
         refresh()
@@ -416,7 +434,7 @@ def _render_column(  # noqa: PLR0913 # pragma: no cover
                 "text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600",
             )
         if not cards:
-            ui.label("Drag accounts here").classes("text-xs text-slate-400 italic")
+            ui.label("Перетащите аккаунты сюда").classes("text-xs text-slate-400 italic")
         for card in cards:
             _render_card(card, drag)
 
@@ -443,14 +461,13 @@ def _render_card(  # pragma: no cover
             ui.label(_STATE_LABEL.get(card.state, card.state)).classes(
                 f"text-[11px] px-2 py-0.5 rounded {_STATE_BADGE.get(card.state, '')}",
             )
-        meta = f"cycles {card.cycles_completed}"
+        meta = f"циклов {card.cycles_completed}"
         if card.last_event:
             meta = f"{meta} · {card.last_event}"
         ui.label(meta).classes("text-[11px] text-slate-500 truncate")
         if card.readiness and not card.readiness.ready:
-            ui.label(f"not ready: {', '.join(card.readiness.reasons)}").classes(
-                "text-[11px] text-red-600 truncate",
-            )
+            reasons = ", ".join(_ru_reason(reason) for reason in card.readiness.reasons)
+            ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
 
 
 def _render_log_row(entry: LogEntry) -> None:  # pragma: no cover
@@ -471,9 +488,9 @@ async def _render_activity_log() -> None:  # pragma: no cover
     with ui.card().classes("w-full p-4 gap-2"):
         with ui.row().classes("w-full items-center gap-2"):
             ui.icon("bolt").classes("text-amber-500")
-            ui.label("Live activity").classes("text-base font-semibold")
+            ui.label("Живая активность").classes("text-base font-semibold")
             ui.space()
-            warming_only_switch = ui.switch("Warming only", value=True).props("dense")
+            warming_only_switch = ui.switch("Только прогрев", value=True).props("dense")
         log_box = ui.column().classes("w-full gap-1 max-h-80 overflow-auto")
         seen: dict[str, object] = {"sig": None}
 
@@ -495,7 +512,7 @@ async def _render_activity_log() -> None:  # pragma: no cover
             log_box.clear()
             with log_box:
                 if not entries:
-                    ui.label("Waiting for activity…").classes("text-xs text-slate-400")
+                    ui.label("Ожидание активности…").classes("text-xs text-slate-400")
                 for entry in entries:
                     _render_log_row(entry)
 
