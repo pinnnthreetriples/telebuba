@@ -69,6 +69,7 @@ from schemas.warming import (
     is_warming,
     warming_health,
 )
+from services.spam_status import refresh_spam_status
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -397,6 +398,7 @@ def _to_card(
         proxy_snapshot=record.proxy_snapshot if record else None,
         daily_actions=record.daily_actions if record else 0,
         daily_count_date=record.daily_count_date if record else None,
+        quarantine_count=record.quarantine_count if record else 0,
         readiness=readiness,
     )
 
@@ -447,6 +449,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     proxy_snapshot: str | None | _Sentinel = _SENTINEL,
     daily_actions: int | _Sentinel = _SENTINEL,
     daily_count_date: str | None | _Sentinel = _SENTINEL,
+    quarantine_count: int | _Sentinel = _SENTINEL,
 ) -> WarmingStateRecord:
     current = await fetch_warming_state(account_id)
     cycles = current.cycles_completed if current else 0
@@ -487,6 +490,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             proxy_snapshot=cast("str | None", _resolve(proxy_snapshot, "proxy_snapshot")),
             daily_actions=cast("int", _resolve(daily_actions, "daily_actions") or 0),
             daily_count_date=cast("str | None", _resolve(daily_count_date, "daily_count_date")),
+            quarantine_count=cast("int", _resolve(quarantine_count, "quarantine_count") or 0),
         ),
     )
 
@@ -525,6 +529,7 @@ async def _current_card(account_id: str) -> WarmingAccountState:
         proxy_snapshot=record.proxy_snapshot if record else None,
         daily_actions=record.daily_actions if record else 0,
         daily_count_date=record.daily_count_date if record else None,
+        quarantine_count=record.quarantine_count if record else 0,
     )
 
 
@@ -686,9 +691,16 @@ async def _human_pause(min_seconds: float, max_seconds: float) -> None:
     await asyncio.sleep(_rng.uniform(min(min_seconds, max_seconds), max(min_seconds, max_seconds)))
 
 
+# Rate-limit families that carry a duration and mean "wait then retry".
+_WAIT_STATUSES: Final = frozenset({"flood_wait", "slow_mode_wait", "premium_wait"})
+# Any status that should halt the current channel/cycle pass. ``peer_flood`` is
+# a moderation restriction (no duration) handled by quarantine, not a wait.
+_HALT_STATUSES: Final = _WAIT_STATUSES | {"peer_flood"}
+
+
 def _classify_flood(result: ActionResult) -> tuple[bool, int | None, str | None]:
-    """Extract (flooded, seconds, until_iso) from an ActionResult."""
-    if result.status != "flood_wait":
+    """Extract (flooded, seconds, until_iso) from a wait-family ActionResult."""
+    if result.status not in _WAIT_STATUSES:
         return False, None, None
     seconds = result.flood_wait_seconds
     until = None
@@ -715,7 +727,7 @@ async def _read_and_react(
         reads = 1
     elif read_result.status == "failed":
         failures += 1
-    elif read_result.status == "flood_wait":
+    elif read_result.status in _HALT_STATUSES:
         return reads, reactions, read_result, failures
     await _human_pause(warm.reading_min_seconds, warm.reading_max_seconds)
     if reactions_enabled and _rng.random() < reaction_probability:
@@ -727,7 +739,7 @@ async def _read_and_react(
                 message_limit=warm.reaction_message_limit,
             ),
         )
-        if react_result.status == "flood_wait":
+        if react_result.status in _HALT_STATUSES:
             return reads, reactions, react_result, failures
         if react_result.status == "ok":
             reactions = 1
@@ -822,6 +834,7 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
         last_failed_action: str | None = None
         last_failed_channel: str | None = None
         flooded = False
+        peer_flooded = False
 
         for channel in chosen:
             if secret.join_enabled:
@@ -832,7 +845,12 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                     failures += 1
                     last_failed_action = "join"
                     last_failed_channel = channel.channel
-                elif join_result.status == "flood_wait":
+                elif join_result.status == "peer_flood":
+                    peer_flooded = True
+                    last_failed_action = "join"
+                    last_failed_channel = channel.channel
+                    break
+                elif join_result.status in _WAIT_STATUSES:
                     flooded, flood_seconds, flood_until = _classify_flood(join_result)
                     last_failed_action = "join"
                     last_failed_channel = channel.channel
@@ -857,7 +875,10 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                 last_failed_action = "read_or_react"
                 last_failed_channel = channel.channel
             if channel_flood is not None:
-                flooded, flood_seconds, flood_until = _classify_flood(channel_flood)
+                if channel_flood.status == "peer_flood":
+                    peer_flooded = True
+                else:
+                    flooded, flood_seconds, flood_until = _classify_flood(channel_flood)
                 last_failed_action = channel_flood.action_type
                 last_failed_channel = channel.channel
                 break
@@ -866,6 +887,7 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
         messages_sent = 0
         if (
             not flooded
+            and not peer_flooded
             and intensity.dm_allowed
             and secret.inter_account_chat
             and secret.gemini_api_key
@@ -885,7 +907,9 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                     extra={"error_type": type(exc).__name__, "message": str(exc)},
                 )
 
-    if flooded:
+    if peer_flooded:
+        status = "peer_flood"
+    elif flooded:
         status = "flood_wait"
     elif failures and not (joined or reads or reactions):
         # Every action failed → don't lie about success.
@@ -1014,6 +1038,73 @@ async def _maybe_inter_account_chat(  # noqa: PLR0911 - explicit early returns c
 # --------------------------------------------------------------------------- #
 
 
+async def _recover_from_quarantine(
+    account_id: str,
+    record: WarmingStateRecord,
+    now: datetime,
+) -> WarmingCycleResult:
+    """Re-check a quarantined account: resume if cleared, escalate otherwise.
+
+    Called when a quarantine window has elapsed. Re-probes @SpamBot; a cleared
+    account returns to warming, a still-limited one is re-quarantined until the
+    configured repeat cap, after which it is given up on (error + alert).
+    """
+    warm = settings.warming
+    verdict = await refresh_spam_status(account_id, force=True)
+    if verdict.status != "limited":
+        next_run = (now + timedelta(seconds=warm.startup_jitter_max_seconds)).isoformat()
+        await _set_state(
+            account_id,
+            "sleeping",
+            last_event="quarantine_recovered",
+            next_run_at=next_run,
+            heartbeat_at=now.isoformat(),
+            last_error=None,
+            quarantine_count=0,
+        )
+        await log_event("INFO", "warming_quarantine_recovered", account_id=account_id)
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="recovered")
+
+    count = record.quarantine_count + 1
+    if count >= warm.quarantine_max_repeats:
+        await _set_state(
+            account_id,
+            "error",
+            last_event="quarantine_exhausted",
+            last_error=f"peer-flood not lifted after {count} checks",
+            heartbeat_at=now.isoformat(),
+            quarantine_count=count,
+        )
+        await log_event(
+            "ERROR",
+            "warming_quarantine_exhausted",
+            account_id=account_id,
+            extra={"checks": count},
+        )
+        return WarmingCycleResult(
+            account_id=account_id,
+            status="error",
+            detail="quarantine exhausted",
+        )
+
+    next_run = (now + timedelta(hours=warm.quarantine_hours)).isoformat()
+    await _set_state(
+        account_id,
+        "quarantine",
+        last_event="quarantine_extended",
+        next_run_at=next_run,
+        heartbeat_at=now.isoformat(),
+        quarantine_count=count,
+    )
+    await log_event(
+        "WARNING",
+        "warming_quarantine_extended",
+        account_id=account_id,
+        extra={"checks": count},
+    )
+    return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
+
+
 async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     """Run one iteration of the warming loop (cycle + state transitions).
 
@@ -1029,6 +1120,9 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     warm = settings.warming
     controls = await load_warming_settings()
     record = await fetch_warming_state(account_id)
+
+    if record is not None and record.state == "quarantine":
+        return await _recover_from_quarantine(account_id, record, now)
 
     if controls.quiet_hours_enabled and _in_quiet_hours(
         now,
@@ -1075,7 +1169,9 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     )
     new_daily = daily_count + actions_done
 
-    if result.status == "flood_wait" and result.flood_wait_seconds:
+    if result.status == "peer_flood":
+        sleep_seconds = warm.quarantine_hours * _SECONDS_PER_HOUR
+    elif result.status == "flood_wait" and result.flood_wait_seconds:
         sleep_seconds = float(result.flood_wait_seconds)
     else:
         sleep_seconds = _rng.uniform(
@@ -1085,7 +1181,9 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     next_run = (datetime.now(UTC) + timedelta(seconds=sleep_seconds)).isoformat()
 
     next_state: WarmingState
-    if result.status == "flood_wait":
+    if result.status == "peer_flood":
+        next_state = "quarantine"
+    elif result.status == "flood_wait":
         next_state = "flood_wait"
     elif result.status == "failed":
         next_state = "error"

@@ -31,6 +31,7 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.gemini import GeminiResult
 from schemas.proxy import AccountProxyCheckUpdate, AccountProxyUpsert
+from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.warming import (
@@ -66,10 +67,15 @@ class _Recorder:
     def __init__(self) -> None:
         self.actions: list[tuple[str, TelegramAction]] = []
         self.flood_on: set[str] = set()
+        self.peer_flood_on: set[str] = set()
 
     async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
         self.actions.append((account_id, action))
-        status = "flood_wait" if action.action_type in self.flood_on else "ok"
+        status = "ok"
+        if action.action_type in self.flood_on:
+            status = "flood_wait"
+        elif action.action_type in self.peer_flood_on:
+            status = "peer_flood"
         return ActionResult(
             status=status,
             action_type=action.action_type,
@@ -263,6 +269,112 @@ async def test_cycle_skips_dm_for_fresh_account(monkeypatch: pytest.MonkeyPatch)
 
     assert result.messages_sent == 0
     assert "send_dm" not in recorder.types()
+
+
+# --------------------------------------------------------------------------- #
+# PEER_FLOOD quarantine
+# --------------------------------------------------------------------------- #
+
+
+def _verdict(account_id: str, status: SpamStatusKind) -> SpamStatusVerdict:
+    return SpamStatusVerdict(
+        account_id=account_id,
+        status=status,
+        checked_at="2026-06-13T00:00:00+00:00",
+    )
+
+
+@pytest.mark.asyncio
+async def test_cycle_reports_peer_flood(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    recorder.peer_flood_on.add("join_channel")
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "peer_flood"
+    assert "read_channel" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_loop_iteration_quarantines_on_peer_flood(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    recorder.peer_flood_on.add("join_channel")
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.run_loop_iteration("acc-1")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "quarantine"
+
+
+@pytest.mark.asyncio
+async def test_quarantine_recovers_when_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=1),
+    )
+
+    async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        return _verdict(account_id, "clean")
+
+    monkeypatch.setattr(warming, "refresh_spam_status", fake_refresh)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.detail == "recovered"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "sleeping"
+    assert state.quarantine_count == 0
+
+
+@pytest.mark.asyncio
+async def test_quarantine_extends_when_still_limited(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=0),
+    )
+
+    async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        return _verdict(account_id, "limited")
+
+    monkeypatch.setattr(warming, "refresh_spam_status", fake_refresh)
+
+    await warming.run_loop_iteration("acc-1")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "quarantine"
+    assert state.quarantine_count == 1
+
+
+@pytest.mark.asyncio
+async def test_quarantine_exhausts_to_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=2),
+    )
+
+    async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        return _verdict(account_id, "limited")
+
+    monkeypatch.setattr(warming, "refresh_spam_status", fake_refresh)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "error"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "error"
 
 
 # --------------------------------------------------------------------------- #

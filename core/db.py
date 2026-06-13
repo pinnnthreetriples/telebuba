@@ -165,6 +165,7 @@ _warming_account_state = Table(
     Column("proxy_snapshot", String, nullable=True),
     Column("daily_actions", Integer, nullable=True),
     Column("daily_count_date", String, nullable=True),
+    Column("quarantine_count", Integer, nullable=True),
 )
 _account_spam_status = Table(
     "account_spam_status",
@@ -249,6 +250,7 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
             ("proxy_snapshot", "VARCHAR"),
             ("daily_actions", "INTEGER"),
             ("daily_count_date", "VARCHAR"),
+            ("quarantine_count", "INTEGER"),
         )
         for column_name, column_type in _warming_state_new_columns:
             if column_name not in warming_state_columns:
@@ -1052,6 +1054,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         proxy_snapshot=_optional_str(mapping.get("proxy_snapshot")),
         daily_actions=_optional_int(mapping.get("daily_actions")) or 0,
         daily_count_date=_optional_str(mapping.get("daily_count_date")),
+        quarantine_count=_optional_int(mapping.get("quarantine_count")) or 0,
     )
 
 
@@ -1101,6 +1104,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "proxy_snapshot": data.proxy_snapshot,
         "daily_actions": data.daily_actions,
         "daily_count_date": data.daily_count_date,
+        "quarantine_count": data.quarantine_count,
     }
     with _get_engine().begin() as connection:
         exists = connection.execute(

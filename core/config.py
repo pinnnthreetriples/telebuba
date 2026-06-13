@@ -131,6 +131,11 @@ class WarmingSettings(BaseSettings):
     # How long a cached @SpamBot verdict stays fresh before we re-probe. Frequent
     # /start to @SpamBot is itself suspicious, so keep this generous.
     spam_status_ttl_hours: float = Field(default=36.0, ge=0.0)
+    # PEER_FLOOD quarantine: how long an account rests before its status is
+    # re-checked, and how many consecutive still-limited re-checks are tolerated
+    # before it is given up on (marked error + alerted).
+    quarantine_hours: float = Field(default=48.0, gt=0.0)
+    quarantine_max_repeats: int = Field(default=3, ge=1)
 
 
 class GeminiSettings(BaseSettings):
