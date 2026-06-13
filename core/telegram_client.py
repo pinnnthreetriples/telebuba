@@ -47,6 +47,7 @@ if TYPE_CHECKING:
     from telethon.tl.types import TypeInputMedia, TypeInputPrivacyRule
 
     from schemas.telegram_actions import (
+        ActionStatus,
         ReactToPost,
         ReadChannel,
         TelegramAction,
@@ -117,6 +118,7 @@ def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
             connection_retries=settings.telegram.connection_retries,
             retry_delay=settings.telegram.retry_delay_seconds,
             request_retries=settings.telegram.request_retries,
+            flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
             proxy=proxy,
         )
     return TelegramClient(
@@ -133,6 +135,7 @@ def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
         connection_retries=settings.telegram.connection_retries,
         retry_delay=settings.telegram.retry_delay_seconds,
         request_retries=settings.telegram.request_retries,
+        flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
     )
 
 
@@ -292,31 +295,75 @@ def _proxy_config(profile: TelegramClientProfile) -> dict[str, object] | None:
     }
 
 
+async def _flood_action_result(
+    account_id: str,
+    action: TelegramAction,
+    *,
+    status: ActionStatus,
+    seconds: int | None,
+) -> ActionResult:
+    """Log a Telegram rate-limit event and build the matching ``ActionResult``.
+
+    Covers the differentiated flood family — generic flood-wait, per-peer
+    ``PEER_FLOOD`` (no duration), per-chat slow mode, and premium-gated waits —
+    so callers can react per type instead of treating a moderation restriction
+    as an ordinary failure.
+    """
+    await log_event(
+        "WARNING",
+        f"telegram_{action.action_type}_{status}",
+        account_id=account_id,
+        extra={"seconds": seconds},
+    )
+    return ActionResult(
+        status=status,
+        action_type=action.action_type,
+        account_id=account_id,
+        flood_wait_seconds=seconds,
+    )
+
+
 async def execute(account_id: str, action: TelegramAction) -> ActionResult:
     """Dispatch a typed Telegram action against ``account_id``.
 
     The only entry point for Telethon calls from outside ``core/``. Builds the
     account's client (with proxy + device fingerprint), runs the action,
-    catches ``FloodWaitError`` separately, logs every outcome, and returns a
-    typed ``ActionResult`` — never raises Telethon errors upward.
+    classifies the Telegram rate-limit family (flood-wait / slow-mode /
+    premium / peer-flood) separately, logs every outcome, and returns a typed
+    ``ActionResult`` — never raises Telethon errors upward.
     """
     request = TelegramClientRequest(account_id=account_id)
     async with telegram_client(request) as client:
         try:
             await client.connect()
             message_id = await _dispatch_action(client, action)
-        except errors.FloodWaitError as exc:
-            await log_event(
-                "WARNING",
-                f"telegram_{action.action_type}_flood_wait",
-                account_id=account_id,
-                extra={"seconds": exc.seconds},
+        except errors.SlowModeWaitError as exc:
+            return await _flood_action_result(
+                account_id,
+                action,
+                status="slow_mode_wait",
+                seconds=exc.seconds,
             )
-            return ActionResult(
+        except errors.FloodPremiumWaitError as exc:
+            return await _flood_action_result(
+                account_id,
+                action,
+                status="premium_wait",
+                seconds=exc.seconds,
+            )
+        except errors.PeerFloodError:
+            return await _flood_action_result(
+                account_id,
+                action,
+                status="peer_flood",
+                seconds=None,
+            )
+        except errors.FloodWaitError as exc:
+            return await _flood_action_result(
+                account_id,
+                action,
                 status="flood_wait",
-                action_type=action.action_type,
-                account_id=account_id,
-                flood_wait_seconds=exc.seconds,
+                seconds=exc.seconds,
             )
         except Exception as exc:  # noqa: BLE001 — Telethon throws diverse errors; classify and report.
             await log_event(

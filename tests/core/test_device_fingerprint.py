@@ -175,6 +175,7 @@ def test_create_telegram_client_passes_device_profile(monkeypatch) -> None:
             "connection_retries": 3,
             "retry_delay": 2,
             "request_retries": 3,
+            "flood_sleep_threshold": 0,
         },
     }
 

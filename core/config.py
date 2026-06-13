@@ -28,6 +28,11 @@ class TelegramSettings(BaseSettings):
     connection_retries: int = Field(default=3, ge=0)
     retry_delay_seconds: int = Field(default=2, ge=0)
     request_retries: int = Field(default=3, ge=0)
+    # Telethon auto-sleeps and retries on a flood wait whose duration is at or
+    # below this threshold; longer waits raise so we can handle them ourselves.
+    # Default 0 = surface every flood event to our own state machine (no silent
+    # auto-sleep) so flood-type differentiation and quarantine logic always see it.
+    flood_sleep_threshold: int = Field(default=0, ge=0)
 
 
 class UiSettings(BaseSettings):

@@ -21,7 +21,8 @@ from core import telegram_client as telegram_client_module
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
-from core.telegram_client import execute
+from core.telegram_client import create_telegram_client, execute
+from schemas.device_fingerprint import DeviceFingerprint, TelegramClientProfile
 from schemas.telegram_actions import (
     AddProfileMusic,
     JoinChannel,
@@ -285,6 +286,87 @@ async def test_execute_handles_flood_wait(monkeypatch: pytest.MonkeyPatch) -> No
     assert result.status == "flood_wait"
     assert result.flood_wait_seconds == 42
     assert result.error_type is None
+
+
+@pytest.mark.asyncio
+async def test_execute_handles_slow_mode_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.SlowModeWaitError(request=None, capture=30)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-slow", JoinChannel(channel="@hot"))
+
+    assert result.status == "slow_mode_wait"
+    assert result.flood_wait_seconds == 30
+    assert result.error_type is None
+
+
+@pytest.mark.asyncio
+async def test_execute_handles_premium_wait(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.FloodPremiumWaitError(request=None, capture=9)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-prem", JoinChannel(channel="@hot"))
+
+    assert result.status == "premium_wait"
+    assert result.flood_wait_seconds == 9
+    assert result.error_type is None
+
+
+@pytest.mark.asyncio
+async def test_execute_handles_peer_flood(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.PeerFloodError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-peer", JoinChannel(channel="@hot"))
+
+    assert result.status == "peer_flood"
+    assert result.flood_wait_seconds is None
+    assert result.error_type is None
+
+
+def test_create_telegram_client_applies_flood_sleep_threshold(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.telegram, "flood_sleep_threshold", 7)
+    profile = TelegramClientProfile(
+        account_id="acc",
+        session_path=str(tmp_path / "acc"),
+        receive_updates=False,
+        device=DeviceFingerprint(
+            account_id="acc",
+            platform="linux",
+            device_model="PC",
+            system_version="Ubuntu 24.04",
+            app_version="5.0.0 x64",
+            lang_code="en",
+            system_lang_code="en-US",
+        ),
+    )
+    client = create_telegram_client(profile)
+    try:
+        assert client.flood_sleep_threshold == 7
+    finally:
+        if client.session is not None:
+            client.session.close()
 
 
 @pytest.mark.asyncio
