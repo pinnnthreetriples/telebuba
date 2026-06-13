@@ -42,6 +42,7 @@ from schemas.proxy import (
     ProxyStatus,
     ProxyType,
 )
+from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.warming import (
     WarmingChannel,
     WarmingChannelList,
@@ -164,6 +165,14 @@ _warming_account_state = Table(
     Column("proxy_snapshot", String, nullable=True),
     Column("daily_actions", Integer, nullable=True),
     Column("daily_count_date", String, nullable=True),
+)
+_account_spam_status = Table(
+    "account_spam_status",
+    _metadata,
+    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
+    Column("status", String, nullable=False),
+    Column("detail", String, nullable=True),
+    Column("checked_at", String, nullable=False),
 )
 
 _WARMING_SETTINGS_ID = 1
@@ -840,6 +849,55 @@ def _remove_warming_channel(channel: str) -> WarmingChannelList:
 
 async def remove_warming_channel(channel: str) -> WarmingChannelList:
     return await asyncio.to_thread(_remove_warming_channel, channel)
+
+
+def _row_to_spam_status(mapping: Mapping[str, object]) -> SpamStatusVerdict:
+    return SpamStatusVerdict(
+        account_id=str(mapping["account_id"]),
+        status=cast("SpamStatusKind", str(mapping["status"])),
+        detail=_optional_str(mapping.get("detail")),
+        checked_at=str(mapping["checked_at"]),
+    )
+
+
+def _get_spam_status(account_id: str) -> SpamStatusVerdict | None:
+    statement = select(_account_spam_status).where(
+        _account_spam_status.c.account_id == account_id,
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).mappings().first()
+    if row is None:
+        return None
+    return _row_to_spam_status(cast("Mapping[str, object]", row))
+
+
+async def get_spam_status(account_id: str) -> SpamStatusVerdict | None:
+    """Return the cached spam-status verdict for an account, or ``None``."""
+    return await asyncio.to_thread(_get_spam_status, account_id)
+
+
+def _upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
+    values = {
+        "status": verdict.status,
+        "detail": verdict.detail,
+        "checked_at": verdict.checked_at,
+    }
+    with _get_engine().begin() as connection:
+        updated = connection.execute(
+            update(_account_spam_status)
+            .where(_account_spam_status.c.account_id == verdict.account_id)
+            .values(**values),
+        )
+        if updated.rowcount == 0:
+            connection.execute(
+                insert(_account_spam_status).values(account_id=verdict.account_id, **values),
+            )
+    return verdict
+
+
+async def upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
+    """Insert or update one account's cached spam-status verdict."""
+    return await asyncio.to_thread(_upsert_spam_status, verdict)
 
 
 def _bool_or(value: object, default: bool) -> bool:  # noqa: FBT001

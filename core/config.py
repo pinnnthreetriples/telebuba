@@ -128,6 +128,9 @@ class WarmingSettings(BaseSettings):
     ramp_initial_reaction_probability: float = Field(default=0.1, ge=0.0, le=1.0)
     # Cold-start guard: no outbound DM until the account is at least this old.
     dm_min_age_hours: float = Field(default=36.0, ge=0.0)
+    # How long a cached @SpamBot verdict stays fresh before we re-probe. Frequent
+    # /start to @SpamBot is itself suspicious, so keep this generous.
+    spam_status_ttl_hours: float = Field(default=36.0, ge=0.0)
 
 
 class GeminiSettings(BaseSettings):
