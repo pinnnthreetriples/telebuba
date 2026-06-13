@@ -1059,6 +1059,10 @@ async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
 # imports live at the bottom because the repositories import shared table
 # objects and helpers defined above.
 # --------------------------------------------------------------------------- #
+from core.repositories.content import (  # noqa: E402, F401
+    record_sent_hash,
+    was_hash_sent_since,
+)
 from core.repositories.device_fingerprint import (  # noqa: E402, F401
     fetch_device_fingerprint,
     insert_device_fingerprint,

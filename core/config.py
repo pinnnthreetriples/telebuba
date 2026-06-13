@@ -136,6 +136,15 @@ class WarmingSettings(BaseSettings):
     # before it is given up on (marked error + alerted).
     quarantine_hours: float = Field(default=48.0, gt=0.0)
     quarantine_max_repeats: int = Field(default=3, ge=1)
+    # Content anti-repeat: refuse to send the same normalised text twice within
+    # this window (identical content across accounts is a strong spam signal),
+    # how many times to regenerate before giving up, plus an outbound filter.
+    content_dedup_window_days: float = Field(default=7.0, ge=0.0)
+    content_max_attempts: int = Field(default=3, ge=1)
+    content_block_links: bool = True
+    content_forbidden_words: list[str] = Field(
+        default_factory=lambda: ["реклама", "купить", "продам", "продаю", "скидк", "промокод"],
+    )
 
 
 class GeminiSettings(BaseSettings):

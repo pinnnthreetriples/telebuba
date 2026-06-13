@@ -564,6 +564,48 @@ async def test_cycle_skips_dm_when_peer_has_no_user_id(monkeypatch: pytest.Monke
     assert "send_dm" not in recorder.types()
 
 
+@pytest.mark.asyncio
+async def test_cycle_skips_dm_on_duplicate_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="hi there")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    await warming.register_sent("hi there")  # already sent → every attempt is a duplicate
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_dm_on_forbidden_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    monkeypatch.setattr(settings.warming, "content_forbidden_words", ["купить"])
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="купить дёшево прямо сейчас")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+
+
 # --------------------------------------------------------------------------- #
 # Lifecycle, failed handling, sanitization, runtime reconcile
 # --------------------------------------------------------------------------- #

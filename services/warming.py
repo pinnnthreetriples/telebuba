@@ -71,6 +71,7 @@ from schemas.warming import (
     is_warming,
     warming_health,
 )
+from services.content import is_acceptable, is_duplicate, register_sent
 from services.spam_status import refresh_spam_status
 
 if TYPE_CHECKING:
@@ -967,7 +968,44 @@ def _sanitize_chat_text(raw: str) -> str | None:
     return cleaned or None
 
 
-async def _maybe_inter_account_chat(  # noqa: PLR0911 - explicit early returns clearer than nesting.
+async def _generate_chat_text(sender_id: str, secret: WarmingSettingsSecret) -> str | None:
+    """Generate a chat line, retrying until it passes the filter and dedup.
+
+    Returns ``None`` if generation fails outright or no acceptable, non-duplicate
+    text is produced within ``content_max_attempts`` tries.
+    """
+    for _ in range(settings.warming.content_max_attempts):
+        generated = await generate_text(
+            GeminiRequest(
+                api_key=secret.gemini_api_key,
+                prompt=_rng.choice(_CHAT_PROMPTS),
+                model=secret.gemini_model,
+                temperature=settings.gemini.temperature,
+                max_output_tokens=settings.gemini.max_output_tokens,
+            ),
+        )
+        if generated.status != "ok" or not generated.text:
+            await log_event(
+                "WARNING",
+                "warming_chat_generation_failed",
+                account_id=sender_id,
+                extra={"error": generated.error},
+            )
+            return None
+        candidate = _sanitize_chat_text(generated.text)
+        if candidate is None:
+            continue
+        if not is_acceptable(candidate):
+            await log_event("INFO", "warming_chat_filtered", account_id=sender_id)
+            continue
+        if await is_duplicate(candidate):
+            await log_event("INFO", "warming_chat_duplicate", account_id=sender_id)
+            continue
+        return candidate
+    return None
+
+
+async def _maybe_inter_account_chat(
     sender_id: str,
     secret: WarmingSettingsSecret,
 ) -> int:
@@ -993,31 +1031,8 @@ async def _maybe_inter_account_chat(  # noqa: PLR0911 - explicit early returns c
     if receiver_user_id is None:
         return 0
 
-    generated = await generate_text(
-        GeminiRequest(
-            api_key=secret.gemini_api_key,
-            prompt=_rng.choice(_CHAT_PROMPTS),
-            model=secret.gemini_model,
-            temperature=settings.gemini.temperature,
-            max_output_tokens=settings.gemini.max_output_tokens,
-        ),
-    )
-    if generated.status != "ok" or not generated.text:
-        await log_event(
-            "WARNING",
-            "warming_chat_generation_failed",
-            account_id=sender_id,
-            extra={"error": generated.error},
-        )
-        return 0
-
-    sanitized = _sanitize_chat_text(generated.text)
+    sanitized = await _generate_chat_text(sender_id, secret)
     if sanitized is None:
-        await log_event(
-            "WARNING",
-            "warming_chat_text_empty_after_sanitize",
-            account_id=sender_id,
-        )
         return 0
 
     result = await execute(
@@ -1026,6 +1041,7 @@ async def _maybe_inter_account_chat(  # noqa: PLR0911 - explicit early returns c
     )
     if result.status != "ok":
         return 0
+    await register_sent(sanitized)
     await log_event(
         "INFO",
         "warming_chat_sent",
