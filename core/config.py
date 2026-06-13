@@ -173,6 +173,10 @@ class WarmingSettings(BaseSettings):
     dialogue_partners_min: int = Field(default=2, ge=1)
     dialogue_partners_max: int = Field(default=4, ge=1)
     dialogue_reshuffle_days: float = Field(default=10.0, gt=0.0)
+    # A conversation fades after this many messages within the rolling window;
+    # once the window passes the pair may start talking again (resumption).
+    dialogue_max_turns: int = Field(default=12, ge=1)
+    dialogue_conversation_window_hours: float = Field(default=48.0, gt=0.0)
 
 
 class GeminiSettings(BaseSettings):

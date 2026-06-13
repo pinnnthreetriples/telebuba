@@ -1094,7 +1094,12 @@ from core.repositories.device_fingerprint import (  # noqa: E402, F401
     insert_device_fingerprint,
 )
 from core.repositories.dialogues import (  # noqa: E402, F401
+    count_pair_messages_since,
+    latest_unreplied_for,
     list_dialogue_pairs,
+    mark_message_replied,
+    pair_key,
+    record_dialogue_message,
     replace_dialogue_pairs,
 )
 from core.repositories.spam_status import (  # noqa: E402, F401

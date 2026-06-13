@@ -45,6 +45,7 @@ from schemas.warming import (
     WarmingStateWrite,
 )
 from services import warming
+from services.dialogues import assign_pairs
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -396,6 +397,7 @@ async def _seed_two_warming_accounts() -> None:
     )
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-2", state="active"))
+    await assign_pairs()
 
 
 @pytest.mark.asyncio
@@ -557,6 +559,7 @@ async def test_cycle_skips_dm_when_peer_has_no_user_id(monkeypatch: pytest.Monke
     await create_account(AccountCreate(account_id="acc-2"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-2", state="active"))
+    await assign_pairs()
 
     result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
 
@@ -604,6 +607,32 @@ async def test_cycle_skips_dm_on_forbidden_content(monkeypatch: pytest.MonkeyPat
 
     assert result.messages_sent == 0
     assert "send_dm" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_replies_to_pending_partner_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="о, привет, как сам?")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()  # acc-1 ↔ acc-2 paired; acc-2 has user_id 999
+    # acc-2 has sent acc-1 a message that is awaiting a reply.
+    await warming.record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 1
+    dms = [action for _id, action in recorder.actions if action.action_type == "send_dm"]
+    assert dms
+    assert dms[0].user_id == 999
+    # the incoming message is now answered → not replied again
+    assert await warming.latest_unreplied_for("acc-1") is None
 
 
 # --------------------------------------------------------------------------- #

@@ -14,3 +14,15 @@ class DialoguePair(BaseModel):
     account_a: str = Field(min_length=1)
     account_b: str = Field(min_length=1)
     assigned_at: str = Field(min_length=1)
+
+
+class DialogueMessage(BaseModel):
+    """One message exchanged between two paired accounts."""
+
+    id: int
+    pair_key: str = Field(min_length=1)
+    from_account: str = Field(min_length=1)
+    to_account: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    created_at: str = Field(min_length=1)
+    replied: bool = False

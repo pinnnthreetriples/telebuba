@@ -29,10 +29,13 @@ from core.db import (
     add_warming_channel,
     fetch_account,
     fetch_warming_state,
+    latest_unreplied_for,
     list_accounts,
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
+    mark_message_replied,
+    record_dialogue_message,
     remove_warming_channel,
     save_warming_settings,
     upsert_warming_state,
@@ -72,11 +75,13 @@ from schemas.warming import (
     warming_health,
 )
 from services.content import is_acceptable, is_duplicate, register_sent
+from services.dialogues import get_partners
 from services.spam_status import refresh_spam_status
 from services.trust import account_trust_score
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.dialogues import DialogueMessage
 
 # SystemRandom: non-cryptographic jitter/selection; avoids ruff S311 on the
 # module-level ``random.*`` helpers. Behaviour is identical for our needs.
@@ -972,9 +977,15 @@ def _sanitize_chat_text(raw: str) -> str | None:
     return cleaned or None
 
 
-async def _generate_chat_text(sender_id: str, secret: WarmingSettingsSecret) -> str | None:
+async def _generate_chat_text(
+    sender_id: str,
+    secret: WarmingSettingsSecret,
+    *,
+    prompt: str | None = None,
+) -> str | None:
     """Generate a chat line, retrying until it passes the filter and dedup.
 
+    ``prompt`` overrides the random opener (used for context-aware replies).
     Returns ``None`` if generation fails outright or no acceptable, non-duplicate
     text is produced within ``content_max_attempts`` tries.
     """
@@ -982,7 +993,7 @@ async def _generate_chat_text(sender_id: str, secret: WarmingSettingsSecret) -> 
         generated = await generate_text(
             GeminiRequest(
                 api_key=secret.gemini_api_key,
-                prompt=_rng.choice(_CHAT_PROMPTS),
+                prompt=prompt or _rng.choice(_CHAT_PROMPTS),
                 model=secret.gemini_model,
                 temperature=settings.gemini.temperature,
                 max_output_tokens=settings.gemini.max_output_tokens,
@@ -1009,48 +1020,92 @@ async def _generate_chat_text(sender_id: str, secret: WarmingSettingsSecret) -> 
     return None
 
 
+_REPLY_PROMPT = (
+    "Ответь коротко и по-дружески, как другу в Telegram, на это сообщение: "
+    "«{incoming}». Только текст ответа, без кавычек."
+)
+
+
 async def _maybe_inter_account_chat(
     sender_id: str,
     secret: WarmingSettingsSecret,
 ) -> int:
-    """If two+ accounts are warming, send one Gemini-written DM to a peer."""
-    records = await list_warming_states()
-    peer_ids = {
-        record.account_id
-        for record in records
-        if is_warming(record.state) and record.account_id != sender_id
-    }
-    if not peer_ids:
+    """Advance one dialogue turn for ``sender_id`` with one of its partners.
+
+    Replies to the most recent unanswered message from a partner; otherwise
+    opens a new conversation with an eligible partner. Returns messages sent.
+    """
+    partners = await get_partners(sender_id)
+    if not partners:
         return 0
     accounts = {account.account_id: account for account in (await list_accounts()).accounts}
-    eligible = [
-        account_id
-        for account_id in peer_ids
-        if accounts.get(account_id) is not None and accounts[account_id].user_id is not None
-    ]
-    if not eligible:
-        return 0
-    receiver_id = _rng.choice(eligible)
-    receiver_user_id = accounts[receiver_id].user_id
-    if receiver_user_id is None:
-        return 0
 
-    sanitized = await _generate_chat_text(sender_id, secret)
-    if sanitized is None:
-        return 0
+    incoming = await latest_unreplied_for(sender_id)
+    if incoming is not None and incoming.from_account in partners:
+        return await _reply_to_partner(sender_id, incoming, secret, accounts)
+    return await _open_with_partner(sender_id, partners, secret, accounts)
 
-    result = await execute(
+
+async def _reply_to_partner(
+    sender_id: str,
+    incoming: DialogueMessage,
+    secret: WarmingSettingsSecret,
+    accounts: dict[str, AccountRead],
+) -> int:
+    target = accounts.get(incoming.from_account)
+    if target is None or target.user_id is None:
+        await mark_message_replied(incoming.id)
+        return 0
+    text = await _generate_chat_text(
         sender_id,
-        SendDirectMessage(user_id=receiver_user_id, text=sanitized),
+        secret,
+        prompt=_REPLY_PROMPT.format(incoming=incoming.text),
     )
+    if text is None:
+        return 0
+    result = await execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
     if result.status != "ok":
         return 0
-    await register_sent(sanitized)
+    await mark_message_replied(incoming.id)
+    await register_sent(text)
     await log_event(
         "INFO",
-        "warming_chat_sent",
+        "warming_dialogue_reply",
         account_id=sender_id,
-        extra={"to": receiver_id, "length": len(sanitized)},
+        extra={"to": incoming.from_account},
+    )
+    return 1
+
+
+async def _open_with_partner(
+    sender_id: str,
+    partners: list[str],
+    secret: WarmingSettingsSecret,
+    accounts: dict[str, AccountRead],
+) -> int:
+    candidates = [
+        accounts[partner]
+        for partner in partners
+        if accounts.get(partner) is not None and accounts[partner].user_id is not None
+    ]
+    if not candidates:
+        return 0
+    target = _rng.choice(candidates)
+    if target.user_id is None:
+        return 0
+    text = await _generate_chat_text(sender_id, secret)
+    if text is None:
+        return 0
+    result = await execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
+    if result.status != "ok":
+        return 0
+    await register_sent(text)
+    await record_dialogue_message(sender_id, target.account_id, text)
+    await log_event(
+        "INFO",
+        "warming_dialogue_opened",
+        account_id=sender_id,
+        extra={"to": target.account_id},
     )
     return 1
 
