@@ -51,9 +51,32 @@ class ProxySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PROXY__", extra="ignore")
 
     check_host: str = Field(default="ip-api.com", min_length=1)
-    check_path: str = Field(default="/json?fields=status,message,query,country,countryCode")
+    check_path: str = Field(default="/json?fields=status,message,query,country,countryCode,as")
     check_port: int = Field(default=80, ge=1, le=65535)
     check_timeout_seconds: float = Field(default=8.0, gt=0)
+    # Substrings (case-insensitive) in the ASN string that mark a hosting /
+    # datacenter network — lower trust than residential/mobile. ip-api's free
+    # endpoint only exposes the ``as`` string, so we classify by known names.
+    datacenter_asn_keywords: list[str] = Field(
+        default_factory=lambda: [
+            "amazon",
+            "aws",
+            "google",
+            "microsoft",
+            "azure",
+            "digitalocean",
+            "hetzner",
+            "ovh",
+            "linode",
+            "vultr",
+            "contabo",
+            "leaseweb",
+            "m247",
+            "choopa",
+            "oracle",
+            "scaleway",
+        ],
+    )
 
 
 class ProfileMediaSettings(BaseSettings):

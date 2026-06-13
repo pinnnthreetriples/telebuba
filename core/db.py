@@ -105,6 +105,8 @@ _account_proxies = Table(
     Column("exit_ip", String, nullable=True),
     Column("country_code", String, nullable=True),
     Column("country_name", String, nullable=True),
+    Column("asn", String, nullable=True),
+    Column("is_datacenter", Integer, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
 )
@@ -225,16 +227,18 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
         if "bio" not in account_columns:
             connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN bio VARCHAR")
         proxy_columns = _sqlite_columns(connection, "account_proxies")
-        if "exit_ip" not in proxy_columns:
-            connection.exec_driver_sql("ALTER TABLE account_proxies ADD COLUMN exit_ip VARCHAR")
-        if "country_code" not in proxy_columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE account_proxies ADD COLUMN country_code VARCHAR",
-            )
-        if "country_name" not in proxy_columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE account_proxies ADD COLUMN country_name VARCHAR",
-            )
+        _proxy_new_columns: tuple[tuple[str, str], ...] = (
+            ("exit_ip", "VARCHAR"),
+            ("country_code", "VARCHAR"),
+            ("country_name", "VARCHAR"),
+            ("asn", "VARCHAR"),
+            ("is_datacenter", "INTEGER"),
+        )
+        for column_name, column_type in _proxy_new_columns:
+            if column_name not in proxy_columns:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE account_proxies ADD COLUMN {column_name} {column_type}",
+                )
         warming_state_columns = _sqlite_columns(connection, "warming_account_state")
         # Each entry is (column_name, sql_type) — additive only, never destructive.
         _warming_state_new_columns: tuple[tuple[str, str], ...] = (
@@ -359,6 +363,8 @@ def _row_to_account_proxy(mapping: Mapping[str, object]) -> AccountProxyRead:
         exit_ip=_optional_str(mapping.get("exit_ip")),
         country_code=_optional_str(mapping.get("country_code")),
         country_name=_optional_str(mapping.get("country_name")),
+        asn=_optional_str(mapping.get("asn")),
+        is_datacenter=bool(mapping.get("is_datacenter")),
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -547,6 +553,24 @@ async def delete_account_proxy(data: AccountProxyDelete) -> None:
     await asyncio.to_thread(_delete_account_proxy, data)
 
 
+def _exit_ip_collisions() -> dict[str, list[str]]:
+    statement = select(
+        _account_proxies.c.account_id,
+        _account_proxies.c.exit_ip,
+    ).where(_account_proxies.c.exit_ip.is_not(None))
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).all()
+    grouped: dict[str, list[str]] = {}
+    for account_id, exit_ip in rows:
+        grouped.setdefault(str(exit_ip), []).append(str(account_id))
+    return {ip: ids for ip, ids in grouped.items() if len(ids) > 1}
+
+
+async def exit_ip_collisions() -> dict[str, list[str]]:
+    """Map each shared exit IP to the accounts using it (only IPs used by 2+)."""
+    return await asyncio.to_thread(_exit_ip_collisions)
+
+
 def _update_account_proxy_check(data: AccountProxyCheckUpdate) -> AccountProxyRead:
     now = _now_iso()
     values: dict[str, object | None] = {
@@ -556,6 +580,8 @@ def _update_account_proxy_check(data: AccountProxyCheckUpdate) -> AccountProxyRe
         "exit_ip": data.exit_ip,
         "country_code": data.country_code,
         "country_name": data.country_name,
+        "asn": data.asn,
+        "is_datacenter": int(data.is_datacenter),
         "updated_at": now,
     }
     with _get_engine().begin() as connection:

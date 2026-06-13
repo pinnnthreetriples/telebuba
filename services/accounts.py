@@ -226,6 +226,8 @@ async def check_account_proxy(data: AccountProxyCheckRequest) -> AccountProxyRea
             exit_ip=result.exit_ip,
             country_code=result.country_code,
             country_name=result.country_name,
+            asn=result.asn,
+            is_datacenter=result.is_datacenter,
         ),
     )
     await log_event(

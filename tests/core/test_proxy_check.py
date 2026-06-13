@@ -84,6 +84,34 @@ def test_payload_to_result_maps_geo_failure() -> None:
     assert result.last_error == "reserved range"
 
 
+def test_payload_to_result_flags_datacenter_asn() -> None:
+    result = _payload_to_result(
+        {
+            "status": "success",
+            "query": "1.2.3.4",
+            "countryCode": "DE",
+            "as": "AS24940 Hetzner Online GmbH",
+        },
+    )
+
+    assert result.asn == "AS24940 Hetzner Online GmbH"
+    assert result.is_datacenter is True
+
+
+def test_payload_to_result_residential_asn_is_not_datacenter() -> None:
+    result = _payload_to_result(
+        {
+            "status": "success",
+            "query": "1.2.3.4",
+            "countryCode": "KZ",
+            "as": "AS9198 JSC Kazakhtelecom",
+        },
+    )
+
+    assert result.asn == "AS9198 JSC Kazakhtelecom"
+    assert result.is_datacenter is False
+
+
 @pytest.mark.asyncio
 async def test_check_proxy_connectivity_maps_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_fetch(_proxy: AccountProxySettings) -> dict[str, object]:
