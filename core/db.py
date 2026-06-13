@@ -42,7 +42,6 @@ from schemas.proxy import (
     ProxyStatus,
     ProxyType,
 )
-from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.warming import (
     WarmingChannel,
     WarmingChannelList,
@@ -373,36 +372,6 @@ def _row_to_account_proxy_settings(mapping: Mapping[str, object]) -> AccountProx
         username=_optional_str(mapping.get("username")),
         password=_optional_str(mapping.get("password")),
     )
-
-
-def _fetch_device_fingerprint(account_id: str) -> DeviceFingerprint | None:
-    statement = select(_device_fingerprints).where(_device_fingerprints.c.account_id == account_id)
-    with _get_engine().connect() as connection:
-        row = connection.execute(statement).mappings().first()
-    if row is None:
-        return None
-    return _row_to_device_fingerprint(cast("Mapping[str, object]", row))
-
-
-async def fetch_device_fingerprint(account_id: str) -> DeviceFingerprint | None:
-    return await asyncio.to_thread(_fetch_device_fingerprint, account_id)
-
-
-def _insert_device_fingerprint(profile: DeviceFingerprint) -> DeviceFingerprint:
-    statement = insert(_device_fingerprints).values(**profile.model_dump())
-    with _get_engine().begin() as connection:
-        connection.execute(statement)
-    return profile
-
-
-async def insert_device_fingerprint(profile: DeviceFingerprint) -> DeviceFingerprint:
-    try:
-        return await asyncio.to_thread(_insert_device_fingerprint, profile)
-    except IntegrityError:
-        existing = await fetch_device_fingerprint(profile.account_id)
-        if existing is None:
-            raise
-        return existing
 
 
 def _account_select_statement() -> Select[tuple[Any, ...]]:
@@ -853,55 +822,6 @@ async def remove_warming_channel(channel: str) -> WarmingChannelList:
     return await asyncio.to_thread(_remove_warming_channel, channel)
 
 
-def _row_to_spam_status(mapping: Mapping[str, object]) -> SpamStatusVerdict:
-    return SpamStatusVerdict(
-        account_id=str(mapping["account_id"]),
-        status=cast("SpamStatusKind", str(mapping["status"])),
-        detail=_optional_str(mapping.get("detail")),
-        checked_at=str(mapping["checked_at"]),
-    )
-
-
-def _get_spam_status(account_id: str) -> SpamStatusVerdict | None:
-    statement = select(_account_spam_status).where(
-        _account_spam_status.c.account_id == account_id,
-    )
-    with _get_engine().connect() as connection:
-        row = connection.execute(statement).mappings().first()
-    if row is None:
-        return None
-    return _row_to_spam_status(cast("Mapping[str, object]", row))
-
-
-async def get_spam_status(account_id: str) -> SpamStatusVerdict | None:
-    """Return the cached spam-status verdict for an account, or ``None``."""
-    return await asyncio.to_thread(_get_spam_status, account_id)
-
-
-def _upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
-    values = {
-        "status": verdict.status,
-        "detail": verdict.detail,
-        "checked_at": verdict.checked_at,
-    }
-    with _get_engine().begin() as connection:
-        updated = connection.execute(
-            update(_account_spam_status)
-            .where(_account_spam_status.c.account_id == verdict.account_id)
-            .values(**values),
-        )
-        if updated.rowcount == 0:
-            connection.execute(
-                insert(_account_spam_status).values(account_id=verdict.account_id, **values),
-            )
-    return verdict
-
-
-async def upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
-    """Insert or update one account's cached spam-status verdict."""
-    return await asyncio.to_thread(_upsert_spam_status, verdict)
-
-
 def _bool_or(value: object, default: bool) -> bool:  # noqa: FBT001
     return default if value is None else bool(value)
 
@@ -1131,3 +1051,19 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
 
 async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
     return await asyncio.to_thread(_upsert_warming_state, data)
+
+
+# --------------------------------------------------------------------------- #
+# Domain repositories (#38) — split out of this module and re-exported so that
+# existing ``from core.db import ...`` call sites keep working unchanged. These
+# imports live at the bottom because the repositories import shared table
+# objects and helpers defined above.
+# --------------------------------------------------------------------------- #
+from core.repositories.device_fingerprint import (  # noqa: E402, F401
+    fetch_device_fingerprint,
+    insert_device_fingerprint,
+)
+from core.repositories.spam_status import (  # noqa: E402, F401
+    get_spam_status,
+    upsert_spam_status,
+)
