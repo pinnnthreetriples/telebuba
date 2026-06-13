@@ -204,6 +204,68 @@ async def test_cycle_stops_on_flood_wait(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 # --------------------------------------------------------------------------- #
+# Age-based ramp
+# --------------------------------------------------------------------------- #
+
+
+def _configure_ramp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "ramp_enabled", True)
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_max", 3)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 0.6)
+    monkeypatch.setattr(settings.warming, "ramp_initial_channels_max", 1)
+    monkeypatch.setattr(settings.warming, "ramp_initial_reaction_probability", 0.1)
+    monkeypatch.setattr(settings.warming, "ramp_full_age_hours", 192.0)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 36.0)
+
+
+def test_compute_intensity_is_quiet_for_a_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_ramp(monkeypatch)
+    fresh = warming.compute_intensity(0.0)
+    assert fresh.channels_max == 1
+    assert fresh.reaction_probability == pytest.approx(0.1)
+    assert fresh.dm_allowed is False
+
+
+def test_compute_intensity_reaches_full_intensity_when_aged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_ramp(monkeypatch)
+    aged = warming.compute_intensity(500.0)
+    assert aged.channels_max == 3
+    assert aged.reaction_probability == pytest.approx(0.6)
+    assert aged.dm_allowed is True
+    # DM unlocks exactly at the cold-start threshold.
+    assert warming.compute_intensity(36.0).dm_allowed is True
+    assert warming.compute_intensity(35.0).dm_allowed is False
+
+
+def test_compute_intensity_full_when_ramp_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_ramp(monkeypatch)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    full = warming.compute_intensity(0.0)
+    assert full.channels_max == 3
+    assert full.reaction_probability == pytest.approx(0.6)
+    assert full.dm_allowed is True
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_dm_for_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A freshly created account (age ~0) must not send DMs under the cold-start
+    # guard, even with chat enabled and an eligible peer present.
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+
+
+# --------------------------------------------------------------------------- #
 # Inter-account chat
 # --------------------------------------------------------------------------- #
 
@@ -228,6 +290,7 @@ async def _seed_two_warming_accounts() -> None:
 async def test_cycle_sends_inter_account_dm(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
 
     async def fake_generate(_request: object) -> GeminiResult:
         return GeminiResult(status="ok", text="hi there")
@@ -249,6 +312,7 @@ async def test_cycle_sends_inter_account_dm(monkeypatch: pytest.MonkeyPatch) -> 
 async def test_cycle_skips_dm_when_generation_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
 
     async def fake_generate(_request: object) -> GeminiResult:
         return GeminiResult(status="error", error="quota")
@@ -268,6 +332,7 @@ async def test_cycle_skips_dm_when_generation_fails(monkeypatch: pytest.MonkeyPa
 async def test_cycle_skips_dm_without_peers(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
     await _seed_channel()
     await _set_settings(chat=True, reactions=False, key="gemini-key")
     await create_account(AccountCreate(account_id="acc-1"))
@@ -372,6 +437,7 @@ async def test_load_settings_masks_key() -> None:
 async def test_cycle_skips_dm_when_peer_has_no_user_id(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
     await _seed_channel()
     await _set_settings(chat=True, reactions=False, key="gemini-key")
     # Two warming accounts but the peer was never session-checked → user_id is None.

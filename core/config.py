@@ -119,6 +119,15 @@ class WarmingSettings(BaseSettings):
     # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
     # When the day's count reaches the cap the account parks until UTC midnight.
     max_daily_actions: int = Field(default=0, ge=0)
+    # Age-based ramp ("balanced" profile): a fresh account behaves quietly and
+    # grows to full intensity over ``ramp_full_age_hours``. Disable to make every
+    # account run at full intensity from day one.
+    ramp_enabled: bool = True
+    ramp_full_age_hours: float = Field(default=192.0, ge=0.0)
+    ramp_initial_channels_max: int = Field(default=1, ge=1)
+    ramp_initial_reaction_probability: float = Field(default=0.1, ge=0.0, le=1.0)
+    # Cold-start guard: no outbound DM until the account is at least this old.
+    dm_min_age_hours: float = Field(default=36.0, ge=0.0)
 
 
 class GeminiSettings(BaseSettings):

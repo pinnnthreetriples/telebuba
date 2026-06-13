@@ -58,6 +58,7 @@ from schemas.warming import (
     WarmingChannelList,
     WarmingCycleRequest,
     WarmingCycleResult,
+    WarmingIntensity,
     WarmingReadiness,
     WarmingSettings,
     WarmingSettingsSecret,
@@ -701,6 +702,7 @@ async def _read_and_react(
     channel: str,
     *,
     reactions_enabled: bool,
+    reaction_probability: float,
 ) -> tuple[int, int, ActionResult | None, int]:
     """Read a channel and maybe react. Returns (reads, reactions, flood_result, failures)."""
     warm = settings.warming
@@ -716,7 +718,7 @@ async def _read_and_react(
     elif read_result.status == "flood_wait":
         return reads, reactions, read_result, failures
     await _human_pause(warm.reading_min_seconds, warm.reading_max_seconds)
-    if reactions_enabled and _rng.random() < warm.reaction_probability:
+    if reactions_enabled and _rng.random() < reaction_probability:
         react_result = await execute(
             account_id,
             ReactToPost(
@@ -732,6 +734,58 @@ async def _read_and_react(
         elif react_result.status == "failed":
             failures += 1
     return reads, reactions, None, failures
+
+
+def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
+    """Hours since the account was created; full-ramp age when unknown.
+
+    A missing/unparseable ``created_at`` degrades to full intensity so an
+    anomalous record never silently freezes an account at day-one behaviour.
+    """
+    if account is None:
+        return settings.warming.ramp_full_age_hours
+    try:
+        created = datetime.fromisoformat(account.created_at)
+    except ValueError:
+        return settings.warming.ramp_full_age_hours
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
+
+
+def compute_intensity(age_hours: float) -> WarmingIntensity:
+    """Map an account's age to its per-cycle intensity via the configured ramp.
+
+    Channels-per-cycle and reaction rate grow linearly from a quiet initial
+    floor to the configured full values over ``ramp_full_age_hours``; DM is
+    gated until ``dm_min_age_hours``. With the ramp disabled, every account runs
+    at full intensity with DM allowed.
+    """
+    warm = settings.warming
+    if not warm.ramp_enabled:
+        return WarmingIntensity(
+            channels_min=warm.channels_per_cycle_min,
+            channels_max=warm.channels_per_cycle_max,
+            reaction_probability=warm.reaction_probability,
+            dm_allowed=True,
+        )
+    if warm.ramp_full_age_hours <= 0:
+        frac = 1.0
+    else:
+        frac = min(1.0, max(0.0, age_hours / warm.ramp_full_age_hours))
+    initial_channels = min(warm.ramp_initial_channels_max, warm.channels_per_cycle_max)
+    grown = round(frac * (warm.channels_per_cycle_max - initial_channels))
+    channels_max = max(1, initial_channels + grown)
+    channels_min = min(warm.channels_per_cycle_min, channels_max)
+    reaction_probability = warm.ramp_initial_reaction_probability + frac * (
+        warm.reaction_probability - warm.ramp_initial_reaction_probability
+    )
+    return WarmingIntensity(
+        channels_min=channels_min,
+        channels_max=channels_max,
+        reaction_probability=min(1.0, max(0.0, reaction_probability)),
+        dm_allowed=age_hours >= warm.dm_min_age_hours,
+    )
 
 
 async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitting hides flow.
@@ -750,14 +804,16 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
         )
 
     warm = settings.warming
+    account = await fetch_account(account_id)
+    intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
     online_set = False
     try:
         await execute(account_id, SetOnline(online=True))
         online_set = True
         await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
 
-        upper = min(warm.channels_per_cycle_max, len(channels))
-        lower = min(warm.channels_per_cycle_min, upper)
+        upper = min(intensity.channels_max, len(channels))
+        lower = min(intensity.channels_min, upper)
         chosen = _rng.sample(channels, _rng.randint(lower, upper))
 
         joined = reads = reactions = failures = 0
@@ -792,6 +848,7 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                 account_id,
                 channel.channel,
                 reactions_enabled=secret.reactions_enabled,
+                reaction_probability=intensity.reaction_probability,
             )
             reads += channel_reads
             reactions += channel_reactions
@@ -807,7 +864,12 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
             await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
 
         messages_sent = 0
-        if not flooded and secret.inter_account_chat and secret.gemini_api_key:
+        if (
+            not flooded
+            and intensity.dm_allowed
+            and secret.inter_account_chat
+            and secret.gemini_api_key
+        ):
             messages_sent = await _maybe_inter_account_chat(account_id, secret)
     finally:
         # SetOnline(False) must run even if any of the inner steps raises so the

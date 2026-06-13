@@ -128,6 +128,19 @@ class WarmingSettingsUpdate(BaseModel):
     clear_gemini_key: bool = False
 
 
+class WarmingIntensity(BaseModel):
+    """Effective per-cycle intensity for an account, derived from its age.
+
+    Produced by the age-based ramp: a fresh account warms quietly (few channels,
+    low reaction rate, no DM) and grows to the configured full intensity.
+    """
+
+    channels_min: int = Field(ge=1)
+    channels_max: int = Field(ge=1)
+    reaction_probability: float = Field(ge=0.0, le=1.0)
+    dm_allowed: bool
+
+
 class WarmingReadiness(BaseModel):
     """Pre-start verdict for an account: can it safely begin warming?
 
