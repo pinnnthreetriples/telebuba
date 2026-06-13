@@ -143,6 +143,8 @@ async def _render_warming_page() -> None:  # pragma: no cover
             await _render_config_cards()
             await _render_channels_card()
 
+        _render_how_it_works()
+
         initial = await load_board()
         holder: dict[str, object] = {"board": initial, "sig": _board_signature(initial)}
 
@@ -187,6 +189,73 @@ def _section_caption(text: str) -> None:  # pragma: no cover
     ui.label(text).classes(
         "text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1",
     )
+
+
+def _info_item(icon: str, title: str, description: str) -> None:  # pragma: no cover
+    """A read-only "how it works" row: icon · (title + description)."""
+    with ui.row().classes("w-full items-start gap-3 py-1 flex-nowrap"):
+        ui.icon(icon).classes("text-slate-400 text-xl shrink-0 mt-0.5")
+        with ui.column().classes("flex-1 gap-0 min-w-0"):
+            ui.label(title).classes("text-sm font-medium text-slate-800 leading-tight")
+            ui.label(description).classes("text-xs text-slate-500 leading-snug")
+
+
+def _render_how_it_works() -> None:  # pragma: no cover
+    """Explain the always-on engine mechanics so buyers see the full value."""
+    with ui.card().classes("w-full p-4 gap-2"):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("auto_mode").classes("text-slate-500")
+            ui.label("Как работает прогрев").classes("text-base font-semibold")
+        ui.label(
+            "Эти механики включены всегда и работают для каждого аккаунта "
+            "автоматически — настраивать их не нужно.",
+        ).classes("text-xs text-slate-500")
+        ui.separator()
+        with ui.row().classes("w-full gap-6 items-start flex-wrap"):
+            with ui.column().classes("flex-1 min-w-[300px] gap-1"):
+                _section_caption("В каждом цикле")
+                _info_item(
+                    "visibility",
+                    "Читает каналы",
+                    "Заходит в каналы из списка и просматривает свежие посты — основа прогрева.",
+                )
+                _info_item(
+                    "wifi",
+                    "Онлайн и офлайн",
+                    "Появляется в сети на время активности и выходит после, как живой человек.",
+                )
+                _info_item(
+                    "schedule",
+                    "Паузы как у человека",
+                    "Случайные задержки между действиями: «печатает», «читает», не спешит.",
+                )
+                _info_item(
+                    "hourglass_empty",
+                    "Сон 12–30 часов",
+                    "После цикла аккаунт отдыхает случайное время и повторяет активность позже.",
+                )
+            with ui.column().classes("flex-1 min-w-[300px] gap-1"):
+                _section_caption("Защита и надёжность")
+                _info_item(
+                    "shield",
+                    "Пауза при лимите Telegram",
+                    "При flood-wait аккаунт ждёт безопасное время, а не продолжает действия.",
+                )
+                _info_item(
+                    "restart_alt",
+                    "Переживает перезапуск",
+                    "После перезапуска приложения прогрев продолжается по расписанию, а не с нуля.",
+                )
+                _info_item(
+                    "vpn_lock",
+                    "Запоминает прокси старта",
+                    "Фиксирует, с каким прокси аккаунт начал прогрев — удобно для разбора проблем.",
+                )
+                _info_item(
+                    "receipt_long",
+                    "Счётчики и журнал",
+                    "Считает действия за день и пишет события (старт, цикл, ошибка) в живой лог.",
+                )
 
 
 def _feature_row(
