@@ -27,6 +27,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from core.config import settings
 from core.db import (
     add_warming_channel,
+    count_pair_messages_since,
     fetch_account,
     fetch_warming_state,
     latest_unreplied_for,
@@ -35,6 +36,7 @@ from core.db import (
     list_warming_states,
     load_warming_settings,
     mark_message_replied,
+    pair_key,
     record_dialogue_message,
     remove_warming_channel,
     save_warming_settings,
@@ -1056,6 +1058,17 @@ async def _reply_to_partner(
     if target is None or target.user_id is None:
         await mark_message_replied(incoming.id)
         return 0
+    if await _conversation_faded(sender_id, incoming.from_account):
+        # Long enough — let it fade rather than ping-pong forever. Marking the
+        # message replied ends the thread; a new one may start after the window.
+        await mark_message_replied(incoming.id)
+        await log_event(
+            "INFO",
+            "warming_dialogue_faded",
+            account_id=sender_id,
+            extra={"with": incoming.from_account},
+        )
+        return 0
     text = await _generate_chat_text(
         sender_id,
         secret,
@@ -1068,6 +1081,9 @@ async def _reply_to_partner(
         return 0
     await mark_message_replied(incoming.id)
     await register_sent(text)
+    # Chain: record our reply as a new pending message so the partner can answer
+    # next cycle — this is what turns a single round-trip into a conversation.
+    await record_dialogue_message(sender_id, incoming.from_account, text)
     await log_event(
         "INFO",
         "warming_dialogue_reply",
@@ -1075,6 +1091,16 @@ async def _reply_to_partner(
         extra={"to": incoming.from_account},
     )
     return 1
+
+
+async def _conversation_faded(account_a: str, account_b: str) -> bool:
+    """True once a pair has exchanged ``dialogue_max_turns`` within the window."""
+    warm = settings.warming
+    since = (
+        datetime.now(UTC) - timedelta(hours=warm.dialogue_conversation_window_hours)
+    ).isoformat()
+    count = await count_pair_messages_since(pair_key(account_a, account_b), since)
+    return count >= warm.dialogue_max_turns
 
 
 async def _open_with_partner(

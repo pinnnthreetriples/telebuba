@@ -635,6 +635,50 @@ async def test_cycle_replies_to_pending_partner_message(monkeypatch: pytest.Monk
     assert await warming.latest_unreplied_for("acc-1") is None
 
 
+@pytest.mark.asyncio
+async def test_dialogue_reply_chains_for_multi_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="ага, у меня норм, а у тебя?")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    await warming.record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 1
+    # acc-1's reply is now pending for acc-2 → the conversation can continue
+    pending = await warming.latest_unreplied_for("acc-2")
+    assert pending is not None
+    assert pending.from_account == "acc-1"
+
+
+@pytest.mark.asyncio
+async def test_conversation_fades_after_max_turns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    monkeypatch.setattr(settings.warming, "dialogue_max_turns", 1)
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    # The pair has already hit the turn cap; the incoming should fade, not reply.
+    await warming.record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+    # the thread is ended (incoming marked replied), no new pending message
+    assert await warming.latest_unreplied_for("acc-1") is None
+
+
 # --------------------------------------------------------------------------- #
 # Lifecycle, failed handling, sanitization, runtime reconcile
 # --------------------------------------------------------------------------- #
