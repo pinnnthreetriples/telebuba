@@ -310,6 +310,11 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
         inter_account_chat=secret.inter_account_chat,
         reactions_enabled=secret.reactions_enabled,
         join_enabled=secret.join_enabled,
+        enforce_readiness=secret.enforce_readiness,
+        quiet_hours_enabled=secret.quiet_hours_enabled,
+        quiet_hours_start=secret.quiet_hours_start,
+        quiet_hours_end=secret.quiet_hours_end,
+        max_daily_actions=secret.max_daily_actions,
         has_gemini_key=bool(secret.gemini_api_key),
         gemini_model=secret.gemini_model,
         updated_at=secret.updated_at,
@@ -333,6 +338,11 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         inter_account_chat=data.inter_account_chat,
         reactions_enabled=data.reactions_enabled,
         join_enabled=data.join_enabled,
+        enforce_readiness=data.enforce_readiness,
+        quiet_hours_enabled=data.quiet_hours_enabled,
+        quiet_hours_start=data.quiet_hours_start,
+        quiet_hours_end=data.quiet_hours_end,
+        max_daily_actions=data.max_daily_actions,
         gemini_api_key=api_key,
         gemini_model=data.gemini_model,
     )
@@ -343,6 +353,9 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
             "inter_account_chat": secret.inter_account_chat,
             "reactions_enabled": secret.reactions_enabled,
             "join_enabled": secret.join_enabled,
+            "enforce_readiness": secret.enforce_readiness,
+            "quiet_hours_enabled": secret.quiet_hours_enabled,
+            "max_daily_actions": secret.max_daily_actions,
             "has_gemini_key": bool(secret.gemini_api_key),
             "gemini_model": secret.gemini_model,
         },
@@ -541,7 +554,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if account is None:
             msg = f"Unknown account: {data.account_id}"
             raise UnknownAccountError(msg)
-        if settings.warming.enforce_readiness:
+        if (await load_warming_settings()).enforce_readiness:
             channel_count = len((await list_warming_channels()).channels)
             readiness = evaluate_readiness(account, channel_count)
             if not readiness.ready:
@@ -952,14 +965,15 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     """
     now = datetime.now(UTC)
     warm = settings.warming
+    controls = await load_warming_settings()
     record = await fetch_warming_state(account_id)
 
-    if warm.quiet_hours_enabled and _in_quiet_hours(
+    if controls.quiet_hours_enabled and _in_quiet_hours(
         now,
-        warm.quiet_hours_start,
-        warm.quiet_hours_end,
+        controls.quiet_hours_start,
+        controls.quiet_hours_end,
     ):
-        next_run = _quiet_hours_end_at(now, warm.quiet_hours_end).isoformat()
+        next_run = _quiet_hours_end_at(now, controls.quiet_hours_end).isoformat()
         await _set_state(
             account_id,
             "sleeping",
@@ -970,7 +984,7 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
 
     daily_count, daily_date = _roll_daily(record, now.date().isoformat())
-    if warm.max_daily_actions > 0 and daily_count >= warm.max_daily_actions:
+    if controls.max_daily_actions > 0 and daily_count >= controls.max_daily_actions:
         next_run = _next_utc_midnight(now).isoformat()
         await _set_state(
             account_id,

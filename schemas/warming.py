@@ -77,6 +77,11 @@ class WarmingSettings(BaseModel):
     inter_account_chat: bool = False
     reactions_enabled: bool = True
     join_enabled: bool = True
+    enforce_readiness: bool = True
+    quiet_hours_enabled: bool = False
+    quiet_hours_start: int = Field(default=0, ge=0, le=23)
+    quiet_hours_end: int = Field(default=0, ge=0, le=23)
+    max_daily_actions: int = Field(default=0, ge=0)
     has_gemini_key: bool = False
     gemini_model: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
@@ -88,6 +93,11 @@ class WarmingSettingsSecret(BaseModel):
     inter_account_chat: bool
     reactions_enabled: bool
     join_enabled: bool = True
+    enforce_readiness: bool = True
+    quiet_hours_enabled: bool = False
+    quiet_hours_start: int = Field(default=0, ge=0, le=23)
+    quiet_hours_end: int = Field(default=0, ge=0, le=23)
+    max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str
     gemini_model: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
@@ -108,6 +118,11 @@ class WarmingSettingsUpdate(BaseModel):
     inter_account_chat: bool = False
     reactions_enabled: bool = True
     join_enabled: bool = True
+    enforce_readiness: bool = True
+    quiet_hours_enabled: bool = False
+    quiet_hours_start: int = Field(default=0, ge=0, le=23)
+    quiet_hours_end: int = Field(default=0, ge=0, le=23)
+    max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str | None = None
     gemini_model: str | None = None
     clear_gemini_key: bool = False

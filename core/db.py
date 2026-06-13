@@ -134,6 +134,11 @@ _warming_settings = Table(
     Column("inter_account_chat", Integer, nullable=False),
     Column("reactions_enabled", Integer, nullable=False),
     Column("join_enabled", Integer, nullable=True),
+    Column("enforce_readiness", Integer, nullable=True),
+    Column("quiet_hours_enabled", Integer, nullable=True),
+    Column("quiet_hours_start", Integer, nullable=True),
+    Column("quiet_hours_end", Integer, nullable=True),
+    Column("max_daily_actions", Integer, nullable=True),
     Column("gemini_api_key", String, nullable=False),
     Column("gemini_model", String, nullable=False),
     Column("updated_at", String, nullable=False),
@@ -248,6 +253,20 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
             connection.exec_driver_sql(
                 "ALTER TABLE warming_settings ADD COLUMN join_enabled INTEGER DEFAULT 1",
             )
+        # User-editable warming controls promoted from config to the settings row.
+        # Literal DEFAULTs match the config defaults so existing rows keep behaving.
+        _warming_settings_new_columns: tuple[tuple[str, str], ...] = (
+            ("enforce_readiness", "INTEGER DEFAULT 1"),
+            ("quiet_hours_enabled", "INTEGER DEFAULT 0"),
+            ("quiet_hours_start", "INTEGER DEFAULT 0"),
+            ("quiet_hours_end", "INTEGER DEFAULT 0"),
+            ("max_daily_actions", "INTEGER DEFAULT 0"),
+        )
+        for column_name, column_def in _warming_settings_new_columns:
+            if column_name not in warming_settings_columns:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE warming_settings ADD COLUMN {column_name} {column_def}",
+                )
 
 
 def _sqlite_columns(
@@ -823,14 +842,27 @@ async def remove_warming_channel(channel: str) -> WarmingChannelList:
     return await asyncio.to_thread(_remove_warming_channel, channel)
 
 
+def _bool_or(value: object, default: bool) -> bool:  # noqa: FBT001
+    return default if value is None else bool(value)
+
+
+def _int_or(value: object, default: int) -> int:
+    return default if value is None else int(cast("int | str", value))
+
+
 def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSettingsSecret:
-    # ``join_enabled`` is nullable for rows created before the column existed —
-    # treat a missing/NULL value as enabled so they keep their old behaviour.
-    join_raw = mapping.get("join_enabled")
+    # Columns added after the row was first created are nullable; a NULL means
+    # "never set", so fall back to the config default to preserve old behaviour.
+    warm = settings.warming
     return WarmingSettingsSecret(
         inter_account_chat=bool(mapping["inter_account_chat"]),
         reactions_enabled=bool(mapping["reactions_enabled"]),
-        join_enabled=True if join_raw is None else bool(join_raw),
+        join_enabled=_bool_or(mapping.get("join_enabled"), default=True),
+        enforce_readiness=_bool_or(mapping.get("enforce_readiness"), warm.enforce_readiness),
+        quiet_hours_enabled=_bool_or(mapping.get("quiet_hours_enabled"), warm.quiet_hours_enabled),
+        quiet_hours_start=_int_or(mapping.get("quiet_hours_start"), warm.quiet_hours_start),
+        quiet_hours_end=_int_or(mapping.get("quiet_hours_end"), warm.quiet_hours_end),
+        max_daily_actions=_int_or(mapping.get("max_daily_actions"), warm.max_daily_actions),
         gemini_api_key=str(mapping["gemini_api_key"]),
         gemini_model=str(mapping["gemini_model"]),
         updated_at=str(mapping["updated_at"]),
@@ -838,11 +870,17 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
 
 
 def _default_warming_settings_values() -> dict[str, object]:
+    warm = settings.warming
     return {
         "id": _WARMING_SETTINGS_ID,
         "inter_account_chat": 0,
         "reactions_enabled": 1,
         "join_enabled": 1,
+        "enforce_readiness": int(warm.enforce_readiness),
+        "quiet_hours_enabled": int(warm.quiet_hours_enabled),
+        "quiet_hours_start": warm.quiet_hours_start,
+        "quiet_hours_end": warm.quiet_hours_end,
+        "max_daily_actions": warm.max_daily_actions,
         "gemini_api_key": settings.gemini.api_key,
         "gemini_model": settings.gemini.model,
         "updated_at": _now_iso(),
@@ -865,11 +903,16 @@ async def load_warming_settings() -> WarmingSettingsSecret:
     return await asyncio.to_thread(_load_warming_settings)
 
 
-def _save_warming_settings(
+def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting reads clearer.
     *,
     inter_account_chat: bool,
     reactions_enabled: bool,
     join_enabled: bool = True,
+    enforce_readiness: bool = True,
+    quiet_hours_enabled: bool = False,
+    quiet_hours_start: int = 0,
+    quiet_hours_end: int = 0,
+    max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
 ) -> WarmingSettingsSecret:
@@ -880,6 +923,11 @@ def _save_warming_settings(
         "inter_account_chat": int(inter_account_chat),
         "reactions_enabled": int(reactions_enabled),
         "join_enabled": int(join_enabled),
+        "enforce_readiness": int(enforce_readiness),
+        "quiet_hours_enabled": int(quiet_hours_enabled),
+        "quiet_hours_start": quiet_hours_start,
+        "quiet_hours_end": quiet_hours_end,
+        "max_daily_actions": max_daily_actions,
         "gemini_api_key": new_key,
         "gemini_model": new_model,
         "updated_at": _now_iso(),
@@ -893,11 +941,16 @@ def _save_warming_settings(
     return _load_warming_settings()
 
 
-async def save_warming_settings(
+async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column list.
     *,
     inter_account_chat: bool,
     reactions_enabled: bool,
     join_enabled: bool = True,
+    enforce_readiness: bool = True,
+    quiet_hours_enabled: bool = False,
+    quiet_hours_start: int = 0,
+    quiet_hours_end: int = 0,
+    max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
 ) -> WarmingSettingsSecret:
@@ -911,6 +964,11 @@ async def save_warming_settings(
         inter_account_chat=inter_account_chat,
         reactions_enabled=reactions_enabled,
         join_enabled=join_enabled,
+        enforce_readiness=enforce_readiness,
+        quiet_hours_enabled=quiet_hours_enabled,
+        quiet_hours_start=quiet_hours_start,
+        quiet_hours_end=quiet_hours_end,
+        max_daily_actions=max_daily_actions,
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
     )
