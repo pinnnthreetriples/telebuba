@@ -303,8 +303,13 @@ async def test_start_and_stop_warming_manage_the_task(monkeypatch: pytest.Monkey
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(warming, "_warming_loop", fake_loop)
-    monkeypatch.setattr(settings.warming, "enforce_readiness", False)
     await create_account(AccountCreate(account_id="acc-1"))
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
 
     started = await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
     assert started.state == "active"
@@ -624,9 +629,14 @@ async def test_shutdown_warming_runtime_cancels_all(monkeypatch: pytest.MonkeyPa
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(warming, "_warming_loop", fake_loop)
-    monkeypatch.setattr(settings.warming, "enforce_readiness", False)
     await create_account(AccountCreate(account_id="acc-1"))
     await create_account(AccountCreate(account_id="acc-2"))
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
     await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
     await warming.start_warming(StartWarmingRequest(account_id="acc-2"))
     assert len(warming._RUNTIME) == 2
@@ -808,12 +818,16 @@ def test_quiet_hours_end_at_same_day_when_ahead() -> None:
 async def test_run_loop_iteration_parks_during_quiet_hours(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings.warming, "quiet_hours_enabled", True)
     monkeypatch.setattr(warming, "_in_quiet_hours", lambda *_args: True)
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
     await _seed_channel()
-    await _set_settings(chat=False, reactions=False, key="")
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        quiet_hours_enabled=True,
+        gemini_api_key="",
+    )
     await create_account(AccountCreate(account_id="acc-1"))
 
     result = await warming.run_loop_iteration("acc-1")
@@ -862,11 +876,15 @@ def test_roll_daily_handles_missing_record() -> None:
 async def test_run_loop_iteration_parks_when_daily_cap_reached(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    monkeypatch.setattr(settings.warming, "max_daily_actions", 3)
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
     await _seed_channel()
-    await _set_settings(chat=False, reactions=False, key="")
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        max_daily_actions=3,
+        gemini_api_key="",
+    )
     await create_account(AccountCreate(account_id="acc-1"))
     today = datetime.now(UTC).date().isoformat()
     await upsert_warming_state(
@@ -930,6 +948,31 @@ async def test_cycle_skips_join_when_join_disabled(monkeypatch: pytest.MonkeyPat
     assert result.channels_joined == 0
     assert "join_channel" not in recorder.types()
     assert "read_channel" in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_save_settings_persists_warming_controls() -> None:
+    masked = await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=False,
+            reactions_enabled=True,
+            enforce_readiness=False,
+            quiet_hours_enabled=True,
+            quiet_hours_start=23,
+            quiet_hours_end=7,
+            max_daily_actions=50,
+        ),
+    )
+
+    assert masked.enforce_readiness is False
+    assert masked.quiet_hours_enabled is True
+    assert masked.quiet_hours_start == 23
+    assert masked.quiet_hours_end == 7
+    assert masked.max_daily_actions == 50
+
+    reloaded = await warming.load_settings()
+    assert reloaded.quiet_hours_start == 23
+    assert reloaded.max_daily_actions == 50
 
 
 # --------------------------------------------------------------------------- #

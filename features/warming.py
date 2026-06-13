@@ -47,7 +47,7 @@ from services.warming import (
 )
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Coroutine
+    from collections.abc import Callable
 
     from schemas.logs import LogEntry
     from schemas.warming import WarmingAccountState, WarmingBoardState, WarmingSettings
@@ -176,34 +176,56 @@ def _settings_status(model: str, *, has_key: bool) -> str:  # pragma: no cover
     return f"Модель {model} · AI-ключ {'задан' if has_key else 'нет'}"
 
 
-def _feature_switch(
+def _clamp_hour(value: object) -> int:  # pragma: no cover
+    """Coerce a ``ui.number`` value (float | None) to a valid 0-23 hour."""
+    if not isinstance(value, (int, float)):
+        return 0
+    return max(0, min(23, int(value)))
+
+
+def _section_caption(text: str) -> None:  # pragma: no cover
+    ui.label(text).classes(
+        "text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1",
+    )
+
+
+def _feature_row(
+    icon: str,
     label: str,
     description: str,
-    *,
-    value: bool,
-    on_toggle: Callable[[], Coroutine[Any, Any, None]],
-) -> ui.switch:  # pragma: no cover
-    """A labelled toggle with a sub-caption that auto-saves on change."""
-    switch = ui.switch(label, value=value)
-    ui.label(description).classes("text-xs text-slate-400 ml-10 -mt-2")
-    switch.on_value_change(lambda _e: asyncio.create_task(on_toggle()))
-    return switch
+    build_control: Callable[[], ui.element],
+) -> ui.element:  # pragma: no cover
+    """A tidy settings row: icon · (label + description) · right-aligned control.
+
+    Returns the control element so the caller can read its value later.
+    """
+    with ui.row().classes("w-full items-center gap-3 py-1 flex-nowrap"):
+        ui.icon(icon).classes("text-slate-400 text-2xl shrink-0")
+        with ui.column().classes("flex-1 gap-0 min-w-0"):
+            ui.label(label).classes("text-sm font-medium text-slate-800 leading-tight")
+            ui.label(description).classes("text-xs text-slate-500 leading-snug")
+        return build_control()
 
 
 async def _render_config_cards() -> None:  # pragma: no cover
     board = await load_board()
     current = board.settings
-    refs: dict[str, ui.switch] = {}
+    refs: dict[str, Any] = {}
 
     async def persist(*, key: str | None, model: str | None, clear: bool) -> WarmingSettings:
         # Always send the full settings payload so saving one card never clobbers
-        # the other: toggles pass key/model=None (preserve), the API card passes
-        # the live toggle values read from ``refs``.
+        # the other: the controls below pass key/model=None (preserve), while the
+        # API card passes the live control values read from ``refs``.
         return await save_settings(
             WarmingSettingsUpdate(
                 inter_account_chat=bool(refs["chat"].value),
                 reactions_enabled=bool(refs["reactions"].value),
                 join_enabled=bool(refs["join"].value),
+                enforce_readiness=bool(refs["readiness"].value),
+                quiet_hours_enabled=bool(refs["quiet"].value),
+                quiet_hours_start=_clamp_hour(refs["quiet_start"].value),
+                quiet_hours_end=_clamp_hour(refs["quiet_end"].value),
+                max_daily_actions=max(0, int(refs["daily"].value or 0)),
                 gemini_api_key=key,
                 gemini_model=model,
                 clear_gemini_key=clear,
@@ -214,28 +236,84 @@ async def _render_config_cards() -> None:  # pragma: no cover
         await persist(key=None, model=None, clear=False)
         ui.notify("Функции обновлены", type="positive")
 
-    with ui.card().classes("w-[420px] p-4 gap-2"):
-        ui.label("Функции").classes("text-base font-semibold")
-        ui.label("Что разрешено делать аккаунтам на прогреве — сохраняется сразу.").classes(
+    def trigger(_e: object = None) -> asyncio.Task[None]:
+        return asyncio.create_task(on_toggle())
+
+    def _switch(*, value: bool) -> ui.element:
+        return ui.switch(value=value, on_change=trigger).props("dense")
+
+    with ui.card().classes("w-[460px] p-4 gap-2"):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("tune").classes("text-slate-500")
+            ui.label("Функции прогрева").classes("text-base font-semibold")
+        ui.label("Что делают аккаунты и какие лимиты соблюдают. Сохраняется сразу.").classes(
             "text-xs text-slate-500",
         )
-        refs["chat"] = _feature_switch(
-            "Аккаунты переписываются друг с другом",
-            "ИИ-сообщения между вашими аккаунтами на прогреве (нужен ключ Gemini).",
-            value=current.inter_account_chat,
-            on_toggle=on_toggle,
+
+        ui.separator()
+        _section_caption("Поведение")
+        refs["chat"] = _feature_row(
+            "forum",
+            "Переписка между аккаунтами",
+            "ИИ-сообщения между вашими аккаунтами (нужен ключ Gemini).",
+            lambda: _switch(value=current.inter_account_chat),
         )
-        refs["reactions"] = _feature_switch(
-            "Ставить реакции на посты",
-            "Иногда реагировать на свежие посты в каналах.",
-            value=current.reactions_enabled,
-            on_toggle=on_toggle,
+        refs["reactions"] = _feature_row(
+            "favorite",
+            "Реакции на посты",
+            "Иногда ставить реакции на свежие посты в каналах.",
+            lambda: _switch(value=current.reactions_enabled),
         )
-        refs["join"] = _feature_switch(
+        refs["join"] = _feature_row(
+            "add_circle",
             "Вступать в новые каналы",
-            "Разрешить вступать в каналы из вашего списка — самое рискованное действие.",
-            value=current.join_enabled,
-            on_toggle=on_toggle,
+            "Вступать в каналы из вашего списка — самое рискованное действие.",
+            lambda: _switch(value=current.join_enabled),
+        )
+
+        ui.separator()
+        _section_caption("Лимиты и безопасность")
+        refs["readiness"] = _feature_row(
+            "verified_user",
+            "Проверка перед стартом",
+            "Не запускать аккаунт без рабочего прокси, сессии и каналов.",
+            lambda: _switch(value=current.enforce_readiness),
+        )
+        refs["quiet"] = _feature_row(
+            "bedtime",
+            "Тихие часы (UTC)",
+            "Ночью аккаунты ничего не делают — выглядит естественнее.",
+            lambda: _switch(value=current.quiet_hours_enabled),
+        )
+        quiet_times = ui.row().classes("w-full items-center gap-2 pl-9")
+        with quiet_times:
+            ui.label("с").classes("text-xs text-slate-500")
+            refs["quiet_start"] = (
+                ui.number(value=current.quiet_hours_start, min=0, max=23, format="%d")
+                .props("dense outlined debounce=600")
+                .classes("w-20")
+                .on_value_change(trigger)
+            )
+            ui.label("до").classes("text-xs text-slate-500")
+            refs["quiet_end"] = (
+                ui.number(value=current.quiet_hours_end, min=0, max=23, format="%d")
+                .props("dense outlined debounce=600")
+                .classes("w-20")
+                .on_value_change(trigger)
+            )
+            ui.label("часов").classes("text-xs text-slate-400")
+        quiet_times.bind_visibility_from(refs["quiet"], "value")
+
+        refs["daily"] = _feature_row(
+            "speed",
+            "Дневной лимит действий",
+            "Максимум действий в сутки на аккаунт. 0 — без лимита.",
+            lambda: (
+                ui.number(value=current.max_daily_actions, min=0, format="%d")
+                .props("dense outlined debounce=600")
+                .classes("w-24")
+                .on_value_change(trigger)
+            ),
         )
 
     placeholder = "ключ задан" if current.has_gemini_key else "вставьте ключ для ИИ-чата"
