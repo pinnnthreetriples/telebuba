@@ -145,6 +145,11 @@ class WarmingSettings(BaseSettings):
     content_forbidden_words: list[str] = Field(
         default_factory=lambda: ["реклама", "купить", "продам", "продаю", "скидк", "промокод"],
     )
+    # Inter-account dialogue pairing: how many partners each account gets, and
+    # how often the acquaintance graph is reshuffled (imitates meeting people).
+    dialogue_partners_min: int = Field(default=2, ge=1)
+    dialogue_partners_max: int = Field(default=4, ge=1)
+    dialogue_reshuffle_days: float = Field(default=10.0, gt=0.0)
 
 
 class GeminiSettings(BaseSettings):

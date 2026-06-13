@@ -1067,6 +1067,10 @@ from core.repositories.device_fingerprint import (  # noqa: E402, F401
     fetch_device_fingerprint,
     insert_device_fingerprint,
 )
+from core.repositories.dialogues import (  # noqa: E402, F401
+    list_dialogue_pairs,
+    replace_dialogue_pairs,
+)
 from core.repositories.spam_status import (  # noqa: E402, F401
     get_spam_status,
     upsert_spam_status,
