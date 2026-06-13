@@ -104,7 +104,9 @@ exclude_also = [
     "if TYPE_CHECKING:",
     "raise NotImplementedError",
     "if __name__ == .__main__.:",
-    "@(typing\\.)?overload",
+    # TOML literal (single-quoted): backslashes are literal, so a rebase/reformat
+    # can't corrupt the regex escape into invalid TOML (which breaks `uv sync`).
+    '@(typing\.)?overload',
 ]
 
 # ============================================================================
