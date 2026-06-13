@@ -73,6 +73,7 @@ from schemas.warming import (
 )
 from services.content import is_acceptable, is_duplicate, register_sent
 from services.spam_status import refresh_spam_status
+from services.trust import account_trust_score
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -417,6 +418,9 @@ async def load_board() -> WarmingBoardState:
     for account in accounts.accounts:
         readiness = evaluate_readiness(account, channel_count)
         card = _to_card(account, records.get(account.account_id), readiness=readiness)
+        trust = await account_trust_score(account.account_id)
+        card.trust_score = trust.score
+        card.trust_band = trust.band
         (warming if is_warming(card.state) else idle).append(card)
     return WarmingBoardState(
         idle=idle,

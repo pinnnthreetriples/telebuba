@@ -158,6 +158,29 @@ class GeminiSettings(BaseSettings):
     max_output_tokens: int = Field(default=120, ge=1, le=2048)
 
 
+class TrustSettings(BaseSettings):
+    """Tunables for the internal account Trust Score (our own metric, 0-100)."""
+
+    model_config = SettingsConfigDict(env_prefix="TRUST__", extra="ignore")
+
+    # Band lower bounds (score >= bound → that band, checked excellent → critical).
+    excellent_min: int = Field(default=90, ge=0, le=100)
+    good_min: int = Field(default=75, ge=0, le=100)
+    watch_min: int = Field(default=60, ge=0, le=100)
+    at_risk_min: int = Field(default=40, ge=0, le=100)
+    # Penalties subtracted from a 100 baseline.
+    penalty_not_alive: int = Field(default=40, ge=0, le=100)
+    penalty_spam_limited: int = Field(default=50, ge=0, le=100)
+    penalty_spam_unknown: int = Field(default=10, ge=0, le=100)
+    penalty_quarantine_each: int = Field(default=15, ge=0, le=100)
+    penalty_flood_active: int = Field(default=15, ge=0, le=100)
+    penalty_geo_mismatch: int = Field(default=10, ge=0, le=100)
+    penalty_geo_unknown: int = Field(default=5, ge=0, le=100)
+    penalty_proxy_failed: int = Field(default=20, ge=0, le=100)
+    penalty_new_account: int = Field(default=10, ge=0, le=100)
+    new_account_hours: float = Field(default=48.0, ge=0.0)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -169,6 +192,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
+    trust: TrustSettings = Field(default_factory=TrustSettings)
 
 
 def load_settings() -> Settings:

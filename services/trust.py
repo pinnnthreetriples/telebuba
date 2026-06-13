@@ -1,0 +1,128 @@
+"""Internal account Trust Score — our own 0-100 health aggregate.
+
+Explicitly NOT a mirror of any Telegram-published metric (Telegram does not
+publish one). Aggregates signals we already store — session status, spam-limit
+verdict, quarantine / flood history, proxy + geo consistency, and account age —
+into a single score and band for gating and UI display. All weights live in
+``settings.trust`` (no magic numbers).
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+
+from core.config import settings
+from core.db import fetch_account, fetch_warming_state, get_spam_status
+from schemas.trust import TrustBand, TrustScore
+from services.accounts import evaluate_account_geo
+
+_SECONDS_PER_HOUR = 3600
+
+
+def _band(score: int) -> TrustBand:
+    trust = settings.trust
+    if score >= trust.excellent_min:
+        return "excellent"
+    if score >= trust.good_min:
+        return "good"
+    if score >= trust.watch_min:
+        return "watch"
+    if score >= trust.at_risk_min:
+        return "at_risk"
+    return "critical"
+
+
+def compute_trust_score(  # noqa: PLR0913 - one explicit arg per signal reads clearer than a bag.
+    *,
+    account_id: str,
+    account_status: str,
+    spam_status: str,
+    quarantine_count: int,
+    flood_active: bool,
+    geo_status: str,
+    proxy_status: str | None,
+    age_hours: float,
+) -> TrustScore:
+    """Combine account signals into a 0-100 trust verdict (pure)."""
+    trust = settings.trust
+    score = 100
+    reasons: list[str] = []
+
+    if account_status != "alive":
+        score -= trust.penalty_not_alive
+        reasons.append(f"status {account_status}")
+    if spam_status == "limited":
+        score -= trust.penalty_spam_limited
+        reasons.append("spam-limited")
+    elif spam_status == "unknown":
+        score -= trust.penalty_spam_unknown
+        reasons.append("spam status unknown")
+    if quarantine_count > 0:
+        score -= trust.penalty_quarantine_each * quarantine_count
+        reasons.append(f"quarantined x{quarantine_count}")
+    if flood_active:
+        score -= trust.penalty_flood_active
+        reasons.append("recent flood")
+    if geo_status == "mismatch":
+        score -= trust.penalty_geo_mismatch
+        reasons.append("geo mismatch")
+    elif geo_status == "unknown":
+        score -= trust.penalty_geo_unknown
+        reasons.append("geo unknown")
+    if proxy_status == "failed":
+        score -= trust.penalty_proxy_failed
+        reasons.append("proxy failed")
+    if age_hours < trust.new_account_hours:
+        score -= trust.penalty_new_account
+        reasons.append("new account")
+
+    score = max(0, min(100, score))
+    return TrustScore(account_id=account_id, score=score, band=_band(score), reasons=reasons)
+
+
+def _age_hours(created_at: str, now: datetime) -> float:
+    try:
+        created = datetime.fromisoformat(created_at)
+    except ValueError:
+        return 0.0
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
+
+
+def _flood_active(flood_wait_until: str | None, now: datetime) -> bool:
+    if not flood_wait_until:
+        return False
+    try:
+        until = datetime.fromisoformat(flood_wait_until)
+    except ValueError:
+        return False
+    if until.tzinfo is None:
+        until = until.replace(tzinfo=UTC)
+    return until > now
+
+
+async def account_trust_score(account_id: str) -> TrustScore:
+    """Gather an account's current signals and compute its Trust Score."""
+    account = await fetch_account(account_id)
+    if account is None:
+        return TrustScore(
+            account_id=account_id,
+            score=0,
+            band="critical",
+            reasons=["unknown account"],
+        )
+    record = await fetch_warming_state(account_id)
+    spam = await get_spam_status(account_id)
+    geo = await evaluate_account_geo(account_id)
+    now = datetime.now(UTC)
+    return compute_trust_score(
+        account_id=account_id,
+        account_status=account.status,
+        spam_status=spam.status if spam else "unknown",
+        quarantine_count=record.quarantine_count if record else 0,
+        flood_active=_flood_active(record.flood_wait_until if record else None, now),
+        geo_status=geo.status,
+        proxy_status=account.proxy_status,
+        age_hours=_age_hours(account.created_at, now),
+    )

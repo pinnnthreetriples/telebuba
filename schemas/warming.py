@@ -225,6 +225,8 @@ class WarmingAccountState(BaseModel):
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
     quarantine_count: int = Field(default=0, ge=0)
+    trust_score: int | None = Field(default=None, ge=0, le=100)
+    trust_band: str | None = None
     readiness: WarmingReadiness | None = None
 
 
