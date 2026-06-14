@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 import random
 from contextlib import asynccontextmanager, suppress
@@ -51,6 +52,7 @@ if TYPE_CHECKING:
         ActionStatus,
         ReactToPost,
         ReadChannel,
+        SendDirectMessage,
         TelegramAction,
         UpdateProfile,
     )
@@ -449,6 +451,24 @@ async def _probe_self_restriction(client: TelegramClient) -> tuple[bool, str | N
     return restricted, (reason or None)
 
 
+def _typing_seconds(text: str) -> float:
+    """Length-proportional typing time (≈ WPM), clamped to a sane window."""
+    warm = settings.warming
+    base = len(text) * 60.0 / (5.0 * warm.typing_wpm)
+    return max(warm.typing_sim_min_seconds, min(warm.typing_sim_max_seconds, base))
+
+
+async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage) -> int | None:
+    """Send a DM, optionally preceded by a length-proportional "typing…" action."""
+    if settings.warming.typing_simulation_enabled:
+        async with client.action(action.user_id, "typing"):  # ty: ignore[invalid-context-manager]
+            await asyncio.sleep(_typing_seconds(action.text))
+            message = await client.send_message(action.user_id, action.text)
+    else:
+        message = await client.send_message(action.user_id, action.text)
+    return int(getattr(message, "id", 0)) or None
+
+
 async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:
     """Run one action against an already-connected client. Returns message_id if any.
 
@@ -475,8 +495,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
     elif action.action_type == "react_to_post":
         message_id = await _dispatch_react_to_post(client, action)
     elif action.action_type == "send_dm":
-        message = await client.send_message(action.user_id, action.text)
-        message_id = int(getattr(message, "id", 0)) or None
+        message_id = await _send_dm_with_typing(client, action)
     elif action.action_type in {"set_profile_photo", "post_story", "add_profile_music"}:
         message_id = await _dispatch_profile_media_action(client, action)
     else:

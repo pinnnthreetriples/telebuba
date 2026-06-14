@@ -736,8 +736,24 @@ async def shutdown_warming_runtime() -> None:
 # --------------------------------------------------------------------------- #
 
 
+def _human_delay(min_seconds: float, max_seconds: float) -> float:
+    """A human-like pause in ``[min, max]`` from a clipped log-normal.
+
+    Real users are bursty: many short gaps with a heavy tail of long ones. We
+    draw a log-normal fraction (median below the midpoint, occasional spike to
+    the max) and map it onto the configured range — unlike a uniform draw, which
+    is the most obvious bot signature.
+    """
+    lo, hi = sorted((min_seconds, max_seconds))
+    if hi <= lo:
+        return lo
+    warm = settings.warming
+    fraction = min(1.0, _rng.lognormvariate(warm.delay_lognorm_mu, warm.delay_lognorm_sigma))
+    return lo + fraction * (hi - lo)
+
+
 async def _human_pause(min_seconds: float, max_seconds: float) -> None:
-    await asyncio.sleep(_rng.uniform(min(min_seconds, max_seconds), max(min_seconds, max_seconds)))
+    await asyncio.sleep(_human_delay(min_seconds, max_seconds))
 
 
 # Rate-limit families that carry a duration and mean "wait then retry".
@@ -1243,14 +1259,19 @@ async def _recover_from_quarantine(
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
 
 
+async def _account_tz(account_id: str) -> str | None:
+    """The account's IANA timezone (from its phone number), or ``None``."""
+    account = await fetch_account(account_id)
+    return timezone_for_phone(account.phone) if account else None
+
+
 async def _local_now(account_id: str, now: datetime) -> datetime:
     """Return ``now`` in the account's local timezone (from its phone number).
 
     Quiet hours are evaluated in the account's local time rather than UTC. Falls
     back to ``now`` when the number has no resolvable timezone.
     """
-    account = await fetch_account(account_id)
-    tz_name = timezone_for_phone(account.phone) if account else None
+    tz_name = await _account_tz(account_id)
     if tz_name is None:
         return now
     try:
@@ -1259,7 +1280,31 @@ async def _local_now(account_id: str, now: datetime) -> datetime:
         return now
 
 
-async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
+def _shift_to_active_hours(candidate: datetime, tz_name: str | None) -> datetime:
+    """Move a next-run time into the account's active local window if it's outside.
+
+    Keeps activity clustered in waking hours (account's phone timezone) instead
+    of firing uniformly through the night. A ``start == end`` window disables it.
+    """
+    warm = settings.warming
+    if not warm.active_hours_enabled or warm.active_hours_start == warm.active_hours_end:
+        return candidate
+    if tz_name is None:
+        local = candidate.astimezone(UTC)
+    else:
+        try:
+            local = candidate.astimezone(ZoneInfo(tz_name))
+        except ZoneInfoNotFoundError:
+            local = candidate.astimezone(UTC)
+    if _in_quiet_hours(local, warm.active_hours_start, warm.active_hours_end):
+        return candidate
+    target = local.replace(hour=warm.active_hours_start, minute=0, second=0, microsecond=0)
+    if target <= local:
+        target += timedelta(days=1)
+    return target.astimezone(UTC)
+
+
+async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C901 - linear loop step
     """Run one iteration of the warming loop (cycle + state transitions).
 
     Extracted from ``_warming_loop`` so it can be tested without the infinite
@@ -1330,7 +1375,12 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
             warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
             warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
         )
-    next_run = (datetime.now(UTC) + timedelta(seconds=sleep_seconds)).isoformat()
+    next_run_dt = datetime.now(UTC) + timedelta(seconds=sleep_seconds)
+    # Bias a normal cadence to wake in active local hours; never delay a
+    # flood/peer-flood recovery, which has its own required timing.
+    if result.status not in {"peer_flood", "flood_wait"}:
+        next_run_dt = _shift_to_active_hours(next_run_dt, await _account_tz(account_id))
+    next_run = next_run_dt.isoformat()
 
     next_state: WarmingState
     if result.status == "peer_flood":

@@ -21,7 +21,7 @@ from core import telegram_client as telegram_client_module
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
-from core.telegram_client import create_telegram_client, execute
+from core.telegram_client import _typing_seconds, create_telegram_client, execute
 from schemas.device_fingerprint import DeviceFingerprint, TelegramClientProfile
 from schemas.telegram_actions import (
     AddProfileMusic,
@@ -29,6 +29,7 @@ from schemas.telegram_actions import (
     LeaveChannel,
     PostComment,
     PostStory,
+    SendDirectMessage,
     SetProfilePhoto,
     UpdateProfile,
 )
@@ -371,6 +372,67 @@ def test_create_telegram_client_applies_flood_sleep_threshold(
     finally:
         if client.session is not None:
             client.session.close()
+
+
+def test_typing_seconds_scales_and_clamps(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "typing_wpm", 45)
+    monkeypatch.setattr(settings.warming, "typing_sim_min_seconds", 0.5)
+    monkeypatch.setattr(settings.warming, "typing_sim_max_seconds", 12.0)
+    assert _typing_seconds("") == 0.5  # clamp to min
+    assert _typing_seconds("x" * 20) == pytest.approx(20 * 60 / (5 * 45))
+    assert _typing_seconds("x" * 1000) == 12.0  # clamp to max
+
+
+@pytest.mark.asyncio
+async def test_execute_send_dm_simulates_typing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", True)
+    monkeypatch.setattr(settings.warming, "typing_sim_min_seconds", 0.0)
+    monkeypatch.setattr(settings.warming, "typing_sim_max_seconds", 0.0)
+    typed = {"flag": False}
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        def action(self, _entity: object, _action: str) -> object:
+            @asynccontextmanager
+            async def cm():
+                typed["flag"] = True
+                yield
+
+            return cm()
+
+        async def send_message(self, user_id: int, text: str) -> object:
+            assert user_id == 42
+            assert text == "привет"
+            return MagicMock(id=555)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc", SendDirectMessage(user_id=42, text="привет"))
+
+    assert result.status == "ok"
+    assert result.message_id == 555
+    assert typed["flag"] is True
+
+
+@pytest.mark.asyncio
+async def test_execute_send_dm_without_typing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_message(self, _user_id: int, _text: str) -> object:
+            return MagicMock(id=7)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc", SendDirectMessage(user_id=42, text="hi"))
+
+    assert result.status == "ok"
+    assert result.message_id == 7
 
 
 @pytest.mark.asyncio
