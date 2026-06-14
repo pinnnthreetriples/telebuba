@@ -10,7 +10,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import Column, Integer, String, Table, delete, insert, select, update
+from sqlalchemy import Column, Integer, String, Table, delete, func, insert, select, update
 
 from core.db import _get_engine, _metadata, _now_iso
 from schemas.dialogues import DialogueMessage, DialoguePair
@@ -164,11 +164,15 @@ async def mark_message_replied(message_id: int) -> None:
 
 
 def _count_pair_messages_since(key: str, since_iso: str) -> int:
-    statement = select(dialogue_messages.c.id).where(
-        (dialogue_messages.c.pair_key == key) & (dialogue_messages.c.created_at >= since_iso),
+    statement = (
+        select(func.count())
+        .select_from(dialogue_messages)
+        .where(
+            (dialogue_messages.c.pair_key == key) & (dialogue_messages.c.created_at >= since_iso),
+        )
     )
     with _get_engine().connect() as connection:
-        return len(connection.execute(statement).all())
+        return int(connection.execute(statement).scalar_one())
 
 
 async def count_pair_messages_since(key: str, since_iso: str) -> int:
