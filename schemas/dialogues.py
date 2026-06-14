@@ -26,3 +26,10 @@ class DialogueMessage(BaseModel):
     text: str = Field(min_length=1)
     created_at: str = Field(min_length=1)
     replied: bool = False
+
+
+class DialogueOverview(BaseModel):
+    """Pairs and recent messages for the warming page's dialogue panel."""
+
+    pairs: list[DialoguePair] = Field(default_factory=list)
+    recent: list[DialogueMessage] = Field(default_factory=list)

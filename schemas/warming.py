@@ -227,7 +227,25 @@ class WarmingAccountState(BaseModel):
     quarantine_count: int = Field(default=0, ge=0)
     trust_score: int | None = Field(default=None, ge=0, le=100)
     trust_band: str | None = None
+    trust_reasons: list[str] = Field(default_factory=list)
+    spam_status: str | None = None
+    spam_detail: str | None = None
+    age_hours: float | None = Field(default=None, ge=0.0)
+    dm_allowed: bool = False
     readiness: WarmingReadiness | None = None
+
+
+class WarmingSummary(BaseModel):
+    """Fleet-level roll-up shown at the top of the warming page."""
+
+    total: int = Field(default=0, ge=0)
+    warming: int = Field(default=0, ge=0)
+    active: int = Field(default=0, ge=0)
+    ready: int = Field(default=0, ge=0)
+    attention: int = Field(default=0, ge=0)
+    trust_healthy: int = Field(default=0, ge=0)
+    trust_watch: int = Field(default=0, ge=0)
+    trust_risk: int = Field(default=0, ge=0)
 
 
 class WarmingBoardState(BaseModel):
@@ -239,6 +257,7 @@ class WarmingBoardState(BaseModel):
     settings: WarmingSettings
     channel_count: int = Field(ge=0)
     active_count: int = Field(ge=0)
+    summary: WarmingSummary = Field(default_factory=WarmingSummary)
 
 
 class StartWarmingRequest(BaseModel):

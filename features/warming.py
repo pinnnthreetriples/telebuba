@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from nicegui import ui
@@ -35,6 +36,7 @@ from schemas.warming import (
     StopWarmingRequest,
     WarmingSettingsUpdate,
 )
+from services.dialogues import load_dialogue_overview
 from services.logs import load_logs_page
 from services.warming import (
     WarmingNotReadyError,
@@ -49,12 +51,20 @@ from services.warming import (
 if TYPE_CHECKING:
     from collections.abc import Callable
 
+    from schemas.dialogues import DialogueOverview
     from schemas.logs import LogEntry
-    from schemas.warming import WarmingAccountState, WarmingBoardState, WarmingSettings
+    from schemas.warming import (
+        WarmingAccountState,
+        WarmingBoardState,
+        WarmingSettings,
+        WarmingSummary,
+    )
 
 _BOARD_POLL_SECONDS = 4.0
 _LOG_POLL_SECONDS = 2.0
 _LOG_LIMIT = 40
+_ETA_HOUR_SECONDS = 3600
+_ETA_DAY_SECONDS = 86_400
 
 _HEALTH_DOT = {
     "ok": "bg-green-500",
@@ -67,6 +77,7 @@ _STATE_LABEL = {
     "active": "Прогрев",
     "sleeping": "Сон",
     "flood_wait": "Flood-ожидание",
+    "quarantine": "Карантин",
     "error": "Ошибка",
 }
 _STATE_BADGE = {
@@ -74,7 +85,13 @@ _STATE_BADGE = {
     "active": "text-green-700 bg-green-100",
     "sleeping": "text-amber-700 bg-amber-100",
     "flood_wait": "text-amber-800 bg-amber-100",
+    "quarantine": "text-orange-700 bg-orange-100",
     "error": "text-red-700 bg-red-100",
+}
+_SPAM_BADGE = {
+    "clean": ("✅ чисто", "text-green-700 bg-green-100"),
+    "limited": ("⛔ ограничен", "text-red-700 bg-red-100"),
+    "unknown": ("❓ не проверён", "text-slate-600 bg-slate-100"),
 }
 _LOG_ROW_BORDER = {
     "success": "border-green-500",
@@ -171,6 +188,7 @@ async def _render_warming_page() -> None:  # pragma: no cover
         await render_board()
         ui.timer(_BOARD_POLL_SECONDS, reload)
 
+        await _render_dialogues()
         await _render_activity_log()
 
 
@@ -516,6 +534,9 @@ def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma:
                 card.next_run_at,
                 card.last_error,
                 card.trust_score,
+                card.spam_status,
+                card.daily_actions,
+                card.dm_allowed,
                 None
                 if card.readiness is None
                 else (card.readiness.ready, tuple(card.readiness.reasons)),
@@ -525,7 +546,48 @@ def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma:
     )
 
 
+def _relative_eta(iso: str | None) -> str | None:  # pragma: no cover
+    """Human ETA from now to an ISO timestamp, e.g. ``7 ч`` / ``12 мин``."""
+    if not iso:
+        return None
+    try:
+        target = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if target.tzinfo is None:
+        target = target.replace(tzinfo=UTC)
+    delta = (target - datetime.now(UTC)).total_seconds()
+    if delta <= 0:
+        return "сейчас"
+    if delta < _ETA_HOUR_SECONDS:
+        return f"{int(delta // 60)} мин"
+    if delta < _ETA_DAY_SECONDS:
+        return f"{int(delta // _ETA_HOUR_SECONDS)} ч"
+    return f"{int(delta // _ETA_DAY_SECONDS)} д"
+
+
+_SUMMARY_CHIPS = (
+    ("Всего", "total", "bg-slate-100 text-slate-700"),
+    ("Прогрев", "warming", "bg-green-100 text-green-700"),
+    ("Готовы", "ready", "bg-emerald-100 text-emerald-700"),
+    ("Внимание", "attention", "bg-orange-100 text-orange-700"),
+    ("⛨ здоровы", "trust_healthy", "bg-green-100 text-green-700"),
+    ("⛨ watch", "trust_watch", "bg-amber-100 text-amber-700"),
+    ("⛨ риск", "trust_risk", "bg-red-100 text-red-700"),
+)
+
+
+def _render_summary(summary: WarmingSummary) -> None:  # pragma: no cover
+    with ui.row().classes("w-full gap-2 flex-wrap"):
+        for label, field, cls in _SUMMARY_CHIPS:
+            ui.label(f"{label}: {getattr(summary, field)}").classes(
+                f"px-3 py-1.5 rounded-md text-xs font-medium {cls}",
+            )
+
+
 def _render_board(board: WarmingBoardState, drag: dict[str, str | None], refresh) -> None:  # noqa: ANN001 # pragma: no cover
+    _render_summary(board.summary)
+    max_daily = board.settings.max_daily_actions
     with ui.row().classes("w-full gap-4 items-stretch flex-wrap"):
         _render_column(
             "Простой",
@@ -534,6 +596,7 @@ def _render_board(board: WarmingBoardState, drag: dict[str, str | None], refresh
             "border-slate-300",
             drag,
             refresh,
+            max_daily,
         )
         _render_column(
             f"Прогрев · активно: {board.active_count}",
@@ -542,6 +605,7 @@ def _render_board(board: WarmingBoardState, drag: dict[str, str | None], refresh
             "border-green-400",
             drag,
             refresh,
+            max_daily,
         )
 
 
@@ -552,6 +616,7 @@ def _render_column(  # noqa: PLR0913 # pragma: no cover
     border: str,
     drag: dict[str, str | None],
     refresh,  # noqa: ANN001
+    max_daily: int,
 ) -> None:
     column = ui.column().classes(
         f"tb-dropzone flex-1 min-w-[320px] p-3 gap-2 rounded-lg border-2 border-dashed "
@@ -584,7 +649,7 @@ def _render_column(  # noqa: PLR0913 # pragma: no cover
         if not cards:
             ui.label("Перетащите аккаунты сюда").classes("text-xs text-slate-400 italic")
         for card in cards:
-            _render_card(card, drag)
+            _render_card(card, drag, max_daily)
 
 
 _TRUST_BADGE = {
@@ -596,9 +661,44 @@ _TRUST_BADGE = {
 }
 
 
+def _render_trust_badge(card: WarmingAccountState) -> None:  # pragma: no cover
+    tooltip = f"Trust {card.trust_score} · {card.trust_band or 'n/a'}"
+    if card.trust_reasons:
+        tooltip = f"{tooltip}: " + ", ".join(card.trust_reasons)
+    ui.label(f"⛨ {card.trust_score}").classes(
+        "text-[11px] px-1.5 py-0.5 rounded "
+        f"{_TRUST_BADGE.get(card.trust_band or '', 'bg-slate-100 text-slate-600')}",
+    ).tooltip(tooltip)
+
+
+def _render_spam_badge(card: WarmingAccountState) -> None:  # pragma: no cover
+    text, cls = _SPAM_BADGE.get(
+        card.spam_status or "",
+        (card.spam_status or "", "text-slate-600 bg-slate-100"),
+    )
+    badge = ui.label(text).classes(f"w-fit text-[11px] px-1.5 py-0.5 rounded {cls}")
+    if card.spam_detail:
+        badge.tooltip(card.spam_detail)
+
+
+def _render_card_stats(card: WarmingAccountState, max_daily: int) -> None:  # pragma: no cover
+    parts: list[str] = []
+    if card.age_hours is not None:
+        days = int(card.age_hours // 24)
+        parts.append(f"возраст {days} д" if days else f"возраст {int(card.age_hours)} ч")
+    parts.append("DM ✅" if card.dm_allowed else "DM 🔒")
+    daily = f"действий {card.daily_actions}"
+    parts.append(f"{daily}/{max_daily}" if max_daily > 0 else daily)
+    eta = _relative_eta(card.next_run_at)
+    if eta:
+        parts.append(f"⏭ {eta}")
+    ui.label(" · ".join(parts)).classes("text-[11px] text-slate-500 truncate")
+
+
 def _render_card(  # pragma: no cover
     card: WarmingAccountState,
     drag: dict[str, str | None],
+    max_daily: int,
 ) -> None:
     pulse = " tb-active" if card.state == "active" else ""
     element = (
@@ -619,14 +719,14 @@ def _render_card(  # pragma: no cover
                 f"text-[11px] px-2 py-0.5 rounded {_STATE_BADGE.get(card.state, '')}",
             )
             if card.trust_score is not None:
-                ui.label(f"⛨ {card.trust_score}").classes(
-                    "text-[11px] px-1.5 py-0.5 rounded "
-                    f"{_TRUST_BADGE.get(card.trust_band or '', 'bg-slate-100 text-slate-600')}",
-                ).tooltip(f"Trust: {card.trust_band or 'n/a'}")
+                _render_trust_badge(card)
+        if card.spam_status:
+            _render_spam_badge(card)
         meta = f"циклов {card.cycles_completed}"
         if card.last_event:
             meta = f"{meta} · {card.last_event}"
         ui.label(meta).classes("text-[11px] text-slate-500 truncate")
+        _render_card_stats(card, max_daily)
         if card.readiness and not card.readiness.ready:
             reasons = ", ".join(_ru_reason(reason) for reason in card.readiness.reasons)
             ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
@@ -644,6 +744,59 @@ def _render_log_row(entry: LogEntry) -> None:  # pragma: no cover
             ui.label(json.dumps(entry.extra, ensure_ascii=False)).classes(
                 "text-[11px] text-slate-400 truncate",
             )
+
+
+def _render_dialogue_body(overview: DialogueOverview) -> None:  # pragma: no cover
+    if not overview.pairs:
+        ui.label("Пар пока нет — появятся, когда прогреваются 2+ аккаунта.").classes(
+            "text-xs text-slate-400",
+        )
+    else:
+        with ui.row().classes("w-full gap-1 flex-wrap"):
+            for pair in overview.pairs:
+                ui.label(f"{pair.account_a} ↔ {pair.account_b}").classes(
+                    "text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700",
+                )
+    if overview.recent:
+        ui.separator()
+        for message in overview.recent:
+            with ui.row().classes("w-full items-center gap-2"):
+                ui.label(message.created_at[11:19]).classes(
+                    "text-[11px] text-slate-400 w-16 shrink-0",
+                )
+                ui.label(f"{message.from_account} → {message.to_account}").classes(
+                    "text-[11px] text-slate-500 w-40 shrink-0 truncate",
+                )
+                ui.label(message.text).classes("text-xs truncate")
+
+
+async def _render_dialogues() -> None:  # pragma: no cover
+    with ui.card().classes("w-full p-4 gap-2"):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("forum").classes("text-indigo-500")
+            ui.label("Диалоги между аккаунтами").classes("text-base font-semibold")
+        ui.label(
+            "Аккаунты переписываются друг с другом по парам — ход за ходом, с паузами; "
+            "беседа естественно затухает и может возобновиться позже.",
+        ).classes("text-xs text-slate-500")
+        body = ui.column().classes("w-full gap-2")
+        seen: dict[str, object] = {"sig": None}
+
+        async def refresh_dialogues() -> None:
+            overview = await load_dialogue_overview(recent_limit=12)
+            signature = (
+                tuple((pair.account_a, pair.account_b) for pair in overview.pairs),
+                tuple(message.id for message in overview.recent),
+            )
+            if signature == seen["sig"]:
+                return
+            seen["sig"] = signature
+            body.clear()
+            with body:
+                _render_dialogue_body(overview)
+
+        await refresh_dialogues()
+        ui.timer(_BOARD_POLL_SECONDS, refresh_dialogues)
 
 
 async def _render_activity_log() -> None:  # pragma: no cover

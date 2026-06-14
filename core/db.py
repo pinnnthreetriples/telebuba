@@ -1097,6 +1097,7 @@ from core.repositories.dialogues import (  # noqa: E402, F401
     count_pair_messages_since,
     latest_unreplied_for,
     list_dialogue_pairs,
+    list_recent_dialogue_messages,
     mark_message_replied,
     pair_key,
     record_dialogue_message,
