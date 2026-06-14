@@ -10,6 +10,7 @@ from core.config import settings
 from core.db import (
     configure_database,
     create_account,
+    record_dialogue_message,
     update_account_from_session_check,
     upsert_warming_state,
 )
@@ -17,7 +18,7 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate, AccountStatus
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.warming import WarmingStateWrite
-from services.dialogues import assign_pairs, get_partners
+from services.dialogues import assign_pairs, get_partners, load_dialogue_overview
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -109,3 +110,17 @@ async def test_assign_pairs_reshuffles_when_membership_changes() -> None:
 
     covered = {pair.account_a for pair in pairs} | {pair.account_b for pair in pairs}
     assert covered == {"acc-1", "acc-2", "acc-3"}
+
+
+@pytest.mark.asyncio
+async def test_load_dialogue_overview_returns_pairs_and_recent() -> None:
+    await _seed_warming("acc-1")
+    await _seed_warming("acc-2")
+    await assign_pairs()
+    await record_dialogue_message("acc-1", "acc-2", "привет")
+
+    overview = await load_dialogue_overview()
+
+    assert overview.pairs
+    assert overview.recent
+    assert overview.recent[0].text == "привет"

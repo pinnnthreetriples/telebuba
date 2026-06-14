@@ -30,6 +30,7 @@ from core.db import (
     count_pair_messages_since,
     fetch_account,
     fetch_warming_state,
+    get_spam_status,
     latest_unreplied_for,
     list_accounts,
     list_warming_channels,
@@ -73,6 +74,7 @@ from schemas.warming import (
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
+    WarmingSummary,
     is_warming,
     warming_health,
 )
@@ -420,14 +422,13 @@ async def load_board() -> WarmingBoardState:
     channels = await list_warming_channels()
     masked = await load_settings()
     channel_count = len(channels.channels)
+    now = datetime.now(UTC)
     idle: list[WarmingAccountState] = []
     warming: list[WarmingAccountState] = []
     for account in accounts.accounts:
         readiness = evaluate_readiness(account, channel_count)
         card = _to_card(account, records.get(account.account_id), readiness=readiness)
-        trust = await account_trust_score(account.account_id)
-        card.trust_score = trust.score
-        card.trust_band = trust.band
+        await _enrich_card(account, card, now)
         (warming if is_warming(card.state) else idle).append(card)
     return WarmingBoardState(
         idle=idle,
@@ -436,6 +437,40 @@ async def load_board() -> WarmingBoardState:
         settings=masked,
         channel_count=len(channels.channels),
         active_count=sum(1 for card in warming if card.state == "active"),
+        summary=_build_summary([*idle, *warming]),
+    )
+
+
+async def _enrich_card(account: AccountRead, card: WarmingAccountState, now: datetime) -> None:
+    """Attach the live health signals (trust, spam, age/ramp) to a board card."""
+    trust = await account_trust_score(account.account_id)
+    card.trust_score = trust.score
+    card.trust_band = trust.band
+    card.trust_reasons = trust.reasons
+    spam = await get_spam_status(account.account_id)
+    if spam is not None:
+        card.spam_status = spam.status
+        card.spam_detail = spam.detail
+    age_hours = _account_age_hours(account, now)
+    card.age_hours = age_hours
+    card.dm_allowed = compute_intensity(age_hours).dm_allowed
+
+
+_TRUST_HEALTHY_BANDS: Final = frozenset({"excellent", "good"})
+_TRUST_RISK_BANDS: Final = frozenset({"at_risk", "critical"})
+_ATTENTION_STATES: Final = frozenset({"flood_wait", "quarantine", "error"})
+
+
+def _build_summary(cards: list[WarmingAccountState]) -> WarmingSummary:
+    return WarmingSummary(
+        total=len(cards),
+        warming=sum(1 for card in cards if is_warming(card.state)),
+        active=sum(1 for card in cards if card.state == "active"),
+        ready=sum(1 for card in cards if card.readiness is not None and card.readiness.ready),
+        attention=sum(1 for card in cards if card.state in _ATTENTION_STATES),
+        trust_healthy=sum(1 for card in cards if card.trust_band in _TRUST_HEALTHY_BANDS),
+        trust_watch=sum(1 for card in cards if card.trust_band == "watch"),
+        trust_risk=sum(1 for card in cards if card.trust_band in _TRUST_RISK_BANDS),
     )
 
 

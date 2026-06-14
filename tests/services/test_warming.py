@@ -25,6 +25,7 @@ from core.db import (
     update_account_from_session_check,
     update_account_proxy_check,
     upsert_account_proxy,
+    upsert_spam_status,
     upsert_warming_state,
 )
 from core.logging import reset_logging_for_tests, setup_logging
@@ -474,6 +475,35 @@ async def test_load_board_splits_idle_and_warming() -> None:
     assert {card.account_id for card in board.idle} == {"acc-idle"}
     assert {card.account_id for card in board.warming} == {"acc-warming"}
     assert board.active_count == 1
+
+
+@pytest.mark.asyncio
+async def test_load_board_enriches_cards_and_summary() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-1",
+            session_path="acc-1",
+            status="alive",
+            is_temporary=False,
+        ),
+    )
+    await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id="acc-1",
+            status="clean",
+            checked_at="2026-06-13T00:00:00+00:00",
+        ),
+    )
+
+    board = await warming.load_board()
+
+    card = next(c for c in (*board.idle, *board.warming) if c.account_id == "acc-1")
+    assert card.trust_score is not None
+    assert card.trust_band is not None
+    assert card.spam_status == "clean"
+    assert card.age_hours is not None
+    assert board.summary.total == 1
 
 
 @pytest.mark.asyncio
