@@ -22,22 +22,29 @@ import random
 import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final, cast
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.config import settings
 from core.db import (
     add_warming_channel,
+    count_pair_messages_since,
     fetch_account,
     fetch_warming_state,
+    latest_unreplied_for,
     list_accounts,
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
+    mark_message_replied,
+    pair_key,
+    record_dialogue_message,
     remove_warming_channel,
     save_warming_settings,
     upsert_warming_state,
 )
 from core.gemini import generate_text
 from core.logging import log_event
+from core.phone_geo import timezone_for_phone
 from core.telegram_client import execute
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import (
@@ -58,6 +65,7 @@ from schemas.warming import (
     WarmingChannelList,
     WarmingCycleRequest,
     WarmingCycleResult,
+    WarmingIntensity,
     WarmingReadiness,
     WarmingSettings,
     WarmingSettingsSecret,
@@ -68,9 +76,14 @@ from schemas.warming import (
     is_warming,
     warming_health,
 )
+from services.content import is_acceptable, is_duplicate, register_sent
+from services.dialogues import get_partners
+from services.spam_status import refresh_spam_status
+from services.trust import account_trust_score
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.dialogues import DialogueMessage
 
 # SystemRandom: non-cryptographic jitter/selection; avoids ruff S311 on the
 # module-level ``random.*`` helpers. Behaviour is identical for our needs.
@@ -396,6 +409,7 @@ def _to_card(
         proxy_snapshot=record.proxy_snapshot if record else None,
         daily_actions=record.daily_actions if record else 0,
         daily_count_date=record.daily_count_date if record else None,
+        quarantine_count=record.quarantine_count if record else 0,
         readiness=readiness,
     )
 
@@ -411,6 +425,9 @@ async def load_board() -> WarmingBoardState:
     for account in accounts.accounts:
         readiness = evaluate_readiness(account, channel_count)
         card = _to_card(account, records.get(account.account_id), readiness=readiness)
+        trust = await account_trust_score(account.account_id)
+        card.trust_score = trust.score
+        card.trust_band = trust.band
         (warming if is_warming(card.state) else idle).append(card)
     return WarmingBoardState(
         idle=idle,
@@ -446,6 +463,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     proxy_snapshot: str | None | _Sentinel = _SENTINEL,
     daily_actions: int | _Sentinel = _SENTINEL,
     daily_count_date: str | None | _Sentinel = _SENTINEL,
+    quarantine_count: int | _Sentinel = _SENTINEL,
 ) -> WarmingStateRecord:
     current = await fetch_warming_state(account_id)
     cycles = current.cycles_completed if current else 0
@@ -486,6 +504,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             proxy_snapshot=cast("str | None", _resolve(proxy_snapshot, "proxy_snapshot")),
             daily_actions=cast("int", _resolve(daily_actions, "daily_actions") or 0),
             daily_count_date=cast("str | None", _resolve(daily_count_date, "daily_count_date")),
+            quarantine_count=cast("int", _resolve(quarantine_count, "quarantine_count") or 0),
         ),
     )
 
@@ -524,6 +543,7 @@ async def _current_card(account_id: str) -> WarmingAccountState:
         proxy_snapshot=record.proxy_snapshot if record else None,
         daily_actions=record.daily_actions if record else 0,
         daily_count_date=record.daily_count_date if record else None,
+        quarantine_count=record.quarantine_count if record else 0,
     )
 
 
@@ -685,9 +705,16 @@ async def _human_pause(min_seconds: float, max_seconds: float) -> None:
     await asyncio.sleep(_rng.uniform(min(min_seconds, max_seconds), max(min_seconds, max_seconds)))
 
 
+# Rate-limit families that carry a duration and mean "wait then retry".
+_WAIT_STATUSES: Final = frozenset({"flood_wait", "slow_mode_wait", "premium_wait"})
+# Any status that should halt the current channel/cycle pass. ``peer_flood`` is
+# a moderation restriction (no duration) handled by quarantine, not a wait.
+_HALT_STATUSES: Final = _WAIT_STATUSES | {"peer_flood"}
+
+
 def _classify_flood(result: ActionResult) -> tuple[bool, int | None, str | None]:
-    """Extract (flooded, seconds, until_iso) from an ActionResult."""
-    if result.status != "flood_wait":
+    """Extract (flooded, seconds, until_iso) from a wait-family ActionResult."""
+    if result.status not in _WAIT_STATUSES:
         return False, None, None
     seconds = result.flood_wait_seconds
     until = None
@@ -701,6 +728,7 @@ async def _read_and_react(
     channel: str,
     *,
     reactions_enabled: bool,
+    reaction_probability: float,
 ) -> tuple[int, int, ActionResult | None, int]:
     """Read a channel and maybe react. Returns (reads, reactions, flood_result, failures)."""
     warm = settings.warming
@@ -713,10 +741,10 @@ async def _read_and_react(
         reads = 1
     elif read_result.status == "failed":
         failures += 1
-    elif read_result.status == "flood_wait":
+    elif read_result.status in _HALT_STATUSES:
         return reads, reactions, read_result, failures
     await _human_pause(warm.reading_min_seconds, warm.reading_max_seconds)
-    if reactions_enabled and _rng.random() < warm.reaction_probability:
+    if reactions_enabled and _rng.random() < reaction_probability:
         react_result = await execute(
             account_id,
             ReactToPost(
@@ -725,13 +753,65 @@ async def _read_and_react(
                 message_limit=warm.reaction_message_limit,
             ),
         )
-        if react_result.status == "flood_wait":
+        if react_result.status in _HALT_STATUSES:
             return reads, reactions, react_result, failures
         if react_result.status == "ok":
             reactions = 1
         elif react_result.status == "failed":
             failures += 1
     return reads, reactions, None, failures
+
+
+def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
+    """Hours since the account was created; full-ramp age when unknown.
+
+    A missing/unparseable ``created_at`` degrades to full intensity so an
+    anomalous record never silently freezes an account at day-one behaviour.
+    """
+    if account is None:
+        return settings.warming.ramp_full_age_hours
+    try:
+        created = datetime.fromisoformat(account.created_at)
+    except ValueError:
+        return settings.warming.ramp_full_age_hours
+    if created.tzinfo is None:
+        created = created.replace(tzinfo=UTC)
+    return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
+
+
+def compute_intensity(age_hours: float) -> WarmingIntensity:
+    """Map an account's age to its per-cycle intensity via the configured ramp.
+
+    Channels-per-cycle and reaction rate grow linearly from a quiet initial
+    floor to the configured full values over ``ramp_full_age_hours``; DM is
+    gated until ``dm_min_age_hours``. With the ramp disabled, every account runs
+    at full intensity with DM allowed.
+    """
+    warm = settings.warming
+    if not warm.ramp_enabled:
+        return WarmingIntensity(
+            channels_min=warm.channels_per_cycle_min,
+            channels_max=warm.channels_per_cycle_max,
+            reaction_probability=warm.reaction_probability,
+            dm_allowed=True,
+        )
+    if warm.ramp_full_age_hours <= 0:
+        frac = 1.0
+    else:
+        frac = min(1.0, max(0.0, age_hours / warm.ramp_full_age_hours))
+    initial_channels = min(warm.ramp_initial_channels_max, warm.channels_per_cycle_max)
+    grown = round(frac * (warm.channels_per_cycle_max - initial_channels))
+    channels_max = max(1, initial_channels + grown)
+    channels_min = min(warm.channels_per_cycle_min, channels_max)
+    reaction_probability = warm.ramp_initial_reaction_probability + frac * (
+        warm.reaction_probability - warm.ramp_initial_reaction_probability
+    )
+    return WarmingIntensity(
+        channels_min=channels_min,
+        channels_max=channels_max,
+        reaction_probability=min(1.0, max(0.0, reaction_probability)),
+        dm_allowed=age_hours >= warm.dm_min_age_hours,
+    )
 
 
 async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitting hides flow.
@@ -750,14 +830,16 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
         )
 
     warm = settings.warming
+    account = await fetch_account(account_id)
+    intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
     online_set = False
     try:
         await execute(account_id, SetOnline(online=True))
         online_set = True
         await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
 
-        upper = min(warm.channels_per_cycle_max, len(channels))
-        lower = min(warm.channels_per_cycle_min, upper)
+        upper = min(intensity.channels_max, len(channels))
+        lower = min(intensity.channels_min, upper)
         chosen = _rng.sample(channels, _rng.randint(lower, upper))
 
         joined = reads = reactions = failures = 0
@@ -766,6 +848,7 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
         last_failed_action: str | None = None
         last_failed_channel: str | None = None
         flooded = False
+        peer_flooded = False
 
         for channel in chosen:
             if secret.join_enabled:
@@ -776,7 +859,12 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                     failures += 1
                     last_failed_action = "join"
                     last_failed_channel = channel.channel
-                elif join_result.status == "flood_wait":
+                elif join_result.status == "peer_flood":
+                    peer_flooded = True
+                    last_failed_action = "join"
+                    last_failed_channel = channel.channel
+                    break
+                elif join_result.status in _WAIT_STATUSES:
                     flooded, flood_seconds, flood_until = _classify_flood(join_result)
                     last_failed_action = "join"
                     last_failed_channel = channel.channel
@@ -792,6 +880,7 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                 account_id,
                 channel.channel,
                 reactions_enabled=secret.reactions_enabled,
+                reaction_probability=intensity.reaction_probability,
             )
             reads += channel_reads
             reactions += channel_reactions
@@ -800,14 +889,23 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                 last_failed_action = "read_or_react"
                 last_failed_channel = channel.channel
             if channel_flood is not None:
-                flooded, flood_seconds, flood_until = _classify_flood(channel_flood)
+                if channel_flood.status == "peer_flood":
+                    peer_flooded = True
+                else:
+                    flooded, flood_seconds, flood_until = _classify_flood(channel_flood)
                 last_failed_action = channel_flood.action_type
                 last_failed_channel = channel.channel
                 break
             await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
 
         messages_sent = 0
-        if not flooded and secret.inter_account_chat and secret.gemini_api_key:
+        if (
+            not flooded
+            and not peer_flooded
+            and intensity.dm_allowed
+            and secret.inter_account_chat
+            and secret.gemini_api_key
+        ):
             messages_sent = await _maybe_inter_account_chat(account_id, secret)
     finally:
         # SetOnline(False) must run even if any of the inner steps raises so the
@@ -823,7 +921,9 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitti
                     extra={"error_type": type(exc).__name__, "message": str(exc)},
                 )
 
-    if flooded:
+    if peer_flooded:
+        status = "peer_flood"
+    elif flooded:
         status = "flood_wait"
     elif failures and not (joined or reads or reactions):
         # Every action failed → don't lie about success.
@@ -879,70 +979,159 @@ def _sanitize_chat_text(raw: str) -> str | None:
     return cleaned or None
 
 
-async def _maybe_inter_account_chat(  # noqa: PLR0911 - explicit early returns clearer than nesting.
+async def _generate_chat_text(
+    sender_id: str,
+    secret: WarmingSettingsSecret,
+    *,
+    prompt: str | None = None,
+) -> str | None:
+    """Generate a chat line, retrying until it passes the filter and dedup.
+
+    ``prompt`` overrides the random opener (used for context-aware replies).
+    Returns ``None`` if generation fails outright or no acceptable, non-duplicate
+    text is produced within ``content_max_attempts`` tries.
+    """
+    for _ in range(settings.warming.content_max_attempts):
+        generated = await generate_text(
+            GeminiRequest(
+                api_key=secret.gemini_api_key,
+                prompt=prompt or _rng.choice(_CHAT_PROMPTS),
+                model=secret.gemini_model,
+                temperature=settings.gemini.temperature,
+                max_output_tokens=settings.gemini.max_output_tokens,
+            ),
+        )
+        if generated.status != "ok" or not generated.text:
+            await log_event(
+                "WARNING",
+                "warming_chat_generation_failed",
+                account_id=sender_id,
+                extra={"error": generated.error},
+            )
+            return None
+        candidate = _sanitize_chat_text(generated.text)
+        if candidate is None:
+            continue
+        if not is_acceptable(candidate):
+            await log_event("INFO", "warming_chat_filtered", account_id=sender_id)
+            continue
+        if await is_duplicate(candidate):
+            await log_event("INFO", "warming_chat_duplicate", account_id=sender_id)
+            continue
+        return candidate
+    return None
+
+
+_REPLY_PROMPT = (
+    "Ответь коротко и по-дружески, как другу в Telegram, на это сообщение: "
+    "«{incoming}». Только текст ответа, без кавычек."
+)
+
+
+async def _maybe_inter_account_chat(
     sender_id: str,
     secret: WarmingSettingsSecret,
 ) -> int:
-    """If two+ accounts are warming, send one Gemini-written DM to a peer."""
-    records = await list_warming_states()
-    peer_ids = {
-        record.account_id
-        for record in records
-        if is_warming(record.state) and record.account_id != sender_id
-    }
-    if not peer_ids:
+    """Advance one dialogue turn for ``sender_id`` with one of its partners.
+
+    Replies to the most recent unanswered message from a partner; otherwise
+    opens a new conversation with an eligible partner. Returns messages sent.
+    """
+    partners = await get_partners(sender_id)
+    if not partners:
         return 0
     accounts = {account.account_id: account for account in (await list_accounts()).accounts}
-    eligible = [
-        account_id
-        for account_id in peer_ids
-        if accounts.get(account_id) is not None and accounts[account_id].user_id is not None
-    ]
-    if not eligible:
-        return 0
-    receiver_id = _rng.choice(eligible)
-    receiver_user_id = accounts[receiver_id].user_id
-    if receiver_user_id is None:
-        return 0
 
-    generated = await generate_text(
-        GeminiRequest(
-            api_key=secret.gemini_api_key,
-            prompt=_rng.choice(_CHAT_PROMPTS),
-            model=secret.gemini_model,
-            temperature=settings.gemini.temperature,
-            max_output_tokens=settings.gemini.max_output_tokens,
-        ),
-    )
-    if generated.status != "ok" or not generated.text:
+    incoming = await latest_unreplied_for(sender_id)
+    if incoming is not None and incoming.from_account in partners:
+        return await _reply_to_partner(sender_id, incoming, secret, accounts)
+    return await _open_with_partner(sender_id, partners, secret, accounts)
+
+
+async def _reply_to_partner(
+    sender_id: str,
+    incoming: DialogueMessage,
+    secret: WarmingSettingsSecret,
+    accounts: dict[str, AccountRead],
+) -> int:
+    target = accounts.get(incoming.from_account)
+    if target is None or target.user_id is None:
+        await mark_message_replied(incoming.id)
+        return 0
+    if await _conversation_faded(sender_id, incoming.from_account):
+        # Long enough — let it fade rather than ping-pong forever. Marking the
+        # message replied ends the thread; a new one may start after the window.
+        await mark_message_replied(incoming.id)
         await log_event(
-            "WARNING",
-            "warming_chat_generation_failed",
+            "INFO",
+            "warming_dialogue_faded",
             account_id=sender_id,
-            extra={"error": generated.error},
+            extra={"with": incoming.from_account},
         )
         return 0
-
-    sanitized = _sanitize_chat_text(generated.text)
-    if sanitized is None:
-        await log_event(
-            "WARNING",
-            "warming_chat_text_empty_after_sanitize",
-            account_id=sender_id,
-        )
-        return 0
-
-    result = await execute(
+    text = await _generate_chat_text(
         sender_id,
-        SendDirectMessage(user_id=receiver_user_id, text=sanitized),
+        secret,
+        prompt=_REPLY_PROMPT.format(incoming=incoming.text),
     )
+    if text is None:
+        return 0
+    result = await execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
     if result.status != "ok":
         return 0
+    await mark_message_replied(incoming.id)
+    await register_sent(text)
+    # Chain: record our reply as a new pending message so the partner can answer
+    # next cycle — this is what turns a single round-trip into a conversation.
+    await record_dialogue_message(sender_id, incoming.from_account, text)
     await log_event(
         "INFO",
-        "warming_chat_sent",
+        "warming_dialogue_reply",
         account_id=sender_id,
-        extra={"to": receiver_id, "length": len(sanitized)},
+        extra={"to": incoming.from_account},
+    )
+    return 1
+
+
+async def _conversation_faded(account_a: str, account_b: str) -> bool:
+    """True once a pair has exchanged ``dialogue_max_turns`` within the window."""
+    warm = settings.warming
+    since = (
+        datetime.now(UTC) - timedelta(hours=warm.dialogue_conversation_window_hours)
+    ).isoformat()
+    count = await count_pair_messages_since(pair_key(account_a, account_b), since)
+    return count >= warm.dialogue_max_turns
+
+
+async def _open_with_partner(
+    sender_id: str,
+    partners: list[str],
+    secret: WarmingSettingsSecret,
+    accounts: dict[str, AccountRead],
+) -> int:
+    candidates = [
+        accounts[partner]
+        for partner in partners
+        if accounts.get(partner) is not None and accounts[partner].user_id is not None
+    ]
+    if not candidates:
+        return 0
+    target = _rng.choice(candidates)
+    if target.user_id is None:
+        return 0
+    text = await _generate_chat_text(sender_id, secret)
+    if text is None:
+        return 0
+    result = await execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
+    if result.status != "ok":
+        return 0
+    await register_sent(text)
+    await record_dialogue_message(sender_id, target.account_id, text)
+    await log_event(
+        "INFO",
+        "warming_dialogue_opened",
+        account_id=sender_id,
+        extra={"to": target.account_id},
     )
     return 1
 
@@ -950,6 +1139,89 @@ async def _maybe_inter_account_chat(  # noqa: PLR0911 - explicit early returns c
 # --------------------------------------------------------------------------- #
 # Long-running loop
 # --------------------------------------------------------------------------- #
+
+
+async def _recover_from_quarantine(
+    account_id: str,
+    record: WarmingStateRecord,
+    now: datetime,
+) -> WarmingCycleResult:
+    """Re-check a quarantined account: resume if cleared, escalate otherwise.
+
+    Called when a quarantine window has elapsed. Re-probes @SpamBot; a cleared
+    account returns to warming, a still-limited one is re-quarantined until the
+    configured repeat cap, after which it is given up on (error + alert).
+    """
+    warm = settings.warming
+    verdict = await refresh_spam_status(account_id, force=True)
+    if verdict.status != "limited":
+        next_run = (now + timedelta(seconds=warm.startup_jitter_max_seconds)).isoformat()
+        await _set_state(
+            account_id,
+            "sleeping",
+            last_event="quarantine_recovered",
+            next_run_at=next_run,
+            heartbeat_at=now.isoformat(),
+            last_error=None,
+            quarantine_count=0,
+        )
+        await log_event("INFO", "warming_quarantine_recovered", account_id=account_id)
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="recovered")
+
+    count = record.quarantine_count + 1
+    if count >= warm.quarantine_max_repeats:
+        await _set_state(
+            account_id,
+            "error",
+            last_event="quarantine_exhausted",
+            last_error=f"peer-flood not lifted after {count} checks",
+            heartbeat_at=now.isoformat(),
+            quarantine_count=count,
+        )
+        await log_event(
+            "ERROR",
+            "warming_quarantine_exhausted",
+            account_id=account_id,
+            extra={"checks": count},
+        )
+        return WarmingCycleResult(
+            account_id=account_id,
+            status="error",
+            detail="quarantine exhausted",
+        )
+
+    next_run = (now + timedelta(hours=warm.quarantine_hours)).isoformat()
+    await _set_state(
+        account_id,
+        "quarantine",
+        last_event="quarantine_extended",
+        next_run_at=next_run,
+        heartbeat_at=now.isoformat(),
+        quarantine_count=count,
+    )
+    await log_event(
+        "WARNING",
+        "warming_quarantine_extended",
+        account_id=account_id,
+        extra={"checks": count},
+    )
+    return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
+
+
+async def _local_now(account_id: str, now: datetime) -> datetime:
+    """Return ``now`` in the account's local timezone (from its phone number).
+
+    Quiet hours are evaluated in the account's local time rather than UTC. Falls
+    back to ``now`` when the number has no resolvable timezone.
+    """
+    account = await fetch_account(account_id)
+    tz_name = timezone_for_phone(account.phone) if account else None
+    if tz_name is None:
+        return now
+    try:
+        return now.astimezone(ZoneInfo(tz_name))
+    except ZoneInfoNotFoundError:
+        return now
 
 
 async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
@@ -968,20 +1240,21 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     controls = await load_warming_settings()
     record = await fetch_warming_state(account_id)
 
-    if controls.quiet_hours_enabled and _in_quiet_hours(
-        now,
-        controls.quiet_hours_start,
-        controls.quiet_hours_end,
-    ):
-        next_run = _quiet_hours_end_at(now, controls.quiet_hours_end).isoformat()
-        await _set_state(
-            account_id,
-            "sleeping",
-            last_event="quiet_hours",
-            next_run_at=next_run,
-            heartbeat_at=now.isoformat(),
-        )
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
+    if record is not None and record.state == "quarantine":
+        return await _recover_from_quarantine(account_id, record, now)
+
+    if controls.quiet_hours_enabled:
+        local_now = await _local_now(account_id, now)
+        if _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
+            next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
+            await _set_state(
+                account_id,
+                "sleeping",
+                last_event="quiet_hours",
+                next_run_at=next_run,
+                heartbeat_at=now.isoformat(),
+            )
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
 
     daily_count, daily_date = _roll_daily(record, now.date().isoformat())
     if controls.max_daily_actions > 0 and daily_count >= controls.max_daily_actions:
@@ -1013,7 +1286,9 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     )
     new_daily = daily_count + actions_done
 
-    if result.status == "flood_wait" and result.flood_wait_seconds:
+    if result.status == "peer_flood":
+        sleep_seconds = warm.quarantine_hours * _SECONDS_PER_HOUR
+    elif result.status == "flood_wait" and result.flood_wait_seconds:
         sleep_seconds = float(result.flood_wait_seconds)
     else:
         sleep_seconds = _rng.uniform(
@@ -1023,7 +1298,9 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     next_run = (datetime.now(UTC) + timedelta(seconds=sleep_seconds)).isoformat()
 
     next_state: WarmingState
-    if result.status == "flood_wait":
+    if result.status == "peer_flood":
+        next_state = "quarantine"
+    elif result.status == "flood_wait":
         next_state = "flood_wait"
     elif result.status == "failed":
         next_state = "error"

@@ -6,6 +6,7 @@ from core.db import (
     configure_database,
     create_account,
     delete_account_proxy,
+    exit_ip_collisions,
     fetch_account_proxy,
     fetch_account_proxy_settings,
     list_accounts,
@@ -75,6 +76,58 @@ async def test_update_account_proxy_check_persists_exit_country(tmp_path) -> Non
     assert proxy.country_code == "NL"
     assert accounts.accounts[0].proxy_exit_ip == "45.130.253.155"
     assert accounts.accounts[0].proxy_country_name == "Netherlands"
+
+
+@pytest.mark.asyncio
+async def test_update_account_proxy_check_persists_asn_and_datacenter(tmp_path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-dc"))
+    await upsert_account_proxy(
+        AccountProxyUpsert(account_id="acc-dc", proxy_type="socks5", host="127.0.0.1", port=9050),
+    )
+
+    proxy = await update_account_proxy_check(
+        AccountProxyCheckUpdate(
+            account_id="acc-dc",
+            status="tcp_working",
+            exit_ip="1.2.3.4",
+            asn="AS24940 Hetzner Online GmbH",
+            is_datacenter=True,
+        ),
+    )
+
+    assert proxy.asn == "AS24940 Hetzner Online GmbH"
+    assert proxy.is_datacenter is True
+
+
+@pytest.mark.asyncio
+async def test_exit_ip_collisions_flags_shared_ip(tmp_path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    for account_id in ("acc-a", "acc-b", "acc-solo"):
+        await create_account(AccountCreate(account_id=account_id))
+        await upsert_account_proxy(
+            AccountProxyUpsert(
+                account_id=account_id,
+                proxy_type="socks5",
+                host="127.0.0.1",
+                port=9050,
+            ),
+        )
+    shared = "8.8.8.8"
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(account_id="acc-a", status="tcp_working", exit_ip=shared),
+    )
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(account_id="acc-b", status="tcp_working", exit_ip=shared),
+    )
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(account_id="acc-solo", status="tcp_working", exit_ip="9.9.9.9"),
+    )
+
+    collisions = await exit_ip_collisions()
+
+    assert set(collisions) == {shared}
+    assert sorted(collisions[shared]) == ["acc-a", "acc-b"]
 
 
 @pytest.mark.asyncio

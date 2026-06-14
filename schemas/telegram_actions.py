@@ -112,7 +112,14 @@ TelegramAction = Annotated[
 ]
 
 
-ActionStatus = Literal["ok", "flood_wait", "failed"]
+ActionStatus = Literal[
+    "ok",
+    "flood_wait",
+    "slow_mode_wait",
+    "premium_wait",
+    "peer_flood",
+    "failed",
+]
 
 
 class ActionResult(BaseModel):

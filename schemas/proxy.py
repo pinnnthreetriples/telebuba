@@ -38,6 +38,8 @@ class AccountProxyRead(BaseModel):
     exit_ip: str | None = None
     country_code: str | None = None
     country_name: str | None = None
+    asn: str | None = None
+    is_datacenter: bool = False
     updated_at: str
 
 
@@ -56,6 +58,8 @@ class ProxyCheckResult(BaseModel):
     exit_ip: str | None = None
     country_code: str | None = None
     country_name: str | None = None
+    asn: str | None = None
+    is_datacenter: bool = False
 
 
 class AccountProxyCheckUpdate(BaseModel):
@@ -65,3 +69,5 @@ class AccountProxyCheckUpdate(BaseModel):
     exit_ip: str | None = None
     country_code: str | None = None
     country_name: str | None = None
+    asn: str | None = None
+    is_datacenter: bool = False

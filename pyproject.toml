@@ -9,6 +9,7 @@ dependencies = [
     "loguru>=0.7.3",
     "nicegui>=3.13.0",
     "opentele2>=1.2.1",
+    "phonenumbers>=9.0.32",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.11.0",
     "python-dotenv>=1.2.2",

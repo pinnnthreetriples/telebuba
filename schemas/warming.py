@@ -19,23 +19,25 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "error"]
+WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 
-_ACTIVE_STATES: frozenset[WarmingState] = frozenset({"active", "sleeping", "flood_wait", "error"})
+_ACTIVE_STATES: frozenset[WarmingState] = frozenset(
+    {"active", "sleeping", "flood_wait", "quarantine", "error"},
+)
 
 
 def warming_health(state: WarmingState) -> WarmingHealth:
     """Map a warming state to a traffic-light colour for the UI.
 
     - ``ok`` (green)  — actively warming.
-    - ``warn`` (amber) — sleeping between cycles or flood-waited.
+    - ``warn`` (amber) — sleeping between cycles, flood-waited, or quarantined.
     - ``fail`` (red)  — last cycle errored.
     - ``idle`` (grey) — not being warmed.
     """
     if state == "active":
         return "ok"
-    if state in {"sleeping", "flood_wait"}:
+    if state in {"sleeping", "flood_wait", "quarantine"}:
         return "warn"
     if state == "error":
         return "fail"
@@ -128,6 +130,19 @@ class WarmingSettingsUpdate(BaseModel):
     clear_gemini_key: bool = False
 
 
+class WarmingIntensity(BaseModel):
+    """Effective per-cycle intensity for an account, derived from its age.
+
+    Produced by the age-based ramp: a fresh account warms quietly (few channels,
+    low reaction rate, no DM) and grows to the configured full intensity.
+    """
+
+    channels_min: int = Field(ge=1)
+    channels_max: int = Field(ge=1)
+    reaction_probability: float = Field(ge=0.0, le=1.0)
+    dm_allowed: bool
+
+
 class WarmingReadiness(BaseModel):
     """Pre-start verdict for an account: can it safely begin warming?
 
@@ -160,6 +175,7 @@ class WarmingStateRecord(BaseModel):
     proxy_snapshot: str | None = None
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
+    quarantine_count: int = Field(default=0, ge=0)
 
 
 class WarmingStateWrite(BaseModel):
@@ -182,6 +198,7 @@ class WarmingStateWrite(BaseModel):
     proxy_snapshot: str | None = None
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
+    quarantine_count: int = Field(default=0, ge=0)
 
 
 class WarmingAccountState(BaseModel):
@@ -207,6 +224,9 @@ class WarmingAccountState(BaseModel):
     proxy_snapshot: str | None = None
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
+    quarantine_count: int = Field(default=0, ge=0)
+    trust_score: int | None = Field(default=None, ge=0, le=100)
+    trust_band: str | None = None
     readiness: WarmingReadiness | None = None
 
 
@@ -233,7 +253,7 @@ class WarmingCycleRequest(BaseModel):
     account_id: str = Field(min_length=1)
 
 
-CycleStatus = Literal["ok", "skipped", "flood_wait", "error", "failed"]
+CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]
 
 
 class WarmingCycleResult(BaseModel):

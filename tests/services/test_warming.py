@@ -31,6 +31,7 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.gemini import GeminiResult
 from schemas.proxy import AccountProxyCheckUpdate, AccountProxyUpsert
+from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.telegram_session import TelegramSessionCheckResult
 from schemas.warming import (
@@ -44,6 +45,7 @@ from schemas.warming import (
     WarmingStateWrite,
 )
 from services import warming
+from services.dialogues import assign_pairs
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -66,10 +68,15 @@ class _Recorder:
     def __init__(self) -> None:
         self.actions: list[tuple[str, TelegramAction]] = []
         self.flood_on: set[str] = set()
+        self.peer_flood_on: set[str] = set()
 
     async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
         self.actions.append((account_id, action))
-        status = "flood_wait" if action.action_type in self.flood_on else "ok"
+        status = "ok"
+        if action.action_type in self.flood_on:
+            status = "flood_wait"
+        elif action.action_type in self.peer_flood_on:
+            status = "peer_flood"
         return ActionResult(
             status=status,
             action_type=action.action_type,
@@ -204,6 +211,174 @@ async def test_cycle_stops_on_flood_wait(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 # --------------------------------------------------------------------------- #
+# Age-based ramp
+# --------------------------------------------------------------------------- #
+
+
+def _configure_ramp(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "ramp_enabled", True)
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_max", 3)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 0.6)
+    monkeypatch.setattr(settings.warming, "ramp_initial_channels_max", 1)
+    monkeypatch.setattr(settings.warming, "ramp_initial_reaction_probability", 0.1)
+    monkeypatch.setattr(settings.warming, "ramp_full_age_hours", 192.0)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 36.0)
+
+
+def test_compute_intensity_is_quiet_for_a_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_ramp(monkeypatch)
+    fresh = warming.compute_intensity(0.0)
+    assert fresh.channels_max == 1
+    assert fresh.reaction_probability == pytest.approx(0.1)
+    assert fresh.dm_allowed is False
+
+
+def test_compute_intensity_reaches_full_intensity_when_aged(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _configure_ramp(monkeypatch)
+    aged = warming.compute_intensity(500.0)
+    assert aged.channels_max == 3
+    assert aged.reaction_probability == pytest.approx(0.6)
+    assert aged.dm_allowed is True
+    # DM unlocks exactly at the cold-start threshold.
+    assert warming.compute_intensity(36.0).dm_allowed is True
+    assert warming.compute_intensity(35.0).dm_allowed is False
+
+
+def test_compute_intensity_full_when_ramp_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_ramp(monkeypatch)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    full = warming.compute_intensity(0.0)
+    assert full.channels_max == 3
+    assert full.reaction_probability == pytest.approx(0.6)
+    assert full.dm_allowed is True
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_dm_for_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A freshly created account (age ~0) must not send DMs under the cold-start
+    # guard, even with chat enabled and an eligible peer present.
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+
+
+# --------------------------------------------------------------------------- #
+# PEER_FLOOD quarantine
+# --------------------------------------------------------------------------- #
+
+
+def _verdict(account_id: str, status: SpamStatusKind) -> SpamStatusVerdict:
+    return SpamStatusVerdict(
+        account_id=account_id,
+        status=status,
+        checked_at="2026-06-13T00:00:00+00:00",
+    )
+
+
+@pytest.mark.asyncio
+async def test_cycle_reports_peer_flood(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    recorder.peer_flood_on.add("join_channel")
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "peer_flood"
+    assert "read_channel" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_loop_iteration_quarantines_on_peer_flood(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    recorder.peer_flood_on.add("join_channel")
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.run_loop_iteration("acc-1")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "quarantine"
+
+
+@pytest.mark.asyncio
+async def test_quarantine_recovers_when_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=1),
+    )
+
+    async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        return _verdict(account_id, "clean")
+
+    monkeypatch.setattr(warming, "refresh_spam_status", fake_refresh)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.detail == "recovered"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "sleeping"
+    assert state.quarantine_count == 0
+
+
+@pytest.mark.asyncio
+async def test_quarantine_extends_when_still_limited(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=0),
+    )
+
+    async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        return _verdict(account_id, "limited")
+
+    monkeypatch.setattr(warming, "refresh_spam_status", fake_refresh)
+
+    await warming.run_loop_iteration("acc-1")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "quarantine"
+    assert state.quarantine_count == 1
+
+
+@pytest.mark.asyncio
+async def test_quarantine_exhausts_to_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=2),
+    )
+
+    async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        return _verdict(account_id, "limited")
+
+    monkeypatch.setattr(warming, "refresh_spam_status", fake_refresh)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "error"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "error"
+
+
+# --------------------------------------------------------------------------- #
 # Inter-account chat
 # --------------------------------------------------------------------------- #
 
@@ -222,12 +397,14 @@ async def _seed_two_warming_accounts() -> None:
     )
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-2", state="active"))
+    await assign_pairs()
 
 
 @pytest.mark.asyncio
 async def test_cycle_sends_inter_account_dm(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
 
     async def fake_generate(_request: object) -> GeminiResult:
         return GeminiResult(status="ok", text="hi there")
@@ -249,6 +426,7 @@ async def test_cycle_sends_inter_account_dm(monkeypatch: pytest.MonkeyPatch) -> 
 async def test_cycle_skips_dm_when_generation_fails(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
 
     async def fake_generate(_request: object) -> GeminiResult:
         return GeminiResult(status="error", error="quota")
@@ -268,6 +446,7 @@ async def test_cycle_skips_dm_when_generation_fails(monkeypatch: pytest.MonkeyPa
 async def test_cycle_skips_dm_without_peers(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
     await _seed_channel()
     await _set_settings(chat=True, reactions=False, key="gemini-key")
     await create_account(AccountCreate(account_id="acc-1"))
@@ -372,6 +551,7 @@ async def test_load_settings_masks_key() -> None:
 async def test_cycle_skips_dm_when_peer_has_no_user_id(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
     await _seed_channel()
     await _set_settings(chat=True, reactions=False, key="gemini-key")
     # Two warming accounts but the peer was never session-checked → user_id is None.
@@ -379,11 +559,124 @@ async def test_cycle_skips_dm_when_peer_has_no_user_id(monkeypatch: pytest.Monke
     await create_account(AccountCreate(account_id="acc-2"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-2", state="active"))
+    await assign_pairs()
 
     result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
 
     assert result.messages_sent == 0
     assert "send_dm" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_dm_on_duplicate_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="hi there")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    await warming.register_sent("hi there")  # already sent → every attempt is a duplicate
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_dm_on_forbidden_content(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    monkeypatch.setattr(settings.warming, "content_forbidden_words", ["купить"])
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="купить дёшево прямо сейчас")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_replies_to_pending_partner_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="о, привет, как сам?")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()  # acc-1 ↔ acc-2 paired; acc-2 has user_id 999
+    # acc-2 has sent acc-1 a message that is awaiting a reply.
+    await warming.record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 1
+    dms = [action for _id, action in recorder.actions if action.action_type == "send_dm"]
+    assert dms
+    assert dms[0].user_id == 999
+    # the incoming message is now answered → not replied again
+    assert await warming.latest_unreplied_for("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_dialogue_reply_chains_for_multi_turn(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="ага, у меня норм, а у тебя?")
+
+    monkeypatch.setattr(warming, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    await warming.record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 1
+    # acc-1's reply is now pending for acc-2 → the conversation can continue
+    pending = await warming.latest_unreplied_for("acc-2")
+    assert pending is not None
+    assert pending.from_account == "acc-1"
+
+
+@pytest.mark.asyncio
+async def test_conversation_fades_after_max_turns(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    monkeypatch.setattr(settings.warming, "dialogue_max_turns", 1)
+    recorder = _Recorder()
+    monkeypatch.setattr(warming, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    # The pair has already hit the turn cap; the incoming should fade, not reply.
+    await warming.record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
+    # the thread is ended (incoming marked replied), no new pending message
+    assert await warming.latest_unreplied_for("acc-1") is None
 
 
 # --------------------------------------------------------------------------- #
@@ -839,6 +1132,31 @@ async def test_run_loop_iteration_parks_during_quiet_hours(
     assert record is not None
     assert record.state == "sleeping"
     assert record.next_run_at is not None
+
+
+@pytest.mark.asyncio
+async def test_local_now_converts_to_account_timezone() -> None:
+    await create_account(AccountCreate(account_id="acc-tz"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-tz",
+            session_path="acc-tz",
+            status="alive",
+            is_temporary=False,
+            phone="+12025550123",
+        ),
+    )
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    local = await warming._local_now("acc-tz", now)
+    assert str(local.tzinfo) == "America/New_York"
+    assert local.utcoffset() != now.utcoffset()
+
+
+@pytest.mark.asyncio
+async def test_local_now_falls_back_to_utc_without_phone() -> None:
+    await create_account(AccountCreate(account_id="acc-nophone"))
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    assert await warming._local_now("acc-nophone", now) == now
 
 
 # --------------------------------------------------------------------------- #

@@ -91,12 +91,23 @@ def _payload_to_result(payload: dict[str, Any]) -> ProxyCheckResult:
     if payload.get("status") != "success":
         message = str(payload.get("message") or "Geo endpoint returned failure")
         return ProxyCheckResult(status="failed", last_error=message[:_MAX_ERROR_LENGTH])
+    asn = _optional_payload_str(payload.get("as"))
     return ProxyCheckResult(
         status="tcp_working",
         exit_ip=_optional_payload_str(payload.get("query")),
         country_code=_optional_payload_str(payload.get("countryCode")),
         country_name=_optional_payload_str(payload.get("country")),
+        asn=asn,
+        is_datacenter=_is_datacenter_asn(asn),
     )
+
+
+def _is_datacenter_asn(asn: str | None) -> bool:
+    """True when the ASN string matches a known hosting/datacenter network."""
+    if not asn:
+        return False
+    lowered = asn.lower()
+    return any(keyword in lowered for keyword in settings.proxy.datacenter_asn_keywords)
 
 
 def _optional_payload_str(value: object) -> str | None:

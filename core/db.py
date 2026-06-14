@@ -105,6 +105,8 @@ _account_proxies = Table(
     Column("exit_ip", String, nullable=True),
     Column("country_code", String, nullable=True),
     Column("country_name", String, nullable=True),
+    Column("asn", String, nullable=True),
+    Column("is_datacenter", Integer, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
 )
@@ -164,6 +166,15 @@ _warming_account_state = Table(
     Column("proxy_snapshot", String, nullable=True),
     Column("daily_actions", Integer, nullable=True),
     Column("daily_count_date", String, nullable=True),
+    Column("quarantine_count", Integer, nullable=True),
+)
+_account_spam_status = Table(
+    "account_spam_status",
+    _metadata,
+    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
+    Column("status", String, nullable=False),
+    Column("detail", String, nullable=True),
+    Column("checked_at", String, nullable=False),
 )
 
 _WARMING_SETTINGS_ID = 1
@@ -216,16 +227,18 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
         if "bio" not in account_columns:
             connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN bio VARCHAR")
         proxy_columns = _sqlite_columns(connection, "account_proxies")
-        if "exit_ip" not in proxy_columns:
-            connection.exec_driver_sql("ALTER TABLE account_proxies ADD COLUMN exit_ip VARCHAR")
-        if "country_code" not in proxy_columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE account_proxies ADD COLUMN country_code VARCHAR",
-            )
-        if "country_name" not in proxy_columns:
-            connection.exec_driver_sql(
-                "ALTER TABLE account_proxies ADD COLUMN country_name VARCHAR",
-            )
+        _proxy_new_columns: tuple[tuple[str, str], ...] = (
+            ("exit_ip", "VARCHAR"),
+            ("country_code", "VARCHAR"),
+            ("country_name", "VARCHAR"),
+            ("asn", "VARCHAR"),
+            ("is_datacenter", "INTEGER"),
+        )
+        for column_name, column_type in _proxy_new_columns:
+            if column_name not in proxy_columns:
+                connection.exec_driver_sql(
+                    f"ALTER TABLE account_proxies ADD COLUMN {column_name} {column_type}",
+                )
         warming_state_columns = _sqlite_columns(connection, "warming_account_state")
         # Each entry is (column_name, sql_type) — additive only, never destructive.
         _warming_state_new_columns: tuple[tuple[str, str], ...] = (
@@ -240,6 +253,7 @@ def _ensure_sqlite_schema(engine: Engine) -> None:
             ("proxy_snapshot", "VARCHAR"),
             ("daily_actions", "INTEGER"),
             ("daily_count_date", "VARCHAR"),
+            ("quarantine_count", "INTEGER"),
         )
         for column_name, column_type in _warming_state_new_columns:
             if column_name not in warming_state_columns:
@@ -349,6 +363,8 @@ def _row_to_account_proxy(mapping: Mapping[str, object]) -> AccountProxyRead:
         exit_ip=_optional_str(mapping.get("exit_ip")),
         country_code=_optional_str(mapping.get("country_code")),
         country_name=_optional_str(mapping.get("country_name")),
+        asn=_optional_str(mapping.get("asn")),
+        is_datacenter=bool(mapping.get("is_datacenter")),
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -362,36 +378,6 @@ def _row_to_account_proxy_settings(mapping: Mapping[str, object]) -> AccountProx
         username=_optional_str(mapping.get("username")),
         password=_optional_str(mapping.get("password")),
     )
-
-
-def _fetch_device_fingerprint(account_id: str) -> DeviceFingerprint | None:
-    statement = select(_device_fingerprints).where(_device_fingerprints.c.account_id == account_id)
-    with _get_engine().connect() as connection:
-        row = connection.execute(statement).mappings().first()
-    if row is None:
-        return None
-    return _row_to_device_fingerprint(cast("Mapping[str, object]", row))
-
-
-async def fetch_device_fingerprint(account_id: str) -> DeviceFingerprint | None:
-    return await asyncio.to_thread(_fetch_device_fingerprint, account_id)
-
-
-def _insert_device_fingerprint(profile: DeviceFingerprint) -> DeviceFingerprint:
-    statement = insert(_device_fingerprints).values(**profile.model_dump())
-    with _get_engine().begin() as connection:
-        connection.execute(statement)
-    return profile
-
-
-async def insert_device_fingerprint(profile: DeviceFingerprint) -> DeviceFingerprint:
-    try:
-        return await asyncio.to_thread(_insert_device_fingerprint, profile)
-    except IntegrityError:
-        existing = await fetch_device_fingerprint(profile.account_id)
-        if existing is None:
-            raise
-        return existing
 
 
 def _account_select_statement() -> Select[tuple[Any, ...]]:
@@ -567,6 +553,24 @@ async def delete_account_proxy(data: AccountProxyDelete) -> None:
     await asyncio.to_thread(_delete_account_proxy, data)
 
 
+def _exit_ip_collisions() -> dict[str, list[str]]:
+    statement = select(
+        _account_proxies.c.account_id,
+        _account_proxies.c.exit_ip,
+    ).where(_account_proxies.c.exit_ip.is_not(None))
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).all()
+    grouped: dict[str, list[str]] = {}
+    for account_id, exit_ip in rows:
+        grouped.setdefault(str(exit_ip), []).append(str(account_id))
+    return {ip: ids for ip, ids in grouped.items() if len(ids) > 1}
+
+
+async def exit_ip_collisions() -> dict[str, list[str]]:
+    """Map each shared exit IP to the accounts using it (only IPs used by 2+)."""
+    return await asyncio.to_thread(_exit_ip_collisions)
+
+
 def _update_account_proxy_check(data: AccountProxyCheckUpdate) -> AccountProxyRead:
     now = _now_iso()
     values: dict[str, object | None] = {
@@ -576,6 +580,8 @@ def _update_account_proxy_check(data: AccountProxyCheckUpdate) -> AccountProxyRe
         "exit_ip": data.exit_ip,
         "country_code": data.country_code,
         "country_name": data.country_name,
+        "asn": data.asn,
+        "is_datacenter": int(data.is_datacenter),
         "updated_at": now,
     }
     with _get_engine().begin() as connection:
@@ -994,6 +1000,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         proxy_snapshot=_optional_str(mapping.get("proxy_snapshot")),
         daily_actions=_optional_int(mapping.get("daily_actions")) or 0,
         daily_count_date=_optional_str(mapping.get("daily_count_date")),
+        quarantine_count=_optional_int(mapping.get("quarantine_count")) or 0,
     )
 
 
@@ -1043,6 +1050,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "proxy_snapshot": data.proxy_snapshot,
         "daily_actions": data.daily_actions,
         "daily_count_date": data.daily_count_date,
+        "quarantine_count": data.quarantine_count,
     }
     with _get_engine().begin() as connection:
         exists = connection.execute(
@@ -1069,3 +1077,32 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
 
 async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
     return await asyncio.to_thread(_upsert_warming_state, data)
+
+
+# --------------------------------------------------------------------------- #
+# Domain repositories (#38) — split out of this module and re-exported so that
+# existing ``from core.db import ...`` call sites keep working unchanged. These
+# imports live at the bottom because the repositories import shared table
+# objects and helpers defined above.
+# --------------------------------------------------------------------------- #
+from core.repositories.content import (  # noqa: E402, F401
+    record_sent_hash,
+    was_hash_sent_since,
+)
+from core.repositories.device_fingerprint import (  # noqa: E402, F401
+    fetch_device_fingerprint,
+    insert_device_fingerprint,
+)
+from core.repositories.dialogues import (  # noqa: E402, F401
+    count_pair_messages_since,
+    latest_unreplied_for,
+    list_dialogue_pairs,
+    mark_message_replied,
+    pair_key,
+    record_dialogue_message,
+    replace_dialogue_pairs,
+)
+from core.repositories.spam_status import (  # noqa: E402, F401
+    get_spam_status,
+    upsert_spam_status,
+)

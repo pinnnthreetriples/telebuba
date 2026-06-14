@@ -515,6 +515,7 @@ def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma:
                 card.last_event,
                 card.next_run_at,
                 card.last_error,
+                card.trust_score,
                 None
                 if card.readiness is None
                 else (card.readiness.ready, tuple(card.readiness.reasons)),
@@ -586,6 +587,15 @@ def _render_column(  # noqa: PLR0913 # pragma: no cover
             _render_card(card, drag)
 
 
+_TRUST_BADGE = {
+    "excellent": "bg-green-100 text-green-700",
+    "good": "bg-emerald-100 text-emerald-700",
+    "watch": "bg-amber-100 text-amber-700",
+    "at_risk": "bg-orange-100 text-orange-700",
+    "critical": "bg-red-100 text-red-700",
+}
+
+
 def _render_card(  # pragma: no cover
     card: WarmingAccountState,
     drag: dict[str, str | None],
@@ -608,6 +618,11 @@ def _render_card(  # pragma: no cover
             ui.label(_STATE_LABEL.get(card.state, card.state)).classes(
                 f"text-[11px] px-2 py-0.5 rounded {_STATE_BADGE.get(card.state, '')}",
             )
+            if card.trust_score is not None:
+                ui.label(f"⛨ {card.trust_score}").classes(
+                    "text-[11px] px-1.5 py-0.5 rounded "
+                    f"{_TRUST_BADGE.get(card.trust_band or '', 'bg-slate-100 text-slate-600')}",
+                ).tooltip(f"Trust: {card.trust_band or 'n/a'}")
         meta = f"циклов {card.cycles_completed}"
         if card.last_event:
             meta = f"{meta} · {card.last_event}"

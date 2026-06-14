@@ -28,6 +28,11 @@ class TelegramSettings(BaseSettings):
     connection_retries: int = Field(default=3, ge=0)
     retry_delay_seconds: int = Field(default=2, ge=0)
     request_retries: int = Field(default=3, ge=0)
+    # Telethon auto-sleeps and retries on a flood wait whose duration is at or
+    # below this threshold; longer waits raise so we can handle them ourselves.
+    # Default 0 = surface every flood event to our own state machine (no silent
+    # auto-sleep) so flood-type differentiation and quarantine logic always see it.
+    flood_sleep_threshold: int = Field(default=0, ge=0)
 
 
 class UiSettings(BaseSettings):
@@ -46,9 +51,32 @@ class ProxySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PROXY__", extra="ignore")
 
     check_host: str = Field(default="ip-api.com", min_length=1)
-    check_path: str = Field(default="/json?fields=status,message,query,country,countryCode")
+    check_path: str = Field(default="/json?fields=status,message,query,country,countryCode,as")
     check_port: int = Field(default=80, ge=1, le=65535)
     check_timeout_seconds: float = Field(default=8.0, gt=0)
+    # Substrings (case-insensitive) in the ASN string that mark a hosting /
+    # datacenter network — lower trust than residential/mobile. ip-api's free
+    # endpoint only exposes the ``as`` string, so we classify by known names.
+    datacenter_asn_keywords: list[str] = Field(
+        default_factory=lambda: [
+            "amazon",
+            "aws",
+            "google",
+            "microsoft",
+            "azure",
+            "digitalocean",
+            "hetzner",
+            "ovh",
+            "linode",
+            "vultr",
+            "contabo",
+            "leaseweb",
+            "m247",
+            "choopa",
+            "oracle",
+            "scaleway",
+        ],
+    )
 
 
 class ProfileMediaSettings(BaseSettings):
@@ -114,6 +142,41 @@ class WarmingSettings(BaseSettings):
     # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
     # When the day's count reaches the cap the account parks until UTC midnight.
     max_daily_actions: int = Field(default=0, ge=0)
+    # Age-based ramp ("balanced" profile): a fresh account behaves quietly and
+    # grows to full intensity over ``ramp_full_age_hours``. Disable to make every
+    # account run at full intensity from day one.
+    ramp_enabled: bool = True
+    ramp_full_age_hours: float = Field(default=192.0, ge=0.0)
+    ramp_initial_channels_max: int = Field(default=1, ge=1)
+    ramp_initial_reaction_probability: float = Field(default=0.1, ge=0.0, le=1.0)
+    # Cold-start guard: no outbound DM until the account is at least this old.
+    dm_min_age_hours: float = Field(default=36.0, ge=0.0)
+    # How long a cached @SpamBot verdict stays fresh before we re-probe. Frequent
+    # /start to @SpamBot is itself suspicious, so keep this generous.
+    spam_status_ttl_hours: float = Field(default=36.0, ge=0.0)
+    # PEER_FLOOD quarantine: how long an account rests before its status is
+    # re-checked, and how many consecutive still-limited re-checks are tolerated
+    # before it is given up on (marked error + alerted).
+    quarantine_hours: float = Field(default=48.0, gt=0.0)
+    quarantine_max_repeats: int = Field(default=3, ge=1)
+    # Content anti-repeat: refuse to send the same normalised text twice within
+    # this window (identical content across accounts is a strong spam signal),
+    # how many times to regenerate before giving up, plus an outbound filter.
+    content_dedup_window_days: float = Field(default=7.0, ge=0.0)
+    content_max_attempts: int = Field(default=3, ge=1)
+    content_block_links: bool = True
+    content_forbidden_words: list[str] = Field(
+        default_factory=lambda: ["реклама", "купить", "продам", "продаю", "скидк", "промокод"],
+    )
+    # Inter-account dialogue pairing: how many partners each account gets, and
+    # how often the acquaintance graph is reshuffled (imitates meeting people).
+    dialogue_partners_min: int = Field(default=2, ge=1)
+    dialogue_partners_max: int = Field(default=4, ge=1)
+    dialogue_reshuffle_days: float = Field(default=10.0, gt=0.0)
+    # A conversation fades after this many messages within the rolling window;
+    # once the window passes the pair may start talking again (resumption).
+    dialogue_max_turns: int = Field(default=12, ge=1)
+    dialogue_conversation_window_hours: float = Field(default=48.0, gt=0.0)
 
 
 class GeminiSettings(BaseSettings):
@@ -127,6 +190,29 @@ class GeminiSettings(BaseSettings):
     max_output_tokens: int = Field(default=120, ge=1, le=2048)
 
 
+class TrustSettings(BaseSettings):
+    """Tunables for the internal account Trust Score (our own metric, 0-100)."""
+
+    model_config = SettingsConfigDict(env_prefix="TRUST__", extra="ignore")
+
+    # Band lower bounds (score >= bound → that band, checked excellent → critical).
+    excellent_min: int = Field(default=90, ge=0, le=100)
+    good_min: int = Field(default=75, ge=0, le=100)
+    watch_min: int = Field(default=60, ge=0, le=100)
+    at_risk_min: int = Field(default=40, ge=0, le=100)
+    # Penalties subtracted from a 100 baseline.
+    penalty_not_alive: int = Field(default=40, ge=0, le=100)
+    penalty_spam_limited: int = Field(default=50, ge=0, le=100)
+    penalty_spam_unknown: int = Field(default=10, ge=0, le=100)
+    penalty_quarantine_each: int = Field(default=15, ge=0, le=100)
+    penalty_flood_active: int = Field(default=15, ge=0, le=100)
+    penalty_geo_mismatch: int = Field(default=10, ge=0, le=100)
+    penalty_geo_unknown: int = Field(default=5, ge=0, le=100)
+    penalty_proxy_failed: int = Field(default=20, ge=0, le=100)
+    penalty_new_account: int = Field(default=10, ge=0, le=100)
+    new_account_hours: float = Field(default=48.0, ge=0.0)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -138,6 +224,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
+    trust: TrustSettings = Field(default_factory=TrustSettings)
 
 
 def load_settings() -> Settings:

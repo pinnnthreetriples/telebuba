@@ -31,7 +31,9 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     create_account,
+    fetch_account,
     fetch_account_proxy_settings,
+    fetch_device_fingerprint,
     list_accounts,
     update_account_from_session_check,
     update_account_profile_snapshot,
@@ -43,6 +45,7 @@ from core.db import (
 )
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
+from core.phone_geo import evaluate_geo
 from core.proxy_check import check_proxy_connectivity
 from core.tdata_import import convert_tdata_zip
 from core.telegram_client import check_telegram_session, execute
@@ -59,6 +62,7 @@ from schemas.accounts import (
     AccountTableRow,
     health_for_status,
 )
+from schemas.geo import GeoMatch
 from schemas.proxy import AccountProxyCheckUpdate
 from schemas.telegram_actions import (
     ActionResult,
@@ -222,6 +226,8 @@ async def check_account_proxy(data: AccountProxyCheckRequest) -> AccountProxyRea
             exit_ip=result.exit_ip,
             country_code=result.country_code,
             country_name=result.country_name,
+            asn=result.asn,
+            is_datacenter=result.is_datacenter,
         ),
     )
     await log_event(
@@ -361,6 +367,25 @@ async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionRe
         extra={"filename": data.filename, "has_title": data.title is not None},
     )
     return result
+
+
+async def evaluate_account_geo(account_id: str) -> GeoMatch:
+    """Non-blocking geo check: does the account's proxy country match its number?
+
+    Compares the phone number's country (via ``phonenumbers``) against the proxy
+    exit country, plus the device language region. A mismatch is a warning + risk
+    signal for the UI, never a hard block (product decision).
+    """
+    account = await fetch_account(account_id)
+    if account is None:
+        return GeoMatch(status="unknown", message="account not found")
+    fingerprint = await fetch_device_fingerprint(account_id)
+    lang_code = fingerprint.system_lang_code if fingerprint else None
+    return evaluate_geo(
+        phone=account.phone,
+        proxy_country=account.proxy_country_code,
+        lang_code=lang_code,
+    )
 
 
 async def load_accounts_table(data: AccountFilter) -> AccountsTableState:
