@@ -7,8 +7,10 @@ service boundary so the engine is exercised with no real network or sleeps.
 from __future__ import annotations
 
 import asyncio
+import random
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
+from zoneinfo import ZoneInfo
 
 import pytest
 from sqlalchemy import delete as sa_delete
@@ -1187,6 +1189,58 @@ async def test_local_now_falls_back_to_utc_without_phone() -> None:
     await create_account(AccountCreate(account_id="acc-nophone"))
     now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
     assert await warming._local_now("acc-nophone", now) == now
+
+
+# --------------------------------------------------------------------------- #
+# Human pacing
+# --------------------------------------------------------------------------- #
+
+
+def test_human_delay_is_bounded_and_right_skewed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(warming, "_rng", random.Random(7))  # noqa: S311 - deterministic test rng
+    samples = [warming._human_delay(0.0, 10.0) for _ in range(2000)]
+    assert all(0.0 <= sample <= 10.0 for sample in samples)
+    # heavy right tail → most pauses sit below the midpoint, unlike a uniform draw
+    below_midpoint = sum(1 for sample in samples if sample < 5.0)
+    assert below_midpoint > len(samples) * 0.5
+    # an equal range collapses to the value
+    assert warming._human_delay(3.0, 3.0) == 3.0
+
+
+def test_shift_to_active_hours_moves_night_into_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
+    assert warming._shift_to_active_hours(night, None).hour == 8
+    day = datetime(2026, 6, 12, 14, 0, tzinfo=UTC)
+    assert warming._shift_to_active_hours(day, None) == day
+
+
+def test_shift_to_active_hours_uses_account_timezone(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    # 03:00 UTC is the middle of the night in New York → shifted into the window.
+    night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
+    shifted = warming._shift_to_active_hours(night, "America/New_York")
+    local = shifted.astimezone(ZoneInfo("America/New_York"))
+    assert 8 <= local.hour < 23
+
+
+def test_shift_to_active_hours_bad_timezone_falls_back(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
+    assert warming._shift_to_active_hours(night, "Not/AZone").hour == 8
+
+
+def test_shift_to_active_hours_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "active_hours_start", 0)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 0)
+    night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
+    assert warming._shift_to_active_hours(night, None) == night
 
 
 # --------------------------------------------------------------------------- #

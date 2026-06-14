@@ -173,6 +173,8 @@ async def test_react_to_post_no_messages_returns_ok_without_reaction(
 
 @pytest.mark.asyncio
 async def test_send_dm_returns_message_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
+
     class FakeClient:
         async def connect(self) -> None:
             return None

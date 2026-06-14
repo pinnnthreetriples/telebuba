@@ -177,6 +177,23 @@ class WarmingSettings(BaseSettings):
     # once the window passes the pair may start talking again (resumption).
     dialogue_max_turns: int = Field(default=12, ge=1)
     dialogue_conversation_window_hours: float = Field(default=48.0, gt=0.0)
+    # Human-like pacing: inter-action pauses are drawn from a clipped log-normal
+    # (heavy right tail — many short pauses, the occasional long one) instead of
+    # a flat uniform, which is the most detectable timing pattern.
+    delay_lognorm_mu: float = -0.8
+    delay_lognorm_sigma: float = Field(default=0.6, gt=0.0)
+    # Typing simulation: show the "typing…" action and wait a length-proportional
+    # time before sending a DM (≈ WPM), clamped to a sane window.
+    typing_simulation_enabled: bool = True
+    typing_wpm: int = Field(default=45, ge=1)
+    typing_sim_min_seconds: float = Field(default=0.5, ge=0.0)
+    typing_sim_max_seconds: float = Field(default=12.0, ge=0.0)
+    # Time-of-day cadence: bias the next cycle to land inside an active local-time
+    # window (account's phone timezone), so accounts cluster activity in waking
+    # hours instead of firing uniformly around the clock.
+    active_hours_enabled: bool = True
+    active_hours_start: int = Field(default=8, ge=0, le=23)
+    active_hours_end: int = Field(default=23, ge=0, le=23)
 
 
 class GeminiSettings(BaseSettings):
