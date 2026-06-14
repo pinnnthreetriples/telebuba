@@ -1,6 +1,6 @@
 ---
 name: telegram
-description: Telethon integration — session handling, typed actions + executor, outbox, rate limits, and the rules around touching Telegram from this codebase.
+description: Telethon integration — session handling, typed actions + executor, crash safety, rate limits, and the rules around touching Telegram from this codebase.
 triggers:
   - "telegram"
   - "telethon"
@@ -44,20 +44,30 @@ class UpdateProfile(TelegramAction):   action_type: Literal["update_profile"]; f
 The executor pattern-matches on `action_type` and calls the right Telethon method. Benefits:
 - Services and tests describe *what* to do without touching Telethon.
 - Validation at the boundary — no bad payloads slip into the SDK.
-- One point to enforce rate limits, FloodWait policy, proxy config, and outbox writes.
+- One point to enforce rate limits, FloodWait policy, and proxy config.
 
-[VERIFY AFTER FIRST IMPLEMENTATION — exact executor signature once `core/telegram_client.py` exists.]
+Implemented signature (`core/telegram_client.py`):
 
-## Outbox pattern
+```python
+async def execute(account_id: str, action: TelegramAction) -> ActionResult
+```
 
-Telegram actions cost money (accounts can be banned). Mid-flight crashes must not leave the system in an unknown state.
+`ActionResult` carries `status` (`ok` / `failed` / `flood_wait`), `action_type`, `account_id`,
+and optional `message_id` / `flood_wait_seconds` / `error_type` / `error_message`. No Telethon
+object ever leaves the gateway.
 
-- For non-trivial actions, services do not call `execute` directly. They write an **intent row** to the SQLite `telegram_outbox` table via `core/db.py`.
-- A dedicated APScheduler job (or `services/telegram_outbox.py`) picks up pending intents, calls `execute`, records the result, and marks them `done` / `failed`.
-- Survives crashes: on restart, pending intents are retried. Idempotency is the caller's contract (an intent has a `dedupe_key`).
-- Trivial reads (fetching an account's profile to display) bypass the outbox — they are cheap to retry on a re-request.
+## Crash safety — direct executor, not an outbox
 
-[TO BE DETERMINED — outbox table schema, retry/backoff policy, dedupe key generation, worker owner.]
+An `telegram_outbox` table was originally planned for at-least-once intent delivery. It was
+**not built and has been dropped** (see `context/decisions.md` → "Outbox pattern", Superseded).
+At single-process / ~50-account scale the executor is called directly and durability comes from
+**per-cycle persisted state**, not a queue:
+
+- `services/warming.py` runs each account as an `asyncio.Task` and writes the outcome of every
+  cycle to `warming_account_state` (last action/channel/error, heartbeat, FloodWait window).
+- On restart, `reconcile_warming_runtime()` rebuilds the in-memory loop set from that table — a
+  crash loses at most the in-flight action, never accumulated progress.
+- Revisit a real outbox/queue only if we move to multi-process execution.
 
 ## Sessions
 
@@ -92,8 +102,8 @@ Telegram actions cost money (accounts can be banned). Mid-flight crashes must no
 
 ## Rate limits and FloodWaitError
 
-- Telethon raises `FloodWaitError` with a `seconds` field when a limit is hit. The executor catches it, logs a business event via `core/logging.py`, marks the outbox row `flood_wait` with `retry_after`, and returns a `FloodWaitResult` to the caller.
-- Never retry a flood-waited call immediately. The cooldown is per account, not global. The outbox worker respects `retry_after`.
+- Telethon raises `FloodWaitError` with a `seconds` field when a limit is hit. The executor catches it, logs a business event via `core/logging.py`, and returns an `ActionResult` with `status="flood_wait"` and `flood_wait_seconds` set. The caller persists the cooldown window onto `warming_account_state`.
+- Never retry a flood-waited call immediately. The cooldown is per account, not global. The warming loop reads the stored FloodWait window before scheduling the next cycle.
 
 ## Account lifecycle states
 

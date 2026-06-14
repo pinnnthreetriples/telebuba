@@ -34,6 +34,20 @@ async def fetch_device_fingerprint(account_id: str) -> DeviceFingerprint | None:
     return await asyncio.to_thread(_fetch_device_fingerprint, account_id)
 
 
+def _list_device_fingerprints() -> dict[str, DeviceFingerprint]:
+    with _get_engine().connect() as connection:
+        rows = connection.execute(select(_device_fingerprints)).mappings().all()
+    return {
+        str(row["account_id"]): _row_to_device_fingerprint(cast("Mapping[str, object]", row))
+        for row in rows
+    }
+
+
+async def list_device_fingerprints() -> dict[str, DeviceFingerprint]:
+    """Return every device fingerprint keyed by ``account_id`` (one query)."""
+    return await asyncio.to_thread(_list_device_fingerprints)
+
+
 def _insert_device_fingerprint(profile: DeviceFingerprint) -> DeviceFingerprint:
     statement = insert(_device_fingerprints).values(**profile.model_dump())
     with _get_engine().begin() as connection:

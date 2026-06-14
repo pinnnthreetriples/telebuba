@@ -10,11 +10,22 @@ into a single score and band for gating and UI display. All weights live in
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account, fetch_warming_state, get_spam_status
+from core.db import (
+    fetch_account,
+    fetch_device_fingerprint,
+    fetch_warming_state,
+    get_spam_status,
+)
+from core.phone_geo import evaluate_geo
 from schemas.trust import TrustBand, TrustScore
-from services.accounts import evaluate_account_geo
+
+if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
+    from schemas.spam_status import SpamStatusVerdict
+    from schemas.warming import WarmingStateRecord
 
 _SECONDS_PER_HOUR = 3600
 
@@ -102,6 +113,36 @@ def _flood_active(flood_wait_until: str | None, now: datetime) -> bool:
     return until > now
 
 
+def account_trust_score_from(
+    *,
+    account: AccountRead,
+    record: WarmingStateRecord | None,
+    spam: SpamStatusVerdict | None,
+    lang_code: str | None,
+    now: datetime,
+) -> TrustScore:
+    """Compute a Trust Score from already-loaded signals — no DB I/O.
+
+    Lets a batch caller (the warming board) score many accounts from one set of
+    bulk-loaded rows instead of re-querying account/state/spam/fingerprint per card.
+    """
+    geo = evaluate_geo(
+        phone=account.phone,
+        proxy_country=account.proxy_country_code,
+        lang_code=lang_code,
+    )
+    return compute_trust_score(
+        account_id=account.account_id,
+        account_status=account.status,
+        spam_status=spam.status if spam else "unknown",
+        quarantine_count=record.quarantine_count if record else 0,
+        flood_active=_flood_active(record.flood_wait_until if record else None, now),
+        geo_status=geo.status,
+        proxy_status=account.proxy_status,
+        age_hours=_age_hours(account.created_at, now),
+    )
+
+
 async def account_trust_score(account_id: str) -> TrustScore:
     """Gather an account's current signals and compute its Trust Score."""
     account = await fetch_account(account_id)
@@ -114,15 +155,11 @@ async def account_trust_score(account_id: str) -> TrustScore:
         )
     record = await fetch_warming_state(account_id)
     spam = await get_spam_status(account_id)
-    geo = await evaluate_account_geo(account_id)
-    now = datetime.now(UTC)
-    return compute_trust_score(
-        account_id=account_id,
-        account_status=account.status,
-        spam_status=spam.status if spam else "unknown",
-        quarantine_count=record.quarantine_count if record else 0,
-        flood_active=_flood_active(record.flood_wait_until if record else None, now),
-        geo_status=geo.status,
-        proxy_status=account.proxy_status,
-        age_hours=_age_hours(account.created_at, now),
+    fingerprint = await fetch_device_fingerprint(account_id)
+    return account_trust_score_from(
+        account=account,
+        record=record,
+        spam=spam,
+        lang_code=fingerprint.system_lang_code if fingerprint else None,
+        now=datetime.now(UTC),
     )

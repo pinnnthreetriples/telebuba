@@ -42,13 +42,14 @@ last_updated: 2026-06-10
 
 ### Outbox pattern for non-trivial Telegram actions
 **Date:** 2026-06-10
-**Status:** Active
-**Decision:** Services persist Telegram **intents** (rows in a `telegram_outbox` SQLite table) via `core/db.py`. A worker (APScheduler job or `services/telegram_outbox.py`) picks them up and calls `execute`. Survives crashes; idempotent via `dedupe_key`. Trivial reads bypass the outbox.
-**Reasoning:** Accounts cost money — a crash mid-warming must not lose state or double-act. Synchronous calls offer no recovery story. An outbox gives at-least-once semantics with explicit dedupe, plus a natural place to enforce per-account rate limits and FloodWait backoff.
-**Alternatives considered:**
-- *Synchronous calls with retries in-memory* (rejected — does not survive a process restart).
-- *External queue (Redis/RabbitMQ)* (rejected — overkill at ~50 accounts; violates "no broker" decision).
-**Consequences:** New `telegram_outbox` table in `core/db.py`. New `services/telegram_outbox.py` worker. Services that need writes go through the outbox; reads do not. Schema and retry policy: TBD.
+**Status:** ~~Active~~ **Superseded 2026-06-14** (never built) → *direct executor with per-cycle persisted state*.
+**Original decision:** Services persist Telegram **intents** (rows in a `telegram_outbox` SQLite table) via `core/db.py`. A worker (APScheduler job or `services/telegram_outbox.py`) picks them up and calls `execute`. Survives crashes; idempotent via `dedupe_key`. Trivial reads bypass the outbox.
+**Original reasoning:** Accounts cost money — a crash mid-warming must not lose state or double-act. Synchronous calls offer no recovery story. An outbox gives at-least-once semantics with explicit dedupe.
+
+**Why superseded:** The outbox was never implemented, and the design that actually shipped makes it unnecessary at current scale. Warming runs single-process (one `asyncio.Task` per account in `services/warming.py`); each cycle persists its outcome to `warming_account_state`, and `reconcile_warming_runtime()` rebuilds the loop set on restart. That already gives crash-durable *progress* — a crash loses at most one in-flight action, never accumulated state. A full intent table + worker + dedupe machinery is premature infrastructure (a broker-shaped thing we explicitly rejected) for ~50 accounts in one process.
+
+**Replacement decision (2026-06-14):** Services call `core.telegram_client.execute(account_id, action)` directly; durability is per-cycle state on `warming_account_state`, not a queue. The executor remains the single choke-point for rate limits / FloodWait / proxy. **Reopen** an outbox/queue only when execution goes multi-process.
+**Consequences:** No `telegram_outbox` table, no `services/telegram_outbox.py`. The repository-split aggregate list drops `telegram_outbox`. `context/telegram.md` "Crash safety" section documents the replacement.
 
 ### Config namespaces — nested Pydantic settings instead of one flat blob
 **Date:** 2026-06-10
