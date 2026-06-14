@@ -143,9 +143,9 @@ async def create_account(data: dict) -> dict:
 **Config via `core/config.py`.**
 
 ```python
-# Correct
+# Correct — nested namespaces, one per domain
 from core.config import settings
-session_path = settings.session_dir / f"{account_id}.session"
+session_path = settings.telegram.session_dir / f"{account_id}.session"
 
 # Wrong
 session_path = f"./sessions/{account_id}.session"
@@ -163,15 +163,15 @@ from sqlalchemy.orm import Session
 session.add(AccountModel(...))
 ```
 
-**Telegram via the factory, not Telethon in features.**
+**Telegram via the typed executor, never Telethon outside `core/`.**
 
 ```python
-# Correct — in features/accounts.py
-from core.telegram_client import get_client
-async with get_client(account_id) as client:
-    result = await client.send_message(...)
+# Correct — build a typed action, hand it to the executor (usual home: a service)
+from core.telegram_client import execute
+from schemas.telegram_actions import UpdateProfile
+result = await execute(account_id, UpdateProfile(first_name="...", last_name=None, username=None, bio=None))
 
-# Wrong — in features/accounts.py
+# Wrong — raw Telethon, or any client.send_message(...), outside core/
 from telethon import TelegramClient
 client = TelegramClient(...)
 ```

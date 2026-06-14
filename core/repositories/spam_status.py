@@ -44,6 +44,20 @@ async def get_spam_status(account_id: str) -> SpamStatusVerdict | None:
     return await asyncio.to_thread(_get_spam_status, account_id)
 
 
+def _list_spam_statuses() -> dict[str, SpamStatusVerdict]:
+    with _get_engine().connect() as connection:
+        rows = connection.execute(select(_account_spam_status)).mappings().all()
+    return {
+        str(row["account_id"]): _row_to_spam_status(cast("Mapping[str, object]", row))
+        for row in rows
+    }
+
+
+async def list_spam_statuses() -> dict[str, SpamStatusVerdict]:
+    """Return every cached spam-status verdict keyed by ``account_id`` (one query)."""
+    return await asyncio.to_thread(_list_spam_statuses)
+
+
 def _upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
     values = {
         "status": verdict.status,

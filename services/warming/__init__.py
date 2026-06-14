@@ -11,6 +11,14 @@ running account owns an :class:`asyncio.Task` registered in ``_RUNTIME`` rather
 than an APScheduler job. ``run_one_cycle`` is the testable unit; ``_warming_loop``
 is the long-running wrapper around it.
 
+Package layout. The cohesive, side-effect-light slices live in submodules —
+``channels`` (input parsing), ``settings`` (settings row), ``board`` (kanban read
+model), ``pacing`` (scheduling/intensity helpers). This module keeps the engine
+itself: the state transitions, the cycle, the Gemini-driven chat, the quarantine
+recovery, and the runtime loop — i.e. everything that calls the injectable seams
+(``execute`` / ``generate_text`` / ``refresh_spam_status``), which tests patch on
+this package namespace.
+
 Telegram I/O only ever goes through ``core.telegram_client.execute`` with typed
 actions; DB only through ``core.db``; HTTP only through ``core.gemini``.
 """
@@ -22,15 +30,12 @@ import random
 import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, Final, cast
-from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from core.config import settings
 from core.db import (
-    add_warming_channel,
     count_pair_messages_since,
     fetch_account,
     fetch_warming_state,
-    get_spam_status,
     latest_unreplied_for,
     list_accounts,
     list_warming_channels,
@@ -39,17 +44,13 @@ from core.db import (
     mark_message_replied,
     pair_key,
     record_dialogue_message,
-    remove_warming_channel,
-    save_warming_settings,
     upsert_warming_state,
 )
 from core.gemini import generate_text
 from core.logging import log_event
-from core.phone_geo import timezone_for_phone
 from core.telegram_client import execute
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import (
-    ActionResult,
     JoinChannel,
     ReactToPost,
     ReadChannel,
@@ -57,39 +58,67 @@ from schemas.telegram_actions import (
     SetOnline,
 )
 from schemas.warming import (
-    AddChannelsRequest,
-    RemoveChannelRequest,
     StartWarmingRequest,
     StopWarmingRequest,
     WarmingAccountState,
-    WarmingBoardState,
-    WarmingChannelList,
     WarmingCycleRequest,
     WarmingCycleResult,
-    WarmingIntensity,
-    WarmingReadiness,
-    WarmingSettings,
-    WarmingSettingsSecret,
-    WarmingSettingsUpdate,
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
-    WarmingSummary,
     is_warming,
     warming_health,
 )
 from services.content import is_acceptable, is_duplicate, register_sent
 from services.dialogues import get_partners
 from services.spam_status import refresh_spam_status
-from services.trust import account_trust_score
+from services.warming.board import _to_card, load_board
+from services.warming.channels import add_channels, list_channels, remove_channel
+from services.warming.pacing import (
+    _HALT_STATUSES,
+    _SECONDS_PER_HOUR,
+    _WAIT_STATUSES,
+    _account_age_hours,
+    _account_tz,
+    _classify_flood,
+    _in_quiet_hours,
+    _local_now,
+    _next_utc_midnight,
+    _now_iso,
+    _proxy_snapshot,
+    _quiet_hours_end_at,
+    _roll_daily,
+    _seconds_until,
+    _shift_to_active_hours,
+    compute_intensity,
+    evaluate_readiness,
+)
+from services.warming.settings_store import load_settings, save_settings
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.dialogues import DialogueMessage
+    from schemas.telegram_actions import ActionResult
+    from schemas.warming import WarmingSettingsSecret
 
-# SystemRandom: non-cryptographic jitter/selection; avoids ruff S311 on the
-# module-level ``random.*`` helpers. Behaviour is identical for our needs.
-_rng = random.SystemRandom()
+__all__ = [
+    "UnknownAccountError",
+    "WarmingNotReadyError",
+    "add_channels",
+    "compute_intensity",
+    "evaluate_readiness",
+    "list_channels",
+    "load_board",
+    "load_settings",
+    "reconcile_warming_runtime",
+    "remove_channel",
+    "run_loop_iteration",
+    "run_one_cycle",
+    "save_settings",
+    "shutdown_warming_runtime",
+    "start_warming",
+    "stop_warming",
+]
 
 
 class _Sentinel:
@@ -97,6 +126,12 @@ class _Sentinel:
 
 
 _SENTINEL: Final = _Sentinel()
+
+# SystemRandom: non-cryptographic jitter/selection; avoids ruff S311 on the
+# module-level ``random.*`` helpers. Behaviour is identical for our needs. Lives
+# here (not in ``pacing``) so tests can patch ``warming._rng`` and have the
+# engine's cycle/dialogue/timing draws and ``_human_delay`` all see it.
+_rng = random.SystemRandom()
 
 # account_id -> running warming loop. Genuine runtime state (rare exception to
 # the "no classes for stateless logic" rule): the loops must outlive a single
@@ -108,7 +143,6 @@ _RUNTIME: dict[str, asyncio.Task[None]] = {}
 # and never freed — the dictionary is bounded by the number of accounts.
 _ACCOUNT_LOCKS: dict[str, asyncio.Lock] = {}
 
-_SECONDS_PER_HOUR = 3600
 # Control characters: strip from Gemini output before sending it as a DM.
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
@@ -121,9 +155,10 @@ _CHAT_PROMPTS = (
     "Только текст, без пояснений.",
 )
 
-
-def _now_iso() -> str:
-    return datetime.now(UTC).isoformat()
+_REPLY_PROMPT = (
+    "Ответь коротко и по-дружески, как другу в Telegram, на это сообщение: "
+    "«{incoming}». Только текст ответа, без кавычек."
+)
 
 
 def _account_lock(account_id: str) -> asyncio.Lock:
@@ -132,346 +167,6 @@ def _account_lock(account_id: str) -> asyncio.Lock:
         lock = asyncio.Lock()
         _ACCOUNT_LOCKS[account_id] = lock
     return lock
-
-
-# --------------------------------------------------------------------------- #
-# Scheduling helpers (pure) — quiet hours, daily budget, next-run timing.
-# --------------------------------------------------------------------------- #
-
-
-def _seconds_until(next_run_at_iso: str, now: datetime) -> float:
-    """Seconds from ``now`` until an ISO timestamp, never negative.
-
-    Corrupt/naive timestamps degrade to ``0.0`` so the loop runs now rather than
-    crashing or sleeping forever.
-    """
-    try:
-        target = datetime.fromisoformat(next_run_at_iso)
-    except ValueError:
-        return 0.0
-    if target.tzinfo is None:
-        target = target.replace(tzinfo=UTC)
-    return max(0.0, (target - now).total_seconds())
-
-
-def _in_quiet_hours(now: datetime, start_hour: int, end_hour: int) -> bool:
-    """True when ``now``'s UTC hour falls in the ``[start, end)`` window.
-
-    ``start == end`` means "no window" (always False). The window wraps midnight
-    when ``start > end`` (e.g. 23→7).
-    """
-    if start_hour == end_hour:
-        return False
-    hour = now.hour
-    if start_hour < end_hour:
-        return start_hour <= hour < end_hour
-    return hour >= start_hour or hour < end_hour
-
-
-def _quiet_hours_end_at(now: datetime, end_hour: int) -> datetime:
-    """The next UTC datetime at ``end_hour:00`` strictly after ``now``."""
-    candidate = now.replace(hour=end_hour, minute=0, second=0, microsecond=0)
-    if candidate <= now:
-        candidate += timedelta(days=1)
-    return candidate
-
-
-def _next_utc_midnight(now: datetime) -> datetime:
-    return (now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
-
-
-def _roll_daily(record: WarmingStateRecord | None, today: str) -> tuple[int, str]:
-    """Return ``(count, date)`` for today, resetting the counter on a new day."""
-    if record is None or record.daily_count_date != today:
-        return 0, today
-    return record.daily_actions, today
-
-
-def _proxy_snapshot(account: AccountRead) -> str | None:
-    """Freeze which proxy an account started warming with, for later diagnosis."""
-    if not account.proxy_host:
-        return None
-    base = f"{account.proxy_type or 'proxy'}://{account.proxy_host}:{account.proxy_port}"
-    if account.proxy_country_code:
-        base = f"{base} ({account.proxy_country_code})"
-    return base
-
-
-def evaluate_readiness(account: AccountRead, channel_count: int) -> WarmingReadiness:
-    """Decide whether an account can safely start warming, from last-known state.
-
-    Uses the persisted account/proxy snapshot (no live network) so the board can
-    show a badge cheaply and ``start_warming`` can refuse broken accounts.
-    """
-    reasons: list[str] = []
-    if account.status != "alive":
-        reasons.append(f"session {account.status}")
-    if not account.proxy_host:
-        reasons.append("no proxy")
-    elif account.proxy_status == "failed":
-        reasons.append("proxy failed")
-    if channel_count <= 0:
-        reasons.append("no channels")
-    return WarmingReadiness(ready=not reasons, reasons=reasons)
-
-
-# --------------------------------------------------------------------------- #
-# Channels
-# --------------------------------------------------------------------------- #
-
-# Allowed token format for a Telegram channel/group identifier. We accept
-# the canonical ``@username`` form and bare ``username`` / ``invite_hash``;
-# the resolver in Telethon handles invite hashes (``joinchat/<hash>``).
-_CHANNEL_TOKEN_RE = re.compile(r"^@?[A-Za-z0-9_]{3,32}(/[A-Za-z0-9_-]+)?$")
-_INVITE_HASH_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
-
-
-def _normalize_channel(token: str) -> str | None:
-    cleaned = token.strip().strip("<>").rstrip("/")
-    if not cleaned:
-        return None
-    lowered = cleaned.lower()
-    for prefix in ("https://t.me/", "http://t.me/", "t.me/", "telegram.me/"):
-        if lowered.startswith(prefix):
-            cleaned = cleaned[len(prefix) :]
-            break
-    cleaned = cleaned.lstrip("@")
-    if not cleaned:
-        return None
-    if cleaned.startswith("+"):
-        # Telegram private invite link of the form ``+abcDEF...``.
-        cleaned = cleaned[1:]
-        return cleaned if _INVITE_HASH_RE.match(cleaned) else None
-    if cleaned.startswith("joinchat/"):
-        invite = cleaned.split("/", 1)[1]
-        return f"joinchat/{invite}" if _INVITE_HASH_RE.match(invite) else None
-    if len(cleaned) > settings.warming.max_channel_length:
-        return None
-    return cleaned if _CHANNEL_TOKEN_RE.match(cleaned) else None
-
-
-def _parse_channels(raw: str) -> list[str]:
-    seen: list[str] = []
-    lowered_seen: set[str] = set()
-    for token in re.split(r"[\s,]+", raw.strip()):
-        normalized = _normalize_channel(token)
-        if normalized is None:
-            continue
-        key = normalized.lower()
-        if key in lowered_seen:
-            continue
-        lowered_seen.add(key)
-        seen.append(normalized)
-    return seen
-
-
-async def list_channels() -> WarmingChannelList:
-    return await list_warming_channels()
-
-
-async def add_channels(data: AddChannelsRequest) -> WarmingChannelList:
-    """Parse a free-form blob of links/usernames and persist each unique one.
-
-    Enforces ``settings.warming.max_channels_per_add`` and
-    ``settings.warming.max_channels_total`` — junk uploads cannot grow the table
-    without bound.
-    """
-    parsed = _parse_channels(data.raw)
-    if not parsed:
-        return await list_warming_channels()
-
-    warm = settings.warming
-    parsed = parsed[: warm.max_channels_per_add]
-    existing = await list_warming_channels()
-    existing_keys = {ch.channel.lower() for ch in existing.channels}
-    headroom = max(0, warm.max_channels_total - len(existing_keys))
-
-    channels = existing
-    added = 0
-    for channel in parsed:
-        if added >= headroom:
-            await log_event(
-                "WARNING",
-                "warming_channel_limit_reached",
-                extra={"limit": warm.max_channels_total},
-            )
-            break
-        if channel.lower() in existing_keys:
-            continue
-        channels = await add_warming_channel(channel)
-        existing_keys.add(channel.lower())
-        added += 1
-    await log_event(
-        "INFO",
-        "warming_channels_added",
-        extra={"count": added, "submitted": len(parsed)},
-    )
-    return channels
-
-
-async def remove_channel(data: RemoveChannelRequest) -> WarmingChannelList:
-    channels = await remove_warming_channel(data.channel)
-    await log_event("INFO", "warming_channel_removed", extra={"channel": data.channel})
-    return channels
-
-
-# --------------------------------------------------------------------------- #
-# Settings
-# --------------------------------------------------------------------------- #
-
-
-def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
-    return WarmingSettings(
-        inter_account_chat=secret.inter_account_chat,
-        reactions_enabled=secret.reactions_enabled,
-        join_enabled=secret.join_enabled,
-        enforce_readiness=secret.enforce_readiness,
-        quiet_hours_enabled=secret.quiet_hours_enabled,
-        quiet_hours_start=secret.quiet_hours_start,
-        quiet_hours_end=secret.quiet_hours_end,
-        max_daily_actions=secret.max_daily_actions,
-        has_gemini_key=bool(secret.gemini_api_key),
-        gemini_model=secret.gemini_model,
-        updated_at=secret.updated_at,
-    )
-
-
-async def load_settings() -> WarmingSettings:
-    return _mask_settings(await load_warming_settings())
-
-
-async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
-    # ``clear_gemini_key`` wins over ``gemini_api_key``: the UI uses the flag
-    # for an explicit "wipe the stored key" gesture; passing an empty string
-    # also clears it; passing ``None`` (and no flag) preserves the existing key.
-    if data.clear_gemini_key:
-        api_key: str | None = ""
-    else:
-        api_key = data.gemini_api_key
-
-    secret = await save_warming_settings(
-        inter_account_chat=data.inter_account_chat,
-        reactions_enabled=data.reactions_enabled,
-        join_enabled=data.join_enabled,
-        enforce_readiness=data.enforce_readiness,
-        quiet_hours_enabled=data.quiet_hours_enabled,
-        quiet_hours_start=data.quiet_hours_start,
-        quiet_hours_end=data.quiet_hours_end,
-        max_daily_actions=data.max_daily_actions,
-        gemini_api_key=api_key,
-        gemini_model=data.gemini_model,
-    )
-    await log_event(
-        "INFO",
-        "warming_settings_saved",
-        extra={
-            "inter_account_chat": secret.inter_account_chat,
-            "reactions_enabled": secret.reactions_enabled,
-            "join_enabled": secret.join_enabled,
-            "enforce_readiness": secret.enforce_readiness,
-            "quiet_hours_enabled": secret.quiet_hours_enabled,
-            "max_daily_actions": secret.max_daily_actions,
-            "has_gemini_key": bool(secret.gemini_api_key),
-            "gemini_model": secret.gemini_model,
-        },
-    )
-    return _mask_settings(secret)
-
-
-# --------------------------------------------------------------------------- #
-# Board / kanban
-# --------------------------------------------------------------------------- #
-
-
-def _to_card(
-    account: AccountRead,
-    record: WarmingStateRecord | None,
-    *,
-    readiness: WarmingReadiness | None = None,
-) -> WarmingAccountState:
-    state: WarmingState = record.state if record else "idle"
-    return WarmingAccountState(
-        account_id=account.account_id,
-        label=account.label or account.account_id,
-        state=state,
-        health=warming_health(state),
-        cycles_completed=record.cycles_completed if record else 0,
-        last_event=record.last_event if record else None,
-        last_cycle_at=record.last_cycle_at if record else None,
-        next_run_at=record.next_run_at if record else None,
-        updated_at=record.updated_at if record else None,
-        last_error=record.last_error if record else None,
-        last_action=record.last_action if record else None,
-        last_channel=record.last_channel if record else None,
-        heartbeat_at=record.heartbeat_at if record else None,
-        started_at=record.started_at if record else None,
-        stopped_at=record.stopped_at if record else None,
-        flood_wait_seconds=record.flood_wait_seconds if record else None,
-        flood_wait_until=record.flood_wait_until if record else None,
-        proxy_snapshot=record.proxy_snapshot if record else None,
-        daily_actions=record.daily_actions if record else 0,
-        daily_count_date=record.daily_count_date if record else None,
-        quarantine_count=record.quarantine_count if record else 0,
-        readiness=readiness,
-    )
-
-
-async def load_board() -> WarmingBoardState:
-    accounts = await list_accounts()
-    records = {record.account_id: record for record in await list_warming_states()}
-    channels = await list_warming_channels()
-    masked = await load_settings()
-    channel_count = len(channels.channels)
-    now = datetime.now(UTC)
-    idle: list[WarmingAccountState] = []
-    warming: list[WarmingAccountState] = []
-    for account in accounts.accounts:
-        readiness = evaluate_readiness(account, channel_count)
-        card = _to_card(account, records.get(account.account_id), readiness=readiness)
-        await _enrich_card(account, card, now)
-        (warming if is_warming(card.state) else idle).append(card)
-    return WarmingBoardState(
-        idle=idle,
-        warming=warming,
-        channels=channels,
-        settings=masked,
-        channel_count=len(channels.channels),
-        active_count=sum(1 for card in warming if card.state == "active"),
-        summary=_build_summary([*idle, *warming]),
-    )
-
-
-async def _enrich_card(account: AccountRead, card: WarmingAccountState, now: datetime) -> None:
-    """Attach the live health signals (trust, spam, age/ramp) to a board card."""
-    trust = await account_trust_score(account.account_id)
-    card.trust_score = trust.score
-    card.trust_band = trust.band
-    card.trust_reasons = trust.reasons
-    spam = await get_spam_status(account.account_id)
-    if spam is not None:
-        card.spam_status = spam.status
-        card.spam_detail = spam.detail
-    age_hours = _account_age_hours(account, now)
-    card.age_hours = age_hours
-    card.dm_allowed = compute_intensity(age_hours).dm_allowed
-
-
-_TRUST_HEALTHY_BANDS: Final = frozenset({"excellent", "good"})
-_TRUST_RISK_BANDS: Final = frozenset({"at_risk", "critical"})
-_ATTENTION_STATES: Final = frozenset({"flood_wait", "quarantine", "error"})
-
-
-def _build_summary(cards: list[WarmingAccountState]) -> WarmingSummary:
-    return WarmingSummary(
-        total=len(cards),
-        warming=sum(1 for card in cards if is_warming(card.state)),
-        active=sum(1 for card in cards if card.state == "active"),
-        ready=sum(1 for card in cards if card.readiness is not None and card.readiness.ready),
-        attention=sum(1 for card in cards if card.state in _ATTENTION_STATES),
-        trust_healthy=sum(1 for card in cards if card.trust_band in _TRUST_HEALTHY_BANDS),
-        trust_watch=sum(1 for card in cards if card.trust_band == "watch"),
-        trust_risk=sum(1 for card in cards if card.trust_band in _TRUST_RISK_BANDS),
-    )
 
 
 # --------------------------------------------------------------------------- #
@@ -756,24 +451,6 @@ async def _human_pause(min_seconds: float, max_seconds: float) -> None:
     await asyncio.sleep(_human_delay(min_seconds, max_seconds))
 
 
-# Rate-limit families that carry a duration and mean "wait then retry".
-_WAIT_STATUSES: Final = frozenset({"flood_wait", "slow_mode_wait", "premium_wait"})
-# Any status that should halt the current channel/cycle pass. ``peer_flood`` is
-# a moderation restriction (no duration) handled by quarantine, not a wait.
-_HALT_STATUSES: Final = _WAIT_STATUSES | {"peer_flood"}
-
-
-def _classify_flood(result: ActionResult) -> tuple[bool, int | None, str | None]:
-    """Extract (flooded, seconds, until_iso) from a wait-family ActionResult."""
-    if result.status not in _WAIT_STATUSES:
-        return False, None, None
-    seconds = result.flood_wait_seconds
-    until = None
-    if seconds is not None:
-        until = (datetime.now(UTC) + timedelta(seconds=seconds)).isoformat()
-    return True, seconds, until
-
-
 async def _read_and_react(
     account_id: str,
     channel: str,
@@ -811,58 +488,6 @@ async def _read_and_react(
         elif react_result.status == "failed":
             failures += 1
     return reads, reactions, None, failures
-
-
-def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
-    """Hours since the account was created; full-ramp age when unknown.
-
-    A missing/unparseable ``created_at`` degrades to full intensity so an
-    anomalous record never silently freezes an account at day-one behaviour.
-    """
-    if account is None:
-        return settings.warming.ramp_full_age_hours
-    try:
-        created = datetime.fromisoformat(account.created_at)
-    except ValueError:
-        return settings.warming.ramp_full_age_hours
-    if created.tzinfo is None:
-        created = created.replace(tzinfo=UTC)
-    return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
-
-
-def compute_intensity(age_hours: float) -> WarmingIntensity:
-    """Map an account's age to its per-cycle intensity via the configured ramp.
-
-    Channels-per-cycle and reaction rate grow linearly from a quiet initial
-    floor to the configured full values over ``ramp_full_age_hours``; DM is
-    gated until ``dm_min_age_hours``. With the ramp disabled, every account runs
-    at full intensity with DM allowed.
-    """
-    warm = settings.warming
-    if not warm.ramp_enabled:
-        return WarmingIntensity(
-            channels_min=warm.channels_per_cycle_min,
-            channels_max=warm.channels_per_cycle_max,
-            reaction_probability=warm.reaction_probability,
-            dm_allowed=True,
-        )
-    if warm.ramp_full_age_hours <= 0:
-        frac = 1.0
-    else:
-        frac = min(1.0, max(0.0, age_hours / warm.ramp_full_age_hours))
-    initial_channels = min(warm.ramp_initial_channels_max, warm.channels_per_cycle_max)
-    grown = round(frac * (warm.channels_per_cycle_max - initial_channels))
-    channels_max = max(1, initial_channels + grown)
-    channels_min = min(warm.channels_per_cycle_min, channels_max)
-    reaction_probability = warm.ramp_initial_reaction_probability + frac * (
-        warm.reaction_probability - warm.ramp_initial_reaction_probability
-    )
-    return WarmingIntensity(
-        channels_min=channels_min,
-        channels_max=channels_max,
-        reaction_probability=min(1.0, max(0.0, reaction_probability)),
-        dm_allowed=age_hours >= warm.dm_min_age_hours,
-    )
 
 
 async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915 - linear cycle; splitting hides flow.
@@ -1073,12 +698,6 @@ async def _generate_chat_text(
     return None
 
 
-_REPLY_PROMPT = (
-    "Ответь коротко и по-дружески, как другу в Telegram, на это сообщение: "
-    "«{incoming}». Только текст ответа, без кавычек."
-)
-
-
 async def _maybe_inter_account_chat(
     sender_id: str,
     secret: WarmingSettingsSecret,
@@ -1257,51 +876,6 @@ async def _recover_from_quarantine(
         extra={"checks": count},
     )
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
-
-
-async def _account_tz(account_id: str) -> str | None:
-    """The account's IANA timezone (from its phone number), or ``None``."""
-    account = await fetch_account(account_id)
-    return timezone_for_phone(account.phone) if account else None
-
-
-async def _local_now(account_id: str, now: datetime) -> datetime:
-    """Return ``now`` in the account's local timezone (from its phone number).
-
-    Quiet hours are evaluated in the account's local time rather than UTC. Falls
-    back to ``now`` when the number has no resolvable timezone.
-    """
-    tz_name = await _account_tz(account_id)
-    if tz_name is None:
-        return now
-    try:
-        return now.astimezone(ZoneInfo(tz_name))
-    except ZoneInfoNotFoundError:
-        return now
-
-
-def _shift_to_active_hours(candidate: datetime, tz_name: str | None) -> datetime:
-    """Move a next-run time into the account's active local window if it's outside.
-
-    Keeps activity clustered in waking hours (account's phone timezone) instead
-    of firing uniformly through the night. A ``start == end`` window disables it.
-    """
-    warm = settings.warming
-    if not warm.active_hours_enabled or warm.active_hours_start == warm.active_hours_end:
-        return candidate
-    if tz_name is None:
-        local = candidate.astimezone(UTC)
-    else:
-        try:
-            local = candidate.astimezone(ZoneInfo(tz_name))
-        except ZoneInfoNotFoundError:
-            local = candidate.astimezone(UTC)
-    if _in_quiet_hours(local, warm.active_hours_start, warm.active_hours_end):
-        return candidate
-    target = local.replace(hour=warm.active_hours_start, minute=0, second=0, microsecond=0)
-    if target <= local:
-        target += timedelta(days=1)
-    return target.astimezone(UTC)
 
 
 async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C901 - linear loop step
