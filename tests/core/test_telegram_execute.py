@@ -347,6 +347,10 @@ def test_create_telegram_client_applies_flood_sleep_threshold(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(settings.telegram, "flood_sleep_threshold", 7)
+    # Telethon refuses to build a client with an empty api_id/api_hash, so set
+    # placeholders — CI has no .env, unlike a local dev machine.
+    monkeypatch.setattr(settings.telegram, "api_id", 12345)
+    monkeypatch.setattr(settings.telegram, "api_hash", "test-hash")
     profile = TelegramClientProfile(
         account_id="acc",
         session_path=str(tmp_path / "acc"),
