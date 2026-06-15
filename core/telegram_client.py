@@ -36,7 +36,20 @@ from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from schemas.device_fingerprint import TelegramClientProfile, TelegramClientRequest
 from schemas.spam_status import SpamStatusProbe
-from schemas.telegram_actions import ActionResult, AddProfileMusic, PostStory, SetProfilePhoto
+from schemas.telegram_actions import (
+    ActionResult,
+    AddProfileMusic,
+    JoinChannel,
+    LeaveChannel,
+    PostComment,
+    PostStory,
+    ReactToPost,
+    ReadChannel,
+    SendDirectMessage,
+    SetOnline,
+    SetProfilePhoto,
+    UpdateProfile,
+)
 from schemas.telegram_session import (
     SessionCheckStatus,
     TelegramSessionCheckRequest,
@@ -48,14 +61,7 @@ if TYPE_CHECKING:
 
     from telethon.tl.types import TypeInputMedia, TypeInputPrivacyRule
 
-    from schemas.telegram_actions import (
-        ActionStatus,
-        ReactToPost,
-        ReadChannel,
-        SendDirectMessage,
-        TelegramAction,
-        UpdateProfile,
-    )
+    from schemas.telegram_actions import ActionStatus, TelegramAction
 
 
 # SystemRandom: non-cryptographic jitter/selection, but avoids the module-level
@@ -472,35 +478,36 @@ async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage
 async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:
     """Run one action against an already-connected client. Returns message_id if any.
 
-    Single exit point keeps the branch count linting-friendly as the action set
-    grows; the per-action body is delegated to small helpers where it is more
-    than a one-liner.
+    Pattern-matches on the concrete action model so ty narrows ``action`` inside
+    each branch; a single exit keeps the return count lint-friendly as the action
+    set grows, and bodies are delegated to helpers where more than a one-liner.
     """
     # Telethon resolves usernames / chat refs at runtime; ty insists on the
     # narrow InputChannel union, so the str/int passthrough needs an ignore.
     message_id: int | None = None
-    if action.action_type == "join_channel":
-        await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-    elif action.action_type == "leave_channel":
-        await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-    elif action.action_type == "post_comment":
-        message = await client.send_message(action.chat_id, action.text)
-        message_id = int(getattr(message, "id", 0)) or None
-    elif action.action_type == "update_profile":
-        await _dispatch_update_profile(client, action)
-    elif action.action_type == "set_online":
-        await client(UpdateStatusRequest(offline=not action.online))
-    elif action.action_type == "read_channel":
-        await _dispatch_read_channel(client, action)
-    elif action.action_type == "react_to_post":
-        message_id = await _dispatch_react_to_post(client, action)
-    elif action.action_type == "send_dm":
-        message_id = await _send_dm_with_typing(client, action)
-    elif action.action_type in {"set_profile_photo", "post_story", "add_profile_music"}:
-        message_id = await _dispatch_profile_media_action(client, action)
-    else:
-        msg = f"Unsupported action_type: {action.action_type}"
-        raise ValueError(msg)
+    match action:
+        case JoinChannel():
+            await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+        case LeaveChannel():
+            await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+        case PostComment():
+            message = await client.send_message(action.chat_id, action.text)
+            message_id = int(getattr(message, "id", 0)) or None
+        case UpdateProfile():
+            await _dispatch_update_profile(client, action)
+        case SetOnline():
+            await client(UpdateStatusRequest(offline=not action.online))
+        case ReadChannel():
+            await _dispatch_read_channel(client, action)
+        case ReactToPost():
+            message_id = await _dispatch_react_to_post(client, action)
+        case SendDirectMessage():
+            message_id = await _send_dm_with_typing(client, action)
+        case SetProfilePhoto() | PostStory() | AddProfileMusic():
+            message_id = await _dispatch_profile_media_action(client, action)
+        case _:  # pragma: no cover - discriminated union is exhaustive
+            msg = f"Unsupported action_type: {action.action_type}"
+            raise ValueError(msg)
     return message_id
 
 
@@ -556,16 +563,18 @@ async def _dispatch_profile_media_action(
     client: TelegramClient,
     action: TelegramAction,
 ) -> int | None:
-    if isinstance(action, SetProfilePhoto):
-        await _set_profile_photo(client, action.filename, action.content)
-        return None
-    if isinstance(action, PostStory):
-        return await _post_story(client, action)
-    if isinstance(action, AddProfileMusic):
-        await _add_profile_music(client, action)
-        return None
-    msg = f"Unsupported profile media action_type: {action.action_type}"
-    raise ValueError(msg)
+    match action:
+        case SetProfilePhoto():
+            await _set_profile_photo(client, action.filename, action.content)
+            return None
+        case PostStory():
+            return await _post_story(client, action)
+        case AddProfileMusic():
+            await _add_profile_music(client, action)
+            return None
+        case _:  # pragma: no cover - caller only routes media actions here
+            msg = f"Unsupported profile media action_type: {action.action_type}"
+            raise ValueError(msg)
 
 
 async def _set_profile_photo(client: TelegramClient, filename: str, content: bytes) -> None:
@@ -613,11 +622,11 @@ async def _story_media(
 
 
 def _story_privacy_rules(preset: str) -> list[TypeInputPrivacyRule]:
-    if preset == "public":
-        return [InputPrivacyValueAllowAll()]
-    if preset == "close_friends":
-        return [InputPrivacyValueAllowCloseFriends()]
-    return [InputPrivacyValueAllowContacts()]
+    rules: dict[str, list[TypeInputPrivacyRule]] = {
+        "public": [InputPrivacyValueAllowAll()],
+        "close_friends": [InputPrivacyValueAllowCloseFriends()],
+    }
+    return rules.get(preset, [InputPrivacyValueAllowContacts()])
 
 
 async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) -> None:
@@ -659,22 +668,23 @@ def _named_bytes(filename: str, content: bytes) -> BytesIO:
 def _action_log_extra(action: TelegramAction) -> dict[str, object]:
     """Compact summary of an action for log extras — no payload secrets."""
     extra: dict[str, object]
-    if action.action_type in {"join_channel", "leave_channel", "read_channel", "react_to_post"}:
-        extra = {"channel": getattr(action, "channel", "")}
-    elif action.action_type == "post_comment":
-        extra = {"chat_id": getattr(action, "chat_id", 0)}
-    elif action.action_type == "set_online":
-        extra = {"online": getattr(action, "online", None)}
-    elif action.action_type == "send_dm":
-        extra = {"user_id": getattr(action, "user_id", 0)}
-    elif action.action_type == "update_profile":
-        extra = {
-            "has_last_name": getattr(action, "last_name", None) is not None,
-            "has_username": getattr(action, "username", None) is not None,
-            "has_bio": getattr(action, "bio", None) is not None,
-        }
-    elif action.action_type in {"set_profile_photo", "post_story", "add_profile_music"}:
-        extra = {"filename": getattr(action, "filename", "")}
-    else:
-        extra = {}
+    match action:
+        case JoinChannel() | LeaveChannel() | ReadChannel() | ReactToPost():
+            extra = {"channel": action.channel}
+        case PostComment():
+            extra = {"chat_id": action.chat_id}
+        case SetOnline():
+            extra = {"online": action.online}
+        case SendDirectMessage():
+            extra = {"user_id": action.user_id}
+        case UpdateProfile():
+            extra = {
+                "has_last_name": action.last_name is not None,
+                "has_username": action.username is not None,
+                "has_bio": action.bio is not None,
+            }
+        case SetProfilePhoto() | PostStory() | AddProfileMusic():
+            extra = {"filename": action.filename}
+        case _:  # pragma: no cover - discriminated union is exhaustive
+            extra = {}
     return extra
