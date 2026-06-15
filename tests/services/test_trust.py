@@ -11,6 +11,7 @@ from core.db import configure_database, update_account_from_session_check
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
 from schemas.telegram_session import TelegramSessionCheckResult
+from schemas.trust import TrustSignals
 from services.accounts import add_account
 from services.trust import account_trust_score, compute_trust_score
 
@@ -33,14 +34,16 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 def test_compute_trust_score_healthy_account_is_excellent() -> None:
     score = compute_trust_score(
-        account_id="a",
-        account_status="alive",
-        spam_status="clean",
-        quarantine_count=0,
-        flood_active=False,
-        geo_status="match",
-        proxy_status="tcp_working",
-        age_hours=1000.0,
+        TrustSignals(
+            account_id="a",
+            account_status="alive",
+            spam_status="clean",
+            quarantine_count=0,
+            flood_active=False,
+            geo_status="match",
+            proxy_status="tcp_working",
+            age_hours=1000.0,
+        ),
     )
     assert score.score == 100
     assert score.band == "excellent"
@@ -49,14 +52,16 @@ def test_compute_trust_score_healthy_account_is_excellent() -> None:
 
 def test_compute_trust_score_spam_limited_drops_band() -> None:
     score = compute_trust_score(
-        account_id="a",
-        account_status="alive",
-        spam_status="limited",
-        quarantine_count=0,
-        flood_active=False,
-        geo_status="match",
-        proxy_status="tcp_working",
-        age_hours=1000.0,
+        TrustSignals(
+            account_id="a",
+            account_status="alive",
+            spam_status="limited",
+            quarantine_count=0,
+            flood_active=False,
+            geo_status="match",
+            proxy_status="tcp_working",
+            age_hours=1000.0,
+        ),
     )
     assert score.score == 50  # 100 - penalty_spam_limited
     assert score.band == "at_risk"
@@ -65,14 +70,16 @@ def test_compute_trust_score_spam_limited_drops_band() -> None:
 
 def test_compute_trust_score_clamps_at_zero() -> None:
     score = compute_trust_score(
-        account_id="a",
-        account_status="banned",
-        spam_status="limited",
-        quarantine_count=3,
-        flood_active=True,
-        geo_status="mismatch",
-        proxy_status="failed",
-        age_hours=0.0,
+        TrustSignals(
+            account_id="a",
+            account_status="banned",
+            spam_status="limited",
+            quarantine_count=3,
+            flood_active=True,
+            geo_status="mismatch",
+            proxy_status="failed",
+            age_hours=0.0,
+        ),
     )
     assert score.score == 0
     assert score.band == "critical"

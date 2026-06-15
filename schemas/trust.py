@@ -21,3 +21,20 @@ class TrustScore(BaseModel):
     score: int = Field(ge=0, le=100)
     band: TrustBand
     reasons: list[str] = Field(default_factory=list)
+
+
+class TrustSignals(BaseModel):
+    """Already-loaded inputs to the trust verdict — pure data, no I/O.
+
+    Bundled so ``compute_trust_score`` takes one typed argument instead of a
+    long keyword list (architecture: Pydantic models at layer boundaries).
+    """
+
+    account_id: str = Field(min_length=1)
+    account_status: str = Field(min_length=1)
+    spam_status: str = Field(min_length=1)
+    quarantine_count: int = Field(ge=0)
+    flood_active: bool
+    geo_status: str = Field(min_length=1)
+    proxy_status: str | None = None
+    age_hours: float = Field(ge=0)
