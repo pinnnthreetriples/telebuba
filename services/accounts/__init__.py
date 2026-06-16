@@ -117,6 +117,16 @@ async def add_account(data: AccountCreate) -> AccountRead:
     return persisted
 
 
+class SessionAlreadyExistsError(ValueError):
+    """Raised when an import would overwrite an existing account's session.
+
+    A ``.session`` file is effectively a Telegram credential — re-uploading a
+    file with the same name must not silently replace what is already there.
+    The operator has to delete the existing account first if they really want
+    to swap credentials.
+    """
+
+
 async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     # Service-layer guardrail: ``.session`` files are effectively credentials.
     # The UI may attempt to validate size first, but a CLI / scheduler caller
@@ -131,6 +141,15 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     filename = _session_filename(data.filename)
     session_name = Path(filename).stem
     session_path = settings.telegram.session_dir / filename
+    # Refuse to overwrite credentials. Check by account_id (DB) AND by file
+    # presence on disk — either being present means there is already an
+    # account whose session we would clobber.
+    if await fetch_account(session_name) is not None or session_path.exists():
+        msg = (
+            f"An account with session {session_name!r} already exists. "
+            "Delete it first if you want to replace the credentials."
+        )
+        raise SessionAlreadyExistsError(msg)
     await asyncio.to_thread(_write_session_file, session_path, data.content)
     return await add_account(
         AccountCreate(account_id=session_name, label=data.label, session_name=session_name),

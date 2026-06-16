@@ -44,6 +44,7 @@ from schemas.telegram_actions import (
 )
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
+    SessionAlreadyExistsError,
     add_account,
     add_account_profile_music,
     check_account_proxy,
@@ -150,6 +151,31 @@ async def test_import_account_session_rejects_non_session_file() -> None:
         await import_account_session(
             AccountSessionFileImport(filename="not-session.txt", content=b"content"),
         )
+
+
+@pytest.mark.asyncio
+async def test_import_account_session_refuses_to_overwrite_existing() -> None:
+    """Re-uploading a same-named session must NOT silently replace credentials."""
+    await import_account_session(
+        AccountSessionFileImport(
+            filename="dup.session",
+            content=b"original-session-bytes",
+            label="Original",
+        ),
+    )
+    session_path = settings.telegram.session_dir / "dup.session"
+    assert session_path.read_bytes() == b"original-session-bytes"
+
+    with pytest.raises(SessionAlreadyExistsError):
+        await import_account_session(
+            AccountSessionFileImport(
+                filename="dup.session",
+                content=b"attacker-session-bytes",
+                label="Replacement",
+            ),
+        )
+    # File must be untouched.
+    assert session_path.read_bytes() == b"original-session-bytes"
 
 
 @pytest.mark.asyncio
