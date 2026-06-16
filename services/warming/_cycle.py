@@ -44,7 +44,9 @@ def _human_delay(min_seconds: float, max_seconds: float) -> float:
         return lo
     warm = settings.warming
     fraction = min(1.0, _seams.rng.lognormvariate(warm.delay_lognorm_mu, warm.delay_lognorm_sigma))
-    return lo + fraction * (hi - lo)
+    # min(hi, ...) guards the float-rounding edge where fraction == 1.0 makes
+    # lo + (hi - lo) overshoot hi by an ULP — the result must stay within [lo, hi].
+    return min(hi, lo + fraction * (hi - lo))
 
 
 async def _human_pause(min_seconds: float, max_seconds: float) -> None:
