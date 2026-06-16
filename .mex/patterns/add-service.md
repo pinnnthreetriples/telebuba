@@ -1,6 +1,6 @@
 ---
 name: add-service
-description: Add a new service module — pure business logic, async, Pydantic at edges, no SDK imports. Always paired with a test file under tests/services/.
+description: Add or extend a service module/package — pure business logic, async, Pydantic at edges, no SDK imports. Pair with tests under tests/services/.
 triggers:
   - "add service"
   - "new service"
@@ -15,7 +15,7 @@ edges:
     condition: when the service drives Telegram via typed actions
   - target: patterns/add-feature.md
     condition: when a feature is going to call this service
-last_updated: 2026-06-10
+last_updated: 2026-06-16
 ---
 
 # Add a Service
@@ -23,53 +23,52 @@ last_updated: 2026-06-10
 ## Context
 
 Read `context/services.md` for the layer definition. Hard rules:
-- `services/<domain>.py` — one new file per domain (`warming`, `accounts`, `comments`, `telegram_outbox`, ...).
-- Pure business logic. No `nicegui`, no `sqlalchemy`, no `telethon`, no raw `httpx` imports.
+- Small domain: `services/<domain>.py`. Large domain: `services/<domain>/` package.
+- Pure business logic. No `nicegui`, no `sqlalchemy`, no `telethon`, no raw provider HTTP imports.
 - All I/O goes through `core/*` adapters.
-- All public functions are `async def`, take and return Pydantic models from `schemas/`.
+- Public cross-layer functions take and return Pydantic models from `schemas/` or `None`.
 
 ## Steps
 
 1. **Schema first.** Add request/result models in `schemas/<domain>.py`. If new Telegram actions are needed, extend `schemas/telegram_actions.py`.
-2. **Create the service file.** `services/<domain>.py`:
-   - Public async functions taking Pydantic input, returning Pydantic output.
-   - Compose with other services freely (`from services.accounts import load_account`).
-   - Delegate I/O exclusively to `core/*`.
-3. **Use the right gateways:**
-   - DB: `from core.db import save_<x>, load_<x>` (or repository module when split lands).
-   - Telegram: `from core.telegram_client import execute` + typed action from `schemas/telegram_actions.py`. Wrap non-trivial actions in an outbox row (see `context/telegram.md`).
-   - HTTP (Gemini): `from core.<provider> import ...` wrapper.
+2. **Create or extend the service domain.** Use `services/<domain>.py` for a small domain or `services/<domain>/` for a domain that already has multiple concerns.
+3. **Keep the package root thin.** In a package, `__init__.py` should re-export public API or contain minimal compatibility/orchestration. Move real slices into submodules.
+4. **Use the right gateways:**
+   - DB: `core/db.py` compatibility re-exports or `core/repositories/*`.
+   - Telegram: `from core.telegram_client import execute` + typed action from `schemas/telegram_actions.py`.
+   - HTTP providers: `core/<provider>.py` wrapper.
    - Logging: `from core.logging import log_event`.
    - Config: `from core.config import settings` then `settings.<namespace>.<field>`.
-4. **Test — prefer `/tdd`.** `tests/services/test_<domain>.py`:
-   - Mock `core/*` adapters (db, telegram_client, http, logging).
-   - Cover happy path + at least one failure (validation error, FloodWait, DB rollback).
-   - Aim for branch coverage ≥ 90 %.
-5. **Run `uv run pytest`.** Strict mode must pass.
+5. **Test — prefer `/tdd`.** Add/update tests under `tests/services/`:
+   - Mock `core/*` adapters.
+   - Cover happy path + failure paths.
+   - Keep branch coverage ≥ 90%.
+6. **Run gates.** `uv run pytest` and relevant lint/type/security gates.
 
 ## Gotchas
 
-- It is tempting to drop a NiceGUI notification inside a service ("the user clicks 'warm' and gets a toast"). **Don't.** The service returns a result; the feature handler renders the toast. Services must be UI-runnable headless (CLI, test, scheduler).
-- It is tempting to import `from features.warming import ...` to reuse warming logic. **Don't.** Pull the shared piece into a service.
-- Sync I/O (`time.sleep`, blocking HTTP) freezes the NiceGUI event loop. Use `await` everywhere; for unavoidable sync work, `asyncio.to_thread`.
-- A service that grew past ~300 lines or holds multiple unrelated concerns is a smell — split by domain.
+- Do not put NiceGUI notifications inside a service. The service returns a result; the feature renders it.
+- Do not import from `features/`. Pull shared behavior into services/core/schemas.
+- Sync I/O blocks the NiceGUI event loop. Use `await`; for unavoidable sync work, `asyncio.to_thread`.
+- A service package root that grows past simple API re-export/orchestration is a smell — split by subdomain.
+- Do not add raw list/dict returns for convenience; create a response schema.
 
 ## Verify
 
-- [ ] New `services/<domain>.py`; no edit of existing service files unless extending the same domain
+- [ ] Service domain is in `services/<domain>.py` or `services/<domain>/`
 - [ ] No `nicegui` / `sqlalchemy` / `telethon` / raw `httpx` imports in the service
-- [ ] All public functions are `async def` and take/return Pydantic models
-- [ ] Telegram actions go through `core.telegram_client.execute(action)` with a typed action schema
-- [ ] Non-trivial Telegram writes go through the outbox, not direct `execute`
-- [ ] Config used as `settings.<namespace>.<field>` (no flat `settings.<field>`)
-- [ ] `tests/services/test_<domain>.py` exists with mocks of `core/*`; covers happy + failure paths
-- [ ] `uv run pytest` passes (strict mode, coverage ≥ 90 %)
+- [ ] Public cross-layer functions are async when they perform I/O and take/return Pydantic models
+- [ ] Telegram actions go through `core.telegram_client.execute(account_id, action)` with a typed action schema
+- [ ] Config used as `settings.<namespace>.<field>`
+- [ ] Tests under `tests/services/` mock `core/*`; cover happy + failure paths
+- [ ] `uv run pytest` passes
 
 ## Debug
 
-- Service can't be imported from a test → likely circular import via `core/`. Services must not import `features/`; check that `core/*` doesn't either.
-- Test passes but coverage drops below 90 % → unhandled branch in the service; add a failure-path test.
-- `FloodWaitError` leaks past the service → the executor should be wrapping it; check `core/telegram_client.execute` returns a `FloodWaitResult`.
+- Service can't be imported from a test → likely circular import via `core/` or an accidental feature import.
+- Test passes but coverage drops below 90% → unhandled branch in the service; add a failure-path test.
+- SDK exception leaks past a service → the core gateway should classify it and return a typed result; check the gateway boundary.
 
 ## After
+
 Run the GROW step from `ROUTER.md` (update `state/active.md`, touch any out-of-date `context/`, bump `last_updated`).

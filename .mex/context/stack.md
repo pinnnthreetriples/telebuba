@@ -15,67 +15,78 @@ edges:
   - target: context/telegram.md
     condition: for Telethon-specific details
   - target: context/warming.md
-    condition: for APScheduler-specific details
+    condition: for runtime workflow details
   - target: context/logging.md
-    condition: for the loguru / structlog / Sentry layout
-last_updated: 2026-06-10
+    condition: for the loguru / SQLite / Sentry layout
+last_updated: 2026-06-16
 ---
 
 # Stack
 
-Pinned in `pyproject.toml` + `uv.lock`. Local dev: Python 3.13.13, uv 0.10.9.
+Pinned in `pyproject.toml` + `uv.lock`. Local dev target: Python 3.13.x, uv.
 
 ## Runtime
 
-| Package        | Role / non-obvious note |
-|----------------|--------------------------|
-| `nicegui`      | UI **and** HTTP server in one async process. No separate frontend. |
-| `sqlalchemy`   | ORM for SQLite. Only used inside `core/db.py`. |
-| `telethon`     | Telegram MTProto client. Only used inside `core/telegram_client.py`. |
-| `python-socks` | SOCKS5/HTTP proxy. One proxy per account — without it, ban. |
-| `apscheduler`  | In-process scheduler for warming jobs. No external broker. |
-| `httpx`        | Async HTTP client for Gemini API calls. |
-| `python-dotenv`| Loads `.env` into `core/config.py`. |
-| `pydantic`     | Validation at every layer boundary. |
-| `anyio`        | Structured concurrency primitives. |
+| Package | Role / non-obvious note |
+| --- | --- |
+| `nicegui` | UI and HTTP server in one async process. No separate frontend. |
+| `sqlalchemy` | SQLite access. Only used inside `core/db.py` and `core/repositories/*`. |
+| `telethon` | Telegram MTProto client. Only used inside `core/telegram_client/`. |
+| `python-socks` | SOCKS5/HTTP proxy support for Telethon gateway construction. |
+| `httpx` | Async HTTP client for `core/gemini.py`; services do not import it directly. |
+| `python-dotenv` | Loaded through `pydantic-settings`; callers use `core.config.settings`. |
+| `pydantic` | Validation at every layer boundary. |
+| `pydantic-settings` | Nested settings namespaces from `.env`. |
+| `anyio` | Async/concurrency support used by dependencies and tests. |
+| `loguru` | Rotating diagnostic log sink, encapsulated by `core/logging.py`. |
+| `sentry-sdk` | Optional production error reporting, encapsulated by `core/logging.py`. |
+
+## Runtime deliberately not used
+
+| Tool | Reason |
+| --- | --- |
+| `apscheduler` | Removed/unused for the current warming runtime. Per-account runtime work uses raw `asyncio.Task`s. Add a scheduler only if a future feature needs true cron semantics. |
+| `structlog` | Removed/unused. Structured business events are Pydantic payloads persisted to SQLite through `core.logging.log_event()`. |
+| External broker/queue | Not needed for the current single-process architecture. Revisit only for multi-process execution. |
+| Remote DB | SQLite is sufficient for the current local/single-process scope. |
 
 ## Logging stack
 
-| Package       | Role |
-|---------------|------|
-| `loguru`      | Rotating `debug.log` for diagnostic noise (stacktraces, retries, timings). |
-| `structlog`   | Structured business events → SQLite `logs` table (queried by the NiceGUI Logs page). |
-| `sentry-sdk`  | Production error reporting. ERRORs and unhandled exceptions only. |
+| Package / store | Role |
+| --- | --- |
+| `loguru` | Rotating `debug.log` for diagnostic noise (stacktraces, retries, timings). |
+| SQLite `logs` table | Structured business events queried by the NiceGUI Logs page. |
+| `sentry-sdk` | Optional production error reporting for ERROR events/unhandled exceptions. |
 
-Full three-tier architecture: `context/logging.md`.
+Full logging architecture: `context/logging.md`.
 
 ## Dev / test toolchain
 
-| Package         | Role / non-obvious note |
-|-----------------|--------------------------|
-| `uv`            | Package manager + venv. Replaces pip/venv. |
-| `ruff`          | Lint + format. Replaces black, isort, flake8, pyupgrade, pydocstyle. |
-| `ty`            | Type checker from Astral. ~100× mypy speed. Pre-1.0. |
-| `pytest`        | Test runner. |
-| `pytest-asyncio`| Async test support (Telethon, NiceGUI). |
-| `pytest-cov`    | Coverage. |
-| `hypothesis`    | Property-based tests — generates pathological inputs. |
-| `bandit`        | SAST — SQL injection, `eval`, weak crypto. |
-| `pip-audit`     | Known CVEs in dependencies. |
-| `semgrep`       | 2000+ rule SAST. Heavy — usually CI-only. |
-| `aislop`        | "AI-slop" detector — hallucinated imports, swallowed exceptions, dead code. |
-| `radon`         | Cyclomatic complexity (A–F). Below C → split the function. |
-| `pre-commit`    | Hook runner — ruff + ty + bandit before every commit. |
-| `deptry`        | Unused / missing dependencies. |
-| `vulture`       | Dead code detector. |
-| `respx`         | HTTP mocking for tests (fake Gemini responses). |
-| `factory-boy`   | Fake account / proxy / session fixtures for tests. |
+| Package | Role / non-obvious note |
+| --- | --- |
+| `uv` | Package manager + venv. Replaces pip/venv. |
+| `ruff` | Lint + format. Replaces black, isort, flake8, pyupgrade, pydocstyle. |
+| `ty` | Type checker from Astral. Pre-1.0; strict unresolved-reference rules are enabled. |
+| `pytest` | Test runner. |
+| `pytest-asyncio` | Async test support. |
+| `pytest-cov` | Branch coverage with 90% floor. |
+| `hypothesis` | Property-based tests. |
+| `bandit` | SAST for Python source. |
+| `pip-audit` | Known CVEs in dependencies. |
+| `semgrep` | SAST on PR/push. |
+| `aislop` | AI-slop/quality gate; zero-tolerance in CI and pre-push. |
+| `radon` | Cyclomatic complexity gate; project wrapper fails rank D+. |
+| `pre-commit` | Hook runner. |
+| `deptry` | Unused / missing / transitive dependencies. |
+| `vulture` | Dead code detector. |
+| `respx` | HTTP mocking for tests. |
+| `factory-boy` | Test factories. |
 
 ## Deliberately NOT Used
 
-- No separate web framework (FastAPI/Flask) — NiceGUI is the server (FastAPI is a transitive dep, we do not import it directly).
-- No external broker (Redis/Celery/RabbitMQ) — APScheduler in-process is enough for ~50 accounts.
-- No remote DB (Postgres/MySQL) — SQLite. Migrate if scale demands it.
+- No separate web framework in app code (FastAPI is a transitive dependency through NiceGUI; do not import it directly).
+- No external broker (Redis/Celery/RabbitMQ) in the current architecture.
+- No remote DB (Postgres/MySQL) yet.
 - No `print()` — `core/logging.py` only.
 - No `mypy` — `ty`.
 - No `black` / `isort` / `flake8` / `pyupgrade` / `pydocstyle` — all replaced by `ruff`.
@@ -88,4 +99,4 @@ Full three-tier architecture: `context/logging.md`.
 
 ## Known Issues
 
-- `aislop --version` fails on Windows due to a space in the Python install path. Call via `uv run python -m aislop` if the CLI breaks.
+- `aislop --version` can fail on Windows due to a space in the Python install path. Call via `uv run python -m aislop` if direct CLI invocation breaks.

@@ -1,85 +1,91 @@
 ---
 name: warming
-description: Scheduled warming activity — APScheduler jobs that drive human-like behaviour on accounts. Load when adding, debugging, or tuning warming jobs.
+description: Warming runtime workflow — per-account asyncio tasks, cycle execution, persisted runtime state, board read model, and settings. Load when adding, debugging, or tuning this domain.
 triggers:
   - "warming"
   - "warm-up"
+  - "runtime"
   - "scheduler"
-  - "apscheduler"
-  - "cron"
+  - "asyncio"
+  - "cycle"
   - "job"
 edges:
   - target: context/telegram.md
-    condition: when the job's body performs Telegram I/O
+    condition: when the cycle performs Telegram I/O
   - target: context/architecture.md
-    condition: when deciding where job code lives vs UI code
+    condition: when deciding where runtime code lives vs UI code
+  - target: context/services.md
+    condition: when changing the warming service package
   - target: patterns/add-warming-job.md
-    condition: when adding a new scheduled warming task
-last_updated: 2026-06-12
+    condition: when adding a new warming runtime task
+last_updated: 2026-06-16
 ---
 
-# Warming (per-account asyncio loops)
+# Warming Runtime
 
-## Runtime model (decided at first implementation)
+## Runtime model
 
-Warming is a **continuous randomised loop per account**, not a fixed-schedule cron job:
-`cycle → sleep 12-30h → cycle …`. So instead of APScheduler we run one
-`asyncio.Task` per warming account, owned by `services/warming.py` in the module-level
-`_RUNTIME: dict[str, asyncio.Task]`.
+Warming is a continuous per-account runtime workflow, not a fixed cron job. The domain uses one `asyncio.Task` per active account, owned by `services/warming/_runtime.py` in `_RUNTIME`.
 
-- `start_warming(account_id)` sets state `active` and creates the loop task.
-- `stop_warming(account_id)` cancels the task and resets state to `idle`.
-- The loop wrapper `_warming_loop` calls the testable `run_one_cycle`, then sleeps a
-  random 12-30h, updating `warming_account_state` (next_run_at, last_cycle_at, cycle count).
+- `start_warming(account_id)` validates readiness, sets state, and creates the loop task.
+- `stop_warming(account_id)` cancels the task and resets state.
+- `shutdown_warming_runtime()` cancels running tasks on app shutdown.
+- `reconcile_warming_runtime()` rebuilds the in-memory task set after app startup based on persisted state.
+- `run_one_cycle(...)` is the testable cycle unit.
+- `run_loop_iteration(...)` owns persisted next-run calculation and state updates.
 
-APScheduler / `core/scheduler.py` is **only** needed if a future feature wants real cron
-scheduling — warming does not. This resolves the old "shared scheduler handle" and
-"jobstore" open decisions for the warming domain.
+APScheduler / `core/scheduler.py` is not used for the current warming runtime. Add a scheduler only if a future feature needs true cron semantics.
+
+## Package layout
+
+```text
+services/warming/
+├── __init__.py        public API re-exports
+├── channels.py        channel input parsing/list/add/remove
+├── settings_store.py  settings row load/save
+├── board.py           kanban/read-model builder; bulk-loads signals
+├── pacing.py          scheduling, readiness, intensity, time helpers
+├── _seams.py          injectable execute/generate_text/status/rng seams
+├── _state.py          state transition helpers
+├── _chat.py           Gemini chat helper + text sanitisation
+├── _cycle.py          one-cycle execution
+├── _loop.py           one loop iteration + recovery paths
+└── _runtime.py        task ownership, start/stop/reconcile/shutdown
+```
+
+`features/warming/` is UI-only: settings cards, channels UI, board rendering, activity log. It must delegate all domain logic to `services/warming/`.
 
 ## Cycle design rules
 
-- `run_one_cycle(WarmingCycleRequest)` is the pure, testable unit — it returns a
-  `WarmingCycleResult` and performs no infinite sleeps (delays come from `settings.warming`,
-  set to 0 in tests).
-- All Telegram I/O goes through `core.telegram_client.execute(account_id, action)` with
-  typed actions (`SetOnline`, `JoinChannel`, `ReadChannel`, `ReactToPost`, `SendDirectMessage`).
-- A `flood_wait` result short-circuits the cycle; the loop then parks the account in the
-  `flood_wait` state until the next scheduled cycle.
-- The loop body never raises to the task: `_warming_loop` catches everything, logs
-  `warming_loop_crashed` via `core/logging.py`, and sets state `error`.
-- `run_loop_iteration` is the single writer of `next_run_at`; `_warming_loop` only ever
-  sleeps `_seconds_until(record.next_run_at)`. So a restart resumes the persisted schedule
-  instead of firing a cycle immediately (no activity spike on app restart).
-- Two gates run before each cycle: quiet hours (`settings.warming.quiet_hours_*`, UTC, park
-  until the window ends) and the per-account daily action budget
-  (`settings.warming.max_daily_actions`, park until UTC midnight). Both default to off.
-- `start_warming` refuses a not-ready account when `settings.warming.enforce_readiness` is on
-  (`evaluate_readiness`: alive session, configured/working proxy, ≥1 channel) and freezes a
-  `proxy_snapshot` on the state row. The board shows readiness per card.
+- `run_one_cycle(...)` is the unit-level business operation. It returns a Pydantic result and performs no infinite loop itself.
+- Telegram I/O goes through `core.telegram_client.execute(account_id, action)` with typed actions.
+- Rate-limit / failure statuses returned by the executor are surfaced in the cycle result and persisted by the loop/state layer.
+- The loop body never lets exceptions kill task ownership silently: loop errors are logged and state is updated.
+- `run_loop_iteration` is the single writer of next-run state; task wrappers sleep based on persisted state.
+- Readiness and pacing policies live in `services/warming/pacing.py` and `settings.warming` / persisted warming settings.
 
 ## Persistence
 
-- Channels: `warming_channels` (unlimited, deduped). Settings: `warming_settings`
-  (singleton row — inter-account-chat toggle, reactions toggle, join toggle, Gemini key + model).
-  Per-account runtime: `warming_account_state` (state, cycles_completed, last_event,
-  last_cycle_at, next_run_at, proxy_snapshot, daily_actions, daily_count_date, …).
-- The Gemini key is entered in the UI and stored in `warming_settings`; `settings.gemini`
-  only supplies defaults (env `GEMINI__API_KEY`) and non-secret tunables.
+- Channels: `warming_channels`.
+- Settings: `warming_settings` singleton row — feature toggles, Gemini key/model, runtime controls.
+- Per-account runtime state: `warming_account_state` — state, counters, last event/action/channel/error, heartbeat, started/stopped timestamps, next run, cooldown fields, proxy snapshot, daily counters, quarantine count.
+- DB queries live in `core/repositories/warming.py` and are re-exported through `core/db.py` for compatibility.
 
-## Human-like activity (decided)
+## Board/read model
 
-All in `settings.warming`, no magic numbers in code:
-- Per-action pause 10-30s; "typing" 5-30s; "reading posts" 8-45s.
-- Random 1-3 channels per cycle (`channels_per_cycle_min/max`).
-- Reaction probability per read (default 0.6) using a configurable emoji set; reactions
-  target a random recent post.
-- Post-cycle sleep 12-30h with per-account startup jitter.
-- Inter-account chat (opt-in): when ≥2 accounts are warming and a Gemini key is set, the
-  sender DMs a random warming peer (that has a known `user_id`) a Gemini-generated line.
-- Per-account daily action budget via `settings.warming.max_daily_actions` (0 = off).
+`services/warming/board.py` builds the board read model for the UI.
+
+Important invariant: `load_board()` bulk-loads accounts, runtime states, channels, spam/status signals, fingerprints, and settings once. It must not reintroduce per-card DB queries.
+
+## Settings
+
+- Static defaults live in `core/config.py` under `settings.warming` and `settings.gemini`.
+- User-editable controls live in the `warming_settings` table and are read/written through `services/warming/settings_store.py`.
+- `.env.example` must include every config field; `tests/test_architecture.py` enforces this.
 
 ## What does NOT belong here
 
-- No direct Telegram calls inline — go through `core/telegram_client.py`.
-- No business logic in `features/warming.py` — it is UI-thin and delegates to
-  `services/warming.py`.
+- No direct Telegram SDK calls inline — go through `core.telegram_client`.
+- No business logic in `features/warming/` — it is UI-thin and delegates to `services/warming/`.
+- No APScheduler assumptions for this domain.
+- No `telegram_outbox` assumptions; the current model is direct executor + persisted runtime state.
