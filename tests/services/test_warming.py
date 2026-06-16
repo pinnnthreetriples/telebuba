@@ -24,6 +24,7 @@ from core.db import (
     create_account,
     fetch_warming_state,
     latest_unreplied_for,
+    list_dialogue_pairs,
     record_dialogue_message,
     save_warming_settings,
     update_account_from_session_check,
@@ -934,6 +935,27 @@ async def test_reconcile_warming_runtime_skips_error_state(
     assert "acc-broken" not in warming._RUNTIME
     await asyncio.sleep(0)
     assert "acc-broken" not in started
+
+
+@pytest.mark.asyncio
+async def test_reconcile_warming_runtime_builds_dialogue_pairs(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Inter-account chat needs pairs — reconcile must build the graph on startup."""
+
+    async def fake_loop(_account_id: str) -> None:
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    for account_id in ("acc-1", "acc-2", "acc-3"):
+        await _seed_ready_account(account_id)
+        await upsert_warming_state(WarmingStateWrite(account_id=account_id, state="active"))
+    assert (await list_dialogue_pairs()) == []
+
+    await warming.reconcile_warming_runtime()
+
+    pairs = await list_dialogue_pairs()
+    assert pairs, "reconcile must produce dialogue pairs so inter-account chat works"
 
 
 @pytest.mark.asyncio

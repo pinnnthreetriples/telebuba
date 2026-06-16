@@ -27,6 +27,7 @@ from core.logging import log_event
 from schemas.warming import (
     is_warming,
 )
+from services.dialogues import assign_pairs
 from services.warming import _seams
 from services.warming._loop import run_loop_iteration
 from services.warming._state import _current_card, _set_state
@@ -163,6 +164,11 @@ async def reconcile_warming_runtime() -> None:
     ``_RUNTIME`` lives in process memory: after a restart the DB still shows
     ``active``/``sleeping``/``flood_wait`` but no task exists. We restart the
     loop for each such account so the board does not lie.
+
+    Also refreshes the inter-account dialogue graph — ``assign_pairs`` is the
+    only path that materialises pairs, so without this call the feature stays
+    silently dormant. The call is idempotent (it rebuilds only when stale or
+    membership-changed), so running it on every reconcile is cheap.
     """
     records = await list_warming_states()
     restarted = 0
@@ -192,6 +198,18 @@ async def reconcile_warming_runtime() -> None:
             "INFO",
             "warming_runtime_reconciled",
             extra={"restarted": restarted},
+        )
+    await _refresh_dialogue_pairs()
+
+
+async def _refresh_dialogue_pairs() -> None:
+    try:
+        await assign_pairs()
+    except Exception as exc:  # noqa: BLE001 - reconcile must not fail because dialogues did.
+        await log_event(
+            "WARNING",
+            "warming_dialogue_pair_refresh_failed",
+            extra={"error": str(exc)},
         )
 
 
