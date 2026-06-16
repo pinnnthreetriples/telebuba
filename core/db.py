@@ -177,12 +177,16 @@ def _get_engine() -> Engine:
             future=True,
         )
 
-        # SQLite ignores ForeignKey constraints unless this PRAGMA is set on
-        # every connection. Without it, orphan rows are silently allowed.
+        # SQLite ignores ForeignKey constraints unless PRAGMA foreign_keys is
+        # set on every connection. WAL + busy_timeout + synchronous=NORMAL let
+        # concurrent warming loops write without "database is locked".
         @event.listens_for(engine, "connect")
-        def _enable_sqlite_fk(dbapi_connection: Any, _connection_record: object) -> None:  # noqa: ANN401 - SQLAlchemy hands us the raw DBAPI handle.
+        def _configure_sqlite(dbapi_connection: Any, _connection_record: object) -> None:  # noqa: ANN401 - SQLAlchemy hands us the raw DBAPI handle.
             cursor = dbapi_connection.cursor()
             cursor.execute("PRAGMA foreign_keys=ON")
+            cursor.execute("PRAGMA journal_mode=WAL")
+            cursor.execute("PRAGMA synchronous=NORMAL")
+            cursor.execute("PRAGMA busy_timeout=5000")
             cursor.close()
 
         _state.engine = engine
@@ -334,6 +338,7 @@ from core.repositories.accounts import (  # noqa: E402, F401
 )
 from core.repositories.content import (  # noqa: E402, F401
     record_sent_hash,
+    try_reserve_sent_hash,
     was_hash_sent_since,
 )
 from core.repositories.device_fingerprint import (  # noqa: E402, F401
@@ -350,6 +355,7 @@ from core.repositories.dialogues import (  # noqa: E402, F401
     pair_key,
     record_dialogue_message,
     replace_dialogue_pairs,
+    try_claim_message_reply,
 )
 from core.repositories.logs import (  # noqa: E402, F401
     insert_log_row,

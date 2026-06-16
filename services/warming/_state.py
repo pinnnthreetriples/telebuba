@@ -28,7 +28,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     *,
     last_event: str | None = None,
     last_cycle_at: str | None = None,
-    next_run_at: str | None = None,
+    next_run_at: str | None | _Sentinel = _SENTINEL,
     increment_cycle: bool = False,
     last_error: str | None | _Sentinel = _SENTINEL,
     last_action: str | None | _Sentinel = _SENTINEL,
@@ -62,9 +62,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             last_cycle_at=(
                 last_cycle_at if last_cycle_at is not None else _carry(current, "last_cycle_at")
             ),
-            next_run_at=(
-                next_run_at if next_run_at is not None else _carry(current, "next_run_at")
-            ),
+            next_run_at=cast("str | None", _resolve(next_run_at, "next_run_at")),
             last_error=cast("str | None", _resolve(last_error, "last_error")),
             last_action=cast("str | None", _resolve(last_action, "last_action")),
             last_channel=cast("str | None", _resolve(last_channel, "last_channel")),

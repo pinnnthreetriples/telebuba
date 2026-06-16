@@ -102,6 +102,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             data.account_id,
             "active",
             last_event="queued",
+            next_run_at=None,
             started_at=_now_iso(),
             stopped_at=None,
             last_error=None,
@@ -166,7 +167,10 @@ async def reconcile_warming_runtime() -> None:
     records = await list_warming_states()
     restarted = 0
     for record in records:
-        if not is_warming(record.state):
+        # ``error`` is part of ``_ACTIVE_STATES`` so the UI keeps the card in
+        # the warming column, but reconcile must not auto-resurrect a broken
+        # account — the operator has to acknowledge and restart it.
+        if not is_warming(record.state) or record.state == "error":
             continue
         existing = _RUNTIME.get(record.account_id)
         if existing is not None and not existing.done():

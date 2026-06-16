@@ -13,7 +13,7 @@ import re
 from datetime import UTC, datetime, timedelta
 
 from core.config import settings
-from core.db import record_sent_hash, was_hash_sent_since
+from core.db import record_sent_hash, try_reserve_sent_hash, was_hash_sent_since
 
 _LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/)", re.IGNORECASE)
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
@@ -57,5 +57,26 @@ async def is_duplicate(text: str) -> bool:
 
 
 async def register_sent(text: str) -> None:
-    """Record that this text has been sent (for future dedup)."""
+    """Record that this text has been sent (for future dedup).
+
+    Prefer :func:`try_reserve_sent` when the call is the gate before a send —
+    that variant is atomic. ``register_sent`` is the no-op-on-failure fallback
+    used by code paths that have already established uniqueness.
+    """
     await record_sent_hash(content_hash(text))
+
+
+async def try_reserve_sent(text: str) -> bool:
+    """Atomically claim a content hash before sending — True if claim wins.
+
+    Combines :func:`is_duplicate` and :func:`register_sent` into a single
+    transaction so two concurrent senders of the same text cannot both pass
+    the dedup gate. A False return means another sender already reserved this
+    text within the dedup window; the caller must abort.
+    """
+    window = settings.warming.content_dedup_window_days
+    if window <= 0:
+        await register_sent(text)
+        return True
+    since = (datetime.now(UTC) - timedelta(days=window)).isoformat()
+    return await try_reserve_sent_hash(content_hash(text), since)

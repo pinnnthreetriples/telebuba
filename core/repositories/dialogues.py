@@ -163,6 +163,30 @@ async def mark_message_replied(message_id: int) -> None:
     await asyncio.to_thread(_mark_message_replied, message_id)
 
 
+def _try_claim_message_reply(message_id: int) -> bool:
+    statement = (
+        update(dialogue_messages)
+        .where(
+            (dialogue_messages.c.id == message_id) & (dialogue_messages.c.replied == 0),
+        )
+        .values(replied=1)
+    )
+    with _get_engine().begin() as connection:
+        result = connection.execute(statement)
+        return result.rowcount > 0
+
+
+async def try_claim_message_reply(message_id: int) -> bool:
+    """Atomically mark a message as replied iff no one else has — returns True on success.
+
+    Use this before sending a DM so two parallel cycles cannot both answer the
+    same incoming message. The non-atomic ``latest_unreplied_for`` + ``mark``
+    split could race; this collapses the claim into a single
+    ``UPDATE ... WHERE replied=0`` whose ``rowcount`` is the source of truth.
+    """
+    return await asyncio.to_thread(_try_claim_message_reply, message_id)
+
+
 def _count_pair_messages_since(key: str, since_iso: str) -> int:
     statement = (
         select(func.count())
