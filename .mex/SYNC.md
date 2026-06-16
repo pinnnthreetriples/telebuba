@@ -1,23 +1,11 @@
 # Sync — Realign This Scaffold
 
-## Recommended: Use sync.sh
-
-```bash
-.mex/sync.sh
-```
-
-The script runs drift detection first, shows you exactly what's wrong, then offers:
-1. **Targeted sync** — AI fixes only the flagged files (fastest, cheapest)
-2. **Full resync** — AI re-reads everything and updates all scaffold files
-3. **Prompt export** — shows the prompts for manual paste
-4. **Exit** — fix it yourself
-
 ## Quick Check
 
 ```bash
-mex check              # full drift report
-mex check --quiet      # one-liner: "drift score 85/100 (1 error)"
-mex sync --dry-run     # preview targeted fix prompts
+npx mex-agent check              # full drift report
+npx mex-agent check --quiet      # one-liner: "drift score 85/100 (1 error)"
+npx mex-agent sync --dry-run     # preview targeted fix prompts
 ```
 
 ## Manual Resync

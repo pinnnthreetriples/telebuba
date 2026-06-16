@@ -34,7 +34,7 @@ last_updated: 2026-06-16
 - `services/accounts/` — account lifecycle/actions, session import/check, proxy operations, profile/media actions, account table read model helpers.
 - `services/warming/` — runtime workflow domain package: channels, settings storage, board read model, pacing/readiness, cycle execution, runtime task ownership.
 - `services/trust.py` — trust-score calculation from stored account signals.
-- `services/comments.py` — not built yet.
+- `comments` domain — not yet started.
 
 ## Why it exists
 
@@ -54,7 +54,7 @@ With `services/`:
 - **Async public API.** Public service functions that perform I/O are `async def`.
 - **Pydantic at every edge.** Inputs and outputs are models from `schemas/`. No raw `dict`/`tuple`/`list` of raw values crossing into or out of a service.
 - **No SDK I/O directly.** Services delegate I/O to `core/`:
-  - DB → `core/db.py` compatibility re-exports or `core/repositories/*`.
+  - DB → `core/db.py` compatibility re-exports or `core/repositories/`.
   - Telegram → `core.telegram_client.execute(account_id, action)` with typed actions from `schemas/telegram_actions.py`.
   - HTTP providers → `core/<provider>.py` wrapper, not raw `httpx`.
   - Logging → `core/logging.py`.
@@ -69,7 +69,7 @@ A service package root (`services/<domain>/__init__.py`) should be thin:
 - small compatibility shim,
 - or minimal orchestration that intentionally keeps test seams patchable.
 
-If the root starts collecting unrelated logic, split into submodules (`runtime.py`, `settings_store.py`, `board.py`, `profile.py`, `proxy.py`, etc.) and re-export the public API.
+If the root starts collecting unrelated logic, split into focused submodules (e.g. `_runtime`, `settings_store`, `board`, `pacing`) and re-export the public API.
 
 ## What does NOT belong here
 

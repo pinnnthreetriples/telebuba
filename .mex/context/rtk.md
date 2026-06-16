@@ -11,12 +11,12 @@ edges:
     condition: when listing developer commands
   - target: state/active.md
     condition: when a known issue mentions rtk hook unavailability
-last_updated: 2026-06-10
+last_updated: 2026-06-16
 ---
 
 # RTK (Rust Token Killer)
 
-A `PreToolUse` hook on `Bash` rewrites commands to `rtk <cmd>` automatically — agents never type `rtk` by hand. The hook is global (`~/.claude/settings.json`); if it is not active in a session, prefix commands manually for the categories below. Goal: 60–90 % fewer tokens spent on verbose shell output.
+A `PreToolUse` hook on `Bash` rewrites commands to `rtk <cmd>` automatically — agents never type `rtk` by hand. The hook is in the global Claude Code settings; if it is not active in a session, prefix commands manually for the categories below. Goal: 60–90 % fewer tokens spent on verbose shell output.
 
 ## Prefix `rtk` for these categories
 
@@ -37,4 +37,4 @@ A `PreToolUse` hook on `Bash` rewrites commands to `rtk <cmd>` automatically —
 - `rtk discover` — analyse history for missed wrapping opportunities.
 - `rtk proxy <cmd>` — run without filtering when you need exact upstream output.
 
-Full reference: `~/.claude/RTK.md`.
+Full reference: the global RTK configuration file in the Claude user config directory.

@@ -30,7 +30,7 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
 - Every feature is its own module or package under `features/`.
 - Small feature: `features/<name>.py`. Larger feature: `features/<name>/` with a thin `__init__.py` and cohesive render/helper modules.
 - UI-thin only — NiceGUI page/component definitions and click handlers. All business logic delegates to `services/`.
-- No imports between feature domains. `features/accounts/**` must not import `features/warming/**`.
+- No imports between feature domains. `features/accounts/` must not import `features/warming/`.
 - **Why:** keeps feature ownership clear, prevents god-modules, lets agents work on different features with fewer merge conflicts, and keeps UI replaceable.
 
 ### 2. Pydantic Boundaries
@@ -113,7 +113,7 @@ Run this checklist explicitly before presenting any code or committing:
 
 ## Naming
 
-- Files and packages: snake_case (`account_creation.py`, not `AccountCreation.py`).
+- Files and packages: snake_case (e.g. `account_creation`, not `AccountCreation`).
 - Functions: snake_case, verb-first (`create_account`, not `account_creator`).
 - Pydantic models: PascalCase, suffix by role (`AccountCreate`, `AccountRead`, `AccountUpdate`, `AccountResponse`).
 - DB tables / columns: snake_case (`accounts`, `created_at`).
@@ -125,7 +125,7 @@ Run this checklist explicitly before presenting any code or committing:
 - One domain per module/package. Do not keep adding unrelated concerns to a package root.
 - Package root (`__init__.py`) should be thin: page scaffold, public API re-exports, or compatibility shims only.
 - Shared business logic lives in `services/`. Shared infrastructure lives in `core/`. Shared contracts live in `schemas/`.
-- Tests live in `tests/`, mirroring the source tree where practical (`features/accounts/` → `tests/features/test_accounts*.py`).
+- Tests live in `tests/`, mirroring the source tree where practical (e.g. `features/accounts/` → `tests/features/`).
 - Full layer / import rules: `context/architecture.md`.
 
 ## Code Patterns

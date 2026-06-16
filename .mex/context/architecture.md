@@ -30,7 +30,7 @@ last_updated: 2026-06-16
 
 ## System Overview
 
-User opens the NiceGUI web interface → interacts with a thin page/component in `features/` → inputs are validated through Pydantic models from `schemas/` → the handler delegates to a `services/` domain package/module → the service uses `core/` gateways for I/O: SQLite through `core/db.py` + `core/repositories/*`, Telegram through `core/telegram_client/`, Gemini through `core/gemini.py`, logging through `core/logging.py`.
+User opens the NiceGUI web interface → interacts with a thin page/component in `features/` → inputs are validated through Pydantic models from `schemas/` → the handler delegates to a `services/` domain package/module → the service uses `core/` gateways for I/O: SQLite through `core/db.py` + `core/repositories/`, Telegram through `core/telegram_client/`, Gemini through `core/gemini.py`, logging through `core/logging.py`.
 
 Long-running runtime workflows are owned by service-layer async tasks. The current warming runtime uses per-account `asyncio.Task`s owned by `services/warming/_runtime.py`; APScheduler is not used for that domain.
 
@@ -63,7 +63,7 @@ telebuba/
 └── tests/                        mirrors source tree; pytest + property tests + architecture tests
 ```
 
-A small domain may start as a single module (`features/logs.py`, `services/comments.py`). Once it grows, it should become a package with a thin `__init__.py` and cohesive submodules. Package split is now normal, not an exception.
+A small domain may start as a single module (e.g. `features/logs.py`). Once it grows, it should become a package with a thin `__init__.py` and cohesive submodules. Package split is now normal, not an exception.
 
 ## Layer Model
 
@@ -117,7 +117,7 @@ Inside a single function or private module, regular Python data structures are f
 - **`main.py`** — composition root: setup logging, register pages, run NiceGUI, reconcile runtime tasks on startup, shutdown runtime tasks gracefully.
 - **`core/config.py`** — typed settings via `pydantic-settings`. Nested namespaces per domain (`settings.warming`, `settings.gemini`, `settings.telegram`, ...). Single source of truth for tunables and secrets.
 - **`core/db.py`** — shared SQLite plumbing only: SQLAlchemy metadata, table definitions, engine lifecycle, additive migration hook, generic row/value helpers, and compatibility re-exports.
-- **`core/repositories/*`** — per-aggregate DB query modules: accounts, warming, logs, content, device_fingerprint, dialogues, spam_status.
+- **`core/repositories/`** — per-aggregate DB query modules: accounts, warming, logs, content, device_fingerprint, dialogues, spam_status.
 - **`core/telegram_client/`** — Telethon gateway package. Public imports still come from `core.telegram_client`; implementation is split into focused private modules.
 - **`core/gemini.py`** — Gemini HTTP gateway. Only place raw Gemini HTTP calls belong.
 - **`core/tdata_import.py`** — opentele2 adapter. Safe-extracts `tdata.zip` and writes Telethon `.session` files.
@@ -130,7 +130,7 @@ Inside a single function or private module, regular Python data structures are f
 ## External Dependencies
 
 - **Telegram (via Telethon)** — all calls funnel through `core/telegram_client/` and typed actions.
-- **SQLite (via SQLAlchemy)** — local file DB for the current single-process deployment. DB access goes through `core/db.py` and `core/repositories/*`.
+- **SQLite (via SQLAlchemy)** — local file DB for the current single-process deployment. DB access goes through `core/db.py` and `core/repositories/`.
 - **Gemini API (via httpx)** — AI text generation through `core/gemini.py` only.
 - **NiceGUI** — UI and HTTP server in one async Python process.
 

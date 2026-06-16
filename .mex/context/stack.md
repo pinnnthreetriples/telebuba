@@ -30,7 +30,7 @@ Pinned in `pyproject.toml` + `uv.lock`. Local dev target: Python 3.13.x, uv.
 | Package | Role / non-obvious note |
 | --- | --- |
 | `nicegui` | UI and HTTP server in one async process. No separate frontend. |
-| `sqlalchemy` | SQLite access. Only used inside `core/db.py` and `core/repositories/*`. |
+| `sqlalchemy` | SQLite access. Only used inside `core/db.py` and `core/repositories/`. |
 | `telethon` | Telegram MTProto client. Only used inside `core/telegram_client/`. |
 | `python-socks` | SOCKS5/HTTP proxy support for Telethon gateway construction. |
 | `httpx` | Async HTTP client for `core/gemini.py`; services do not import it directly. |

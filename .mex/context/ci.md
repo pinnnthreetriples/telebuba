@@ -23,8 +23,8 @@ last_updated: 2026-06-16
 
 Workflows live under `.github/workflows/`. Two files:
 
-- `ci.yml` — fires on `pull_request` and `push` to `main`.
-- `nightly.yml` — fires on `cron: "0 3 * * *"` UTC and `workflow_dispatch`.
+- `.github/workflows/ci.yml` — fires on `pull_request` and `push` to `main`.
+- `.github/workflows/nightly.yml` — fires on `cron: "0 3 * * *"` UTC and `workflow_dispatch`.
 
 Dependabot (`.github/dependabot.yml`) opens weekly PRs for GitHub Actions updates.
 
@@ -48,8 +48,7 @@ All four were installed but unwired; they now gate:
   documented `per_rule_ignores` in `pyproject.toml`: `opentele2` (DEP002, lazy
   `importlib` import) and `hypothesis` (DEP004, dev dep used in `conftest.py`).
   `tools/` is excluded (it imports the dev-only `radon`).
-- **vulture** — dead code. Pre-commit + lint job. Scans `core/features/schemas/
-  services` (config in `pyproject.toml`). Re-exports stay live via each package's
+- **vulture** — dead code. Pre-commit + lint job. Scans `core/`, `features/`, `schemas/`, `services/` (config in `pyproject.toml`). Re-exports stay live via each package's
   `__all__`.
 - **radon** — cyclomatic complexity. radon never exits non-zero on its own, so
   `tools/radon_gate.py` wraps its API and **fails on rank D+ (cc > 20)**. Chosen
@@ -95,7 +94,7 @@ Selection lives in `conftest.py`.
 ## What does NOT belong in CI
 
 - `pytest-xdist` parallelism — add only when test count justifies it; with the canary alone it is noise.
-- `mutmut` — gated to nightly + `workflow_dispatch` once it has real code to mutate. See `state/active.md → Open Decisions`.
+- `mutmut` — gated to nightly + `workflow_dispatch` once it has real code to mutate. See `state/active.md` (Open Decisions section).
 - Branch protection / required-status-check setup — that lives in repo settings, not workflows.
 
 ## Known gotcha
