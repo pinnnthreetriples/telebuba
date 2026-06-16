@@ -16,7 +16,7 @@ edges:
     condition: when the same command runs locally
   - target: state/active.md
     condition: when CI state changes (red main, new known failure)
-last_updated: 2026-06-10
+last_updated: 2026-06-16
 ---
 
 # CI Policy
@@ -32,12 +32,39 @@ Dependabot (`.github/dependabot.yml`) opens weekly PRs for GitHub Actions update
 
 | Job | PR | Push to main | Nightly | Notes |
 |---|---|---|---|---|
-| `lint` (pre-commit all hooks) | ✓ | ✓ | — | ruff + ruff-format + bandit + ty + gitleaks + hygiene |
+| `lint` (pre-commit all hooks) | ✓ | ✓ | — | ruff + ruff-format + bandit + ty + gitleaks + hygiene + deptry + vulture + radon (cc D+ gate) |
 | `test` (pytest strict) | ✓ | ✓ | extended profile only | Hypothesis: `dev` (50) on PR, `strict` (200) on main, `extended` (2000) nightly |
 | `audit` (pip-audit) | ✓ | ✓ | — | CVEs in deps |
-| `semgrep` (auto config) | — | ✓ | — | gated to main only — too slow for PR |
+| `semgrep` (auto config) | ✓ | ✓ | — | runs on PR + push so the security gate is pre-merge |
+| `aislop` (quality gate) | ✓ | ✓ | — | zero-tolerance: any error OR warning fails; needs Node (npx) |
 | `semgrep-full` (3 rulesets) | — | — | ✓ | security-audit + OWASP top 10 + python |
 | `extended-hypothesis` | — | — | ✓ | 2000 examples per property |
+
+## Quality gates (deptry / vulture / radon / aislop)
+
+All four were installed but unwired; they now gate:
+
+- **deptry** — unused / missing / transitive deps. Pre-commit + lint job. Two
+  documented `per_rule_ignores` in `pyproject.toml`: `opentele2` (DEP002, lazy
+  `importlib` import) and `hypothesis` (DEP004, dev dep used in `conftest.py`).
+  `tools/` is excluded (it imports the dev-only `radon`).
+- **vulture** — dead code. Pre-commit + lint job. Scans `core/features/schemas/
+  services` (config in `pyproject.toml`). Re-exports stay live via each package's
+  `__all__`.
+- **radon** — cyclomatic complexity. radon never exits non-zero on its own, so
+  `tools/radon_gate.py` wraps its API and **fails on rank D+ (cc > 20)**. Chosen
+  over the stricter C+ so genuinely-overgrown functions are caught without
+  forcing artificial splits of branchy domain logic.
+- **aislop** — AI-slop quality gate (an npm tool via `npx`, so it needs Node).
+  `tools/aislop_gate.py` parses its JSON and is **zero-tolerance: any error OR
+  warning fails**. Dedicated CI job (`setup-node`) + a `pre-push` pre-commit hook
+  (heavy, so not every commit). Its size rules (`file-too-large` 400,
+  `function-too-long` 80, `too-many-params` 6) and `repetitive-dispatch` drove
+  the package splits across `core`/`services`/`features`.
+
+`tools/` helpers are excluded from deptry/bandit (`exclude_dirs`/hook `exclude`)
+and semgrep (`.semgrepignore`), with a narrow ruff ignore for the intentional
+subprocess.
 
 ## Triggers and skips
 
