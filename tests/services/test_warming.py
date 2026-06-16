@@ -915,6 +915,28 @@ async def test_reconcile_warming_runtime_restarts_active_loops(
 
 
 @pytest.mark.asyncio
+async def test_reconcile_warming_runtime_skips_error_state(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Error accounts must not be auto-resurrected on restart; user has to act."""
+    started: list[str] = []
+
+    async def fake_loop(account_id: str) -> None:
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await create_account(AccountCreate(account_id="acc-broken"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-broken", state="error"))
+
+    await warming.reconcile_warming_runtime()
+
+    assert "acc-broken" not in warming._RUNTIME
+    await asyncio.sleep(0)
+    assert "acc-broken" not in started
+
+
+@pytest.mark.asyncio
 async def test_reconcile_marks_orphan_state_rows_idle(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_loop(_account_id: str) -> None:
         await asyncio.sleep(3600)
