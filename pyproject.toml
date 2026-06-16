@@ -146,7 +146,7 @@ ignore = [
 # Russian-language UI strings — Cyrillic letters are intentional, not confusables.
 "features/accounts.py" = ["RUF001", "RUF002", "RUF003"]
 "features/logs.py" = ["RUF001", "RUF002", "RUF003"]
-"features/warming.py" = ["RUF001", "RUF002", "RUF003"]
+"features/warming/**" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
