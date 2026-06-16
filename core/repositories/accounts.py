@@ -296,6 +296,16 @@ async def delete_account_proxy(data: AccountProxyDelete) -> None:
     await asyncio.to_thread(_delete_account_proxy, data)
 
 
+def _delete_account(account_id: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(delete(_accounts).where(_accounts.c.account_id == account_id))
+
+
+async def delete_account(account_id: str) -> None:
+    """Delete an account row (cascade is handled by SQLite FK constraints)."""
+    await asyncio.to_thread(_delete_account, account_id)
+
+
 def _exit_ip_collisions() -> dict[str, list[str]]:
     statement = select(
         _account_proxies.c.account_id,

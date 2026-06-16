@@ -325,6 +325,7 @@ def _optional_int(value: object) -> int | None:
 # --------------------------------------------------------------------------- #
 from core.repositories.accounts import (  # noqa: E402, F401
     create_account,
+    delete_account,
     delete_account_proxy,
     exit_ip_collisions,
     fetch_account,

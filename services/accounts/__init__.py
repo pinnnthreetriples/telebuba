@@ -17,12 +17,16 @@ take this module's public functions directly.
 from __future__ import annotations
 
 import asyncio
+import shutil
+from contextlib import suppress
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import (
     create_account,
+    delete_account,
     fetch_account,
     fetch_account_proxy_settings,
     fetch_device_fingerprint,
@@ -156,12 +160,51 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     )
 
 
-async def import_account_tdata(data: TdataConvertRequest) -> list[AccountRead]:
-    """Convert a tdata.zip payload to one or more .session files and register each account.
+@dataclass(frozen=True)
+class _TdataAccountPlan:
+    account_id: str
+    session_name: str
+    staging_path: Path
+    final_path: Path
 
-    Every successfully written session is added to the DB and immediately session-checked.
-    Returns the post-check ``AccountRead`` rows. Raises ``ValueError`` with a human-readable
-    message when the conversion itself failed.
+
+async def _preflight_tdata_plans(plans: list[_TdataAccountPlan]) -> None:
+    """Refuse to start the import if any account_id / file would clobber existing state."""
+    for plan in plans:
+        if await fetch_account(plan.account_id) is not None:
+            msg = f"tdata account {plan.account_id!r} already exists. Delete it before importing."
+            raise SessionAlreadyExistsError(msg)
+        if plan.final_path.exists() and plan.staging_path.resolve() != plan.final_path.resolve():
+            msg = (
+                f"session file {plan.final_path.name!r} already exists. Delete it before importing."
+            )
+            raise SessionAlreadyExistsError(msg)
+
+
+async def _rollback_tdata_import(account_ids: list[str], session_files: list[Path]) -> None:
+    """Best-effort: remove DB rows + .session files written during a failed import."""
+    for account_id in account_ids:
+        with suppress(Exception):
+            await delete_account(account_id)
+    for session_file in session_files:
+        with suppress(OSError):
+            session_file.unlink()
+    await log_event(
+        "WARNING",
+        "tdata_import_rolled_back",
+        extra={"accounts": account_ids, "files": [str(p) for p in session_files]},
+    )
+
+
+async def import_account_tdata(data: TdataConvertRequest) -> list[AccountRead]:
+    """Atomic conversion of a tdata.zip into ``.session`` files + DB rows.
+
+    Convert runs first (staging-only, no side effects on the final dir). Then
+    preflight checks that every produced account_id is free in both the DB and
+    the final sessions dir; if any conflict, the import aborts before touching
+    the final dir. Finally, files are moved and accounts added one-by-one — on
+    any mid-batch failure, every change made so far is rolled back so the
+    caller never observes a partial import.
     """
     result = await convert_tdata_zip(data, settings.telegram.session_dir)
     if result.status != "ok":
@@ -179,20 +222,40 @@ async def import_account_tdata(data: TdataConvertRequest) -> list[AccountRead]:
         await log_event("WARNING", "tdata_no_accounts", extra={"filename": data.filename})
         raise ValueError(msg)
 
-    checked: list[AccountRead] = []
+    plans: list[_TdataAccountPlan] = []
     for summary in result.accounts:
-        session_name = Path(summary.session_path).stem
+        staging_path = Path(summary.session_path)
+        session_name = staging_path.stem
         account_id = str(summary.user_id) if summary.user_id is not None else session_name
-        await add_account(
-            AccountCreate(
-                account_id=account_id,
-                label=data.label or account_id,
-                session_name=session_name,
-            ),
-        )
-        checked.append(
-            await check_account_session(AccountCheckRequest(account_id=account_id)),
-        )
+        final_path = settings.telegram.session_dir / staging_path.name
+        plans.append(_TdataAccountPlan(account_id, session_name, staging_path, final_path))
+
+    await _preflight_tdata_plans(plans)
+
+    placed_files: list[Path] = []
+    added_account_ids: list[str] = []
+    checked: list[AccountRead] = []
+    try:
+        for plan in plans:
+            if plan.staging_path.resolve() != plan.final_path.resolve():
+                plan.final_path.parent.mkdir(parents=True, exist_ok=True)
+                shutil.move(str(plan.staging_path), str(plan.final_path))
+            placed_files.append(plan.final_path)
+            await add_account(
+                AccountCreate(
+                    account_id=plan.account_id,
+                    label=data.label or plan.account_id,
+                    session_name=plan.session_name,
+                ),
+            )
+            added_account_ids.append(plan.account_id)
+            checked.append(
+                await check_account_session(AccountCheckRequest(account_id=plan.account_id)),
+            )
+    except Exception:
+        await _rollback_tdata_import(added_account_ids, placed_files)
+        raise
+
     await log_event(
         "INFO",
         "tdata_import_completed",
