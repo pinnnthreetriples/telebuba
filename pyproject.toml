@@ -52,6 +52,9 @@ override-dependencies = [
     # PYSEC-2026-175/177/178/179 in pyjwt 2.12.1 (pulled by semgrep -> mcp,
     # which upper-pins <2.13). Fix line is 2.13.0. Recheck on semgrep bumps.
     "pyjwt>=2.13.0",
+    # CVE-2026-54282/54283 in starlette 1.2.1 (pulled transitively via nicegui ->
+    # fastapi). Fix line is 1.3.1. Recheck when nicegui's fastapi pin catches up.
+    "starlette>=1.3.1",
 ]
 
 # ============================================================================
