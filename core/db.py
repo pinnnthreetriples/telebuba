@@ -338,6 +338,7 @@ from core.repositories.accounts import (  # noqa: E402, F401
     upsert_account_proxy,
 )
 from core.repositories.content import (  # noqa: E402, F401
+    purge_sent_hashes_older_than,
     record_sent_hash,
     try_reserve_sent_hash,
     was_hash_sent_since,
@@ -354,6 +355,7 @@ from core.repositories.dialogues import (  # noqa: E402, F401
     list_recent_dialogue_messages,
     mark_message_replied,
     pair_key,
+    purge_dialogue_messages_older_than,
     record_dialogue_message,
     replace_dialogue_pairs,
     try_claim_message_reply,
@@ -362,6 +364,7 @@ from core.repositories.logs import (  # noqa: E402, F401
     insert_log_row,
     list_filtered_logs,
     list_recent_logs,
+    purge_logs_older_than,
 )
 from core.repositories.spam_status import (  # noqa: E402, F401
     get_spam_status,

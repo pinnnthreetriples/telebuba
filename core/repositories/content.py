@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 
-from sqlalchemy import Column, String, Table, insert, update
+from sqlalchemy import Column, String, Table, delete, insert, update
 
 from core.db import _get_engine, _metadata, _now_iso
 
@@ -91,3 +91,18 @@ async def try_reserve_sent_hash(text_hash: str, since_iso: str) -> bool:
     sender already reserved this text within the dedup window.
     """
     return await asyncio.to_thread(_try_reserve_sent_hash, text_hash, since_iso)
+
+
+def _purge_sent_hashes_older_than(cutoff_iso: str) -> int:
+    statement = delete(sent_message_hashes).where(sent_message_hashes.c.created_at < cutoff_iso)
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount
+
+
+async def purge_sent_hashes_older_than(cutoff_iso: str) -> int:
+    """Delete sent-hash rows older than the cutoff. Returns rows removed.
+
+    Anything past the dedup window is dead weight: it cannot block any current
+    send, so retaining it just bloats the table.
+    """
+    return await asyncio.to_thread(_purge_sent_hashes_older_than, cutoff_iso)
