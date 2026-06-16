@@ -143,6 +143,9 @@ ignore = [
     "RUF003",
 ]
 "conftest.py" = ["ANN", "S101"]
+# CI gate helpers: subprocess to dev tools is intentional; they are standalone
+# scripts (no package) run by CI / pre-commit, not imported by the app.
+"tools/**" = ["S603", "S607", "INP001"]
 # Russian-language UI strings — Cyrillic letters are intentional, not confusables.
 "features/accounts/**" = ["RUF001", "RUF002", "RUF003"]
 "features/logs.py" = ["RUF001", "RUF002", "RUF003"]
@@ -175,7 +178,7 @@ unresolved-import = "error"
 # trip false positives.
 # ============================================================================
 [tool.bandit]
-exclude_dirs = ["tests", ".venv"]
+exclude_dirs = ["tests", ".venv", "tools"]
 skips = []
 
 # ============================================================================
@@ -183,6 +186,9 @@ skips = []
 # ============================================================================
 [tool.deptry]
 known_first_party = ["core", "features", "schemas", "services"]
+# CI gate helpers under tools/ import dev-only tooling (radon); they are not
+# part of the shipped app, so exclude them from the dependency scan.
+extend_exclude = ["tools"]
 
 [tool.deptry.per_rule_ignores]
 # opentele2 is imported lazily via importlib.import_module in core/tdata_import.py

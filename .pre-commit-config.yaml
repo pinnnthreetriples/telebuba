@@ -49,6 +49,7 @@ repos:
       - id: bandit
         args: [-c, pyproject.toml]
         additional_dependencies: ["bandit[toml]"]
+        exclude: ^tools/
 
   # --- ty: Astral type checker (pre-1.0, run from local venv) ----------------
   - repo: local
@@ -59,3 +60,36 @@ repos:
         language: system
         types: [python]
         pass_filenames: false
+
+  # --- dependency / dead-code / complexity gates (pure-python, every commit) -
+  - repo: local
+    hooks:
+      - id: deptry
+        name: deptry (unused / missing / transitive deps)
+        entry: uv run deptry .
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: vulture
+        name: vulture (dead code)
+        entry: uv run vulture
+        language: system
+        types: [python]
+        pass_filenames: false
+      - id: radon-complexity
+        name: radon (cyclomatic complexity gate, fail on rank D+)
+        entry: uv run python tools/radon_gate.py
+        language: system
+        types: [python]
+        pass_filenames: false
+
+  # --- aislop: AI-slop quality gate (needs Node; heavy, so push-time only) ---
+  - repo: local
+    hooks:
+      - id: aislop
+        name: aislop (AI-slop quality gate, zero-tolerance)
+        entry: uv run python tools/aislop_gate.py
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]

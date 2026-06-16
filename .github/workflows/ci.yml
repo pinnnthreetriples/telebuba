@@ -125,12 +125,11 @@ jobs:
         run: uv run pip-audit --strict
 
   # ---------------------------------------------------------------------------
-  # Heavier SAST scan. Only on push to main — too slow for every PR.
-  # The full ruleset is in the nightly workflow.
+  # SAST scan on every PR and push, so the security gate fires before merge
+  # (not after). The heavier full rulesets run in the nightly workflow.
   # ---------------------------------------------------------------------------
   semgrep:
     name: semgrep (SAST, auto)
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
@@ -147,3 +146,32 @@ jobs:
 
       - name: Run semgrep
         run: uv run semgrep --config auto --error .
+
+  # ---------------------------------------------------------------------------
+  # aislop — AI-slop quality gate, zero-tolerance (any error OR warning fails).
+  # It is an npm tool, so the runner needs Node; the gate is a thin JSON-parsing
+  # wrapper (tools/aislop_gate.py). Runs on every PR and push.
+  # ---------------------------------------------------------------------------
+  aislop:
+    name: aislop (quality gate, zero-tolerance)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run aislop gate
+        run: uv run python tools/aislop_gate.py
