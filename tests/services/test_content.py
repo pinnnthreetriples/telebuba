@@ -66,3 +66,19 @@ async def test_is_duplicate_disabled_with_zero_window(monkeypatch: pytest.Monkey
     monkeypatch.setattr(settings.warming, "content_dedup_window_days", 0.0)
     await content.register_sent("hi there")
     assert not await content.is_duplicate("hi there")
+
+
+@pytest.mark.asyncio
+async def test_try_reserve_sent_first_wins_second_loses(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "content_dedup_window_days", 7)
+    assert await content.try_reserve_sent("hi there") is True
+    assert await content.try_reserve_sent("hi there") is False
+    # Normalised collision: punctuation/case-different but same hash → also loses.
+    assert await content.try_reserve_sent("Hi, there!") is False
+
+
+@pytest.mark.asyncio
+async def test_try_reserve_sent_zero_window_always_wins(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "content_dedup_window_days", 0)
+    assert await content.try_reserve_sent("hi") is True
+    assert await content.try_reserve_sent("hi") is True

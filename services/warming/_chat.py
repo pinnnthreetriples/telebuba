@@ -23,7 +23,7 @@ from core.db import (
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import SendDirectMessage
-from services.content import is_acceptable, is_duplicate, register_sent
+from services.content import is_acceptable, is_duplicate, try_reserve_sent
 from services.dialogues import get_partners
 from services.warming import _seams
 
@@ -126,7 +126,7 @@ async def _maybe_inter_account_chat(
     return await _open_with_partner(sender_id, partners, secret, accounts)
 
 
-async def _reply_to_partner(
+async def _reply_to_partner(  # noqa: PLR0911 - each return is a distinct guard (faded/unknown/no-text/claimed/duplicate/send-failed); inlining the early-exits keeps the happy path linear.
     sender_id: str,
     incoming: DialogueMessage,
     secret: WarmingSettingsSecret,
@@ -160,10 +160,13 @@ async def _reply_to_partner(
     # reply by design — silence is safer than a duplicate.
     if not await try_claim_message_reply(incoming.id):
         return 0
+    # Same atomic-reserve trick for content dedup — see _open_with_partner.
+    if not await try_reserve_sent(text):
+        await log_event("INFO", "warming_chat_duplicate", account_id=sender_id)
+        return 0
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
     if result.status != "ok":
         return 0
-    await register_sent(text)
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.
     await record_dialogue_message(sender_id, incoming.from_account, text)
@@ -205,10 +208,14 @@ async def _open_with_partner(
     text = await _generate_chat_text(sender_id, secret)
     if text is None:
         return 0
+    # Atomic reserve before send — two parallel cycles cannot both pass the
+    # dedup gate for the same text and end up double-sending.
+    if not await try_reserve_sent(text):
+        await log_event("INFO", "warming_chat_duplicate", account_id=sender_id)
+        return 0
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
     if result.status != "ok":
         return 0
-    await register_sent(text)
     await record_dialogue_message(sender_id, target.account_id, text)
     await log_event(
         "INFO",

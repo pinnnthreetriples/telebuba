@@ -338,6 +338,7 @@ from core.repositories.accounts import (  # noqa: E402, F401
 )
 from core.repositories.content import (  # noqa: E402, F401
     record_sent_hash,
+    try_reserve_sent_hash,
     was_hash_sent_since,
 )
 from core.repositories.device_fingerprint import (  # noqa: E402, F401
