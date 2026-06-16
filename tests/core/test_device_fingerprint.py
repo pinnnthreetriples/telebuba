@@ -23,14 +23,17 @@ from core.telegram_client import (
     prepare_telegram_client_profile,
     telegram_client,
 )
-from schemas.accounts import AccountCreate
 from schemas.device_fingerprint import (
     DeviceFingerprint,
     TelegramClientProfile,
     TelegramClientRequest,
 )
-from schemas.proxy import AccountProxyUpsert
 from schemas.telegram_session import TelegramSessionCheckRequest
+from tests.factories import (
+    AccountCreateFactory,
+    AccountProxyUpsertFactory,
+    DeviceFingerprintFactory,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -50,15 +53,7 @@ async def test_device_fingerprint_created_once_in_sqlite(tmp_path: Path) -> None
 @pytest.mark.asyncio
 async def test_insert_duplicate_device_fingerprint_returns_saved_row(tmp_path: Path) -> None:
     configure_database(tmp_path / "telebuba.db")
-    saved = DeviceFingerprint(
-        account_id="account-duplicate",
-        platform="windows",
-        device_model="Desktop",
-        system_version="Windows 11",
-        app_version="5.4.0 x64",
-        lang_code="en",
-        system_lang_code="en-US",
-    )
+    saved = DeviceFingerprintFactory.build(account_id="account-duplicate")
     changed = saved.model_copy(update={"device_model": "Laptop"})
 
     first = await insert_device_fingerprint(saved)
@@ -89,12 +84,10 @@ async def test_telegram_client_profile_includes_saved_proxy(
 ) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
-    await create_account(AccountCreate(account_id="account-proxy"))
+    await create_account(AccountCreateFactory.build(account_id="account-proxy"))
     await upsert_account_proxy(
-        AccountProxyUpsert(
+        AccountProxyUpsertFactory.build(
             account_id="account-proxy",
-            proxy_type="socks5",
-            host="127.0.0.1",
             port=9050,
             username="alice",
             password="secret",  # noqa: S106 - test fixture value, not a real credential.
@@ -141,15 +134,7 @@ def test_create_telegram_client_passes_device_profile(monkeypatch) -> None:
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
 
-    client_profile = DeviceFingerprint(
-        account_id="account-3",
-        platform="windows",
-        device_model="Desktop",
-        system_version="Windows 11",
-        app_version="5.4.0 x64",
-        lang_code="en",
-        system_lang_code="en-US",
-    )
+    client_profile = DeviceFingerprintFactory.build(account_id="account-3")
     created = create_telegram_client(
         TelegramClientProfile(
             account_id="account-3",
@@ -189,15 +174,7 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
 
     monkeypatch.setattr("core.telegram_client._client.TelegramClient", FakeTelegramClient)
 
-    client_profile = DeviceFingerprint(
-        account_id="account-3",
-        platform="windows",
-        device_model="Desktop",
-        system_version="Windows 11",
-        app_version="5.4.0 x64",
-        lang_code="en",
-        system_lang_code="en-US",
-    )
+    client_profile = DeviceFingerprintFactory.build(account_id="account-3")
     create_telegram_client(
         TelegramClientProfile(
             account_id="account-3",

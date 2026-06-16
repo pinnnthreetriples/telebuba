@@ -22,7 +22,7 @@ from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client import create_telegram_client, execute
 from core.telegram_client._actions import _typing_seconds
-from schemas.device_fingerprint import DeviceFingerprint, TelegramClientProfile
+from schemas.device_fingerprint import TelegramClientProfile
 from schemas.telegram_actions import (
     AddProfileMusic,
     JoinChannel,
@@ -33,6 +33,7 @@ from schemas.telegram_actions import (
     SetProfilePhoto,
     UpdateProfile,
 )
+from tests.factories import DeviceFingerprintFactory
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -355,14 +356,12 @@ def test_create_telegram_client_applies_flood_sleep_threshold(
         account_id="acc",
         session_path=str(tmp_path / "acc"),
         receive_updates=False,
-        device=DeviceFingerprint(
+        device=DeviceFingerprintFactory.build(
             account_id="acc",
             platform="linux",
             device_model="PC",
             system_version="Ubuntu 24.04",
             app_version="5.0.0 x64",
-            lang_code="en",
-            system_lang_code="en-US",
         ),
     )
     client = create_telegram_client(profile)

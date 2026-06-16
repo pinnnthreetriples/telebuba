@@ -14,7 +14,8 @@ from core.db import (
     upsert_account_proxy,
 )
 from schemas.accounts import AccountCreate
-from schemas.proxy import AccountProxyCheckUpdate, AccountProxyDelete, AccountProxyUpsert
+from schemas.proxy import AccountProxyCheckUpdate, AccountProxyDelete
+from tests.factories import AccountProxyUpsertFactory
 
 
 @pytest.mark.asyncio
@@ -23,10 +24,8 @@ async def test_upsert_account_proxy_returns_masked_read_model(tmp_path) -> None:
     await create_account(AccountCreate(account_id="acc-1"))
 
     saved = await upsert_account_proxy(
-        AccountProxyUpsert(
+        AccountProxyUpsertFactory.build(
             account_id="acc-1",
-            proxy_type="socks5",
-            host="127.0.0.1",
             port=9050,
             username="alice",
             password="secret",  # noqa: S106 - test fixture value, not a real credential.
@@ -52,10 +51,8 @@ async def test_update_account_proxy_check_persists_exit_country(tmp_path) -> Non
     configure_database(tmp_path / "telebuba.db")
     await create_account(AccountCreate(account_id="acc-check"))
     await upsert_account_proxy(
-        AccountProxyUpsert(
+        AccountProxyUpsertFactory.build(
             account_id="acc-check",
-            proxy_type="socks5",
-            host="127.0.0.1",
             port=9050,
         ),
     )
@@ -83,7 +80,7 @@ async def test_update_account_proxy_check_persists_asn_and_datacenter(tmp_path) 
     configure_database(tmp_path / "telebuba.db")
     await create_account(AccountCreate(account_id="acc-dc"))
     await upsert_account_proxy(
-        AccountProxyUpsert(account_id="acc-dc", proxy_type="socks5", host="127.0.0.1", port=9050),
+        AccountProxyUpsertFactory.build(account_id="acc-dc", port=9050),
     )
 
     proxy = await update_account_proxy_check(
@@ -106,10 +103,8 @@ async def test_exit_ip_collisions_flags_shared_ip(tmp_path) -> None:
     for account_id in ("acc-a", "acc-b", "acc-solo"):
         await create_account(AccountCreate(account_id=account_id))
         await upsert_account_proxy(
-            AccountProxyUpsert(
+            AccountProxyUpsertFactory.build(
                 account_id=account_id,
-                proxy_type="socks5",
-                host="127.0.0.1",
                 port=9050,
             ),
         )
@@ -135,7 +130,7 @@ async def test_delete_account_proxy_removes_settings(tmp_path) -> None:
     configure_database(tmp_path / "telebuba.db")
     await create_account(AccountCreate(account_id="acc-2"))
     await upsert_account_proxy(
-        AccountProxyUpsert(
+        AccountProxyUpsertFactory.build(
             account_id="acc-2",
             proxy_type="http",
             host="proxy.local",
