@@ -29,6 +29,7 @@ permissions: read-all
 env:
   PYTHON_VERSION: "3.13"
   UV_VERSION: "0.10.9"
+  AISLOP_NPM_PACKAGE: "aislop@0.10.2"
 
 jobs:
   # ---------------------------------------------------------------------------

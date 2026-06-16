@@ -9,11 +9,12 @@ PATH — it is wired as a dedicated CI job (with setup-node) and a pre-push hook
 from __future__ import annotations
 
 import json
+import os
 import shutil
 import subprocess
 import sys
 
-_NPM_PACKAGE = "aislop@0.10.2"
+_NPM_PACKAGE = os.environ.get("AISLOP_NPM_PACKAGE", "aislop@0.10.2")
 _EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena"
 
 
