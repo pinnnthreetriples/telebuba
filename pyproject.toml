@@ -26,6 +26,7 @@ dev = [
     "deptry>=0.25.1",
     "factory-boy>=3.3.3",
     "hypothesis>=6.155.2",
+    "mutmut>=3.6.0",
     "pip-audit>=2.10.0",
     "pre-commit>=4.6.0",
     "pytest>=9.0.3",
@@ -208,3 +209,12 @@ DEP004 = ["hypothesis"]
 [tool.vulture]
 min_confidence = 80
 paths = ["core", "features", "schemas", "services"]
+
+# ============================================================================
+# mutmut — mutation testing. Run nightly; not a PR gate.
+# Only mutates lines that are already covered by tests.
+# ============================================================================
+[tool.mutmut]
+source_paths = ["services", "core"]
+pytest_add_cli_args_test_selection = ["tests/services", "tests/core"]
+mutate_only_covered_lines = true

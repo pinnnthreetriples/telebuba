@@ -73,3 +73,26 @@ jobs:
             --config p/python \
             --error \
             .
+
+  # ---------------------------------------------------------------------------
+  # Mutation testing — verifies tests catch real bugs, not just exercise code.
+  # Slow by nature; nightly cadence keeps it off the PR critical path.
+  # ---------------------------------------------------------------------------
+  mutation:
+    name: mutation testing
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      - name: Run mutmut
+        run: uv run mutmut run
