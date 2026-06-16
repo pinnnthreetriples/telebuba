@@ -1,61 +1,74 @@
 ---
 name: add-warming-job
-description: Register a new scheduled warming job on the shared APScheduler instance.
+description: Add or change warming runtime work in the per-account asyncio-task model.
 triggers:
   - "warming job"
   - "scheduled job"
-  - "apscheduler"
-  - "add_job"
-  - "cron"
+  - "warming runtime"
+  - "asyncio task"
+  - "cycle"
+  - "runtime"
 edges:
   - target: context/warming.md
-    condition: always — defines scheduler ownership and job rules
+    condition: always — defines runtime ownership and cycle rules
   - target: patterns/add-telegram-task.md
-    condition: when the job body performs Telegram I/O
+    condition: when the runtime body performs Telegram I/O
   - target: context/conventions.md
-    condition: when shaping the job's schemas and logging
-last_updated: 2026-06-10
+    condition: when shaping schemas and logging
+last_updated: 2026-06-16
 ---
 
-# Add a Warming Job
+# Add Warming Runtime Work
 
 ## Context
 
 Read `context/warming.md`. Hard rules:
-- A single shared `AsyncIOScheduler` lives in `features/warming.py` (or `core/scheduler.py` once it exists).
-- Other features must not create their own scheduler.
-- Jobs are async, idempotent, and never raise to the scheduler.
+- Warming does **not** use APScheduler.
+- Runtime ownership lives in `services/warming/_runtime.py` as per-account `asyncio.Task`s.
+- Cycle logic lives in `services/warming/_cycle.py` / `_loop.py`; UI lives in `features/warming/` and must stay thin.
+- Runtime state is persisted in `warming_account_state` through repository helpers.
 
 ## Steps
 
-1. **Define schemas.** A job-spec model (account id, params) and a result model. Both in `schemas/`.
-2. **Write the job body.** An async function taking the spec model, returning the result model. If it does Telegram I/O, follow `patterns/add-telegram-task.md`.
-3. **Make it idempotent.** Read current state from the DB before acting. If the work is already done (or out-of-window), return a no-op result.
-4. **Register the job** on the shared scheduler. Trigger: cron or interval, with jitter so accounts don't all fire at the same second. [VERIFY AFTER FIRST IMPLEMENTATION — exact registration API once `features/warming.py` exists.]
-5. **Catch everything.** Wrap the job body in `try/except`. Log a business event via `core/logging.py` on both success and failure. Never let an exception escape.
-6. **Test.** Cover: happy path, idempotent re-fire, and one underlying failure (e.g. mocked `FloodWaitError`).
+1. **Define/extend schemas.** Add request/result/state fields in `schemas/warming.py` when crossing layer boundaries.
+2. **Place the logic in the right submodule:**
+   - channel parsing/listing → `services/warming/channels.py`
+   - settings row → `services/warming/settings_store.py`
+   - board read model → `services/warming/board.py`
+   - timing/readiness/intensity helpers → `services/warming/pacing.py`
+   - one-cycle behavior → `services/warming/_cycle.py`
+   - loop/recovery/next-run state → `services/warming/_loop.py`
+   - task ownership/start/stop/reconcile → `services/warming/_runtime.py`
+3. **Persist state deliberately.** If the runtime decision changes account state, write it through `core/repositories/warming.py` / `core.db` re-export.
+4. **Catch and classify failures.** Runtime loops must log and persist errors; they should not silently die.
+5. **Test.** Cover happy path, persisted state update, and one failure path. Patch seams in `services.warming._seams` or the owning submodule.
+6. **Run gates.** `uv run pytest` and relevant lint/type gates.
 
 ## Gotchas
 
-- Scheduler fires can overlap with previous runs if the previous run hasn't finished. Use `max_instances=1` per job, or check inside.
-- A raised exception inside a job can wedge APScheduler's logging — always catch.
-- Without jitter, many accounts firing the same activity at `:00` looks robotic to Telegram. Add per-account random delay.
-- Don't import `features/warming.py` from another feature file (no-cross-feature-import rule). Register through the `core/` helper once it exists.
+- Do not create a new scheduler for warming. The current model is service-owned async tasks.
+- Do not put runtime logic in `features/warming/`; UI should only call services and render.
+- Do not reintroduce per-card DB queries in the board. `load_board()` bulk-loads signals once.
+- Do not sleep directly inside a unit-level cycle test path; keep sleep/timing injectable or configurable.
+- Do not let a task cancellation hang forever; stop paths should cancel and await with a timeout.
 
 ## Verify
 
-- [ ] Job is registered on the shared scheduler, not a new one
-- [ ] Job body is async, takes and returns Pydantic models
-- [ ] Job is idempotent — re-firing produces a logged no-op, not a duplicate action
-- [ ] Job catches all exceptions and logs them via `core/logging.py`
-- [ ] No `features/*` import from another `features/*`
-- [ ] Test covers happy path, re-fire, and a failure path; `uv run pytest` passes
+- [ ] Logic is in the correct `services/warming/` submodule
+- [ ] No APScheduler dependency or assumptions
+- [ ] Runtime state is persisted where needed
+- [ ] Failure path logs and updates state
+- [ ] No `features/*` import from another feature domain
+- [ ] Tests cover happy path, persisted-state behavior, and failure path
+- [ ] `uv run pytest` passes
 
 ## Debug
 
-- Job never fires → check scheduler is started and the trigger expression is right; check logs for registration errors at startup.
-- Job fires twice and double-acts → idempotency check is missing or wrong; add a guard at the top of the body.
-- Scheduler dies silently after an error → the job raised; wrap in try/except.
+- Runtime does not resume after restart → check `reconcile_warming_runtime()` and stored state.
+- Task appears stuck after stop → check cancellation/timeout handling.
+- Board is slow → check that a change did not reintroduce per-card DB calls.
+- State flips unexpectedly → check which function owns the write; `run_loop_iteration` should own next-run state.
 
 ## After
+
 Run the GROW step from `ROUTER.md` (update `state/active.md`, touch any out-of-date `context/`, bump `last_updated`).
