@@ -20,10 +20,6 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingSettings
 
 
-def _settings_status(model: str, *, has_key: bool) -> str:  # pragma: no cover
-    return f"Модель {model} · AI-ключ {'задан' if has_key else 'нет'}"
-
-
 def _clamp_hour(value: object) -> int:  # pragma: no cover
     """Coerce a ``ui.number`` value (float | None) to a valid 0-23 hour."""
     if not isinstance(value, (int, float)):
@@ -248,38 +244,17 @@ def _render_gemini_card(
     *,
     persist: Callable[..., Awaitable[WarmingSettings]],
 ) -> None:  # pragma: no cover
-    placeholder = "ключ задан" if current.has_gemini_key else "вставьте ключ для ИИ-чата"
+    # Gemini credentials are .env-managed (security: not stored in the SQLite
+    # backup). This card is read-only — operators rotate the key in .env and
+    # restart. ``persist`` is kept on the signature so the caller-side wiring
+    # does not change.
+    del persist
+    status_label = "Ключ задан в .env" if current.has_gemini_key else "Ключ Gemini не задан в .env"
     with ui.card().classes("w-[420px] p-4 gap-3"):
-        ui.label("Настройки").classes("text-base font-semibold")
-        key_input = (
-            ui.input(label="API-ключ Gemini", placeholder=placeholder, password=True)
-            .props("dense outlined clearable")
-            .classes("w-full")
-        )
-        clear_key_checkbox = ui.checkbox("Удалить сохранённый ключ", value=False)
-        model_input = (
-            ui.input(label="Модель Gemini", value=current.gemini_model)
-            .props("dense outlined")
-            .classes("w-full")
-        )
-        status = ui.label(
-            _settings_status(current.gemini_model, has_key=current.has_gemini_key),
+        ui.label("Gemini (управляется через .env)").classes("text-base font-semibold")
+        ui.label(status_label).classes("text-sm")
+        ui.label(f"Модель: {current.gemini_model}").classes("text-xs text-slate-500")
+        ui.label(
+            "Чтобы заменить или ротировать ключ, отредактируйте `.env` "
+            "(GEMINI__API_KEY) и перезапустите приложение.",
         ).classes("text-xs text-slate-500")
-
-        async def on_save() -> None:
-            raw_key = (key_input.value or "").strip()
-            raw_model = (model_input.value or "").strip()
-            updated = await persist(
-                key=raw_key or None,
-                model=raw_model or None,
-                clear=bool(clear_key_checkbox.value),
-            )
-            key_input.value = ""
-            clear_key_checkbox.value = False
-            model_input.value = updated.gemini_model
-            status.set_text(_settings_status(updated.gemini_model, has_key=updated.has_gemini_key))
-            ui.notify("Настройки сохранены", type="positive")
-
-        ui.button("Сохранить настройки", icon="save", on_click=on_save).props(
-            "color=primary",
-        ).classes("w-full")
