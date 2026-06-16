@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio as _asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -118,3 +119,36 @@ async def test_refresh_reprobes_when_ttl_disabled(monkeypatch: pytest.MonkeyPatc
     verdict = await spam_status.refresh_spam_status("acc-1")
     assert len(calls) == 2
     assert verdict.status == "limited"
+
+
+@pytest.mark.asyncio
+async def test_refresh_concurrent_callers_share_probe(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Two cycles waking together must produce a single @SpamBot probe, not two."""
+    monkeypatch.setattr(settings.warming, "spam_status_ttl_hours", 24.0)
+    monkeypatch.setattr(spam_status, "_REFRESH_LOCKS", {})
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    calls = 0
+    probe_event = _asyncio.Event()
+
+    async def slow_probe(account_id: str) -> SpamStatusProbe:
+        nonlocal calls
+        calls += 1
+        # Hold the first probe until the second caller is already waiting.
+        await probe_event.wait()
+        return SpamStatusProbe(
+            account_id=account_id,
+            reply_text="Good news, no limits are currently applied to your account.",
+        )
+
+    monkeypatch.setattr(spam_status, "check_spam_status", slow_probe)
+
+    task1 = _asyncio.create_task(spam_status.refresh_spam_status("acc-1"))
+    await _asyncio.sleep(0)
+    task2 = _asyncio.create_task(spam_status.refresh_spam_status("acc-1"))
+    await _asyncio.sleep(0)
+    probe_event.set()
+    await task1
+    await task2
+
+    assert calls == 1

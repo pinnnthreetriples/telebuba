@@ -11,7 +11,7 @@ import asyncio
 import json
 from typing import cast
 
-from sqlalchemy import insert, select
+from sqlalchemy import delete, insert, select
 
 from core.db import _get_engine, _logs, _now_iso, _optional_str
 from schemas.logs import LogEntry, LogEventInput, LogFilter, LogLevel, LogStatus
@@ -111,3 +111,19 @@ def _list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
 async def list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
     """Return the latest log entries that match the filter (newest first)."""
     return await asyncio.to_thread(_list_filtered_logs, log_filter)
+
+
+def _purge_logs_older_than(cutoff_iso: str) -> int:
+    statement = delete(_logs).where(_logs.c.created_at < cutoff_iso)
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount
+
+
+async def purge_logs_older_than(cutoff_iso: str) -> int:
+    """Delete log rows with ``created_at`` older than the given ISO timestamp.
+
+    Returns the number of rows removed so callers can log / surface the cleanup
+    in a single line. ISO comparison is lexicographic; same shape as everywhere
+    else in the codebase.
+    """
+    return await asyncio.to_thread(_purge_logs_older_than, cutoff_iso)

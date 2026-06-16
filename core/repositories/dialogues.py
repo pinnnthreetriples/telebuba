@@ -10,7 +10,18 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import Column, Integer, String, Table, delete, func, insert, select, update
+from sqlalchemy import (
+    Column,
+    Index,
+    Integer,
+    String,
+    Table,
+    delete,
+    func,
+    insert,
+    select,
+    update,
+)
 
 from core.db import _get_engine, _metadata, _now_iso
 from schemas.dialogues import DialogueMessage, DialoguePair
@@ -75,6 +86,11 @@ dialogue_messages = Table(
     Column("text", String, nullable=False),
     Column("created_at", String, nullable=False),
     Column("replied", Integer, nullable=False),
+    # Hot paths: latest_unreplied_for filters by (to_account, replied) then orders by id;
+    # count_pair_messages_since filters by (pair_key, created_at). Without these indexes
+    # both degrade to full table scans once the table accumulates history.
+    Index("ix_dialogue_messages_inbox", "to_account", "replied", "id"),
+    Index("ix_dialogue_messages_pair_time", "pair_key", "created_at"),
 )
 
 
@@ -214,3 +230,18 @@ def _list_recent_dialogue_messages(limit: int) -> list[DialogueMessage]:
 async def list_recent_dialogue_messages(limit: int = 20) -> list[DialogueMessage]:
     """Return the most recent dialogue messages, newest first (for the UI)."""
     return await asyncio.to_thread(_list_recent_dialogue_messages, limit)
+
+
+def _purge_dialogue_messages_older_than(cutoff_iso: str) -> int:
+    # Only purge already-replied messages — unreplied ones may still owe an
+    # answer even if old, and dropping them would break ongoing conversations.
+    statement = delete(dialogue_messages).where(
+        (dialogue_messages.c.created_at < cutoff_iso) & (dialogue_messages.c.replied == 1),
+    )
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount
+
+
+async def purge_dialogue_messages_older_than(cutoff_iso: str) -> int:
+    """Delete replied dialogue messages older than the cutoff. Returns rows removed."""
+    return await asyncio.to_thread(_purge_dialogue_messages_older_than, cutoff_iso)

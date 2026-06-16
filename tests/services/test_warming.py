@@ -25,6 +25,9 @@ from core.db import (
     fetch_warming_state,
     latest_unreplied_for,
     list_dialogue_pairs,
+    purge_dialogue_messages_older_than,
+    purge_logs_older_than,
+    purge_sent_hashes_older_than,
     record_dialogue_message,
     save_warming_settings,
     update_account_from_session_check,
@@ -956,6 +959,44 @@ async def test_reconcile_warming_runtime_builds_dialogue_pairs(
 
     pairs = await list_dialogue_pairs()
     assert pairs, "reconcile must produce dialogue pairs so inter-account chat works"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_purges_stale_history(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reconcile must run retention so logs/dialogues/hashes don't grow forever."""
+    monkeypatch.setattr(settings.warming, "log_retention_days", 30.0)
+    monkeypatch.setattr(settings.warming, "dialogue_message_retention_days", 90.0)
+    monkeypatch.setattr(settings.warming, "sent_hash_retention_days", 14.0)
+
+    calls: list[str] = []
+
+    async def make_recorder(name: str) -> object:
+        async def fake(_cutoff: str) -> int:
+            calls.append(name)
+            return 0
+
+        return fake
+
+    monkeypatch.setattr(
+        "services.warming._runtime.purge_logs_older_than",
+        await make_recorder("logs"),
+    )
+    monkeypatch.setattr(
+        "services.warming._runtime.purge_dialogue_messages_older_than",
+        await make_recorder("dialogues"),
+    )
+    monkeypatch.setattr(
+        "services.warming._runtime.purge_sent_hashes_older_than",
+        await make_recorder("hashes"),
+    )
+
+    await warming.reconcile_warming_runtime()
+
+    assert set(calls) == {"logs", "dialogues", "hashes"}
+    # Sanity: the real purge_* functions still work at the repo level.
+    assert await purge_logs_older_than("1900-01-01") == 0
+    assert await purge_dialogue_messages_older_than("1900-01-01") == 0
+    assert await purge_sent_hashes_older_than("1900-01-01") == 0
 
 
 @pytest.mark.asyncio

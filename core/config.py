@@ -168,6 +168,11 @@ class WarmingSettings(BaseSettings):
     content_forbidden_words: list[str] = Field(
         default_factory=lambda: ["реклама", "купить", "продам", "продаю", "скидк", "промокод"],
     )
+    # Retention windows for append-only tables that would otherwise grow forever.
+    # 0 means "never purge" — kept as escape hatch.
+    log_retention_days: float = Field(default=30.0, ge=0.0)
+    dialogue_message_retention_days: float = Field(default=90.0, ge=0.0)
+    sent_hash_retention_days: float = Field(default=14.0, ge=0.0)
     # Inter-account dialogue pairing: how many partners each account gets, and
     # how often the acquaintance graph is reshuffled (imitates meeting people).
     dialogue_partners_min: int = Field(default=2, ge=1)

@@ -7,6 +7,7 @@ use :func:`refresh_spam_status`.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 from core.config import settings
@@ -66,26 +67,43 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
 
     A fresh cached verdict within ``spam_status_ttl_hours`` is reused (probing
     @SpamBot too often is itself suspicious). ``force`` bypasses the cache.
-    """
-    now = datetime.now(UTC)
-    cached = await get_spam_status(account_id)
-    if not force and cached is not None and _is_fresh(cached.checked_at, now):
-        return cached
 
-    probe = await check_spam_status(account_id)
-    status, detail = classify_spam_probe(probe)
-    saved = await upsert_spam_status(
-        SpamStatusVerdict(
+    A per-account asyncio lock collapses concurrent callers: the first one
+    probes, the rest wait, and on wake they see the freshly-cached verdict
+    instead of all hitting @SpamBot. Without this, several warming cycles
+    waking together can all decide the cache is stale and probe in parallel.
+    """
+    async with _refresh_lock(account_id):
+        now = datetime.now(UTC)
+        cached = await get_spam_status(account_id)
+        if not force and cached is not None and _is_fresh(cached.checked_at, now):
+            return cached
+
+        probe = await check_spam_status(account_id)
+        status, detail = classify_spam_probe(probe)
+        saved = await upsert_spam_status(
+            SpamStatusVerdict(
+                account_id=account_id,
+                status=status,
+                detail=detail,
+                checked_at=now.isoformat(),
+            ),
+        )
+        await log_event(
+            "INFO" if status != "limited" else "WARNING",
+            "spam_status_refreshed",
             account_id=account_id,
-            status=status,
-            detail=detail,
-            checked_at=now.isoformat(),
-        ),
-    )
-    await log_event(
-        "INFO" if status != "limited" else "WARNING",
-        "spam_status_refreshed",
-        account_id=account_id,
-        extra={"status": status, "detail": detail},
-    )
-    return saved
+            extra={"status": status, "detail": detail},
+        )
+        return saved
+
+
+_REFRESH_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _refresh_lock(account_id: str) -> asyncio.Lock:
+    lock = _REFRESH_LOCKS.get(account_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _REFRESH_LOCKS[account_id] = lock
+    return lock
