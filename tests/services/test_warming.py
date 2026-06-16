@@ -1103,6 +1103,34 @@ async def test_start_warming_ready_account_records_proxy_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_manual_start_clears_stale_next_run_at(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Manual Start must fire immediately, not honour an old persisted schedule."""
+
+    async def fake_loop(_account_id: str) -> None:
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await _seed_ready_account("acc-1")
+    far_future = (datetime.now(UTC) + timedelta(hours=12)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            cycles_completed=0,
+            next_run_at=far_future,
+        ),
+    )
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.next_run_at is None
+
+
+@pytest.mark.asyncio
 async def test_load_board_attaches_readiness() -> None:
     await create_account(AccountCreate(account_id="acc-1"))  # not ready
 

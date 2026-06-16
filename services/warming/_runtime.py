@@ -102,6 +102,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             data.account_id,
             "active",
             last_event="queued",
+            next_run_at=None,
             started_at=_now_iso(),
             stopped_at=None,
             last_error=None,
