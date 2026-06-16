@@ -9,6 +9,7 @@ mismatch. Per non-negotiable #6 the third-party library is wrapped here in
 from __future__ import annotations
 
 import phonenumbers
+from loguru import logger
 from phonenumbers import timezone as pn_timezone
 
 from schemas.geo import GeoMatch
@@ -37,15 +38,29 @@ def country_for_phone(phone: str | None) -> str | None:
 def timezone_for_phone(phone: str | None) -> str | None:
     """A representative IANA timezone for a phone number, or ``None``.
 
-    Numbers on a shared calling code (e.g. +7 → RU/KZ) map to many zones; we
-    take the first as a representative for local-time scheduling.
+    Numbers on a shared calling code (e.g. +7 → RU/KZ, +1 → US/CA/CA-tz-many)
+    map to many zones; we take the first as a representative. When that
+    happens we emit a debug log so operators can see whose schedule is
+    pinned to a coarse fallback — the call site itself has no async path
+    to ``log_event`` so a sync loguru line is the right level here.
     """
     parsed = _parse(phone)
     if parsed is None:
         return None
     zones = pn_timezone.time_zones_for_number(parsed)
-    zone = zones[0] if zones else None
-    return zone if zone and zone != _UNKNOWN_TZ else None
+    if not zones:
+        return None
+    zone = zones[0]
+    if zone == _UNKNOWN_TZ:
+        return None
+    if len(zones) > 1:
+        logger.debug(
+            "phone_timezone_ambiguous phone=%s picked=%s candidates=%s",
+            phone,
+            zone,
+            list(zones),
+        )
+    return zone
 
 
 def _lang_region(lang_code: str | None) -> str | None:
