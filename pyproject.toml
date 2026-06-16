@@ -184,6 +184,15 @@ skips = []
 [tool.deptry]
 known_first_party = ["core", "features", "schemas", "services"]
 
+[tool.deptry.per_rule_ignores]
+# opentele2 is imported lazily via importlib.import_module in core/tdata_import.py
+# (so the tdata path stays optional), which deptry's static scan can't see.
+DEP002 = ["opentele2"]
+# hypothesis is used in conftest.py (test infrastructure). deptry treats the
+# root conftest as production code and flags the dev-only import; it is correct
+# that hypothesis is a dev dependency.
+DEP004 = ["hypothesis"]
+
 # ============================================================================
 # vulture — dead code detector. Higher confidence = fewer false positives.
 # ============================================================================
