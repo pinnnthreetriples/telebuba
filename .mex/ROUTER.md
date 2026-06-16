@@ -37,7 +37,7 @@ last_updated: 2026-06-16
 
 # Session Bootstrap
 
-`AGENTS.md` is always loaded (via root `CLAUDE.md` → `@.mex/AGENTS.md`). After this file, load `state/active.md` for the live picture and `context/kanban.md` for the board protocol.
+`AGENTS.md` is always loaded (via root `CLAUDE.md` which imports `.mex/AGENTS.md`). After this file, load `state/active.md` for the live picture and `context/kanban.md` for the board protocol.
 
 ## Routing Table
 

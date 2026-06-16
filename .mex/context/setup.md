@@ -15,7 +15,7 @@ edges:
     condition: when understanding how components connect during setup
   - target: context/logging.md
     condition: when configuring Sentry DSN or log file location
-last_updated: 2026-06-10
+last_updated: 2026-06-16
 ---
 
 # Setup
@@ -34,24 +34,27 @@ last_updated: 2026-06-10
 2. Copy `.env.example` → `.env` and fill in keys (see below).
 3. `uv run pre-commit install` — installs the git hooks (already wired on this machine; new clones need to run it once).
 4. SQLite tables are created lazily by `core/db.py` on first DB access.
-5. `uv run python main.py` — starts NiceGUI + scheduler.
+5. `uv run python main.py` — starts NiceGUI (warming runtime tasks reconcile on startup).
 
 ## Environment Variables
 
-- `TELEGRAM_API_ID` (required) — Telegram API id from my.telegram.org.
-- `TELEGRAM_API_HASH` (required) — Telegram API hash.
-- `TELEBUBA_DB_PATH` (optional) — SQLite file path, default `telebuba.db`.
-- `TELEBUBA_SESSION_DIR` (optional) — Telethon session directory, default `sessions`.
-- `GEMINI_API_KEY` (required) — key for httpx → Gemini comment generation.
-- `SENTRY_DSN` (optional) — if set, errors are sent to Sentry; otherwise local-only.
-- `LOG_LEVEL` (optional) — loguru level, default INFO.
-- `PROXY_<account_id>` or whatever storage format — [TO BE DETERMINED, decide alongside the account model].
+Uses double-underscore namespace convention (`NAMESPACE__FIELD`) via `pydantic-settings`. Full list in `.env.example`; key ones:
+
+- `TELEGRAM__API_ID` (required) — Telegram API id from my.telegram.org.
+- `TELEGRAM__API_HASH` (required) — Telegram API hash.
+- `TELEGRAM__SESSION_DIR` (optional) — Telethon session directory, default `sessions`.
+- `DB__PATH` (optional) — SQLite file path, default `telebuba.db`.
+- `GEMINI__API_KEY` (required) — key for httpx → Gemini text generation.
+- `LOGGING__SENTRY_DSN` (optional) — if set, errors are sent to Sentry; otherwise local-only.
+- `UI__PORT` (optional) — NiceGUI port, default 8080.
+
+All namespaces: `TELEGRAM__`, `UI__`, `DB__`, `PROXY__`, `PROFILE_MEDIA__`, `LOGGING__`, `WARMING__`, `GEMINI__`, `TRUST__`. See `core/config.py` for the full nested settings model.
 
 ## Common Commands
 
 - `uv sync` — install / refresh dependencies from `pyproject.toml` + `uv.lock`.
 - `uv add <pkg>` / `uv add --dev <pkg>` — add a runtime / dev dependency.
-- `uv run python main.py` — run NiceGUI + scheduler.
+- `uv run python main.py` — run NiceGUI (warming tasks reconcile on startup).
 - `uv run pytest` — full test suite. Strict mode is baked into `pyproject.toml`: warnings → errors, branch coverage ≥ 90%, `asyncio_mode = strict`, Hypothesis `strict` profile (200 examples).
 - `uv run pytest -p no:cacheprovider --hypothesis-profile=dev` — fast inner-loop run (50 Hypothesis examples, fresh cache).
 - `uv run ruff check .` — lint.
@@ -72,4 +75,4 @@ last_updated: 2026-06-10
 
 **`uv sync` after changing Python version** — if you changed `.python-version`, delete `.venv` and re-run `uv sync`.
 
-[More issues — TO BE DETERMINED after first real runs. Expected: Telethon session file locking, "database is locked" under concurrent APScheduler jobs, NiceGUI port conflicts.]
+[More issues — TO BE DETERMINED after first real runs. Expected: Telethon session file locking, "database is locked" under concurrent async tasks, NiceGUI port conflicts.]

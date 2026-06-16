@@ -27,7 +27,7 @@ last_updated: 2026-06-16
 **Alternatives considered:**
 - *Logic in `features/`* (rejected — duplication and feature-boundary violations).
 - *Logic in `core/`* (rejected — core is for infrastructure adapters, not domain rules).
-- *Single `services.py` module* (rejected — god-module risk).
+- *Single-file services layer* (rejected — god-module risk).
 **Consequences:** `services/` is the home of every algorithm/state transition/domain operation. Tests target services directly with mocked `core/*` adapters. Layer matrix in architecture.md has four layers.
 
 ### Typed Telegram actions + central executor
@@ -46,7 +46,7 @@ last_updated: 2026-06-16
 **Original decision:** Services persist Telegram intents in a `telegram_outbox` SQLite table. A worker picks them up and calls `execute`.
 **Why superseded:** The outbox was never implemented, and the shipped design is single-process. Runtime progress is persisted on `warming_account_state`; `reconcile_warming_runtime()` rebuilds in-memory tasks on restart. A separate intent table + worker is premature until execution becomes multi-process.
 **Replacement decision:** Services call `core.telegram_client.execute(account_id, action)` directly. Durability is per-cycle state, not a queue. Reopen an outbox/queue only when execution goes multi-process.
-**Consequences:** No `telegram_outbox` table and no `services/telegram_outbox.py`.
+**Consequences:** No `telegram_outbox` table and no `telegram_outbox` module in `services/`.
 
 ### Config namespaces — nested Pydantic settings instead of one flat blob
 **Date:** 2026-06-10
@@ -66,7 +66,7 @@ last_updated: 2026-06-16
 **Alternatives considered:**
 - *Always one file* (rejected — breaks down as tables grow).
 - *Repositories from day one* (initially deferred; implemented after the trigger was reached).
-**Consequences:** Current repositories include accounts, warming, logs, content, device_fingerprint, dialogues, and spam_status. Existing `from core.db import ...` call sites still work via re-exports, but new aggregate queries should live in `core/repositories/*`.
+**Consequences:** Current repositories include accounts, warming, logs, content, device_fingerprint, dialogues, and spam_status. Existing `from core.db import ...` call sites still work via re-exports, but new aggregate queries should live in `core/repositories/`.
 
 ### Astral toolchain (uv + ruff + ty) instead of legacy Python tooling
 **Date:** 2026-06-10
@@ -123,8 +123,8 @@ last_updated: 2026-06-16
 **Date:** 2026-06-10
 **Status:** Updated 2026-06-16
 **Decision:** Each feature owns one module or package under `features/`. Small features can be a single file; larger features become a package with a thin `__init__.py` and focused submodules. Feature domains cannot import each other.
-**Reasoning:** The original one-file rule prevented premature structure, but `features/accounts.py` and `features/warming.py` grew past healthy limits. Package-per-feature keeps isolation while avoiding god-files.
-**Alternatives considered:** Force one file forever (rejected — file-size/complexity gates fail); shared `features/common.py` (rejected — shared logic belongs in services/core/schemas).
+**Reasoning:** The original one-file rule prevented premature structure, but the accounts and warming feature files grew past healthy limits. Package-per-feature keeps isolation while avoiding god-files.
+**Alternatives considered:** Force one file forever (rejected — file-size/complexity gates fail); a shared features utility module (rejected — shared logic belongs in services/core/schemas).
 **Consequences:** New behavior may extend an existing feature package only when it belongs to that same feature domain. Cross-domain shared logic still moves to `services/`, `core/`, or `schemas/`.
 
 ### Pydantic schemas as the only inter-layer carrier

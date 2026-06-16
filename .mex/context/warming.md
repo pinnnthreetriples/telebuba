@@ -34,7 +34,7 @@ Warming is a continuous per-account runtime workflow, not a fixed cron job. The 
 - `run_one_cycle(...)` is the testable cycle unit.
 - `run_loop_iteration(...)` owns persisted next-run calculation and state updates.
 
-APScheduler / `core/scheduler.py` is not used for the current warming runtime. Add a scheduler only if a future feature needs true cron semantics.
+APScheduler is not used for the current warming runtime. Add a scheduler only if a future feature needs true cron semantics.
 
 ## Package layout
 

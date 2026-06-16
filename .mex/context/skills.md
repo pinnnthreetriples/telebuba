@@ -1,6 +1,6 @@
 ---
 name: skills
-description: Default-applied skills (caveman, karpathy-guidelines) and project-local matt-pocock skills with telebuba-tailored triggers. Load when deciding whether a skill should be invoked.
+description: Default-applied skills (ponytail, karpathy-guidelines) and project-local matt-pocock skills with telebuba-tailored triggers. Load when deciding whether a skill should be invoked.
 triggers:
   - "skill"
   - "tdd"
@@ -17,7 +17,7 @@ edges:
     condition: for board-related skills (to-prd, to-issues)
   - target: context/conventions.md
     condition: when /tdd is invoked — rule 7 sets the strict test policy
-last_updated: 2026-06-10
+last_updated: 2026-06-16
 ---
 
 # Skills
@@ -27,7 +27,7 @@ last_updated: 2026-06-10
 Global skills the user has set as defaults. Every session applies them without being asked.
 
 - **`karpathy-guidelines`** — coding behaviour: surface assumptions, prefer the minimum code, surgical changes only, transform tasks into verifiable goals. Applies to every write/review/refactor action.
-- **`caveman`** — communication style: drop filler, articles, pleasantries; keep code, commands, errors, technical terms exact. Default to brief. Expand only when clarity, safety, or the user explicitly asks for detail.
+- **`ponytail ultra`** — code minimisation: YAGNI extremist, deletion before addition, challenge the requirement before building. Active every response. `/ponytail-review` runs automatically after every code task. `/ponytail-audit` on whole-repo work. `/ponytail-debt` to harvest deferred shortcuts.
 
 ## Agent Skills (project-local — invoke on the listed trigger)
 
@@ -52,14 +52,14 @@ Installed in `.claude/skills/`. The agent does NOT auto-run them — invoke via 
 
 ### Setup / safety
 
-- **`/setup-matt-pocock-skills`** — bootstraps an `## Agent skills` block in AGENTS.md/CLAUDE.md and `docs/agents/` so the engineering skills know the project's issue tracker, triage labels, and domain doc layout. **Trigger:** if a matt-pocock skill complains it can't find that context. **Warning:** the skill writes its own block; our hand-written `Project Skill Configuration` below would be overwritten. Re-run only if we want a clean rewrite.
-- **`/git-guardrails-claude-code`** — install Claude Code hooks that block destructive git ops (`push --force`, `reset --hard`, `clean -fd`, `branch -D`). **Trigger:** if anyone ever runs a destructive git command "by accident". Note: modifies global `~/.claude/settings.json`. Discuss with the user before invoking.
+- **`/setup-matt-pocock-skills`** — bootstraps an `## Agent skills` block in agent config files so the engineering skills know the project's issue tracker, triage labels, and domain doc layout. **Trigger:** if a matt-pocock skill complains it can't find that context. **Warning:** the skill writes its own block; our hand-written `Project Skill Configuration` below would be overwritten. Re-run only if we want a clean rewrite.
+- **`/git-guardrails-claude-code`** — install Claude Code hooks that block destructive git ops (`push --force`, `reset --hard`, `clean -fd`, `branch -D`). **Trigger:** if anyone ever runs a destructive git command "by accident". Note: modifies the global Claude Code settings. Discuss with the user before invoking.
 
 ## Project Skill Configuration
 
 This block is what `setup-matt-pocock-skills` would produce. Hand-written so the engineering skills above have the context they need.
 
-- **Issue tracker:** GitHub Issues on `pinnnthreetriples/telebuba`. Use `gh` from `D:/gh.exe`.
+- **Issue tracker:** GitHub Issues on the `telebuba` repo (owner: `pinnnthreetriples`). Use `gh` (or `D:/gh.exe` on Windows if `gh` is not in PATH).
 - **Project board:** GitHub Project #2 (`telebuba`) — full protocol and column IDs in `context/kanban.md`. Status: `Backlog` → `Ready` → `In progress` → `In review` → `Done`.
 - **Triage labels:** none yet. When the first label is created, add it here and to `state/active.md`.
 - **Domain docs:** `.mex/ROUTER.md` is the entrypoint; `.mex/context/` and `.mex/patterns/` are the domain source of truth. `state/active.md` carries live state.

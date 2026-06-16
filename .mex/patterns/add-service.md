@@ -34,7 +34,7 @@ Read `context/services.md` for the layer definition. Hard rules:
 2. **Create or extend the service domain.** Use `services/<domain>.py` for a small domain or `services/<domain>/` for a domain that already has multiple concerns.
 3. **Keep the package root thin.** In a package, `__init__.py` should re-export public API or contain minimal compatibility/orchestration. Move real slices into submodules.
 4. **Use the right gateways:**
-   - DB: `core/db.py` compatibility re-exports or `core/repositories/*`.
+   - DB: `core/db.py` compatibility re-exports or `core/repositories/`.
    - Telegram: `from core.telegram_client import execute` + typed action from `schemas/telegram_actions.py`.
    - HTTP providers: `core/<provider>.py` wrapper.
    - Logging: `from core.logging import log_event`.
