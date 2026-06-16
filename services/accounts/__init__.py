@@ -59,6 +59,8 @@ from schemas.telegram_actions import (
 )
 from schemas.telegram_session import TelegramSessionCheckRequest
 from services.accounts._table import load_accounts_table
+from services.accounts._tdata import SessionAlreadyExistsError
+from services.accounts._tdata import import_account_tdata as _tdata_import
 from services.accounts._uploads import (
     _PROFILE_MUSIC_SUFFIXES,
     _PROFILE_PHOTO_SUFFIXES,
@@ -117,16 +119,6 @@ async def add_account(data: AccountCreate) -> AccountRead:
     return persisted
 
 
-class SessionAlreadyExistsError(ValueError):
-    """Raised when an import would overwrite an existing account's session.
-
-    A ``.session`` file is effectively a Telegram credential — re-uploading a
-    file with the same name must not silently replace what is already there.
-    The operator has to delete the existing account first if they really want
-    to swap credentials.
-    """
-
-
 async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     # Service-layer guardrail: ``.session`` files are effectively credentials.
     # The UI may attempt to validate size first, but a CLI / scheduler caller
@@ -157,48 +149,13 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
 
 
 async def import_account_tdata(data: TdataConvertRequest) -> list[AccountRead]:
-    """Convert a tdata.zip payload to one or more .session files and register each account.
-
-    Every successfully written session is added to the DB and immediately session-checked.
-    Returns the post-check ``AccountRead`` rows. Raises ``ValueError`` with a human-readable
-    message when the conversion itself failed.
-    """
-    result = await convert_tdata_zip(data, settings.telegram.session_dir)
-    if result.status != "ok":
-        msg = f"tdata import failed: {result.status}"
-        if result.error:
-            msg = f"{msg} — {result.error}"
-        await log_event(
-            "ERROR",
-            "tdata_import_failed",
-            extra={"status": result.status, "error": result.error},
-        )
-        raise ValueError(msg)
-    if not result.accounts:
-        msg = "tdata contained no accounts"
-        await log_event("WARNING", "tdata_no_accounts", extra={"filename": data.filename})
-        raise ValueError(msg)
-
-    checked: list[AccountRead] = []
-    for summary in result.accounts:
-        session_name = Path(summary.session_path).stem
-        account_id = str(summary.user_id) if summary.user_id is not None else session_name
-        await add_account(
-            AccountCreate(
-                account_id=account_id,
-                label=data.label or account_id,
-                session_name=session_name,
-            ),
-        )
-        checked.append(
-            await check_account_session(AccountCheckRequest(account_id=account_id)),
-        )
-    await log_event(
-        "INFO",
-        "tdata_import_completed",
-        extra={"imported": len(checked)},
+    """Thin wrapper — implementation in :mod:`services.accounts._tdata`."""
+    return await _tdata_import(
+        data,
+        convert=convert_tdata_zip,
+        add_account=add_account,
+        check_account_session=check_account_session,
     )
-    return checked
 
 
 async def check_account_session(data: AccountCheckRequest) -> AccountRead:

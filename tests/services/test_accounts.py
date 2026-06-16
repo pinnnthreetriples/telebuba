@@ -53,6 +53,7 @@ from services.accounts import (
     evaluate_account_geo,
     import_account_session,
     import_account_tdata,
+    list_accounts,
     load_accounts_table,
     post_account_story,
     save_account_proxy,
@@ -260,6 +261,96 @@ async def test_import_account_tdata_rejects_empty_payload(
         await import_account_tdata(
             TdataConvertRequest(filename="tdata.zip", content=b"x"),
         )
+
+
+@pytest.mark.asyncio
+async def test_import_account_tdata_rolls_back_on_mid_batch_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """Mid-batch failure must leave the DB and disk in their pre-import state."""
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "111.session").write_bytes(b"sess-111")
+    (staging / "222.session").write_bytes(b"sess-222")
+
+    async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
+        return TdataConvertResult(
+            status="ok",
+            accounts=[
+                TdataAccountSummary(user_id=111, session_path=str(staging / "111.session")),
+                TdataAccountSummary(user_id=222, session_path=str(staging / "222.session")),
+            ],
+        )
+
+    call_count = {"n": 0}
+
+    async def flaky_check(request: object) -> TelegramSessionCheckResult:
+        call_count["n"] += 1
+        if call_count["n"] == 2:
+            msg = "boom on second account"
+            raise RuntimeError(msg)
+        account_id = getattr(request, "account_id", "?")
+        return TelegramSessionCheckResult(
+            account_id=account_id,
+            session_path=f"sessions/{account_id}",
+            status="alive",
+            is_temporary=False,
+            user_id=int(account_id),
+            username=f"u{account_id}",
+        )
+
+    monkeypatch.setattr("services.accounts.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts.check_telegram_session", flaky_check)
+
+    with pytest.raises(RuntimeError, match=r"boom"):
+        await import_account_tdata(
+            TdataConvertRequest(filename="tdata.zip", content=b"x"),
+        )
+
+    persisted = await list_accounts()
+    assert persisted.accounts == []
+    final_dir = settings.telegram.session_dir
+    assert not (final_dir / "111.session").exists()
+    assert not (final_dir / "222.session").exists()
+
+
+@pytest.mark.asyncio
+async def test_import_account_tdata_preflight_blocks_existing_account(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """If any tdata account_id is already in DB, the whole import aborts before touching disk."""
+    await add_account(AccountCreate(account_id="111", label="pre-existing"))
+    final_dir = settings.telegram.session_dir
+    final_dir.mkdir(parents=True, exist_ok=True)
+    existing_session = final_dir / "111.session"
+    existing_session.write_bytes(b"original")
+
+    staging = tmp_path / "staging"
+    staging.mkdir()
+    (staging / "111.session").write_bytes(b"new-from-tdata")
+    (staging / "222.session").write_bytes(b"new-from-tdata-2")
+
+    async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
+        return TdataConvertResult(
+            status="ok",
+            accounts=[
+                TdataAccountSummary(user_id=111, session_path=str(staging / "111.session")),
+                TdataAccountSummary(user_id=222, session_path=str(staging / "222.session")),
+            ],
+        )
+
+    monkeypatch.setattr("services.accounts.convert_tdata_zip", fake_convert)
+
+    with pytest.raises(SessionAlreadyExistsError, match=r"111"):
+        await import_account_tdata(
+            TdataConvertRequest(filename="tdata.zip", content=b"x"),
+        )
+
+    # Pre-existing file is untouched, second tdata account did not land either.
+    assert existing_session.read_bytes() == b"original"
+    assert not (final_dir / "222.session").exists()
 
 
 @pytest.mark.asyncio
