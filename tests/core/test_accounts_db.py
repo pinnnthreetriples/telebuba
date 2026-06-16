@@ -12,8 +12,8 @@ from core.db import (
     update_account_from_session_check,
 )
 from schemas.accounts import AccountCreate
-from schemas.device_fingerprint import DeviceFingerprint
 from schemas.telegram_session import TelegramSessionCheckResult
+from tests.factories import DeviceFingerprintFactory
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -26,15 +26,7 @@ async def test_create_account_lists_device_profile(tmp_path: Path) -> None:
         AccountCreate(account_id="account-1", label="Main", session_name="session-1"),
     )
     await insert_device_fingerprint(
-        DeviceFingerprint(
-            account_id="account-1",
-            platform="windows",
-            device_model="Desktop",
-            system_version="Windows 11",
-            app_version="5.4.0 x64",
-            lang_code="en",
-            system_lang_code="en-US",
-        ),
+        DeviceFingerprintFactory.build(account_id="account-1"),
     )
 
     accounts = await list_accounts()

@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-06-14
+last_updated: 2026-06-16
 ---
 
 # Active State
@@ -16,7 +16,8 @@ This file is the only place that should change after every task. `ROUTER.md` sta
 - `pyproject.toml` configured for maximum test strictness: `filterwarnings=["error"]`, `--strict-markers`, `--strict-config`, `xfail_strict`, `asyncio_mode=strict`, branch coverage with `--cov-fail-under=90`.
 - `conftest.py` registers Hypothesis profiles (`strict` = 200 examples, default; `dev` = 50 examples, fast loop).
 - `ruff` configured with `select = ["ALL"]` + minimal ignores; `ty` strict imports/references; `bandit`, `deptry`, `vulture` wired in pyproject.
-- `.pre-commit-config.yaml` installed and verified end-to-end (13 hooks: generic hygiene + gitleaks + ruff + ruff-format + bandit + ty). `pre-commit install` ran — git hook is wired in `.git/hooks/pre-commit`.
+- `.pre-commit-config.yaml` installed and verified end-to-end (generic hygiene + gitleaks + ruff + ruff-format + bandit + ty + **deptry + vulture + radon** every commit, **aislop** at pre-push). `pre-commit install` ran — git hook is wired in `.git/hooks/pre-commit`.
+- **Strict quality gates wired (branch `refactor/strict-quality-gates`, 2026-06-16):** deptry/vulture/radon gate in pre-commit + CI lint; `tools/radon_gate.py` fails on cyclomatic rank D+; `tools/aislop_gate.py` is a zero-tolerance aislop CI job (needs Node) + pre-push hook; semgrep moved to every PR+push. aislop's size/dispatch rules drove package splits — `core/telegram_client/`, `services/accounts/`, `services/warming/` (engine → `_seams`/`_state`/`_chat`/`_cycle`/`_loop`/`_runtime`), `features/warming/`, `features/accounts/` are all packages now. factory-boy factories in `tests/factories.py`; hypothesis property tests in `tests/**/*_properties.py`. aislop 17→0 warnings, 287 tests green, cov ~92%.
 - `.claude/skills/` populated with 10 matt-pocock skills (tdd, diagnose, prototype, grill-with-docs, zoom-out, improve-codebase-architecture, to-prd, to-issues, setup-matt-pocock-skills, git-guardrails-claude-code). Triggers documented in `.mex/AGENTS.md` → Agent Skills.
 - `main.py` is the NiceGUI entrypoint; it registers accounts/warming/logs pages and runs on `UI__PORT` (default `8080`, validated via `pydantic-settings`) with reload disabled for predictable local runs. Startup hook calls `services.warming.reconcile_warming_runtime()` to re-attach per-account loops after a restart; shutdown hook cancels them gracefully.
 - `core/config.py` uses **`pydantic-settings`** (nested `BaseSettings`, one namespace per domain). All knobs read from typed env: `TELEGRAM__*`, `UI__*`, `DB__*`, `PROXY__*`, `PROFILE_MEDIA__*`, `LOGGING__*`, `WARMING__*`, `GEMINI__*`. A misconfigured `.env` raises a clear `ValidationError` at import time.

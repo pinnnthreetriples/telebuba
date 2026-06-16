@@ -44,7 +44,6 @@ from schemas.telegram_actions import (
 )
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
-    _format_last_checked,
     add_account,
     add_account_profile_music,
     check_account_proxy,
@@ -59,6 +58,7 @@ from services.accounts import (
     set_account_profile_photo,
     update_account_profile,
 )
+from services.accounts._table import _format_last_checked
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

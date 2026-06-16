@@ -17,12 +17,12 @@ from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelReque
 from telethon.tl.functions.photos import UploadProfilePhotoRequest
 from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
 
-from core import telegram_client as telegram_client_module
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
-from core.telegram_client import _typing_seconds, create_telegram_client, execute
-from schemas.device_fingerprint import DeviceFingerprint, TelegramClientProfile
+from core.telegram_client import create_telegram_client, execute
+from core.telegram_client._actions import _typing_seconds
+from schemas.device_fingerprint import TelegramClientProfile
 from schemas.telegram_actions import (
     AddProfileMusic,
     JoinChannel,
@@ -33,6 +33,7 @@ from schemas.telegram_actions import (
     SetProfilePhoto,
     UpdateProfile,
 )
+from tests.factories import DeviceFingerprintFactory
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -61,7 +62,7 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     async def fake_cm(_request: object):
         yield client
 
-    monkeypatch.setattr(telegram_client_module, "telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._actions.telegram_client", fake_cm)
 
 
 @pytest.mark.asyncio
@@ -232,8 +233,7 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
     deleted: list[int] = []
 
     monkeypatch.setattr(
-        telegram_client_module.utils,
-        "get_input_document",
+        "core.telegram_client._media.utils.get_input_document",
         lambda _document: MagicMock(),
     )
 
@@ -356,14 +356,12 @@ def test_create_telegram_client_applies_flood_sleep_threshold(
         account_id="acc",
         session_path=str(tmp_path / "acc"),
         receive_updates=False,
-        device=DeviceFingerprint(
+        device=DeviceFingerprintFactory.build(
             account_id="acc",
             platform="linux",
             device_model="PC",
             system_version="Ubuntu 24.04",
             app_version="5.0.0 x64",
-            lang_code="en",
-            system_lang_code="en-US",
         ),
     )
     client = create_telegram_client(profile)

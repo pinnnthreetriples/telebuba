@@ -1,0 +1,2 @@
+# CI gate helpers (trusted tooling that shells out to dev tools); not app code.
+tools/

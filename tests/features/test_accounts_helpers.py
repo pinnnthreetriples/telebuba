@@ -2,13 +2,15 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from features.accounts import (
-    _account_id_from_event,
-    _account_status_label,
+from features.accounts._dialogs import (
     _proxy_dialog_error,
     _proxy_dialog_geo,
     _proxy_dialog_status,
     _proxy_port_value,
+)
+from features.accounts._table import (
+    _account_id_from_event,
+    _account_status_label,
     _remember_selection,
     _row_from_event,
     _service_error_label,

@@ -20,7 +20,7 @@ from core.db import (
     get_spam_status,
 )
 from core.phone_geo import evaluate_geo
-from schemas.trust import TrustBand, TrustScore
+from schemas.trust import TrustBand, TrustScore, TrustSignals
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -43,52 +43,47 @@ def _band(score: int) -> TrustBand:
     return "critical"
 
 
-def compute_trust_score(  # noqa: PLR0913 - one explicit arg per signal reads clearer than a bag.
-    *,
-    account_id: str,
-    account_status: str,
-    spam_status: str,
-    quarantine_count: int,
-    flood_active: bool,
-    geo_status: str,
-    proxy_status: str | None,
-    age_hours: float,
-) -> TrustScore:
+def compute_trust_score(signals: TrustSignals) -> TrustScore:
     """Combine account signals into a 0-100 trust verdict (pure)."""
     trust = settings.trust
     score = 100
     reasons: list[str] = []
 
-    if account_status != "alive":
+    if signals.account_status != "alive":
         score -= trust.penalty_not_alive
-        reasons.append(f"status {account_status}")
-    if spam_status == "limited":
+        reasons.append(f"status {signals.account_status}")
+    if signals.spam_status == "limited":
         score -= trust.penalty_spam_limited
         reasons.append("spam-limited")
-    elif spam_status == "unknown":
+    elif signals.spam_status == "unknown":
         score -= trust.penalty_spam_unknown
         reasons.append("spam status unknown")
-    if quarantine_count > 0:
-        score -= trust.penalty_quarantine_each * quarantine_count
-        reasons.append(f"quarantined x{quarantine_count}")
-    if flood_active:
+    if signals.quarantine_count > 0:
+        score -= trust.penalty_quarantine_each * signals.quarantine_count
+        reasons.append(f"quarantined x{signals.quarantine_count}")
+    if signals.flood_active:
         score -= trust.penalty_flood_active
         reasons.append("recent flood")
-    if geo_status == "mismatch":
+    if signals.geo_status == "mismatch":
         score -= trust.penalty_geo_mismatch
         reasons.append("geo mismatch")
-    elif geo_status == "unknown":
+    elif signals.geo_status == "unknown":
         score -= trust.penalty_geo_unknown
         reasons.append("geo unknown")
-    if proxy_status == "failed":
+    if signals.proxy_status == "failed":
         score -= trust.penalty_proxy_failed
         reasons.append("proxy failed")
-    if age_hours < trust.new_account_hours:
+    if signals.age_hours < trust.new_account_hours:
         score -= trust.penalty_new_account
         reasons.append("new account")
 
     score = max(0, min(100, score))
-    return TrustScore(account_id=account_id, score=score, band=_band(score), reasons=reasons)
+    return TrustScore(
+        account_id=signals.account_id,
+        score=score,
+        band=_band(score),
+        reasons=reasons,
+    )
 
 
 def _age_hours(created_at: str, now: datetime) -> float:
@@ -132,14 +127,16 @@ def account_trust_score_from(
         lang_code=lang_code,
     )
     return compute_trust_score(
-        account_id=account.account_id,
-        account_status=account.status,
-        spam_status=spam.status if spam else "unknown",
-        quarantine_count=record.quarantine_count if record else 0,
-        flood_active=_flood_active(record.flood_wait_until if record else None, now),
-        geo_status=geo.status,
-        proxy_status=account.proxy_status,
-        age_hours=_age_hours(account.created_at, now),
+        TrustSignals(
+            account_id=account.account_id,
+            account_status=account.status,
+            spam_status=spam.status if spam else "unknown",
+            quarantine_count=record.quarantine_count if record else 0,
+            flood_active=_flood_active(record.flood_wait_until if record else None, now),
+            geo_status=geo.status,
+            proxy_status=account.proxy_status,
+            age_hours=_age_hours(account.created_at, now),
+        ),
     )
 
 
