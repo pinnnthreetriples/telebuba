@@ -16,8 +16,8 @@ edges:
   - target: context/stack.md
     condition: when a convention is tied to a specific library
   - target: patterns/add-feature.md
-    condition: when adding a new feature file
-last_updated: 2026-06-10
+    condition: when adding a new user-facing feature
+last_updated: 2026-06-16
 ---
 
 # Conventions
@@ -27,103 +27,105 @@ last_updated: 2026-06-10
 Each rule states the rule, then a one-line **Why** where it is not obvious.
 
 ### 1. Feature Isolation (UI layer)
-- Every feature is its own file in `features/`. **UI-thin** — NiceGUI page + click handlers only. All business logic delegates to `services/`.
-- Existing feature files are never modified to add behavior — create a new file.
-- No imports between `features/*.py`. `features/accounts.py` must not import `features/warming.py`.
-- **Why:** keeps "add a feature" a pure additive change; prevents the slow drift of a god-module; lets agents work on different features without merge conflicts. Thin UI means we can swap NiceGUI for CLI/REST later without rewriting domain logic.
+- Every feature is its own module or package under `features/`.
+- Small feature: `features/<name>.py`. Larger feature: `features/<name>/` with a thin `__init__.py` and cohesive render/helper modules.
+- UI-thin only — NiceGUI page/component definitions and click handlers. All business logic delegates to `services/`.
+- No imports between feature domains. `features/accounts/**` must not import `features/warming/**`.
+- **Why:** keeps feature ownership clear, prevents god-modules, lets agents work on different features with fewer merge conflicts, and keeps UI replaceable.
 
 ### 2. Pydantic Boundaries
 - All data crossing layers passes through Pydantic models in `schemas/`.
 - No raw `dict`, `tuple`, or `list` of raw values as inputs or outputs of cross-layer functions.
-- Public functions return Pydantic models or `None`.
+- Public functions return Pydantic models or `None`. If returning multiple records, wrap them in a Pydantic response model.
 - **Why:** validation at every edge; types for free; prevents drift between UI, core, and DB representations.
 
 ### 3. No Hardcoded Values
-- No hardcoded paths, limits, API keys, URLs.
-- Tunables live in `core/config.py` (Pydantic + python-dotenv).
+- No hardcoded paths, limits, API keys, URLs, timings, or thresholds.
+- Tunables live in `core/config.py` via nested `pydantic-settings` namespaces.
 - Secrets live in `.env` and are read via `core/config.py`.
 
 ### 4. Logging Only
 - No `print()`.
-- All logging through `core/logging.py` (loguru + SQLite `logs` table; Sentry in prod).
-- See `context/logging.md` for the full three-tier setup.
+- All logging through `core/logging.py` (`log_event` for business events; loguru/Sentry encapsulated there).
+- See `context/logging.md` for the full logging setup.
 
 ### 5. Layer Isolation (4 layers + shared types)
-- `features/*.py` imports `services/*`, `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon / another feature.
-- `services/*.py` imports other `services/*` (composition allowed), `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon directly / `nicegui` / `features/*`.
-- `core/*.py` imports `schemas/*` (shared types), stdlib, and third-party SDKs. Never `services/*` or `features/*`.
-- `schemas/*.py` imports only `pydantic` and `typing`.
-- **Why:** `schemas/` is a shared-types layer, not a downstream layer — all layers may import types; types must not import layers. The `services/` layer is what makes business logic UI-agnostic and reusable from both NiceGUI handlers and APScheduler jobs.
+- `features/**` imports `services/*`, `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon / another feature.
+- `services/**` imports other `services/*` (composition allowed), `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon directly / `nicegui` / `features/*` / raw provider HTTP clients.
+- `core/**` imports `schemas/*` (shared types), stdlib, and third-party SDKs. Never `services/*` or `features/*`.
+- `schemas/*.py` imports only `pydantic`, `typing`, and safe stdlib typing helpers.
+- **Why:** `schemas/` is a shared-types layer, not a downstream layer — all layers may import types; types must not import layers. The `services/` layer keeps business logic UI-agnostic and reusable.
 - Full import matrix: `context/architecture.md`.
 
 ### 6. Database & Telegram Client Gateways
-- Database access only through `core/db.py` (splits into `core/repositories/<aggregate>.py` once tables ≥ 5).
-- Telegram actions only through `core/telegram_client.execute(action)` — `action` is a Pydantic class from `schemas/telegram_actions.py` (e.g. `JoinChannel`, `PostComment`, `UpdateProfile`). No direct `client.send_message(...)` from services or features.
-- `sqlalchemy` and `telethon` must not be imported in `services/*.py` or `features/*.py`.
-- **Why:** one place to enforce session lifecycle, rate limits, proxy config, FloodWait handling, and outbox/retry policy. Declarative actions are also testable without mocking Telethon.
+- Database access only through `core/db.py` compatibility re-exports or `core/repositories/<aggregate>.py`.
+- Telegram actions only through `core.telegram_client.execute(account_id, action)` — `action` is a Pydantic class from `schemas/telegram_actions.py`.
+- `sqlalchemy` and `telethon` must not be imported in `services/**` or `features/**`.
+- **Why:** one place to enforce session lifecycle, typed results, proxy config, error classification, and logging. Declarative actions are testable without mocking Telethon across the app.
 
 ### 7. Test Coverage (maximum strictness — prefer `/tdd` skill)
-- Every new feature ships with `tests/test_*.py` using fixtures from `conftest.py`.
-- Tests run via `pytest`. Green tests = done. **Strictness is configured, not optional** — see `pyproject.toml [tool.pytest.ini_options]`.
-- Hard pytest policy (enforced by config):
-  - `filterwarnings = ["error"]` — **any** warning is a test failure.
+- Every new feature/service change ships with tests.
+- Tests run via `pytest`. Green tests = done. Strictness is configured, not optional — see `pyproject.toml [tool.pytest.ini_options]`.
+- Hard pytest policy:
+  - `filterwarnings = ["error"]` — any warning is a test failure.
   - `--strict-markers` / `--strict-config` — undefined markers or config typos fail the run.
   - `xfail_strict = true` — an `xfail` that passes is a failure.
   - `asyncio_mode = "strict"` — every async test must be explicitly marked.
-  - `--cov-fail-under=90` with `--cov-branch` — branch coverage must stay ≥ 90% on `core`, `features`, `schemas`.
-- Hypothesis runs the `strict` profile by default (200 examples, full reproducer blob, every bug surfaced). The `dev` profile (50 examples) is for the fast inner loop only — never for CI.
-- **Adding a `filterwarnings` ignore requires a one-line justification comment** naming the upstream library and the reason it cannot be fixed at the source. Blanket ignores are forbidden.
-- **Why:** every warning is a real signal someone chose to surface. Once we start ignoring "harmless" ones, real ones disappear into the noise. Treating warnings as errors keeps the floor honest.
+  - `--cov-fail-under=90` with `--cov-branch` — branch coverage must stay ≥ 90% on `core`, `features`, `schemas`, `services`.
+- Adding a `filterwarnings` ignore requires a one-line justification comment naming the upstream library and the reason it cannot be fixed at the source. Blanket ignores are forbidden.
+- **Why:** warnings-as-errors and branch coverage keep the quality floor honest.
 
 ### 8. Async & Type Safety
-- All functions have type hints. `from __future__ import annotations` at the top of every file.
-- Every DB, Telegram, or HTTP operation is `async def`.
-- Exceptions: `raise CustomError(...) from e` (preserve the cause chain).
+- All functions have type hints. `from __future__ import annotations` at the top of every Python file.
+- Every DB, Telegram, or HTTP operation is `async def` at the public boundary.
+- Exceptions: `raise CustomError(...) from e` when wrapping another exception.
 
 ### 9. Device Fingerprint Immutable
 - One device profile per account, created at registration and never mutated.
-- **Why:** Telegram correlates device fingerprint with account history; mutating a profile mid-life is a strong ban signal. Treat the profile as an immutable identity attribute, not a settings blob.
+- **Why:** it is identity metadata; changing it mid-life creates inconsistent account history.
 
 ### 10. Configuration-Driven
-- All parameters (limits, delays, proxy settings) come from `core/config.py`.
-- `core/config.py` uses **nested namespaces** — `settings.warming`, `settings.gemini`, `settings.telegram`, etc. Each domain owns its slice; no one mega-`Settings` blob.
+- All parameters come from `core/config.py`.
+- `core/config.py` uses nested namespaces — `settings.warming`, `settings.gemini`, `settings.telegram`, etc. Each domain owns its slice; no one mega-`Settings` blob.
 - No magic numbers in code.
 
-### 11. Services Layer (NEW)
-- All business logic — warming algorithm, FloodWait/retry policy, comment generation, account state transitions — lives in `services/<domain>.py`. NOT in `features/` (UI-thin) and NOT in `core/` (infra-only).
+### 11. Services Layer
+- All business logic — runtime workflows, state transitions, account operations, content generation orchestration — lives in `services/<domain>/` or `services/<domain>.py`. NOT in `features/` and NOT in `core/`.
 - Services are async, take and return Pydantic models, and may compose freely with other services.
-- A feature handler is a 3-liner: validate input, call a service, render result. Anything longer = logic leaking out of the service.
-- **Why:** business logic must be callable from both NiceGUI handlers (`features/`) AND APScheduler jobs (`features/warming.py` registrations) without duplication. If logic lives in `features/warming.py`, calling it from `features/accounts.py` would require a cross-feature import (Rule 1 violation). Services solve this cleanly.
+- A feature handler validates input, calls a service, then renders the result. Anything more is a signal to move logic into a service.
+- **Why:** business logic must be callable from UI, tests, scripts, and runtime tasks without duplicating it or importing one feature from another.
 
 ## Pre-Commit Checklist
 
 Run this checklist explicitly before presenting any code or committing:
 
-- [ ] No imports between `features/*.py`?
-- [ ] Business logic lives in `services/`, NOT in `features/` (handlers stay UI-thin)?
+- [ ] No imports between feature domains under `features/`?
+- [ ] Business logic lives in `services/`, NOT in `features/`?
 - [ ] No `sqlalchemy` / `telethon` import outside `core/*`?
-- [ ] Telegram actions go through `core/telegram_client.execute(action)`, not raw method calls?
+- [ ] Telegram actions go through `core.telegram_client.execute(account_id, action)`, not raw SDK calls?
 - [ ] Every function has type hints?
-- [ ] Every public function returns a Pydantic model (or `None`)?
+- [ ] Every public cross-layer function returns a Pydantic model or `None`?
 - [ ] No `print()`?
 - [ ] No hardcoded values?
 - [ ] Config via `settings.<namespace>.<field>`, not flat `settings.<field>`?
-- [ ] Test exists for the new feature AND the new service?
+- [ ] Test exists for the changed feature/service/core path?
 - [ ] `uv run pytest` passes with zero warnings and coverage ≥ 90%?
 
 ## Naming
 
-- Files: snake_case (`account_creation.py`, not `AccountCreation.py`)
-- Functions: snake_case, verb-first (`create_account`, not `account_creator`)
-- Pydantic models: PascalCase, suffix by role (`AccountCreate`, `AccountRead`, `AccountUpdate`, `AccountResponse`)
-- DB tables / columns: snake_case (`accounts`, `created_at`)
-- Feature files: one feature = one file in `features/`, named after the feature (`features/accounts.py`, `features/warming.py`)
+- Files and packages: snake_case (`account_creation.py`, not `AccountCreation.py`).
+- Functions: snake_case, verb-first (`create_account`, not `account_creator`).
+- Pydantic models: PascalCase, suffix by role (`AccountCreate`, `AccountRead`, `AccountUpdate`, `AccountResponse`).
+- DB tables / columns: snake_case (`accounts`, `created_at`).
+- Feature domains: `features/<name>.py` for small pages, `features/<name>/` for larger pages.
+- Service domains: `services/<domain>.py` for small domains, `services/<domain>/` for larger domains.
 
 ## Structure
 
-- One feature per file in `features/`. Never edit an existing feature file when adding a new feature.
-- Shared logic lives in `core/`. If two features need it, it belongs there, not duplicated.
-- Tests live in `tests/`, mirroring the source tree (`features/accounts.py` → `tests/features/test_accounts.py`).
+- One domain per module/package. Do not keep adding unrelated concerns to a package root.
+- Package root (`__init__.py`) should be thin: page scaffold, public API re-exports, or compatibility shims only.
+- Shared business logic lives in `services/`. Shared infrastructure lives in `core/`. Shared contracts live in `schemas/`.
+- Tests live in `tests/`, mirroring the source tree where practical (`features/accounts/` → `tests/features/test_accounts*.py`).
 - Full layer / import rules: `context/architecture.md`.
 
 ## Code Patterns
@@ -151,14 +153,14 @@ session_path = settings.telegram.session_dir / f"{account_id}.session"
 session_path = f"./sessions/{account_id}.session"
 ```
 
-**DB via `core/db.py`, not SQLAlchemy in features.**
+**DB via repositories / core DB gateway, not SQLAlchemy in features.**
 
 ```python
-# Correct — in features/accounts.py
-from core.db import save_account
-saved = await save_account(account_create)
+# Correct — in a service or core-facing helper
+from core.db import fetch_account
+account = await fetch_account(account_id)
 
-# Wrong — in features/accounts.py
+# Wrong — in features/ or services/
 from sqlalchemy.orm import Session
 session.add(AccountModel(...))
 ```
@@ -166,12 +168,12 @@ session.add(AccountModel(...))
 **Telegram via the typed executor, never Telethon outside `core/`.**
 
 ```python
-# Correct — build a typed action, hand it to the executor (usual home: a service)
+# Correct — build a typed action, hand it to the executor
 from core.telegram_client import execute
 from schemas.telegram_actions import UpdateProfile
 result = await execute(account_id, UpdateProfile(first_name="...", last_name=None, username=None, bio=None))
 
-# Wrong — raw Telethon, or any client.send_message(...), outside core/
+# Wrong — raw Telethon outside core/
 from telethon import TelegramClient
 client = TelegramClient(...)
 ```
