@@ -193,6 +193,37 @@ async def test_load_accounts_table_filters_query_and_status() -> None:
 
 
 @pytest.mark.asyncio
+async def test_load_accounts_table_paginates_in_db() -> None:
+    """limit/offset must reach the DB — UI no longer loads everything to slice in Python."""
+    for ident in ("a", "b", "c", "d", "e"):
+        await add_account(AccountCreate(account_id=ident, label=f"Label {ident}"))
+
+    page = await load_accounts_table(AccountFilter(limit=2, offset=0))
+    assert len(page.rows) == 2
+    # Summary still reflects the whole table.
+    assert page.summary.total == 5
+
+    next_page = await load_accounts_table(AccountFilter(limit=2, offset=2))
+    assert len(next_page.rows) == 2
+    assert {row.account_id for row in page.rows} & {
+        row.account_id for row in next_page.rows
+    } == set()
+
+
+@pytest.mark.asyncio
+async def test_load_accounts_table_search_uses_db_filter() -> None:
+    await add_account(AccountCreate(account_id="alpha", label="Alpha"))
+    await add_account(AccountCreate(account_id="beta", label="Beta"))
+    await add_account(AccountCreate(account_id="alphabet", label="Alphabet"))
+
+    state = await load_accounts_table(AccountFilter(query="alpha"))
+    ids = {row.account_id for row in state.rows}
+    assert ids == {"alpha", "alphabet"}
+    # Summary is still the whole table — search narrows rows, not totals.
+    assert state.summary.total == 3
+
+
+@pytest.mark.asyncio
 async def test_import_account_tdata_registers_each_account_and_checks(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

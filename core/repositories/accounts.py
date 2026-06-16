@@ -13,7 +13,7 @@ import asyncio
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any, cast
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from core.db import (
@@ -198,8 +198,17 @@ async def create_account(data: AccountCreate) -> AccountRead:
     return await asyncio.to_thread(_create_account, data)
 
 
-def _list_accounts() -> AccountList:
+def _list_accounts(
+    *,
+    query: str = "",
+    status: str = "all",
+    limit: int | None = None,
+    offset: int = 0,
+) -> AccountList:
     statement = _account_select_statement().order_by(_accounts.c.created_at.desc())
+    statement = _apply_account_filters(statement, query=query, status=status)
+    if limit is not None:
+        statement = statement.limit(limit).offset(offset)
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
     return AccountList(
@@ -207,8 +216,59 @@ def _list_accounts() -> AccountList:
     )
 
 
-async def list_accounts() -> AccountList:
-    return await asyncio.to_thread(_list_accounts)
+def _apply_account_filters(statement: Select, *, query: str, status: str) -> Select:
+    if status != "all":
+        statement = statement.where(_accounts.c.status == status)
+    if query:
+        needle = f"%{query.lower()}%"
+        # Mirrors the in-memory _matches_filter haystack: account_id + label +
+        # phone + username + first/last name + session_name. SQLite LIKE is
+        # case-insensitive for ASCII; lower() on the column handles the rest.
+        haystack = func.lower(
+            func.coalesce(_accounts.c.account_id, "")
+            + " "
+            + func.coalesce(_accounts.c.label, "")
+            + " "
+            + func.coalesce(_accounts.c.phone, "")
+            + " "
+            + func.coalesce(_accounts.c.username, "")
+            + " "
+            + func.coalesce(_accounts.c.first_name, "")
+            + " "
+            + func.coalesce(_accounts.c.last_name, "")
+            + " "
+            + func.coalesce(_accounts.c.session_name, ""),
+        )
+        statement = statement.where(haystack.like(needle))
+    return statement
+
+
+async def list_accounts(
+    *,
+    query: str = "",
+    status: str = "all",
+    limit: int | None = None,
+    offset: int = 0,
+) -> AccountList:
+    return await asyncio.to_thread(
+        _list_accounts,
+        query=query,
+        status=status,
+        limit=limit,
+        offset=offset,
+    )
+
+
+def _account_summary_counts() -> dict[str, int]:
+    statement = select(_accounts.c.status, func.count()).group_by(_accounts.c.status)
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).all()
+    return {str(row[0]): int(row[1]) for row in rows}
+
+
+async def account_summary_counts() -> dict[str, int]:
+    """Return a status -> count mapping over the entire accounts table."""
+    return await asyncio.to_thread(_account_summary_counts)
 
 
 def _fetch_account_proxy(account_id: str) -> AccountProxyRead | None:

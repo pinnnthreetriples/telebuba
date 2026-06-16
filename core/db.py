@@ -324,6 +324,7 @@ def _optional_int(value: object) -> int | None:
 # and helpers defined above.
 # --------------------------------------------------------------------------- #
 from core.repositories.accounts import (  # noqa: E402, F401
+    account_summary_counts,
     create_account,
     delete_account,
     delete_account_proxy,
