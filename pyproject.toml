@@ -144,7 +144,7 @@ ignore = [
 ]
 "conftest.py" = ["ANN", "S101"]
 # Russian-language UI strings — Cyrillic letters are intentional, not confusables.
-"features/accounts.py" = ["RUF001", "RUF002", "RUF003"]
+"features/accounts/**" = ["RUF001", "RUF002", "RUF003"]
 "features/logs.py" = ["RUF001", "RUF002", "RUF003"]
 "features/warming/**" = ["RUF001", "RUF002", "RUF003"]
 
