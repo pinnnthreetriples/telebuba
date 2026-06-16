@@ -10,7 +10,6 @@ import pytest
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.messages import SendReactionRequest
 
-from core import telegram_client as telegram_client_module
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
@@ -44,7 +43,7 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     async def fake_cm(_request: object):
         yield client
 
-    monkeypatch.setattr(telegram_client_module, "telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._actions.telegram_client", fake_cm)
 
 
 @pytest.mark.asyncio

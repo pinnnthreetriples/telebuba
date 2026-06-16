@@ -17,11 +17,11 @@ from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelReque
 from telethon.tl.functions.photos import UploadProfilePhotoRequest
 from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
 
-from core import telegram_client as telegram_client_module
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
-from core.telegram_client import _typing_seconds, create_telegram_client, execute
+from core.telegram_client import create_telegram_client, execute
+from core.telegram_client._actions import _typing_seconds
 from schemas.device_fingerprint import DeviceFingerprint, TelegramClientProfile
 from schemas.telegram_actions import (
     AddProfileMusic,
@@ -61,7 +61,7 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     async def fake_cm(_request: object):
         yield client
 
-    monkeypatch.setattr(telegram_client_module, "telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._actions.telegram_client", fake_cm)
 
 
 @pytest.mark.asyncio
@@ -232,8 +232,7 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
     deleted: list[int] = []
 
     monkeypatch.setattr(
-        telegram_client_module.utils,
-        "get_input_document",
+        "core.telegram_client._media.utils.get_input_document",
         lambda _document: MagicMock(),
     )
 

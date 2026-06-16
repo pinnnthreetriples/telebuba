@@ -71,7 +71,7 @@ async def test_insert_duplicate_device_fingerprint_returns_saved_row(tmp_path: P
 @pytest.mark.asyncio
 async def test_telegram_client_profile_uses_saved_fingerprint(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
 
     request = TelegramClientRequest(account_id="account-2", receive_updates=False)
     first = await prepare_telegram_client_profile(request)
@@ -88,7 +88,7 @@ async def test_telegram_client_profile_includes_saved_proxy(
     monkeypatch,
 ) -> None:
     configure_database(tmp_path / "telebuba.db")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
     await create_account(AccountCreate(account_id="account-proxy"))
     await upsert_account_proxy(
         AccountProxyUpsert(
@@ -137,9 +137,9 @@ def test_create_telegram_client_passes_device_profile(monkeypatch) -> None:
             captured["api_hash"] = api_hash
             captured["kwargs"] = kwargs
 
-    monkeypatch.setattr("core.telegram_client.TelegramClient", FakeTelegramClient)
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_id", 12345)
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_hash", "hash")
+    monkeypatch.setattr("core.telegram_client._client.TelegramClient", FakeTelegramClient)
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
 
     client_profile = DeviceFingerprint(
         account_id="account-3",
@@ -187,7 +187,7 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
         def __init__(self, _session_path: str, _api_id: int, _api_hash: str, **kwargs) -> None:
             captured.update(kwargs)
 
-    monkeypatch.setattr("core.telegram_client.TelegramClient", FakeTelegramClient)
+    monkeypatch.setattr("core.telegram_client._client.TelegramClient", FakeTelegramClient)
 
     client_profile = DeviceFingerprint(
         account_id="account-3",
@@ -225,7 +225,7 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
 @pytest.mark.asyncio
 async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
     disconnected = False
 
     class FakeTelegramClient:
@@ -234,7 +234,7 @@ async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) 
             disconnected = True
 
     monkeypatch.setattr(
-        "core.telegram_client.create_telegram_client",
+        "core.telegram_client._client.create_telegram_client",
         lambda _: FakeTelegramClient(),
     )
 
@@ -248,11 +248,13 @@ async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) 
 @pytest.mark.asyncio
 async def test_check_telegram_session_returns_alive(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_id", 12345)
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_hash", "hash")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(authorized=True)
-    monkeypatch.setattr("core.telegram_client.create_telegram_client", lambda _: fake_client)
+    monkeypatch.setattr(
+        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
+    )
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-alive"))
 
@@ -266,11 +268,13 @@ async def test_check_telegram_session_returns_alive(tmp_path: Path, monkeypatch)
 @pytest.mark.asyncio
 async def test_check_telegram_session_returns_unauthorized(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_id", 12345)
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_hash", "hash")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(authorized=False)
-    monkeypatch.setattr("core.telegram_client.create_telegram_client", lambda _: fake_client)
+    monkeypatch.setattr(
+        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
+    )
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-dead"))
 
@@ -298,11 +302,13 @@ async def test_check_telegram_session_classifies_errors(
     status: str,
 ) -> None:
     configure_database(tmp_path / "telebuba.db")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.session_dir", tmp_path / "sessions")
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_id", 12345)
-    monkeypatch.setattr("core.telegram_client.settings.telegram.api_hash", "hash")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(connect_error=exc)
-    monkeypatch.setattr("core.telegram_client.create_telegram_client", lambda _: fake_client)
+    monkeypatch.setattr(
+        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
+    )
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-error"))
 
