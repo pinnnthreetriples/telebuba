@@ -103,6 +103,10 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    # Gemini credentials live in .env (not the DB). Provide a non-empty default
+    # so cycle/save tests see has_gemini_key=True without each one mucking with
+    # the secret namespace.
+    monkeypatch.setattr(settings.gemini, "api_key", "test-key")
     for field in _ZERO_DELAY_FIELDS:
         monkeypatch.setattr(settings.warming, field, 0.0)
     monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
@@ -838,34 +842,38 @@ async def test_sanitize_chat_text_returns_none_for_blank() -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_settings_clear_key_wipes_stored_value() -> None:
-    await warming.save_settings(
-        WarmingSettingsUpdate(
-            inter_account_chat=False,
-            reactions_enabled=False,
-            gemini_api_key="secret",
-        ),
-    )
+async def test_save_settings_ignores_gemini_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    """UI inputs for Gemini key/model are accepted for compat but never persisted."""
+    monkeypatch.setattr(settings.gemini, "api_key", "env-key")
+    monkeypatch.setattr(settings.gemini, "model", "gemini-from-env")
+
     masked = await warming.save_settings(
         WarmingSettingsUpdate(
             inter_account_chat=False,
             reactions_enabled=False,
+            gemini_api_key="ignored",
+            gemini_model="ignored-model",
             clear_gemini_key=True,
         ),
     )
-    assert masked.has_gemini_key is False
+    # has_gemini_key reflects the env, not what the UI tried to save.
+    assert masked.has_gemini_key is True
+    assert masked.gemini_model == "gemini-from-env"
 
 
 @pytest.mark.asyncio
-async def test_save_settings_updates_gemini_model() -> None:
+async def test_save_settings_model_is_env_managed(monkeypatch: pytest.MonkeyPatch) -> None:
+    """gemini_model on save is ignored; the value comes from settings.gemini.model."""
+    monkeypatch.setattr(settings.gemini, "model", "gemini-2.5-pro-from-env")
+
     masked = await warming.save_settings(
         WarmingSettingsUpdate(
             inter_account_chat=False,
             reactions_enabled=False,
-            gemini_model="gemini-2.5-pro",
+            gemini_model="user-typed-other-name",
         ),
     )
-    assert masked.gemini_model == "gemini-2.5-pro"
+    assert masked.gemini_model == "gemini-2.5-pro-from-env"
 
 
 @pytest.mark.asyncio

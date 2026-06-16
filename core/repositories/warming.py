@@ -103,6 +103,9 @@ def _int_or(value: object, default: int) -> int:
 def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSettingsSecret:
     # Columns added after the row was first created are nullable; a NULL means
     # "never set", so fall back to the config default to preserve old behaviour.
+    # gemini_api_key + gemini_model are intentionally NOT read from the DB:
+    # secrets belong in .env. The DB column is kept for migration compatibility
+    # but is ignored on read so a rotated env value takes effect immediately.
     warm = settings.warming
     return WarmingSettingsSecret(
         inter_account_chat=bool(mapping["inter_account_chat"]),
@@ -113,8 +116,8 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         quiet_hours_start=_int_or(mapping.get("quiet_hours_start"), warm.quiet_hours_start),
         quiet_hours_end=_int_or(mapping.get("quiet_hours_end"), warm.quiet_hours_end),
         max_daily_actions=_int_or(mapping.get("max_daily_actions"), warm.max_daily_actions),
-        gemini_api_key=str(mapping["gemini_api_key"]),
-        gemini_model=str(mapping["gemini_model"]),
+        gemini_api_key=settings.gemini.api_key,
+        gemini_model=settings.gemini.model,
         updated_at=str(mapping["updated_at"]),
     )
 
@@ -166,9 +169,12 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     gemini_api_key: str | None,
     gemini_model: str | None = None,
 ) -> WarmingSettingsSecret:
-    current = _load_warming_settings()
-    new_key = current.gemini_api_key if gemini_api_key is None else gemini_api_key
-    new_model = gemini_model or current.gemini_model
+    # gemini_api_key / gemini_model are no longer persisted to the DB —
+    # credentials belong in .env. Arguments are accepted for backward
+    # compatibility with callers (services + UI) but ignored on write.
+    del gemini_api_key, gemini_model
+    # Ensure the singleton row exists so the UPDATE below has something to hit.
+    _load_warming_settings()
     values: dict[str, object] = {
         "inter_account_chat": int(inter_account_chat),
         "reactions_enabled": int(reactions_enabled),
@@ -178,8 +184,8 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
         "quiet_hours_start": quiet_hours_start,
         "quiet_hours_end": quiet_hours_end,
         "max_daily_actions": max_daily_actions,
-        "gemini_api_key": new_key,
-        "gemini_model": new_model,
+        "gemini_api_key": "",
+        "gemini_model": settings.gemini.model,
         "updated_at": _now_iso(),
     }
     with _get_engine().begin() as connection:

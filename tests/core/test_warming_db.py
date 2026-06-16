@@ -70,22 +70,22 @@ async def test_settings_default_row_is_created_on_first_read() -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_settings_updates_and_preserves_key_when_none() -> None:
-    await save_warming_settings(
+async def test_save_ignores_gemini_key_and_reads_from_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The DB no longer stores Gemini credentials; load returns the env value."""
+    monkeypatch.setattr(settings.gemini, "api_key", "env-key")
+
+    saved = await save_warming_settings(
         inter_account_chat=True,
         reactions_enabled=False,
-        gemini_api_key="secret-key",
+        gemini_api_key="ui-typed-this-but-it-must-be-ignored",
     )
 
-    preserved = await save_warming_settings(
-        inter_account_chat=False,
-        reactions_enabled=True,
-        gemini_api_key=None,
-    )
+    assert saved.gemini_api_key == "env-key"
 
-    assert preserved.inter_account_chat is False
-    assert preserved.reactions_enabled is True
-    assert preserved.gemini_api_key == "secret-key"
+    reloaded = await load_warming_settings()
+    assert reloaded.gemini_api_key == "env-key"
 
 
 @pytest.mark.asyncio
