@@ -4,6 +4,11 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# account_id is later joined into dialogue pair_keys via "|". Restricting the
+# charset here is cheaper than escaping every join site downstream. Allows
+# digit-only Telegram user_ids and the session-name stems we actually use.
+_ACCOUNT_ID_PATTERN = r"^[A-Za-z0-9._-]+$"
+
 AccountStatus = Literal[
     "new",
     "alive",
@@ -18,7 +23,7 @@ AccountStatus = Literal[
 
 
 class AccountCreate(BaseModel):
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     label: str | None = Field(default=None, min_length=1)
     session_name: str | None = Field(default=None, min_length=1)
 
@@ -68,11 +73,11 @@ class AccountFilter(BaseModel):
 
 
 class AccountCheckRequest(BaseModel):
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
 
 
 class AccountProfileUpdateRequest(BaseModel):
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     first_name: str = Field(min_length=1)
     last_name: str | None = None
     username: str | None = None

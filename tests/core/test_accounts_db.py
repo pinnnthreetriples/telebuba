@@ -3,6 +3,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from pydantic import ValidationError
 
 from core.db import (
     configure_database,
@@ -38,6 +39,22 @@ async def test_create_account_lists_device_profile(tmp_path: Path) -> None:
     assert account.session_name == "session-1"
     assert account.status == "new"
     assert account.device_model == "Desktop"
+
+
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "with|pipe",
+        "with space",
+        "with/slash",
+        'has"quote',
+        "",
+    ],
+)
+def test_account_id_rejects_unsafe_charset(bad_id: str) -> None:
+    """pair_key joins account_ids with '|' — refuse anything that breaks the contract."""
+    with pytest.raises(ValidationError):
+        AccountCreate(account_id=bad_id)
 
 
 @pytest.mark.asyncio
