@@ -18,6 +18,7 @@ from core.db import (
     mark_message_replied,
     pair_key,
     record_dialogue_message,
+    try_claim_message_reply,
 )
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
@@ -153,10 +154,15 @@ async def _reply_to_partner(
     )
     if text is None:
         return 0
+    # Atomic claim before send: collapses ``latest_unreplied_for`` + ``mark``
+    # into one UPDATE WHERE replied=0 so two parallel cycles cannot both
+    # answer the same incoming message. Send-failure after a claim drops the
+    # reply by design — silence is safer than a duplicate.
+    if not await try_claim_message_reply(incoming.id):
+        return 0
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
     if result.status != "ok":
         return 0
-    await mark_message_replied(incoming.id)
     await register_sent(text)
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.

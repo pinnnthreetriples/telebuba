@@ -10,7 +10,9 @@ from core.config import settings
 from core.db import (
     configure_database,
     create_account,
+    latest_unreplied_for,
     record_dialogue_message,
+    try_claim_message_reply,
     update_account_from_session_check,
     upsert_warming_state,
 )
@@ -124,3 +126,17 @@ async def test_load_dialogue_overview_returns_pairs_and_recent() -> None:
     assert overview.pairs
     assert overview.recent
     assert overview.recent[0].text == "привет"
+
+
+@pytest.mark.asyncio
+async def test_try_claim_message_reply_atomic() -> None:
+    """First claim wins; the second one (race) returns False without sending."""
+    await create_account(AccountCreate(account_id="a"))
+    await create_account(AccountCreate(account_id="b"))
+    await record_dialogue_message("a", "b", "hi")
+    incoming = await latest_unreplied_for("b")
+    assert incoming is not None
+
+    assert await try_claim_message_reply(incoming.id) is True
+    assert await try_claim_message_reply(incoming.id) is False
+    assert await latest_unreplied_for("b") is None

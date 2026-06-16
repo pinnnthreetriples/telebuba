@@ -354,6 +354,7 @@ from core.repositories.dialogues import (  # noqa: E402, F401
     pair_key,
     record_dialogue_message,
     replace_dialogue_pairs,
+    try_claim_message_reply,
 )
 from core.repositories.logs import (  # noqa: E402, F401
     insert_log_row,
