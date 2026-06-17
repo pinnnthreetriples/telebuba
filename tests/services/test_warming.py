@@ -1456,7 +1456,7 @@ async def test_run_loop_iteration_increments_daily_counter(
 
 
 @pytest.mark.asyncio
-async def test_cycle_hard_daily_limit_includes_cleanup(
+async def test_daily_limit_excludes_offline_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recorder = _Recorder()
