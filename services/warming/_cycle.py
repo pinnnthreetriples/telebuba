@@ -12,7 +12,13 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account, list_warming_channels, load_warming_settings
+from core.db import (
+    fetch_account,
+    is_channel_joined,
+    list_warming_channels,
+    load_warming_settings,
+    record_channel_joined,
+)
 from core.logging import log_event
 from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel, SetOnline
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
@@ -160,8 +166,10 @@ async def _run_channel_loop(
     warm = settings.warming
     tally = _ChannelTally()
     for channel in chosen:
-        if secret.join_enabled:
+        if secret.join_enabled and not await is_channel_joined(account_id, channel.channel):
             join_result = await _seams.execute(account_id, JoinChannel(channel=channel.channel))
+            if join_result.status == "ok":
+                await record_channel_joined(account_id, channel.channel)
             if _apply_join_result(tally, join_result, channel.channel):
                 break
             await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
@@ -199,8 +207,7 @@ async def _build_cycle_result(
         status = "peer_flood"
     elif tally.flooded:
         status = "flood_wait"
-    elif tally.failures and not (tally.joined or tally.reads or tally.reactions):
-        # Every action failed → don't lie about success.
+    elif tally.failures:
         status = "failed"
     else:
         status = "ok"
@@ -254,7 +261,20 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:
     messages_sent = 0
     online_set = False
     try:
-        await _seams.execute(account_id, SetOnline(online=True))
+        online_result = await _seams.execute(account_id, SetOnline(online=True))
+        if online_result.status != "ok":
+            if online_result.status in _WAIT_STATUSES:
+                flooded, seconds, until = _classify_flood(online_result)
+                tally.flooded = flooded
+                tally.flood_seconds = seconds
+                tally.flood_until = until
+            elif online_result.status == "peer_flood":
+                tally.peer_flooded = True
+            else:
+                tally.failures += 1
+                tally.last_failed_action = "set_online"
+            return await _build_cycle_result(account_id, tally, messages_sent)
+
         online_set = True
         await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
 

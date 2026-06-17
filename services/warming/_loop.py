@@ -100,7 +100,7 @@ async def _recover_from_quarantine(
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
 
 
-async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C901 - linear loop step
+async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C901, PLR0912 - linear loop step
     """Run one iteration of the warming loop (cycle + state transitions).
 
     Extracted from ``_warming_loop`` so it can be tested without the infinite
@@ -158,8 +158,14 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C9
     result = await run_one_cycle(WarmingCycleRequest(account_id=account_id))
 
     actions_done = (
-        result.channels_joined + result.channels_read + result.reactions_sent + result.messages_sent
+        result.channels_joined
+        + result.channels_read
+        + result.reactions_sent
+        + result.messages_sent
+        + result.failures
     )
+    if result.status in {"peer_flood", "flood_wait"}:
+        actions_done += 1
     new_daily = daily_count + actions_done
 
     if result.status == "peer_flood":

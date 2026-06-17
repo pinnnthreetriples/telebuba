@@ -32,6 +32,7 @@ from services.warming.settings_store import load_settings
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.spam_status import SpamStatusVerdict
+    from schemas.trust import TrustScore
     from schemas.warming import WarmingReadiness, WarmingStateRecord
 
 
@@ -82,17 +83,27 @@ async def load_board() -> WarmingBoardState:
     idle: list[WarmingAccountState] = []
     warming: list[WarmingAccountState] = []
     for account in accounts.accounts:
-        readiness = evaluate_readiness(account, channel_count)
         record = records.get(account.account_id)
-        card = _to_card(account, record, readiness=readiness)
+        spam = spam_by_account.get(account.account_id)
         fingerprint = fingerprints.get(account.account_id)
-        _enrich_card(
-            account,
-            card,
+        lang_code = fingerprint.system_lang_code if fingerprint else None
+
+        trust = account_trust_score_from(
+            account=account,
             record=record,
-            spam=spam_by_account.get(account.account_id),
-            lang_code=fingerprint.system_lang_code if fingerprint else None,
+            spam=spam,
+            lang_code=lang_code,
             now=now,
+        )
+        readiness = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
+        card = _to_card(account, record, readiness=readiness)
+
+        age_hours = _account_age_hours(account, now)
+        _enrich_card(
+            card,
+            trust=trust,
+            spam=spam,
+            age_hours=age_hours,
         )
         (warming if is_warming(card.state) else idle).append(card)
     return WarmingBoardState(
@@ -106,33 +117,20 @@ async def load_board() -> WarmingBoardState:
     )
 
 
-def _enrich_card(  # noqa: PLR0913 - explicit per-signal args mirror the bulk-loaded board rows.
-    account: AccountRead,
+def _enrich_card(
     card: WarmingAccountState,
     *,
-    record: WarmingStateRecord | None,
+    trust: TrustScore,
     spam: SpamStatusVerdict | None,
-    lang_code: str | None,
-    now: datetime,
+    age_hours: float,
 ) -> None:
-    """Attach the live health signals (trust, spam, age/ramp) to a board card.
-
-    Pure given its inputs — all DB rows are bulk-loaded once by ``load_board``.
-    """
-    trust = account_trust_score_from(
-        account=account,
-        record=record,
-        spam=spam,
-        lang_code=lang_code,
-        now=now,
-    )
+    """Attach the live health signals (trust, spam, age/ramp) to a board card."""
     card.trust_score = trust.score
     card.trust_band = trust.band
     card.trust_reasons = trust.reasons
     if spam is not None:
         card.spam_status = spam.status
         card.spam_detail = spam.detail
-    age_hours = _account_age_hours(account, now)
     card.age_hours = age_hours
     card.dm_allowed = compute_intensity(age_hours).dm_allowed
 

@@ -18,7 +18,9 @@ from schemas.warming import WarmingIntensity, WarmingReadiness
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
+    from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import ActionResult
+    from schemas.trust import TrustScore
     from schemas.warming import WarmingStateRecord
 
 _SECONDS_PER_HOUR = 3600
@@ -92,7 +94,12 @@ def _proxy_snapshot(account: AccountRead) -> str | None:
     return base
 
 
-def evaluate_readiness(account: AccountRead, channel_count: int) -> WarmingReadiness:
+def evaluate_readiness(
+    account: AccountRead,
+    channel_count: int,
+    spam: SpamStatusVerdict | None = None,
+    trust_score: TrustScore | None = None,
+) -> WarmingReadiness:
     """Decide whether an account can safely start warming, from last-known state.
 
     Uses the persisted account/proxy snapshot (no live network) so the board can
@@ -107,6 +114,10 @@ def evaluate_readiness(account: AccountRead, channel_count: int) -> WarmingReadi
         reasons.append("proxy failed")
     if channel_count <= 0:
         reasons.append("no channels")
+    if spam and spam.status == "limited":
+        reasons.append("spam limited")
+    if trust_score and trust_score.band == "critical":
+        reasons.append("trust critical")
     return WarmingReadiness(ready=not reasons, reasons=reasons)
 
 

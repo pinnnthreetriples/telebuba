@@ -13,7 +13,7 @@ import re
 from datetime import UTC, datetime, timedelta
 
 from core.config import settings
-from core.db import record_sent_hash, try_reserve_sent_hash, was_hash_sent_since
+from core.db import record_sent_hash, try_reserve_sent_hash
 
 _LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/)", re.IGNORECASE)
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
@@ -47,15 +47,6 @@ def is_acceptable(text: str) -> bool:
     return not has_forbidden_word(text, warm.content_forbidden_words)
 
 
-async def is_duplicate(text: str) -> bool:
-    """True if the same normalised text was sent within the dedup window."""
-    window = settings.warming.content_dedup_window_days
-    if window <= 0:
-        return False
-    since = (datetime.now(UTC) - timedelta(days=window)).isoformat()
-    return await was_hash_sent_since(content_hash(text), since)
-
-
 async def register_sent(text: str) -> None:
     """Record that this text has been sent (for future dedup).
 
@@ -69,7 +60,7 @@ async def register_sent(text: str) -> None:
 async def try_reserve_sent(text: str) -> bool:
     """Atomically claim a content hash before sending — True if claim wins.
 
-    Combines :func:`is_duplicate` and :func:`register_sent` into a single
+    Combines checking and registration into a single
     transaction so two concurrent senders of the same text cannot both pass
     the dedup gate. A False return means another sender already reserved this
     text within the dedup window; the caller must abort.

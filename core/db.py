@@ -107,6 +107,13 @@ _warming_channels = Table(
     Column("label", String, nullable=True),
     Column("created_at", String, nullable=False),
 )
+_warming_joined_channels = Table(
+    "warming_joined_channels",
+    _metadata,
+    Column("account_id", String, primary_key=True),
+    Column("channel", String, primary_key=True),
+    Column("created_at", String, nullable=False),
+)
 _warming_settings = Table(
     "warming_settings",
     _metadata,
@@ -305,4 +312,8 @@ from core.repositories.warming import (  # noqa: E402, F401
     remove_warming_channel,
     save_warming_settings,
     upsert_warming_state,
+)
+from core.repositories.warming_joined import (  # noqa: E402, F401
+    is_channel_joined,
+    record_channel_joined,
 )

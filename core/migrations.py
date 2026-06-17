@@ -120,6 +120,17 @@ def _add_warming_user_controls(connection: Connection) -> None:
             )
 
 
+def _add_warming_joined_channels(connection: Connection) -> None:
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS warming_joined_channels ("
+        "  account_id VARCHAR NOT NULL,"
+        "  channel VARCHAR NOT NULL,"
+        "  created_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (account_id, channel)"
+        ")"
+    )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -128,6 +139,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (3, "add_warming_state_runtime_columns", _add_warming_state_runtime_columns),
     (4, "add_warming_join_enabled", _add_warming_join_enabled),
     (5, "add_warming_user_controls", _add_warming_user_controls),
+    (6, "add_warming_joined_channels", _add_warming_joined_channels),
 )
 
 
