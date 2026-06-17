@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from core.db import list_accounts
+from core.db import account_summary_counts, list_accounts
 from schemas.accounts import (
     AccountsTableState,
     AccountSummary,
@@ -24,41 +24,28 @@ _SECONDS_PER_DAY = 86_400
 
 
 async def load_accounts_table(data: AccountFilter) -> AccountsTableState:
-    accounts = await list_accounts()
-    filtered = [account for account in accounts.accounts if _matches_filter(account, data)]
+    # DB-level filter + optional pagination so the UI does not have to pull
+    # the entire accounts table into memory just to render one page.
+    accounts = await list_accounts(
+        query=data.query,
+        status=data.status if data.status != "all" else "all",
+        limit=data.limit,
+        offset=data.offset,
+    )
+    summary = _summary_from_counts(await account_summary_counts())
     return AccountsTableState(
-        rows=[_to_table_row(account) for account in filtered],
-        summary=_summarize(accounts.accounts),
+        rows=[_to_table_row(account) for account in accounts.accounts],
+        summary=summary,
     )
 
 
-def _matches_filter(account: AccountRead, data: AccountFilter) -> bool:
-    if data.status not in ("all", account.status):
-        return False
-    if not data.query:
-        return True
-    haystack = " ".join(
-        value or ""
-        for value in (
-            account.account_id,
-            account.label,
-            account.phone,
-            account.username,
-            account.first_name,
-            account.last_name,
-            account.session_name,
-        )
-    ).lower()
-    return data.query.lower() in haystack
-
-
-def _summarize(accounts: list[AccountRead]) -> AccountSummary:
+def _summary_from_counts(counts: dict[str, int]) -> AccountSummary:
     return AccountSummary(
-        total=len(accounts),
-        alive=sum(account.status == "alive" for account in accounts),
-        permanent_issue=sum(account.status in _PERMANENT_ISSUES for account in accounts),
-        temporary_issue=sum(account.status in _TEMPORARY_ISSUES for account in accounts),
-        never_checked=sum(account.status == "new" for account in accounts),
+        total=sum(counts.values()),
+        alive=counts.get("alive", 0),
+        permanent_issue=sum(counts.get(status, 0) for status in _PERMANENT_ISSUES),
+        temporary_issue=sum(counts.get(status, 0) for status in _TEMPORARY_ISSUES),
+        never_checked=counts.get("new", 0),
     )
 
 

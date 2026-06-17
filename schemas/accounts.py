@@ -70,6 +70,9 @@ class AccountList(BaseModel):
 class AccountFilter(BaseModel):
     query: str = ""
     status: AccountStatus | Literal["all"] = "all"
+    # Optional pagination. ``limit=None`` returns every match (legacy default).
+    limit: int | None = Field(default=None, ge=1)
+    offset: int = Field(default=0, ge=0)
 
 
 class AccountCheckRequest(BaseModel):
