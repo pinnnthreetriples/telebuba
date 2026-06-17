@@ -100,7 +100,49 @@ async def _recover_from_quarantine(
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
 
 
-async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C901, PLR0912 - linear loop step
+async def _calculate_next_run(
+    account_id: str,
+    result: WarmingCycleResult,
+) -> tuple[int, datetime, WarmingState]:
+    warm = settings.warming
+    actions_done = (
+        result.channels_joined
+        + result.channels_read
+        + result.reactions_sent
+        + result.messages_sent
+        + result.failures
+    )
+    if result.status in {"peer_flood", "flood_wait"}:
+        actions_done += 1
+
+    next_state: WarmingState
+    if result.status == "peer_flood":
+        sleep_seconds = warm.quarantine_hours * _SECONDS_PER_HOUR
+        next_state = "quarantine"
+    elif result.status == "flood_wait":
+        sleep_seconds = float(result.flood_wait_seconds) if result.flood_wait_seconds else 0.0
+        next_state = "flood_wait"
+    elif result.status == "failed":
+        sleep_seconds = _seams.rng.uniform(
+            warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
+            warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
+        )
+        next_state = "error"
+    else:
+        sleep_seconds = _seams.rng.uniform(
+            warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
+            warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
+        )
+        next_state = "sleeping"
+
+    next_run_dt = datetime.now(UTC) + timedelta(seconds=sleep_seconds)
+    if result.status not in {"peer_flood", "flood_wait"}:
+        next_run_dt = _shift_to_active_hours(next_run_dt, await _account_tz(account_id))
+
+    return actions_done, next_run_dt, next_state
+
+
+async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     """Run one iteration of the warming loop (cycle + state transitions).
 
     Extracted from ``_warming_loop`` so it can be tested without the infinite
@@ -112,7 +154,6 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C9
     the per-account daily action budget (park until UTC midnight).
     """
     now = datetime.now(UTC)
-    warm = settings.warming
     controls = await load_warming_settings()
     record = await fetch_warming_state(account_id)
 
@@ -156,43 +197,9 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:  # noqa: C9
         daily_count_date=daily_date,
     )
     result = await run_one_cycle(WarmingCycleRequest(account_id=account_id))
-
-    actions_done = (
-        result.channels_joined
-        + result.channels_read
-        + result.reactions_sent
-        + result.messages_sent
-        + result.failures
-    )
-    if result.status in {"peer_flood", "flood_wait"}:
-        actions_done += 1
+    actions_done, next_run_dt, next_state = await _calculate_next_run(account_id, result)
     new_daily = daily_count + actions_done
-
-    if result.status == "peer_flood":
-        sleep_seconds = warm.quarantine_hours * _SECONDS_PER_HOUR
-    elif result.status == "flood_wait" and result.flood_wait_seconds:
-        sleep_seconds = float(result.flood_wait_seconds)
-    else:
-        sleep_seconds = _seams.rng.uniform(
-            warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
-            warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
-        )
-    next_run_dt = datetime.now(UTC) + timedelta(seconds=sleep_seconds)
-    # Bias a normal cadence to wake in active local hours; never delay a
-    # flood/peer-flood recovery, which has its own required timing.
-    if result.status not in {"peer_flood", "flood_wait"}:
-        next_run_dt = _shift_to_active_hours(next_run_dt, await _account_tz(account_id))
     next_run = next_run_dt.isoformat()
-
-    next_state: WarmingState
-    if result.status == "peer_flood":
-        next_state = "quarantine"
-    elif result.status == "flood_wait":
-        next_state = "flood_wait"
-    elif result.status == "failed":
-        next_state = "error"
-    else:
-        next_state = "sleeping"
 
     await _set_state(
         account_id,
