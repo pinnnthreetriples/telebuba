@@ -1627,7 +1627,7 @@ async def test_start_warming_refreshes_pairs_before_loop(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_joined_channels_cleanup_on_channel_remove(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_joined_channels_cleanup_on_channel_remove() -> None:
     from sqlalchemy import select
 
     from core.db import (
@@ -1657,7 +1657,7 @@ async def test_joined_channels_cleanup_on_channel_remove(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
-async def test_joined_channels_cleanup_on_account_delete(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_joined_channels_cleanup_on_account_delete() -> None:
     import asyncio
 
     from sqlalchemy import select

@@ -47,7 +47,6 @@ def _normalize_channel(token: str) -> str | None:
     cleaned = cleaned.lstrip("@")
     if not cleaned:
         return None
-
     # Reject private chat links (e.g. t.me/c/12345/1)
     if cleaned.lower().startswith("c/"):
         return None
@@ -55,7 +54,6 @@ def _normalize_channel(token: str) -> str | None:
     # If it was a valid public post link (e.g. t.me/mychannel/123), extract the channel
     if "/" in cleaned:
         cleaned = cleaned.split("/")[0]
-
     if len(cleaned) > settings.warming.max_channel_length:
         return None
     return cleaned if _CHANNEL_TOKEN_RE.match(cleaned) else None
