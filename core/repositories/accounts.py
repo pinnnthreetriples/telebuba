@@ -224,10 +224,48 @@ async def account_summary_counts() -> dict[str, int]:
 
 
 def _delete_account(account_id: str) -> None:
+    # F4: schema declares ForeignKey on account_proxies / warming_account_state /
+    # account_spam_status without ON DELETE CASCADE, and PRAGMA foreign_keys=ON,
+    # so deleting a warmed account explodes with IntegrityError unless we clean
+    # the children first. device_fingerprints / dialogue tables have no FK but
+    # are still per-account data that must not outlive the account.
+    from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
+    from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
+
     with _get_engine().begin() as connection:
         connection.execute(
             delete(_warming_joined_channels).where(
                 _warming_joined_channels.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_warming_account_state).where(
+                _warming_account_state.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_account_proxies).where(_account_proxies.c.account_id == account_id),
+        )
+        connection.execute(
+            delete(_account_spam_status).where(
+                _account_spam_status.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_device_fingerprints).where(
+                _device_fingerprints.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(dialogue_messages).where(
+                (dialogue_messages.c.from_account == account_id)
+                | (dialogue_messages.c.to_account == account_id),
+            ),
+        )
+        connection.execute(
+            delete(dialogue_pairs).where(
+                (dialogue_pairs.c.account_a == account_id)
+                | (dialogue_pairs.c.account_b == account_id),
             ),
         )
         connection.execute(delete(_accounts).where(_accounts.c.account_id == account_id))

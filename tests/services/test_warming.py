@@ -1706,3 +1706,123 @@ async def test_joined_channels_cleanup_on_account_delete() -> None:
     with _get_engine().connect() as conn:
         res = conn.execute(select(_warming_joined_channels)).all()
         assert len(res) == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_account_with_all_related_rows() -> None:
+    """F4 regression: deleting a warmed account must not raise IntegrityError.
+
+    Schema declares ForeignKey on account_proxies / warming_account_state /
+    account_spam_status without ON DELETE CASCADE, so the repo has to clean
+    children explicitly. We seed every per-account table that exists.
+    """
+    from core.db import (  # noqa: PLC0415
+        _account_proxies,
+        _account_spam_status,
+        _accounts,
+        _device_fingerprints,
+        _get_engine,
+        _warming_account_state,
+        _warming_joined_channels,
+        add_warming_channel,
+        record_channel_joined,
+        upsert_warming_state,
+    )
+    from core.repositories.accounts import _delete_account  # noqa: PLC0415
+    from core.repositories.dialogues import (  # noqa: PLC0415
+        dialogue_messages,
+        dialogue_pairs,
+        record_dialogue_message,
+        replace_dialogue_pairs,
+    )
+
+    await create_account(AccountCreate(account_id="acc-a", session_name="acc-a"))
+    await create_account(AccountCreate(account_id="acc-b", session_name="acc-b"))
+    await add_warming_channel("testchan")
+    await record_channel_joined("acc-a", "testchan")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-a", state="active"))
+    await upsert_account_proxy(
+        AccountProxyUpsert(
+            account_id="acc-a",
+            proxy_type="socks5",
+            host="127.0.0.1",
+            port=1080,
+            username=None,
+            password=None,
+        ),
+    )
+    await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id="acc-a",
+            status="clean",
+            detail=None,
+            checked_at="2026-01-01T00:00:00+00:00",
+        ),
+    )
+    await replace_dialogue_pairs([("acc-a", "acc-b")])
+    await record_dialogue_message("acc-a", "acc-b", "hi")
+    await record_dialogue_message("acc-b", "acc-a", "yo")
+
+    await asyncio.to_thread(_delete_account, "acc-a")
+
+    with _get_engine().connect() as conn:
+        assert (
+            conn.execute(sa_delete(_accounts).where(_accounts.c.account_id == "acc-a")).rowcount
+            == 0
+        )
+        assert (
+            conn.execute(
+                _warming_joined_channels.select().where(
+                    _warming_joined_channels.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _warming_account_state.select().where(
+                    _warming_account_state.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _account_proxies.select().where(_account_proxies.c.account_id == "acc-a"),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _account_spam_status.select().where(
+                    _account_spam_status.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _device_fingerprints.select().where(
+                    _device_fingerprints.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                dialogue_messages.select().where(
+                    (dialogue_messages.c.from_account == "acc-a")
+                    | (dialogue_messages.c.to_account == "acc-a"),
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                dialogue_pairs.select().where(
+                    (dialogue_pairs.c.account_a == "acc-a")
+                    | (dialogue_pairs.c.account_b == "acc-a"),
+                ),
+            ).all()
+            == []
+        )

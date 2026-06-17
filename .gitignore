@@ -47,3 +47,5 @@ htmlcov/
 .codex/
 .friday/
 .specify/
+
+.tmp_backups/
