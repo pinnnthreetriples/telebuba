@@ -208,6 +208,14 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     new_daily = daily_count + actions_done
     next_run = next_run_dt.isoformat()
 
+    # F1: if stop_warming wrote idle while we were inside run_one_cycle, do not
+    # resurrect the cycle's next_state on top of it. The cycle's I/O may have
+    # outlived task.cancel() (e.g. asyncio.to_thread isn't interrupted mid-write),
+    # and the operator-issued idle must win.
+    latest = await fetch_warming_state(account_id)
+    if latest is not None and latest.state == "idle":
+        return result
+
     await _set_state(
         account_id,
         next_state,

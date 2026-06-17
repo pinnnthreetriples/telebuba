@@ -49,6 +49,7 @@ from schemas.warming import (
     StartWarmingRequest,
     StopWarmingRequest,
     WarmingCycleRequest,
+    WarmingCycleResult,
     WarmingSettingsUpdate,
     WarmingStateRecord,
     WarmingStateWrite,
@@ -1844,3 +1845,29 @@ async def test_create_account_allows_multiple_null_session_names() -> None:
     await create_account(AccountCreate(account_id="acc-1"))
     await create_account(AccountCreate(account_id="acc-2"))
     # No exception — both rows persist.
+
+
+@pytest.mark.asyncio
+async def test_stop_does_not_get_overwritten_by_inflight_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F1: a stop fired while ``run_one_cycle`` is in flight must stick."""
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    # Patch ``run_one_cycle`` to simulate stop_warming firing mid-cycle:
+    # the operator wrote ``idle`` while the loop was still inside this call.
+    async def cycle_with_stop_inside(req):  # type: ignore[no-untyped-def]
+        await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
+        return WarmingCycleResult(account_id=req.account_id, status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", cycle_with_stop_inside)
+
+    await run_loop_iteration("acc-1")
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"
