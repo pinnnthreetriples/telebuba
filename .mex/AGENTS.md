@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Always-loaded project anchor. Read first. Project identity, stack, file map, non-negotiables, commands, pointer to ROUTER.md.
-last_updated: 2026-06-16
+last_updated: 2026-06-17
 ---
 
 # Telebuba
@@ -51,6 +51,8 @@ For the live implementation state, read `state/active.md`. This anchor is only t
 9. **Device Fingerprint Immutable** — one profile per account, created at registration, never mutated.
 10. **Configuration-Driven** — all limits/delays/proxies through `core/config.py`; nested namespaces (`settings.warming`, `settings.gemini`, ...); no magic numbers.
 11. **Services Layer** — all business logic lives in `services/<domain>/` or `services/<domain>.py`. Features validate, call services, render.
+
+Before adding files, follow `.mex/context/conventions.md` → **File Placement Guide** (where each kind of code goes, when to split, the package-root rule).
 
 ## Commands
 - Install: `uv sync`

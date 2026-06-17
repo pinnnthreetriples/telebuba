@@ -17,7 +17,7 @@ edges:
     condition: when a convention is tied to a specific library
   - target: patterns/add-feature.md
     condition: when adding a new user-facing feature
-last_updated: 2026-06-16
+last_updated: 2026-06-17
 ---
 
 # Conventions
@@ -127,6 +127,78 @@ Run this checklist explicitly before presenting any code or committing:
 - Shared business logic lives in `services/`. Shared infrastructure lives in `core/`. Shared contracts live in `schemas/`.
 - Tests live in `tests/`, mirroring the source tree where practical (e.g. `features/accounts/` → `tests/features/`).
 - Full layer / import rules: `context/architecture.md`.
+
+## File Placement Guide
+
+The non-negotiables above say *which layer* code belongs in. This section says
+*which file inside that layer* it belongs in, so successive refactors don't
+keep undoing each other.
+
+### When to create a new file
+
+Create a new file when:
+
+- the new code owns a distinct concern;
+- the existing file is already ~150–200 lines and growing;
+- the existing file mixes UI rendering, event handlers, business logic,
+  adapters, or schemas in one place;
+- the new code will be tested in isolation;
+- the new code is used by several functions inside the same domain package.
+
+### Where each kind of code goes
+
+- **`features/<feature>/` — NiceGUI UI only.**
+  Page registration, rendering helpers, UI event handlers, dialogs / forms /
+  tables / cards. No business decisions. No DB/Telegram SDK imports.
+  Recommended layout for a larger feature:
+  - `__init__.py` — thin public re-export (typically `register_<feature>_page`)
+  - `_page.py` — route + page composition (`register_*_page`, `_render_*_page`)
+  - `_controller.py` — UI event handlers / page state
+  - `_header.py` / `_metrics.py` / `_table_section.py` / `_dialogs.py` / `_table.py`
+    — focused render modules
+- **`services/<domain>/` — business logic.**
+  State transitions, validation beyond UI, orchestration, account / session /
+  proxy / profile / domain operations, runtime workflows. Calls `core/*`
+  gateways. Returns Pydantic models.
+  Recommended layout:
+  - `__init__.py` — public API re-export only
+  - `lifecycle.py`, `sessions.py`, `proxy.py`, `profile.py`, `media.py`
+  - any further domain-specific modules split by concern
+- **`core/` — infrastructure only.**
+  DB metadata + repositories, Telegram gateway, Gemini / HTTP gateways,
+  config, logging, migrations, adapters around external SDKs.
+- **`schemas/` — Pydantic contracts only.**
+  Request models, response models, typed action models, enums / literals.
+  No I/O. No service / core / feature imports.
+- **`tests/`** — mirror the source tree where practical:
+  - `services/accounts/sessions.py` → `tests/services/test_accounts.py`
+    (or a focused module if the surface grows)
+  - `core/migrations.py` → `tests/core/test_migrations.py`
+  - architecture rules → `tests/test_architecture.py`
+
+### Package-root rule
+
+`__init__.py` should stay thin:
+
+- public re-export
+- route registration re-export
+- compatibility shim only
+
+Do **NOT** put growing business logic, UI controller logic, or large rendering
+blocks into `__init__.py`. If logic accumulates there, split it out before the
+next change.
+
+### Split triggers
+
+Split a file when any of these holds:
+
+- it has more than one reason to change;
+- it mixes rendering with event handling;
+- it mixes service orchestration with low-level adapter calls;
+- tests need to monkeypatch internal collaborators (each seam should live
+  on its owning submodule, not on the package root);
+- radon / aislop / maintainability gates start pushing back;
+- future agents would likely edit unrelated parts of the same file.
 
 ## Code Patterns
 

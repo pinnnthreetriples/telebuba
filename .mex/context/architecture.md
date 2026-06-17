@@ -55,11 +55,11 @@ telebuba/
 ├── schemas/                      Pydantic models; shared types, no behavior, no I/O
 │   └── <domain>.py               one file per domain contract
 ├── services/                     business logic — pure, reusable, no UI, no SDK imports
-│   ├── accounts/                 account/session/profile/proxy operations
+│   ├── accounts/                 thin re-export package; logic in lifecycle.py / sessions.py / proxy.py / profile.py / media.py + _table.py / _tdata.py / _uploads.py helpers
 │   └── warming/                  runtime workflow domain package
 ├── features/                     UI-thin NiceGUI pages/components; delegates logic to services/
-│   ├── accounts/
-│   ├── warming/
+│   ├── accounts/                 thin re-export of register_accounts_page; rendering split across _page.py / _controller.py / _header.py / _metrics.py / _table_section.py / _dialogs.py / _table.py
+│   ├── warming/                  thin composition root; split across _config.py / _channels.py / _board.py / _activity.py
 │   └── logs.py
 └── tests/                        mirrors source tree; pytest + property tests + architecture tests
 ```
