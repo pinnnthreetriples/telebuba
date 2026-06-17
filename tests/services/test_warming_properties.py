@@ -7,6 +7,7 @@ strict (200) / extended (2000) example budgets from ``conftest.py``.
 
 from __future__ import annotations
 
+import pytest
 from hypothesis import assume, given
 from hypothesis import strategies as st
 
@@ -20,9 +21,59 @@ from services.warming.channels import _normalize_channel
 _PREFIXES = ("https://t.me/", "http://t.me/", "t.me/", "telegram.me/")
 
 
-@given(raw=st.text())
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "https://t.me/testchannel",
+        "t.me/testchannel",
+        "@testchannel",
+        "t.me/+AbC_12345",
+        "t.me/joinchat/AbC_12345",
+    ],
+)
 def test_normalize_channel_output_is_clean(raw: str) -> None:
     """A non-None result is non-empty and carries no ``@`` / ``t.me`` prefix."""
+    result = _normalize_channel(raw)
+    assert result is not None
+    assert "https://" not in result
+    assert "t.me/" not in result
+    assert "@" not in result
+    assert not result.startswith("/")
+    assert not result.endswith("/")
+    if "single" in raw:
+        assert "?" not in result
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [
+        ("https://t.me/mychannel/123", "mychannel"),
+        ("t.me/mychannel/123?single", "mychannel"),
+        ("t.me/+AbC_12345", "+AbC_12345"),
+        ("t.me/joinchat/AbC_12345", "+AbC_12345"),
+        ("t.me/+AbC_12345?x=1", "+AbC_12345"),
+        ("t.me/joinchat/AbC_12345?x=1", "+AbC_12345"),
+    ],
+)
+def test_normalize_channel_exact_matches(raw: str, expected: str) -> None:
+    assert _normalize_channel(raw) == expected
+
+
+@pytest.mark.parametrize(
+    "raw",
+    [
+        "mychannel/123",
+        "t.me/c/1234567/1",
+        "c/12345",
+        "t.me/c/invalid",
+    ],
+)
+def test_normalize_channel_rejects_invalid(raw: str) -> None:
+    assert _normalize_channel(raw) is None
+
+
+@given(raw=st.text())
+def test_normalize_channel_property_is_clean(raw: str) -> None:
     result = _normalize_channel(raw)
     if result is not None:
         assert result

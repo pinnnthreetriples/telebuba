@@ -1449,8 +1449,55 @@ async def test_run_loop_iteration_increments_daily_counter(
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_count_date == datetime.now(UTC).date().isoformat()
-    # One channel per cycle: set_online + join + read + set_offline = 4 attempts.
-    assert record.daily_actions == 4
+    # One channel per cycle: set_online + join + read = 3 attempts (set_offline does not count).
+    assert record.daily_actions == 3
+
+
+@pytest.mark.asyncio
+async def test_cycle_hard_daily_limit_includes_cleanup(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    # Give it only 2 remaining actions: SetOnline(True) uses 1, Join uses 1.
+    # It should not attempt Read, but SetOnline(False) should still run.
+    result = await warming.run_one_cycle(
+        WarmingCycleRequest(account_id="acc-1", remaining_actions=2)
+    )
+
+    assert result.attempted_actions == 2
+    types = recorder.types()
+    assert types == ["set_online", "join_channel", "set_online"]
+    assert result.channels_joined == 1
+    assert result.channels_read == 0
+
+
+@pytest.mark.asyncio
+async def test_cycle_hard_daily_limit_react_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.5)
+    await _seed_channel()
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=True,
+        join_enabled=False,
+        gemini_api_key="",
+    )
+
+    result = await warming.run_one_cycle(
+        WarmingCycleRequest(account_id="acc-1", remaining_actions=2)
+    )
+
+    assert result.attempted_actions == 2
+    assert recorder.types() == ["set_online", "read_channel", "set_online"]
+    assert result.channels_read == 1
+    assert result.reactions_sent == 0
 
 
 # --------------------------------------------------------------------------- #
@@ -1555,3 +1602,107 @@ def test_loop_sleep_falls_back_without_schedule(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(settings.warming, "cycle_sleep_max_hours", 1.0)
     value = warming._loop_sleep_seconds(None, datetime(2026, 6, 12, 0, 0, tzinfo=UTC))
     assert value == pytest.approx(3600)
+
+
+@pytest.mark.asyncio
+async def test_cycle_diagnostics_chat_failure(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    await _seed_two_warming_accounts()
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="error", text=None)
+
+    monkeypatch.setattr(_seams, "generate_text", fake_generate)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.last_failed_action == "generate_chat_text"
+
+
+@pytest.mark.asyncio
+async def test_start_warming_refreshes_pairs_before_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    async def fake_refresh() -> None:
+        calls.append("refresh")
+
+    async def fake_loop(_account_id: str) -> None:
+        calls.append("loop")
+
+    monkeypatch.setattr("services.warming._runtime._refresh_dialogue_pairs", fake_refresh)
+    monkeypatch.setattr("services.warming._runtime._warming_loop", fake_loop)
+    from schemas.warming import WarmingReadiness  # noqa: PLC0415
+
+    monkeypatch.setattr(
+        "services.warming._runtime.evaluate_readiness",
+        lambda *_a, **_kw: WarmingReadiness(ready=True, reasons=[]),
+    )
+
+    await create_account(AccountCreate(account_id="acc-a"))
+    await _set_settings(chat=True, reactions=False, key="test")
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-a"))
+
+    # Verify order
+    assert calls == ["refresh", "loop"]
+
+
+@pytest.mark.asyncio
+async def test_joined_channels_cleanup_on_channel_remove() -> None:
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from core.db import (  # noqa: PLC0415
+        _get_engine,
+        _warming_joined_channels,
+        add_warming_channel,
+        record_channel_joined,
+    )
+    from services.warming.channels import remove_warming_channel  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-a"))
+    await add_warming_channel("testchan")
+    await record_channel_joined("acc-a", "testchan")
+
+    # Verify it exists
+    with _get_engine().connect() as conn:
+        res = conn.execute(select(_warming_joined_channels)).all()
+        assert len(res) == 1
+
+    # Remove channel
+    await remove_warming_channel("testchan")
+
+    # Verify cascade delete
+    with _get_engine().connect() as conn:
+        res = conn.execute(select(_warming_joined_channels)).all()
+        assert len(res) == 0
+
+
+@pytest.mark.asyncio
+async def test_joined_channels_cleanup_on_account_delete() -> None:
+    import asyncio  # noqa: PLC0415
+
+    from sqlalchemy import select  # noqa: PLC0415
+
+    from core.db import (  # noqa: PLC0415
+        _get_engine,
+        _warming_joined_channels,
+        add_warming_channel,
+        record_channel_joined,
+    )
+    from core.repositories.accounts import _delete_account  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-a"))
+    await add_warming_channel("testchan")
+    await record_channel_joined("acc-a", "testchan")
+
+    # Remove account
+    await asyncio.to_thread(_delete_account, "acc-a")
+
+    # Verify cascade delete
+    with _get_engine().connect() as conn:
+        res = conn.execute(select(_warming_joined_channels)).all()
+        assert len(res) == 0

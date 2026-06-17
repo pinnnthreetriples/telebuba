@@ -25,6 +25,7 @@ from core.db import (
     _required_int,
     _warming_account_state,
     _warming_channels,
+    _warming_joined_channels,
     _warming_settings,
 )
 from schemas.warming import (
@@ -82,6 +83,9 @@ async def add_warming_channel(channel: str, label: str | None = None) -> Warming
 
 def _remove_warming_channel(channel: str) -> WarmingChannelList:
     with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_warming_joined_channels).where(_warming_joined_channels.c.channel == channel),
+        )
         connection.execute(
             delete(_warming_channels).where(_warming_channels.c.channel == channel),
         )

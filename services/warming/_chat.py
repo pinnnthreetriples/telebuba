@@ -52,11 +52,18 @@ _REPLY_PROMPT = (
 
 
 @dataclasses.dataclass
+class GenerateResult:
+    text: str | None = None
+    failure_reason: str | None = None
+
+
+@dataclasses.dataclass
 class ChatResult:
     messages_sent: int = 0
     failures: int = 0
     attempted_actions: int = 0
     flood_result: ActionResult | None = None
+    last_failed_action: str | None = None
 
 
 def _sanitize_chat_text(raw: str) -> str | None:
@@ -77,13 +84,14 @@ async def _generate_chat_text(
     secret: WarmingSettingsSecret,
     *,
     prompt: str | None = None,
-) -> str | None:
+) -> GenerateResult:
     """Generate a chat line, retrying until it passes the filter and dedup.
 
     ``prompt`` overrides the random opener (used for context-aware replies).
-    Returns ``None`` if generation fails outright or no acceptable, non-duplicate
-    text is produced within ``content_max_attempts`` tries.
+    Returns ``GenerateResult`` with text if successful, or the specific
+    failure reason.
     """
+    failure = "generate_chat_text"
     for _ in range(settings.warming.content_max_attempts):
         generated = await _seams.generate_text(
             GeminiRequest(
@@ -101,18 +109,20 @@ async def _generate_chat_text(
                 account_id=sender_id,
                 extra={"error": generated.error},
             )
-            return None
+            return GenerateResult(failure_reason="generate_chat_text")
         candidate = _sanitize_chat_text(generated.text)
         if candidate is None:
             continue
         if not is_acceptable(candidate):
             await log_event("INFO", "warming_chat_filtered", account_id=sender_id)
+            failure = "chat_content_filtered"
             continue
         if not await try_reserve_sent(candidate):
             await log_event("INFO", "warming_chat_duplicate", account_id=sender_id)
+            failure = "chat_duplicate"
             continue
-        return candidate
-    return None
+        return GenerateResult(text=candidate)
+    return GenerateResult(failure_reason=failure)
 
 
 async def _maybe_inter_account_chat(
@@ -156,13 +166,14 @@ async def _reply_to_partner(  # noqa: PLR0911
             extra={"with": incoming.from_account},
         )
         return ChatResult()
-    text = await _generate_chat_text(
+    gen = await _generate_chat_text(
         sender_id,
         secret,
         prompt=_REPLY_PROMPT.format(incoming=incoming.text),
     )
-    if text is None:
-        return ChatResult(failures=1)
+    if gen.text is None:
+        return ChatResult(failures=1, last_failed_action=gen.failure_reason)
+    text = gen.text
     # Atomic claim before send: collapses ``latest_unreplied_for`` + ``mark``
     # into one UPDATE WHERE replied=0 so two parallel cycles cannot both
     # answer the same incoming message. Send-failure after a claim drops the
@@ -173,9 +184,9 @@ async def _reply_to_partner(  # noqa: PLR0911
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
 
     if result.status in ("flood_wait", "peer_flood", "slow_mode_wait", "premium_wait"):
-        return ChatResult(attempted_actions=1, flood_result=result)
+        return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
-        return ChatResult(failures=1, attempted_actions=1)
+        return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.
     await record_dialogue_message(sender_id, incoming.from_account, text)
@@ -214,16 +225,17 @@ async def _open_with_partner(
     target = _seams.rng.choice(candidates)
     if target.user_id is None:
         return ChatResult()
-    text = await _generate_chat_text(sender_id, secret)
-    if text is None:
-        return ChatResult(failures=1)
+    gen = await _generate_chat_text(sender_id, secret)
+    if gen.text is None:
+        return ChatResult(failures=1, last_failed_action=gen.failure_reason)
+    text = gen.text
     # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
 
     if result.status in ("flood_wait", "peer_flood", "slow_mode_wait", "premium_wait"):
-        return ChatResult(attempted_actions=1, flood_result=result)
+        return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
-        return ChatResult(failures=1, attempted_actions=1)
+        return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
 
     await record_dialogue_message(sender_id, target.account_id, text)
     await log_event(
