@@ -2333,32 +2333,66 @@ async def test_start_warming_mints_fresh_run_id(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
-async def test_concurrent_create_duplicate_session_name_raises_domain_error() -> None:
-    """P2.5: a duplicate-session_name race must raise a typed domain error.
+async def test_create_account_post_integrity_branch_raises_domain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2.5: post-IntegrityError branch raises DuplicateSessionNameError.
 
-    When two creates race on the same session_name, the loser gets
-    DuplicateSessionNameError (typed domain error), never RuntimeError.
+    The IntegrityError-on-INSERT branch translates the unique-index violation
+    into DuplicateSessionNameError, not RuntimeError.
 
-    Two parallel create_account calls with the same session_name go through
-    asyncio.to_thread (separate connections). One wins the cooperative
-    pre-check + INSERT; the other's INSERT trips migration #7's unique index.
-    The post-IntegrityError branch in ``_create_account`` must translate that
-    into a DuplicateSessionNameError, not pass through to the catch-all
-    "Account was not persisted" RuntimeError.
+    Drives the post-IntegrityError path deterministically by patching the
+    cooperative pre-check SELECT to return None, so the INSERT actually fires
+    and the migration-#7 unique index raises IntegrityError. The fix must
+    re-read after the IntegrityError, find the conflict, and surface the
+    typed domain error — never the catch-all "Account was not persisted".
+
+    A live asyncio.gather race would be the ideal regression test, but
+    SQLite + WAL + busy_timeout produces non-deterministic OperationalError
+    ('database is locked') under thread contention, so we stick to the
+    deterministic unit shape.
     """
+    from core.repositories import accounts as accounts_repo  # noqa: PLC0415
     from core.repositories.accounts import DuplicateSessionNameError  # noqa: PLC0415
 
-    results = await asyncio.gather(
-        create_account(AccountCreate(account_id="acc-1", session_name="shared")),
-        create_account(AccountCreate(account_id="acc-2", session_name="shared")),
-        return_exceptions=True,
-    )
+    # Plant the conflicting row first.
+    await create_account(AccountCreate(account_id="acc-1", session_name="shared"))
 
-    successes = [r for r in results if not isinstance(r, BaseException)]
-    failures = [r for r in results if isinstance(r, BaseException)]
-    assert len(successes) == 1
-    assert len(failures) == 1
-    assert isinstance(failures[0], DuplicateSessionNameError)
+    # Patch the pre-check SELECT to always return None so the second create
+    # proceeds straight to INSERT and trips the unique index.
+    original_create = accounts_repo._create_account
+
+    def patched_create(data):  # type: ignore[no-untyped-def]
+        # Temporarily blind the pre-check by patching select() inside the
+        # accounts module to return a SELECT that yields no rows on .first().
+        original_select = accounts_repo.select
+        call_count = {"n": 0}
+
+        class _NullFirst:
+            def first(self) -> None:
+                return None
+
+        def _select_returning_null(*args, **kwargs):  # type: ignore[no-untyped-def]
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                # The first select() call inside _create_account is the
+                # pre-check. Return a SELECT that genuinely won't match the
+                # conflict so the INSERT path runs.
+                return original_select(
+                    accounts_repo._accounts.c.account_id,
+                ).where(accounts_repo._accounts.c.account_id == "__no_such_id__")
+            return original_select(*args, **kwargs)
+
+        monkeypatch.setattr(accounts_repo, "select", _select_returning_null)
+        try:
+            return original_create(data)
+        finally:
+            monkeypatch.setattr(accounts_repo, "select", original_select)
+
+    monkeypatch.setattr(accounts_repo, "_create_account", patched_create)
+
+    with pytest.raises(DuplicateSessionNameError):
+        await create_account(AccountCreate(account_id="acc-2", session_name="shared"))
 
 
 @pytest.mark.asyncio
