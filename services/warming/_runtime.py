@@ -12,6 +12,7 @@ patch it on this module.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -123,10 +124,20 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             flood_wait_until=None,
             proxy_snapshot=_proxy_snapshot(account),
         )
-        existing = _RUNTIME.get(data.account_id)
-        if existing is None or existing.done():
-            await _refresh_dialogue_pairs()
-            _RUNTIME[data.account_id] = asyncio.create_task(_warming_loop(data.account_id))
+        # F2: an existing task may still be inside the inter-cycle
+        # ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous*
+        # ``next_run_at``. We just cleared that schedule, so the only way to
+        # honour the operator's "start now" is to cancel and replace the task.
+        existing = _RUNTIME.pop(data.account_id, None)
+        if existing is not None and not existing.done():
+            existing.cancel()
+            with suppress(TimeoutError, asyncio.CancelledError):
+                await asyncio.wait_for(
+                    asyncio.shield(existing),
+                    timeout=settings.warming.stop_cancel_timeout_seconds,
+                )
+        await _refresh_dialogue_pairs()
+        _RUNTIME[data.account_id] = asyncio.create_task(_warming_loop(data.account_id))
     await log_event("INFO", "warming_started", account_id=data.account_id)
     return await _current_card(data.account_id)
 

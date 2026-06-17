@@ -1871,3 +1871,43 @@ async def test_stop_does_not_get_overwritten_by_inflight_cycle(
     state = await fetch_warming_state("acc-1")
     assert state is not None
     assert state.state == "idle"
+
+
+@pytest.mark.asyncio
+async def test_manual_start_replaces_existing_loop_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F2: re-starting an account must cancel a still-sleeping loop and create a fresh task."""
+    started: list[str] = []
+    cancelled = asyncio.Event()
+
+    async def fake_loop(account_id: str) -> None:
+        started.append(account_id)
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    monkeypatch.setattr(settings.warming, "enforce_readiness", False)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    first_task = warming._RUNTIME["acc-1"]
+    await asyncio.sleep(0)
+    assert started == ["acc-1"]
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    second_task = warming._RUNTIME["acc-1"]
+    await asyncio.sleep(0)
+
+    assert second_task is not first_task
+    assert cancelled.is_set()
+    assert started == ["acc-1", "acc-1"]
