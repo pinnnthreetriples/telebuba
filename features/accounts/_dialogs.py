@@ -6,7 +6,13 @@ proxy label/port helpers are pure and unit-tested.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+import os
+import shutil
+import tempfile
+from contextlib import suppress
+from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
@@ -72,17 +78,23 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
             await refresh()
 
         async def handle_tdata_upload(event: UploadEventArguments) -> None:
+            # Stream the upload to a temp file rather than reading the entire
+            # archive into RAM (1 GB cap × Pydantic copy = ~2 GB peak otherwise).
+            tmp = await asyncio.to_thread(_spool_upload_to_tempfile, event.file)
             try:
                 accounts = await import_account_tdata(
                     TdataConvertRequest(
                         filename=event.file.name,
-                        content=await event.file.read(),
+                        content_path=tmp,
                         label=label.value or None,
                     ),
                 )
             except ValueError as exc:
                 ui.notify(_service_error_label(str(exc)), type="warning")
                 return
+            finally:
+                with suppress(OSError):
+                    tmp.unlink()
             dialog.close()
             ui.notify(f"Импортировано аккаунтов из tdata: {len(accounts)}", type="positive")
             await refresh()
@@ -115,6 +127,25 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
         with ui.row().classes("w-full justify-end gap-2"):
             ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip("Отмена")
     dialog.open()
+
+
+def _spool_upload_to_tempfile(file: Any) -> Path:  # noqa: ANN401 - NiceGUI's FileUpload has no public stable type.
+    """Copy a NiceGUI upload into a private temp file by streaming chunks.
+
+    Reading ``event.file`` end-to-end into RAM is what blows up at 1 GB
+    uploads. ``shutil.copyfileobj`` does a fixed-buffer stream copy, so peak
+    memory stays at the buffer size regardless of archive size. The caller is
+    responsible for unlinking the returned path.
+    """
+    fd, tmp_path = tempfile.mkstemp(prefix="telebuba_tdata_", suffix=".zip")
+    try:
+        with os.fdopen(fd, "wb") as dst:
+            shutil.copyfileobj(file, dst)
+    except Exception:
+        with suppress(OSError):
+            Path(tmp_path).unlink()
+        raise
+    return Path(tmp_path)
 
 
 def _profile_text_tab(

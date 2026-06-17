@@ -6,9 +6,10 @@ opentele2 SDK lives behind ``core.tdata_import`` and never leaks out.
 
 from __future__ import annotations
 
+from pathlib import Path  # noqa: TC003 - Pydantic needs the runtime class for field schema.
 from typing import Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 TdataConvertStatus = Literal[
     "ok",
@@ -24,11 +25,26 @@ TdataConvertStatus = Literal[
 
 
 class TdataConvertRequest(BaseModel):
-    """User-supplied tdata.zip ready for conversion."""
+    """User-supplied tdata.zip ready for conversion.
+
+    Either ``content`` (in-memory bytes) or ``content_path`` (filesystem) must
+    be set. UI uploads stream to a temp file and pass ``content_path`` so a
+    1 GB archive never sits in RAM; CLI / test callers may still pass ``content``.
+    """
+
+    model_config = {"arbitrary_types_allowed": True}
 
     filename: str = Field(min_length=1)
-    content: bytes = Field(min_length=1)
+    content: bytes = Field(default=b"")
+    content_path: Path | None = None
     label: str | None = Field(default=None, min_length=1)
+
+    @model_validator(mode="after")
+    def _exactly_one_payload(self) -> TdataConvertRequest:
+        if not self.content and self.content_path is None:
+            msg = "TdataConvertRequest needs either content or content_path"
+            raise ValueError(msg)
+        return self
 
 
 class TdataAccountSummary(BaseModel):

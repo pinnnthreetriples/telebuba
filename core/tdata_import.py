@@ -80,13 +80,19 @@ def _is_symlink_entry(info: zipfile.ZipInfo) -> bool:
     return mode == _POSIX_SYMLINK_MODE
 
 
-def _safe_extract_zip(content: bytes, dest: Path) -> TdataConvertStatus | None:
+def _safe_extract_zip(
+    source: bytes | Path,
+    dest: Path,
+) -> TdataConvertStatus | None:
     """Validate the zip and extract into ``dest``.
 
-    Returns None on success, or a non-ok ``TdataConvertStatus`` on rejection.
+    ``source`` may be the raw archive bytes (used by CLI / tests) or a Path to
+    a temp file (UI uploads stream there to keep RAM flat). Returns None on
+    success, or a non-ok ``TdataConvertStatus`` on rejection.
     """
+    handle: io.BytesIO | Path = io.BytesIO(source) if isinstance(source, bytes) else source
     try:
-        zf = zipfile.ZipFile(io.BytesIO(content))
+        zf = zipfile.ZipFile(handle)
     except zipfile.BadZipFile:
         return "invalid_zip"
 
@@ -144,7 +150,8 @@ async def convert_tdata_zip(
         ),
     )
     try:
-        reject = _safe_extract_zip(req.content, tmp_dir)
+        source: bytes | Path = req.content_path if req.content_path is not None else req.content
+        reject = _safe_extract_zip(source, tmp_dir)
         if reject is not None:
             return TdataConvertResult(status=reject)
 
