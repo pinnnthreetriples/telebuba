@@ -14,6 +14,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import delete, insert, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from core.config import settings
@@ -284,6 +285,11 @@ async def fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
 
 
 def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
+    # F9: previous select-then-insert/update is racy — two writers in the same
+    # account-lock-bypassing path (stop_warming / reconcile / loop's late
+    # final write) could observe the same pre-state and clobber each other's
+    # updates. Collapse to a single sqlite_insert ON CONFLICT DO UPDATE so the
+    # whole upsert runs under SQLite's implicit write lock.
     now = _now_iso()
     values: dict[str, object | None] = {
         "state": data.state,
@@ -305,22 +311,16 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "daily_count_date": data.daily_count_date,
         "quarantine_count": data.quarantine_count,
     }
+    stmt = (
+        sqlite_insert(_warming_account_state)
+        .values(account_id=data.account_id, **values)
+        .on_conflict_do_update(
+            index_elements=[_warming_account_state.c.account_id],
+            set_=values,
+        )
+    )
     with _get_engine().begin() as connection:
-        exists = connection.execute(
-            select(_warming_account_state.c.account_id).where(
-                _warming_account_state.c.account_id == data.account_id,
-            ),
-        ).first()
-        if exists is None:
-            connection.execute(
-                insert(_warming_account_state).values(account_id=data.account_id, **values),
-            )
-        else:
-            connection.execute(
-                update(_warming_account_state)
-                .where(_warming_account_state.c.account_id == data.account_id)
-                .values(**values),
-            )
+        connection.execute(stmt)
     record = _fetch_warming_state(data.account_id)
     if record is None:
         msg = f"Warming state was not persisted: {data.account_id}"
