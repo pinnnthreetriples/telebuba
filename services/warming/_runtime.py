@@ -339,16 +339,25 @@ async def _warming_loop(account_id: str) -> None:  # pragma: no cover - long-run
 
     Never raises to the caller. On (re)start it respects an existing schedule so
     an app restart does not turn parked accounts into an activity spike.
+
+    P1.1: exits whenever the DB state is no longer a warming state (idle,
+    stopped, error). Without this, a task that survived a cancel — or was
+    created in error — would keep spinning even after the operator stopped
+    the account, periodically overwriting ``idle`` with ``active`` at the
+    next ``cycle_started`` write.
     """
     try:
         record = await fetch_warming_state(account_id)
-        if record is not None and record.state == "error":
+        if record is None or not is_warming(record.state) or record.state == "error":
             return
         await asyncio.sleep(_initial_delay_seconds(record, datetime.now(UTC)))
         while True:
+            record = await fetch_warming_state(account_id)
+            if record is None or not is_warming(record.state) or record.state == "error":
+                break
             await run_loop_iteration(account_id)
             record = await fetch_warming_state(account_id)
-            if record is not None and record.state == "error":
+            if record is None or not is_warming(record.state) or record.state == "error":
                 break
             await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
     except asyncio.CancelledError:

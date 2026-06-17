@@ -2187,3 +2187,52 @@ async def test_migration_unique_session_name_handles_existing_duplicates(
             "SELECT account_id FROM schema_remediations WHERE migration = 7",
         ).all()
         assert [r[0] for r in remediations] == ["acc-2"]
+
+
+@pytest.mark.asyncio
+async def test_warming_loop_exits_when_state_becomes_idle_after_iteration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P1.1: a loop that survives stop_warming must exit on the next idle re-read.
+
+    Simulates a runaway loop by patching ``run_loop_iteration`` to flip state to
+    ``idle`` (the stop_warming effect) without actually cancelling the task.
+    The loop must observe the idle row on the next fetch and break — *not*
+    overwrite it with another cycle_started.
+    """
+    iterations: list[str] = []
+
+    async def fake_iteration(account_id: str) -> WarmingCycleResult:
+        iterations.append(account_id)
+        await upsert_warming_state(WarmingStateWrite(account_id=account_id, state="idle"))
+        return WarmingCycleResult(account_id=account_id, status="ok")
+
+    monkeypatch.setattr(_runtime, "run_loop_iteration", fake_iteration)
+    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    await _runtime._warming_loop("acc-1")
+
+    assert iterations == ["acc-1"]
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_bails_when_state_already_idle() -> None:
+    """P1.1: a stale iteration started for an already-stopped account is a no-op."""
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
+
+    result = await run_loop_iteration("acc-1")
+    assert result.status == "skipped"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The early-exit did NOT overwrite ``idle`` with ``cycle_started``.
+    assert state.state == "idle"

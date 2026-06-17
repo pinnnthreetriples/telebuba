@@ -155,6 +155,12 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     controls = await load_warming_settings()
     record = await fetch_warming_state(account_id)
 
+    # P1.1: if the operator stopped the account before this iteration ran,
+    # do not overwrite ``idle`` with ``cycle_started`` (the early _set_state
+    # below). Bail before touching the row.
+    if record is not None and record.state == "idle":
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="idle")
+
     if record is not None and record.state == "quarantine":
         return await _recover_from_quarantine(account_id, record, now)
 
