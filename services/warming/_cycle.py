@@ -313,6 +313,8 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
             messages_sent = chat_result.messages_sent
             tally.attempts += chat_result.attempted_actions
             tally.failures += chat_result.failures
+            if chat_result.failures > 0 and not chat_result.flood_result:
+                tally.last_failed_action = "send_dm"
             if chat_result.flood_result:
                 if chat_result.flood_result.status == "peer_flood":
                     tally.peer_flooded = True
