@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-06-17
+last_updated: 2026-06-18
 ---
 
 # Active State
@@ -29,7 +29,7 @@ This file is the only place that should change after every meaningful task. `ROU
 - `services/accounts/` is a thin re-export package. Implementations live in per-concern submodules: `lifecycle.py` (registration + geo), `sessions.py` (`.session` and tdata import + liveness check, with the `_tdata`/`_uploads`/`_table` helpers), `proxy.py`, `profile.py`, `media.py`. Tests monkeypatch external collaborators on the owning submodule (`services.accounts.sessions.convert_tdata_zip`, `services.accounts.proxy.check_proxy_connectivity`, `services.accounts.profile.execute`, `services.accounts.media.execute`).
 - `import_account_tdata` returns a `TdataImportResult` Pydantic wrapper rather than a raw `list[AccountRead]`, keeping the service boundary Pydantic-only and leaving room for per-import metadata. Same treatment applied to `services.dialogues.get_partners` → `DialoguePartnersResult` and `services.dialogues.assign_pairs` → `DialoguePairsResult`.
 - `tests/test_architecture.py` walks each layer with `rglob("*.py")` (no auto-skip for `__init__.py`), adds a cross-feature isolation test, and a regression test that the package submodules (`services/accounts/`, `services/warming/`, `features/accounts/`, `features/warming/`, `core/telegram_client/`, `core/repositories/`) are actually reached by the scan.
-- `features/accounts/` is a NiceGUI page package for account metrics, filters, table, import dialogs, profile/proxy controls, and session checks.
+- `features/accounts/` is a NiceGUI page package, split into focused rendering modules: `_header.py` (toolbar + nav), `_metrics.py` (metric tiles), `_table_section.py` (search + table), `_controller.py` (event handlers / page state), `_page.py` (route + wiring), `_dialogs.py`, `_table.py`. `__init__.py` is re-export only — `register_accounts_page` is the public entry. The controller catches `ValueError` from `check_account_session` and surfaces it via `ui.notify` instead of letting it escape into NiceGUI's logs.
 - `services/warming/` is a package. Submodules: `channels.py`, `settings_store.py`, `board.py`, `pacing.py`, `_seams.py`, `_state.py`, `_chat.py`, `_cycle.py`, `_loop.py`, `_runtime.py`.
 - `features/warming/` is a UI-only package for config cards, channel UI, board rendering, and activity/log UI.
 - Warming runtime model is resolved: per-account `asyncio.Task`s owned by `services/warming/_runtime.py`, not APScheduler.
@@ -47,7 +47,6 @@ This file is the only place that should change after every meaningful task. `ROU
 ## Known Issues
 
 - `aislop --version` can fail on Windows due to a space in the Python path. Use `uv run python -m aislop` if direct CLI invocation fails.
-- `features/accounts/__init__.py` remains a large UI composer (264 lines: page builders + controller); consider splitting later. Out of scope for the current refactor — pre-existing, not touched by the architecture pass.
 
 ## Open Decisions
 

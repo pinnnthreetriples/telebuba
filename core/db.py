@@ -1,11 +1,14 @@
-"""Shared SQLite plumbing — schema, engine, additive migrations, generic helpers.
+"""Shared SQLite plumbing — schema, engine, generic helpers.
 
 This module owns the SQLAlchemy ``MetaData``, every table definition, engine
-lifecycle, the additive-migration hook, and the small row/value helpers shared
-across aggregates. The per-aggregate query functions live in
-``core/repositories/<aggregate>.py`` (split out for #38); they import the table
-objects and helpers below, and this module re-exports their public functions at
-the bottom so existing ``from core.db import ...`` call sites keep working.
+lifecycle, and the small row/value helpers shared across aggregates. Schema
+evolution is delegated to :mod:`core.migrations` — ``_get_engine`` calls
+``apply_migrations`` after ``create_all`` so every unstamped migration runs
+once. The per-aggregate query functions live in
+``core/repositories/<aggregate>.py`` (split out for #38); they import the
+table objects and helpers below, and this module re-exports their public
+functions at the bottom so existing ``from core.db import ...`` call sites
+keep working.
 """
 
 from __future__ import annotations
