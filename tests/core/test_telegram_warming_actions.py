@@ -43,7 +43,11 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     async def fake_cm(_request: object):
         yield client
 
+    async def fake_fetch(account_id: str):
+        return MagicMock(session_name=account_id)
+
     monkeypatch.setattr("core.telegram_client._actions.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._actions.fetch_account", fake_fetch)
 
 
 @pytest.mark.asyncio
