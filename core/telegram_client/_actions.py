@@ -76,6 +76,22 @@ async def _flood_action_result(
     )
 
 
+async def _generic_error(account_id: str, action: TelegramAction, exc: Exception) -> ActionResult:
+    await log_event(
+        "ERROR",
+        f"telegram_{action.action_type}_failed",
+        account_id=account_id,
+        extra={"error_type": type(exc).__name__, "message": str(exc)},
+    )
+    return ActionResult(
+        status="failed",
+        action_type=action.action_type,
+        account_id=account_id,
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+    )
+
+
 async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: PLR0911
     """Dispatch a typed Telegram action against ``account_id``.
 
@@ -102,17 +118,17 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
             message_id = await _dispatch_action(client, action)
         except errors.SlowModeWaitError as exc:
             return await _flood_action_result(
-                account_id,
-                action,
-                status="slow_mode_wait",
-                seconds=exc.seconds,
+                account_id, action, status="slow_mode_wait", seconds=exc.seconds
             )
         except errors.FloodPremiumWaitError as exc:
             return await _flood_action_result(
-                account_id,
-                action,
-                status="premium_wait",
-                seconds=exc.seconds,
+                account_id, action, status="premium_wait", seconds=exc.seconds
+            )
+        except errors.PeerFloodError:
+            return await _flood_action_result(account_id, action, status="peer_flood", seconds=None)
+        except errors.FloodWaitError as exc:
+            return await _flood_action_result(
+                account_id, action, status="flood_wait", seconds=exc.seconds
             )
         except errors.UserAlreadyParticipantError as exc:
             if action.action_type == "join_channel":
@@ -123,52 +139,11 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
                     extra={"channel": getattr(action, "channel", None)},
                 )
                 return ActionResult(
-                    status="ok",
-                    action_type=action.action_type,
-                    account_id=account_id,
+                    status="ok", action_type=action.action_type, account_id=account_id
                 )
-            # Re-raise or fall through to generic Exception handler if it happens elsewhere.
-            await log_event(
-                "ERROR",
-                f"telegram_{action.action_type}_failed",
-                account_id=account_id,
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
-            )
-            return ActionResult(
-                status="failed",
-                action_type=action.action_type,
-                account_id=account_id,
-                error_type=type(exc).__name__,
-                error_message=str(exc),
-            )
-        except errors.PeerFloodError:
-            return await _flood_action_result(
-                account_id,
-                action,
-                status="peer_flood",
-                seconds=None,
-            )
-        except errors.FloodWaitError as exc:
-            return await _flood_action_result(
-                account_id,
-                action,
-                status="flood_wait",
-                seconds=exc.seconds,
-            )
-        except Exception as exc:  # noqa: BLE001 — Telethon throws diverse errors; classify and report.
-            await log_event(
-                "ERROR",
-                f"telegram_{action.action_type}_failed",
-                account_id=account_id,
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
-            )
-            return ActionResult(
-                status="failed",
-                action_type=action.action_type,
-                account_id=account_id,
-                error_type=type(exc).__name__,
-                error_message=str(exc),
-            )
+            return await _generic_error(account_id, action, exc)
+        except Exception as exc:  # noqa: BLE001
+            return await _generic_error(account_id, action, exc)
 
     await log_event(
         "INFO",
