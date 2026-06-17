@@ -20,6 +20,7 @@ from sqlalchemy import (
     BigInteger,
     Column,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
     String,
@@ -67,6 +68,10 @@ _accounts = Table(
     Column("last_checked_at", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+    # F5: two accounts pointing at the same .session file would race on the
+    # same Telethon SQLite session DB. SQLite treats NULLs as distinct in a
+    # UNIQUE index, so accounts without a custom session_name still coexist.
+    Index("ix_accounts_session_name_unique", "session_name", unique=True),
 )
 _account_proxies = Table(
     "account_proxies",
@@ -261,6 +266,7 @@ from core.repositories._proxies import (  # noqa: E402, F401
     upsert_account_proxy,
 )
 from core.repositories.accounts import (  # noqa: E402, F401
+    DuplicateSessionNameError,
     account_summary_counts,
     create_account,
     delete_account,

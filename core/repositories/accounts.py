@@ -44,6 +44,10 @@ if TYPE_CHECKING:
 _MASK_PASSTHROUGH_LENGTH = 2
 
 
+class DuplicateSessionNameError(ValueError):
+    """Two accounts cannot share one Telethon session file (F5)."""
+
+
 def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
     return AccountRead(
         account_id=str(mapping["account_id"]),
@@ -137,8 +141,24 @@ def _create_account(data: AccountCreate) -> AccountRead:
         "created_at": now,
         "updated_at": now,
     }
-    with _get_engine().begin() as connection, suppress(IntegrityError):
-        connection.execute(insert(_accounts).values(**values))
+    with _get_engine().begin() as connection:
+        # F5: reject a different account claiming the same Telethon session
+        # file. Existing-account_id with same session_name is fine — the insert
+        # below is idempotent (IntegrityError on PK is suppressed).
+        if data.session_name is not None:
+            conflict = connection.execute(
+                select(_accounts.c.account_id).where(
+                    (_accounts.c.session_name == data.session_name)
+                    & (_accounts.c.account_id != data.account_id),
+                ),
+            ).first()
+            if conflict is not None:
+                msg = (
+                    f"Session name {data.session_name!r} is already used by account {conflict[0]!r}"
+                )
+                raise DuplicateSessionNameError(msg)
+        with suppress(IntegrityError):
+            connection.execute(insert(_accounts).values(**values))
     account = _fetch_account(data.account_id)
     if account is None:
         msg = f"Account was not persisted: {data.account_id}"

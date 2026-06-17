@@ -1826,3 +1826,21 @@ async def test_delete_account_with_all_related_rows() -> None:
             ).all()
             == []
         )
+
+
+@pytest.mark.asyncio
+async def test_create_account_rejects_duplicate_session_name() -> None:
+    """F5: two accounts cannot share one Telethon session file."""
+    from core.repositories.accounts import DuplicateSessionNameError  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1", session_name="shared"))
+    with pytest.raises(DuplicateSessionNameError):
+        await create_account(AccountCreate(account_id="acc-2", session_name="shared"))
+
+
+@pytest.mark.asyncio
+async def test_create_account_allows_multiple_null_session_names() -> None:
+    """F5: NULL session_name is not a value, so accounts without one can coexist."""
+    await create_account(AccountCreate(account_id="acc-1"))
+    await create_account(AccountCreate(account_id="acc-2"))
+    # No exception — both rows persist.

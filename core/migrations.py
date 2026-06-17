@@ -131,6 +131,16 @@ def _add_warming_joined_channels(connection: Connection) -> None:
     )
 
 
+def _add_unique_session_name_index(connection: Connection) -> None:
+    # F5: forbid two accounts from sharing a Telethon .session file.
+    # SQLite treats NULLs as distinct in a UNIQUE index, so NULL session_names
+    # remain free to coexist for accounts that don't override the path.
+    connection.exec_driver_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_accounts_session_name_unique "
+        "ON accounts(session_name)",
+    )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -140,6 +150,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (4, "add_warming_join_enabled", _add_warming_join_enabled),
     (5, "add_warming_user_controls", _add_warming_user_controls),
     (6, "add_warming_joined_channels", _add_warming_joined_channels),
+    (7, "add_unique_session_name_index", _add_unique_session_name_index),
 )
 
 
