@@ -115,7 +115,13 @@ async def _render_activity_log() -> None:  # pragma: no cover
             state = await load_logs_page(LogFilter(limit=limit))
             entries = state.entries
             if warming_only_switch.value:
-                entries = [entry for entry in entries if entry.event.startswith("warming_")]
+                entries = [
+                    entry
+                    for entry in entries
+                    if entry.event.startswith("warming_")
+                    or entry.event.startswith("telegram_")
+                    or entry.event.startswith("dialogue_")
+                ]
             entries = entries[:_LOG_LIMIT]
             # Only rebuild when the visible set of entries changed — otherwise the
             # feed re-mounts every poll and visibly blinks.

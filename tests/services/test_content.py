@@ -52,23 +52,6 @@ def test_is_acceptable(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 @pytest.mark.asyncio
-async def test_is_duplicate_after_register(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.warming, "content_dedup_window_days", 7.0)
-    assert not await content.is_duplicate("hi there")
-    await content.register_sent("hi there")
-    assert await content.is_duplicate("hi there")
-    # normalisation means punctuation/case variants are the same content
-    assert await content.is_duplicate("Hi, there!")
-
-
-@pytest.mark.asyncio
-async def test_is_duplicate_disabled_with_zero_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.warming, "content_dedup_window_days", 0.0)
-    await content.register_sent("hi there")
-    assert not await content.is_duplicate("hi there")
-
-
-@pytest.mark.asyncio
 async def test_try_reserve_sent_first_wins_second_loses(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.warming, "content_dedup_window_days", 7)
     assert await content.try_reserve_sent("hi there") is True

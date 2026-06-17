@@ -1449,8 +1449,8 @@ async def test_run_loop_iteration_increments_daily_counter(
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_count_date == datetime.now(UTC).date().isoformat()
-    # One channel per cycle: join + read = 2 actions.
-    assert record.daily_actions == 2
+    # One channel per cycle: set_online + join + read + set_offline = 4 attempts.
+    assert record.daily_actions == 4
 
 
 # --------------------------------------------------------------------------- #

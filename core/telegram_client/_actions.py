@@ -13,13 +13,15 @@ from telethon.tl.functions.account import (
     UpdateUsernameRequest,
 )
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
-from telethon.tl.functions.messages import SendReactionRequest
+from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 
 from core.config import settings
+from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._client import telegram_client
 from core.telegram_client._media import _dispatch_profile_media_action
+from core.telegram_client._util import extract_invite_hash
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.telegram_actions import (
     ActionResult,
@@ -74,7 +76,7 @@ async def _flood_action_result(
     )
 
 
-async def execute(account_id: str, action: TelegramAction) -> ActionResult:
+async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: PLR0911
     """Dispatch a typed Telegram action against ``account_id``.
 
     The only entry point for Telethon calls from outside ``core/``. Builds the
@@ -83,7 +85,17 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:
     premium / peer-flood) separately, logs every outcome, and returns a typed
     ``ActionResult`` — never raises Telethon errors upward.
     """
-    request = TelegramClientRequest(account_id=account_id)
+    account = await fetch_account(account_id)
+    if account is None:
+        return ActionResult(
+            status="failed",
+            action_type=action.action_type,
+            account_id=account_id,
+            error_type="AccountNotFound",
+            error_message="Account not found in database",
+        )
+
+    request = TelegramClientRequest(account_id=account_id, session_name=account.session_name)
     async with telegram_client(request) as client:
         try:
             await client.connect()
@@ -163,7 +175,7 @@ async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage
     return int(getattr(message, "id", 0)) or None
 
 
-async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:
+async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:  # noqa: C901
     """Run one action against an already-connected client. Returns message_id if any.
 
     Pattern-matches on the concrete action model so ty narrows ``action`` inside
@@ -175,7 +187,11 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
     message_id: int | None = None
     match action:
         case JoinChannel():
-            await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+            hash_str = extract_invite_hash(action.channel)
+            if hash_str:
+                await client(ImportChatInviteRequest(hash=hash_str))
+            else:
+                await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
         case LeaveChannel():
             await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
         case PostComment():

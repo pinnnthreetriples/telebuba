@@ -8,6 +8,8 @@ mismatch. Per non-negotiable #6 the third-party library is wrapped here in
 
 from __future__ import annotations
 
+from functools import lru_cache
+
 import phonenumbers
 from loguru import logger
 from phonenumbers import timezone as pn_timezone
@@ -17,6 +19,7 @@ from schemas.geo import GeoMatch
 _UNKNOWN_TZ = "Etc/Unknown"
 
 
+@lru_cache(maxsize=1024)
 def _parse(phone: str | None) -> phonenumbers.PhoneNumber | None:
     if not phone:
         return None
@@ -27,6 +30,7 @@ def _parse(phone: str | None) -> phonenumbers.PhoneNumber | None:
         return None
 
 
+@lru_cache(maxsize=1024)
 def country_for_phone(phone: str | None) -> str | None:
     """ISO-3166 alpha-2 country for an E.164 phone number, or ``None``."""
     parsed = _parse(phone)
@@ -35,6 +39,7 @@ def country_for_phone(phone: str | None) -> str | None:
     return phonenumbers.region_code_for_number(parsed) or None
 
 
+@lru_cache(maxsize=1024)
 def timezone_for_phone(phone: str | None) -> str | None:
     """A representative IANA timezone for a phone number, or ``None``.
 

@@ -19,6 +19,7 @@ from core.config import settings
 from core.db import (
     fetch_account,
     fetch_warming_state,
+    get_spam_status,
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
@@ -31,6 +32,7 @@ from schemas.warming import (
     is_warming,
 )
 from services.dialogues import assign_pairs
+from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._loop import run_loop_iteration
 from services.warming._state import _current_card, _set_state
@@ -93,7 +95,14 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             raise UnknownAccountError(msg)
         if (await load_warming_settings()).enforce_readiness:
             channel_count = len((await list_warming_channels()).channels)
-            readiness = evaluate_readiness(account, channel_count)
+            spam = await get_spam_status(data.account_id)
+            trust_score = await account_trust_score(data.account_id)
+            readiness = evaluate_readiness(
+                account,
+                channel_count,
+                spam=spam,
+                trust_score=trust_score,
+            )
             if not readiness.ready:
                 await log_event(
                     "WARNING",
@@ -118,6 +127,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if existing is None or existing.done():
             _RUNTIME[data.account_id] = asyncio.create_task(_warming_loop(data.account_id))
     await log_event("INFO", "warming_started", account_id=data.account_id)
+    await _refresh_dialogue_pairs()
     return await _current_card(data.account_id)
 
 
@@ -158,6 +168,7 @@ async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
                 stopped_at=_now_iso(),
             )
     await log_event("INFO", "warming_stopped", account_id=data.account_id)
+    await _refresh_dialogue_pairs()
     return await _current_card(data.account_id)
 
 
@@ -311,10 +322,14 @@ async def _warming_loop(account_id: str) -> None:  # pragma: no cover - long-run
     """
     try:
         record = await fetch_warming_state(account_id)
+        if record is not None and record.state == "error":
+            return
         await asyncio.sleep(_initial_delay_seconds(record, datetime.now(UTC)))
         while True:
             await run_loop_iteration(account_id)
             record = await fetch_warming_state(account_id)
+            if record is not None and record.state == "error":
+                break
             await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
     except asyncio.CancelledError:
         raise

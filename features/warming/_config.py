@@ -144,8 +144,22 @@ async def _render_config_cards() -> None:  # pragma: no cover
         )
 
     async def on_toggle() -> None:
-        await persist(key=None, model=None, clear=False)
-        ui.notify("Функции обновлены", type="positive")
+        try:
+            await persist(key=None, model=None, clear=False)
+            ui.notify("Функции обновлены", type="positive")
+        except Exception as exc:  # noqa: BLE001
+            ui.notify(f"Ошибка сохранения: {exc}", type="negative")
+            # Rollback to the last known good state
+            fresh_board = await load_board()
+            fresh = fresh_board.settings
+            refs["chat"].value = fresh.inter_account_chat
+            refs["reactions"].value = fresh.reactions_enabled
+            refs["join"].value = fresh.join_enabled
+            refs["readiness"].value = fresh.enforce_readiness
+            refs["quiet"].value = fresh.quiet_hours_enabled
+            refs["quiet_start"].value = fresh.quiet_hours_start
+            refs["quiet_end"].value = fresh.quiet_hours_end
+            refs["daily"].value = fresh.max_daily_actions
 
     def trigger(_e: object = None) -> asyncio.Task[None]:
         return asyncio.create_task(on_toggle())
@@ -203,7 +217,7 @@ def _render_features_card(
         )
         refs["quiet"] = _feature_row(
             "bedtime",
-            "Тихие часы (UTC)",
+            "Локальное время аккаунта",
             "Ночью аккаунты ничего не делают — выглядит естественнее.",
             lambda: switch(value=current.quiet_hours_enabled),
         )

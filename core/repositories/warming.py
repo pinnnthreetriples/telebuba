@@ -134,7 +134,7 @@ def _default_warming_settings_values() -> dict[str, object]:
         "quiet_hours_start": warm.quiet_hours_start,
         "quiet_hours_end": warm.quiet_hours_end,
         "max_daily_actions": warm.max_daily_actions,
-        "gemini_api_key": settings.gemini.api_key,
+        "gemini_api_key": "",
         "gemini_model": settings.gemini.model,
         "updated_at": _now_iso(),
     }
@@ -212,8 +212,7 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
 ) -> WarmingSettingsSecret:
     """Persist warming settings.
 
-    ``gemini_api_key=None`` leaves the stored key intact; empty string clears it.
-    ``gemini_model=None`` or empty leaves the stored model intact.
+    ``gemini_api_key`` and ``gemini_model`` are ignored (credentials belong in .env).
     """
     return await asyncio.to_thread(
         _save_warming_settings,
