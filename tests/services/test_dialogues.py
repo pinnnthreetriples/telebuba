@@ -56,7 +56,7 @@ async def _seed_warming(account_id: str, status: AccountStatus = "new") -> None:
 @pytest.mark.asyncio
 async def test_assign_pairs_needs_two_accounts() -> None:
     await _seed_warming("acc-1")
-    assert await assign_pairs() == []
+    assert (await assign_pairs()).pairs == []
 
 
 @pytest.mark.asyncio
@@ -64,14 +64,14 @@ async def test_assign_pairs_creates_mutual_partners() -> None:
     for i in (1, 2, 3):
         await _seed_warming(f"acc-{i}")
 
-    pairs = await assign_pairs()
+    result = await assign_pairs()
 
-    assert pairs
-    partners = await get_partners("acc-1")
+    assert result.pairs
+    partners = (await get_partners("acc-1")).partners
     assert partners
     assert set(partners) <= {"acc-2", "acc-3"}
     # pairing is symmetric
-    assert "acc-1" in await get_partners(partners[0])
+    assert "acc-1" in (await get_partners(partners[0])).partners
 
 
 @pytest.mark.asyncio
@@ -82,8 +82,8 @@ async def test_assign_pairs_excludes_dead_accounts() -> None:
 
     await assign_pairs()
 
-    assert await get_partners("acc-dead") == []
-    assert set(await get_partners("acc-1")) <= {"acc-2"}
+    assert (await get_partners("acc-dead")).partners == []
+    assert set((await get_partners("acc-1")).partners) <= {"acc-2"}
 
 
 @pytest.mark.asyncio
@@ -91,8 +91,8 @@ async def test_assign_pairs_is_stable_without_change() -> None:
     for i in (1, 2, 3):
         await _seed_warming(f"acc-{i}")
 
-    first = await assign_pairs()
-    again = await assign_pairs()
+    first = (await assign_pairs()).pairs
+    again = (await assign_pairs()).pairs
 
     def _key(pairs: list) -> set[tuple[str, str]]:
         return {(pair.account_a, pair.account_b) for pair in pairs}
@@ -108,7 +108,7 @@ async def test_assign_pairs_reshuffles_when_membership_changes() -> None:
     await assign_pairs()
 
     await _seed_warming("acc-3")
-    pairs = await assign_pairs()
+    pairs = (await assign_pairs()).pairs
 
     covered = {pair.account_a for pair in pairs} | {pair.account_b for pair in pairs}
     assert covered == {"acc-1", "acc-2", "acc-3"}
