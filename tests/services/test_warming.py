@@ -2016,3 +2016,20 @@ async def fetch_account_helper(account_id: str):  # type: ignore[no-untyped-def]
     from core.db import fetch_account  # noqa: PLC0415
 
     return await fetch_account(account_id)
+
+
+@pytest.mark.asyncio
+async def test_try_reserve_sent_hash_concurrent_only_one_wins() -> None:
+    """F7: parallel reservers of the same hash never both observe an empty window."""
+    from core.db import purge_sent_hashes_older_than, try_reserve_sent_hash  # noqa: PLC0415
+
+    # Warm up the engine on this thread before fanning out — the gather below
+    # spawns 8 threads via asyncio.to_thread, which would otherwise race on
+    # ``_get_engine`` + ``_metadata.create_all`` and leave some threads talking
+    # to a DB where the table did not yet exist.
+    await purge_sent_hashes_older_than("1900-01-01T00:00:00+00:00")
+
+    since = (datetime.now(UTC) - timedelta(days=7)).isoformat()
+    results = await asyncio.gather(*(try_reserve_sent_hash("shared-hash", since) for _ in range(8)))
+    assert sum(1 for r in results if r) == 1
+    assert sum(1 for r in results if not r) == 7
