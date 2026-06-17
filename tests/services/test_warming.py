@@ -2359,3 +2359,79 @@ async def test_concurrent_create_duplicate_session_name_raises_domain_error() ->
     assert len(successes) == 1
     assert len(failures) == 1
     assert isinstance(failures[0], DuplicateSessionNameError)
+
+
+@pytest.mark.asyncio
+async def test_reply_flood_does_not_block_same_text_retry_as_duplicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2.6: a reply that floods must not lock its own text out of the dedup window.
+
+    The pre-fix path reserved the text via try_reserve_sent inside Gemini
+    generation, but on flood/peer_flood the reservation stayed. A second cycle
+    that generated the *same* reply would be filtered out as duplicate and the
+    incoming message could never actually get answered. Fix: release the
+    reservation on every non-ok send branch.
+    """
+    from core.db import (  # noqa: PLC0415
+        latest_unreplied_for,
+        record_dialogue_message,
+        replace_dialogue_pairs,
+    )
+
+    await create_account(AccountCreate(account_id="acc-a"))
+    await create_account(AccountCreate(account_id="acc-b"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-b",
+            session_path="acc-b",
+            status="alive",
+            is_temporary=False,
+            user_id=42,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+        ),
+    )
+    await replace_dialogue_pairs([("acc-a", "acc-b")])
+    await record_dialogue_message("acc-b", "acc-a", "hi there")
+
+    # Gemini deterministically returns the same line — the same content hash
+    # would normally be locked for the entire dedup window after the first send.
+    async def stable_gen(_req: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="привет!")
+
+    async def flood_execute(account_id: str, action: TelegramAction) -> ActionResult:
+        return ActionResult(
+            status="flood_wait",
+            action_type=action.action_type,
+            account_id=account_id,
+            flood_wait_seconds=60,
+        )
+
+    monkeypatch.setattr(_seams, "generate_text", stable_gen)
+    monkeypatch.setattr(_seams, "execute", flood_execute)
+
+    from services.warming._chat import _reply_to_partner  # noqa: PLC0415
+
+    incoming = await latest_unreplied_for("acc-a")
+    assert incoming is not None
+    secret = await load_warming_settings()
+    accounts_map = {
+        "acc-a": await fetch_account_helper("acc-a"),
+        "acc-b": await fetch_account_helper("acc-b"),
+    }
+
+    first = await _reply_to_partner("acc-a", incoming, secret, accounts_map)
+    assert first.flood_result is not None
+
+    # The hash reservation must have been released — running Gemini -> same text
+    # path again would see ``chat_duplicate`` if it weren't.
+    again_incoming = await latest_unreplied_for("acc-a")
+    assert again_incoming is not None
+    second = await _reply_to_partner("acc-a", again_incoming, secret, accounts_map)
+    # Still flood (we did not change the execute seam), but the failure_reason
+    # is ``send_dm`` (the send attempt happened), not ``chat_duplicate``
+    # (the dedup gate would have rejected before the send).
+    assert second.last_failed_action == "send_dm"

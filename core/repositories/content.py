@@ -96,6 +96,25 @@ async def try_reserve_sent_hash(text_hash: str, since_iso: str) -> bool:
     return await asyncio.to_thread(_try_reserve_sent_hash, text_hash, since_iso)
 
 
+def _release_sent_hash(text_hash: str) -> int:
+    statement = delete(sent_message_hashes).where(sent_message_hashes.c.text_hash == text_hash)
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount
+
+
+async def release_sent_hash(text_hash: str) -> int:
+    """Drop a previously-reserved hash so the same text can be retried (P2.6).
+
+    Used by the chat path when a send fails after a successful reservation:
+    without releasing, the text stays locked for the full dedup window and the
+    next cycle is forced to filter it as a duplicate — so a transient flood
+    on a Gemini-generated reply would permanently shadow the same text. The
+    delete is unconditional; the caller is the only writer who could have
+    inserted this row in the inter-send window.
+    """
+    return await asyncio.to_thread(_release_sent_hash, text_hash)
+
+
 def _purge_sent_hashes_older_than(cutoff_iso: str) -> int:
     statement = delete(sent_message_hashes).where(sent_message_hashes.c.created_at < cutoff_iso)
     with _get_engine().begin() as connection:
