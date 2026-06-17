@@ -161,7 +161,7 @@ def _apply_read_result(
     return True
 
 
-async def _run_channel_loop(
+async def _run_channel_loop(  # noqa: PLR0913
     account_id: str,
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
@@ -259,7 +259,7 @@ async def _build_cycle_result(
     return result
 
 
-async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noqa: PLR0915
+async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noqa: C901, PLR0912, PLR0915
     """Perform exactly one warming pass for an account. The testable core."""
     account_id = data.account_id
     secret = await load_warming_settings()

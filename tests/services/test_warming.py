@@ -1610,7 +1610,7 @@ async def test_start_warming_refreshes_pairs_before_loop(monkeypatch: pytest.Mon
 
     monkeypatch.setattr("services.warming._runtime._refresh_dialogue_pairs", fake_refresh)
     monkeypatch.setattr("services.warming._runtime._warming_loop", fake_loop)
-    from schemas.warming import WarmingReadiness
+    from schemas.warming import WarmingReadiness  # noqa: PLC0415
 
     monkeypatch.setattr(
         "services.warming._runtime.evaluate_readiness",
@@ -1628,15 +1628,15 @@ async def test_start_warming_refreshes_pairs_before_loop(monkeypatch: pytest.Mon
 
 @pytest.mark.asyncio
 async def test_joined_channels_cleanup_on_channel_remove() -> None:
-    from sqlalchemy import select
+    from sqlalchemy import select  # noqa: PLC0415
 
-    from core.db import (
+    from core.db import (  # noqa: PLC0415
         _get_engine,
         _warming_joined_channels,
         add_warming_channel,
         record_channel_joined,
     )
-    from services.warming.channels import remove_warming_channel
+    from services.warming.channels import remove_warming_channel  # noqa: PLC0415
 
     await create_account(AccountCreate(account_id="acc-a"))
     await add_warming_channel("testchan")
@@ -1658,17 +1658,17 @@ async def test_joined_channels_cleanup_on_channel_remove() -> None:
 
 @pytest.mark.asyncio
 async def test_joined_channels_cleanup_on_account_delete() -> None:
-    import asyncio
+    import asyncio  # noqa: PLC0415
 
-    from sqlalchemy import select
+    from sqlalchemy import select  # noqa: PLC0415
 
-    from core.db import (
+    from core.db import (  # noqa: PLC0415
         _get_engine,
         _warming_joined_channels,
         add_warming_channel,
         record_channel_joined,
     )
-    from core.repositories.accounts import _delete_account
+    from core.repositories.accounts import _delete_account  # noqa: PLC0415
 
     await create_account(AccountCreate(account_id="acc-a"))
     await add_warming_channel("testchan")

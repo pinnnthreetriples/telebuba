@@ -22,7 +22,7 @@ if TYPE_CHECKING:
 _CHANNEL_TOKEN_RE = re.compile(r"^@?[A-Za-z0-9_]{3,32}$")
 
 
-def _normalize_channel(token: str) -> str | None:
+def _normalize_channel(token: str) -> str | None:  # noqa: PLR0911
     invite_hash = extract_invite_hash(token)
     if invite_hash:
         return f"+{invite_hash}"
