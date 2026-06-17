@@ -194,7 +194,16 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
         daily_actions=daily_count,
         daily_count_date=daily_date,
     )
-    result = await run_one_cycle(WarmingCycleRequest(account_id=account_id))
+    remaining = None
+    if controls.max_daily_actions > 0:
+        remaining = max(0, controls.max_daily_actions - daily_count)
+
+    result = await run_one_cycle(
+        WarmingCycleRequest(
+            account_id=account_id,
+            remaining_actions=remaining,
+        )
+    )
     actions_done, next_run_dt, next_state = await _calculate_next_run(account_id, result)
     new_daily = daily_count + actions_done
     next_run = next_run_dt.isoformat()

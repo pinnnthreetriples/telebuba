@@ -270,6 +270,7 @@ class StopWarmingRequest(BaseModel):
 
 class WarmingCycleRequest(BaseModel):
     account_id: str = Field(min_length=1)
+    remaining_actions: int | None = None
 
 
 CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]

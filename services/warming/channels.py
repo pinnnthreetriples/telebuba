@@ -17,10 +17,9 @@ from core.telegram_client._util import extract_invite_hash
 if TYPE_CHECKING:
     from schemas.warming import AddChannelsRequest, RemoveChannelRequest, WarmingChannelList
 
-# Allowed token format for a Telegram channel/group identifier. We accept
-# the canonical ``@username`` form and bare ``username`` / ``invite_hash``;
-# the resolver in Telethon handles invite hashes (``joinchat/<hash>``).
-_CHANNEL_TOKEN_RE = re.compile(r"^@?[A-Za-z0-9_]{3,32}(/[A-Za-z0-9_-]+)?$")
+# Allowed token format for a Telegram public channel/group identifier.
+# Joinchat/invite links are intercepted earlier by extract_invite_hash.
+_CHANNEL_TOKEN_RE = re.compile(r"^@?[A-Za-z0-9_]{3,32}$")
 
 
 def _normalize_channel(token: str) -> str | None:
@@ -31,14 +30,32 @@ def _normalize_channel(token: str) -> str | None:
     cleaned = token.strip().strip("<>").rstrip("/")
     if not cleaned:
         return None
+
+    # Strip query parameters (like ?single)
+    cleaned = cleaned.split("?")[0]
+
     lowered = cleaned.lower()
     for prefix in ("https://t.me/", "http://t.me/", "t.me/", "telegram.me/"):
         if lowered.startswith(prefix):
             cleaned = cleaned[len(prefix) :]
             break
+    else:
+        # Reject bare tokens that contain a slash (e.g. channel/123)
+        if "/" in cleaned:
+            return None
+
     cleaned = cleaned.lstrip("@")
     if not cleaned:
         return None
+
+    # Reject private chat links (e.g. t.me/c/12345/1)
+    if cleaned.lower().startswith("c/"):
+        return None
+
+    # If it was a valid public post link (e.g. t.me/mychannel/123), extract the channel
+    if "/" in cleaned:
+        cleaned = cleaned.split("/")[0]
+
     if len(cleaned) > settings.warming.max_channel_length:
         return None
     return cleaned if _CHANNEL_TOKEN_RE.match(cleaned) else None

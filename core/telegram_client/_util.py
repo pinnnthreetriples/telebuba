@@ -14,7 +14,11 @@ def optional_str(value: object) -> str | None:
 
 
 def extract_invite_hash(channel: str) -> str | None:
-    """Extract the bare hash from a private invite link or bare hash string."""
+    """Extract the hash from a private invite link (``+HASH`` or ``joinchat/HASH``).
+
+    Bare hashes without prefixes are intentionally not supported to avoid
+    collisions with regular usernames.
+    """
     cleaned = channel.strip().strip("<>").rstrip("/")
     for prefix in ("https://t.me/", "http://t.me/", "t.me/", "telegram.me/"):
         if cleaned.lower().startswith(prefix):

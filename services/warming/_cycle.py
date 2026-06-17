@@ -166,10 +166,20 @@ async def _run_channel_loop(
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
     intensity: WarmingIntensity,
+    attempts_so_far: int,
+    remaining_actions: int | None,
 ) -> _ChannelTally:
     warm = settings.warming
     tally = _ChannelTally()
+
+    def _can_attempt() -> bool:
+        if remaining_actions is None:
+            return True
+        return (attempts_so_far + tally.attempts) < remaining_actions
+
     for channel in chosen:
+        if not _can_attempt():
+            break
         if secret.join_enabled and not await is_channel_joined(account_id, channel.channel):
             join_result = await _seams.execute(account_id, JoinChannel(channel=channel.channel))
             tally.attempts += 1
@@ -178,6 +188,8 @@ async def _run_channel_loop(
             if _apply_join_result(tally, join_result, channel.channel):
                 break
             await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
+            if not _can_attempt():
+                break
         outcome = await _read_and_react(
             account_id,
             channel.channel,
@@ -266,6 +278,15 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
     tally = _ChannelTally()
     messages_sent = 0
     online_set = False
+
+    def _can_attempt() -> bool:
+        if data.remaining_actions is None:
+            return True
+        return tally.attempts < data.remaining_actions
+
+    if not _can_attempt():
+        return await _build_cycle_result(account_id, tally, messages_sent)
+
     try:
         online_result = await _seams.execute(account_id, SetOnline(online=True))
         tally.attempts += 1
@@ -288,7 +309,9 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
         upper = min(intensity.channels_max, len(channels))
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(channels, _seams.rng.randint(lower, upper))
-        channel_tally = await _run_channel_loop(account_id, chosen, secret, intensity)
+        channel_tally = await _run_channel_loop(
+            account_id, chosen, secret, intensity, tally.attempts, data.remaining_actions
+        )
 
         tally.joined += channel_tally.joined
         tally.reads += channel_tally.reads
@@ -303,7 +326,8 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
         tally.peer_flooded = channel_tally.peer_flooded
 
         if (
-            not tally.flooded
+            _can_attempt()
+            and not tally.flooded
             and not tally.peer_flooded
             and intensity.dm_allowed
             and secret.inter_account_chat
@@ -313,8 +337,8 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
             messages_sent = chat_result.messages_sent
             tally.attempts += chat_result.attempted_actions
             tally.failures += chat_result.failures
-            if chat_result.failures > 0 and not chat_result.flood_result:
-                tally.last_failed_action = "send_dm"
+            if chat_result.last_failed_action:
+                tally.last_failed_action = chat_result.last_failed_action
             if chat_result.flood_result:
                 if chat_result.flood_result.status == "peer_flood":
                     tally.peer_flooded = True
@@ -328,6 +352,5 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
         # account does not stay online forever.
         if online_set:
             await _set_offline(account_id)
-            tally.attempts += 1
 
     return await _build_cycle_result(account_id, tally, messages_sent)

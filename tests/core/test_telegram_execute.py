@@ -142,6 +142,44 @@ async def test_execute_join_channel_with_joinchat_dispatches_import(
 
 
 @pytest.mark.asyncio
+async def test_execute_join_channel_already_participant_returns_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.UserAlreadyParticipantError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-already", JoinChannel(channel="@already"))
+
+    assert result.status == "ok"
+    assert result.action_type == "join_channel"
+
+
+@pytest.mark.asyncio
+async def test_execute_leave_channel_already_participant_does_not_swallow(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.UserAlreadyParticipantError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc", LeaveChannel(channel="@hot"))
+
+    assert result.status == "failed"
+    assert result.error_type == "UserAlreadyParticipantError"
+
+
+@pytest.mark.asyncio
 async def test_execute_leave_channel_dispatches_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

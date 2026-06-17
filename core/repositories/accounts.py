@@ -24,6 +24,7 @@ from core.db import (
     _now_iso,
     _optional_int,
     _optional_str,
+    _warming_joined_channels,
 )
 from schemas.accounts import (
     AccountCreate,
@@ -224,6 +225,11 @@ async def account_summary_counts() -> dict[str, int]:
 
 def _delete_account(account_id: str) -> None:
     with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_warming_joined_channels).where(
+                _warming_joined_channels.c.account_id == account_id,
+            ),
+        )
         connection.execute(delete(_accounts).where(_accounts.c.account_id == account_id))
 
 

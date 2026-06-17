@@ -125,9 +125,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         )
         existing = _RUNTIME.get(data.account_id)
         if existing is None or existing.done():
+            await _refresh_dialogue_pairs()
             _RUNTIME[data.account_id] = asyncio.create_task(_warming_loop(data.account_id))
     await log_event("INFO", "warming_started", account_id=data.account_id)
-    await _refresh_dialogue_pairs()
     return await _current_card(data.account_id)
 
 

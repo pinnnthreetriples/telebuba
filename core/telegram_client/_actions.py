@@ -114,6 +114,33 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
                 status="premium_wait",
                 seconds=exc.seconds,
             )
+        except errors.UserAlreadyParticipantError as exc:
+            if action.action_type == "join_channel":
+                await log_event(
+                    "INFO",
+                    "telegram_join_channel_already_participant",
+                    account_id=account_id,
+                    extra={"channel": getattr(action, "channel", None)},
+                )
+                return ActionResult(
+                    status="ok",
+                    action_type=action.action_type,
+                    account_id=account_id,
+                )
+            # Re-raise or fall through to generic Exception handler if it happens elsewhere.
+            await log_event(
+                "ERROR",
+                f"telegram_{action.action_type}_failed",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__, "message": str(exc)},
+            )
+            return ActionResult(
+                status="failed",
+                action_type=action.action_type,
+                account_id=account_id,
+                error_type=type(exc).__name__,
+                error_message=str(exc),
+            )
         except errors.PeerFloodError:
             return await _flood_action_result(
                 account_id,
