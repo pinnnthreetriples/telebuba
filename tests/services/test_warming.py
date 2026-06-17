@@ -1911,3 +1911,36 @@ async def test_manual_start_replaces_existing_loop_task(
     assert second_task is not first_task
     assert cancelled.is_set()
     assert started == ["acc-1", "acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_skips_when_state_already_idle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F3: if state flipped to idle between listing and lock-acquire, do not restart."""
+    from core.db import list_warming_states as real_list_states  # noqa: PLC0415
+
+    started: list[str] = []
+
+    async def fake_loop(account_id: str) -> None:
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    # Simulate the race: list_warming_states sees "active", then between that
+    # and the per-account lock, stop_warming flips the row to "idle".
+    async def race_list() -> list:  # type: ignore[type-arg]
+        records = await real_list_states()
+        await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
+        return records
+
+    monkeypatch.setattr(_runtime, "list_warming_states", race_list)
+
+    await warming.reconcile_warming_runtime()
+    await asyncio.sleep(0)
+
+    assert "acc-1" not in warming._RUNTIME
+    assert started == []

@@ -203,21 +203,30 @@ async def reconcile_warming_runtime() -> None:
         # account — the operator has to acknowledge and restart it.
         if not is_warming(record.state) or record.state == "error":
             continue
-        existing = _RUNTIME.get(record.account_id)
-        if existing is not None and not existing.done():
-            continue
-        account = await fetch_account(record.account_id)
-        if account is None:
-            # Orphan state row — mark it stopped so the board is honest.
-            await _set_state(
-                record.account_id,
-                "idle",
-                last_event="reconcile_orphan",
-                stopped_at=_now_iso(),
-            )
-            continue
-        _RUNTIME[record.account_id] = asyncio.create_task(_warming_loop(record.account_id))
-        restarted += 1
+        # F3: take the same per-account lock as start/stop. Reconcile reads
+        # state then spawns a task; without the lock, a parallel stop can
+        # interleave and we end up with DB=idle + a live task.
+        async with _account_lock(record.account_id):
+            # Re-read inside the lock — stop_warming may have flipped this row
+            # between the listing and acquiring the lock.
+            fresh = await fetch_warming_state(record.account_id)
+            if fresh is None or not is_warming(fresh.state) or fresh.state == "error":
+                continue
+            existing = _RUNTIME.get(record.account_id)
+            if existing is not None and not existing.done():
+                continue
+            account = await fetch_account(record.account_id)
+            if account is None:
+                # Orphan state row — mark it stopped so the board is honest.
+                await _set_state(
+                    record.account_id,
+                    "idle",
+                    last_event="reconcile_orphan",
+                    stopped_at=_now_iso(),
+                )
+                continue
+            _RUNTIME[record.account_id] = asyncio.create_task(_warming_loop(record.account_id))
+            restarted += 1
     if restarted:
         await log_event(
             "INFO",
