@@ -12,7 +12,7 @@ import asyncio
 from pathlib import Path
 
 from core.config import settings
-from core.db import fetch_account, list_accounts, update_account_from_session_check
+from core.db import fetch_account, update_account_from_session_check
 from core.tdata_import import convert_tdata_zip
 from core.telegram_client import check_telegram_session
 from schemas.accounts import (
@@ -70,8 +70,10 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
 
 
 async def check_account_session(data: AccountCheckRequest) -> AccountRead:
-    accounts = await list_accounts()
-    account = next(item for item in accounts.accounts if item.account_id == data.account_id)
+    account = await fetch_account(data.account_id)
+    if account is None:
+        msg = f"Unknown account: {data.account_id}"
+        raise ValueError(msg)
     result = await check_telegram_session(
         TelegramSessionCheckRequest(
             account_id=account.account_id,
