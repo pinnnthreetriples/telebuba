@@ -2435,3 +2435,47 @@ async def test_reply_flood_does_not_block_same_text_retry_as_duplicate(
     # is ``send_dm`` (the send attempt happened), not ``chat_duplicate``
     # (the dedup gate would have rejected before the send).
     assert second.last_failed_action == "send_dm"
+
+
+@pytest.mark.asyncio
+async def test_remove_account_stops_runtime_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P3.7: removing an active warming account must stop its runtime task.
+
+    Repo-level _delete_account is layer-correct in not touching _RUNTIME; the
+    service-level ``remove_account`` is what callers should use to avoid leaving
+    an orphan task that keeps trying to act on a vanished account.
+    """
+    from services.accounts.lifecycle import remove_account  # noqa: PLC0415
+
+    started_events: list[str] = []
+    cancelled_events: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started_events.append(account_id)
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            cancelled_events.append(account_id)
+            raise
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    await asyncio.sleep(0)
+    assert "acc-1" in warming._RUNTIME
+
+    await remove_account("acc-1")
+
+    assert "acc-1" not in warming._RUNTIME
+    assert cancelled_events == ["acc-1"]
+    # DB row gone too.
+    from core.db import fetch_account  # noqa: PLC0415
+
+    assert await fetch_account("acc-1") is None
