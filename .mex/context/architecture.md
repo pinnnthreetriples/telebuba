@@ -23,7 +23,7 @@ edges:
     condition: when working with runtime workflow tasks
   - target: context/logging.md
     condition: when working with the three-tier logging architecture
-last_updated: 2026-06-16
+last_updated: 2026-06-17
 ---
 
 # Architecture
@@ -46,7 +46,8 @@ telebuba/
 ├── .env.example                  committed template; architecture tests keep it synced with core/config.py
 ├── core/                         shared infrastructure — only layer touching third-party SDKs
 │   ├── config.py                 pydantic-settings; nested namespaces
-│   ├── db.py                     SQLite metadata, table definitions, engine lifecycle, additive migrations, re-exports
+│   ├── db.py                     SQLite metadata, table definitions, engine lifecycle, generic row/value helpers, compatibility re-exports
+│   ├── migrations.py             versioned, append-only migration registry — `_get_engine()` calls `apply_migrations()` after `create_all()`
 │   ├── repositories/             per-aggregate DB query modules
 │   ├── telegram_client/          Telethon gateway package; public API re-exported from core.telegram_client
 │   ├── gemini.py                 HTTP gateway for Gemini
@@ -54,11 +55,11 @@ telebuba/
 ├── schemas/                      Pydantic models; shared types, no behavior, no I/O
 │   └── <domain>.py               one file per domain contract
 ├── services/                     business logic — pure, reusable, no UI, no SDK imports
-│   ├── accounts/                 account/session/profile/proxy operations
+│   ├── accounts/                 thin re-export package; logic in lifecycle.py / sessions.py / proxy.py / profile.py / media.py + _table.py / _tdata.py / _uploads.py helpers
 │   └── warming/                  runtime workflow domain package
 ├── features/                     UI-thin NiceGUI pages/components; delegates logic to services/
-│   ├── accounts/
-│   ├── warming/
+│   ├── accounts/                 thin re-export of register_accounts_page; rendering split across _page.py / _controller.py / _header.py / _metrics.py / _table_section.py / _dialogs.py / _table.py
+│   ├── warming/                  thin composition root; split across _config.py / _channels.py / _board.py / _activity.py
 │   └── logs.py
 └── tests/                        mirrors source tree; pytest + property tests + architecture tests
 ```
@@ -116,7 +117,7 @@ Inside a single function or private module, regular Python data structures are f
 
 - **`main.py`** — composition root: setup logging, register pages, run NiceGUI, reconcile runtime tasks on startup, shutdown runtime tasks gracefully.
 - **`core/config.py`** — typed settings via `pydantic-settings`. Nested namespaces per domain (`settings.warming`, `settings.gemini`, `settings.telegram`, ...). Single source of truth for tunables and secrets.
-- **`core/db.py`** — shared SQLite plumbing only: SQLAlchemy metadata, table definitions, engine lifecycle, additive migration hook, generic row/value helpers, and compatibility re-exports.
+- **`core/db.py`** — shared SQLite plumbing only: SQLAlchemy metadata, table definitions, engine lifecycle, generic row/value helpers, and compatibility re-exports. Schema evolution lives in `core/migrations.py` as a versioned, append-only migration registry; `_get_engine()` calls `apply_migrations()` after `create_all()`.
 - **`core/repositories/`** — per-aggregate DB query modules: accounts, warming, logs, content, device_fingerprint, dialogues, spam_status.
 - **`core/telegram_client/`** — Telethon gateway package. Public imports still come from `core.telegram_client`; implementation is split into focused private modules.
 - **`core/gemini.py`** — Gemini HTTP gateway. Only place raw Gemini HTTP calls belong.
