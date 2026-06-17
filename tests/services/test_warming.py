@@ -2330,3 +2330,32 @@ async def test_start_warming_mints_fresh_run_id(monkeypatch: pytest.MonkeyPatch)
     assert state_second is not None
     assert state_second.run_id is not None
     assert state_second.run_id != first_run_id
+
+
+@pytest.mark.asyncio
+async def test_concurrent_create_duplicate_session_name_raises_domain_error() -> None:
+    """P2.5: a duplicate-session_name race must raise a typed domain error.
+
+    When two creates race on the same session_name, the loser gets
+    DuplicateSessionNameError (typed domain error), never RuntimeError.
+
+    Two parallel create_account calls with the same session_name go through
+    asyncio.to_thread (separate connections). One wins the cooperative
+    pre-check + INSERT; the other's INSERT trips migration #7's unique index.
+    The post-IntegrityError branch in ``_create_account`` must translate that
+    into a DuplicateSessionNameError, not pass through to the catch-all
+    "Account was not persisted" RuntimeError.
+    """
+    from core.repositories.accounts import DuplicateSessionNameError  # noqa: PLC0415
+
+    results = await asyncio.gather(
+        create_account(AccountCreate(account_id="acc-1", session_name="shared")),
+        create_account(AccountCreate(account_id="acc-2", session_name="shared")),
+        return_exceptions=True,
+    )
+
+    successes = [r for r in results if not isinstance(r, BaseException)]
+    failures = [r for r in results if isinstance(r, BaseException)]
+    assert len(successes) == 1
+    assert len(failures) == 1
+    assert isinstance(failures[0], DuplicateSessionNameError)

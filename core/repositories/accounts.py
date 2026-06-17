@@ -10,7 +10,6 @@ existing call sites are unaffected.
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import delete, func, insert, select, update
@@ -143,8 +142,9 @@ def _create_account(data: AccountCreate) -> AccountRead:
     }
     with _get_engine().begin() as connection:
         # F5: reject a different account claiming the same Telethon session
-        # file. Existing-account_id with same session_name is fine — the insert
-        # below is idempotent (IntegrityError on PK is suppressed).
+        # file. The pre-check below catches the cooperative case; the FK
+        # unique index (migration #7) is the last line of defense for racy
+        # concurrent inserts.
         if data.session_name is not None:
             conflict = connection.execute(
                 select(_accounts.c.account_id).where(
@@ -157,8 +157,38 @@ def _create_account(data: AccountCreate) -> AccountRead:
                     f"Session name {data.session_name!r} is already used by account {conflict[0]!r}"
                 )
                 raise DuplicateSessionNameError(msg)
-        with suppress(IntegrityError):
+        try:
             connection.execute(insert(_accounts).values(**values))
+        except IntegrityError:
+            # P2.5: don't swallow IntegrityError blindly. Two outcomes possible:
+            # (a) PK conflict on account_id  → idempotent create (existing row
+            #     with same id is fine; fall through to the readback below).
+            # (b) UNIQUE conflict on session_name (the migration-#7 index won
+            #     a race with our pre-check) → surface the typed domain error
+            #     so callers can render a useful message.
+            session_owner: object | None = None
+            if data.session_name is not None:
+                row = connection.execute(
+                    select(_accounts.c.account_id).where(
+                        (_accounts.c.session_name == data.session_name)
+                        & (_accounts.c.account_id != data.account_id),
+                    ),
+                ).first()
+                session_owner = row[0] if row is not None else None
+            if session_owner is not None:
+                msg = (
+                    f"Session name {data.session_name!r} is already used by account "
+                    f"{session_owner!r}"
+                )
+                raise DuplicateSessionNameError(msg) from None
+            # Neither a session_name collision nor a known existing account_id:
+            # something else is wrong (e.g. a FK), re-raise so the operator
+            # sees the real error instead of a misleading RuntimeError later.
+            existing = connection.execute(
+                select(_accounts.c.account_id).where(_accounts.c.account_id == data.account_id),
+            ).first()
+            if existing is None:
+                raise
     account = _fetch_account(data.account_id)
     if account is None:
         msg = f"Account was not persisted: {data.account_id}"
