@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-06-16
+last_updated: 2026-06-17
 ---
 
 # Active State
@@ -19,14 +19,16 @@ This file is the only place that should change after every meaningful task. `ROU
 - `main.py` is the NiceGUI composition root. It registers accounts/warming/logs pages, runs on `UI__PORT`, calls `services.warming.reconcile_warming_runtime()` on startup, and shuts runtime tasks down gracefully.
 - `core/config.py` uses nested `pydantic-settings` namespaces: `TELEGRAM__*`, `UI__*`, `DB__*`, `PROXY__*`, `PROFILE_MEDIA__*`, `LOGGING__*`, `WARMING__*`, `GEMINI__*`, `TRUST__*`.
 - `.env.example` has full config coverage and is checked by `tests/test_architecture.py`.
-- `core/db.py` is now shared SQLite plumbing only: metadata, table definitions, engine lifecycle, additive migrations, generic helpers, and compatibility re-exports.
+- `core/db.py` is now shared SQLite plumbing only: metadata, table definitions, engine lifecycle, generic row helpers, and compatibility re-exports. Schema evolution lives in `core/migrations.py` as a versioned, append-only registry stamped in a `schema_version` table — `apply_migrations()` runs every unstamped migration idempotently, so legacy databases that already carry the columns are stamped without errors.
 - Per-aggregate DB queries live in `core/repositories/`: accounts, warming, logs, content, device_fingerprint, dialogues, spam_status.
 - SQLite foreign keys are enabled on every new connection via `PRAGMA foreign_keys=ON`.
 - `core/telegram_client/` is a gateway package. Public API is re-exported from `core.telegram_client`; implementation is split into focused private modules.
 - `core/gemini.py` is the HTTP gateway for Gemini and returns typed results.
 - `core/logging.py` is live: loguru diagnostic file + SQLite `logs` table + optional Sentry. `log_event()` is best-effort and does not break business operations when a sink fails.
 - `core/tdata_import.py` converts uploaded `tdata.zip` to Telethon `.session` files with safe-extract guardrails.
-- `services/accounts/` is a package for account lifecycle/actions, session import/check, proxy operations, and profile/media actions.
+- `services/accounts/` is a thin re-export package. Implementations live in per-concern submodules: `lifecycle.py` (registration + geo), `sessions.py` (`.session` and tdata import + liveness check, with the `_tdata`/`_uploads`/`_table` helpers), `proxy.py`, `profile.py`, `media.py`. Tests monkeypatch external collaborators on the owning submodule (`services.accounts.sessions.convert_tdata_zip`, `services.accounts.proxy.check_proxy_connectivity`, `services.accounts.profile.execute`, `services.accounts.media.execute`).
+- `import_account_tdata` returns a `TdataImportResult` Pydantic wrapper rather than a raw `list[AccountRead]`, keeping the service boundary Pydantic-only and leaving room for per-import metadata. Same treatment applied to `services.dialogues.get_partners` → `DialoguePartnersResult` and `services.dialogues.assign_pairs` → `DialoguePairsResult`.
+- `tests/test_architecture.py` walks each layer with `rglob("*.py")` (no auto-skip for `__init__.py`), adds a cross-feature isolation test, and a regression test that the package submodules (`services/accounts/`, `services/warming/`, `features/accounts/`, `features/warming/`, `core/telegram_client/`, `core/repositories/`) are actually reached by the scan.
 - `features/accounts/` is a NiceGUI page package for account metrics, filters, table, import dialogs, profile/proxy controls, and session checks.
 - `services/warming/` is a package. Submodules: `channels.py`, `settings_store.py`, `board.py`, `pacing.py`, `_seams.py`, `_state.py`, `_chat.py`, `_cycle.py`, `_loop.py`, `_runtime.py`.
 - `features/warming/` is a UI-only package for config cards, channel UI, board rendering, and activity/log UI.
@@ -45,8 +47,7 @@ This file is the only place that should change after every meaningful task. `ROU
 ## Known Issues
 
 - `aislop --version` can fail on Windows due to a space in the Python path. Use `uv run python -m aislop` if direct CLI invocation fails.
-- `tests/test_architecture.py` currently needs a follow-up fix: import-boundary checks should recurse into package submodules with `rglob("*.py")`, not only top-level `*.py`.
-- Migration layer is still a small additive hook in `core/db.py`; consider a schema-versioned migration registry before more schema growth.
+- `features/accounts/__init__.py` remains a large UI composer (264 lines: page builders + controller); consider splitting later. Out of scope for the current refactor — pre-existing, not touched by the architecture pass.
 
 ## Open Decisions
 

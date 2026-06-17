@@ -33,3 +33,20 @@ class DialogueOverview(BaseModel):
 
     pairs: list[DialoguePair] = Field(default_factory=list)
     recent: list[DialogueMessage] = Field(default_factory=list)
+
+
+class DialoguePartnersResult(BaseModel):
+    """Partners paired with one account — see :func:`services.dialogues.get_partners`."""
+
+    partners: list[str] = Field(default_factory=list)
+
+
+class DialoguePairsResult(BaseModel):
+    """Outcome of one :func:`services.dialogues.assign_pairs` call.
+
+    The wrapper keeps the service boundary Pydantic-only (#2) and leaves room
+    for per-assignment metadata (e.g. ``reshuffled: bool``) without breaking
+    every call site.
+    """
+
+    pairs: list[DialoguePair] = Field(default_factory=list)

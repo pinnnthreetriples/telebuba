@@ -11,6 +11,10 @@ from typing import Literal
 
 from pydantic import BaseModel, Field, model_validator
 
+from schemas.accounts import (
+    AccountRead,  # noqa: TC001 - Pydantic needs the runtime class for field schema.
+)
+
 TdataConvertStatus = Literal[
     "ok",
     "no_accounts",
@@ -65,3 +69,16 @@ class TdataConvertResult(BaseModel):
     status: TdataConvertStatus
     accounts: list[TdataAccountSummary] = Field(default_factory=list)
     error: str | None = None
+
+
+class TdataImportResult(BaseModel):
+    """Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.
+
+    Wrapping the imported accounts in a model (instead of returning a raw
+    ``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room
+    to add per-import metadata (counts, partial-failure summaries) without
+    breaking every call site, and matches the convention used by ``list_accounts``
+    and other multi-row reads.
+    """
+
+    accounts: list[AccountRead] = Field(default_factory=list)

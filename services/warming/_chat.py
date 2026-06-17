@@ -115,7 +115,7 @@ async def _maybe_inter_account_chat(
     Replies to the most recent unanswered message from a partner; otherwise
     opens a new conversation with an eligible partner. Returns messages sent.
     """
-    partners = await get_partners(sender_id)
+    partners = (await get_partners(sender_id)).partners
     if not partners:
         return 0
     accounts = {account.account_id: account for account in (await list_accounts()).accounts}

@@ -21,7 +21,7 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.accounts import health_for_status
-from schemas.dialogues import DialogueOverview
+from schemas.dialogues import DialogueOverview, DialoguePairsResult, DialoguePartnersResult
 from schemas.warming import is_warming
 
 if TYPE_CHECKING:
@@ -31,7 +31,7 @@ _rng = random.SystemRandom()
 _MIN_POOL = 2
 
 
-async def get_partners(account_id: str) -> list[str]:
+async def get_partners(account_id: str) -> DialoguePartnersResult:
     """Return the accounts paired with ``account_id`` (either side of a pair)."""
     partners: list[str] = []
     for pair in await list_dialogue_pairs():
@@ -39,7 +39,7 @@ async def get_partners(account_id: str) -> list[str]:
             partners.append(pair.account_b)
         elif pair.account_b == account_id:
             partners.append(pair.account_a)
-    return partners
+    return DialoguePartnersResult(partners=partners)
 
 
 async def _eligible_accounts() -> list[str]:
@@ -84,7 +84,7 @@ def _build_pairs(accounts: list[str]) -> list[tuple[str, str]]:
     return sorted(pairs)
 
 
-async def assign_pairs(*, force: bool = False) -> list[DialoguePair]:
+async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
     """Reshuffle the acquaintance graph when stale, membership-changed, or forced.
 
     A pool below two eligible accounts clears any existing pairs (nobody to talk
@@ -97,10 +97,10 @@ async def assign_pairs(*, force: bool = False) -> list[DialoguePair]:
     if len(eligible) < _MIN_POOL:
         if pairs:
             await replace_dialogue_pairs([])
-        return []
+        return DialoguePairsResult(pairs=[])
 
     if not force and not _needs_reshuffle(pairs, eligible, now):
-        return pairs
+        return DialoguePairsResult(pairs=pairs)
 
     new_pairs = _build_pairs(eligible)
     await replace_dialogue_pairs(new_pairs)
@@ -109,7 +109,7 @@ async def assign_pairs(*, force: bool = False) -> list[DialoguePair]:
         "dialogue_pairs_assigned",
         extra={"accounts": len(eligible), "pairs": len(new_pairs)},
     )
-    return await list_dialogue_pairs()
+    return DialoguePairsResult(pairs=await list_dialogue_pairs())
 
 
 async def load_dialogue_overview(*, recent_limit: int = 20) -> DialogueOverview:

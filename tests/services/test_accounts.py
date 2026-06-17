@@ -253,15 +253,15 @@ async def test_import_account_tdata_registers_each_account_and_checks(
             username=f"user{request_account_id}",
         )
 
-    monkeypatch.setattr("services.accounts.convert_tdata_zip", fake_convert)
-    monkeypatch.setattr("services.accounts.check_telegram_session", fake_check)
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
 
-    accounts = await import_account_tdata(
+    result = await import_account_tdata(
         TdataConvertRequest(filename="tdata.zip", content=b"x", label="My pool"),
     )
 
-    assert [a.account_id for a in accounts] == ["111", "222"]
-    assert all(a.status == "alive" for a in accounts)
+    assert [a.account_id for a in result.accounts] == ["111", "222"]
+    assert all(a.status == "alive" for a in result.accounts)
 
 
 @pytest.mark.asyncio
@@ -271,7 +271,7 @@ async def test_import_account_tdata_surfaces_conversion_failure(
     async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
         return TdataConvertResult(status="invalid_zip", error="bad header")
 
-    monkeypatch.setattr("services.accounts.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
 
     with pytest.raises(ValueError, match=r"invalid_zip"):
         await import_account_tdata(
@@ -286,7 +286,7 @@ async def test_import_account_tdata_rejects_empty_payload(
     async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
         return TdataConvertResult(status="ok", accounts=[])
 
-    monkeypatch.setattr("services.accounts.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
 
     with pytest.raises(ValueError, match=r"no accounts"):
         await import_account_tdata(
@@ -331,8 +331,8 @@ async def test_import_account_tdata_rolls_back_on_mid_batch_failure(
             username=f"u{account_id}",
         )
 
-    monkeypatch.setattr("services.accounts.convert_tdata_zip", fake_convert)
-    monkeypatch.setattr("services.accounts.check_telegram_session", flaky_check)
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", flaky_check)
 
     with pytest.raises(RuntimeError, match=r"boom"):
         await import_account_tdata(
@@ -372,7 +372,7 @@ async def test_import_account_tdata_preflight_blocks_existing_account(
             ],
         )
 
-    monkeypatch.setattr("services.accounts.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
 
     with pytest.raises(SessionAlreadyExistsError, match=r"111"):
         await import_account_tdata(
@@ -398,7 +398,7 @@ async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPa
             username="checked",
         )
 
-    monkeypatch.setattr("services.accounts.check_telegram_session", fake_check)
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
 
     account = await check_account_session(AccountCheckRequest(account_id="account-2"))
     state = await load_accounts_table(AccountFilter(status="alive"))
@@ -456,7 +456,7 @@ async def test_check_account_proxy_persists_route_metadata(
             country_name="Netherlands",
         )
 
-    monkeypatch.setattr("services.accounts.check_proxy_connectivity", fake_check)
+    monkeypatch.setattr("services.accounts.proxy.check_proxy_connectivity", fake_check)
 
     proxy = await check_account_proxy(AccountProxyCheckRequest(account_id="account-proxy-check"))
     state = await load_accounts_table(AccountFilter())
@@ -487,7 +487,7 @@ async def test_update_account_profile_executes_action_and_persists_snapshot(
         captured.append(action)
         return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
 
-    monkeypatch.setattr("services.accounts.execute", fake_execute)
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
 
     account = await update_account_profile(
         AccountProfileUpdateRequest(
@@ -517,7 +517,7 @@ async def test_update_account_profile_can_clear_optional_fields(
         captured.append(action)
         return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
 
-    monkeypatch.setattr("services.accounts.execute", fake_execute)
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
     await update_account_profile(
         AccountProfileUpdateRequest(
             account_id="account-profile-clear",
@@ -559,7 +559,7 @@ async def test_update_account_profile_surfaces_action_failure(
             error_message="boom",
         )
 
-    monkeypatch.setattr("services.accounts.execute", fake_execute)
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
 
     with pytest.raises(ValueError, match="boom"):
         await update_account_profile(
@@ -577,7 +577,7 @@ async def test_set_account_profile_photo_executes_action(
         captured.append(action)
         return ActionResult(status="ok", action_type="set_profile_photo", account_id=account_id)
 
-    monkeypatch.setattr("services.accounts.execute", fake_execute)
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
 
     result = await set_account_profile_photo(
         AccountProfilePhotoUpload(
@@ -601,7 +601,7 @@ async def test_post_account_story_executes_story_action(
         captured.append(action)
         return ActionResult(status="ok", action_type="post_story", account_id=account_id)
 
-    monkeypatch.setattr("services.accounts.execute", fake_execute)
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
 
     result = await post_account_story(
         AccountStoryUpload(
@@ -629,7 +629,7 @@ async def test_add_account_profile_music_executes_music_action(
         captured.append(action)
         return ActionResult(status="ok", action_type="add_profile_music", account_id=account_id)
 
-    monkeypatch.setattr("services.accounts.execute", fake_execute)
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
 
     result = await add_account_profile_music(
         AccountProfileMusicUpload(
@@ -692,7 +692,7 @@ async def test_health_taxonomy_matches_status(
             is_temporary=status not in {"alive", "unauthorized", "session_error", "account_error"},
         )
 
-    monkeypatch.setattr("services.accounts.check_telegram_session", fake_check)
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
     await check_account_session(AccountCheckRequest(account_id="acc-h"))
     state = await load_accounts_table(AccountFilter())
     assert state.rows[0].health == expected_health

@@ -82,7 +82,7 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
             # archive into RAM (1 GB cap × Pydantic copy = ~2 GB peak otherwise).
             tmp = await asyncio.to_thread(_spool_upload_to_tempfile, event.file)
             try:
-                accounts = await import_account_tdata(
+                result = await import_account_tdata(
                     TdataConvertRequest(
                         filename=event.file.name,
                         content_path=tmp,
@@ -96,7 +96,10 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
                 with suppress(OSError):
                     tmp.unlink()
             dialog.close()
-            ui.notify(f"Импортировано аккаунтов из tdata: {len(accounts)}", type="positive")
+            ui.notify(
+                f"Импортировано аккаунтов из tdata: {len(result.accounts)}",
+                type="positive",
+            )
             await refresh()
 
         ui.upload(

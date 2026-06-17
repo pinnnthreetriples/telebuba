@@ -11,7 +11,7 @@ the bottom so existing ``from core.db import ...`` call sites keep working.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING, Any, Literal, cast
+from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import (
     BigInteger,
@@ -26,13 +26,14 @@ from sqlalchemy import (
 )
 
 from core.config import settings
+from core.migrations import apply_migrations
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-    from sqlalchemy.engine import Connection, Engine
+    from sqlalchemy.engine import Engine
 
 
 _metadata = MetaData()
@@ -191,90 +192,8 @@ def _get_engine() -> Engine:
 
         _state.engine = engine
         _metadata.create_all(engine)
-        _ensure_sqlite_schema(engine)
+        apply_migrations(engine)
     return _state.engine
-
-
-def _ensure_sqlite_schema(engine: Engine) -> None:
-    """Tiny additive migration hook for local SQLite files created before new columns."""
-    with engine.begin() as connection:
-        account_columns = _sqlite_columns(connection, "accounts")
-        if "bio" not in account_columns:
-            connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN bio VARCHAR")
-        proxy_columns = _sqlite_columns(connection, "account_proxies")
-        _proxy_new_columns: tuple[tuple[str, str], ...] = (
-            ("exit_ip", "VARCHAR"),
-            ("country_code", "VARCHAR"),
-            ("country_name", "VARCHAR"),
-            ("asn", "VARCHAR"),
-            ("is_datacenter", "INTEGER"),
-        )
-        for column_name, column_type in _proxy_new_columns:
-            if column_name not in proxy_columns:
-                connection.exec_driver_sql(
-                    f"ALTER TABLE account_proxies ADD COLUMN {column_name} {column_type}",
-                )
-        warming_state_columns = _sqlite_columns(connection, "warming_account_state")
-        # Each entry is (column_name, sql_type) — additive only, never destructive.
-        _warming_state_new_columns: tuple[tuple[str, str], ...] = (
-            ("last_error", "VARCHAR"),
-            ("last_action", "VARCHAR"),
-            ("last_channel", "VARCHAR"),
-            ("heartbeat_at", "VARCHAR"),
-            ("started_at", "VARCHAR"),
-            ("stopped_at", "VARCHAR"),
-            ("flood_wait_seconds", "INTEGER"),
-            ("flood_wait_until", "VARCHAR"),
-            ("proxy_snapshot", "VARCHAR"),
-            ("daily_actions", "INTEGER"),
-            ("daily_count_date", "VARCHAR"),
-            ("quarantine_count", "INTEGER"),
-        )
-        for column_name, column_type in _warming_state_new_columns:
-            if column_name not in warming_state_columns:
-                connection.exec_driver_sql(
-                    f"ALTER TABLE warming_account_state ADD COLUMN {column_name} {column_type}",
-                )
-        warming_settings_columns = _sqlite_columns(connection, "warming_settings")
-        if "join_enabled" not in warming_settings_columns:
-            # Default 1 (enabled) so accounts created before this column keep
-            # joining channels — a NULL would otherwise read as "disabled".
-            connection.exec_driver_sql(
-                "ALTER TABLE warming_settings ADD COLUMN join_enabled INTEGER DEFAULT 1",
-            )
-        # User-editable warming controls promoted from config to the settings row.
-        # Literal DEFAULTs match the config defaults so existing rows keep behaving.
-        _warming_settings_new_columns: tuple[tuple[str, str], ...] = (
-            ("enforce_readiness", "INTEGER DEFAULT 1"),
-            ("quiet_hours_enabled", "INTEGER DEFAULT 0"),
-            ("quiet_hours_start", "INTEGER DEFAULT 0"),
-            ("quiet_hours_end", "INTEGER DEFAULT 0"),
-            ("max_daily_actions", "INTEGER DEFAULT 0"),
-        )
-        for column_name, column_def in _warming_settings_new_columns:
-            if column_name not in warming_settings_columns:
-                connection.exec_driver_sql(
-                    f"ALTER TABLE warming_settings ADD COLUMN {column_name} {column_def}",
-                )
-
-
-def _sqlite_columns(
-    connection: Connection,
-    table_name: Literal[
-        "accounts",
-        "account_proxies",
-        "warming_account_state",
-        "warming_settings",
-    ],
-) -> set[str]:
-    # Whitelist of allowed table names — table_name is not user input but kept
-    # narrow so ``exec_driver_sql`` can never see anything unexpected.
-    allowed = ("accounts", "account_proxies", "warming_account_state", "warming_settings")
-    if table_name not in allowed:
-        msg = f"unsupported table {table_name!r}"
-        raise ValueError(msg)
-    rows = connection.exec_driver_sql(f"PRAGMA table_info({table_name})").mappings().all()
-    return {str(row["name"]) for row in rows}
 
 
 # --------------------------------------------------------------------------- #
