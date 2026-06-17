@@ -2033,3 +2033,68 @@ async def test_try_reserve_sent_hash_concurrent_only_one_wins() -> None:
     results = await asyncio.gather(*(try_reserve_sent_hash("shared-hash", since) for _ in range(8)))
     assert sum(1 for r in results if r) == 1
     assert sum(1 for r in results if not r) == 7
+
+
+@pytest.mark.asyncio
+async def test_open_with_partner_deterministic_tiebreak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F8: smaller account_id opens; larger waits, preventing crossing DMs."""
+    from services.warming._chat import _open_with_partner  # noqa: PLC0415
+
+    # Two accounts; "alpha" < "bravo" lexicographically.
+    accounts: dict[str, AccountRead] = {
+        "alpha": AccountRead(
+            account_id="alpha",
+            label=None,
+            session_name="alpha",
+            status="alive",
+            user_id=1,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+            bio=None,
+            last_checked_at=None,
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        ),
+        "bravo": AccountRead(
+            account_id="bravo",
+            label=None,
+            session_name="bravo",
+            status="alive",
+            user_id=2,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+            bio=None,
+            last_checked_at=None,
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        ),
+    }
+    secret = await load_warming_settings()
+
+    sent: list[tuple[str, TelegramAction]] = []
+
+    async def capture(account_id: str, action: TelegramAction) -> ActionResult:
+        sent.append((account_id, action))
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    async def gen(req: object) -> GeminiResult:  # noqa: ARG001
+        return GeminiResult(status="ok", text="howdy")
+
+    monkeypatch.setattr(_seams, "execute", capture)
+    monkeypatch.setattr(_seams, "generate_text", gen)
+
+    # bravo is the larger id; its opener attempt must be a no-op.
+    bravo_result = await _open_with_partner("bravo", ["alpha"], secret, accounts)
+    assert bravo_result.messages_sent == 0
+    assert sent == []
+
+    # alpha opens normally.
+    alpha_result = await _open_with_partner("alpha", ["bravo"], secret, accounts)
+    assert alpha_result.messages_sent == 1
+    assert len(sent) == 1

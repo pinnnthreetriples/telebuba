@@ -219,10 +219,16 @@ async def _open_with_partner(
     secret: WarmingSettingsSecret,
     accounts: dict[str, AccountRead],
 ) -> ChatResult:
+    # F8: when paired loops fire at the same instant, both sides would see an
+    # empty inbox and both open the conversation, producing crossing DMs.
+    # Restrict the opener role to the lexicographically smaller account_id;
+    # the other side waits and replies on its next cycle.
     candidates = [
         accounts[partner]
         for partner in partners
-        if accounts.get(partner) is not None and accounts[partner].user_id is not None
+        if accounts.get(partner) is not None
+        and accounts[partner].user_id is not None
+        and sender_id < partner
     ]
     if not candidates:
         return ChatResult()
