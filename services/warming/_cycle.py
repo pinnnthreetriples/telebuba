@@ -59,12 +59,14 @@ async def _human_pause(min_seconds: float, max_seconds: float) -> None:
     await asyncio.sleep(_human_delay(min_seconds, max_seconds))
 
 
-async def _read_and_react(
+async def _read_and_react(  # noqa: PLR0913
     account_id: str,
     channel: str,
     *,
     reactions_enabled: bool,
     reaction_probability: float,
+    attempts_so_far: int,
+    remaining_actions: int | None,
 ) -> tuple[int, int, ActionResult | None, int, int]:
     """Read a channel and maybe react. Returns reads, reactions, flood, fails, attempts."""
     warm = settings.warming
@@ -81,7 +83,11 @@ async def _read_and_react(
     elif read_result.status in _HALT_STATUSES:
         return reads, reactions, read_result, failures, attempts
     await _human_pause(warm.reading_min_seconds, warm.reading_max_seconds)
-    if reactions_enabled and _seams.rng.random() < reaction_probability:
+    can_react = True
+    if remaining_actions is not None and (attempts_so_far + attempts) >= remaining_actions:
+        can_react = False
+
+    if can_react and reactions_enabled and _seams.rng.random() < reaction_probability:
         react_result = await _seams.execute(
             account_id,
             ReactToPost(
@@ -195,6 +201,8 @@ async def _run_channel_loop(  # noqa: PLR0913
             channel.channel,
             reactions_enabled=secret.reactions_enabled,
             reaction_probability=intensity.reaction_probability,
+            attempts_so_far=attempts_so_far + tally.attempts,
+            remaining_actions=remaining_actions,
         )
         if _apply_read_result(tally, outcome, channel.channel):
             break
@@ -346,7 +354,7 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
                     tally.flooded, tally.flood_seconds, tally.flood_until = _classify_flood(
                         chat_result.flood_result
                     )
-                tally.last_failed_action = "chat"
+                tally.last_failed_action = chat_result.last_failed_action or "send_dm"
     finally:
         # SetOnline(False) must run even if any of the inner steps raises so the
         # account does not stay online forever.

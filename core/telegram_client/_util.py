@@ -20,6 +20,7 @@ def extract_invite_hash(channel: str) -> str | None:
     collisions with regular usernames.
     """
     cleaned = channel.strip().strip("<>").rstrip("/")
+    cleaned = cleaned.split("?", 1)[0]
     for prefix in ("https://t.me/", "http://t.me/", "t.me/", "telegram.me/"):
         if cleaned.lower().startswith(prefix):
             cleaned = cleaned[len(prefix) :]

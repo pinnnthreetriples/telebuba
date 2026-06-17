@@ -51,6 +51,8 @@ def test_normalize_channel_output_is_clean(raw: str) -> None:
         ("t.me/mychannel/123?single", "mychannel"),
         ("t.me/+AbC_12345", "+AbC_12345"),
         ("t.me/joinchat/AbC_12345", "+AbC_12345"),
+        ("t.me/+AbC_12345?x=1", "+AbC_12345"),
+        ("t.me/joinchat/AbC_12345?x=1", "+AbC_12345"),
     ],
 )
 def test_normalize_channel_exact_matches(raw: str, expected: str) -> None:

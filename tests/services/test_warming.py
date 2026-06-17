@@ -1475,6 +1475,31 @@ async def test_cycle_hard_daily_limit_includes_cleanup(
     assert result.channels_read == 0
 
 
+@pytest.mark.asyncio
+async def test_cycle_hard_daily_limit_react_skip(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.5)
+    await _seed_channel()
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=True,
+        join_enabled=False,
+        gemini_api_key="",
+    )
+
+    result = await warming.run_one_cycle(
+        WarmingCycleRequest(account_id="acc-1", remaining_actions=2)
+    )
+
+    assert result.attempted_actions == 2
+    assert recorder.types() == ["set_online", "read_channel", "set_online"]
+    assert result.channels_read == 1
+    assert result.reactions_sent == 0
+
+
 # --------------------------------------------------------------------------- #
 # Disabled actions (join toggle)
 # --------------------------------------------------------------------------- #
