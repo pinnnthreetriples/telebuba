@@ -2122,3 +2122,68 @@ async def test_concurrent_set_state_does_not_lose_increment() -> None:
     assert state is not None
     # Final state was set by one of the writers; the row must be present.
     assert state.state == "sleeping"
+
+
+@pytest.mark.asyncio
+async def test_migration_unique_session_name_handles_existing_duplicates(
+    tmp_path: Path,
+) -> None:
+    """P1.3: migration #7 must auto-remediate legacy duplicates, not crash startup.
+
+    Re-creates the pre-migration shape (no unique index) with two rows that
+    share a session_name, then drives ``apply_migrations`` and asserts the
+    index is in place and the second row's session_name was nulled.
+    """
+    from sqlalchemy import create_engine  # noqa: PLC0415
+
+    from core.migrations import apply_migrations  # noqa: PLC0415
+
+    db_path = tmp_path / "legacy.db"
+    engine = create_engine(f"sqlite:///{db_path}", future=True)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE accounts ("
+            "  account_id VARCHAR PRIMARY KEY,"
+            "  label VARCHAR,"
+            "  session_name VARCHAR,"
+            "  status VARCHAR NOT NULL,"
+            "  created_at VARCHAR NOT NULL,"
+            "  updated_at VARCHAR NOT NULL"
+            ")",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+            "VALUES ('acc-1', 'shared', 'new', '2026-01-01', '2026-01-01')",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+            "VALUES ('acc-2', 'shared', 'new', '2026-01-02', '2026-01-02')",
+        )
+
+    # Pretend the previous migrations already ran so #7 fires alone.
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, name VARCHAR NOT NULL, "
+            "applied_at VARCHAR NOT NULL)",
+        )
+        for version in (1, 2, 3, 4, 5, 6):
+            connection.exec_driver_sql(
+                "INSERT INTO schema_version VALUES (?, 'stub', '2026-01-01')",
+                (version,),
+            )
+
+    # Must not raise.
+    apply_migrations(engine)
+
+    with engine.connect() as connection:
+        rows = connection.exec_driver_sql(
+            "SELECT account_id, session_name FROM accounts ORDER BY account_id",
+        ).all()
+        names = {str(row[0]): row[1] for row in rows}
+        # Older row kept the name; the duplicate was nulled.
+        assert names["acc-1"] == "shared"
+        assert names["acc-2"] is None
+        remediations = connection.exec_driver_sql(
+            "SELECT account_id FROM schema_remediations WHERE migration = 7",
+        ).all()
+        assert [r[0] for r in remediations] == ["acc-2"]

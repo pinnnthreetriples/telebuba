@@ -135,6 +135,49 @@ def _add_unique_session_name_index(connection: Connection) -> None:
     # F5: forbid two accounts from sharing a Telethon .session file.
     # SQLite treats NULLs as distinct in a UNIQUE index, so NULL session_names
     # remain free to coexist for accounts that don't override the path.
+    #
+    # Legacy databases predating this migration may already contain duplicate
+    # session_name rows. Creating the index naively would raise IntegrityError
+    # on every startup. Auto-remediate by keeping the oldest row per
+    # session_name and nulling the rest, logging which accounts were touched
+    # so the operator can clean up later.
+    rows = connection.exec_driver_sql(
+        "SELECT account_id, session_name FROM accounts "
+        "WHERE session_name IS NOT NULL "
+        "ORDER BY session_name, created_at, account_id",
+    ).all()
+    seen: set[str] = set()
+    nulled: list[tuple[str, str]] = []
+    for account_id, session_name in rows:
+        name = str(session_name)
+        if name in seen:
+            nulled.append((str(account_id), name))
+            continue
+        seen.add(name)
+    for account_id, _name in nulled:
+        connection.exec_driver_sql(
+            "UPDATE accounts SET session_name = NULL WHERE account_id = ?",
+            (account_id,),
+        )
+    if nulled:
+        # No direct dependency on core.logging here (migrations are import-light);
+        # operator visibility comes via the schema_version row + this audit table.
+        connection.exec_driver_sql(
+            "CREATE TABLE IF NOT EXISTS schema_remediations ("
+            "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+            "  migration INTEGER NOT NULL,"
+            "  account_id VARCHAR NOT NULL,"
+            "  detail VARCHAR NOT NULL,"
+            "  applied_at VARCHAR NOT NULL"
+            ")",
+        )
+        applied_at = datetime.now(UTC).isoformat()
+        for account_id, name in nulled:
+            connection.exec_driver_sql(
+                "INSERT INTO schema_remediations (migration, account_id, detail, applied_at) "
+                "VALUES (?, ?, ?, ?)",
+                (7, account_id, f"session_name {name!r} nulled (duplicate)", applied_at),
+            )
     connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_accounts_session_name_unique "
         "ON accounts(session_name)",
