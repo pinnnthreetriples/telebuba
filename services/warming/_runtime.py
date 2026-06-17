@@ -165,6 +165,42 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
     return await _current_card(data.account_id)
 
 
+async def _stop_warming_locked(account_id: str) -> None:
+    """Inner stop, run with ``_account_lock(account_id)`` already held.
+
+    Extracted so service-level operations that need to compose stop with
+    other state mutations (e.g. ``remove_account``) can hold the lock across
+    both steps. See P2.2.
+    """
+    task = _RUNTIME.pop(account_id, None)
+    if task is not None and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(task),
+                timeout=settings.warming.stop_cancel_timeout_seconds,
+            )
+        except (TimeoutError, asyncio.CancelledError):
+            # Either we timed out or the cancel propagated correctly —
+            # in both cases the task is no longer ours to await.
+            pass
+        except Exception as exc:  # noqa: BLE001 - log+continue; stop must not fail.
+            await log_event(
+                "WARNING",
+                "warming_stop_task_error",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__, "message": str(exc)},
+            )
+    account = await fetch_account(account_id)
+    if account is not None:
+        await _set_state(
+            account_id,
+            "idle",
+            last_event="stopped",
+            stopped_at=_now_iso(),
+        )
+
+
 async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
     """Cancel an account's loop task and return it to the idle column.
 
@@ -174,36 +210,22 @@ async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
     a no-op for the DB — only the in-memory task is cleaned up.
     """
     async with _account_lock(data.account_id):
-        task = _RUNTIME.pop(data.account_id, None)
-        if task is not None and not task.done():
-            task.cancel()
-            try:
-                await asyncio.wait_for(
-                    asyncio.shield(task),
-                    timeout=settings.warming.stop_cancel_timeout_seconds,
-                )
-            except (TimeoutError, asyncio.CancelledError):
-                # Either we timed out or the cancel propagated correctly —
-                # in both cases the task is no longer ours to await.
-                pass
-            except Exception as exc:  # noqa: BLE001 - log+continue; stop must not fail.
-                await log_event(
-                    "WARNING",
-                    "warming_stop_task_error",
-                    account_id=data.account_id,
-                    extra={"error_type": type(exc).__name__, "message": str(exc)},
-                )
-        account = await fetch_account(data.account_id)
-        if account is not None:
-            await _set_state(
-                data.account_id,
-                "idle",
-                last_event="stopped",
-                stopped_at=_now_iso(),
-            )
+        await _stop_warming_locked(data.account_id)
     await log_event("INFO", "warming_stopped", account_id=data.account_id)
     await _refresh_dialogue_pairs()
     return await _current_card(data.account_id)
+
+
+def account_lock(account_id: str) -> asyncio.Lock:
+    """Public accessor for the per-account lifecycle lock (P2.2).
+
+    Use this from a service-level operation that needs to hold the same lock
+    ``start_warming`` / ``stop_warming`` / ``reconcile_warming_runtime`` use,
+    e.g. to serialize stop + delete in ``remove_account``. The bare locked
+    primitive (rather than a context manager wrapper) keeps the call site
+    explicit about lock scope.
+    """
+    return _account_lock(account_id)
 
 
 async def reconcile_warming_runtime() -> None:

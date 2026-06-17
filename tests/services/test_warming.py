@@ -2627,3 +2627,52 @@ async def test_run_loop_iteration_bails_when_state_error() -> None:
     assert state is not None
     assert state.state == "error"
     assert state.last_error == "boom"
+
+
+@pytest.mark.asyncio
+async def test_remove_account_blocks_concurrent_start_until_delete_complete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-2 P2.2: remove_account holds the lifecycle lock across stop + delete.
+
+    Forces the race shape: a parallel ``start_warming`` is dispatched while
+    ``remove_account`` is mid-flight. With the lock held across both stop and
+    delete, the start has to wait until delete finishes; by then the account
+    is gone, so start raises UnknownAccountError and no orphan task is
+    created. Without the lock, the start would interleave and produce an
+    orphan task pointing at a deleted account.
+    """
+    from services.accounts.lifecycle import remove_account  # noqa: PLC0415
+
+    started_events: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started_events.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    await asyncio.sleep(0)
+    started_events.clear()  # drop the legitimate first start
+
+    # Run remove and a concurrent start. If the lock isn't held, the start
+    # races into _RUNTIME before delete_account; if it is, start waits for
+    # the lock, finds the account gone, and bails with UnknownAccountError.
+    remove_task = asyncio.create_task(remove_account("acc-1"))
+    await asyncio.sleep(0)  # give remove a chance to take the lock
+
+    with pytest.raises(warming.UnknownAccountError):
+        await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    await remove_task
+
+    # No orphan task survived the race.
+    assert "acc-1" not in warming._RUNTIME
+    assert started_events == []
