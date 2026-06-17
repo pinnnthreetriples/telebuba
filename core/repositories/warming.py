@@ -286,13 +286,17 @@ async def fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
 
 
 def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
-    # F9 + P1.2: collapse to a single sqlite_insert ON CONFLICT DO UPDATE so the
-    # whole upsert runs under SQLite's implicit write lock, eliminating the
-    # select-then-write TOCTOU. ``run_id`` carries the loop generation marker
-    # so an old in-flight cycle can detect a newer start by comparing.
+    # F9 + P1.2 + P2.4: collapse to a single sqlite_insert ON CONFLICT DO UPDATE
+    # so the whole upsert runs under SQLite's implicit write lock, eliminating
+    # the select-then-write TOCTOU. ``run_id`` carries the loop generation
+    # marker, and ``increment_cycle=True`` makes the cycles_completed bump an
+    # atomic SQL expression instead of a read-then-compute round trip.
     now = _now_iso()
-    values: dict[str, object | None] = {
+    insert_values: dict[str, object | None] = {
         "state": data.state,
+        # For a brand-new row, increment_cycle just means "this is cycle 1".
+        # The caller supplies cycles_completed=1 in that case; otherwise the
+        # supplied value is used verbatim.
         "cycles_completed": data.cycles_completed,
         "last_event": data.last_event,
         "last_cycle_at": data.last_cycle_at,
@@ -312,12 +316,15 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "quarantine_count": data.quarantine_count,
         "run_id": data.run_id,
     }
+    update_values: dict[str, object] = dict(insert_values)
+    if data.increment_cycle:
+        update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1
     stmt = (
         sqlite_insert(_warming_account_state)
-        .values(account_id=data.account_id, **values)
+        .values(account_id=data.account_id, **insert_values)
         .on_conflict_do_update(
             index_elements=[_warming_account_state.c.account_id],
-            set_=values,
+            set_=update_values,
         )
     )
     with _get_engine().begin() as connection:

@@ -2101,27 +2101,28 @@ async def test_open_with_partner_deterministic_tiebreak(
 
 
 @pytest.mark.asyncio
-async def test_concurrent_set_state_does_not_lose_increment() -> None:
-    """F9: parallel _set_state(increment_cycle=True) preserves both increments."""
+async def test_concurrent_set_state_increment_cycle_preserves_all_increments() -> None:
+    """P2.4: N parallel _set_state(increment_cycle=True) → cycles_completed == N.
+
+    The pre-fix code computed ``cycles + 1`` from a stale read in _set_state and
+    handed the result to the upsert. Concurrent writers all read the same
+    pre-state and clobbered each other (each thought their write was the next).
+    The fix moves the bump into the ON CONFLICT DO UPDATE SQL expression.
+    """
     from services.warming._state import _set_state  # noqa: PLC0415
 
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
 
-    # Even with parallel writers, the upsert is now a single statement, so
-    # cycles_completed must end at the value of the last writer rather than
-    # losing one of the increments to a select-then-write race.
-    async def step(target: int) -> None:
-        record = await fetch_warming_state("acc-1")
-        next_cycles = (record.cycles_completed if record else 0) + 1
-        await _set_state("acc-1", "sleeping", last_event=f"cycle-{target}")
-        del next_cycles  # not asserted; we only care about not crashing.
+    n_writers = 8
 
-    await asyncio.gather(*(step(i) for i in range(5)))
+    async def bump(i: int) -> None:
+        await _set_state("acc-1", "sleeping", last_event=f"cycle-{i}", increment_cycle=True)
+
+    await asyncio.gather(*(bump(i) for i in range(n_writers)))
     state = await fetch_warming_state("acc-1")
     assert state is not None
-    # Final state was set by one of the writers; the row must be present.
-    assert state.state == "sleeping"
+    assert state.cycles_completed == n_writers
 
 
 @pytest.mark.asyncio

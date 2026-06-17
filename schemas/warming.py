@@ -205,6 +205,12 @@ class WarmingStateWrite(BaseModel):
     quarantine_count: int = Field(default=0, ge=0)
     # P1.2: see WarmingStateRecord.run_id.
     run_id: str | None = None
+    # P2.4: when True, the upsert sets ``cycles_completed`` to
+    # ``warming_account_state.cycles_completed + 1`` on conflict (atomic SQL
+    # expression), instead of writing the read-then-compute value the caller
+    # supplied in ``cycles_completed``. This closes the lost-update race when
+    # two writers concurrently bump the counter.
+    increment_cycle: bool = False
 
 
 class WarmingAccountState(BaseModel):
