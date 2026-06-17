@@ -42,6 +42,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     daily_actions: int | _Sentinel = _SENTINEL,
     daily_count_date: str | None | _Sentinel = _SENTINEL,
     quarantine_count: int | _Sentinel = _SENTINEL,
+    run_id: str | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateRecord:
     current = await fetch_warming_state(account_id)
     cycles = current.cycles_completed if current else 0
@@ -81,6 +82,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             daily_actions=cast("int", _resolve(daily_actions, "daily_actions") or 0),
             daily_count_date=cast("str | None", _resolve(daily_count_date, "daily_count_date")),
             quarantine_count=cast("int", _resolve(quarantine_count, "quarantine_count") or 0),
+            run_id=cast("str | None", _resolve(run_id, "run_id")),
         ),
     )
 

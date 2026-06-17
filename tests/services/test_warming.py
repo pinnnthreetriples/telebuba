@@ -524,7 +524,7 @@ async def test_load_board_enriches_cards_and_summary() -> None:
 
 @pytest.mark.asyncio
 async def test_start_and_stop_warming_manage_the_task(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -912,7 +912,7 @@ async def test_reconcile_warming_runtime_restarts_active_loops(
 ) -> None:
     started: list[str] = []
 
-    async def fake_loop(account_id: str) -> None:
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         started.append(account_id)
         await asyncio.sleep(3600)
 
@@ -935,7 +935,7 @@ async def test_reconcile_warming_runtime_skips_error_state(
     """Error accounts must not be auto-resurrected on restart; user has to act."""
     started: list[str] = []
 
-    async def fake_loop(account_id: str) -> None:
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         started.append(account_id)
         await asyncio.sleep(3600)
 
@@ -956,7 +956,7 @@ async def test_reconcile_warming_runtime_builds_dialogue_pairs(
 ) -> None:
     """Inter-account chat needs pairs — reconcile must build the graph on startup."""
 
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1011,7 +1011,7 @@ async def test_reconcile_purges_stale_history(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_reconcile_marks_orphan_state_rows_idle(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1049,7 +1049,7 @@ async def test_reconcile_marks_orphan_state_rows_idle(monkeypatch: pytest.Monkey
 
 @pytest.mark.asyncio
 async def test_shutdown_warming_runtime_cancels_all(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1182,7 +1182,7 @@ async def test_start_warming_blocks_not_ready_account() -> None:
 async def test_start_warming_ready_account_records_proxy_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1203,7 +1203,7 @@ async def test_manual_start_clears_stale_next_run_at(
 ) -> None:
     """Manual Start must fire immediately, not honour an old persisted schedule."""
 
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1632,7 +1632,7 @@ async def test_start_warming_refreshes_pairs_before_loop(monkeypatch: pytest.Mon
     async def fake_refresh() -> None:
         calls.append("refresh")
 
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         calls.append("loop")
 
     monkeypatch.setattr("services.warming._runtime._refresh_dialogue_pairs", fake_refresh)
@@ -1882,7 +1882,7 @@ async def test_manual_start_replaces_existing_loop_task(
     started: list[str] = []
     cancelled = asyncio.Event()
 
-    async def fake_loop(account_id: str) -> None:
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         started.append(account_id)
         try:
             await asyncio.sleep(3600)
@@ -1923,7 +1923,7 @@ async def test_reconcile_skips_when_state_already_idle(
 
     started: list[str] = []
 
-    async def fake_loop(account_id: str) -> None:
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         started.append(account_id)
         await asyncio.sleep(3600)
 
@@ -2136,10 +2136,17 @@ async def test_migration_unique_session_name_handles_existing_duplicates(
     """
     from sqlalchemy import create_engine  # noqa: PLC0415
 
-    from core.migrations import apply_migrations  # noqa: PLC0415
-
     db_path = tmp_path / "legacy.db"
     engine = create_engine(f"sqlite:///{db_path}", future=True)
+    try:
+        await _exercise_migration_seven(engine)
+    finally:
+        engine.dispose()
+
+
+async def _exercise_migration_seven(engine) -> None:  # type: ignore[no-untyped-def]
+    from core.migrations import apply_migrations  # noqa: PLC0415
+
     with engine.begin() as connection:
         connection.exec_driver_sql(
             "CREATE TABLE accounts ("
@@ -2166,7 +2173,11 @@ async def test_migration_unique_session_name_handles_existing_duplicates(
             "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, name VARCHAR NOT NULL, "
             "applied_at VARCHAR NOT NULL)",
         )
-        for version in (1, 2, 3, 4, 5, 6):
+        # Stamp every non-#7 migration as already applied so the test DB only
+        # exercises the new index migration. Append the new version here when
+        # adding a migration that touches a table this test does NOT create.
+        already_applied = (1, 2, 3, 4, 5, 6, 8)
+        for version in already_applied:
             connection.exec_driver_sql(
                 "INSERT INTO schema_version VALUES (?, 'stub', '2026-01-01')",
                 (version,),
@@ -2202,7 +2213,11 @@ async def test_warming_loop_exits_when_state_becomes_idle_after_iteration(
     """
     iterations: list[str] = []
 
-    async def fake_iteration(account_id: str) -> WarmingCycleResult:
+    async def fake_iteration(
+        account_id: str,
+        *,
+        run_id: str | None = None,  # noqa: ARG001
+    ) -> WarmingCycleResult:
         iterations.append(account_id)
         await upsert_warming_state(WarmingStateWrite(account_id=account_id, state="idle"))
         return WarmingCycleResult(account_id=account_id, status="ok")
@@ -2236,3 +2251,81 @@ async def test_run_loop_iteration_bails_when_state_already_idle() -> None:
     assert state is not None
     # The early-exit did NOT overwrite ``idle`` with ``cycle_started``.
     assert state.state == "idle"
+
+
+@pytest.mark.asyncio
+async def test_old_cycle_cannot_overwrite_new_manual_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P1.2: an in-flight cycle from a previous start must not write through.
+
+    Simulates the race: cycle A is running ``run_one_cycle`` (state=active,
+    run_id=A); meanwhile a second start_warming has flipped run_id → B and
+    written 'queued' for the new generation. When A's iteration tries to write
+    its final next_state, the run_id mismatch must turn the write into a no-op.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    # Stage the DB: run_id_b is the "new" generation; the old cycle holds run_id_a.
+    run_id_a = "old-run"
+    run_id_b = "new-run"
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id=run_id_a),
+    )
+
+    async def cycle_with_restart_inside(req):  # type: ignore[no-untyped-def]
+        # Simulate start_warming firing during this in-flight cycle: it minted
+        # a fresh run_id and wrote it (along with state='active') to the row.
+        await upsert_warming_state(
+            WarmingStateWrite(
+                account_id=req.account_id,
+                state="active",
+                run_id=run_id_b,
+                last_event="queued",
+            ),
+        )
+        return WarmingCycleResult(account_id=req.account_id, status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", cycle_with_restart_inside)
+
+    await run_loop_iteration("acc-1", run_id=run_id_a)
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The new generation owns the row; the stale cycle's final write must not
+    # have flipped state to 'sleeping'/'error' or rolled run_id back to A.
+    assert state.run_id == run_id_b
+    assert state.state == "active"
+    assert state.last_event == "queued"
+
+
+@pytest.mark.asyncio
+async def test_start_warming_mints_fresh_run_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P1.2: each manual start writes a new run_id distinct from the previous one."""
+
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    state_first = await fetch_warming_state("acc-1")
+    assert state_first is not None
+    first_run_id = state_first.run_id
+    assert first_run_id is not None
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    state_second = await fetch_warming_state("acc-1")
+    assert state_second is not None
+    assert state_second.run_id is not None
+    assert state_second.run_id != first_run_id

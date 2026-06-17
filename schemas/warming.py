@@ -176,6 +176,10 @@ class WarmingStateRecord(BaseModel):
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
     quarantine_count: int = Field(default=0, ge=0)
+    # P1.2: per-loop generation marker. start_warming / reconcile mint a fresh
+    # value; the loop captures it and refuses to write through if the DB run_id
+    # has changed underneath it (= a newer start replaced this generation).
+    run_id: str | None = None
 
 
 class WarmingStateWrite(BaseModel):
@@ -199,6 +203,8 @@ class WarmingStateWrite(BaseModel):
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
     quarantine_count: int = Field(default=0, ge=0)
+    # P1.2: see WarmingStateRecord.run_id.
+    run_id: str | None = None
 
 
 class WarmingAccountState(BaseModel):

@@ -255,6 +255,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         daily_actions=_optional_int(mapping.get("daily_actions")) or 0,
         daily_count_date=_optional_str(mapping.get("daily_count_date")),
         quarantine_count=_optional_int(mapping.get("quarantine_count")) or 0,
+        run_id=_optional_str(mapping.get("run_id")),
     )
 
 
@@ -285,11 +286,10 @@ async def fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
 
 
 def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
-    # F9: previous select-then-insert/update is racy — two writers in the same
-    # account-lock-bypassing path (stop_warming / reconcile / loop's late
-    # final write) could observe the same pre-state and clobber each other's
-    # updates. Collapse to a single sqlite_insert ON CONFLICT DO UPDATE so the
-    # whole upsert runs under SQLite's implicit write lock.
+    # F9 + P1.2: collapse to a single sqlite_insert ON CONFLICT DO UPDATE so the
+    # whole upsert runs under SQLite's implicit write lock, eliminating the
+    # select-then-write TOCTOU. ``run_id`` carries the loop generation marker
+    # so an old in-flight cycle can detect a newer start by comparing.
     now = _now_iso()
     values: dict[str, object | None] = {
         "state": data.state,
@@ -310,6 +310,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "daily_actions": data.daily_actions,
         "daily_count_date": data.daily_count_date,
         "quarantine_count": data.quarantine_count,
+        "run_id": data.run_id,
     }
     stmt = (
         sqlite_insert(_warming_account_state)

@@ -33,6 +33,17 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingState, WarmingStateRecord
 
 
+def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -> bool:
+    """True iff ``record`` is alive and (when supplied) matches ``run_id`` (P1.2)."""
+    if record is None:
+        return run_id is None  # no DB row + no expectation → trivially "match"
+    if record.state == "idle":
+        return False
+    if run_id is None:
+        return True
+    return record.run_id == run_id
+
+
 async def _recover_from_quarantine(
     account_id: str,
     record: WarmingStateRecord,
@@ -140,7 +151,11 @@ async def _calculate_next_run(
     return actions_done, next_run_dt, next_state
 
 
-async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
+async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches read clearer than chained conditions.
+    account_id: str,
+    *,
+    run_id: str | None = None,
+) -> WarmingCycleResult:
     """Run one iteration of the warming loop (cycle + state transitions).
 
     Extracted from ``_warming_loop`` so it can be tested without the infinite
@@ -150,16 +165,19 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
 
     Two gates run before the cycle: quiet hours (park until the window ends) and
     the per-account daily action budget (park until UTC midnight).
+
+    ``run_id`` (P1.2): when the wrapper passes a non-None generation marker, the
+    iteration re-checks the DB ``run_id`` before any write and bails on
+    mismatch. Tests that drive ``run_loop_iteration`` directly without a
+    generation pass ``run_id=None`` and behave as before.
     """
     now = datetime.now(UTC)
     controls = await load_warming_settings()
     record = await fetch_warming_state(account_id)
 
-    # P1.1: if the operator stopped the account before this iteration ran,
-    # do not overwrite ``idle`` with ``cycle_started`` (the early _set_state
-    # below). Bail before touching the row.
-    if record is not None and record.state == "idle":
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="idle")
+    # P1.1 / P1.2: bail before any write if the iteration is stale.
+    if not _matches_active_run(record, run_id):
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
 
     if record is not None and record.state == "quarantine":
         return await _recover_from_quarantine(account_id, record, now)
@@ -214,11 +232,14 @@ async def run_loop_iteration(account_id: str) -> WarmingCycleResult:
     new_daily = daily_count + actions_done
     next_run = next_run_dt.isoformat()
 
-    # F1: if stop_warming wrote idle while we were inside run_one_cycle, do not
-    # resurrect the cycle's next_state on top of it. The cycle's I/O may have
-    # outlived task.cancel() (e.g. asyncio.to_thread isn't interrupted mid-write),
-    # and the operator-issued idle must win.
+    # F1 + P1.2: if stop_warming wrote ``idle`` OR start_warming minted a fresh
+    # run_id while we were inside run_one_cycle, do not resurrect the cycle's
+    # next_state on top of it. The cycle's I/O may have outlived task.cancel()
+    # (e.g. asyncio.to_thread isn't interrupted mid-write), and the operator's
+    # intent must win.
     latest = await fetch_warming_state(account_id)
+    if not _matches_active_run(latest, run_id):
+        return result
     if latest is not None and latest.state == "idle":
         return result
 

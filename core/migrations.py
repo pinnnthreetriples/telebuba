@@ -184,6 +184,15 @@ def _add_unique_session_name_index(connection: Connection) -> None:
     )
 
 
+def _add_warming_state_run_id(connection: Connection) -> None:
+    # P1.2: per-loop generation marker so an old in-flight cycle cannot write
+    # through after a new start_warming has minted a fresh run_id.
+    if "run_id" not in _sqlite_columns(connection, "warming_account_state"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state ADD COLUMN run_id VARCHAR",
+        )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -194,6 +203,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (5, "add_warming_user_controls", _add_warming_user_controls),
     (6, "add_warming_joined_channels", _add_warming_joined_channels),
     (7, "add_unique_session_name_index", _add_unique_session_name_index),
+    (8, "add_warming_state_run_id", _add_warming_state_run_id),
 )
 
 

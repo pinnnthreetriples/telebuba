@@ -157,6 +157,8 @@ _warming_account_state = Table(
     Column("daily_actions", Integer, nullable=True),
     Column("daily_count_date", String, nullable=True),
     Column("quarantine_count", Integer, nullable=True),
+    # P1.2: see schemas.warming.WarmingStateRecord.run_id.
+    Column("run_id", String, nullable=True),
 )
 _account_spam_status = Table(
     "account_spam_status",

@@ -12,6 +12,7 @@ patch it on this module.
 from __future__ import annotations
 
 import asyncio
+import uuid
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -87,6 +88,22 @@ def _account_lock(account_id: str) -> asyncio.Lock:
     return lock
 
 
+def _is_live_generation(record: WarmingStateRecord | None, run_id: str | None) -> bool:
+    """True iff ``record`` belongs to ``run_id`` and is still in a warming state.
+
+    P1.2: ``run_id is None`` means the loop wasn't given a generation marker
+    (legacy reconcile from a DB that pre-dates migration #8); we fall back to
+    state-only checks so behaviour matches the pre-P1.2 baseline.
+    """
+    if record is None:
+        return False
+    if not is_warming(record.state) or record.state == "error":
+        return False
+    if run_id is None:
+        return True
+    return record.run_id == run_id
+
+
 async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
     """Move an account into the warming column and kick off its loop task."""
     async with _account_lock(data.account_id):
@@ -112,6 +129,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                     extra={"reasons": readiness.reasons},
                 )
                 raise WarmingNotReadyError(readiness.reasons)
+        # P1.2: stamp a fresh generation marker so an in-flight cycle from
+        # the previous run can detect and refuse to write through.
+        run_id = uuid.uuid4().hex
         await _set_state(
             data.account_id,
             "active",
@@ -123,6 +143,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             flood_wait_seconds=None,
             flood_wait_until=None,
             proxy_snapshot=_proxy_snapshot(account),
+            run_id=run_id,
         )
         # F2: an existing task may still be inside the inter-cycle
         # ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous*
@@ -137,7 +158,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                     timeout=settings.warming.stop_cancel_timeout_seconds,
                 )
         await _refresh_dialogue_pairs()
-        _RUNTIME[data.account_id] = asyncio.create_task(_warming_loop(data.account_id))
+        _RUNTIME[data.account_id] = asyncio.create_task(
+            _warming_loop(data.account_id, run_id=run_id),
+        )
     await log_event("INFO", "warming_started", account_id=data.account_id)
     return await _current_card(data.account_id)
 
@@ -225,7 +248,15 @@ async def reconcile_warming_runtime() -> None:
                     stopped_at=_now_iso(),
                 )
                 continue
-            _RUNTIME[record.account_id] = asyncio.create_task(_warming_loop(record.account_id))
+            # P1.2: mint a fresh generation marker so this restarted loop owns
+            # the row going forward; any pre-restart cycle that somehow lives
+            # on (it shouldn't, post-restart, but be defensive) will see the
+            # mismatch and bail.
+            run_id = uuid.uuid4().hex
+            await _set_state(record.account_id, fresh.state, run_id=run_id)
+            _RUNTIME[record.account_id] = asyncio.create_task(
+                _warming_loop(record.account_id, run_id=run_id),
+            )
             restarted += 1
     if restarted:
         await log_event(
@@ -334,30 +365,34 @@ def _initial_delay_seconds(record: WarmingStateRecord | None, now: datetime) -> 
     return _seams.rng.uniform(0.0, settings.warming.startup_jitter_max_seconds)
 
 
-async def _warming_loop(account_id: str) -> None:  # pragma: no cover - long-running task
+async def _warming_loop(
+    account_id: str,
+    *,
+    run_id: str | None = None,
+) -> None:  # pragma: no cover - long-running task
     """Run cycles forever, timing each from the persisted ``next_run_at``.
 
     Never raises to the caller. On (re)start it respects an existing schedule so
     an app restart does not turn parked accounts into an activity spike.
 
-    P1.1: exits whenever the DB state is no longer a warming state (idle,
-    stopped, error). Without this, a task that survived a cancel — or was
-    created in error — would keep spinning even after the operator stopped
-    the account, periodically overwriting ``idle`` with ``active`` at the
-    next ``cycle_started`` write.
+    ``run_id`` is the generation marker the caller stamped before creating this
+    task. The loop refuses to keep running if the DB ``run_id`` no longer
+    matches (= a newer ``start_warming`` minted a fresh generation), and passes
+    it to ``run_loop_iteration`` so an in-flight cycle won't write through after
+    a restart either (P1.2).
     """
     try:
         record = await fetch_warming_state(account_id)
-        if record is None or not is_warming(record.state) or record.state == "error":
+        if not _is_live_generation(record, run_id):
             return
         await asyncio.sleep(_initial_delay_seconds(record, datetime.now(UTC)))
         while True:
             record = await fetch_warming_state(account_id)
-            if record is None or not is_warming(record.state) or record.state == "error":
+            if not _is_live_generation(record, run_id):
                 break
-            await run_loop_iteration(account_id)
+            await run_loop_iteration(account_id, run_id=run_id)
             record = await fetch_warming_state(account_id)
-            if record is None or not is_warming(record.state) or record.state == "error":
+            if not _is_live_generation(record, run_id):
                 break
             await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
     except asyncio.CancelledError:
