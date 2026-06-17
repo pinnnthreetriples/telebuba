@@ -2603,6 +2603,14 @@ async def test_restart_between_run_id_check_and_cycle_started_write_loses(
 
     monkeypatch.setattr(_loop, "fetch_warming_state", fake_fetch)
 
+    # Stub the cycle so we don't reach real Telethon — the CAS we're testing
+    # fires on cycle_started *before* the cycle runs, so the stub's content
+    # doesn't matter for the assertion.
+    async def stub_cycle(req):  # type: ignore[no-untyped-def]
+        return WarmingCycleResult(account_id=req.account_id, status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", stub_cycle)
+
     await run_loop_iteration("acc-1", run_id="run-a")
     state = await fetch_warming_state("acc-1")
     assert state is not None
