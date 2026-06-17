@@ -12,7 +12,7 @@ edges:
     condition: when a decision relates to system structure
   - target: context/stack.md
     condition: when a decision relates to technology choice
-last_updated: 2026-06-16
+last_updated: 2026-06-17
 ---
 
 # Decisions
@@ -61,7 +61,7 @@ last_updated: 2026-06-16
 ### Split `core/db.py` into repositories once tables ≥ 5
 **Date:** 2026-06-10
 **Status:** Implemented 2026-06-14
-**Decision:** Per-aggregate CRUD lives in `core/repositories/<aggregate>.py`. `core/db.py` remains shared SQLite plumbing: metadata, table definitions, engine lifecycle, additive migrations, generic helpers, and compatibility re-exports.
+**Decision:** Per-aggregate CRUD lives in `core/repositories/<aggregate>.py`. `core/db.py` remains shared SQLite plumbing: metadata, table definitions, engine lifecycle, generic helpers, and compatibility re-exports. Schema evolution is delegated to `core/migrations.py` as a versioned, append-only migration registry.
 **Reasoning:** A monolithic `core/db.py` was turning into a god-module. The repository pattern keeps aggregate queries colocated while preserving a single SQLAlchemy gateway.
 **Alternatives considered:**
 - *Always one file* (rejected — breaks down as tables grow).
