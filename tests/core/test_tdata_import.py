@@ -164,6 +164,31 @@ async def test_happy_path_single_account(sessions_dir: Path, tmp_base: Path) -> 
 
 
 @pytest.mark.asyncio
+async def test_convert_accepts_content_path_streaming(
+    sessions_dir: Path,
+    tmp_base: Path,
+    tmp_path: Path,
+) -> None:
+    """convert_tdata_zip must read the archive from disk when content_path is set."""
+    payload = _zip({"tdata/key_data": b"x"})
+    archive = tmp_path / "tdata.zip"
+    archive.write_bytes(payload)
+    req = TdataConvertRequest(filename="good.zip", content_path=archive)
+
+    fake_client = AsyncMock()
+    fake_account = MagicMock()
+    fake_account.UserId = 999
+    fake_account.ToTelethon = AsyncMock(return_value=fake_client)
+    fake_td = MagicMock(accountsCount=1, accounts=[fake_account])
+
+    with patch("core.tdata_import.TDesktop", return_value=fake_td):
+        result = await convert_tdata_zip(req, sessions_dir, tmp_base=tmp_base)
+
+    assert result.status == "ok"
+    assert result.accounts[0].user_id == 999
+
+
+@pytest.mark.asyncio
 async def test_happy_path_multiple_accounts(sessions_dir: Path, tmp_base: Path) -> None:
     payload = _zip({"tdata/key_data": b"x"})
     req = TdataConvertRequest(filename="good.zip", content=payload)
