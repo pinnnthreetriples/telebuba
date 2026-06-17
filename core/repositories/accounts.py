@@ -322,7 +322,21 @@ def _delete_account(account_id: str) -> None:
 
 
 async def delete_account(account_id: str) -> None:
-    """Delete an account row (cascade is handled by SQLite FK constraints)."""
+    """Delete an account row + every per-account child row.
+
+    SQLite FKs are declared without ``ON DELETE CASCADE`` (see F4); this
+    helper manually purges ``warming_account_state`` / ``account_proxies`` /
+    ``account_spam_status`` / ``device_fingerprints`` / dialogue tables /
+    joined channels before deleting the ``accounts`` row. New per-account
+    tables MUST be added to ``_delete_account`` — relying on FK cascade is
+    a bug.
+
+    Does not stop a running warming task. Service callers should use
+    :func:`services.accounts.lifecycle.remove_account` instead, which holds
+    the per-account runtime lock across stop + delete (P2.2). The
+    ``_tdata`` rollback path is the only legitimate direct caller of this
+    repo function because those accounts never started warming.
+    """
     await asyncio.to_thread(_delete_account, account_id)
 
 
