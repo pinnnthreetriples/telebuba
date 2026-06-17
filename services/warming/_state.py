@@ -43,6 +43,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     daily_count_date: str | None | _Sentinel = _SENTINEL,
     quarantine_count: int | _Sentinel = _SENTINEL,
     run_id: str | None | _Sentinel = _SENTINEL,
+    expected_run_id: str | None = None,
 ) -> WarmingStateRecord:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
@@ -87,6 +88,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             daily_count_date=cast("str | None", _resolve(daily_count_date, "daily_count_date")),
             quarantine_count=cast("int", _resolve(quarantine_count, "quarantine_count") or 0),
             run_id=cast("str | None", _resolve(run_id, "run_id")),
+            expected_run_id=expected_run_id,
         ),
     )
 

@@ -2513,3 +2513,117 @@ async def test_remove_account_stops_runtime_task(monkeypatch: pytest.MonkeyPatch
     from core.db import fetch_account  # noqa: PLC0415
 
     assert await fetch_account("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_stop_between_run_id_check_and_final_write_loses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-2 P1: CAS upsert prevents stale loop from overwriting a fresh idle.
+
+    Old loop passes the post-cycle guard (run_id still matches), then a stop
+    flips state to ``idle`` AND mints a new (None) run_id slot before the
+    final _set_state lands. With the CAS clause on the upsert, the stale
+    write must turn into a no-op rather than resurrecting ``sleeping``.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
+    )
+
+    async def cycle_with_stop_after_guard(req):  # type: ignore[no-untyped-def]
+        # Simulate stop_warming firing AFTER the iteration's post-cycle guard
+        # but before the final _set_state — flips state to idle and clears
+        # run_id, mimicking the real stop_warming sequence.
+        await upsert_warming_state(
+            WarmingStateWrite(
+                account_id=req.account_id,
+                state="idle",
+                last_event="stopped",
+                run_id=None,
+            ),
+        )
+        return WarmingCycleResult(account_id=req.account_id, status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", cycle_with_stop_after_guard)
+
+    await run_loop_iteration("acc-1", run_id="run-a")
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"
+    assert state.run_id is None
+
+
+@pytest.mark.asyncio
+async def test_restart_between_run_id_check_and_cycle_started_write_loses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-2 P1: a stale iteration cannot stamp 'cycle_started' on top of a new run.
+
+    Forces the race by patching ``fetch_warming_state`` so the first call (the
+    iteration's _matches_active_run guard) sees the OLD run_id, but the row in
+    the DB has already been advanced to a fresh run_id by a new start_warming.
+    The CAS clause on the cycle_started upsert must then refuse to mutate the
+    row — the new generation's state must survive untouched.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    # DB row is on the NEW generation already.
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            last_event="queued",
+            run_id="run-b",
+        ),
+    )
+
+    # The stale guard sees a stale snapshot (run_id=run-a). The CAS on the
+    # subsequent _set_state must catch the mismatch and skip the UPDATE.
+    real_fetch = _loop.fetch_warming_state
+
+    fetch_calls = {"n": 0}
+
+    async def fake_fetch(account_id: str):  # type: ignore[no-untyped-def]
+        fetch_calls["n"] += 1
+        if fetch_calls["n"] == 1:
+            # First fetch is the guard; lie about run_id so the guard accepts.
+            real = await real_fetch(account_id)
+            if real is None:
+                return real
+            return real.model_copy(update={"run_id": "run-a"})
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", fake_fetch)
+
+    await run_loop_iteration("acc-1", run_id="run-a")
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The stale cycle_started write was a no-op; new generation's row stands.
+    assert state.run_id == "run-b"
+    assert state.last_event == "queued"
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_bails_when_state_error() -> None:
+    """Round-2 P2.3: direct call on error account must not resurrect a cycle."""
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="error", last_error="boom"),
+    )
+
+    result = await run_loop_iteration("acc-1")
+    assert result.status == "skipped"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "error"
+    assert state.last_error == "boom"

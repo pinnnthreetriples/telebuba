@@ -286,11 +286,14 @@ async def fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
 
 
 def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
-    # F9 + P1.2 + P2.4: collapse to a single sqlite_insert ON CONFLICT DO UPDATE
-    # so the whole upsert runs under SQLite's implicit write lock, eliminating
-    # the select-then-write TOCTOU. ``run_id`` carries the loop generation
-    # marker, and ``increment_cycle=True`` makes the cycles_completed bump an
-    # atomic SQL expression instead of a read-then-compute round trip.
+    # F9 + P1.2 + P2.4 + Round-2 P1: collapse to a single sqlite_insert
+    # ON CONFLICT DO UPDATE so the whole upsert runs under SQLite's implicit
+    # write lock, eliminating the select-then-write TOCTOU. ``run_id`` carries
+    # the loop generation marker, ``increment_cycle=True`` makes the
+    # cycles_completed bump an atomic SQL expression, and ``expected_run_id``
+    # turns the UPDATE branch into a CAS: the row is only mutated when its
+    # current ``run_id`` matches what the caller saw, so a stale loop whose
+    # generation was already replaced cannot overwrite the new one.
     now = _now_iso()
     insert_values: dict[str, object | None] = {
         "state": data.state,
@@ -319,14 +322,20 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:
         update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1
-    stmt = (
-        sqlite_insert(_warming_account_state)
-        .values(account_id=data.account_id, **insert_values)
-        .on_conflict_do_update(
+    insert_stmt = sqlite_insert(_warming_account_state).values(
+        account_id=data.account_id, **insert_values
+    )
+    if data.expected_run_id is not None:
+        stmt = insert_stmt.on_conflict_do_update(
+            index_elements=[_warming_account_state.c.account_id],
+            set_=update_values,
+            where=(_warming_account_state.c.run_id == data.expected_run_id),
+        )
+    else:
+        stmt = insert_stmt.on_conflict_do_update(
             index_elements=[_warming_account_state.c.account_id],
             set_=update_values,
         )
-    )
     with _get_engine().begin() as connection:
         connection.execute(stmt)
     record = _fetch_warming_state(data.account_id)

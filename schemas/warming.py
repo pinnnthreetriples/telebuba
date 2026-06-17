@@ -211,6 +211,12 @@ class WarmingStateWrite(BaseModel):
     # supplied in ``cycles_completed``. This closes the lost-update race when
     # two writers concurrently bump the counter.
     increment_cycle: bool = False
+    # Round 2 P1: optional CAS gate. When set, the UPDATE branch of the upsert
+    # only fires if the row's current ``run_id`` matches this value. A stale
+    # loop whose run_id was replaced by a newer start_warming therefore turns
+    # into a silent no-op instead of overwriting the new generation. Carries
+    # no effect on the INSERT branch (a new row has no run_id to mismatch).
+    expected_run_id: str | None = None
 
 
 class WarmingAccountState(BaseModel):

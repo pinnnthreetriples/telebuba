@@ -34,10 +34,18 @@ if TYPE_CHECKING:
 
 
 def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -> bool:
-    """True iff ``record`` is alive and (when supplied) matches ``run_id`` (P1.2)."""
+    """True iff ``record`` is alive and (when supplied) matches ``run_id`` (P1.2).
+
+    ``error`` and ``idle`` are both terminal as far as the runtime loop is
+    concerned (the operator has to ack and restart an error'd account; idle
+    is the stopped state). Without rejecting ``error`` here, a direct
+    ``run_loop_iteration(account_id)`` call (run_id=None) could resurrect a
+    cycle on an account the runtime wrapper would have refused to start —
+    inconsistent with reconcile, which skips error rows.
+    """
     if record is None:
         return run_id is None  # no DB row + no expectation → trivially "match"
-    if record.state == "idle":
+    if record.state in ("idle", "error"):
         return False
     if run_id is None:
         return True
@@ -48,12 +56,18 @@ async def _recover_from_quarantine(
     account_id: str,
     record: WarmingStateRecord,
     now: datetime,
+    *,
+    run_id: str | None = None,
 ) -> WarmingCycleResult:
     """Re-check a quarantined account: resume if cleared, escalate otherwise.
 
     Called when a quarantine window has elapsed. Re-probes @SpamBot; a cleared
     account returns to warming, a still-limited one is re-quarantined until the
     configured repeat cap, after which it is given up on (error + alert).
+
+    ``run_id`` (Round-2 P1): if supplied, every write inside this branch is
+    CAS-guarded against the row's current run_id, so a quarantine probe that
+    raced a new start_warming cannot overwrite the fresh generation.
     """
     warm = settings.warming
     verdict = await _seams.refresh_spam_status(account_id, force=True)
@@ -67,6 +81,7 @@ async def _recover_from_quarantine(
             heartbeat_at=now.isoformat(),
             last_error=None,
             quarantine_count=0,
+            expected_run_id=run_id,
         )
         await log_event("INFO", "warming_quarantine_recovered", account_id=account_id)
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="recovered")
@@ -80,6 +95,7 @@ async def _recover_from_quarantine(
             last_error=f"peer-flood not lifted after {count} checks",
             heartbeat_at=now.isoformat(),
             quarantine_count=count,
+            expected_run_id=run_id,
         )
         await log_event(
             "ERROR",
@@ -101,6 +117,7 @@ async def _recover_from_quarantine(
         next_run_at=next_run,
         heartbeat_at=now.isoformat(),
         quarantine_count=count,
+        expected_run_id=run_id,
     )
     await log_event(
         "WARNING",
@@ -166,10 +183,14 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
     Two gates run before the cycle: quiet hours (park until the window ends) and
     the per-account daily action budget (park until UTC midnight).
 
-    ``run_id`` (P1.2): when the wrapper passes a non-None generation marker, the
-    iteration re-checks the DB ``run_id`` before any write and bails on
-    mismatch. Tests that drive ``run_loop_iteration`` directly without a
-    generation pass ``run_id=None`` and behave as before.
+    ``run_id`` (P1.2 + Round-2 P1): when the wrapper passes a non-None
+    generation marker, every state write inside this iteration is CAS-guarded
+    against it (``expected_run_id=run_id`` on the upsert). A stale loop that
+    raced a newer start_warming or stop_warming therefore turns into a series
+    of no-op writes instead of overwriting the new generation between our
+    pre-write guard check and the actual UPDATE. Tests that drive
+    ``run_loop_iteration`` directly without a generation pass ``run_id=None``
+    and behave as before.
     """
     now = datetime.now(UTC)
     controls = await load_warming_settings()
@@ -180,7 +201,7 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
 
     if record is not None and record.state == "quarantine":
-        return await _recover_from_quarantine(account_id, record, now)
+        return await _recover_from_quarantine(account_id, record, now, run_id=run_id)
 
     if controls.quiet_hours_enabled:
         local_now = await _local_now(account_id, now)
@@ -192,6 +213,7 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
                 last_event="quiet_hours",
                 next_run_at=next_run,
                 heartbeat_at=now.isoformat(),
+                expected_run_id=run_id,
             )
             return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
 
@@ -206,6 +228,7 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
             heartbeat_at=now.isoformat(),
             daily_actions=daily_count,
             daily_count_date=daily_date,
+            expected_run_id=run_id,
         )
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="daily limit")
 
@@ -217,6 +240,7 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
         last_error=None,
         daily_actions=daily_count,
         daily_count_date=daily_date,
+        expected_run_id=run_id,
     )
     remaining = None
     if controls.max_daily_actions > 0:
@@ -236,7 +260,9 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
     # run_id while we were inside run_one_cycle, do not resurrect the cycle's
     # next_state on top of it. The cycle's I/O may have outlived task.cancel()
     # (e.g. asyncio.to_thread isn't interrupted mid-write), and the operator's
-    # intent must win.
+    # intent must win. The CAS clause on the final _set_state below provides
+    # the same guarantee even when the run_id flips between this read and the
+    # next write (Round-2 P1).
     latest = await fetch_warming_state(account_id)
     if not _matches_active_run(latest, run_id):
         return result
@@ -258,5 +284,6 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
         flood_wait_until=result.flood_wait_until,
         daily_actions=new_daily,
         daily_count_date=daily_date,
+        expected_run_id=run_id,
     )
     return result
