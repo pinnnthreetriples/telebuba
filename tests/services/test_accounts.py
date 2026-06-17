@@ -410,6 +410,13 @@ async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
+async def test_check_account_session_rejects_unknown_account() -> None:
+    """A missing account_id must surface as a domain ValueError, not StopIteration."""
+    with pytest.raises(ValueError, match=r"Unknown account: account-missing"):
+        await check_account_session(AccountCheckRequest(account_id="account-missing"))
+
+
+@pytest.mark.asyncio
 async def test_save_and_delete_account_proxy_updates_table_row() -> None:
     await add_account(AccountCreate(account_id="account-proxy"))
 
