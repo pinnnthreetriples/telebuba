@@ -323,20 +323,22 @@ def _optional_int(value: object) -> int | None:
 # imports live at the bottom because the repositories import the table objects
 # and helpers defined above.
 # --------------------------------------------------------------------------- #
+from core.repositories._proxies import (  # noqa: E402, F401
+    delete_account_proxy,
+    exit_ip_collisions,
+    fetch_account_proxy,
+    fetch_account_proxy_settings,
+    update_account_proxy_check,
+    upsert_account_proxy,
+)
 from core.repositories.accounts import (  # noqa: E402, F401
     account_summary_counts,
     create_account,
     delete_account,
-    delete_account_proxy,
-    exit_ip_collisions,
     fetch_account,
-    fetch_account_proxy,
-    fetch_account_proxy_settings,
     list_accounts,
     update_account_from_session_check,
     update_account_profile_snapshot,
-    update_account_proxy_check,
-    upsert_account_proxy,
 )
 from core.repositories.content import (  # noqa: E402, F401
     purge_sent_hashes_older_than,
