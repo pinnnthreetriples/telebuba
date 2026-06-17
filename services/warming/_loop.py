@@ -105,15 +105,7 @@ async def _calculate_next_run(
     result: WarmingCycleResult,
 ) -> tuple[int, datetime, WarmingState]:
     warm = settings.warming
-    actions_done = (
-        result.channels_joined
-        + result.channels_read
-        + result.reactions_sent
-        + result.messages_sent
-        + result.failures
-    )
-    if result.status in {"peer_flood", "flood_wait"}:
-        actions_done += 1
+    actions_done = result.attempted_actions
 
     next_state: WarmingState
     if result.status == "peer_flood":
@@ -127,7 +119,13 @@ async def _calculate_next_run(
             warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
             warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
         )
-        next_state = "error"
+        work_actions = (
+            result.channels_joined
+            + result.channels_read
+            + result.reactions_sent
+            + result.messages_sent
+        )
+        next_state = "sleeping" if work_actions > 0 else "error"
     else:
         sleep_seconds = _seams.rng.uniform(
             warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,

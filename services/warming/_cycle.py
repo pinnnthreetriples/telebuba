@@ -65,20 +65,21 @@ async def _read_and_react(
     *,
     reactions_enabled: bool,
     reaction_probability: float,
-) -> tuple[int, int, ActionResult | None, int]:
-    """Read a channel and maybe react. Returns (reads, reactions, flood_result, failures)."""
+) -> tuple[int, int, ActionResult | None, int, int]:
+    """Read a channel and maybe react. Returns reads, reactions, flood, fails, attempts."""
     warm = settings.warming
-    reads = reactions = failures = 0
+    reads = reactions = failures = attempts = 0
     read_result = await _seams.execute(
         account_id,
         ReadChannel(channel=channel, message_limit=warm.read_message_limit),
     )
+    attempts += 1
     if read_result.status == "ok":
         reads = 1
     elif read_result.status == "failed":
         failures += 1
     elif read_result.status in _HALT_STATUSES:
-        return reads, reactions, read_result, failures
+        return reads, reactions, read_result, failures, attempts
     await _human_pause(warm.reading_min_seconds, warm.reading_max_seconds)
     if reactions_enabled and _seams.rng.random() < reaction_probability:
         react_result = await _seams.execute(
@@ -89,13 +90,14 @@ async def _read_and_react(
                 message_limit=warm.reaction_message_limit,
             ),
         )
+        attempts += 1
         if react_result.status in _HALT_STATUSES:
-            return reads, reactions, react_result, failures
+            return reads, reactions, react_result, failures, attempts
         if react_result.status == "ok":
             reactions = 1
         elif react_result.status == "failed":
             failures += 1
-    return reads, reactions, None, failures
+    return reads, reactions, None, failures, attempts
 
 
 @dataclass
@@ -106,6 +108,7 @@ class _ChannelTally:
     reads: int = 0
     reactions: int = 0
     failures: int = 0
+    attempts: int = 0
     flood_seconds: int | None = None
     flood_until: str | None = None
     last_failed_action: str | None = None
@@ -135,14 +138,15 @@ def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str)
 
 def _apply_read_result(
     tally: _ChannelTally,
-    outcome: tuple[int, int, ActionResult | None, int],
+    outcome: tuple[int, int, ActionResult | None, int, int],
     channel: str,
 ) -> bool:
     """Fold a read/react outcome into the tally. Returns True if the cycle should stop."""
-    reads, reactions, channel_flood, failures = outcome
+    reads, reactions, channel_flood, failures, attempts = outcome
     tally.reads += reads
     tally.reactions += reactions
     tally.failures += failures
+    tally.attempts += attempts
     if failures:
         tally.last_failed_action = "read_or_react"
         tally.last_failed_channel = channel
@@ -168,6 +172,7 @@ async def _run_channel_loop(
     for channel in chosen:
         if secret.join_enabled and not await is_channel_joined(account_id, channel.channel):
             join_result = await _seams.execute(account_id, JoinChannel(channel=channel.channel))
+            tally.attempts += 1
             if join_result.status == "ok":
                 await record_channel_joined(account_id, channel.channel)
             if _apply_join_result(tally, join_result, channel.channel):
@@ -221,6 +226,7 @@ async def _build_cycle_result(
         flood_wait_seconds=tally.flood_seconds,
         flood_wait_until=tally.flood_until,
         failures=tally.failures,
+        attempted_actions=tally.attempts,
         last_failed_action=tally.last_failed_action,
         last_failed_channel=tally.last_failed_channel,
     )
@@ -241,7 +247,7 @@ async def _build_cycle_result(
     return result
 
 
-async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:
+async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noqa: PLR0915
     """Perform exactly one warming pass for an account. The testable core."""
     account_id = data.account_id
     secret = await load_warming_settings()
@@ -262,6 +268,7 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:
     online_set = False
     try:
         online_result = await _seams.execute(account_id, SetOnline(online=True))
+        tally.attempts += 1
         if online_result.status != "ok":
             if online_result.status in _WAIT_STATUSES:
                 flooded, seconds, until = _classify_flood(online_result)
@@ -281,7 +288,19 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:
         upper = min(intensity.channels_max, len(channels))
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(channels, _seams.rng.randint(lower, upper))
-        tally = await _run_channel_loop(account_id, chosen, secret, intensity)
+        channel_tally = await _run_channel_loop(account_id, chosen, secret, intensity)
+
+        tally.joined += channel_tally.joined
+        tally.reads += channel_tally.reads
+        tally.reactions += channel_tally.reactions
+        tally.failures += channel_tally.failures
+        tally.attempts += channel_tally.attempts
+        tally.flood_seconds = channel_tally.flood_seconds
+        tally.flood_until = channel_tally.flood_until
+        tally.last_failed_action = channel_tally.last_failed_action
+        tally.last_failed_channel = channel_tally.last_failed_channel
+        tally.flooded = channel_tally.flooded
+        tally.peer_flooded = channel_tally.peer_flooded
 
         if (
             not tally.flooded
@@ -290,11 +309,23 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:
             and secret.inter_account_chat
             and secret.gemini_api_key
         ):
-            messages_sent = await _maybe_inter_account_chat(account_id, secret)
+            chat_result = await _maybe_inter_account_chat(account_id, secret)
+            messages_sent = chat_result.messages_sent
+            tally.attempts += chat_result.attempted_actions
+            tally.failures += chat_result.failures
+            if chat_result.flood_result:
+                if chat_result.flood_result.status == "peer_flood":
+                    tally.peer_flooded = True
+                else:
+                    tally.flooded, tally.flood_seconds, tally.flood_until = _classify_flood(
+                        chat_result.flood_result
+                    )
+                tally.last_failed_action = "chat"
     finally:
         # SetOnline(False) must run even if any of the inner steps raises so the
         # account does not stay online forever.
         if online_set:
             await _set_offline(account_id)
+            tally.attempts += 1
 
     return await _build_cycle_result(account_id, tally, messages_sent)

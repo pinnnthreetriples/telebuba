@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import add_warming_channel, list_warming_channels, remove_warming_channel
 from core.logging import log_event
+from core.telegram_client._util import extract_invite_hash
 
 if TYPE_CHECKING:
     from schemas.warming import AddChannelsRequest, RemoveChannelRequest, WarmingChannelList
@@ -20,10 +21,13 @@ if TYPE_CHECKING:
 # the canonical ``@username`` form and bare ``username`` / ``invite_hash``;
 # the resolver in Telethon handles invite hashes (``joinchat/<hash>``).
 _CHANNEL_TOKEN_RE = re.compile(r"^@?[A-Za-z0-9_]{3,32}(/[A-Za-z0-9_-]+)?$")
-_INVITE_HASH_RE = re.compile(r"^[A-Za-z0-9_-]{8,64}$")
 
 
 def _normalize_channel(token: str) -> str | None:
+    invite_hash = extract_invite_hash(token)
+    if invite_hash:
+        return f"+{invite_hash}"
+
     cleaned = token.strip().strip("<>").rstrip("/")
     if not cleaned:
         return None
@@ -35,13 +39,6 @@ def _normalize_channel(token: str) -> str | None:
     cleaned = cleaned.lstrip("@")
     if not cleaned:
         return None
-    if cleaned.startswith("+"):
-        # Telegram private invite link of the form ``+abcDEF...``.
-        cleaned = cleaned[1:]
-        return cleaned if _INVITE_HASH_RE.match(cleaned) else None
-    if cleaned.startswith("joinchat/"):
-        invite = cleaned.split("/", 1)[1]
-        return f"joinchat/{invite}" if _INVITE_HASH_RE.match(invite) else None
     if len(cleaned) > settings.warming.max_channel_length:
         return None
     return cleaned if _CHANNEL_TOKEN_RE.match(cleaned) else None

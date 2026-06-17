@@ -118,7 +118,9 @@ async def _render_activity_log() -> None:  # pragma: no cover
                 entries = [
                     entry
                     for entry in entries
-                    if entry.event.startswith("warming_") or entry.event.startswith("telegram_")
+                    if entry.event.startswith("warming_")
+                    or entry.event.startswith("telegram_")
+                    or entry.event.startswith("dialogue_")
                 ]
             entries = entries[:_LOG_LIMIT]
             # Only rebuild when the visible set of entries changed — otherwise the

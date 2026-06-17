@@ -150,14 +150,16 @@ async def _render_config_cards() -> None:  # pragma: no cover
         except Exception as exc:  # noqa: BLE001
             ui.notify(f"Ошибка сохранения: {exc}", type="negative")
             # Rollback to the last known good state
-            refs["chat"].value = current.inter_account_chat
-            refs["reactions"].value = current.reactions_enabled
-            refs["join"].value = current.join_enabled
-            refs["readiness"].value = current.enforce_readiness
-            refs["quiet"].value = current.quiet_hours_enabled
-            refs["quiet_start"].value = current.quiet_hours_start
-            refs["quiet_end"].value = current.quiet_hours_end
-            refs["daily"].value = current.max_daily_actions
+            fresh_board = await load_board()
+            fresh = fresh_board.settings
+            refs["chat"].value = fresh.inter_account_chat
+            refs["reactions"].value = fresh.reactions_enabled
+            refs["join"].value = fresh.join_enabled
+            refs["readiness"].value = fresh.enforce_readiness
+            refs["quiet"].value = fresh.quiet_hours_enabled
+            refs["quiet_start"].value = fresh.quiet_hours_start
+            refs["quiet_end"].value = fresh.quiet_hours_end
+            refs["daily"].value = fresh.max_daily_actions
 
     def trigger(_e: object = None) -> asyncio.Task[None]:
         return asyncio.create_task(on_toggle())

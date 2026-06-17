@@ -21,6 +21,7 @@ from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._client import telegram_client
 from core.telegram_client._media import _dispatch_profile_media_action
+from core.telegram_client._util import extract_invite_hash
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.telegram_actions import (
     ActionResult,
@@ -174,7 +175,7 @@ async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage
     return int(getattr(message, "id", 0)) or None
 
 
-async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:  # noqa: C901, PLR0912
+async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:  # noqa: C901
     """Run one action against an already-connected client. Returns message_id if any.
 
     Pattern-matches on the concrete action model so ty narrows ``action`` inside
@@ -186,11 +187,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
     message_id: int | None = None
     match action:
         case JoinChannel():
-            if "+" in action.channel or "joinchat/" in action.channel:
-                if "+" in action.channel:
-                    hash_str = action.channel.split("+")[-1].strip("/")
-                else:
-                    hash_str = action.channel.split("joinchat/")[-1].strip("/")
+            hash_str = extract_invite_hash(action.channel)
+            if hash_str:
                 await client(ImportChatInviteRequest(hash=hash_str))
             else:
                 await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]

@@ -288,5 +288,6 @@ class WarmingCycleResult(BaseModel):
     flood_wait_seconds: int | None = Field(default=None, ge=0)
     flood_wait_until: str | None = None
     failures: int = Field(default=0, ge=0)
+    attempted_actions: int = Field(default=0, ge=0)
     last_failed_action: str | None = None
     last_failed_channel: str | None = None

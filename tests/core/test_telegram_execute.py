@@ -93,6 +93,55 @@ async def test_execute_join_channel_dispatches_request(
 
 
 @pytest.mark.asyncio
+async def test_execute_join_channel_with_plus_hash_dispatches_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    # The action logic uses extract_invite_hash which parses +HASH correctly.
+    result = await execute("acc-2", JoinChannel(channel="+AbC-123_456xYz"))
+
+    assert result.status == "ok"
+    assert len(captured) == 1
+    req = captured[0]
+    assert req.__class__.__name__ == "ImportChatInviteRequest"
+    assert getattr(req, "hash", "") == "AbC-123_456xYz"
+
+
+@pytest.mark.asyncio
+async def test_execute_join_channel_with_joinchat_dispatches_import(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-3", JoinChannel(channel="joinchat/AbC-123_456xYz"))
+
+    assert result.status == "ok"
+    assert len(captured) == 1
+    req = captured[0]
+    assert req.__class__.__name__ == "ImportChatInviteRequest"
+    assert getattr(req, "hash", "") == "AbC-123_456xYz"
+
+
+@pytest.mark.asyncio
 async def test_execute_leave_channel_dispatches_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
