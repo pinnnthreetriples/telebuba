@@ -25,6 +25,7 @@ from core.db import (
     fetch_warming_state,
     latest_unreplied_for,
     list_dialogue_pairs,
+    load_warming_settings,
     purge_dialogue_messages_older_than,
     purge_logs_older_than,
     purge_sent_hashes_older_than,
@@ -1944,3 +1945,74 @@ async def test_reconcile_skips_when_state_already_idle(
 
     assert "acc-1" not in warming._RUNTIME
     assert started == []
+
+
+@pytest.mark.asyncio
+async def test_reply_flood_releases_claim(monkeypatch: pytest.MonkeyPatch) -> None:
+    """F6: send flood on reply leaves the incoming message claimable next cycle."""
+    from core.db import (  # noqa: PLC0415
+        latest_unreplied_for,
+        record_dialogue_message,
+        replace_dialogue_pairs,
+    )
+
+    await create_account(AccountCreate(account_id="acc-a"))
+    await create_account(AccountCreate(account_id="acc-b"))
+    acc_b_session = await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-b",
+            session_path="acc-b",
+            status="alive",
+            is_temporary=False,
+            user_id=42,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+        ),
+    )
+    assert acc_b_session.user_id == 42
+    await replace_dialogue_pairs([("acc-a", "acc-b")])
+    # acc-b sent a message to acc-a; acc-a will try to reply but get flooded.
+    await record_dialogue_message("acc-b", "acc-a", "hi there")
+
+    async def flood_execute(account_id: str, action: TelegramAction) -> ActionResult:
+        return ActionResult(
+            status="flood_wait",
+            action_type=action.action_type,
+            account_id=account_id,
+            flood_wait_seconds=60,
+        )
+
+    monkeypatch.setattr(_seams, "execute", flood_execute)
+    monkeypatch.setattr(
+        _seams,
+        "generate_text",
+        lambda req: _resolve(GeminiResult(status="ok", text="ok-reply")),  # noqa: ARG005
+    )
+
+    incoming = await latest_unreplied_for("acc-a")
+    assert incoming is not None
+    secret = await load_warming_settings()
+    accounts_map = {
+        "acc-a": await fetch_account_helper("acc-a"),
+        "acc-b": await fetch_account_helper("acc-b"),
+    }
+    from services.warming._chat import _reply_to_partner  # noqa: PLC0415
+
+    result = await _reply_to_partner("acc-a", incoming, secret, accounts_map)
+    assert result.flood_result is not None
+    # The incoming row should still be claimable.
+    still_pending = await latest_unreplied_for("acc-a")
+    assert still_pending is not None
+    assert still_pending.id == incoming.id
+
+
+async def _resolve(value):  # type: ignore[no-untyped-def]
+    return value
+
+
+async def fetch_account_helper(account_id: str):  # type: ignore[no-untyped-def]
+    from core.db import fetch_account  # noqa: PLC0415
+
+    return await fetch_account(account_id)

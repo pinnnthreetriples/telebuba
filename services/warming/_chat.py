@@ -17,6 +17,7 @@ from core.db import (
     latest_unreplied_for,
     list_accounts,
     mark_message_replied,
+    mark_message_unreplied,
     pair_key,
     record_dialogue_message,
     try_claim_message_reply,
@@ -176,16 +177,19 @@ async def _reply_to_partner(  # noqa: PLR0911
     text = gen.text
     # Atomic claim before send: collapses ``latest_unreplied_for`` + ``mark``
     # into one UPDATE WHERE replied=0 so two parallel cycles cannot both
-    # answer the same incoming message. Send-failure after a claim drops the
-    # reply by design — silence is safer than a duplicate.
+    # answer the same incoming message. F6: if the send itself fails (flood
+    # or any non-ok), we release the claim so the inbox keeps the message
+    # for the next cycle instead of losing it forever.
     if not await try_claim_message_reply(incoming.id):
         return ChatResult()
     # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
 
     if result.status in ("flood_wait", "peer_flood", "slow_mode_wait", "premium_wait"):
+        await mark_message_unreplied(incoming.id)
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
+        await mark_message_unreplied(incoming.id)
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.

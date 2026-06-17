@@ -203,6 +203,23 @@ async def try_claim_message_reply(message_id: int) -> bool:
     return await asyncio.to_thread(_try_claim_message_reply, message_id)
 
 
+def _mark_message_unreplied(message_id: int) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(dialogue_messages).where(dialogue_messages.c.id == message_id).values(replied=0),
+        )
+
+
+async def mark_message_unreplied(message_id: int) -> None:
+    """Release a previously-claimed reply so the next cycle can retry it (F6).
+
+    Paired with :func:`try_claim_message_reply`: claim before send to dedupe
+    parallel cycles, then release on flood / transient send failure so the
+    incoming message stays in the inbox instead of disappearing.
+    """
+    await asyncio.to_thread(_mark_message_unreplied, message_id)
+
+
 def _count_pair_messages_since(key: str, since_iso: str) -> int:
     statement = (
         select(func.count())
