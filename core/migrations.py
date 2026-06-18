@@ -215,6 +215,22 @@ def _rename_proxy_type_http_to_https(connection: Connection) -> None:
     )
 
 
+def _add_warming_phase_columns(connection: Connection) -> None:
+    # Persisted lifecycle phase + entry timestamp — used by the warming loop
+    # to detect transitions across cycles and surface the per-account phase
+    # on the card. Both nullable so existing rows survive the migration and
+    # get seeded on their next cycle.
+    existing = _sqlite_columns(connection, "warming_account_state")
+    if "current_phase" not in existing:
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state ADD COLUMN current_phase VARCHAR",
+        )
+    if "phase_entered_at" not in existing:
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state ADD COLUMN phase_entered_at VARCHAR",
+        )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -227,6 +243,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (7, "add_unique_session_name_index", _add_unique_session_name_index),
     (8, "add_warming_state_run_id", _add_warming_state_run_id),
     (9, "rename_proxy_type_http_to_https", _rename_proxy_type_http_to_https),
+    (10, "add_warming_phase_columns", _add_warming_phase_columns),
 )
 
 

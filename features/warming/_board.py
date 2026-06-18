@@ -103,6 +103,32 @@ _CHECK_TEXT = {
     "fail": "text-red-700",
 }
 
+# Phase chip styling — semantic colour ramp (slate → sky → amber → lime →
+# emerald). The chip's bg/text/ring trio matches; the progress bar reuses the
+# ``-500`` tone for fill. Red is reserved for diagnostic lines elsewhere on
+# the card, so phase colours stop at emerald.
+_PHASE_LABEL_RU = {
+    "intro": "🥚 Знакомство",
+    "settling": "🐣 Обвыкается",
+    "warming": "🐥 Прогревается",
+    "active": "🐤 Активный",
+    "warmed": "🦅 Прогрет",
+}
+_PHASE_CHIP_CLASSES = {
+    "intro": "bg-slate-100 text-slate-700 ring-slate-200",
+    "settling": "bg-sky-50 text-sky-800 ring-sky-200",
+    "warming": "bg-amber-50 text-amber-800 ring-amber-200",
+    "active": "bg-lime-50 text-lime-800 ring-lime-200",
+    "warmed": "bg-emerald-50 text-emerald-800 ring-emerald-200",
+}
+_PHASE_BAR_FILL = {
+    "intro": "bg-slate-400",
+    "settling": "bg-sky-500",
+    "warming": "bg-amber-500",
+    "active": "bg-lime-500",
+    "warmed": "bg-emerald-500",
+}
+
 
 def _ru_reason(reason: str) -> str:  # pragma: no cover
     if reason in _READINESS_REASON_RU:
@@ -313,6 +339,11 @@ def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma:
                 card.flood_wait_seconds,
                 card.phone_country,
                 card.proxy_country,
+                card.phase,
+                card.daily_cap,
+                card.progress_to_next,
+                card.days_to_next_phase,
+                card.warming_days,
                 None
                 if card.readiness is None
                 else (card.readiness.ready, tuple(card.readiness.reasons)),
@@ -500,14 +531,23 @@ def _render_spam_refresh_link(ctx: _BoardContext, account_id: str) -> None:  # p
     )
 
 
-def _render_card_stats(card: WarmingAccountState, max_daily: int) -> None:  # pragma: no cover
+def _render_card_stats(card: WarmingAccountState, fleet_max_daily: int) -> None:  # pragma: no cover
+    """Single-line stats footer. Per-card daily cap wins over fleet override.
+
+    The fleet ``max_daily_actions`` setting is now an .env-driven override —
+    when it's > 0 (legacy installs) it caps regardless of phase. Otherwise
+    the per-account ``card.daily_cap`` (derived from phase + trust) applies.
+    """
     parts: list[str] = []
     if card.age_hours is not None:
         days = int(card.age_hours // 24)
         parts.append(f"возраст {days} д" if days else f"возраст {int(card.age_hours)} ч")
+    if card.warming_days is not None:
+        parts.append(f"в прогреве {card.warming_days} д")
     parts.append("DM ✅" if card.dm_allowed else "DM 🔒")
+    effective_cap = fleet_max_daily if fleet_max_daily > 0 else card.daily_cap
     daily = f"действий {card.daily_actions}"
-    parts.append(f"{daily}/{max_daily}" if max_daily > 0 else daily)
+    parts.append(f"{daily} / {effective_cap}" if effective_cap > 0 else daily)
     eta = _relative_eta(card.next_run_at)
     if eta:
         parts.append(f"⏭ {eta}")
@@ -552,6 +592,47 @@ def _render_error_line(card: WarmingAccountState) -> None:  # pragma: no cover
     )
 
 
+def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Phase chip + milestone hint + thin 4px progress bar.
+
+    Visual structure follows the agent-B research: pill chip with phase
+    name and emoji, right-aligned "до «X»: N дн" hint, and a 4px solid bar
+    whose colour matches the chip. The bar disappears for the terminal
+    ``warmed`` phase (no next boundary to point at).
+    """
+    if card.phase is None or card.phase_label is None:
+        return
+    chip_classes = _PHASE_CHIP_CLASSES.get(card.phase, _PHASE_CHIP_CLASSES["intro"])
+    bar_fill = _PHASE_BAR_FILL.get(card.phase, _PHASE_BAR_FILL["intro"])
+    with ui.row().classes("w-full items-center justify-between gap-2"):
+        ui.label(card.phase_label).classes(
+            f"w-fit text-[11px] px-2 py-0.5 rounded-full ring-1 font-medium {chip_classes}",
+        )
+        if card.phase != "warmed" and card.days_to_next_phase is not None:
+            next_phase_label = _next_phase_label_short(card.phase)
+            ui.label(f"до «{next_phase_label}»: {card.days_to_next_phase} д").classes(
+                "text-[11px] text-slate-500 tabular-nums shrink-0",
+            )
+    if card.progress_to_next is not None:
+        pct = round(card.progress_to_next * 100)
+        with ui.row().classes("h-1 w-full rounded-full bg-slate-200 overflow-hidden"):
+            ui.element("div").classes(f"h-full rounded-full {bar_fill}").style(
+                f"width: {pct}%",
+            )
+
+
+_NEXT_PHASE_SHORT = {
+    "intro": "Обвыкается",
+    "settling": "Прогревается",
+    "warming": "Активный",
+    "active": "Прогрет",
+}
+
+
+def _next_phase_label_short(phase: str) -> str:  # pragma: no cover
+    return _NEXT_PHASE_SHORT.get(phase, "")
+
+
 def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
     pulse = " tb-active" if card.state == "active" else ""
     element = (
@@ -577,6 +658,8 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
         # Per-signal checks — the "positive signals" view of the trust score.
         if card.trust_score is not None:
             _render_checks(card)
+        # Lifecycle phase: chip + milestone hint + progress bar.
+        _render_phase_block(card)
         # Spam status (always shown).
         _render_spam_badge(ctx, card)
         # Activity line + stats.

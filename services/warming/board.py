@@ -21,6 +21,7 @@ from core.phone_geo import country_for_phone
 from schemas.warming import (
     WarmingAccountState,
     WarmingBoardState,
+    WarmingPhase,
     WarmingState,
     WarmingSummary,
     is_warming,
@@ -33,6 +34,38 @@ from services.warming.settings_store import load_settings
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.warming import WarmingReadiness, WarmingStateRecord
+
+_HOURS_PER_DAY = 24
+
+# Russian labels for the lifecycle phases shown on the kanban card.
+_PHASE_LABEL_RU: dict[WarmingPhase, str] = {
+    "intro": "🥚 Знакомство",
+    "settling": "🐣 Обвыкается",
+    "warming": "🐥 Прогревается",
+    "active": "🐤 Активный",
+    "warmed": "🦅 Прогрет",
+}
+
+
+def _warming_days_since(
+    record: WarmingStateRecord | None,
+    now: datetime,
+) -> int | None:
+    """Whole days since ``started_at`` was first stamped on the warming record.
+
+    ``None`` when warming has never run on this account, so the card can hide
+    the "в прогреве N дн" hint instead of showing a misleading zero.
+    """
+    if record is None or not record.started_at:
+        return None
+    try:
+        started = datetime.fromisoformat(record.started_at)
+    except ValueError:
+        return None
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    delta_hours = (now - started).total_seconds() / 3600.0
+    return max(0, int(delta_hours // _HOURS_PER_DAY))
 
 
 def _to_card(
@@ -98,6 +131,7 @@ async def load_board() -> WarmingBoardState:
         card = _to_card(account, record, readiness=readiness)
 
         age_hours = _account_age_hours(account, now)
+        intensity = compute_intensity(age_hours, trust_band=trust.band)
         card.trust_score = trust.score
         card.trust_band = trust.band
         card.trust_reasons = trust.reasons
@@ -105,9 +139,15 @@ async def load_board() -> WarmingBoardState:
             card.spam_status = spam.status
             card.spam_detail = spam.detail
         card.age_hours = age_hours
-        card.dm_allowed = compute_intensity(age_hours).dm_allowed
+        card.dm_allowed = intensity.dm_allowed
         card.phone_country = country_for_phone(account.phone)
         card.proxy_country = (account.proxy_country_code or "").upper() or None
+        card.phase = intensity.phase
+        card.phase_label = _PHASE_LABEL_RU[intensity.phase]
+        card.daily_cap = intensity.daily_cap
+        card.progress_to_next = intensity.progress_to_next
+        card.days_to_next_phase = intensity.days_to_next_phase
+        card.warming_days = _warming_days_since(record, now)
         (warming if is_warming(card.state) else idle).append(card)
     return WarmingBoardState(
         idle=idle,

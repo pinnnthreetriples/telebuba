@@ -159,6 +159,10 @@ _warming_account_state = Table(
     Column("quarantine_count", Integer, nullable=True),
     # P1.2: see schemas.warming.WarmingStateRecord.run_id.
     Column("run_id", String, nullable=True),
+    # Lifecycle phase persisted between cycles — the previous-phase snapshot
+    # the loop diffs against to detect transitions and fire ``phase_advanced``.
+    Column("current_phase", String, nullable=True),
+    Column("phase_entered_at", String, nullable=True),
 )
 _account_spam_status = Table(
     "account_spam_status",
