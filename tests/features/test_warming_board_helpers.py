@@ -1,14 +1,15 @@
 """Tests for the pure helpers behind the warming kanban card.
 
 The render functions themselves are UI-thin and excluded from coverage; we
-exercise the data-shaping helpers: the trust-reason translator (UI-edge
-localisation), and the board signature digest (which controls when the poll
-loop redraws — a missed field means a stale card).
+exercise the data-shaping helpers: ``_check_states`` (the seven-signal
+"positive signals" derivation shown under the trust badge) and
+``_board_signature`` (which controls when the poll loop redraws — a missed
+field means a stale card).
 """
 
 from __future__ import annotations
 
-from features.warming._board import _board_signature, _ru_trust_reason
+from features.warming._board import _board_signature, _check_states
 from schemas.warming import (
     WarmingAccountState,
     WarmingBoardState,
@@ -17,24 +18,102 @@ from schemas.warming import (
 )
 
 
-def test_ru_trust_reason_known_keys() -> None:
-    assert _ru_trust_reason("spam-limited") == "спам-ограничения"
-    assert _ru_trust_reason("geo mismatch") == "страна номера ≠ страна прокси"
-    assert _ru_trust_reason("geo unknown") == "страна не определена"
-    assert _ru_trust_reason("proxy failed") == "прокси не работает"
-    assert _ru_trust_reason("new account") == "новый аккаунт"
-    assert _ru_trust_reason("recent flood") == "недавний flood-wait"
+def _base_card() -> WarmingAccountState:
+    return WarmingAccountState(account_id="acc-1", label="Acc 1", state="idle", health="idle")
 
 
-def test_ru_trust_reason_dynamic_prefixes() -> None:
-    assert _ru_trust_reason("status banned") == "сессия: banned"
-    assert _ru_trust_reason("status unauthorized") == "сессия: unauthorized"
-    assert _ru_trust_reason("quarantined x3") == "карантин ×3"
+def _by_label(checks: list[tuple[str, str, str]]) -> dict[str, tuple[str, str]]:
+    return {label: (status, tooltip) for label, status, tooltip in checks}
 
 
-def test_ru_trust_reason_unknown_falls_back_to_raw() -> None:
-    assert _ru_trust_reason("totally unknown reason") == "totally unknown reason"
-    assert _ru_trust_reason("") == ""
+def test_check_states_healthy_card_is_all_ok() -> None:
+    card = _base_card().model_copy(
+        update={
+            "trust_score": 100,
+            "trust_band": "excellent",
+            "trust_reasons": [],
+            "spam_status": "clean",
+            "quarantine_count": 0,
+            "phone_country": "RU",
+            "proxy_country": "RU",
+        },
+    )
+
+    checks = _check_states(card)
+
+    labels = [c[0] for c in checks]
+    assert labels == ["сессия", "@SpamBot", "прокси", "гео", "возраст", "flood", "карантин"]
+    assert all(status == "ok" for _, status, _ in checks)
+
+
+def test_check_states_geo_mismatch_carries_country_pair_in_tooltip() -> None:
+    card = _base_card().model_copy(
+        update={
+            "trust_reasons": ["geo mismatch"],
+            "phone_country": "CO",
+            "proxy_country": "NL",
+        },
+    )
+
+    geo_status, geo_tip = _by_label(_check_states(card))["гео"]
+
+    assert geo_status == "fail"
+    assert "CO" in geo_tip
+    assert "NL" in geo_tip
+
+
+def test_check_states_geo_unknown_is_warn() -> None:
+    card = _base_card().model_copy(update={"trust_reasons": ["geo unknown"]})
+
+    geo_status, _ = _by_label(_check_states(card))["гео"]
+
+    assert geo_status == "warn"
+
+
+def test_check_states_spam_unknown_is_warn() -> None:
+    card = _base_card().model_copy(update={"spam_status": None})
+
+    spam_status, spam_tip = _by_label(_check_states(card))["@SpamBot"]
+
+    assert spam_status == "warn"
+    assert "нажмите" in spam_tip  # tooltip hints at the action
+
+
+def test_check_states_spam_limited_is_fail_with_detail() -> None:
+    card = _base_card().model_copy(
+        update={"spam_status": "limited", "spam_detail": "until 2026-08-12"},
+    )
+
+    spam_status, spam_tip = _by_label(_check_states(card))["@SpamBot"]
+
+    assert spam_status == "fail"
+    assert spam_tip == "until 2026-08-12"
+
+
+def test_check_states_quarantine_count_in_tooltip() -> None:
+    card = _base_card().model_copy(update={"quarantine_count": 3})
+
+    q_status, q_tip = _by_label(_check_states(card))["карантин"]
+
+    assert q_status == "fail"
+    assert "3" in q_tip
+
+
+def test_check_states_session_failure_propagates_reason_to_tooltip() -> None:
+    card = _base_card().model_copy(update={"trust_reasons": ["status banned"]})
+
+    session_status, session_tip = _by_label(_check_states(card))["сессия"]
+
+    assert session_status == "fail"
+    assert "banned" in session_tip
+
+
+def test_check_states_new_account_is_warn_not_fail() -> None:
+    card = _base_card().model_copy(update={"trust_reasons": ["new account"]})
+
+    age_status, _ = _by_label(_check_states(card))["возраст"]
+
+    assert age_status == "warn"
 
 
 def _board_from(card: WarmingAccountState) -> WarmingBoardState:
@@ -46,10 +125,6 @@ def _board_from(card: WarmingAccountState) -> WarmingBoardState:
         channel_count=0,
         active_count=0,
     )
-
-
-def _base_card() -> WarmingAccountState:
-    return WarmingAccountState(account_id="acc-1", label="Acc 1", state="idle", health="idle")
 
 
 def test_board_signature_reacts_to_last_error() -> None:
@@ -81,6 +156,12 @@ def test_board_signature_reacts_to_trust_reasons() -> None:
 def test_board_signature_reacts_to_geo_pair() -> None:
     base = _base_card().model_copy(update={"phone_country": "RU", "proxy_country": "RU"})
     changed = base.model_copy(update={"proxy_country": "DE"})
+    assert _board_signature(_board_from(base)) != _board_signature(_board_from(changed))
+
+
+def test_board_signature_reacts_to_spam_detail() -> None:
+    base = _base_card().model_copy(update={"spam_status": "limited"})
+    changed = base.model_copy(update={"spam_detail": "until 2026-08-12"})
     assert _board_signature(_board_from(base)) != _board_signature(_board_from(changed))
 
 

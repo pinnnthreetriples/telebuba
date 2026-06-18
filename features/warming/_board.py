@@ -26,6 +26,7 @@ if TYPE_CHECKING:
 _BOARD_POLL_SECONDS = 4.0
 _ETA_HOUR_SECONDS = 3600
 _ETA_DAY_SECONDS = 86_400
+_ERROR_MAX_LEN = 80
 
 _HEALTH_DOT = {
     "ok": "bg-green-500",
@@ -50,9 +51,22 @@ _STATE_BADGE = {
     "error": "text-red-700 bg-red-100",
 }
 _SPAM_BADGE = {
-    "clean": ("✅ чисто", "text-green-700 bg-green-100"),
-    "limited": ("⛔ ограничен", "text-red-700 bg-red-100"),
-    "unknown": ("❓ не проверён", "text-slate-600 bg-slate-100"),
+    "clean": ("Спам: чисто", "text-green-700 bg-green-100"),
+    "limited": ("Спам: ограничен", "text-red-700 bg-red-100"),
+    "unknown": ("Спам: не проверен", "text-slate-600 bg-slate-100"),
+}
+# Tooltip text shown on the spam badge — populated for every status so the
+# operator never has to guess what "не проверен" refers to.
+_SPAM_TOOLTIP = {
+    "clean": "@SpamBot: ограничений нет",
+    "limited": "@SpamBot: аккаунт ограничен",
+    "unknown": "@SpamBot ещё не запрашивался — нажмите «проверить»",
+}
+# Localisation for the toast that follows a successful refresh.
+_SPAM_STATUS_RU = {
+    "clean": "чисто",
+    "limited": "ограничен",
+    "unknown": "не проверен",
 }
 
 # Readiness reasons are produced (in English) by ``services.warming`` and are
@@ -87,20 +101,18 @@ _TRUST_BAND_LABEL = {
     "at_risk": "риск",
     "critical": "критично",
 }
-# Translate trust reasons at the UI edge — services/trust.py keeps them in
-# English (testable, log-friendly), the warming card surfaces them in Russian.
-# Same pattern as ``_READINESS_REASON_RU`` above. Dynamic prefixes are matched
-# in ``_ru_trust_reason``.
-_TRUST_REASON_RU = {
-    "spam-limited": "спам-ограничения",
-    "recent flood": "недавний flood-wait",
-    "geo mismatch": "страна номера ≠ страна прокси",
-    "geo unknown": "страна не определена",
-    "proxy failed": "прокси не работает",
-    "new account": "новый аккаунт",
+
+# Visual treatment for the per-check chips: dot colour + label colour.
+_CHECK_DOT = {
+    "ok": "bg-green-500",
+    "warn": "bg-amber-500",
+    "fail": "bg-red-500",
 }
-_TRUST_REASONS_INLINE_LIMIT = 2
-_ERROR_MAX_LEN = 80
+_CHECK_TEXT = {
+    "ok": "text-slate-600",
+    "warn": "text-amber-700",
+    "fail": "text-red-700",
+}
 
 
 def _ru_reason(reason: str) -> str:  # pragma: no cover
@@ -111,15 +123,90 @@ def _ru_reason(reason: str) -> str:  # pragma: no cover
     return reason
 
 
-def _ru_trust_reason(reason: str) -> str:
-    """Translate a single trust reason for the UI; falls back to the raw string."""
-    if reason in _TRUST_REASON_RU:
-        return _TRUST_REASON_RU[reason]
-    if reason.startswith("status "):
-        return f"сессия: {reason[len('status ') :]}"
-    if reason.startswith("quarantined x"):
-        return f"карантин ×{reason[len('quarantined x') :]}"
-    return reason
+def _check_states(card: WarmingAccountState) -> list[tuple[str, str, str]]:
+    """Derive seven UI health checks from card fields and trust_reasons.
+
+    Returns a list of ``(label, status, tooltip)`` triples, where ``status`` is
+    ``"ok" | "warn" | "fail"``. Pure — no I/O, no UI side-effects — so the
+    list is straightforward to unit-test. The card already carries every
+    field we read here; we just invert the trust-model's "what's wrong"
+    view into the operator-facing "what's checked and how it's doing".
+    """
+    reasons = set(card.trust_reasons)
+    return [
+        _check_session(reasons),
+        _check_spam(card),
+        _check_simple(reasons, "proxy failed", "прокси", "прокси не работает", "прокси работает"),
+        _check_geo(card, reasons),
+        _check_new_account(reasons),
+        _check_simple(
+            reasons,
+            "recent flood",
+            "flood",
+            "активный flood-wait",
+            "flood-wait не активен",
+        ),
+        _check_quarantine(card),
+    ]
+
+
+def _check_session(reasons: set[str]) -> tuple[str, str, str]:
+    session_bad = next((r for r in reasons if r.startswith("status ")), None)
+    if session_bad:
+        return ("сессия", "fail", f"сессия: {session_bad[len('status ') :]}")
+    return ("сессия", "ok", "сессия живая")
+
+
+def _check_spam(card: WarmingAccountState) -> tuple[str, str, str]:
+    """None and "unknown" both map to warn (data missing, not a risk)."""
+    status = card.spam_status
+    if status == "clean":
+        return ("@SpamBot", "ok", _SPAM_TOOLTIP["clean"])
+    if status == "limited":
+        return ("@SpamBot", "fail", card.spam_detail or _SPAM_TOOLTIP["limited"])
+    return ("@SpamBot", "warn", _SPAM_TOOLTIP["unknown"])
+
+
+def _check_simple(
+    reasons: set[str],
+    reason_key: str,
+    label: str,
+    fail_tip: str,
+    ok_tip: str,
+) -> tuple[str, str, str]:
+    """Generic 2-state check driven by a single reason key."""
+    if reason_key in reasons:
+        return (label, "fail", fail_tip)
+    return (label, "ok", ok_tip)
+
+
+def _check_geo(card: WarmingAccountState, reasons: set[str]) -> tuple[str, str, str]:
+    """Geo verdict + tooltip with the specific country pair when known."""
+    if "geo mismatch" in reasons:
+        if card.phone_country and card.proxy_country:
+            tip = f"📞 {card.phone_country} → 🌐 {card.proxy_country}: страны не совпадают"
+        else:
+            tip = "страна номера ≠ страна прокси"
+        return ("гео", "fail", tip)
+    if "geo unknown" in reasons:
+        return ("гео", "warn", "страна номера или прокси не определена")
+    if card.phone_country and card.proxy_country:
+        return ("гео", "ok", f"страны совпадают ({card.phone_country})")
+    return ("гео", "ok", "проверка пройдена")
+
+
+def _check_new_account(reasons: set[str]) -> tuple[str, str, str]:
+    """Partial signal — warn rather than fail (account is still usable)."""
+    if "new account" in reasons:
+        return ("возраст", "warn", "новый аккаунт (< 48 ч)")
+    return ("возраст", "ok", "возраст ≥ 48 ч")
+
+
+def _check_quarantine(card: WarmingAccountState) -> tuple[str, str, str]:
+    q = card.quarantine_count
+    if q > 0:
+        return ("карантин", "fail", f"карантинов: {q}")
+    return ("карантин", "ok", "карантинов нет")
 
 
 @dataclass(frozen=True)
@@ -156,6 +243,7 @@ def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma:
                 card.trust_band,
                 tuple(card.trust_reasons),
                 card.spam_status,
+                card.spam_detail,
                 card.daily_actions,
                 card.dm_allowed,
                 card.quarantine_count,
@@ -226,7 +314,7 @@ def _render_column(
     border: str,
 ) -> None:  # pragma: no cover
     column = ui.column().classes(
-        f"tb-dropzone flex-1 min-w-[320px] p-3 gap-2 rounded-lg border-2 border-dashed "
+        f"tb-dropzone flex-1 min-w-[320px] p-3 gap-3 rounded-lg border-2 border-dashed "
         f"{border} bg-white min-h-[240px]",
     )
 
@@ -260,51 +348,52 @@ def _render_column(
 
 
 def _render_trust_badge(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Badge ``⛨ 80 · норма`` with full reason list as a tooltip.
-
-    Inline reasons under the header (``_render_trust_reasons``) keep the most
-    important context visible without a hover; the tooltip carries the full
-    set for completeness.
-    """
+    """Two-line key metric: score (large) over band label (small)."""
     band = card.trust_band or ""
-    label_ru = _TRUST_BAND_LABEL.get(band, band or "n/a")
+    label_ru = _TRUST_BAND_LABEL.get(band, "")
     badge_classes = _TRUST_BADGE.get(band, "bg-slate-100 text-slate-600")
-    tooltip = f"Trust {card.trust_score} · {label_ru}"
-    if card.trust_reasons:
-        tooltip = f"{tooltip}: " + ", ".join(_ru_trust_reason(r) for r in card.trust_reasons)
-    ui.label(f"⛨ {card.trust_score} · {label_ru}").classes(
-        f"text-[11px] px-1.5 py-0.5 rounded {badge_classes}",
-    ).tooltip(tooltip)
+    tooltip = f"Trust {card.trust_score} · {label_ru}" if label_ru else f"Trust {card.trust_score}"
+    with ui.column().classes(
+        f"items-center gap-0 px-2.5 py-1 rounded shrink-0 {badge_classes}",
+    ) as badge:
+        ui.label(f"⛨ {card.trust_score}").classes("text-base font-bold leading-tight")
+        if label_ru:
+            ui.label(label_ru).classes("text-[10px] leading-tight")
+    badge.tooltip(tooltip)
 
 
-def _render_trust_reasons(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Inline top reasons under the header — only when the band warrants attention."""
-    if card.trust_band in (None, "", "excellent"):
-        return
-    if not card.trust_reasons:
-        return
-    shown = [_ru_trust_reason(r) for r in card.trust_reasons[:_TRUST_REASONS_INLINE_LIMIT]]
-    extra = len(card.trust_reasons) - len(shown)
-    text = "⛨ " + " · ".join(shown)
-    if extra > 0:
-        text += f" · +ещё {extra}"
-    ui.label(text).classes("text-[11px] text-slate-500 italic truncate")
+def _render_checks(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Strip of seven labelled chips under the trust badge — the full picture.
+
+    Each chip is a small coloured dot + Russian label, with the tooltip
+    explaining the specific signal (e.g. country pair for a geo mismatch).
+    """
+    with ui.row().classes("w-full gap-x-3 gap-y-1 flex-wrap"):
+        for label, status, tooltip in _check_states(card):
+            with ui.row().classes("items-center gap-1") as chip:
+                ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 {_CHECK_DOT[status]}")
+                ui.label(label).classes(f"text-[11px] {_CHECK_TEXT[status]}")
+            chip.tooltip(tooltip)
 
 
 def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
-    """Spam-status badge — always shown, with a refresh link when unknown.
+    """Spam-status badge — always visible, always with a tooltip.
 
-    A missing row is rendered the same as ``unknown`` ("не проверён"). That way
-    the card communicates "no @SpamBot check has been run yet" explicitly,
-    instead of silently hiding the field — which is what made the original
-    setup look inconsistent with the accounts page.
+    The tooltip explains what "не проверен" means (no @SpamBot probe yet) so
+    the operator never has to guess; for "ограничен" we prefer the dynamic
+    ``spam_detail`` (e.g. "until 2026-08-12") if the gateway returned one.
     """
     status = card.spam_status or "unknown"
-    text, cls = _SPAM_BADGE.get(status, (status, "text-slate-600 bg-slate-100"))
+    text, cls = _SPAM_BADGE.get(status, (f"Спам: {status}", "text-slate-600 bg-slate-100"))
+    tooltip = (
+        card.spam_detail
+        if status == "limited" and card.spam_detail
+        else _SPAM_TOOLTIP.get(status, "")
+    )
     with ui.row().classes("w-full items-center gap-2"):
-        badge = ui.label(text).classes(f"w-fit text-[11px] px-1.5 py-0.5 rounded {cls}")
-        if card.spam_detail:
-            badge.tooltip(card.spam_detail)
+        badge = ui.label(text).classes(f"w-fit text-[11px] px-2 py-0.5 rounded {cls}")
+        if tooltip:
+            badge.tooltip(tooltip)
         if status == "unknown":
             _render_spam_refresh_link(ctx, card.account_id)
 
@@ -316,7 +405,8 @@ def _render_spam_refresh_link(ctx: _BoardContext, account_id: str) -> None:  # p
         except Exception as exc:  # noqa: BLE001 — UI handler surfaces any failure
             ui.notify(f"Не удалось проверить: {exc}", type="negative")
             return
-        ui.notify(f"Spam-статус: {verdict.status}", type="positive")
+        ru = _SPAM_STATUS_RU.get(verdict.status, verdict.status)
+        ui.notify(f"Спам-статус: {ru}", type="positive")
         ctx.refresh()
 
     ui.button("проверить", on_click=on_click).props("flat dense no-caps").classes(
@@ -336,22 +426,6 @@ def _render_card_stats(card: WarmingAccountState, max_daily: int) -> None:  # pr
     if eta:
         parts.append(f"⏭ {eta}")
     ui.label(" · ".join(parts)).classes("text-[11px] text-slate-500 truncate")
-
-
-def _render_geo_chip(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Show a phone/proxy country chip only when it tells the operator something.
-
-    Hidden when geo is matched, fully unknown, or partial (would be noise).
-    A mismatch is the case worth surfacing — it pairs with the
-    ``страна номера ≠ страна прокси`` trust reason.
-    """
-    phone = card.phone_country
-    proxy = card.proxy_country
-    if not phone or not proxy or phone == proxy:
-        return
-    ui.label(f"📞 {phone} → 🌐 {proxy}").classes(
-        "w-fit text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800",
-    ).tooltip("Страна номера не совпадает со страной прокси")
 
 
 def _render_flood_wait_line(card: WarmingAccountState) -> None:  # pragma: no cover
@@ -398,29 +472,34 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
         ui.card()
         .props("draggable")
         .classes(
-            f"w-full p-3 gap-1 cursor-grab bg-white border border-slate-200 rounded-md{pulse}",
+            f"w-full p-4 gap-3 cursor-grab bg-white border border-slate-200 rounded-md{pulse}",
         )
     )
     element.on("dragstart", lambda aid=card.account_id: ctx.drag.update(account_id=aid))
     with element:
+        # Header — dot, name, state pill, trust badge (key metric, two-line).
         with ui.row().classes("w-full items-center gap-2"):
             ui.element("div").classes(
-                f"w-2.5 h-2.5 rounded-full {_HEALTH_DOT.get(card.health, 'bg-slate-400')}",
+                f"w-3 h-3 rounded-full shrink-0 {_HEALTH_DOT.get(card.health, 'bg-slate-400')}",
             )
-            ui.label(card.label).classes("text-sm font-medium truncate flex-1")
+            ui.label(card.label).classes("text-sm font-semibold truncate flex-1")
             ui.label(_STATE_LABEL.get(card.state, card.state)).classes(
-                f"text-[11px] px-2 py-0.5 rounded {_STATE_BADGE.get(card.state, '')}",
+                f"text-[11px] px-2 py-0.5 rounded shrink-0 {_STATE_BADGE.get(card.state, '')}",
             )
             if card.trust_score is not None:
                 _render_trust_badge(card)
-        _render_trust_reasons(card)
-        _render_geo_chip(card)
+        # Per-signal checks — the "positive signals" view of the trust score.
+        if card.trust_score is not None:
+            _render_checks(card)
+        # Spam status (always shown).
         _render_spam_badge(ctx, card)
+        # Activity line + stats.
         meta = f"циклов {card.cycles_completed}"
         if card.last_event:
             meta = f"{meta} · {card.last_event}"
         ui.label(meta).classes("text-[11px] text-slate-500 truncate")
         _render_card_stats(card, ctx.max_daily)
+        # Conditional diagnostic lines — only render when relevant.
         _render_flood_wait_line(card)
         _render_quarantine_line(card)
         _render_error_line(card)
