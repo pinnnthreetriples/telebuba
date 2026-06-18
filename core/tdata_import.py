@@ -115,12 +115,48 @@ def _safe_extract_zip(
     return None
 
 
+# Canonical signatures of a Telegram Desktop ``tdata`` directory. The
+# ``key_datas`` file holds the master encryption key; ``D877F783D877F783``
+# is the magic-named subdir Telegram Desktop writes its account data into.
+# Either one is enough to identify a tdata-shaped directory regardless of
+# what it's named on disk.
+_TDATA_KEY_FILE = "key_datas"
+_TDATA_DATA_DIR = "D877F783D877F783"
+
+
+def _looks_like_tdata(path: Path) -> bool:
+    """True if ``path`` contains the canonical tdata key file or data dir.
+
+    Account brokers commonly rename or wrap the tdata folder
+    (e.g. ``[3] +57 ... Devereux Hunt/`` instead of ``tdata/``), so we
+    can't rely on the folder name alone — checking for the on-disk
+    signature is the only robust answer.
+    """
+    return (path / _TDATA_KEY_FILE).is_file() or (path / _TDATA_DATA_DIR).is_dir()
+
+
 def _find_tdata_dir(root: Path) -> Path | None:
-    """Locate the ``tdata`` directory inside ``root``. Top-level first, then nested."""
+    """Locate the tdata directory inside ``root`` by name first, then signature.
+
+    Three strategies in order of specificity:
+    1. ``root/tdata`` — canonical layout when Telegram Desktop's ``tdata``
+       folder was zipped directly.
+    2. Any nested directory literally named ``tdata`` — accounts for
+       wrapping folders like ``account_name/tdata/...``.
+    3. Any directory (root or nested) whose contents match the tdata
+       signature — handles brokers who renamed the folder. ``root`` is
+       checked first so a flat zip of tdata contents (``key_datas`` at the
+       top level) still works.
+    """
     if (root / "tdata").is_dir():
         return root / "tdata"
     for sub in sorted(p for p in root.rglob("tdata") if p.is_dir()):
         return sub
+    if _looks_like_tdata(root):
+        return root
+    for path in sorted(p for p in root.rglob("*") if p.is_dir()):
+        if _looks_like_tdata(path):
+            return path
     return None
 
 
