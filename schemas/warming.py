@@ -22,6 +22,11 @@ from pydantic import BaseModel, ConfigDict, Field
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 
+# Five-stage warming lifecycle. Determines per-account daily action cap and
+# what behaviour is unlocked. Computed from (calendar age, trust_band) and
+# capped from above by trust — see ``services.warming.pacing.effective_phase``.
+WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
+
 _ACTIVE_STATES: frozenset[WarmingState] = frozenset(
     {"active", "sleeping", "flood_wait", "quarantine", "error"},
 )
@@ -131,16 +136,28 @@ class WarmingSettingsUpdate(BaseModel):
 
 
 class WarmingIntensity(BaseModel):
-    """Effective per-cycle intensity for an account, derived from its age.
+    """Effective per-cycle intensity for an account, derived from age + trust.
 
     Produced by the age-based ramp: a fresh account warms quietly (few channels,
-    low reaction rate, no DM) and grows to the configured full intensity.
+    low reaction rate, no DM) and grows to the configured full intensity. The
+    daily action cap and lifecycle phase are part of the same derivation —
+    one source of truth for "what is this account allowed to do today".
     """
 
     channels_min: int = Field(ge=1)
     channels_max: int = Field(ge=1)
     reaction_probability: float = Field(ge=0.0, le=1.0)
     dm_allowed: bool
+    # Auto-scaled daily action budget. Replaces the fleet-wide setting:
+    # each account gets its own cap based on its current phase. 0 = no cap.
+    daily_cap: int = Field(default=0, ge=0)
+    # Current lifecycle phase the account is in.
+    phase: WarmingPhase = "intro"
+    # 0.0..1.0 — how far into the current phase the account is, by age.
+    # 1.0 means "at the boundary, about to advance". ``None`` for terminal phase.
+    progress_to_next: float | None = Field(default=None, ge=0.0, le=1.0)
+    # Whole days until the next phase boundary, ``None`` for terminal phase.
+    days_to_next_phase: int | None = Field(default=None, ge=0)
 
 
 class WarmingReadiness(BaseModel):
@@ -180,6 +197,13 @@ class WarmingStateRecord(BaseModel):
     # value; the loop captures it and refuses to write through if the DB run_id
     # has changed underneath it (= a newer start replaced this generation).
     run_id: str | None = None
+    # Persisted lifecycle phase. Compared against the freshly computed phase
+    # after each cycle to detect transitions; ``None`` on a brand-new record
+    # (seeded on the first cycle, no event fired).
+    current_phase: WarmingPhase | None = None
+    # ISO timestamp of when the account entered ``current_phase``. Drives the
+    # "in phase: N days" hint on the card.
+    phase_entered_at: str | None = None
 
 
 class WarmingStateWrite(BaseModel):
@@ -217,6 +241,9 @@ class WarmingStateWrite(BaseModel):
     # into a silent no-op instead of overwriting the new generation. Carries
     # no effect on the INSERT branch (a new row has no run_id to mismatch).
     expected_run_id: str | None = None
+    # See WarmingStateRecord — persisted lifecycle phase + entry timestamp.
+    current_phase: WarmingPhase | None = None
+    phase_entered_at: str | None = None
 
 
 class WarmingStateWriteResult(BaseModel):
@@ -275,6 +302,15 @@ class WarmingAccountState(BaseModel):
     # phone can't be parsed or the proxy has no country code.
     phone_country: str | None = None
     proxy_country: str | None = None
+    # Lifecycle phase + display affordances, derived per card from age + trust.
+    phase: WarmingPhase | None = None
+    phase_label: str | None = None
+    daily_cap: int = Field(default=0, ge=0)
+    progress_to_next: float | None = Field(default=None, ge=0.0, le=1.0)
+    days_to_next_phase: int | None = Field(default=None, ge=0)
+    # Whole days since warming was first started for this account (from
+    # ``WarmingStateRecord.started_at``). ``None`` when warming never ran.
+    warming_days: int | None = Field(default=None, ge=0)
     readiness: WarmingReadiness | None = None
 
 

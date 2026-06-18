@@ -14,7 +14,7 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from core.config import settings
 from core.db import fetch_account
 from core.phone_geo import timezone_for_phone
-from schemas.warming import WarmingIntensity, WarmingReadiness
+from schemas.warming import WarmingIntensity, WarmingPhase, WarmingReadiness
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -149,21 +149,137 @@ def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
     return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
 
 
-def compute_intensity(age_hours: float) -> WarmingIntensity:
-    """Map an account's age to its per-cycle intensity via the configured ramp.
+# Five-phase lifecycle table — drives the per-account daily action cap and
+# the visible "what stage is this account in" affordance on the card.
+#
+# Day bounds and caps are conservative, anchored on the lower end of the
+# 2026 warming guidance spread (TelePilot Pro 14-day schedule, SMM Plus,
+# CRMChat 80-100/day ceiling for accounts ≥2-3 months). The shape is
+# high-confidence; the absolute numbers carry ±30% uncertainty in the
+# sources, so they live here as constants for future tuning.
+_PHASE_ORDER: tuple[WarmingPhase, ...] = (
+    "intro",
+    "settling",
+    "warming",
+    "active",
+    "warmed",
+)
+
+# Upper day bound of each phase (inclusive). The next phase starts at
+# ``bound + 1`` days. ``None`` = terminal phase (no next bound).
+_PHASE_DAY_BOUND: dict[WarmingPhase, int | None] = {
+    "intro": 2,
+    "settling": 7,
+    "warming": 14,
+    "active": 29,
+    "warmed": None,
+}
+
+# Daily action cap by phase. Lowered from the initial proposal after research
+# found the 2026 source consensus runs ~30% under our first guesses. 80 is the
+# CRMChat documented ceiling for accounts ≥2-3 months.
+_PHASE_DAILY_CAP: dict[WarmingPhase, int] = {
+    "intro": 3,
+    "settling": 10,
+    "warming": 20,
+    "active": 40,
+    "warmed": 80,
+}
+
+# Trust-score gate: the maximum phase a given trust band is allowed to occupy.
+# A 60-day-old account with ``critical`` trust still gets the ``settling`` cap.
+# ``excellent`` / ``good`` = no extra cap, age-phase rules apply.
+_TRUST_PHASE_CEILING: dict[str, WarmingPhase] = {
+    "excellent": "warmed",
+    "good": "warmed",
+    "watch": "active",
+    "at_risk": "warming",
+    "critical": "settling",
+}
+
+# Hard age floor: fresh accounts (< 72 hours) cannot exceed ``intro`` even with
+# a clean trust score and clean proxy. Sources unanimous: the first 72 h are
+# the highest-risk window regardless of other signals.
+_PHASE_HARD_FLOOR_AGE_HOURS = 72.0
+
+
+def _phase_from_age(age_hours: float) -> WarmingPhase:
+    """Phase by calendar age alone, ignoring trust."""
+    if age_hours < _PHASE_HARD_FLOOR_AGE_HOURS:
+        return "intro"
+    days = age_hours / 24.0
+    for phase in _PHASE_ORDER:
+        bound = _PHASE_DAY_BOUND[phase]
+        if bound is None or days <= bound:
+            return phase
+    return "warmed"
+
+
+def _phase_cap_by_trust(trust_band: str | None) -> WarmingPhase:
+    """The highest phase allowed for the given trust band."""
+    if trust_band is None:
+        return "warmed"
+    return _TRUST_PHASE_CEILING.get(trust_band, "warmed")
+
+
+def effective_phase(age_hours: float, trust_band: str | None) -> WarmingPhase:
+    """Min of (age-phase, trust-ceiling) — the safer of the two signals."""
+    age_phase = _phase_from_age(age_hours)
+    ceiling = _phase_cap_by_trust(trust_band)
+    age_rank = _PHASE_ORDER.index(age_phase)
+    ceiling_rank = _PHASE_ORDER.index(ceiling)
+    return _PHASE_ORDER[min(age_rank, ceiling_rank)]
+
+
+def _phase_progress(
+    phase: WarmingPhase,
+    age_hours: float,
+) -> tuple[float | None, int | None]:
+    """How far through ``phase`` the account is, plus whole days until next.
+
+    ``(progress, days_to_next)`` — both ``None`` for the terminal ``warmed``
+    phase, since there is no next boundary.
+    """
+    bound = _PHASE_DAY_BOUND[phase]
+    if bound is None:
+        return None, None
+    idx = _PHASE_ORDER.index(phase)
+    prev_bound = _PHASE_DAY_BOUND[_PHASE_ORDER[idx - 1]] if idx > 0 else None
+    phase_start_days = 0 if prev_bound is None else prev_bound + 1
+    days = age_hours / 24.0
+    span = max(1, bound - phase_start_days + 1)
+    progress = min(1.0, max(0.0, (days - phase_start_days) / span))
+    days_to_next = max(0, bound + 1 - int(days))
+    return progress, days_to_next
+
+
+def compute_intensity(
+    age_hours: float,
+    trust_band: str | None = None,
+) -> WarmingIntensity:
+    """Map an account's age + trust band to its per-cycle intensity and cap.
 
     Channels-per-cycle and reaction rate grow linearly from a quiet initial
     floor to the configured full values over ``ramp_full_age_hours``; DM is
-    gated until ``dm_min_age_hours``. With the ramp disabled, every account runs
-    at full intensity with DM allowed.
+    gated until ``dm_min_age_hours``. The lifecycle phase + daily cap are
+    derived from ``effective_phase(age, trust_band)``. With the legacy ramp
+    disabled, channels/reactions/DM still get full intensity, but the phase
+    machinery still applies the daily cap.
     """
     warm = settings.warming
+    phase = effective_phase(age_hours, trust_band)
+    progress, days_to_next = _phase_progress(phase, age_hours)
+    daily_cap = _PHASE_DAILY_CAP[phase]
     if not warm.ramp_enabled:
         return WarmingIntensity(
             channels_min=warm.channels_per_cycle_min,
             channels_max=warm.channels_per_cycle_max,
             reaction_probability=warm.reaction_probability,
             dm_allowed=True,
+            daily_cap=daily_cap,
+            phase=phase,
+            progress_to_next=progress,
+            days_to_next_phase=days_to_next,
         )
     if warm.ramp_full_age_hours <= 0:
         frac = 1.0
@@ -181,6 +297,10 @@ def compute_intensity(age_hours: float) -> WarmingIntensity:
         channels_max=channels_max,
         reaction_probability=min(1.0, max(0.0, reaction_probability)),
         dm_allowed=age_hours >= warm.dm_min_age_hours,
+        daily_cap=daily_cap,
+        phase=phase,
+        progress_to_next=progress,
+        days_to_next_phase=days_to_next,
     )
 
 

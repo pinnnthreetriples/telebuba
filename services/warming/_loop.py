@@ -11,14 +11,17 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_warming_state, load_warming_settings
+from core.db import fetch_account, fetch_warming_state, load_warming_settings
 from core.logging import log_event
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
+from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._state import _set_state
 from services.warming.pacing import (
+    _PHASE_ORDER,
     _SECONDS_PER_HOUR,
+    _account_age_hours,
     _account_tz,
     _in_quiet_hours,
     _local_now,
@@ -27,10 +30,11 @@ from services.warming.pacing import (
     _quiet_hours_end_at,
     _roll_daily,
     _shift_to_active_hours,
+    compute_intensity,
 )
 
 if TYPE_CHECKING:
-    from schemas.warming import WarmingState, WarmingStateRecord
+    from schemas.warming import WarmingPhase, WarmingState, WarmingStateRecord
 
 
 def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -> bool:
@@ -183,6 +187,50 @@ async def _calculate_next_run(
     return actions_done, next_run_dt, next_state
 
 
+async def _resolve_phase_after_cycle(
+    account_id: str,
+    age_hours: float,
+    latest: WarmingStateRecord | None,
+) -> tuple[WarmingPhase, str]:
+    """Compute the post-cycle phase, fire ``phase_advanced`` if it changed.
+
+    Returns ``(new_phase, phase_entered_iso)`` for the upsert. We recompute
+    trust here on purpose: the cycle may have just shifted spam/quarantine/
+    flood signals, and the phase should react in the same write. Seed-only
+    semantics for the first ever cycle (``prev is None`` → no event, just
+    stamp the entry timestamp).
+    """
+    post_trust = await account_trust_score(account_id)
+    post_intensity = compute_intensity(age_hours, trust_band=post_trust.band)
+    new_phase = post_intensity.phase
+    prev_phase = latest.current_phase if latest is not None else None
+    phase_changed = prev_phase is not None and prev_phase != new_phase
+    if phase_changed and prev_phase is not None:
+        direction = (
+            "forward"
+            if _PHASE_ORDER.index(new_phase) > _PHASE_ORDER.index(prev_phase)
+            else "regression"
+        )
+        await log_event(
+            "INFO" if direction == "forward" else "WARNING",
+            "phase_advanced",
+            account_id=account_id,
+            extra={
+                "from_phase": prev_phase,
+                "to_phase": new_phase,
+                "direction": direction,
+                "trust_score": post_trust.score,
+                "cycle_index": (latest.cycles_completed if latest else 0) + 1,
+            },
+        )
+    phase_entered_iso = (
+        _now_iso()
+        if prev_phase is None or phase_changed
+        else (latest.phase_entered_at if latest and latest.phase_entered_at else _now_iso())
+    )
+    return new_phase, phase_entered_iso
+
+
 async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branches read clearer than chained conditions.
     account_id: str,
     *,
@@ -235,8 +283,20 @@ async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branc
                 )
             return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
 
+    # Per-account auto-cap by phase, with the legacy fleet-wide override
+    # (env / settings) winning when set > 0. The phase is the same one the
+    # card displays, so the operator's mental model and the runtime gate
+    # share a single source of truth.
+    account = await fetch_account(account_id)
+    age_hours = _account_age_hours(account, now)
+    trust = await account_trust_score(account_id)
+    intensity = compute_intensity(age_hours, trust_band=trust.band)
+    effective_cap = (
+        controls.max_daily_actions if controls.max_daily_actions > 0 else intensity.daily_cap
+    )
+
     daily_count, daily_date = _roll_daily(record, now.date().isoformat())
-    if controls.max_daily_actions > 0 and daily_count >= controls.max_daily_actions:
+    if effective_cap > 0 and daily_count >= effective_cap:
         next_run = _next_utc_midnight(now).isoformat()
         write = await _set_state(
             account_id,
@@ -269,8 +329,8 @@ async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branc
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
 
     remaining = None
-    if controls.max_daily_actions > 0:
-        remaining = max(0, controls.max_daily_actions - daily_count)
+    if effective_cap > 0:
+        remaining = max(0, effective_cap - daily_count)
 
     result = await run_one_cycle(
         WarmingCycleRequest(
@@ -295,6 +355,12 @@ async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branc
     if latest is not None and latest.state == "idle":
         return result
 
+    new_phase, phase_entered_iso = await _resolve_phase_after_cycle(
+        account_id,
+        age_hours,
+        latest,
+    )
+
     await _set_state(
         account_id,
         next_state,
@@ -311,5 +377,7 @@ async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branc
         daily_actions=new_daily,
         daily_count_date=daily_date,
         expected_run_id=run_id,
+        current_phase=new_phase,
+        phase_entered_at=phase_entered_iso,
     )
     return result

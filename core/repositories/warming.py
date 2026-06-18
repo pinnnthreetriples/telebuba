@@ -32,6 +32,7 @@ from core.db import (
 from schemas.warming import (
     WarmingChannel,
     WarmingChannelList,
+    WarmingPhase,
     WarmingSettingsSecret,
     WarmingState,
     WarmingStateRecord,
@@ -236,6 +237,7 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
 
 
 def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateRecord:
+    phase_raw = _optional_str(mapping.get("current_phase"))
     return WarmingStateRecord(
         account_id=str(mapping["account_id"]),
         state=cast("WarmingState", mapping["state"]),
@@ -257,6 +259,8 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         daily_count_date=_optional_str(mapping.get("daily_count_date")),
         quarantine_count=_optional_int(mapping.get("quarantine_count")) or 0,
         run_id=_optional_str(mapping.get("run_id")),
+        current_phase=cast("WarmingPhase | None", phase_raw),
+        phase_entered_at=_optional_str(mapping.get("phase_entered_at")),
     )
 
 
@@ -322,6 +326,8 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         "daily_count_date": data.daily_count_date,
         "quarantine_count": data.quarantine_count,
         "run_id": data.run_id,
+        "current_phase": data.current_phase,
+        "phase_entered_at": data.phase_entered_at,
     }
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:

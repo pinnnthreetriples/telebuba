@@ -47,25 +47,6 @@ _QUIET_PRESET_LABELS: dict[str, str] = {
     _QUIET_PRESET_CUSTOM: "⚙ Своё расписание",
 }
 
-# Daily-action presets — values from the 2026 warming guides referenced in
-# plan §9: 15 = week 1, 30 = «100% safe» / week 2, 60 = week 3+, 100 = ≥2 mo.
-_DAILY_PRESET_CUSTOM = "custom"
-_DAILY_PRESETS: dict[str, int] = {
-    "unlimited": 0,
-    "careful_15": 15,
-    "safe_30": 30,
-    "active_60": 60,
-    "max_100": 100,
-}
-_DAILY_PRESET_LABELS: dict[str, str] = {
-    "unlimited": "Без лимита",
-    "careful_15": "🐢 15 / сут · неделя 1",
-    "safe_30": "🚶 30 / сут · неделя 2",
-    "active_60": "🏃 60 / сут · прогретый",
-    "max_100": "🚀 100 / сут · ≥2 мес.",
-    _DAILY_PRESET_CUSTOM: "⚙ Своё значение",
-}
-
 
 def _detect_quiet_preset(*, enabled: bool, start: int, end: int) -> str:
     """Return the quiet-hours preset key matching the saved state.
@@ -80,14 +61,6 @@ def _detect_quiet_preset(*, enabled: bool, start: int, end: int) -> str:
         if (start, end) == (preset_start, preset_end):
             return key
     return _QUIET_PRESET_CUSTOM
-
-
-def _detect_daily_preset(value: int) -> str:
-    """Return the daily-limit preset key matching ``value``, or ``"custom"``."""
-    for key, preset_value in _DAILY_PRESETS.items():
-        if preset_value == value:
-            return key
-    return _DAILY_PRESET_CUSTOM
 
 
 def _section_caption(text: str) -> None:  # pragma: no cover
@@ -138,6 +111,12 @@ def _render_how_it_works() -> None:  # pragma: no cover
                     "hourglass_empty",
                     "Сон 12–30 часов",
                     "После цикла аккаунт отдыхает случайное время и повторяет активность позже.",
+                )
+                _info_item(
+                    "auto_awesome",
+                    "Авто-лимит действий",
+                    "Каждому аккаунту свой лимит на сутки — по фазе прогрева и trust score. "
+                    "См. карточку аккаунта.",
                 )
             with ui.column().classes("flex-1 min-w-[300px] gap-1"):
                 _section_caption("Защита и надёжность")
@@ -199,7 +178,9 @@ async def _render_config_cards() -> None:  # pragma: no cover
                 quiet_hours_enabled=bool(refs["quiet"].value),
                 quiet_hours_start=_clamp_hour(refs["quiet_start"].value),
                 quiet_hours_end=_clamp_hour(refs["quiet_end"].value),
-                max_daily_actions=max(0, int(refs["daily"].value or 0)),
+                # Auto-cap is per-account; this fleet-wide value is preserved
+                # verbatim as an .env-driven override (UI no longer exposes it).
+                max_daily_actions=current.max_daily_actions,
                 gemini_api_key=key,
                 gemini_model=model,
                 clear_gemini_key=clear,
@@ -222,15 +203,13 @@ async def _render_config_cards() -> None:  # pragma: no cover
             refs["quiet"].value = fresh.quiet_hours_enabled
             refs["quiet_start"].value = fresh.quiet_hours_start
             refs["quiet_end"].value = fresh.quiet_hours_end
-            refs["daily"].value = fresh.max_daily_actions
-            # Selects mirror the underlying values — re-detect after rollback
-            # so the chosen preset matches what's actually persisted again.
+            # Quiet-hour preset mirrors the underlying values — re-detect after
+            # rollback so the chosen preset matches what's actually persisted.
             refs["quiet_preset"].value = _detect_quiet_preset(
                 enabled=fresh.quiet_hours_enabled,
                 start=fresh.quiet_hours_start,
                 end=fresh.quiet_hours_end,
             )
-            refs["daily_preset"].value = _detect_daily_preset(fresh.max_daily_actions)
 
     def trigger(_e: object = None) -> asyncio.Task[None]:
         return asyncio.create_task(on_toggle())
@@ -351,43 +330,13 @@ def _render_features_card(
             value=_QUIET_PRESET_CUSTOM,
         )
 
-        initial_daily_preset = _detect_daily_preset(current.max_daily_actions)
-
-        def on_daily_preset(e: object) -> None:
-            key = getattr(e, "value", None) or refs["daily_preset"].value
-            if key in _DAILY_PRESETS:
-                refs["daily"].value = _DAILY_PRESETS[key]
-            # _DAILY_PRESET_CUSTOM → leave the value alone so the operator edits
-            trigger(e)
-
-        refs["daily_preset"] = _feature_row(
-            "speed",
-            "Дневной лимит действий",
-            "Максимум действий в сутки на аккаунт.",
-            lambda: (
-                ui.select(
-                    _DAILY_PRESET_LABELS,
-                    value=initial_daily_preset,
-                    on_change=on_daily_preset,
-                )
-                .props("dense outlined options-dense")
-                .classes("w-56")
-            ),
-        )
-        daily_custom = ui.row().classes("w-full items-center gap-2 pl-9")
-        with daily_custom:
-            refs["daily"] = (
-                ui.number(value=current.max_daily_actions, min=0, format="%d")
-                .props("dense outlined debounce=600")
-                .classes("w-24")
-                .on_value_change(trigger)
-            )
-            ui.label("действий в сутки").classes("text-xs text-slate-400")
-        daily_custom.bind_visibility_from(
-            refs["daily_preset"],
-            "value",
-            value=_DAILY_PRESET_CUSTOM,
-        )
+        # Per-account daily cap is now auto, derived from each account's
+        # warming phase + trust band — see services.warming.pacing. The
+        # legacy fleet-wide ``max_daily_actions`` setting stays in the schema
+        # as an .env-driven override but is no longer surfaced in the UI:
+        # ``persist()`` passes ``current.max_daily_actions`` through verbatim,
+        # so an operator who previously set 60 keeps that override until
+        # they clear it in .env.
 
 
 def _render_gemini_card(
