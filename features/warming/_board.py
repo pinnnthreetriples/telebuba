@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from nicegui import ui
 
@@ -22,6 +22,8 @@ if TYPE_CHECKING:
     from collections.abc import Callable
 
     from schemas.warming import WarmingAccountState, WarmingBoardState, WarmingSummary
+
+NotifyType = Literal["positive", "negative", "warning", "info", "ongoing"]
 
 _BOARD_POLL_SECONDS = 4.0
 _ETA_HOUR_SECONDS = 3600
@@ -50,24 +52,11 @@ _STATE_BADGE = {
     "quarantine": "text-orange-700 bg-orange-100",
     "error": "text-red-700 bg-red-100",
 }
-_SPAM_BADGE = {
-    "clean": ("Спам: чисто", "text-green-700 bg-green-100"),
-    "limited": ("Спам: ограничен", "text-red-700 bg-red-100"),
-    "unknown": ("Спам: не проверен", "text-slate-600 bg-slate-100"),
-}
-# Tooltip text shown on the spam badge — populated for every status so the
-# operator never has to guess what "не проверен" refers to.
-_SPAM_TOOLTIP = {
-    "clean": "@SpamBot: ограничений нет",
-    "limited": "@SpamBot: аккаунт ограничен",
-    "unknown": "@SpamBot ещё не запрашивался — нажмите «проверить»",
-}
-# Localisation for the toast that follows a successful refresh.
-_SPAM_STATUS_RU = {
-    "clean": "чисто",
-    "limited": "ограничен",
-    "unknown": "не проверен",
-}
+# classify_spam_probe writes this exact phrase to ``account_spam_status.detail``
+# when @SpamBot replies "being checked" — we recognise it to distinguish a
+# Telegram-side review from a probe error.
+_SPAM_DETAIL_BEING_CHECKED = "account is being checked"
+_SPAM_OUTCOME_BRIEF_MAX = 80
 
 # Readiness reasons are produced (in English) by ``services.warming`` and are
 # also written to logs/tests; translate them here at the UI edge only.
@@ -123,6 +112,78 @@ def _ru_reason(reason: str) -> str:  # pragma: no cover
     return reason
 
 
+def _spam_badge_label(status: str, detail: str | None) -> str:
+    """Russian badge text, distinguishing unknown sub-states.
+
+    A probe-side error and a Telegram-side "being checked" both land in the
+    same ``unknown`` status, but they mean very different things — the badge
+    text now reflects that so an operator sees at a glance what happened
+    instead of having to hover.
+    """
+    if status == "clean":
+        return "Спам: чисто"
+    if status == "limited":
+        return "Спам: ограничен"
+    if detail == _SPAM_DETAIL_BEING_CHECKED:
+        return "Спам: на проверке Telegram"
+    if detail:
+        return "Спам: ошибка проверки"
+    return "Спам: не проверен"
+
+
+def _spam_badge_classes(status: str, detail: str | None) -> str:
+    """Tailwind colour pair for the spam badge — amber for an actual probe error."""
+    if status == "clean":
+        return "text-green-700 bg-green-100"
+    if status == "limited":
+        return "text-red-700 bg-red-100"
+    if detail and detail != _SPAM_DETAIL_BEING_CHECKED:
+        return "text-amber-700 bg-amber-100"
+    return "text-slate-600 bg-slate-100"
+
+
+def _spam_tooltip(status: str, detail: str | None) -> str:
+    """Full tooltip — the *why* behind the badge, always populated."""
+    if status == "clean":
+        return "@SpamBot: ограничений нет"
+    if status == "limited":
+        return detail or "@SpamBot: аккаунт ограничен"
+    if detail == _SPAM_DETAIL_BEING_CHECKED:
+        return "Telegram сам проверяет аккаунт — повторите позже"
+    if detail:
+        return f"Проверка не прошла: {detail}"
+    return "@SpamBot ещё не запрашивался — нажмите «проверить»"
+
+
+def _spam_outcome_label(status: str, detail: str | None) -> str:
+    """Brief Russian phrase for the post-refresh toast."""
+    if status == "clean":
+        return "чисто"
+    if status == "limited":
+        return f"ограничен ({detail})" if detail else "ограничен"
+    if detail == _SPAM_DETAIL_BEING_CHECKED:
+        return "Telegram сам проверяет аккаунт"
+    if detail:
+        brief = (
+            detail
+            if len(detail) <= _SPAM_OUTCOME_BRIEF_MAX
+            else detail[: _SPAM_OUTCOME_BRIEF_MAX - 1] + "…"
+        )
+        return f"проверка не прошла — {brief}"
+    return "вердикт не получен"
+
+
+def _spam_notify_type(status: str, detail: str | None) -> NotifyType:
+    """Toast colour: positive for clean, negative for limited, warning on probe error."""
+    if status == "clean":
+        return "positive"
+    if status == "limited":
+        return "negative"
+    if detail and detail != _SPAM_DETAIL_BEING_CHECKED:
+        return "warning"
+    return "info"
+
+
 def _check_states(card: WarmingAccountState) -> list[tuple[str, str, str]]:
     """Derive seven UI health checks from card fields and trust_reasons.
 
@@ -159,12 +220,13 @@ def _check_session(reasons: set[str]) -> tuple[str, str, str]:
 
 def _check_spam(card: WarmingAccountState) -> tuple[str, str, str]:
     """None and "unknown" both map to warn (data missing, not a risk)."""
-    status = card.spam_status
+    status = card.spam_status or "unknown"
+    tooltip = _spam_tooltip(status, card.spam_detail)
     if status == "clean":
-        return ("@SpamBot", "ok", _SPAM_TOOLTIP["clean"])
+        return ("@SpamBot", "ok", tooltip)
     if status == "limited":
-        return ("@SpamBot", "fail", card.spam_detail or _SPAM_TOOLTIP["limited"])
-    return ("@SpamBot", "warn", _SPAM_TOOLTIP["unknown"])
+        return ("@SpamBot", "fail", tooltip)
+    return ("@SpamBot", "warn", tooltip)
 
 
 def _check_simple(
@@ -377,19 +439,18 @@ def _render_checks(card: WarmingAccountState) -> None:  # pragma: no cover
 
 
 def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
-    """Spam-status badge — always visible, always with a tooltip.
+    """Spam-status badge — always visible, always self-explaining.
 
-    The tooltip explains what "не проверен" means (no @SpamBot probe yet) so
-    the operator never has to guess; for "ограничен" we prefer the dynamic
-    ``spam_detail`` (e.g. "until 2026-08-12") if the gateway returned one.
+    The badge text itself distinguishes a probe error (« ошибка проверки »)
+    from a Telegram-side review (« на проверке Telegram ») from a plain
+    no-probe-yet (« не проверен »); the tooltip carries the underlying
+    ``spam_detail`` (e.g. "TimeoutError: timed out") so the operator knows
+    where to look next.
     """
     status = card.spam_status or "unknown"
-    text, cls = _SPAM_BADGE.get(status, (f"Спам: {status}", "text-slate-600 bg-slate-100"))
-    tooltip = (
-        card.spam_detail
-        if status == "limited" and card.spam_detail
-        else _SPAM_TOOLTIP.get(status, "")
-    )
+    text = _spam_badge_label(status, card.spam_detail)
+    cls = _spam_badge_classes(status, card.spam_detail)
+    tooltip = _spam_tooltip(status, card.spam_detail)
     with ui.row().classes("w-full items-center gap-2"):
         badge = ui.label(text).classes(f"w-fit text-[11px] px-2 py-0.5 rounded {cls}")
         if tooltip:
@@ -399,18 +460,39 @@ def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  
 
 
 def _render_spam_refresh_link(ctx: _BoardContext, account_id: str) -> None:  # pragma: no cover
+    """Inline «проверить» link that triggers a real @SpamBot probe.
+
+    Visible feedback in two places:
+    1. ``button.props("loading")`` flips the Quasar button to a spinner while
+       the probe runs — the operator sees the system is working. The button
+       is rebuilt on ``ctx.refresh()`` so the loading state vanishes
+       automatically once the new card renders.
+    2. A toast announces the outcome — colour and text both reflect *which*
+       outcome it is (clean / limited / Telegram-проверяет / ошибка / без
+       вердикта), so the operator always knows whether the probe ran and
+       what came back.
+    """
+
     async def on_click() -> None:
+        button.props("loading")
         try:
             verdict = await refresh_spam_status(account_id, force=True)
         except Exception as exc:  # noqa: BLE001 — UI handler surfaces any failure
-            ui.notify(f"Не удалось проверить: {exc}", type="negative")
+            ui.notify(f"Не удалось проверить: {exc}", type="negative", timeout=6000)
+            ctx.refresh()
             return
-        ru = _SPAM_STATUS_RU.get(verdict.status, verdict.status)
-        ui.notify(f"Спам-статус: {ru}", type="positive")
+        label = _spam_outcome_label(verdict.status, verdict.detail)
+        ui.notify(
+            f"Спам-статус: {label}",
+            type=_spam_notify_type(verdict.status, verdict.detail),
+            timeout=6000,
+        )
         ctx.refresh()
 
-    ui.button("проверить", on_click=on_click).props("flat dense no-caps").classes(
-        "text-[11px] text-blue-600 px-1 py-0",
+    button = (
+        ui.button("проверить", on_click=on_click)
+        .props("flat dense no-caps")
+        .classes("text-[11px] text-blue-600 px-1 py-0")
     )
 
 
