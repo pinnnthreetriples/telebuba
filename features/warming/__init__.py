@@ -26,7 +26,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, cast
 
-from nicegui import ui
+from nicegui import context, ui
 
 from features.warming._activity import _render_activity_log, _render_dialogues
 from features.warming._board import _BOARD_POLL_SECONDS, _board_signature, _render_board
@@ -109,7 +109,7 @@ async def _render_warming_page() -> None:  # pragma: no cover
             return asyncio.create_task(reload(force=True))
 
         await render_board()
-        ui.timer(_BOARD_POLL_SECONDS, reload)
+        context.client.on_disconnect(ui.timer(_BOARD_POLL_SECONDS, reload).cancel)
 
         await _render_dialogues()
         await _render_activity_log()
