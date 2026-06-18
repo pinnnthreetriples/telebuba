@@ -69,14 +69,15 @@ def test_classify_falls_back_to_restriction_flag() -> None:
     assert spam_status.classify_spam_probe(probe) == ("limited", "terms violation")
 
 
-def test_classify_ambiguous_is_unknown() -> None:
+def test_classify_unmatched_reply_defaults_to_clean_via_heuristic() -> None:
+    """Heuristic: any non-empty reply without a date or "automat" stem → clean.
+
+    The probe ran, the bot answered, the answer doesn't carry the structural
+    signals of a limit or review — better to call it clean than to bail to
+    "вердикт не получен" on a locale we don't have explicit keywords for.
+    """
     probe = SpamStatusProbe(account_id="a", reply_text="hello there")
-    status, detail = spam_status.classify_spam_probe(probe)
-    assert status == "unknown"
-    # Unrecognised non-empty reply lands the raw text in detail so the UI can
-    # surface it instead of the generic "вердикт не получен".
-    assert detail is not None
-    assert "hello there" in detail
+    assert spam_status.classify_spam_probe(probe) == ("clean", None)
 
 
 def test_classify_empty_reply_is_unknown_with_no_detail() -> None:
@@ -86,7 +87,7 @@ def test_classify_empty_reply_is_unknown_with_no_detail() -> None:
 
 
 def test_classify_clean_russian() -> None:
-    """@SpamBot in Russian — clean verdict via «хорошие новости»."""
+    """@SpamBot in Russian — clean verdict via «хорошие новости» keyword."""
     probe = SpamStatusProbe(
         account_id="a",
         reply_text=(
@@ -116,18 +117,73 @@ def test_classify_being_checked_russian() -> None:
     assert spam_status.classify_spam_probe(probe) == ("unknown", "account is being checked")
 
 
-def test_classify_unrecognised_reply_truncates_in_detail() -> None:
-    """Very long unrecognised replies don't dominate the UI."""
-    long_reply = "Какой-то очень длинный непонятный ответ. " * 20
+# --- language-agnostic heuristic --------------------------------------------
 
-    status, detail = spam_status.classify_spam_probe(
-        SpamStatusProbe(account_id="a", reply_text=long_reply),
+
+def test_classify_clean_german_via_heuristic() -> None:
+    """German clean reply has no keyword match, but no date / no automat → clean."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text=(
+            "Gute Nachrichten! Deinem Konto sind momentan keine Einschränkungen "
+            "auferlegt. Du bist so frei wie ein Vogel – genieße es!"
+        ),
     )
+    assert spam_status.classify_spam_probe(probe) == ("clean", None)
 
-    assert status == "unknown"
+
+def test_classify_clean_spanish_via_heuristic() -> None:
+    """Spanish clean reply lands in the heuristic and is correctly classified."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="Buenas noticias, no hay restricciones en tu cuenta.",
+    )
+    assert spam_status.classify_spam_probe(probe) == ("clean", None)
+
+
+def test_classify_limited_german_via_date_heuristic() -> None:
+    """A date in the reply is treated as a limit verdict, regardless of language."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="Dein Konto ist bis 12. Juli 2026 eingeschränkt.",
+    )
+    status, detail = spam_status.classify_spam_probe(probe)
+    assert status == "limited"
     assert detail is not None
-    assert detail.endswith("…")
-    assert len(detail) < len(long_reply)
+    assert "2026" in detail
+
+
+def test_classify_limited_french_via_date_heuristic() -> None:
+    """French limit reply (no English keyword stem) classified via the date."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="Votre compte est limité jusqu'au 12 juillet 2026.",
+    )
+    status, detail = spam_status.classify_spam_probe(probe)
+    assert status == "limited"
+    assert detail is not None
+    assert "juillet" in detail or "2026" in detail
+
+
+def test_classify_limited_iso_date_heuristic() -> None:
+    """ISO-format date (2026-07-12) is also detected."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="Conta limitada até 2026-07-12.",
+    )
+    status, detail = spam_status.classify_spam_probe(probe)
+    assert status == "limited"
+    assert detail is not None
+    assert "2026-07-12" in detail
+
+
+def test_classify_being_checked_spanish_via_automat_stem() -> None:
+    """The "automat" stem covers en/de/fr/it/pt/es; here Spanish "automatizado"."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="Tu cuenta está siendo verificada por nuestro sistema automatizado.",
+    )
+    assert spam_status.classify_spam_probe(probe) == ("unknown", "account is being checked")
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
+
+from telethon import events
 
 from core.config import settings
 from core.logging import log_event
@@ -47,14 +50,39 @@ async def check_spam_status(account_id: str) -> SpamStatusProbe:
 
 
 async def _probe_spambot(client: TelegramClient) -> str | None:
-    """Open a conversation with @SpamBot, send ``/start`` and return its reply."""
-    async with client.conversation(
-        _SPAMBOT_USERNAME,
-        timeout=settings.telegram.timeout_seconds,
-    ) as conv:
-        await conv.send_message("/start")
-        response = await conv.get_response()
-        return optional_str(getattr(response, "text", None))
+    """Send ``/start`` to @SpamBot and return the next message it sends back.
+
+    Uses ``events.NewMessage`` rather than ``client.conversation`` to close a
+    documented race in Telethon: the conversation context registers its update
+    handler inside ``__aenter__``, so a fast-replying bot can deliver its reply
+    in the window between ``connect()`` and the handler being live. That reply
+    then lands in the general update pool with no one waiting for it, and the
+    conversation times out even though the bot did answer. The Telethon docs
+    state the rule explicitly: "you should get a 'handle' of this special
+    coroutine before acting."
+
+    Here we register the handler BEFORE ``send_message``, filter by sender so
+    we don't grab unrelated traffic, and coordinate via ``asyncio.Future``
+    with our own ``wait_for`` timeout — the exact pattern the docs recommend
+    for waiting on a single message.
+    """
+    bot = await client.get_input_entity(_SPAMBOT_USERNAME)
+    loop = asyncio.get_running_loop()
+    reply_future: asyncio.Future[str | None] = loop.create_future()
+
+    async def on_reply(event: events.NewMessage.Event) -> None:
+        if not reply_future.done():
+            reply_future.set_result(optional_str(getattr(event, "raw_text", None)))
+
+    client.add_event_handler(on_reply, events.NewMessage(from_users=bot, incoming=True))
+    try:
+        await client.send_message(bot, "/start")
+        return await asyncio.wait_for(
+            reply_future,
+            timeout=settings.telegram.timeout_seconds,
+        )
+    finally:
+        client.remove_event_handler(on_reply)
 
 
 async def _probe_self_restriction(client: TelegramClient) -> tuple[bool, str | None]:

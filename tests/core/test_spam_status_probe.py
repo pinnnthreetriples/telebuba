@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from types import SimpleNamespace
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -38,36 +38,61 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     monkeypatch.setattr("core.telegram_client._spam.telegram_client", fake_cm)
 
 
-class _FakeConversation:
-    def __init__(self, reply_text: str) -> None:
-        self._reply_text = reply_text
+class _FakeTelethonClient:
+    """Mock that mirrors the events.NewMessage + send_message contract.
 
-    async def send_message(self, _text: str) -> None:
+    On ``send_message`` the fake invokes the handler that was registered via
+    ``add_event_handler``, which models the real race-free flow: if the probe
+    forgets to register the handler before sending, the bot reply is never
+    delivered to the future and the probe times out.
+    """
+
+    def __init__(
+        self,
+        reply_text: str | None,
+        *,
+        restricted: bool = False,
+        restriction_reason: list[object] | None = None,
+    ) -> None:
+        self._reply_text = reply_text
+        self._restricted = restricted
+        self._restriction_reason = restriction_reason or []
+        self._handler: Any = None
+        self.removed_handlers: list[object] = []
+
+    async def connect(self) -> None:
         return None
 
-    async def get_response(self) -> object:
-        return SimpleNamespace(text=self._reply_text)
+    async def get_input_entity(self, username: str) -> str:
+        return username
+
+    def add_event_handler(self, handler: object, _event: object) -> None:
+        self._handler = handler
+
+    def remove_event_handler(self, handler: object) -> None:
+        self.removed_handlers.append(handler)
+        if self._handler is handler:
+            self._handler = None
+
+    async def send_message(self, _peer: object, _text: str) -> None:
+        handler = self._handler
+        if handler is not None:
+            event = SimpleNamespace(raw_text=self._reply_text)
+            await handler(event)
+
+    async def get_me(self) -> object:
+        return SimpleNamespace(
+            restricted=self._restricted,
+            restriction_reason=self._restriction_reason,
+        )
 
 
 @pytest.mark.asyncio
 async def test_check_spam_status_reads_reply_and_restriction(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class FakeClient:
-        async def connect(self) -> None:
-            return None
-
-        def conversation(self, _username: str, *, timeout: float) -> object:  # noqa: ARG002
-            @asynccontextmanager
-            async def cm():
-                yield _FakeConversation("Good news, no limits are applied.")
-
-            return cm()
-
-        async def get_me(self) -> object:
-            return SimpleNamespace(restricted=False, restriction_reason=[])
-
-    _patch_client(monkeypatch, FakeClient())
+    client = _FakeTelethonClient("Good news, no limits are applied.")
+    _patch_client(monkeypatch, client)
 
     probe = await check_spam_status("acc-1")
 
@@ -81,29 +106,30 @@ async def test_check_spam_status_reads_reply_and_restriction(
 async def test_check_spam_status_reports_restriction_reason(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    class FakeClient:
-        async def connect(self) -> None:
-            return None
-
-        def conversation(self, _username: str, *, timeout: float) -> object:  # noqa: ARG002
-            @asynccontextmanager
-            async def cm():
-                yield _FakeConversation("hello")
-
-            return cm()
-
-        async def get_me(self) -> object:
-            return SimpleNamespace(
-                restricted=True,
-                restriction_reason=[SimpleNamespace(text="spam", reason="")],
-            )
-
-    _patch_client(monkeypatch, FakeClient())
+    client = _FakeTelethonClient(
+        "hello",
+        restricted=True,
+        restriction_reason=[SimpleNamespace(text="spam", reason="")],
+    )
+    _patch_client(monkeypatch, client)
 
     probe = await check_spam_status("acc-1")
 
     assert probe.restricted is True
     assert probe.restriction_reason == "spam"
+
+
+@pytest.mark.asyncio
+async def test_check_spam_status_removes_event_handler_after_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The probe must clean up its handler so we don't leak listeners."""
+    client = _FakeTelethonClient("Good news, no limits.")
+    _patch_client(monkeypatch, client)
+
+    await check_spam_status("acc-1")
+
+    assert len(client.removed_handlers) == 1
 
 
 @pytest.mark.asyncio
