@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from types import SimpleNamespace
 
-from features.accounts._dialogs import (
+from features.accounts._proxy_dialog import (
     _proxy_dialog_error,
     _proxy_dialog_geo,
     _proxy_dialog_status,

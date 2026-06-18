@@ -143,4 +143,6 @@ def _device_label(account: AccountRead) -> str:
 def _proxy_label(account: AccountRead) -> str:
     if not account.proxy_type or not account.proxy_host or account.proxy_port is None:
         return "-"
-    return f"{account.proxy_type.upper()} {account.proxy_host}:{account.proxy_port}"
+    base = f"{account.proxy_type.upper()} {account.proxy_host}:{account.proxy_port}"
+    code = account.proxy_country_code
+    return f"{base} · {code}" if code else base

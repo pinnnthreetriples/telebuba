@@ -103,20 +103,36 @@ def _upsert_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
         msg = f"Account not found: {data.account_id}"
         raise ValueError(msg)
     now = _now_iso()
+    host = data.host.strip()
+    username = data.username.strip() if data.username else None
+    existing = _fetch_account_proxy_settings(data.account_id)
+    # password=None means "leave unchanged" — dialog never replays it back, so an
+    # empty field cannot be distinguished from no edit. Same rule for identity.
+    identity_changed = existing is None or (
+        data.proxy_type != existing.proxy_type
+        or host != existing.host
+        or data.port != existing.port
+        or username != existing.username
+        or (data.password is not None and data.password != existing.password)
+    )
     values: dict[str, object | None] = {
         "proxy_type": data.proxy_type,
-        "host": data.host.strip(),
+        "host": host,
         "port": data.port,
-        "username": data.username.strip() if data.username else None,
-        "status": "unknown",
-        "last_checked_at": None,
-        "last_error": None,
-        "exit_ip": None,
-        "country_code": None,
-        "country_name": None,
+        "username": username,
         "updated_at": now,
     }
-    existing = _fetch_account_proxy_settings(data.account_id)
+    if identity_changed:
+        values |= {
+            "status": "unknown",
+            "last_checked_at": None,
+            "last_error": None,
+            "exit_ip": None,
+            "country_code": None,
+            "country_name": None,
+            "asn": None,
+            "is_datacenter": 0,
+        }
     with _get_engine().begin() as connection:
         if existing is None:
             connection.execute(
