@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from nicegui import ui
 
 from schemas.warming import StartWarmingRequest, StopWarmingRequest
+from services.spam_status import refresh_spam_status
 from services.warming import WarmingNotReadyError, start_warming, stop_warming
 
 if TYPE_CHECKING:
@@ -79,6 +80,27 @@ _TRUST_BADGE = {
     "at_risk": "bg-orange-100 text-orange-700",
     "critical": "bg-red-100 text-red-700",
 }
+_TRUST_BAND_LABEL = {
+    "excellent": "отлично",
+    "good": "норма",
+    "watch": "под наблюдением",
+    "at_risk": "риск",
+    "critical": "критично",
+}
+# Translate trust reasons at the UI edge — services/trust.py keeps them in
+# English (testable, log-friendly), the warming card surfaces them in Russian.
+# Same pattern as ``_READINESS_REASON_RU`` above. Dynamic prefixes are matched
+# in ``_ru_trust_reason``.
+_TRUST_REASON_RU = {
+    "spam-limited": "спам-ограничения",
+    "recent flood": "недавний flood-wait",
+    "geo mismatch": "страна номера ≠ страна прокси",
+    "geo unknown": "страна не определена",
+    "proxy failed": "прокси не работает",
+    "new account": "новый аккаунт",
+}
+_TRUST_REASONS_INLINE_LIMIT = 2
+_ERROR_MAX_LEN = 80
 
 
 def _ru_reason(reason: str) -> str:  # pragma: no cover
@@ -86,6 +108,17 @@ def _ru_reason(reason: str) -> str:  # pragma: no cover
         return _READINESS_REASON_RU[reason]
     if reason.startswith("session "):
         return f"сессия: {reason[len('session ') :]}"
+    return reason
+
+
+def _ru_trust_reason(reason: str) -> str:
+    """Translate a single trust reason for the UI; falls back to the raw string."""
+    if reason in _TRUST_REASON_RU:
+        return _TRUST_REASON_RU[reason]
+    if reason.startswith("status "):
+        return f"сессия: {reason[len('status ') :]}"
+    if reason.startswith("quarantined x"):
+        return f"карантин ×{reason[len('quarantined x') :]}"
     return reason
 
 
@@ -117,10 +150,19 @@ def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma:
                 card.last_event,
                 card.next_run_at,
                 card.last_error,
+                card.last_action,
+                card.last_channel,
                 card.trust_score,
+                card.trust_band,
+                tuple(card.trust_reasons),
                 card.spam_status,
                 card.daily_actions,
                 card.dm_allowed,
+                card.quarantine_count,
+                card.flood_wait_until,
+                card.flood_wait_seconds,
+                card.phone_country,
+                card.proxy_country,
                 None
                 if card.readiness is None
                 else (card.readiness.ready, tuple(card.readiness.reasons)),
@@ -218,23 +260,68 @@ def _render_column(
 
 
 def _render_trust_badge(card: WarmingAccountState) -> None:  # pragma: no cover
-    tooltip = f"Trust {card.trust_score} · {card.trust_band or 'n/a'}"
+    """Badge ``⛨ 80 · норма`` with full reason list as a tooltip.
+
+    Inline reasons under the header (``_render_trust_reasons``) keep the most
+    important context visible without a hover; the tooltip carries the full
+    set for completeness.
+    """
+    band = card.trust_band or ""
+    label_ru = _TRUST_BAND_LABEL.get(band, band or "n/a")
+    badge_classes = _TRUST_BADGE.get(band, "bg-slate-100 text-slate-600")
+    tooltip = f"Trust {card.trust_score} · {label_ru}"
     if card.trust_reasons:
-        tooltip = f"{tooltip}: " + ", ".join(card.trust_reasons)
-    ui.label(f"⛨ {card.trust_score}").classes(
-        "text-[11px] px-1.5 py-0.5 rounded "
-        f"{_TRUST_BADGE.get(card.trust_band or '', 'bg-slate-100 text-slate-600')}",
+        tooltip = f"{tooltip}: " + ", ".join(_ru_trust_reason(r) for r in card.trust_reasons)
+    ui.label(f"⛨ {card.trust_score} · {label_ru}").classes(
+        f"text-[11px] px-1.5 py-0.5 rounded {badge_classes}",
     ).tooltip(tooltip)
 
 
-def _render_spam_badge(card: WarmingAccountState) -> None:  # pragma: no cover
-    text, cls = _SPAM_BADGE.get(
-        card.spam_status or "",
-        (card.spam_status or "", "text-slate-600 bg-slate-100"),
+def _render_trust_reasons(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Inline top reasons under the header — only when the band warrants attention."""
+    if card.trust_band in (None, "", "excellent"):
+        return
+    if not card.trust_reasons:
+        return
+    shown = [_ru_trust_reason(r) for r in card.trust_reasons[:_TRUST_REASONS_INLINE_LIMIT]]
+    extra = len(card.trust_reasons) - len(shown)
+    text = "⛨ " + " · ".join(shown)
+    if extra > 0:
+        text += f" · +ещё {extra}"
+    ui.label(text).classes("text-[11px] text-slate-500 italic truncate")
+
+
+def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
+    """Spam-status badge — always shown, with a refresh link when unknown.
+
+    A missing row is rendered the same as ``unknown`` ("не проверён"). That way
+    the card communicates "no @SpamBot check has been run yet" explicitly,
+    instead of silently hiding the field — which is what made the original
+    setup look inconsistent with the accounts page.
+    """
+    status = card.spam_status or "unknown"
+    text, cls = _SPAM_BADGE.get(status, (status, "text-slate-600 bg-slate-100"))
+    with ui.row().classes("w-full items-center gap-2"):
+        badge = ui.label(text).classes(f"w-fit text-[11px] px-1.5 py-0.5 rounded {cls}")
+        if card.spam_detail:
+            badge.tooltip(card.spam_detail)
+        if status == "unknown":
+            _render_spam_refresh_link(ctx, card.account_id)
+
+
+def _render_spam_refresh_link(ctx: _BoardContext, account_id: str) -> None:  # pragma: no cover
+    async def on_click() -> None:
+        try:
+            verdict = await refresh_spam_status(account_id, force=True)
+        except Exception as exc:  # noqa: BLE001 — UI handler surfaces any failure
+            ui.notify(f"Не удалось проверить: {exc}", type="negative")
+            return
+        ui.notify(f"Spam-статус: {verdict.status}", type="positive")
+        ctx.refresh()
+
+    ui.button("проверить", on_click=on_click).props("flat dense no-caps").classes(
+        "text-[11px] text-blue-600 px-1 py-0",
     )
-    badge = ui.label(text).classes(f"w-fit text-[11px] px-1.5 py-0.5 rounded {cls}")
-    if card.spam_detail:
-        badge.tooltip(card.spam_detail)
 
 
 def _render_card_stats(card: WarmingAccountState, max_daily: int) -> None:  # pragma: no cover
@@ -249,6 +336,60 @@ def _render_card_stats(card: WarmingAccountState, max_daily: int) -> None:  # pr
     if eta:
         parts.append(f"⏭ {eta}")
     ui.label(" · ".join(parts)).classes("text-[11px] text-slate-500 truncate")
+
+
+def _render_geo_chip(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Show a phone/proxy country chip only when it tells the operator something.
+
+    Hidden when geo is matched, fully unknown, or partial (would be noise).
+    A mismatch is the case worth surfacing — it pairs with the
+    ``страна номера ≠ страна прокси`` trust reason.
+    """
+    phone = card.phone_country
+    proxy = card.proxy_country
+    if not phone or not proxy or phone == proxy:
+        return
+    ui.label(f"📞 {phone} → 🌐 {proxy}").classes(
+        "w-fit text-[11px] px-1.5 py-0.5 rounded bg-amber-50 text-amber-800",
+    ).tooltip("Страна номера не совпадает со страной прокси")
+
+
+def _render_flood_wait_line(card: WarmingAccountState) -> None:  # pragma: no cover
+    if card.state != "flood_wait":
+        return
+    remaining = _relative_eta(card.flood_wait_until)
+    if remaining is None and card.flood_wait_seconds is None:
+        return
+    text = (
+        f"🕒 flood-wait ещё {remaining}"
+        if remaining
+        else f"🕒 flood-wait {card.flood_wait_seconds} с"
+    )
+    ui.label(text).classes("text-[11px] text-amber-700 truncate")
+
+
+def _render_quarantine_line(card: WarmingAccountState) -> None:  # pragma: no cover
+    if card.quarantine_count <= 0:
+        return
+    ui.label(f"карантинов: {card.quarantine_count}").classes("text-[11px] text-orange-700 truncate")
+
+
+def _render_error_line(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Show last error only when the card is in an error state and we have a message."""
+    if card.state != "error" or not card.last_error:
+        return
+    parts = ["ошибка"]
+    if card.last_action:
+        parts.append(card.last_action)
+    if card.last_channel:
+        parts.append(f"в {card.last_channel}")
+    head = " · ".join(parts)
+    body = card.last_error
+    if len(body) > _ERROR_MAX_LEN:
+        body = body[: _ERROR_MAX_LEN - 1] + "…"
+    ui.label(f"{head}: {body}").classes("text-[11px] text-red-600 truncate").tooltip(
+        card.last_error,
+    )
 
 
 def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
@@ -272,13 +413,17 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
             )
             if card.trust_score is not None:
                 _render_trust_badge(card)
-        if card.spam_status:
-            _render_spam_badge(card)
+        _render_trust_reasons(card)
+        _render_geo_chip(card)
+        _render_spam_badge(ctx, card)
         meta = f"циклов {card.cycles_completed}"
         if card.last_event:
             meta = f"{meta} · {card.last_event}"
         ui.label(meta).classes("text-[11px] text-slate-500 truncate")
         _render_card_stats(card, ctx.max_daily)
+        _render_flood_wait_line(card)
+        _render_quarantine_line(card)
+        _render_error_line(card)
         if card.readiness and not card.readiness.ready:
             reasons = ", ".join(_ru_reason(reason) for reason in card.readiness.reasons)
             ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")

@@ -17,6 +17,7 @@ from core.db import (
     list_warming_channels,
     list_warming_states,
 )
+from core.phone_geo import country_for_phone
 from schemas.warming import (
     WarmingAccountState,
     WarmingBoardState,
@@ -31,8 +32,6 @@ from services.warming.settings_store import load_settings
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
-    from schemas.spam_status import SpamStatusVerdict
-    from schemas.trust import TrustScore
     from schemas.warming import WarmingReadiness, WarmingStateRecord
 
 
@@ -99,12 +98,16 @@ async def load_board() -> WarmingBoardState:
         card = _to_card(account, record, readiness=readiness)
 
         age_hours = _account_age_hours(account, now)
-        _enrich_card(
-            card,
-            trust=trust,
-            spam=spam,
-            age_hours=age_hours,
-        )
+        card.trust_score = trust.score
+        card.trust_band = trust.band
+        card.trust_reasons = trust.reasons
+        if spam is not None:
+            card.spam_status = spam.status
+            card.spam_detail = spam.detail
+        card.age_hours = age_hours
+        card.dm_allowed = compute_intensity(age_hours).dm_allowed
+        card.phone_country = country_for_phone(account.phone)
+        card.proxy_country = (account.proxy_country_code or "").upper() or None
         (warming if is_warming(card.state) else idle).append(card)
     return WarmingBoardState(
         idle=idle,
@@ -115,24 +118,6 @@ async def load_board() -> WarmingBoardState:
         active_count=sum(1 for card in warming if card.state == "active"),
         summary=_build_summary([*idle, *warming]),
     )
-
-
-def _enrich_card(
-    card: WarmingAccountState,
-    *,
-    trust: TrustScore,
-    spam: SpamStatusVerdict | None,
-    age_hours: float,
-) -> None:
-    """Attach the live health signals (trust, spam, age/ramp) to a board card."""
-    card.trust_score = trust.score
-    card.trust_band = trust.band
-    card.trust_reasons = trust.reasons
-    if spam is not None:
-        card.spam_status = spam.status
-        card.spam_detail = spam.detail
-    card.age_hours = age_hours
-    card.dm_allowed = compute_intensity(age_hours).dm_allowed
 
 
 _TRUST_HEALTHY_BANDS: Final = frozenset({"excellent", "good"})

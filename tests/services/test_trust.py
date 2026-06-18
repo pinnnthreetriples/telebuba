@@ -68,6 +68,48 @@ def test_compute_trust_score_spam_limited_drops_band() -> None:
     assert "spam-limited" in score.reasons
 
 
+def test_compute_trust_score_new_account_ramp_is_linear() -> None:
+    """0h → full penalty (10); halfway → ~half; threshold → 0. No cliff."""
+
+    def score_at(age_hours: float) -> int:
+        return compute_trust_score(
+            TrustSignals(
+                account_id="a",
+                account_status="alive",
+                spam_status="clean",
+                quarantine_count=0,
+                flood_active=False,
+                geo_status="match",
+                proxy_status="tcp_working",
+                age_hours=age_hours,
+            ),
+        ).score
+
+    assert score_at(0.0) == 90  # 100 - full new-account penalty
+    assert score_at(24.0) == 95  # halfway through 48h threshold
+    assert score_at(48.0) == 100  # threshold reached, no penalty
+    assert score_at(1000.0) == 100  # well past threshold
+
+
+def test_compute_trust_score_spam_unknown_does_not_penalise() -> None:
+    """``unknown`` means "not probed yet", not a risk signal — score stays 100."""
+    score = compute_trust_score(
+        TrustSignals(
+            account_id="a",
+            account_status="alive",
+            spam_status="unknown",
+            quarantine_count=0,
+            flood_active=False,
+            geo_status="match",
+            proxy_status="tcp_working",
+            age_hours=1000.0,
+        ),
+    )
+    assert score.score == 100
+    assert score.band == "excellent"
+    assert "spam status unknown" not in score.reasons
+
+
 def test_compute_trust_score_clamps_at_zero() -> None:
     score = compute_trust_score(
         TrustSignals(
@@ -99,8 +141,9 @@ async def test_account_trust_score_for_fresh_alive_account() -> None:
 
     score = await account_trust_score("acc-1")
 
-    # alive(0) - spam unknown(10) - geo unknown(5) - new account(10) = 75
-    assert score.score == 75
+    # alive(0) - spam unknown(0, no penalty by default) - geo unknown(5)
+    # - new account (linear ramp ≈ full at ~0h = 10) = 85
+    assert score.score == 85
     assert score.band == "good"
 
 

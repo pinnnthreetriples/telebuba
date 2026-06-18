@@ -270,6 +270,11 @@ class WarmingAccountState(BaseModel):
     spam_detail: str | None = None
     age_hours: float | None = Field(default=None, ge=0.0)
     dm_allowed: bool = False
+    # ISO-3166 alpha-2 country pair surfaced on the card so an operator can see
+    # *why* a "geo mismatch" trust reason was raised. Both stay None when the
+    # phone can't be parsed or the proxy has no country code.
+    phone_country: str | None = None
+    proxy_country: str | None = None
     readiness: WarmingReadiness | None = None
 
 
