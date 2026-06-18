@@ -86,8 +86,8 @@ def test_classify_empty_reply_is_unknown_with_no_detail() -> None:
     assert spam_status.classify_spam_probe(probe) == ("unknown", None)
 
 
-def test_classify_clean_russian() -> None:
-    """@SpamBot in Russian — clean verdict via «хорошие новости» keyword."""
+def test_classify_clean_russian_long_form() -> None:
+    """@SpamBot Russian long form — clean verdict via «хорошие новости» / «не применены»."""
     probe = SpamStatusProbe(
         account_id="a",
         reply_text=(
@@ -98,8 +98,28 @@ def test_classify_clean_russian() -> None:
     assert spam_status.classify_spam_probe(probe) == ("clean", None)
 
 
+def test_classify_clean_russian_short_form() -> None:
+    """@SpamBot Russian short form — must NOT trip the limited path on «ограничений».
+
+    Regression: «Ваш аккаунт свободен от каких-либо ограничений» contains the
+    substring «ограничен», which used to live in ``_LIMITED_MARKERS`` and
+    flipped the verdict to ``limited``. The "свободен от" clean marker is the
+    fix — it has to match before any limited check sees the shared stem.
+    """
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="Ваш аккаунт свободен от каких-либо ограничений.",
+    )
+    assert spam_status.classify_spam_probe(probe) == ("clean", None)
+
+
 def test_classify_limited_russian() -> None:
-    """@SpamBot in Russian — limited verdict via «ограничен» stem."""
+    """@SpamBot Russian — limited verdict via the discriminative «наложены» stem.
+
+    «ограничен» alone is NOT enough: it appears in clean replies too. The
+    bot's limited replies always include «наложены» (imposed) which is
+    unambiguous.
+    """
     probe = SpamStatusProbe(
         account_id="a",
         reply_text="К сожалению, на ваш аккаунт сейчас наложены ограничения.",
