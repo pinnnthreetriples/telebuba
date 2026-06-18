@@ -1,6 +1,11 @@
 ---
 name: tdd
 description: Test-driven development with red-green-refactor loop. Use when user wants to build features or fix bugs using TDD, mentions "red-green-refactor", wants integration tests, or asks for test-first development.
+when_to_use: >
+  Invoke for any new feature in features/ (mandatory per project rule #7), any
+  bug fix where a reproducing test is feasible, or when the user says "TDD
+  this", "test-first", "red-green-refactor", "write the test first", or "let's
+  TDD this".
 ---
 
 # Test-Driven Development
