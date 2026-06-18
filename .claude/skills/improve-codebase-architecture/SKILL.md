@@ -1,6 +1,12 @@
 ---
 name: improve-codebase-architecture
-description: Find deepening opportunities in a codebase, informed by the domain language in CONTEXT.md and the decisions in docs/adr/. Use when the user wants to improve architecture, find refactoring opportunities, consolidate tightly-coupled modules, or make a codebase more testable and AI-navigable.
+description: Find deepening opportunities in a codebase, informed by the domain language in CONTEXT.md and the decisions in docs/adr/.
+when_to_use: >
+  Invoke when core/ or features/ show duplication, shallow modules, or the
+  non-negotiables in conventions.md are getting bent; when the user says
+  "improve architecture", "refactoring opportunities", "make this more
+  testable", "find coupling", or "clean up the codebase". Run before a
+  refactor, not after.
 ---
 
 # Improve Codebase Architecture
