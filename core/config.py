@@ -225,7 +225,10 @@ class TrustSettings(BaseSettings):
     # Penalties subtracted from a 100 baseline.
     penalty_not_alive: int = Field(default=40, ge=0, le=100)
     penalty_spam_limited: int = Field(default=50, ge=0, le=100)
-    penalty_spam_unknown: int = Field(default=10, ge=0, le=100)
+    # "unknown" is absence of data (no @SpamBot probe yet / probe failed), not a
+    # risk signal. Default 0 keeps the knob for operators who still want a nudge,
+    # but the model no longer penalises uncertainty by default.
+    penalty_spam_unknown: int = Field(default=0, ge=0, le=100)
     penalty_quarantine_each: int = Field(default=15, ge=0, le=100)
     penalty_flood_active: int = Field(default=15, ge=0, le=100)
     penalty_geo_mismatch: int = Field(default=10, ge=0, le=100)

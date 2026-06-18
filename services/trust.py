@@ -55,9 +55,9 @@ def compute_trust_score(signals: TrustSignals) -> TrustScore:
     if signals.spam_status == "limited":
         score -= trust.penalty_spam_limited
         reasons.append("spam-limited")
-    elif signals.spam_status == "unknown":
-        score -= trust.penalty_spam_unknown
-        reasons.append("spam status unknown")
+    # "unknown" deliberately does NOT dock the score: it means "not probed yet"
+    # rather than "risky". Operators see it in the spam badge and can refresh
+    # from the card; no need to mix a missing-data marker into the verdict.
     if signals.quarantine_count > 0:
         score -= trust.penalty_quarantine_each * signals.quarantine_count
         reasons.append(f"quarantined x{signals.quarantine_count}")
@@ -73,8 +73,11 @@ def compute_trust_score(signals: TrustSignals) -> TrustScore:
     if signals.proxy_status == "failed":
         score -= trust.penalty_proxy_failed
         reasons.append("proxy failed")
-    if signals.age_hours < trust.new_account_hours:
-        score -= trust.penalty_new_account
+    if trust.new_account_hours > 0 and signals.age_hours < trust.new_account_hours:
+        # Linear ramp: full penalty at 0h, zero penalty at new_account_hours.
+        # Avoids the cliff where 47h costs 10 and 49h costs 0.
+        ramp = 1.0 - (signals.age_hours / trust.new_account_hours)
+        score -= round(trust.penalty_new_account * ramp)
         reasons.append("new account")
 
     score = max(0, min(100, score))
