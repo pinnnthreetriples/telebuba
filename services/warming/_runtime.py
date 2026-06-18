@@ -364,6 +364,10 @@ async def _warming_loop(
     matches (= a newer ``start_warming`` minted a fresh generation), and passes
     it to ``run_loop_iteration`` so an in-flight cycle won't write through after
     a restart either (P1.2).
+
+    Round-6 P1: the crash handler also runs the generation check + CAS. Without
+    it, a stale loop that crashed after a restart would stamp ``error`` over
+    the new generation's row, undoing the restart.
     """
     try:
         record = await fetch_warming_state(account_id)
@@ -388,10 +392,18 @@ async def _warming_loop(
             account_id=account_id,
             extra={"error_type": type(exc).__name__, "message": str(exc)},
         )
+        # Round-6 P1: pre-check generation so a stale crash does not even try
+        # to write. The CAS predicate below is the suspenders — if our pre-read
+        # raced a restart, the upsert still refuses to overwrite a fresh
+        # generation's row.
+        latest = await fetch_warming_state(account_id)
+        if not _is_live_generation(latest, run_id):
+            return
         await _set_state(
             account_id,
             "error",
             last_event="loop_crashed",
             last_error=f"{type(exc).__name__}: {exc}",
             heartbeat_at=_now_iso(),
+            expected_run_id=run_id,
         )

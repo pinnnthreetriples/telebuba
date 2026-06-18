@@ -2869,3 +2869,47 @@ async def test_stale_quarantine_cas_failure_prevents_spam_probe(
     assert result.status == "skipped"
     assert result.detail == "stale run"
     assert probe_calls == []
+
+
+@pytest.mark.asyncio
+async def test_stale_loop_crash_cannot_overwrite_new_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-6 P1: a crashing stale loop must not stamp 'error' on the new run.
+
+    Without the generation check + CAS in the crash handler, the loop's
+    ``except Exception`` branch wrote ``error`` via _set_state without an
+    ``expected_run_id``, so a stale generation that fell over after the
+    operator restarted the account would overwrite the new generation's
+    row with state=error and a misleading ``last_event='loop_crashed'``.
+    """
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
+    )
+
+    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+
+    async def crash_after_replacing_generation(
+        account_id: str, *, run_id: str | None = None
+    ) -> WarmingCycleResult:
+        # A new start_warming raced this iteration: row now carries run-b.
+        await upsert_warming_state(
+            WarmingStateWrite(account_id=account_id, state="active", run_id="run-b"),
+        )
+        del run_id  # we are the stale loop; bury our own marker
+        msg = "boom from stale loop"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_runtime, "run_loop_iteration", crash_after_replacing_generation)
+
+    await _runtime._warming_loop("acc-1", run_id="run-a")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The new generation's row survives — neither state nor run_id was touched.
+    assert state.state == "active"
+    assert state.run_id == "run-b"
+    assert state.last_event != "loop_crashed"
+    assert state.last_error is None
