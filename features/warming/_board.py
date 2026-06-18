@@ -455,8 +455,12 @@ def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  
         badge = ui.label(text).classes(f"w-fit text-[11px] px-2 py-0.5 rounded {cls}")
         if tooltip:
             badge.tooltip(tooltip)
-        if status == "unknown":
-            _render_spam_refresh_link(ctx, card.account_id)
+        # Refresh is always available — a stale cached verdict (e.g. after a
+        # proxy fix or a Telegram-side review ending) needs a manual re-probe,
+        # and the operator should not have to delete the row from the DB to
+        # invalidate it. ``refresh_spam_status`` passes ``force=True`` so it
+        # bypasses ``spam_status_ttl_hours`` and actually re-probes @SpamBot.
+        _render_spam_refresh_link(ctx, card.account_id)
 
 
 def _render_spam_refresh_link(ctx: _BoardContext, account_id: str) -> None:  # pragma: no cover
