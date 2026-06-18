@@ -29,9 +29,14 @@ _CLEAN_MARKERS = (
     # EN — "Good news, no limits are currently applied to your account."
     "no limits",
     "good news",
-    # RU — "Хорошие новости, к вашему аккаунту не применены никакие ограничения."
+    # RU — long form: "Хорошие новости, ... не применены никакие ограничения."
     "хорошие новости",
     "не применены",
+    # RU — short form: "Ваш аккаунт свободен от каких-либо ограничений."
+    # Has to be matched explicitly because the substring "ограничен" appears in
+    # both the clean ("ограничений") and limited ("наложены ограничения") forms
+    # and is therefore not a safe limited-marker.
+    "свободен от",
 )
 _BEING_CHECKED_MARKERS = (
     # EN — "Your account is being checked."
@@ -45,8 +50,11 @@ _LIMITED_MARKERS = (
     # EN — "Your account is now limited until …"
     "limited",
     "restricted",
-    # RU — typical limited reply contains the "ограничен" / "наложены" stems
-    "ограничен",
+    # RU — Russian limited reply consistently contains the "наложены" stem.
+    # We deliberately do NOT match the "ограничен" stem here: it also appears
+    # in the Russian *clean* reply ("свободен от каких-либо ограничений") and
+    # would cause a false-positive limited verdict. "Наложены" is specific to
+    # limited replies and is the only safe Russian discriminator.
     "наложены",
 )
 # Latin stem covers en/de/fr/it/pt/es ("automated", "automatisch", "automatique",
