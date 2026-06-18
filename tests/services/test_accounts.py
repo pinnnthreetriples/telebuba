@@ -473,6 +473,9 @@ async def test_check_account_proxy_persists_route_metadata(
     assert state.rows[0].proxy_status == "tcp_working"
     assert state.rows[0].proxy_country_code == "NL"
     assert state.rows[0].proxy_country_name == "Netherlands"
+    # Country code is surfaced in the main proxy label so it's visible at a glance
+    # in the table cell, not only in the caption row underneath.
+    assert "NL" in state.rows[0].proxy
 
 
 @pytest.mark.asyncio

@@ -31,6 +31,7 @@ if TYPE_CHECKING:
 __all__ = [
     "check_account_proxy",
     "delete_account_proxy",
+    "fetch_account_proxy_settings",
     "save_account_proxy",
 ]
 

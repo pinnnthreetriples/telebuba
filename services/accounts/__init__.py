@@ -33,6 +33,7 @@ from services.accounts.profile import update_account_profile
 from services.accounts.proxy import (
     check_account_proxy,
     delete_account_proxy,
+    fetch_account_proxy_settings,
     save_account_proxy,
 )
 from services.accounts.sessions import (
@@ -50,6 +51,7 @@ __all__ = [
     "check_account_session",
     "delete_account_proxy",
     "evaluate_account_geo",
+    "fetch_account_proxy_settings",
     "import_account_session",
     "import_account_tdata",
     "list_accounts",

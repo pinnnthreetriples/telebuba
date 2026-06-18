@@ -34,6 +34,7 @@ from services.accounts import (
     check_account_proxy,
     check_account_session,
     delete_account_proxy,
+    fetch_account_proxy_settings,
     import_account_session,
     import_account_tdata,
     post_account_story,
@@ -312,11 +313,13 @@ async def _open_profile_dialog(
     dialog.open()
 
 
-async def _open_proxy_dialog(
+async def _open_proxy_dialog(  # noqa: PLR0915 - UI builder, statements are linear ui.* calls.
     row: dict[str, object],
     refresh: Callable[[], Awaitable[None]],
 ) -> None:  # pragma: no cover
     account_id = str(row["account_id"])
+    existing = await fetch_account_proxy_settings(account_id)
+    pw_hint = "оставьте пустым, чтобы не менять" if existing and existing.password else ""
     with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[460px] max-w-full"):
         ui.label("Настройки прокси").classes("text-base font-semibold")
         proxy_type = ui.select(
@@ -328,8 +331,12 @@ async def _open_proxy_dialog(
         port = ui.number("Порт", value=_proxy_port_value(row), min=1, max=65_535).props(
             "dense outlined",
         )
-        username = ui.input("Логин").props("dense outlined clearable")
-        password = ui.input("Пароль").props("dense outlined clearable type=password")
+        username = ui.input("Логин", value=(existing.username if existing else None) or "").props(
+            "dense outlined clearable",
+        )
+        password = ui.input("Пароль", placeholder=pw_hint).props(
+            "dense outlined clearable type=password",
+        )
         with ui.column().classes(
             "w-full gap-1 rounded border border-slate-200 bg-slate-50 px-3 py-2",
         ):

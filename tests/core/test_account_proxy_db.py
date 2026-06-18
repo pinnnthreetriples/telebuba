@@ -126,6 +126,74 @@ async def test_exit_ip_collisions_flags_shared_ip(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_upsert_account_proxy_preserves_check_state_when_identity_unchanged(
+    tmp_path,
+) -> None:
+    """Re-save of same proxy preserves the prior connectivity-check fields.
+
+    User hits Save after a successful check — status / exit_ip / country must
+    survive instead of resetting to "unknown".
+    """
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-keep"))
+    await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(account_id="acc-keep", host="1.2.3.4", port=9050),
+    )
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(
+            account_id="acc-keep",
+            status="tcp_working",
+            exit_ip="45.130.253.155",
+            country_code="NL",
+            country_name="Netherlands",
+            asn="AS24940 Hetzner",
+            is_datacenter=True,
+        ),
+    )
+
+    re_saved = await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(account_id="acc-keep", host="1.2.3.4", port=9050),
+    )
+
+    assert re_saved.status == "tcp_working"
+    assert re_saved.exit_ip == "45.130.253.155"
+    assert re_saved.country_code == "NL"
+    assert re_saved.country_name == "Netherlands"
+    assert re_saved.asn == "AS24940 Hetzner"
+    assert re_saved.is_datacenter is True
+    assert re_saved.last_checked_at is not None
+
+
+@pytest.mark.asyncio
+async def test_upsert_account_proxy_resets_check_state_on_identity_change(tmp_path) -> None:
+    """Changing host/port/type/username invalidates the prior check — fields must clear."""
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-change"))
+    await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(account_id="acc-change", host="1.2.3.4", port=9050),
+    )
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(
+            account_id="acc-change",
+            status="tcp_working",
+            exit_ip="45.130.253.155",
+            country_code="NL",
+            country_name="Netherlands",
+        ),
+    )
+
+    re_saved = await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(account_id="acc-change", host="9.9.9.9", port=9050),
+    )
+
+    assert re_saved.status == "unknown"
+    assert re_saved.exit_ip is None
+    assert re_saved.country_code is None
+    assert re_saved.country_name is None
+    assert re_saved.last_checked_at is None
+
+
+@pytest.mark.asyncio
 async def test_delete_account_proxy_removes_settings(tmp_path) -> None:
     configure_database(tmp_path / "telebuba.db")
     await create_account(AccountCreate(account_id="acc-2"))
