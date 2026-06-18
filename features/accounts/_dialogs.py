@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import asyncio
 import os
-import shutil
 import tempfile
 from contextlib import suppress
 from pathlib import Path
@@ -83,7 +82,7 @@ async def _run_tdata_pipeline(
         "account_tdata_spool_started",
         extra={"filename": getattr(event.file, "name", "?")},
     )
-    tmp = await asyncio.to_thread(_spool_upload_to_tempfile, event.file)
+    tmp = await _spool_upload_to_tempfile(event.file)
     tmp_holder[0] = tmp
     await log_event(
         "INFO",
@@ -299,23 +298,24 @@ async def _open_add_dialog(  # pragma: no cover
     dialog.open()
 
 
-def _spool_upload_to_tempfile(file: Any) -> Path:  # noqa: ANN401 - NiceGUI's FileUpload has no public stable type.
+async def _spool_upload_to_tempfile(file: Any) -> Path:  # noqa: ANN401 - NiceGUI's FileUpload has no public stable type.
     """Copy a NiceGUI upload into a private temp file by streaming chunks.
 
-    Reading ``event.file`` end-to-end into RAM is what blows up at 1 GB
-    uploads. ``shutil.copyfileobj`` does a fixed-buffer stream copy, so peak
-    memory stays at the buffer size regardless of archive size. The caller is
-    responsible for unlinking the returned path.
+    ``FileUpload.save`` iterates the upload in 1 MB chunks, so peak memory
+    stays flat regardless of archive size — the 1 GB upload cap would
+    otherwise drive a 1+ GB RSS spike via ``await file.read()``. The caller
+    is responsible for unlinking the returned path.
     """
     fd, tmp_path = tempfile.mkstemp(prefix="telebuba_tdata_", suffix=".zip")
+    os.close(fd)
+    path = Path(tmp_path)
     try:
-        with os.fdopen(fd, "wb") as dst:
-            shutil.copyfileobj(file, dst)
+        await file.save(path)
     except Exception:
         with suppress(OSError):
-            Path(tmp_path).unlink()
+            await asyncio.to_thread(path.unlink)
         raise
-    return Path(tmp_path)
+    return path
 
 
 def _profile_text_tab(
