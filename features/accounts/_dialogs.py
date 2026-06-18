@@ -58,6 +58,11 @@ _STATUS_ERROR_LABEL_CLASSES = "text-xs text-red-600 leading-snug whitespace-pre-
 _STATUS_PROGRESS_LABEL_CLASSES = (
     "text-xs text-blue-700 leading-snug whitespace-pre-line break-words"
 )
+# Wall-clock ceiling on the whole tdata→.session→DB pipeline. Big enough for
+# the slowest realistic archive (~1 GB extract + opentele2 read), small enough
+# that a stuck network call inside opentele2 surfaces to the operator instead
+# of leaving the dialog spinning forever.
+_TDATA_IMPORT_TIMEOUT_SECONDS = 120
 
 
 def _build_dialog_status_controls() -> tuple[
@@ -148,13 +153,37 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
             # archive into RAM (1 GB cap × Pydantic copy = ~2 GB peak otherwise).
             tmp = await asyncio.to_thread(_spool_upload_to_tempfile, event.file)
             try:
-                result = await import_account_tdata(
-                    TdataConvertRequest(
-                        filename=event.file.name,
-                        content_path=tmp,
-                        label=label.value or None,
+                # Hard ceiling so a stuck conversion (network call inside
+                # opentele2 with no proxy reachable, or a wedged subprocess)
+                # surfaces to the operator instead of pinning the dialog at
+                # "in progress" forever. The per-step log events in
+                # ``core.tdata_import`` will show which step ran last.
+                result = await asyncio.wait_for(
+                    import_account_tdata(
+                        TdataConvertRequest(
+                            filename=event.file.name,
+                            content_path=tmp,
+                            label=label.value or None,
+                        ),
                     ),
+                    timeout=_TDATA_IMPORT_TIMEOUT_SECONDS,
                 )
+            except TimeoutError:
+                await log_event(
+                    "ERROR",
+                    "account_tdata_import_timeout",
+                    extra={
+                        "filename": event.file.name,
+                        "timeout_seconds": _TDATA_IMPORT_TIMEOUT_SECONDS,
+                    },
+                )
+                show_error(
+                    f"Импорт tdata превысил таймаут {_TDATA_IMPORT_TIMEOUT_SECONDS} с. "
+                    "Скорее всего opentele2 не может связаться с Telegram "
+                    "(нет интернета или прокси). Смотрите страницу «Логи» — "
+                    "там видно, на каком шаге зависло.",
+                )
+                return
             except ValueError as exc:
                 show_error(_service_error_label(str(exc)))
                 return
