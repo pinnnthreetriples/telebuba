@@ -10,6 +10,7 @@ from schemas.warming import (
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
+    WarmingStateWriteResult,
     warming_health,
 )
 from services.warming.board import _to_card
@@ -44,7 +45,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     quarantine_count: int | _Sentinel = _SENTINEL,
     run_id: str | None | _Sentinel = _SENTINEL,
     expected_run_id: str | None = None,
-) -> WarmingStateRecord:
+) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
     # When the caller asks for an increment, we send ``cycles_completed=1`` so a

@@ -36,6 +36,7 @@ from schemas.warming import (
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
+    WarmingStateWriteResult,
 )
 
 if TYPE_CHECKING:
@@ -285,15 +286,18 @@ async def fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
     return await asyncio.to_thread(_fetch_warming_state, account_id)
 
 
-def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
-    # F9 + P1.2 + P2.4 + Round-2 P1: collapse to a single sqlite_insert
-    # ON CONFLICT DO UPDATE so the whole upsert runs under SQLite's implicit
-    # write lock, eliminating the select-then-write TOCTOU. ``run_id`` carries
-    # the loop generation marker, ``increment_cycle=True`` makes the
-    # cycles_completed bump an atomic SQL expression, and ``expected_run_id``
-    # turns the UPDATE branch into a CAS: the row is only mutated when its
-    # current ``run_id`` matches what the caller saw, so a stale loop whose
-    # generation was already replaced cannot overwrite the new one.
+def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
+    # F9 + P1.2 + P2.4 + Round-2 P1 + Round-4 P1.1/P1.2: collapse to a single
+    # sqlite_insert ON CONFLICT DO UPDATE so the whole upsert runs under
+    # SQLite's implicit write lock, eliminating the select-then-write TOCTOU.
+    # ``run_id`` carries the loop generation marker, ``increment_cycle=True``
+    # makes the cycles_completed bump an atomic SQL expression, and
+    # ``expected_run_id`` turns the UPDATE branch into a CAS: the row is only
+    # mutated when its current ``run_id`` matches what the caller saw AND the
+    # row is not already in ``idle``. Returns ``WarmingStateWriteResult`` so
+    # the caller can detect a CAS no-op via ``applied=False`` (R4-P1.2) — the
+    # iteration uses that signal to abort before doing Telegram I/O on behalf
+    # of a stale generation.
     now = _now_iso()
     insert_values: dict[str, object | None] = {
         "state": data.state,
@@ -345,13 +349,16 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
             set_=update_values,
         )
     with _get_engine().begin() as connection:
-        connection.execute(stmt)
+        result = connection.execute(stmt)
+        # SQLite reports rowcount=1 for both the INSERT branch and a matching
+        # ON CONFLICT DO UPDATE; rowcount=0 when the UPDATE's WHERE rejected.
+        applied = result.rowcount > 0
     record = _fetch_warming_state(data.account_id)
     if record is None:
         msg = f"Warming state was not persisted: {data.account_id}"
         raise RuntimeError(msg)
-    return record
+    return WarmingStateWriteResult(record=record, applied=applied)
 
 
-async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
+async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
     return await asyncio.to_thread(_upsert_warming_state, data)

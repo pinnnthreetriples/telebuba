@@ -2686,3 +2686,58 @@ async def test_remove_account_blocks_concurrent_start_until_delete_complete(
     # No orphan task survived the race.
     assert "acc-1" not in warming._RUNTIME
     assert started_events == []
+
+
+@pytest.mark.asyncio
+async def test_stale_cycle_started_cas_failure_prevents_telegram_io(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-4 P1.2: a CAS no-op on cycle_started must abort run_one_cycle.
+
+    Forces the race: the iteration's initial _matches_active_run guard accepts
+    the stale run_id (we lie via fetch_warming_state), but the row in the DB
+    is on a newer run_id, so the cycle_started upsert's CAS WHERE clause
+    matches no rows (rowcount=0 → applied=False). The iteration must turn
+    that into ``status='skipped'`` and never reach run_one_cycle. Otherwise
+    the stale loop would happily issue Telegram actions (join / read / DM)
+    on behalf of a generation that's been replaced.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    # DB row carries the NEW generation already.
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            last_event="queued",
+            run_id="run-b",
+        ),
+    )
+
+    # Lie to the iteration's guard so it proceeds; the CAS underneath will
+    # still see run-b and reject the stale UPDATE.
+    real_fetch = _loop.fetch_warming_state
+    fetch_calls = {"n": 0}
+
+    async def fake_fetch(account_id: str):  # type: ignore[no-untyped-def]
+        fetch_calls["n"] += 1
+        if fetch_calls["n"] == 1:
+            real = await real_fetch(account_id)
+            if real is None:
+                return real
+            return real.model_copy(update={"run_id": "run-a"})
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", fake_fetch)
+
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+
+    result = await run_loop_iteration("acc-1", run_id="run-a")
+    assert result.status == "skipped"
+    assert result.detail == "stale run"
+    # The point of the fix: NO Telegram actions on behalf of the stale loop.
+    assert recorder.actions == []

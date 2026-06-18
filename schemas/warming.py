@@ -219,6 +219,26 @@ class WarmingStateWrite(BaseModel):
     expected_run_id: str | None = None
 
 
+class WarmingStateWriteResult(BaseModel):
+    """Outcome of an upsert against ``warming_account_state`` (Round-4 P1.2).
+
+    ``record`` is always the post-upsert row (a fresh readback). ``applied``
+    distinguishes:
+    - True  → the INSERT happened, or the ON CONFLICT DO UPDATE's WHERE clause
+              matched and the UPDATE went through.
+    - False → the CAS predicate (``expected_run_id`` + ``state != 'idle'``)
+              ruled out the UPDATE; the row is whatever the conflicting
+              generation wrote, NOT what this caller asked for.
+
+    Callers that supplied an ``expected_run_id`` use ``applied`` to decide
+    whether to keep going (continue the cycle) or bail (a newer generation
+    has taken over).
+    """
+
+    record: WarmingStateRecord
+    applied: bool
+
+
 class WarmingAccountState(BaseModel):
     """One account's warming status, rendered as a kanban card."""
 

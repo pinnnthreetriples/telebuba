@@ -168,7 +168,7 @@ async def _calculate_next_run(
     return actions_done, next_run_dt, next_state
 
 
-async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches read clearer than chained conditions.
+async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branches read clearer than chained conditions.
     account_id: str,
     *,
     run_id: str | None = None,
@@ -183,14 +183,13 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
     Two gates run before the cycle: quiet hours (park until the window ends) and
     the per-account daily action budget (park until UTC midnight).
 
-    ``run_id`` (P1.2 + Round-2 P1): when the wrapper passes a non-None
-    generation marker, every state write inside this iteration is CAS-guarded
-    against it (``expected_run_id=run_id`` on the upsert). A stale loop that
-    raced a newer start_warming or stop_warming therefore turns into a series
-    of no-op writes instead of overwriting the new generation between our
-    pre-write guard check and the actual UPDATE. Tests that drive
-    ``run_loop_iteration`` directly without a generation pass ``run_id=None``
-    and behave as before.
+    ``run_id`` (P1.2 + Round-2 P1 + Round-4 P1.2): when the wrapper passes a
+    non-None generation marker, every state write is CAS-guarded against it
+    and the upsert reports ``applied`` so we can detect a CAS no-op caused by
+    a concurrent stop/restart. If the ``cycle_started`` CAS no-ops we bail
+    *before* calling ``run_one_cycle`` — otherwise the stale loop would have
+    issued real Telegram actions on behalf of a generation that's already
+    been replaced.
     """
     now = datetime.now(UTC)
     controls = await load_warming_settings()
@@ -207,7 +206,7 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
         local_now = await _local_now(account_id, now)
         if _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
             next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
-            await _set_state(
+            write = await _set_state(
                 account_id,
                 "sleeping",
                 last_event="quiet_hours",
@@ -215,12 +214,16 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
                 heartbeat_at=now.isoformat(),
                 expected_run_id=run_id,
             )
+            if run_id is not None and not write.applied:
+                return WarmingCycleResult(
+                    account_id=account_id, status="skipped", detail="stale run"
+                )
             return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
 
     daily_count, daily_date = _roll_daily(record, now.date().isoformat())
     if controls.max_daily_actions > 0 and daily_count >= controls.max_daily_actions:
         next_run = _next_utc_midnight(now).isoformat()
-        await _set_state(
+        write = await _set_state(
             account_id,
             "sleeping",
             last_event="daily_limit",
@@ -230,9 +233,14 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
             daily_count_date=daily_date,
             expected_run_id=run_id,
         )
+        if run_id is not None and not write.applied:
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="daily limit")
 
-    await _set_state(
+    # Round-4 P1.2: if cycle_started CAS-no-ops, abort BEFORE the cycle. The
+    # real cost of the bug is the Telegram I/O we'd otherwise issue here on
+    # behalf of a stale generation.
+    started = await _set_state(
         account_id,
         "active",
         last_event="cycle_started",
@@ -242,6 +250,9 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
         daily_count_date=daily_date,
         expected_run_id=run_id,
     )
+    if run_id is not None and not started.applied:
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+
     remaining = None
     if controls.max_daily_actions > 0:
         remaining = max(0, controls.max_daily_actions - daily_count)
@@ -262,7 +273,7 @@ async def run_loop_iteration(  # noqa: PLR0911 - explicit early-exit branches re
     # (e.g. asyncio.to_thread isn't interrupted mid-write), and the operator's
     # intent must win. The CAS clause on the final _set_state below provides
     # the same guarantee even when the run_id flips between this read and the
-    # next write (Round-2 P1).
+    # next write (Round-2 P1 + Round-4 P1.1).
     latest = await fetch_warming_state(account_id)
     if not _matches_active_run(latest, run_id):
         return result
