@@ -16,9 +16,9 @@ from features.accounts._dialogs import (
     _check_accounts,
     _open_add_dialog,
     _open_profile_dialog,
-    _open_proxy_dialog,
 )
 from features.accounts._metrics import _refresh_metrics
+from features.accounts._proxy_dialog import _open_proxy_dialog
 from features.accounts._table import (
     _NOTIFY_TYPE_BY_HEALTH,
     _account_id_from_event,
