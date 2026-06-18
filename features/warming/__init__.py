@@ -29,7 +29,8 @@ from typing import TYPE_CHECKING, cast
 from nicegui import context, ui
 
 from features.warming._activity import _render_activity_log, _render_dialogues
-from features.warming._board import _BOARD_POLL_SECONDS, _board_signature, _render_board
+from features.warming._board import _board_signature, _render_board
+from features.warming._board_styling import _BOARD_POLL_SECONDS
 from features.warming._channels import _render_channels_card
 from features.warming._config import _render_config_cards, _render_how_it_works
 from services.warming import load_board

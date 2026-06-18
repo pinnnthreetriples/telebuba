@@ -34,7 +34,12 @@ from services.warming.pacing import (
 )
 
 if TYPE_CHECKING:
-    from schemas.warming import WarmingPhase, WarmingState, WarmingStateRecord
+    from schemas.warming import (
+        WarmingPhase,
+        WarmingSettingsSecret,
+        WarmingState,
+        WarmingStateRecord,
+    )
 
 
 def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -> bool:
@@ -231,124 +236,91 @@ async def _resolve_phase_after_cycle(
     return new_phase, phase_entered_iso
 
 
-async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branches read clearer than chained conditions.
+async def _gate_quiet_hours(
     account_id: str,
+    controls: WarmingSettingsSecret,
+    now: datetime,
     *,
-    run_id: str | None = None,
-) -> WarmingCycleResult:
-    """Run one iteration of the warming loop (cycle + state transitions).
+    run_id: str | None,
+) -> WarmingCycleResult | None:
+    """Park the account if the quiet-hours window is currently active.
 
-    Extracted from ``_warming_loop`` so it can be tested without the infinite
-    ``while True`` wrapper. Updates DB state but does NOT sleep — it writes
-    ``next_run_at``, the single source of truth the loop reads to time the next
-    cycle (so a restart resumes the existing schedule instead of firing early).
-
-    Two gates run before the cycle: quiet hours (park until the window ends) and
-    the per-account daily action budget (park until UTC midnight).
-
-    ``run_id`` (P1.2 + Round-2 P1 + Round-4 P1.2): when the wrapper passes a
-    non-None generation marker, every state write is CAS-guarded against it
-    and the upsert reports ``applied`` so we can detect a CAS no-op caused by
-    a concurrent stop/restart. If the ``cycle_started`` CAS no-ops we bail
-    *before* calling ``run_one_cycle`` — otherwise the stale loop would have
-    issued real Telegram actions on behalf of a generation that's already
-    been replaced.
+    Returns the terminal ``WarmingCycleResult`` when the iteration should
+    exit early, or ``None`` when the cycle may proceed.
     """
-    now = datetime.now(UTC)
-    controls = await load_warming_settings()
-    record = await fetch_warming_state(account_id)
-
-    # P1.1 / P1.2: bail before any write if the iteration is stale.
-    if not _matches_active_run(record, run_id):
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
-
-    if record is not None and record.state == "quarantine":
-        return await _recover_from_quarantine(account_id, record, now, run_id=run_id)
-
-    if controls.quiet_hours_enabled:
-        local_now = await _local_now(account_id, now)
-        if _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
-            next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
-            write = await _set_state(
-                account_id,
-                "sleeping",
-                last_event="quiet_hours",
-                next_run_at=next_run,
-                heartbeat_at=now.isoformat(),
-                expected_run_id=run_id,
-            )
-            if run_id is not None and not write.applied:
-                return WarmingCycleResult(
-                    account_id=account_id, status="skipped", detail="stale run"
-                )
-            return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
-
-    # Per-account auto-cap by phase, with the legacy fleet-wide override
-    # (env / settings) winning when set > 0. The phase is the same one the
-    # card displays, so the operator's mental model and the runtime gate
-    # share a single source of truth.
-    account = await fetch_account(account_id)
-    age_hours = _account_age_hours(account, now)
-    trust = await account_trust_score(account_id)
-    intensity = compute_intensity(age_hours, trust_band=trust.band)
-    effective_cap = (
-        controls.max_daily_actions if controls.max_daily_actions > 0 else intensity.daily_cap
-    )
-
-    daily_count, daily_date = _roll_daily(record, now.date().isoformat())
-    if effective_cap > 0 and daily_count >= effective_cap:
-        next_run = _next_utc_midnight(now).isoformat()
-        write = await _set_state(
-            account_id,
-            "sleeping",
-            last_event="daily_limit",
-            next_run_at=next_run,
-            heartbeat_at=now.isoformat(),
-            daily_actions=daily_count,
-            daily_count_date=daily_date,
-            expected_run_id=run_id,
-        )
-        if run_id is not None and not write.applied:
-            return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="daily limit")
-
-    # Round-4 P1.2: if cycle_started CAS-no-ops, abort BEFORE the cycle. The
-    # real cost of the bug is the Telegram I/O we'd otherwise issue here on
-    # behalf of a stale generation.
-    started = await _set_state(
+    if not controls.quiet_hours_enabled:
+        return None
+    local_now = await _local_now(account_id, now)
+    if not _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
+        return None
+    next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
+    write = await _set_state(
         account_id,
-        "active",
-        last_event="cycle_started",
+        "sleeping",
+        last_event="quiet_hours",
+        next_run_at=next_run,
         heartbeat_at=now.isoformat(),
-        last_error=None,
+        expected_run_id=run_id,
+    )
+    if run_id is not None and not write.applied:
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+    return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
+
+
+async def _gate_daily_limit(
+    account_id: str,
+    effective_cap: int,
+    daily: tuple[int, str],
+    now: datetime,
+    *,
+    run_id: str | None,
+) -> WarmingCycleResult | None:
+    """Park if the per-account daily action cap has been reached.
+
+    ``daily`` is the ``(count, iso_date)`` pair from :func:`_roll_daily`.
+    Returns the terminal ``WarmingCycleResult`` when the iteration should
+    exit early, or ``None`` when the cycle may proceed.
+    """
+    daily_count, daily_date = daily
+    if effective_cap <= 0 or daily_count < effective_cap:
+        return None
+    next_run = _next_utc_midnight(now).isoformat()
+    write = await _set_state(
+        account_id,
+        "sleeping",
+        last_event="daily_limit",
+        next_run_at=next_run,
+        heartbeat_at=now.isoformat(),
         daily_actions=daily_count,
         daily_count_date=daily_date,
         expected_run_id=run_id,
     )
-    if run_id is not None and not started.applied:
+    if run_id is not None and not write.applied:
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+    return WarmingCycleResult(account_id=account_id, status="skipped", detail="daily limit")
 
-    remaining = None
-    if effective_cap > 0:
-        remaining = max(0, effective_cap - daily_count)
 
-    result = await run_one_cycle(
-        WarmingCycleRequest(
-            account_id=account_id,
-            remaining_actions=remaining,
-        )
-    )
+async def _finalize_after_cycle(
+    account_id: str,
+    result: WarmingCycleResult,
+    age_hours: float,
+    daily: tuple[int, str],
+    *,
+    run_id: str | None,
+) -> WarmingCycleResult:
+    """Write the post-cycle state, honouring concurrent stop/restart.
+
+    F1 + P1.2: if ``stop_warming`` wrote ``idle`` OR ``start_warming``
+    minted a fresh ``run_id`` while we were inside ``run_one_cycle``, do
+    not resurrect the cycle's ``next_state`` on top of it. The CAS clause
+    on the final write provides the same guarantee even when the run_id
+    flips between this read and the write (Round-2 P1 + Round-4 P1.1).
+    """
+    daily_count, daily_date = daily
     actions_done, next_run_dt, next_state = await _calculate_next_run(account_id, result)
     new_daily = daily_count + actions_done
     next_run = next_run_dt.isoformat()
 
-    # F1 + P1.2: if stop_warming wrote ``idle`` OR start_warming minted a fresh
-    # run_id while we were inside run_one_cycle, do not resurrect the cycle's
-    # next_state on top of it. The cycle's I/O may have outlived task.cancel()
-    # (e.g. asyncio.to_thread isn't interrupted mid-write), and the operator's
-    # intent must win. The CAS clause on the final _set_state below provides
-    # the same guarantee even when the run_id flips between this read and the
-    # next write (Round-2 P1 + Round-4 P1.1).
     latest = await fetch_warming_state(account_id)
     if not _matches_active_run(latest, run_id):
         return result
@@ -360,7 +332,6 @@ async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branc
         age_hours,
         latest,
     )
-
     await _set_state(
         account_id,
         next_state,
@@ -381,3 +352,69 @@ async def run_loop_iteration(  # noqa: C901, PLR0911 - explicit early-exit branc
         phase_entered_at=phase_entered_iso,
     )
     return result
+
+
+async def run_loop_iteration(
+    account_id: str,
+    *,
+    run_id: str | None = None,
+) -> WarmingCycleResult:
+    """Run one iteration of the warming loop (cycle + state transitions).
+
+    Updates DB state but does NOT sleep — writes ``next_run_at`` instead,
+    so a restart resumes the existing schedule. When ``run_id`` is set,
+    every state write is CAS-guarded against it so a concurrent
+    stop/restart wins over a stale cycle.
+    """
+    now = datetime.now(UTC)
+    controls = await load_warming_settings()
+    record = await fetch_warming_state(account_id)
+
+    if not _matches_active_run(record, run_id):
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+
+    if record is not None and record.state == "quarantine":
+        return await _recover_from_quarantine(account_id, record, now, run_id=run_id)
+
+    quiet = await _gate_quiet_hours(account_id, controls, now, run_id=run_id)
+    if quiet is not None:
+        return quiet
+
+    account = await fetch_account(account_id)
+    age_hours = _account_age_hours(account, now)
+    trust = await account_trust_score(account_id)
+    intensity = compute_intensity(age_hours, trust_band=trust.band)
+    effective_cap = (
+        controls.max_daily_actions if controls.max_daily_actions > 0 else intensity.daily_cap
+    )
+
+    daily = _roll_daily(record, now.date().isoformat())
+    daily_count, daily_date = daily
+    gated = await _gate_daily_limit(account_id, effective_cap, daily, now, run_id=run_id)
+    if gated is not None:
+        return gated
+
+    started = await _set_state(
+        account_id,
+        "active",
+        last_event="cycle_started",
+        heartbeat_at=now.isoformat(),
+        last_error=None,
+        daily_actions=daily_count,
+        daily_count_date=daily_date,
+        expected_run_id=run_id,
+    )
+    if run_id is not None and not started.applied:
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+
+    remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
+    result = await run_one_cycle(
+        WarmingCycleRequest(account_id=account_id, remaining_actions=remaining),
+    )
+    return await _finalize_after_cycle(
+        account_id,
+        result,
+        age_hours,
+        daily,
+        run_id=run_id,
+    )

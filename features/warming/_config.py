@@ -265,78 +265,83 @@ def _render_features_card(
             "Не запускать аккаунт без рабочего прокси, сессии и каналов.",
             lambda: switch(value=current.enforce_readiness),
         )
-        # Hidden state-holder for ``quiet_hours_enabled``. We render the
-        # user-facing control as a preset select; this switch is the boolean
-        # that ``persist()`` reads, kept in sync by the select's on_change.
-        refs["quiet"] = ui.switch(value=current.quiet_hours_enabled).classes("hidden")
+        _render_quiet_hours_block(current, refs, trigger=trigger)
 
-        initial_quiet_preset = _detect_quiet_preset(
-            enabled=current.quiet_hours_enabled,
-            start=current.quiet_hours_start,
-            end=current.quiet_hours_end,
-        )
 
-        def on_quiet_preset(e: object) -> None:
-            key = getattr(e, "value", None) or refs["quiet_preset"].value
-            if key == _QUIET_PRESET_OFF:
-                refs["quiet"].value = False
-            elif key == _QUIET_PRESET_CUSTOM:
-                refs["quiet"].value = True
-                # leave start/end alone so the operator edits the current pair
-            elif key in _QUIET_PRESETS:
-                start_hour, end_hour = _QUIET_PRESETS[key]
-                refs["quiet"].value = True
-                refs["quiet_start"].value = start_hour
-                refs["quiet_end"].value = end_hour
-            trigger(e)
+def _render_quiet_hours_block(
+    current: WarmingSettings,
+    refs: dict[str, Any],
+    *,
+    trigger: Callable[..., object],
+) -> None:  # pragma: no cover
+    # Hidden state-holder for ``quiet_hours_enabled``. The user-facing
+    # control is a preset select; this switch is the boolean ``persist()``
+    # reads, kept in sync by the select's on_change.
+    refs["quiet"] = ui.switch(value=current.quiet_hours_enabled).classes("hidden")
 
-        refs["quiet_preset"] = _feature_row(
-            "bedtime",
-            "Локальное время аккаунта",
-            "Ночью аккаунты молчат — выглядит как сон по локали аккаунта.",
-            lambda: (
-                ui.select(
-                    _QUIET_PRESET_LABELS,
-                    value=initial_quiet_preset,
-                    on_change=on_quiet_preset,
-                )
-                .props("dense outlined options-dense")
-                .classes("w-56")
-            ),
-        )
-        quiet_times = ui.row().classes("w-full items-center gap-2 pl-9")
-        with quiet_times:
-            ui.label("с").classes("text-xs text-slate-500")
-            refs["quiet_start"] = (
-                ui.number(value=current.quiet_hours_start, min=0, max=23, format="%d")
-                .props("dense outlined debounce=600")
-                .classes("w-20")
-                .on_value_change(trigger)
+    initial_quiet_preset = _detect_quiet_preset(
+        enabled=current.quiet_hours_enabled,
+        start=current.quiet_hours_start,
+        end=current.quiet_hours_end,
+    )
+
+    def on_quiet_preset(e: object) -> None:
+        key = getattr(e, "value", None) or refs["quiet_preset"].value
+        if key == _QUIET_PRESET_OFF:
+            refs["quiet"].value = False
+        elif key == _QUIET_PRESET_CUSTOM:
+            refs["quiet"].value = True
+        elif key in _QUIET_PRESETS:
+            start_hour, end_hour = _QUIET_PRESETS[key]
+            refs["quiet"].value = True
+            refs["quiet_start"].value = start_hour
+            refs["quiet_end"].value = end_hour
+        trigger(e)
+
+    refs["quiet_preset"] = _feature_row(
+        "bedtime",
+        "Локальное время аккаунта",
+        "Ночью аккаунты молчат — выглядит как сон по локали аккаунта.",
+        lambda: (
+            ui.select(
+                _QUIET_PRESET_LABELS,
+                value=initial_quiet_preset,
+                on_change=on_quiet_preset,
             )
-            ui.label("до").classes("text-xs text-slate-500")
-            refs["quiet_end"] = (
-                ui.number(value=current.quiet_hours_end, min=0, max=23, format="%d")
-                .props("dense outlined debounce=600")
-                .classes("w-20")
-                .on_value_change(trigger)
-            )
-            ui.label("часов").classes("text-xs text-slate-400")
-        # Reveal the start/end inputs only for the "custom" preset; presets
-        # write into the same refs but the inputs themselves stay hidden so
-        # the form doesn't look cluttered with controls that aren't actionable.
-        quiet_times.bind_visibility_from(
-            refs["quiet_preset"],
-            "value",
-            value=_QUIET_PRESET_CUSTOM,
+            .props("dense outlined options-dense")
+            .classes("w-56")
+        ),
+    )
+    quiet_times = ui.row().classes("w-full items-center gap-2 pl-9")
+    with quiet_times:
+        ui.label("с").classes("text-xs text-slate-500")
+        refs["quiet_start"] = (
+            ui.number(value=current.quiet_hours_start, min=0, max=23, format="%d")
+            .props("dense outlined debounce=600")
+            .classes("w-20")
+            .on_value_change(trigger)
         )
+        ui.label("до").classes("text-xs text-slate-500")
+        refs["quiet_end"] = (
+            ui.number(value=current.quiet_hours_end, min=0, max=23, format="%d")
+            .props("dense outlined debounce=600")
+            .classes("w-20")
+            .on_value_change(trigger)
+        )
+        ui.label("часов").classes("text-xs text-slate-400")
+    quiet_times.bind_visibility_from(
+        refs["quiet_preset"],
+        "value",
+        value=_QUIET_PRESET_CUSTOM,
+    )
 
-        # Per-account daily cap is now auto, derived from each account's
-        # warming phase + trust band — see services.warming.pacing. The
-        # legacy fleet-wide ``max_daily_actions`` setting stays in the schema
-        # as an .env-driven override but is no longer surfaced in the UI:
-        # ``persist()`` passes ``current.max_daily_actions`` through verbatim,
-        # so an operator who previously set 60 keeps that override until
-        # they clear it in .env.
+    # Per-account daily cap is now auto, derived from each account's
+    # warming phase + trust band — see services.warming.pacing. The
+    # legacy fleet-wide ``max_daily_actions`` setting stays in the schema
+    # as an .env-driven override but is no longer surfaced in the UI:
+    # ``persist()`` passes ``current.max_daily_actions`` through verbatim,
+    # so an operator who previously set 60 keeps that override until
+    # they clear it in .env.
 
 
 def _render_gemini_card(
