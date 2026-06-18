@@ -71,7 +71,63 @@ def test_classify_falls_back_to_restriction_flag() -> None:
 
 def test_classify_ambiguous_is_unknown() -> None:
     probe = SpamStatusProbe(account_id="a", reply_text="hello there")
+    status, detail = spam_status.classify_spam_probe(probe)
+    assert status == "unknown"
+    # Unrecognised non-empty reply lands the raw text in detail so the UI can
+    # surface it instead of the generic "вердикт не получен".
+    assert detail is not None
+    assert "hello there" in detail
+
+
+def test_classify_empty_reply_is_unknown_with_no_detail() -> None:
+    """A genuinely empty reply has no signal to surface — keep detail=None."""
+    probe = SpamStatusProbe(account_id="a", reply_text="")
     assert spam_status.classify_spam_probe(probe) == ("unknown", None)
+
+
+def test_classify_clean_russian() -> None:
+    """@SpamBot in Russian — clean verdict via «хорошие новости»."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text=(
+            "Хорошие новости, к вашему аккаунту в настоящий момент "
+            "не применены никакие ограничения."
+        ),
+    )
+    assert spam_status.classify_spam_probe(probe) == ("clean", None)
+
+
+def test_classify_limited_russian() -> None:
+    """@SpamBot in Russian — limited verdict via «ограничен» stem."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="К сожалению, на ваш аккаунт сейчас наложены ограничения.",
+    )
+    status, _ = spam_status.classify_spam_probe(probe)
+    assert status == "limited"
+
+
+def test_classify_being_checked_russian() -> None:
+    """@SpamBot in Russian — automated review."""
+    probe = SpamStatusProbe(
+        account_id="a",
+        reply_text="Ваш аккаунт сейчас проверяется нашей автоматизированной системой.",
+    )
+    assert spam_status.classify_spam_probe(probe) == ("unknown", "account is being checked")
+
+
+def test_classify_unrecognised_reply_truncates_in_detail() -> None:
+    """Very long unrecognised replies don't dominate the UI."""
+    long_reply = "Какой-то очень длинный непонятный ответ. " * 20
+
+    status, detail = spam_status.classify_spam_probe(
+        SpamStatusProbe(account_id="a", reply_text=long_reply),
+    )
+
+    assert status == "unknown"
+    assert detail is not None
+    assert detail.endswith("…")
+    assert len(detail) < len(long_reply)
 
 
 @pytest.mark.asyncio

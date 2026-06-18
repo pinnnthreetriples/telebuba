@@ -17,6 +17,38 @@ from core.telegram_client import check_spam_status
 from schemas.spam_status import SpamStatusKind, SpamStatusProbe, SpamStatusVerdict
 
 _SECONDS_PER_HOUR = 3600
+_UNRECOGNISED_REPLY_MAX = 160
+
+# Substring markers, lowercased, ordered by check priority. ``@SpamBot``
+# localises its reply to the account's interface language, so the same
+# verdict can land in EN, RU, or anything else; matching by short stems lets
+# one rule cover several inflections of one language. Clean is checked first
+# because the Russian clean reply ("не применены ограничения") legitimately
+# contains a substring shared with the limited markers.
+_CLEAN_MARKERS = (
+    # EN — "Good news, no limits are currently applied to your account."
+    "no limits",
+    "good news",
+    # RU — "Хорошие новости, к вашему аккаунту не применены никакие ограничения."
+    "хорошие новости",
+    "не применены",
+)
+_BEING_CHECKED_MARKERS = (
+    # EN — "Your account is being checked."
+    "being checked",
+    "is checked",
+    # RU — "Ваш аккаунт сейчас проверяется автоматизированной системой."
+    "сейчас проверя",
+    "автоматизирован",
+)
+_LIMITED_MARKERS = (
+    # EN — "Your account is now limited until …"
+    "limited",
+    "restricted",
+    # RU — typical limited reply contains the "ограничен" / "наложены" stems
+    "ограничен",
+    "наложены",
+)
 
 
 def _extract_until(text: str) -> str | None:
@@ -28,24 +60,45 @@ def _extract_until(text: str) -> str | None:
     return tail or None
 
 
+def _classify_reply_text(text: str) -> tuple[SpamStatusKind, str | None] | None:
+    """Match the reply against the keyword markers. ``None`` = no match yet."""
+    lowered = text.lower()
+    if any(marker in lowered for marker in _CLEAN_MARKERS):
+        return "clean", None
+    if any(marker in lowered for marker in _BEING_CHECKED_MARKERS):
+        return "unknown", "account is being checked"
+    if any(marker in lowered for marker in _LIMITED_MARKERS):
+        return "limited", _extract_until(text)
+    return None
+
+
+def _unrecognised_reply_detail(text: str) -> str:
+    snippet = text.strip()
+    if len(snippet) > _UNRECOGNISED_REPLY_MAX:
+        snippet = snippet[: _UNRECOGNISED_REPLY_MAX - 1] + "…"
+    return f"нераспознанный ответ: {snippet}"
+
+
 def classify_spam_probe(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | None]:
     """Map a raw probe to a (status, detail) verdict by signal words.
 
     Parses by resilient signal words rather than exact strings, because the bot
-    wording changes over time. ``getFullUser`` restriction flags are a secondary
-    signal — they cover terms/country restrictions, not spam limits.
+    wording changes over time and varies by locale. ``getFullUser`` restriction
+    flags are a secondary signal — they cover terms/country restrictions, not
+    spam limits. When nothing matches, we surface the raw reply in ``detail`` so
+    the operator can see what came back instead of being told "вердикт не
+    получен" with no clue why.
     """
     if probe.error:
         return "unknown", probe.error
-    lowered = (probe.reply_text or "").lower()
-    if "no limits" in lowered or "good news" in lowered:
-        return "clean", None
-    if "being checked" in lowered or "is checked" in lowered:
-        return "unknown", "account is being checked"
-    if "limited" in lowered or "restricted" in lowered:
-        return "limited", _extract_until(probe.reply_text or "")
+    text = probe.reply_text or ""
+    matched = _classify_reply_text(text)
+    if matched is not None:
+        return matched
     if probe.restricted:
         return "limited", probe.restriction_reason
+    if text.strip():
+        return "unknown", _unrecognised_reply_detail(text)
     return "unknown", None
 
 
