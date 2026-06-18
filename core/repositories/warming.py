@@ -14,6 +14,7 @@ from contextlib import suppress
 from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import delete, insert, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
 from core.config import settings
@@ -35,6 +36,7 @@ from schemas.warming import (
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
+    WarmingStateWriteResult,
 )
 
 if TYPE_CHECKING:
@@ -254,6 +256,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         daily_actions=_optional_int(mapping.get("daily_actions")) or 0,
         daily_count_date=_optional_str(mapping.get("daily_count_date")),
         quarantine_count=_optional_int(mapping.get("quarantine_count")) or 0,
+        run_id=_optional_str(mapping.get("run_id")),
     )
 
 
@@ -283,10 +286,24 @@ async def fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
     return await asyncio.to_thread(_fetch_warming_state, account_id)
 
 
-def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
+def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
+    # F9 + P1.2 + P2.4 + Round-2 P1 + Round-4 P1.1/P1.2: collapse to a single
+    # sqlite_insert ON CONFLICT DO UPDATE so the whole upsert runs under
+    # SQLite's implicit write lock, eliminating the select-then-write TOCTOU.
+    # ``run_id`` carries the loop generation marker, ``increment_cycle=True``
+    # makes the cycles_completed bump an atomic SQL expression, and
+    # ``expected_run_id`` turns the UPDATE branch into a CAS: the row is only
+    # mutated when its current ``run_id`` matches what the caller saw AND the
+    # row is not already in ``idle``. Returns ``WarmingStateWriteResult`` so
+    # the caller can detect a CAS no-op via ``applied=False`` (R4-P1.2) — the
+    # iteration uses that signal to abort before doing Telegram I/O on behalf
+    # of a stale generation.
     now = _now_iso()
-    values: dict[str, object | None] = {
+    insert_values: dict[str, object | None] = {
         "state": data.state,
+        # For a brand-new row, increment_cycle just means "this is cycle 1".
+        # The caller supplies cycles_completed=1 in that case; otherwise the
+        # supplied value is used verbatim.
         "cycles_completed": data.cycles_completed,
         "last_event": data.last_event,
         "last_cycle_at": data.last_cycle_at,
@@ -304,29 +321,44 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         "daily_actions": data.daily_actions,
         "daily_count_date": data.daily_count_date,
         "quarantine_count": data.quarantine_count,
+        "run_id": data.run_id,
     }
-    with _get_engine().begin() as connection:
-        exists = connection.execute(
-            select(_warming_account_state.c.account_id).where(
-                _warming_account_state.c.account_id == data.account_id,
+    update_values: dict[str, object] = dict(insert_values)
+    if data.increment_cycle:
+        update_values["cycles_completed"] = _warming_account_state.c.cycles_completed + 1
+    insert_stmt = sqlite_insert(_warming_account_state).values(
+        account_id=data.account_id, **insert_values
+    )
+    if data.expected_run_id is not None:
+        # Round-4 P1.1: belt+suspenders. The first predicate is the
+        # generation check; the second rejects any UPDATE that would
+        # overwrite a row already in ``idle``. So even if a future caller of
+        # _stop_warming forgets to clear run_id, the stale loop's CAS write
+        # still degrades to a no-op (the operator's idle wins).
+        stmt = insert_stmt.on_conflict_do_update(
+            index_elements=[_warming_account_state.c.account_id],
+            set_=update_values,
+            where=(
+                (_warming_account_state.c.run_id == data.expected_run_id)
+                & (_warming_account_state.c.state != "idle")
             ),
-        ).first()
-        if exists is None:
-            connection.execute(
-                insert(_warming_account_state).values(account_id=data.account_id, **values),
-            )
-        else:
-            connection.execute(
-                update(_warming_account_state)
-                .where(_warming_account_state.c.account_id == data.account_id)
-                .values(**values),
-            )
+        )
+    else:
+        stmt = insert_stmt.on_conflict_do_update(
+            index_elements=[_warming_account_state.c.account_id],
+            set_=update_values,
+        )
+    with _get_engine().begin() as connection:
+        result = connection.execute(stmt)
+        # SQLite reports rowcount=1 for both the INSERT branch and a matching
+        # ON CONFLICT DO UPDATE; rowcount=0 when the UPDATE's WHERE rejected.
+        applied = result.rowcount > 0
     record = _fetch_warming_state(data.account_id)
     if record is None:
         msg = f"Warming state was not persisted: {data.account_id}"
         raise RuntimeError(msg)
-    return record
+    return WarmingStateWriteResult(record=record, applied=applied)
 
 
-async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
+async def upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
     return await asyncio.to_thread(_upsert_warming_state, data)

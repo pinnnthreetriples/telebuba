@@ -20,6 +20,7 @@ from sqlalchemy import (
     BigInteger,
     Column,
     ForeignKey,
+    Index,
     Integer,
     MetaData,
     String,
@@ -67,6 +68,10 @@ _accounts = Table(
     Column("last_checked_at", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+    # F5: two accounts pointing at the same .session file would race on the
+    # same Telethon SQLite session DB. SQLite treats NULLs as distinct in a
+    # UNIQUE index, so accounts without a custom session_name still coexist.
+    Index("ix_accounts_session_name_unique", "session_name", unique=True),
 )
 _account_proxies = Table(
     "account_proxies",
@@ -152,6 +157,8 @@ _warming_account_state = Table(
     Column("daily_actions", Integer, nullable=True),
     Column("daily_count_date", String, nullable=True),
     Column("quarantine_count", Integer, nullable=True),
+    # P1.2: see schemas.warming.WarmingStateRecord.run_id.
+    Column("run_id", String, nullable=True),
 )
 _account_spam_status = Table(
     "account_spam_status",
@@ -261,6 +268,7 @@ from core.repositories._proxies import (  # noqa: E402, F401
     upsert_account_proxy,
 )
 from core.repositories.accounts import (  # noqa: E402, F401
+    DuplicateSessionNameError,
     account_summary_counts,
     create_account,
     delete_account,
@@ -272,6 +280,7 @@ from core.repositories.accounts import (  # noqa: E402, F401
 from core.repositories.content import (  # noqa: E402, F401
     purge_sent_hashes_older_than,
     record_sent_hash,
+    release_sent_hash,
     try_reserve_sent_hash,
     was_hash_sent_since,
 )
@@ -286,6 +295,7 @@ from core.repositories.dialogues import (  # noqa: E402, F401
     list_dialogue_pairs,
     list_recent_dialogue_messages,
     mark_message_replied,
+    mark_message_unreplied,
     pair_key,
     purge_dialogue_messages_older_than,
     record_dialogue_message,

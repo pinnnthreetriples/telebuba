@@ -17,6 +17,7 @@ from core.db import (
     latest_unreplied_for,
     list_accounts,
     mark_message_replied,
+    mark_message_unreplied,
     pair_key,
     record_dialogue_message,
     try_claim_message_reply,
@@ -24,7 +25,7 @@ from core.db import (
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import ActionResult, SendDirectMessage
-from services.content import is_acceptable, try_reserve_sent
+from services.content import is_acceptable, release_sent_text, try_reserve_sent
 from services.dialogues import get_partners
 from services.warming import _seams
 
@@ -176,16 +177,26 @@ async def _reply_to_partner(  # noqa: PLR0911
     text = gen.text
     # Atomic claim before send: collapses ``latest_unreplied_for`` + ``mark``
     # into one UPDATE WHERE replied=0 so two parallel cycles cannot both
-    # answer the same incoming message. Send-failure after a claim drops the
-    # reply by design — silence is safer than a duplicate.
+    # answer the same incoming message. F6: if the send itself fails (flood
+    # or any non-ok), we release the claim so the inbox keeps the message
+    # for the next cycle instead of losing it forever.
     if not await try_claim_message_reply(incoming.id):
+        # The text reservation in _generate_chat_text would otherwise lock
+        # this exact text out of the dedup window for nothing.
+        await release_sent_text(text)
         return ChatResult()
     # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
 
     if result.status in ("flood_wait", "peer_flood", "slow_mode_wait", "premium_wait"):
+        await mark_message_unreplied(incoming.id)
+        # P2.6: drop the reservation so the next retry of an identical reply
+        # isn't shadowed for the entire dedup window.
+        await release_sent_text(text)
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
+        await mark_message_unreplied(incoming.id)
+        await release_sent_text(text)
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.
@@ -215,10 +226,16 @@ async def _open_with_partner(
     secret: WarmingSettingsSecret,
     accounts: dict[str, AccountRead],
 ) -> ChatResult:
+    # F8: when paired loops fire at the same instant, both sides would see an
+    # empty inbox and both open the conversation, producing crossing DMs.
+    # Restrict the opener role to the lexicographically smaller account_id;
+    # the other side waits and replies on its next cycle.
     candidates = [
         accounts[partner]
         for partner in partners
-        if accounts.get(partner) is not None and accounts[partner].user_id is not None
+        if accounts.get(partner) is not None
+        and accounts[partner].user_id is not None
+        and sender_id < partner
     ]
     if not candidates:
         return ChatResult()
@@ -233,8 +250,11 @@ async def _open_with_partner(
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
 
     if result.status in ("flood_wait", "peer_flood", "slow_mode_wait", "premium_wait"):
+        # P2.6: drop the reservation so the next opener retry isn't shadowed.
+        await release_sent_text(text)
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
+        await release_sent_text(text)
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
 
     await record_dialogue_message(sender_id, target.account_id, text)

@@ -10,7 +10,6 @@ existing call sites are unaffected.
 from __future__ import annotations
 
 import asyncio
-from contextlib import suppress
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import delete, func, insert, select, update
@@ -42,6 +41,10 @@ if TYPE_CHECKING:
     from schemas.telegram_session import TelegramSessionCheckResult
 
 _MASK_PASSTHROUGH_LENGTH = 2
+
+
+class DuplicateSessionNameError(ValueError):
+    """Two accounts cannot share one Telethon session file (F5)."""
 
 
 def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
@@ -137,8 +140,55 @@ def _create_account(data: AccountCreate) -> AccountRead:
         "created_at": now,
         "updated_at": now,
     }
-    with _get_engine().begin() as connection, suppress(IntegrityError):
-        connection.execute(insert(_accounts).values(**values))
+    with _get_engine().begin() as connection:
+        # F5: reject a different account claiming the same Telethon session
+        # file. The pre-check below catches the cooperative case; the FK
+        # unique index (migration #7) is the last line of defense for racy
+        # concurrent inserts.
+        if data.session_name is not None:
+            conflict = connection.execute(
+                select(_accounts.c.account_id).where(
+                    (_accounts.c.session_name == data.session_name)
+                    & (_accounts.c.account_id != data.account_id),
+                ),
+            ).first()
+            if conflict is not None:
+                msg = (
+                    f"Session name {data.session_name!r} is already used by account {conflict[0]!r}"
+                )
+                raise DuplicateSessionNameError(msg)
+        try:
+            connection.execute(insert(_accounts).values(**values))
+        except IntegrityError:
+            # P2.5: don't swallow IntegrityError blindly. Two outcomes possible:
+            # (a) PK conflict on account_id  → idempotent create (existing row
+            #     with same id is fine; fall through to the readback below).
+            # (b) UNIQUE conflict on session_name (the migration-#7 index won
+            #     a race with our pre-check) → surface the typed domain error
+            #     so callers can render a useful message.
+            session_owner: object | None = None
+            if data.session_name is not None:
+                row = connection.execute(
+                    select(_accounts.c.account_id).where(
+                        (_accounts.c.session_name == data.session_name)
+                        & (_accounts.c.account_id != data.account_id),
+                    ),
+                ).first()
+                session_owner = row[0] if row is not None else None
+            if session_owner is not None:
+                msg = (
+                    f"Session name {data.session_name!r} is already used by account "
+                    f"{session_owner!r}"
+                )
+                raise DuplicateSessionNameError(msg) from None
+            # Neither a session_name collision nor a known existing account_id:
+            # something else is wrong (e.g. a FK), re-raise so the operator
+            # sees the real error instead of a misleading RuntimeError later.
+            existing = connection.execute(
+                select(_accounts.c.account_id).where(_accounts.c.account_id == data.account_id),
+            ).first()
+            if existing is None:
+                raise
     account = _fetch_account(data.account_id)
     if account is None:
         msg = f"Account was not persisted: {data.account_id}"
@@ -224,17 +274,69 @@ async def account_summary_counts() -> dict[str, int]:
 
 
 def _delete_account(account_id: str) -> None:
+    # F4: schema declares ForeignKey on account_proxies / warming_account_state /
+    # account_spam_status without ON DELETE CASCADE, and PRAGMA foreign_keys=ON,
+    # so deleting a warmed account explodes with IntegrityError unless we clean
+    # the children first. device_fingerprints / dialogue tables have no FK but
+    # are still per-account data that must not outlive the account.
+    from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
+    from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
+
     with _get_engine().begin() as connection:
         connection.execute(
             delete(_warming_joined_channels).where(
                 _warming_joined_channels.c.account_id == account_id,
             ),
         )
+        connection.execute(
+            delete(_warming_account_state).where(
+                _warming_account_state.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_account_proxies).where(_account_proxies.c.account_id == account_id),
+        )
+        connection.execute(
+            delete(_account_spam_status).where(
+                _account_spam_status.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_device_fingerprints).where(
+                _device_fingerprints.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(dialogue_messages).where(
+                (dialogue_messages.c.from_account == account_id)
+                | (dialogue_messages.c.to_account == account_id),
+            ),
+        )
+        connection.execute(
+            delete(dialogue_pairs).where(
+                (dialogue_pairs.c.account_a == account_id)
+                | (dialogue_pairs.c.account_b == account_id),
+            ),
+        )
         connection.execute(delete(_accounts).where(_accounts.c.account_id == account_id))
 
 
 async def delete_account(account_id: str) -> None:
-    """Delete an account row (cascade is handled by SQLite FK constraints)."""
+    """Delete an account row + every per-account child row.
+
+    SQLite FKs are declared without ``ON DELETE CASCADE`` (see F4); this
+    helper manually purges ``warming_account_state`` / ``account_proxies`` /
+    ``account_spam_status`` / ``device_fingerprints`` / dialogue tables /
+    joined channels before deleting the ``accounts`` row. New per-account
+    tables MUST be added to ``_delete_account`` — relying on FK cascade is
+    a bug.
+
+    Does not stop a running warming task. Service callers should use
+    :func:`services.accounts.lifecycle.remove_account` instead, which holds
+    the per-account runtime lock across stop + delete (P2.2). The
+    ``_tdata`` rollback path is the only legitimate direct caller of this
+    repo function because those accounts never started warming.
+    """
     await asyncio.to_thread(_delete_account, account_id)
 
 

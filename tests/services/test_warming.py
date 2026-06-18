@@ -25,6 +25,7 @@ from core.db import (
     fetch_warming_state,
     latest_unreplied_for,
     list_dialogue_pairs,
+    load_warming_settings,
     purge_dialogue_messages_older_than,
     purge_logs_older_than,
     purge_sent_hashes_older_than,
@@ -49,6 +50,7 @@ from schemas.warming import (
     StartWarmingRequest,
     StopWarmingRequest,
     WarmingCycleRequest,
+    WarmingCycleResult,
     WarmingSettingsUpdate,
     WarmingStateRecord,
     WarmingStateWrite,
@@ -522,7 +524,7 @@ async def test_load_board_enriches_cards_and_summary() -> None:
 
 @pytest.mark.asyncio
 async def test_start_and_stop_warming_manage_the_task(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -910,7 +912,7 @@ async def test_reconcile_warming_runtime_restarts_active_loops(
 ) -> None:
     started: list[str] = []
 
-    async def fake_loop(account_id: str) -> None:
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         started.append(account_id)
         await asyncio.sleep(3600)
 
@@ -933,7 +935,7 @@ async def test_reconcile_warming_runtime_skips_error_state(
     """Error accounts must not be auto-resurrected on restart; user has to act."""
     started: list[str] = []
 
-    async def fake_loop(account_id: str) -> None:
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         started.append(account_id)
         await asyncio.sleep(3600)
 
@@ -954,7 +956,7 @@ async def test_reconcile_warming_runtime_builds_dialogue_pairs(
 ) -> None:
     """Inter-account chat needs pairs — reconcile must build the graph on startup."""
 
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -986,15 +988,15 @@ async def test_reconcile_purges_stale_history(monkeypatch: pytest.MonkeyPatch) -
         return fake
 
     monkeypatch.setattr(
-        "services.warming._runtime.purge_logs_older_than",
+        "services.warming._purge.purge_logs_older_than",
         await make_recorder("logs"),
     )
     monkeypatch.setattr(
-        "services.warming._runtime.purge_dialogue_messages_older_than",
+        "services.warming._purge.purge_dialogue_messages_older_than",
         await make_recorder("dialogues"),
     )
     monkeypatch.setattr(
-        "services.warming._runtime.purge_sent_hashes_older_than",
+        "services.warming._purge.purge_sent_hashes_older_than",
         await make_recorder("hashes"),
     )
 
@@ -1009,7 +1011,7 @@ async def test_reconcile_purges_stale_history(monkeypatch: pytest.MonkeyPatch) -
 
 @pytest.mark.asyncio
 async def test_reconcile_marks_orphan_state_rows_idle(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1047,7 +1049,7 @@ async def test_reconcile_marks_orphan_state_rows_idle(monkeypatch: pytest.Monkey
 
 @pytest.mark.asyncio
 async def test_shutdown_warming_runtime_cancels_all(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1180,7 +1182,7 @@ async def test_start_warming_blocks_not_ready_account() -> None:
 async def test_start_warming_ready_account_records_proxy_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1201,7 +1203,7 @@ async def test_manual_start_clears_stale_next_run_at(
 ) -> None:
     """Manual Start must fire immediately, not honour an old persisted schedule."""
 
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
@@ -1454,7 +1456,7 @@ async def test_run_loop_iteration_increments_daily_counter(
 
 
 @pytest.mark.asyncio
-async def test_cycle_hard_daily_limit_includes_cleanup(
+async def test_daily_limit_excludes_offline_cleanup(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     recorder = _Recorder()
@@ -1630,7 +1632,7 @@ async def test_start_warming_refreshes_pairs_before_loop(monkeypatch: pytest.Mon
     async def fake_refresh() -> None:
         calls.append("refresh")
 
-    async def fake_loop(_account_id: str) -> None:
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
         calls.append("loop")
 
     monkeypatch.setattr("services.warming._runtime._refresh_dialogue_pairs", fake_refresh)
@@ -1706,3 +1708,1208 @@ async def test_joined_channels_cleanup_on_account_delete() -> None:
     with _get_engine().connect() as conn:
         res = conn.execute(select(_warming_joined_channels)).all()
         assert len(res) == 0
+
+
+@pytest.mark.asyncio
+async def test_delete_account_with_all_related_rows() -> None:
+    """F4 regression: deleting a warmed account must not raise IntegrityError.
+
+    Schema declares ForeignKey on account_proxies / warming_account_state /
+    account_spam_status without ON DELETE CASCADE, so the repo has to clean
+    children explicitly. We seed every per-account table that exists.
+    """
+    from core.db import (  # noqa: PLC0415
+        _account_proxies,
+        _account_spam_status,
+        _accounts,
+        _device_fingerprints,
+        _get_engine,
+        _warming_account_state,
+        _warming_joined_channels,
+        add_warming_channel,
+        record_channel_joined,
+        upsert_warming_state,
+    )
+    from core.repositories.accounts import _delete_account  # noqa: PLC0415
+    from core.repositories.dialogues import (  # noqa: PLC0415
+        dialogue_messages,
+        dialogue_pairs,
+        record_dialogue_message,
+        replace_dialogue_pairs,
+    )
+
+    await create_account(AccountCreate(account_id="acc-a", session_name="acc-a"))
+    await create_account(AccountCreate(account_id="acc-b", session_name="acc-b"))
+    await add_warming_channel("testchan")
+    await record_channel_joined("acc-a", "testchan")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-a", state="active"))
+    await upsert_account_proxy(
+        AccountProxyUpsert(
+            account_id="acc-a",
+            proxy_type="socks5",
+            host="127.0.0.1",
+            port=1080,
+            username=None,
+            password=None,
+        ),
+    )
+    await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id="acc-a",
+            status="clean",
+            detail=None,
+            checked_at="2026-01-01T00:00:00+00:00",
+        ),
+    )
+    await replace_dialogue_pairs([("acc-a", "acc-b")])
+    await record_dialogue_message("acc-a", "acc-b", "hi")
+    await record_dialogue_message("acc-b", "acc-a", "yo")
+
+    await asyncio.to_thread(_delete_account, "acc-a")
+
+    with _get_engine().connect() as conn:
+        assert (
+            conn.execute(sa_delete(_accounts).where(_accounts.c.account_id == "acc-a")).rowcount
+            == 0
+        )
+        assert (
+            conn.execute(
+                _warming_joined_channels.select().where(
+                    _warming_joined_channels.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _warming_account_state.select().where(
+                    _warming_account_state.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _account_proxies.select().where(_account_proxies.c.account_id == "acc-a"),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _account_spam_status.select().where(
+                    _account_spam_status.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                _device_fingerprints.select().where(
+                    _device_fingerprints.c.account_id == "acc-a",
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                dialogue_messages.select().where(
+                    (dialogue_messages.c.from_account == "acc-a")
+                    | (dialogue_messages.c.to_account == "acc-a"),
+                ),
+            ).all()
+            == []
+        )
+        assert (
+            conn.execute(
+                dialogue_pairs.select().where(
+                    (dialogue_pairs.c.account_a == "acc-a")
+                    | (dialogue_pairs.c.account_b == "acc-a"),
+                ),
+            ).all()
+            == []
+        )
+
+
+@pytest.mark.asyncio
+async def test_create_account_rejects_duplicate_session_name() -> None:
+    """F5: two accounts cannot share one Telethon session file."""
+    from core.repositories.accounts import DuplicateSessionNameError  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1", session_name="shared"))
+    with pytest.raises(DuplicateSessionNameError):
+        await create_account(AccountCreate(account_id="acc-2", session_name="shared"))
+
+
+@pytest.mark.asyncio
+async def test_create_account_allows_multiple_null_session_names() -> None:
+    """F5: NULL session_name is not a value, so accounts without one can coexist."""
+    await create_account(AccountCreate(account_id="acc-1"))
+    await create_account(AccountCreate(account_id="acc-2"))
+    # No exception — both rows persist.
+
+
+@pytest.mark.asyncio
+async def test_stop_does_not_get_overwritten_by_inflight_cycle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F1: a stop fired while ``run_one_cycle`` is in flight must stick."""
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    # Patch ``run_one_cycle`` to simulate stop_warming firing mid-cycle:
+    # the operator wrote ``idle`` while the loop was still inside this call.
+    async def cycle_with_stop_inside(req):  # type: ignore[no-untyped-def]
+        await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
+        return WarmingCycleResult(account_id=req.account_id, status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", cycle_with_stop_inside)
+
+    await run_loop_iteration("acc-1")
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"
+
+
+@pytest.mark.asyncio
+async def test_manual_start_replaces_existing_loop_task(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F2: re-starting an account must cancel a still-sleeping loop and create a fresh task."""
+    started: list[str] = []
+    cancelled = asyncio.Event()
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started.append(account_id)
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    monkeypatch.setattr(settings.warming, "enforce_readiness", False)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    first_task = warming._RUNTIME["acc-1"]
+    await asyncio.sleep(0)
+    assert started == ["acc-1"]
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    second_task = warming._RUNTIME["acc-1"]
+    await asyncio.sleep(0)
+
+    assert second_task is not first_task
+    assert cancelled.is_set()
+    assert started == ["acc-1", "acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_skips_when_state_already_idle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F3: if state flipped to idle between listing and lock-acquire, do not restart."""
+    from core.db import list_warming_states as real_list_states  # noqa: PLC0415
+
+    started: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    # Simulate the race: list_warming_states sees "active", then between that
+    # and the per-account lock, stop_warming flips the row to "idle".
+    async def race_list() -> list:  # type: ignore[type-arg]
+        records = await real_list_states()
+        await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
+        return records
+
+    monkeypatch.setattr(_runtime, "list_warming_states", race_list)
+
+    await warming.reconcile_warming_runtime()
+    await asyncio.sleep(0)
+
+    assert "acc-1" not in warming._RUNTIME
+    assert started == []
+
+
+@pytest.mark.asyncio
+async def test_reply_flood_releases_claim(monkeypatch: pytest.MonkeyPatch) -> None:
+    """F6: send flood on reply leaves the incoming message claimable next cycle."""
+    from core.db import (  # noqa: PLC0415
+        latest_unreplied_for,
+        record_dialogue_message,
+        replace_dialogue_pairs,
+    )
+
+    await create_account(AccountCreate(account_id="acc-a"))
+    await create_account(AccountCreate(account_id="acc-b"))
+    acc_b_session = await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-b",
+            session_path="acc-b",
+            status="alive",
+            is_temporary=False,
+            user_id=42,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+        ),
+    )
+    assert acc_b_session.user_id == 42
+    await replace_dialogue_pairs([("acc-a", "acc-b")])
+    # acc-b sent a message to acc-a; acc-a will try to reply but get flooded.
+    await record_dialogue_message("acc-b", "acc-a", "hi there")
+
+    async def flood_execute(account_id: str, action: TelegramAction) -> ActionResult:
+        return ActionResult(
+            status="flood_wait",
+            action_type=action.action_type,
+            account_id=account_id,
+            flood_wait_seconds=60,
+        )
+
+    monkeypatch.setattr(_seams, "execute", flood_execute)
+    monkeypatch.setattr(
+        _seams,
+        "generate_text",
+        lambda req: _resolve(GeminiResult(status="ok", text="ok-reply")),  # noqa: ARG005
+    )
+
+    incoming = await latest_unreplied_for("acc-a")
+    assert incoming is not None
+    secret = await load_warming_settings()
+    accounts_map = {
+        "acc-a": await fetch_account_helper("acc-a"),
+        "acc-b": await fetch_account_helper("acc-b"),
+    }
+    from services.warming._chat import _reply_to_partner  # noqa: PLC0415
+
+    result = await _reply_to_partner("acc-a", incoming, secret, accounts_map)
+    assert result.flood_result is not None
+    # The incoming row should still be claimable.
+    still_pending = await latest_unreplied_for("acc-a")
+    assert still_pending is not None
+    assert still_pending.id == incoming.id
+
+
+async def _resolve(value):  # type: ignore[no-untyped-def]
+    return value
+
+
+async def fetch_account_helper(account_id: str):  # type: ignore[no-untyped-def]
+    from core.db import fetch_account  # noqa: PLC0415
+
+    return await fetch_account(account_id)
+
+
+@pytest.mark.asyncio
+async def test_try_reserve_sent_hash_concurrent_only_one_wins() -> None:
+    """F7: parallel reservers of the same hash never both observe an empty window."""
+    from core.db import purge_sent_hashes_older_than, try_reserve_sent_hash  # noqa: PLC0415
+
+    # Warm up the engine on this thread before fanning out — the gather below
+    # spawns 8 threads via asyncio.to_thread, which would otherwise race on
+    # ``_get_engine`` + ``_metadata.create_all`` and leave some threads talking
+    # to a DB where the table did not yet exist.
+    await purge_sent_hashes_older_than("1900-01-01T00:00:00+00:00")
+
+    since = (datetime.now(UTC) - timedelta(days=7)).isoformat()
+    results = await asyncio.gather(*(try_reserve_sent_hash("shared-hash", since) for _ in range(8)))
+    assert sum(1 for r in results if r) == 1
+    assert sum(1 for r in results if not r) == 7
+
+
+@pytest.mark.asyncio
+async def test_open_with_partner_deterministic_tiebreak(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """F8: smaller account_id opens; larger waits, preventing crossing DMs."""
+    from services.warming._chat import _open_with_partner  # noqa: PLC0415
+
+    # Two accounts; "alpha" < "bravo" lexicographically.
+    accounts: dict[str, AccountRead] = {
+        "alpha": AccountRead(
+            account_id="alpha",
+            label=None,
+            session_name="alpha",
+            status="alive",
+            user_id=1,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+            bio=None,
+            last_checked_at=None,
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        ),
+        "bravo": AccountRead(
+            account_id="bravo",
+            label=None,
+            session_name="bravo",
+            status="alive",
+            user_id=2,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+            bio=None,
+            last_checked_at=None,
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        ),
+    }
+    secret = await load_warming_settings()
+
+    sent: list[tuple[str, TelegramAction]] = []
+
+    async def capture(account_id: str, action: TelegramAction) -> ActionResult:
+        sent.append((account_id, action))
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    async def gen(req: object) -> GeminiResult:  # noqa: ARG001
+        return GeminiResult(status="ok", text="howdy")
+
+    monkeypatch.setattr(_seams, "execute", capture)
+    monkeypatch.setattr(_seams, "generate_text", gen)
+
+    # bravo is the larger id; its opener attempt must be a no-op.
+    bravo_result = await _open_with_partner("bravo", ["alpha"], secret, accounts)
+    assert bravo_result.messages_sent == 0
+    assert sent == []
+
+    # alpha opens normally.
+    alpha_result = await _open_with_partner("alpha", ["bravo"], secret, accounts)
+    assert alpha_result.messages_sent == 1
+    assert len(sent) == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_set_state_increment_cycle_preserves_all_increments() -> None:
+    """P2.4: N parallel _set_state(increment_cycle=True) → cycles_completed == N.
+
+    The pre-fix code computed ``cycles + 1`` from a stale read in _set_state and
+    handed the result to the upsert. Concurrent writers all read the same
+    pre-state and clobbered each other (each thought their write was the next).
+    The fix moves the bump into the ON CONFLICT DO UPDATE SQL expression.
+    """
+    from services.warming._state import _set_state  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    n_writers = 8
+
+    async def bump(i: int) -> None:
+        await _set_state("acc-1", "sleeping", last_event=f"cycle-{i}", increment_cycle=True)
+
+    await asyncio.gather(*(bump(i) for i in range(n_writers)))
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.cycles_completed == n_writers
+
+
+@pytest.mark.asyncio
+async def test_migration_unique_session_name_handles_existing_duplicates(
+    tmp_path: Path,
+) -> None:
+    """P1.3: migration #7 must auto-remediate legacy duplicates, not crash startup.
+
+    Re-creates the pre-migration shape (no unique index) with two rows that
+    share a session_name, then drives ``apply_migrations`` and asserts the
+    index is in place and the second row's session_name was nulled.
+    """
+    from sqlalchemy import create_engine  # noqa: PLC0415
+
+    db_path = tmp_path / "legacy.db"
+    engine = create_engine(f"sqlite:///{db_path}", future=True)
+    try:
+        await _exercise_migration_seven(engine)
+    finally:
+        engine.dispose()
+
+
+async def _exercise_migration_seven(engine) -> None:  # type: ignore[no-untyped-def]
+    from core.migrations import apply_migrations  # noqa: PLC0415
+
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE accounts ("
+            "  account_id VARCHAR PRIMARY KEY,"
+            "  label VARCHAR,"
+            "  session_name VARCHAR,"
+            "  status VARCHAR NOT NULL,"
+            "  created_at VARCHAR NOT NULL,"
+            "  updated_at VARCHAR NOT NULL"
+            ")",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+            "VALUES ('acc-1', 'shared', 'new', '2026-01-01', '2026-01-01')",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+            "VALUES ('acc-2', 'shared', 'new', '2026-01-02', '2026-01-02')",
+        )
+
+    # Pretend the previous migrations already ran so #7 fires alone.
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, name VARCHAR NOT NULL, "
+            "applied_at VARCHAR NOT NULL)",
+        )
+        # Stamp every non-#7 migration as already applied so the test DB only
+        # exercises the new index migration. Append the new version here when
+        # adding a migration that touches a table this test does NOT create.
+        already_applied = (1, 2, 3, 4, 5, 6, 8)
+        for version in already_applied:
+            connection.exec_driver_sql(
+                "INSERT INTO schema_version VALUES (?, 'stub', '2026-01-01')",
+                (version,),
+            )
+
+    # Must not raise.
+    apply_migrations(engine)
+
+    with engine.connect() as connection:
+        rows = connection.exec_driver_sql(
+            "SELECT account_id, session_name FROM accounts ORDER BY account_id",
+        ).all()
+        names = {str(row[0]): row[1] for row in rows}
+        # Older row kept the name; the duplicate was nulled.
+        assert names["acc-1"] == "shared"
+        assert names["acc-2"] is None
+        remediations = connection.exec_driver_sql(
+            "SELECT account_id FROM schema_remediations WHERE migration = 7",
+        ).all()
+        assert [r[0] for r in remediations] == ["acc-2"]
+
+
+@pytest.mark.asyncio
+async def test_warming_loop_exits_when_state_becomes_idle_after_iteration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P1.1: a loop that survives stop_warming must exit on the next idle re-read.
+
+    Simulates a runaway loop by patching ``run_loop_iteration`` to flip state to
+    ``idle`` (the stop_warming effect) without actually cancelling the task.
+    The loop must observe the idle row on the next fetch and break — *not*
+    overwrite it with another cycle_started.
+    """
+    iterations: list[str] = []
+
+    async def fake_iteration(
+        account_id: str,
+        *,
+        run_id: str | None = None,  # noqa: ARG001
+    ) -> WarmingCycleResult:
+        iterations.append(account_id)
+        await upsert_warming_state(WarmingStateWrite(account_id=account_id, state="idle"))
+        return WarmingCycleResult(account_id=account_id, status="ok")
+
+    monkeypatch.setattr(_runtime, "run_loop_iteration", fake_iteration)
+    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
+
+    await _runtime._warming_loop("acc-1")
+
+    assert iterations == ["acc-1"]
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_bails_when_state_already_idle() -> None:
+    """P1.1: a stale iteration started for an already-stopped account is a no-op."""
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
+
+    result = await run_loop_iteration("acc-1")
+    assert result.status == "skipped"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The early-exit did NOT overwrite ``idle`` with ``cycle_started``.
+    assert state.state == "idle"
+
+
+@pytest.mark.asyncio
+async def test_old_cycle_cannot_overwrite_new_manual_start(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P1.2: an in-flight cycle from a previous start must not write through.
+
+    Simulates the race: cycle A is running ``run_one_cycle`` (state=active,
+    run_id=A); meanwhile a second start_warming has flipped run_id → B and
+    written 'queued' for the new generation. When A's iteration tries to write
+    its final next_state, the run_id mismatch must turn the write into a no-op.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    # Stage the DB: run_id_b is the "new" generation; the old cycle holds run_id_a.
+    run_id_a = "old-run"
+    run_id_b = "new-run"
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id=run_id_a),
+    )
+
+    async def cycle_with_restart_inside(req):  # type: ignore[no-untyped-def]
+        # Simulate start_warming firing during this in-flight cycle: it minted
+        # a fresh run_id and wrote it (along with state='active') to the row.
+        await upsert_warming_state(
+            WarmingStateWrite(
+                account_id=req.account_id,
+                state="active",
+                run_id=run_id_b,
+                last_event="queued",
+            ),
+        )
+        return WarmingCycleResult(account_id=req.account_id, status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", cycle_with_restart_inside)
+
+    await run_loop_iteration("acc-1", run_id=run_id_a)
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The new generation owns the row; the stale cycle's final write must not
+    # have flipped state to 'sleeping'/'error' or rolled run_id back to A.
+    assert state.run_id == run_id_b
+    assert state.state == "active"
+    assert state.last_event == "queued"
+
+
+@pytest.mark.asyncio
+async def test_start_warming_mints_fresh_run_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P1.2: each manual start writes a new run_id distinct from the previous one."""
+
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    state_first = await fetch_warming_state("acc-1")
+    assert state_first is not None
+    first_run_id = state_first.run_id
+    assert first_run_id is not None
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    state_second = await fetch_warming_state("acc-1")
+    assert state_second is not None
+    assert state_second.run_id is not None
+    assert state_second.run_id != first_run_id
+
+
+@pytest.mark.asyncio
+async def test_create_account_post_integrity_branch_raises_domain_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2.5: post-IntegrityError branch raises DuplicateSessionNameError.
+
+    The IntegrityError-on-INSERT branch translates the unique-index violation
+    into DuplicateSessionNameError, not RuntimeError.
+
+    Drives the post-IntegrityError path deterministically by patching the
+    cooperative pre-check SELECT to return None, so the INSERT actually fires
+    and the migration-#7 unique index raises IntegrityError. The fix must
+    re-read after the IntegrityError, find the conflict, and surface the
+    typed domain error — never the catch-all "Account was not persisted".
+
+    A live asyncio.gather race would be the ideal regression test, but
+    SQLite + WAL + busy_timeout produces non-deterministic OperationalError
+    ('database is locked') under thread contention, so we stick to the
+    deterministic unit shape.
+    """
+    from core.repositories import accounts as accounts_repo  # noqa: PLC0415
+    from core.repositories.accounts import DuplicateSessionNameError  # noqa: PLC0415
+
+    # Plant the conflicting row first.
+    await create_account(AccountCreate(account_id="acc-1", session_name="shared"))
+
+    # Patch the pre-check SELECT to always return None so the second create
+    # proceeds straight to INSERT and trips the unique index.
+    original_create = accounts_repo._create_account
+
+    def patched_create(data):  # type: ignore[no-untyped-def]
+        # Temporarily blind the pre-check by patching select() inside the
+        # accounts module to return a SELECT that yields no rows on .first().
+        original_select = accounts_repo.select
+        call_count = {"n": 0}
+
+        class _NullFirst:
+            def first(self) -> None:
+                return None
+
+        def _select_returning_null(*args, **kwargs):  # type: ignore[no-untyped-def]
+            call_count["n"] += 1
+            if call_count["n"] == 1:
+                # The first select() call inside _create_account is the
+                # pre-check. Return a SELECT that genuinely won't match the
+                # conflict so the INSERT path runs.
+                return original_select(
+                    accounts_repo._accounts.c.account_id,
+                ).where(accounts_repo._accounts.c.account_id == "__no_such_id__")
+            return original_select(*args, **kwargs)
+
+        monkeypatch.setattr(accounts_repo, "select", _select_returning_null)
+        try:
+            return original_create(data)
+        finally:
+            monkeypatch.setattr(accounts_repo, "select", original_select)
+
+    monkeypatch.setattr(accounts_repo, "_create_account", patched_create)
+
+    with pytest.raises(DuplicateSessionNameError):
+        await create_account(AccountCreate(account_id="acc-2", session_name="shared"))
+
+
+@pytest.mark.asyncio
+async def test_reply_flood_does_not_block_same_text_retry_as_duplicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """P2.6: a reply that floods must not lock its own text out of the dedup window.
+
+    The pre-fix path reserved the text via try_reserve_sent inside Gemini
+    generation, but on flood/peer_flood the reservation stayed. A second cycle
+    that generated the *same* reply would be filtered out as duplicate and the
+    incoming message could never actually get answered. Fix: release the
+    reservation on every non-ok send branch.
+    """
+    from core.db import (  # noqa: PLC0415
+        latest_unreplied_for,
+        record_dialogue_message,
+        replace_dialogue_pairs,
+    )
+
+    await create_account(AccountCreate(account_id="acc-a"))
+    await create_account(AccountCreate(account_id="acc-b"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="acc-b",
+            session_path="acc-b",
+            status="alive",
+            is_temporary=False,
+            user_id=42,
+            phone=None,
+            username=None,
+            first_name=None,
+            last_name=None,
+        ),
+    )
+    await replace_dialogue_pairs([("acc-a", "acc-b")])
+    await record_dialogue_message("acc-b", "acc-a", "hi there")
+
+    # Gemini deterministically returns the same line — the same content hash
+    # would normally be locked for the entire dedup window after the first send.
+    async def stable_gen(_req: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="привет!")
+
+    async def flood_execute(account_id: str, action: TelegramAction) -> ActionResult:
+        return ActionResult(
+            status="flood_wait",
+            action_type=action.action_type,
+            account_id=account_id,
+            flood_wait_seconds=60,
+        )
+
+    monkeypatch.setattr(_seams, "generate_text", stable_gen)
+    monkeypatch.setattr(_seams, "execute", flood_execute)
+
+    from services.warming._chat import _reply_to_partner  # noqa: PLC0415
+
+    incoming = await latest_unreplied_for("acc-a")
+    assert incoming is not None
+    secret = await load_warming_settings()
+    accounts_map = {
+        "acc-a": await fetch_account_helper("acc-a"),
+        "acc-b": await fetch_account_helper("acc-b"),
+    }
+
+    first = await _reply_to_partner("acc-a", incoming, secret, accounts_map)
+    assert first.flood_result is not None
+
+    # The hash reservation must have been released — running Gemini -> same text
+    # path again would see ``chat_duplicate`` if it weren't.
+    again_incoming = await latest_unreplied_for("acc-a")
+    assert again_incoming is not None
+    second = await _reply_to_partner("acc-a", again_incoming, secret, accounts_map)
+    # Still flood (we did not change the execute seam), but the failure_reason
+    # is ``send_dm`` (the send attempt happened), not ``chat_duplicate``
+    # (the dedup gate would have rejected before the send).
+    assert second.last_failed_action == "send_dm"
+
+
+@pytest.mark.asyncio
+async def test_remove_account_stops_runtime_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    """P3.7: removing an active warming account must stop its runtime task.
+
+    Repo-level _delete_account is layer-correct in not touching _RUNTIME; the
+    service-level ``remove_account`` is what callers should use to avoid leaving
+    an orphan task that keeps trying to act on a vanished account.
+    """
+    from services.accounts.lifecycle import remove_account  # noqa: PLC0415
+
+    started_events: list[str] = []
+    cancelled_events: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started_events.append(account_id)
+        try:
+            await asyncio.sleep(3600)
+        except asyncio.CancelledError:
+            cancelled_events.append(account_id)
+            raise
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    await asyncio.sleep(0)
+    assert "acc-1" in warming._RUNTIME
+
+    await remove_account("acc-1")
+
+    assert "acc-1" not in warming._RUNTIME
+    assert cancelled_events == ["acc-1"]
+    # DB row gone too.
+    from core.db import fetch_account  # noqa: PLC0415
+
+    assert await fetch_account("acc-1") is None
+
+
+@pytest.mark.asyncio
+async def test_real_stop_clears_run_id_so_stale_final_write_cannot_resurrect_idle() -> None:
+    """Round-4 P1.1: drives the *real* _stop_warming_locked + a stale CAS write.
+
+    Earlier round 3 test simulated stop with a hand-written upsert that
+    cleared run_id — that masked a live bug where _stop_warming_locked did
+    NOT clear run_id, so a stale loop's CAS write (run_id still matches)
+    could sneak past and overwrite ``idle`` with ``sleeping``. This test
+    invokes the real stop helper and asserts both legs of the fix:
+    (1) stop clears run_id, (2) even if it did not, the upsert's CAS
+    rejects any UPDATE that would overwrite an idle row.
+    """
+    from services.warming._runtime import _stop_warming_locked  # noqa: PLC0415
+    from services.warming._state import _set_state  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
+    )
+
+    # Real stop. Must clear run_id (belt) so any stale CAS using run-a misses.
+    await _stop_warming_locked("acc-1")
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"
+    assert state.run_id is None
+
+    # Now manually re-stamp run_id to simulate a future regression where
+    # stop forgot to clear it. The CAS-rejects-idle suspenders must still
+    # protect the row from a stale loop's write.
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="idle", run_id="run-a"),
+    )
+    await _set_state(
+        "acc-1",
+        "sleeping",
+        last_event="cycle:ok",
+        expected_run_id="run-a",
+    )
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"  # suspenders held — the stale write was a no-op
+    assert state.last_event != "cycle:ok"
+
+
+@pytest.mark.asyncio
+async def test_restart_between_run_id_check_and_cycle_started_write_loses(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-2 P1: a stale iteration cannot stamp 'cycle_started' on top of a new run.
+
+    Forces the race by patching ``fetch_warming_state`` so the first call (the
+    iteration's _matches_active_run guard) sees the OLD run_id, but the row in
+    the DB has already been advanced to a fresh run_id by a new start_warming.
+    The CAS clause on the cycle_started upsert must then refuse to mutate the
+    row — the new generation's state must survive untouched.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    # DB row is on the NEW generation already.
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            last_event="queued",
+            run_id="run-b",
+        ),
+    )
+
+    # The stale guard sees a stale snapshot (run_id=run-a). The CAS on the
+    # subsequent _set_state must catch the mismatch and skip the UPDATE.
+    real_fetch = _loop.fetch_warming_state
+
+    fetch_calls = {"n": 0}
+
+    async def fake_fetch(account_id: str):  # type: ignore[no-untyped-def]
+        fetch_calls["n"] += 1
+        if fetch_calls["n"] == 1:
+            # First fetch is the guard; lie about run_id so the guard accepts.
+            real = await real_fetch(account_id)
+            if real is None:
+                return real
+            return real.model_copy(update={"run_id": "run-a"})
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", fake_fetch)
+
+    # Stub the cycle so we don't reach real Telethon — the CAS we're testing
+    # fires on cycle_started *before* the cycle runs, so the stub's content
+    # doesn't matter for the assertion.
+    async def stub_cycle(req):  # type: ignore[no-untyped-def]
+        return WarmingCycleResult(account_id=req.account_id, status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", stub_cycle)
+
+    await run_loop_iteration("acc-1", run_id="run-a")
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The stale cycle_started write was a no-op; new generation's row stands.
+    assert state.run_id == "run-b"
+    assert state.last_event == "queued"
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_bails_when_state_error() -> None:
+    """Round-2 P2.3: direct call on error account must not resurrect a cycle."""
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="error", last_error="boom"),
+    )
+
+    result = await run_loop_iteration("acc-1")
+    assert result.status == "skipped"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "error"
+    assert state.last_error == "boom"
+
+
+@pytest.mark.asyncio
+async def test_remove_account_blocks_concurrent_start_until_delete_complete(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-2 P2.2: remove_account holds the lifecycle lock across stop + delete.
+
+    Forces the race shape: a parallel ``start_warming`` is dispatched while
+    ``remove_account`` is mid-flight. With the lock held across both stop and
+    delete, the start has to wait until delete finishes; by then the account
+    is gone, so start raises UnknownAccountError and no orphan task is
+    created. Without the lock, the start would interleave and produce an
+    orphan task pointing at a deleted account.
+    """
+    from services.accounts.lifecycle import remove_account  # noqa: PLC0415
+
+    started_events: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started_events.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    await asyncio.sleep(0)
+    started_events.clear()  # drop the legitimate first start
+
+    # Run remove and a concurrent start. If the lock isn't held, the start
+    # races into _RUNTIME before delete_account; if it is, start waits for
+    # the lock, finds the account gone, and bails with UnknownAccountError.
+    remove_task = asyncio.create_task(remove_account("acc-1"))
+    await asyncio.sleep(0)  # give remove a chance to take the lock
+
+    with pytest.raises(warming.UnknownAccountError):
+        await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    await remove_task
+
+    # No orphan task survived the race.
+    assert "acc-1" not in warming._RUNTIME
+    assert started_events == []
+
+
+@pytest.mark.asyncio
+async def test_stale_cycle_started_cas_failure_prevents_telegram_io(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-4 P1.2: a CAS no-op on cycle_started must abort run_one_cycle.
+
+    Forces the race: the iteration's initial _matches_active_run guard accepts
+    the stale run_id (we lie via fetch_warming_state), but the row in the DB
+    is on a newer run_id, so the cycle_started upsert's CAS WHERE clause
+    matches no rows (rowcount=0 → applied=False). The iteration must turn
+    that into ``status='skipped'`` and never reach run_one_cycle. Otherwise
+    the stale loop would happily issue Telegram actions (join / read / DM)
+    on behalf of a generation that's been replaced.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    # DB row carries the NEW generation already.
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            last_event="queued",
+            run_id="run-b",
+        ),
+    )
+
+    # Lie to the iteration's guard so it proceeds; the CAS underneath will
+    # still see run-b and reject the stale UPDATE.
+    real_fetch = _loop.fetch_warming_state
+    fetch_calls = {"n": 0}
+
+    async def fake_fetch(account_id: str):  # type: ignore[no-untyped-def]
+        fetch_calls["n"] += 1
+        if fetch_calls["n"] == 1:
+            real = await real_fetch(account_id)
+            if real is None:
+                return real
+            return real.model_copy(update={"run_id": "run-a"})
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", fake_fetch)
+
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+
+    result = await run_loop_iteration("acc-1", run_id="run-a")
+    assert result.status == "skipped"
+    assert result.detail == "stale run"
+    # The point of the fix: NO Telegram actions on behalf of the stale loop.
+    assert recorder.actions == []
+
+
+@pytest.mark.asyncio
+async def test_migration_duplicate_session_name_marks_nulled_accounts_not_alive(
+    tmp_path: Path,
+) -> None:
+    """Round-4 P2.3: nulling a duplicate session_name must also flip status.
+
+    Without flipping status, an account left as ``alive`` after losing its
+    session_name silently switches its session file path (``_session_path``
+    falls back to account_id when session_name is None) — the operator
+    thinks the account is healthy while every runtime action talks to a
+    different session file.
+    """
+    from sqlalchemy import create_engine  # noqa: PLC0415
+
+    from core.migrations import apply_migrations  # noqa: PLC0415
+
+    db_path = tmp_path / "legacy_alive.db"
+    engine = create_engine(f"sqlite:///{db_path}", future=True)
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TABLE accounts ("
+                "  account_id VARCHAR PRIMARY KEY,"
+                "  label VARCHAR,"
+                "  session_name VARCHAR,"
+                "  status VARCHAR NOT NULL,"
+                "  created_at VARCHAR NOT NULL,"
+                "  updated_at VARCHAR NOT NULL"
+                ")",
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+                "VALUES ('acc-1', 'shared', 'alive', '2026-01-01', '2026-01-01')",
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+                "VALUES ('acc-2', 'shared', 'alive', '2026-01-02', '2026-01-02')",
+            )
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, name VARCHAR NOT NULL, "
+                "applied_at VARCHAR NOT NULL)",
+            )
+            for version in (1, 2, 3, 4, 5, 6, 8):
+                connection.exec_driver_sql(
+                    "INSERT INTO schema_version VALUES (?, 'stub', '2026-01-01')",
+                    (version,),
+                )
+
+        apply_migrations(engine)
+
+        with engine.connect() as connection:
+            rows = connection.exec_driver_sql(
+                "SELECT account_id, session_name, status FROM accounts ORDER BY account_id",
+            ).all()
+            by_id = {str(row[0]): row for row in rows}
+            assert by_id["acc-1"][1] == "shared"  # oldest kept its name
+            assert by_id["acc-1"][2] == "alive"  # and its status
+            assert by_id["acc-2"][1] is None  # duplicate nulled
+            assert by_id["acc-2"][2] != "alive"  # AND demoted so operator re-checks
+            assert by_id["acc-2"][2] == "new"
+    finally:
+        engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_stale_quarantine_cas_failure_prevents_spam_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-5 P1: a stale quarantine recovery must not hit @SpamBot.
+
+    Round-4 P1.2 closed the regular cycle path, but ``_recover_from_quarantine``
+    issued ``_seams.refresh_spam_status(account_id, force=True)`` *before*
+    any CAS write — so a stale loop in the quarantine branch would still
+    perform external Telegram I/O on behalf of a generation that the
+    operator had already replaced.
+
+    Force the race: DB row carries the new generation (``run-b``); lie to
+    the iteration's pre-cycle guard so it sees ``run-a`` and steps into
+    ``_recover_from_quarantine``. The CAS-gate inside the recovery branch
+    must short-circuit before the spam probe fires.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="")
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="quarantine",
+            quarantine_count=0,
+            run_id="run-b",
+        ),
+    )
+
+    real_fetch = _loop.fetch_warming_state
+    fetch_calls = {"n": 0}
+
+    async def fake_fetch(account_id: str):  # type: ignore[no-untyped-def]
+        fetch_calls["n"] += 1
+        if fetch_calls["n"] == 1:
+            real = await real_fetch(account_id)
+            if real is None:
+                return real
+            return real.model_copy(update={"run_id": "run-a"})
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", fake_fetch)
+
+    probe_calls: list[str] = []
+
+    async def fake_probe(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        probe_calls.append(account_id)
+        return SpamStatusVerdict(
+            account_id=account_id,
+            status="clean",
+            detail=None,
+            checked_at="2026-01-01T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", fake_probe)
+
+    result = await run_loop_iteration("acc-1", run_id="run-a")
+    assert result.status == "skipped"
+    assert result.detail == "stale run"
+    assert probe_calls == []
+
+
+@pytest.mark.asyncio
+async def test_stale_loop_crash_cannot_overwrite_new_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-6 P1: a crashing stale loop must not stamp 'error' on the new run.
+
+    Without the generation check + CAS in the crash handler, the loop's
+    ``except Exception`` branch wrote ``error`` via _set_state without an
+    ``expected_run_id``, so a stale generation that fell over after the
+    operator restarted the account would overwrite the new generation's
+    row with state=error and a misleading ``last_event='loop_crashed'``.
+    """
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
+    )
+
+    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+
+    async def crash_after_replacing_generation(
+        account_id: str, *, run_id: str | None = None
+    ) -> WarmingCycleResult:
+        # A new start_warming raced this iteration: row now carries run-b.
+        await upsert_warming_state(
+            WarmingStateWrite(account_id=account_id, state="active", run_id="run-b"),
+        )
+        del run_id  # we are the stale loop; bury our own marker
+        msg = "boom from stale loop"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_runtime, "run_loop_iteration", crash_after_replacing_generation)
+
+    await _runtime._warming_loop("acc-1", run_id="run-a")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    # The new generation's row survives — neither state nor run_id was touched.
+    assert state.state == "active"
+    assert state.run_id == "run-b"
+    assert state.last_event != "loop_crashed"
+    assert state.last_error is None

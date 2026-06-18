@@ -114,7 +114,7 @@ async def test_warming_state_upsert_inserts_then_updates() -> None:
     inserted = await upsert_warming_state(
         WarmingStateWrite(account_id="acc-1", state="active", cycles_completed=0),
     )
-    assert inserted.state == "active"
+    assert inserted.record.state == "active"
 
     updated = await upsert_warming_state(
         WarmingStateWrite(
@@ -125,9 +125,9 @@ async def test_warming_state_upsert_inserts_then_updates() -> None:
         ),
     )
 
-    assert updated.state == "sleeping"
-    assert updated.cycles_completed == 2
-    assert updated.last_event == "cycle:ok"
+    assert updated.record.state == "sleeping"
+    assert updated.record.cycles_completed == 2
+    assert updated.record.last_event == "cycle:ok"
 
     states = await list_warming_states()
     assert [record.account_id for record in states] == ["acc-1"]
@@ -177,7 +177,7 @@ async def test_settings_warming_controls_default_and_roundtrip() -> None:
 async def test_warming_state_persists_proxy_snapshot_and_daily_fields() -> None:
     await create_account(AccountCreate(account_id="acc-1"))
 
-    record = await upsert_warming_state(
+    result = await upsert_warming_state(
         WarmingStateWrite(
             account_id="acc-1",
             state="active",
@@ -187,9 +187,9 @@ async def test_warming_state_persists_proxy_snapshot_and_daily_fields() -> None:
         ),
     )
 
-    assert record.proxy_snapshot == "socks5://1.2.3.4:1080"
-    assert record.daily_actions == 7
-    assert record.daily_count_date == "2026-06-12"
+    assert result.record.proxy_snapshot == "socks5://1.2.3.4:1080"
+    assert result.record.daily_actions == 7
+    assert result.record.daily_count_date == "2026-06-12"
 
     again = await fetch_warming_state("acc-1")
     assert again is not None

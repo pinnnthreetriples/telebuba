@@ -176,6 +176,10 @@ class WarmingStateRecord(BaseModel):
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
     quarantine_count: int = Field(default=0, ge=0)
+    # P1.2: per-loop generation marker. start_warming / reconcile mint a fresh
+    # value; the loop captures it and refuses to write through if the DB run_id
+    # has changed underneath it (= a newer start replaced this generation).
+    run_id: str | None = None
 
 
 class WarmingStateWrite(BaseModel):
@@ -199,6 +203,40 @@ class WarmingStateWrite(BaseModel):
     daily_actions: int = Field(default=0, ge=0)
     daily_count_date: str | None = None
     quarantine_count: int = Field(default=0, ge=0)
+    # P1.2: see WarmingStateRecord.run_id.
+    run_id: str | None = None
+    # P2.4: when True, the upsert sets ``cycles_completed`` to
+    # ``warming_account_state.cycles_completed + 1`` on conflict (atomic SQL
+    # expression), instead of writing the read-then-compute value the caller
+    # supplied in ``cycles_completed``. This closes the lost-update race when
+    # two writers concurrently bump the counter.
+    increment_cycle: bool = False
+    # Round 2 P1: optional CAS gate. When set, the UPDATE branch of the upsert
+    # only fires if the row's current ``run_id`` matches this value. A stale
+    # loop whose run_id was replaced by a newer start_warming therefore turns
+    # into a silent no-op instead of overwriting the new generation. Carries
+    # no effect on the INSERT branch (a new row has no run_id to mismatch).
+    expected_run_id: str | None = None
+
+
+class WarmingStateWriteResult(BaseModel):
+    """Outcome of an upsert against ``warming_account_state`` (Round-4 P1.2).
+
+    ``record`` is always the post-upsert row (a fresh readback). ``applied``
+    distinguishes:
+    - True  → the INSERT happened, or the ON CONFLICT DO UPDATE's WHERE clause
+              matched and the UPDATE went through.
+    - False → the CAS predicate (``expected_run_id`` + ``state != 'idle'``)
+              ruled out the UPDATE; the row is whatever the conflicting
+              generation wrote, NOT what this caller asked for.
+
+    Callers that supplied an ``expected_run_id`` use ``applied`` to decide
+    whether to keep going (continue the cycle) or bail (a newer generation
+    has taken over).
+    """
+
+    record: WarmingStateRecord
+    applied: bool
 
 
 class WarmingAccountState(BaseModel):

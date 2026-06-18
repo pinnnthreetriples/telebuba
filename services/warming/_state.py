@@ -10,6 +10,7 @@ from schemas.warming import (
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
+    WarmingStateWriteResult,
     warming_health,
 )
 from services.warming.board import _to_card
@@ -42,11 +43,16 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     daily_actions: int | _Sentinel = _SENTINEL,
     daily_count_date: str | None | _Sentinel = _SENTINEL,
     quarantine_count: int | _Sentinel = _SENTINEL,
-) -> WarmingStateRecord:
+    run_id: str | None | _Sentinel = _SENTINEL,
+    expected_run_id: str | None = None,
+) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
-    cycles = current.cycles_completed if current else 0
-    if increment_cycle:
-        cycles += 1
+    # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
+    # When the caller asks for an increment, we send ``cycles_completed=1`` so a
+    # brand-new row gets cycle #1, and the repo's ON CONFLICT path uses an
+    # atomic SQL expression (``cycles_completed = cycles_completed + 1``) for
+    # existing rows. The integer below is ignored on the conflict path.
+    cycles = 1 if increment_cycle else (current.cycles_completed if current else 0)
 
     def _resolve(value: object, field: str) -> object:
         if value is _SENTINEL:
@@ -58,6 +64,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             account_id=account_id,
             state=state,
             cycles_completed=cycles,
+            increment_cycle=increment_cycle,
             last_event=last_event if last_event is not None else _carry(current, "last_event"),
             last_cycle_at=(
                 last_cycle_at if last_cycle_at is not None else _carry(current, "last_cycle_at")
@@ -81,6 +88,8 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
             daily_actions=cast("int", _resolve(daily_actions, "daily_actions") or 0),
             daily_count_date=cast("str | None", _resolve(daily_count_date, "daily_count_date")),
             quarantine_count=cast("int", _resolve(quarantine_count, "quarantine_count") or 0),
+            run_id=cast("str | None", _resolve(run_id, "run_id")),
+            expected_run_id=expected_run_id,
         ),
     )
 

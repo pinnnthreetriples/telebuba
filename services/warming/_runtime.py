@@ -12,7 +12,9 @@ patch it on this module.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+import uuid
+from contextlib import suppress
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -23,9 +25,6 @@ from core.db import (
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
-    purge_dialogue_messages_older_than,
-    purge_logs_older_than,
-    purge_sent_hashes_older_than,
 )
 from core.logging import log_event
 from schemas.warming import (
@@ -35,6 +34,7 @@ from services.dialogues import assign_pairs
 from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._loop import run_loop_iteration
+from services.warming._purge import purge_stale_history
 from services.warming._state import _current_card, _set_state
 from services.warming.pacing import (
     _SECONDS_PER_HOUR,
@@ -86,6 +86,22 @@ def _account_lock(account_id: str) -> asyncio.Lock:
     return lock
 
 
+def _is_live_generation(record: WarmingStateRecord | None, run_id: str | None) -> bool:
+    """True iff ``record`` belongs to ``run_id`` and is still in a warming state.
+
+    P1.2: ``run_id is None`` means the loop wasn't given a generation marker
+    (legacy reconcile from a DB that pre-dates migration #8); we fall back to
+    state-only checks so behaviour matches the pre-P1.2 baseline.
+    """
+    if record is None:
+        return False
+    if not is_warming(record.state) or record.state == "error":
+        return False
+    if run_id is None:
+        return True
+    return record.run_id == run_id
+
+
 async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
     """Move an account into the warming column and kick off its loop task."""
     async with _account_lock(data.account_id):
@@ -111,6 +127,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
                     extra={"reasons": readiness.reasons},
                 )
                 raise WarmingNotReadyError(readiness.reasons)
+        # P1.2: stamp a fresh generation marker so an in-flight cycle from
+        # the previous run can detect and refuse to write through.
+        run_id = uuid.uuid4().hex
         await _set_state(
             data.account_id,
             "active",
@@ -122,13 +141,68 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             flood_wait_seconds=None,
             flood_wait_until=None,
             proxy_snapshot=_proxy_snapshot(account),
+            run_id=run_id,
         )
-        existing = _RUNTIME.get(data.account_id)
-        if existing is None or existing.done():
-            await _refresh_dialogue_pairs()
-            _RUNTIME[data.account_id] = asyncio.create_task(_warming_loop(data.account_id))
+        # F2: an existing task may still be inside the inter-cycle
+        # ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous*
+        # ``next_run_at``. We just cleared that schedule, so the only way to
+        # honour the operator's "start now" is to cancel and replace the task.
+        existing = _RUNTIME.pop(data.account_id, None)
+        if existing is not None and not existing.done():
+            existing.cancel()
+            with suppress(TimeoutError, asyncio.CancelledError):
+                await asyncio.wait_for(
+                    asyncio.shield(existing),
+                    timeout=settings.warming.stop_cancel_timeout_seconds,
+                )
+        await _refresh_dialogue_pairs()
+        _RUNTIME[data.account_id] = asyncio.create_task(
+            _warming_loop(data.account_id, run_id=run_id),
+        )
     await log_event("INFO", "warming_started", account_id=data.account_id)
     return await _current_card(data.account_id)
+
+
+async def _stop_warming_locked(account_id: str) -> None:
+    """Inner stop, run with ``_account_lock(account_id)`` already held.
+
+    Extracted so service-level operations that need to compose stop with
+    other state mutations (e.g. ``remove_account``) can hold the lock across
+    both steps. See P2.2.
+    """
+    task = _RUNTIME.pop(account_id, None)
+    if task is not None and not task.done():
+        task.cancel()
+        try:
+            await asyncio.wait_for(
+                asyncio.shield(task),
+                timeout=settings.warming.stop_cancel_timeout_seconds,
+            )
+        except (TimeoutError, asyncio.CancelledError):
+            # Either we timed out or the cancel propagated correctly —
+            # in both cases the task is no longer ours to await.
+            pass
+        except Exception as exc:  # noqa: BLE001 - log+continue; stop must not fail.
+            await log_event(
+                "WARNING",
+                "warming_stop_task_error",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__, "message": str(exc)},
+            )
+    account = await fetch_account(account_id)
+    if account is not None:
+        # Round-4 P1.1: clear run_id when stopping so the row carries no live
+        # generation. A stale loop's CAS write that targets the previous
+        # run_id therefore cannot match (its WHERE turns the UPDATE into a
+        # no-op). Belt; the CAS-rejects-idle clause in _upsert_warming_state
+        # is the suspenders.
+        await _set_state(
+            account_id,
+            "idle",
+            last_event="stopped",
+            stopped_at=_now_iso(),
+            run_id=None,
+        )
 
 
 async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
@@ -140,36 +214,22 @@ async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
     a no-op for the DB — only the in-memory task is cleaned up.
     """
     async with _account_lock(data.account_id):
-        task = _RUNTIME.pop(data.account_id, None)
-        if task is not None and not task.done():
-            task.cancel()
-            try:
-                await asyncio.wait_for(
-                    asyncio.shield(task),
-                    timeout=settings.warming.stop_cancel_timeout_seconds,
-                )
-            except (TimeoutError, asyncio.CancelledError):
-                # Either we timed out or the cancel propagated correctly —
-                # in both cases the task is no longer ours to await.
-                pass
-            except Exception as exc:  # noqa: BLE001 - log+continue; stop must not fail.
-                await log_event(
-                    "WARNING",
-                    "warming_stop_task_error",
-                    account_id=data.account_id,
-                    extra={"error_type": type(exc).__name__, "message": str(exc)},
-                )
-        account = await fetch_account(data.account_id)
-        if account is not None:
-            await _set_state(
-                data.account_id,
-                "idle",
-                last_event="stopped",
-                stopped_at=_now_iso(),
-            )
+        await _stop_warming_locked(data.account_id)
     await log_event("INFO", "warming_stopped", account_id=data.account_id)
     await _refresh_dialogue_pairs()
     return await _current_card(data.account_id)
+
+
+def account_lock(account_id: str) -> asyncio.Lock:
+    """Public accessor for the per-account lifecycle lock (P2.2).
+
+    Use this from a service-level operation that needs to hold the same lock
+    ``start_warming`` / ``stop_warming`` / ``reconcile_warming_runtime`` use,
+    e.g. to serialize stop + delete in ``remove_account``. The bare locked
+    primitive (rather than a context manager wrapper) keeps the call site
+    explicit about lock scope.
+    """
+    return _account_lock(account_id)
 
 
 async def reconcile_warming_runtime() -> None:
@@ -192,21 +252,38 @@ async def reconcile_warming_runtime() -> None:
         # account — the operator has to acknowledge and restart it.
         if not is_warming(record.state) or record.state == "error":
             continue
-        existing = _RUNTIME.get(record.account_id)
-        if existing is not None and not existing.done():
-            continue
-        account = await fetch_account(record.account_id)
-        if account is None:
-            # Orphan state row — mark it stopped so the board is honest.
-            await _set_state(
-                record.account_id,
-                "idle",
-                last_event="reconcile_orphan",
-                stopped_at=_now_iso(),
+        # F3: take the same per-account lock as start/stop. Reconcile reads
+        # state then spawns a task; without the lock, a parallel stop can
+        # interleave and we end up with DB=idle + a live task.
+        async with _account_lock(record.account_id):
+            # Re-read inside the lock — stop_warming may have flipped this row
+            # between the listing and acquiring the lock.
+            fresh = await fetch_warming_state(record.account_id)
+            if fresh is None or not is_warming(fresh.state) or fresh.state == "error":
+                continue
+            existing = _RUNTIME.get(record.account_id)
+            if existing is not None and not existing.done():
+                continue
+            account = await fetch_account(record.account_id)
+            if account is None:
+                # Orphan state row — mark it stopped so the board is honest.
+                await _set_state(
+                    record.account_id,
+                    "idle",
+                    last_event="reconcile_orphan",
+                    stopped_at=_now_iso(),
+                )
+                continue
+            # P1.2: mint a fresh generation marker so this restarted loop owns
+            # the row going forward; any pre-restart cycle that somehow lives
+            # on (it shouldn't, post-restart, but be defensive) will see the
+            # mismatch and bail.
+            run_id = uuid.uuid4().hex
+            await _set_state(record.account_id, fresh.state, run_id=run_id)
+            _RUNTIME[record.account_id] = asyncio.create_task(
+                _warming_loop(record.account_id, run_id=run_id),
             )
-            continue
-        _RUNTIME[record.account_id] = asyncio.create_task(_warming_loop(record.account_id))
-        restarted += 1
+            restarted += 1
     if restarted:
         await log_event(
             "INFO",
@@ -214,7 +291,7 @@ async def reconcile_warming_runtime() -> None:
             extra={"restarted": restarted},
         )
     await _refresh_dialogue_pairs()
-    await _purge_stale_history()
+    await purge_stale_history()
 
 
 async def _refresh_dialogue_pairs() -> None:
@@ -226,48 +303,6 @@ async def _refresh_dialogue_pairs() -> None:
             "warming_dialogue_pair_refresh_failed",
             extra={"error": str(exc)},
         )
-
-
-async def _purge_stale_history() -> None:
-    """Best-effort retention pass on append-only tables (logs / dialogues / hashes).
-
-    Each window comes from ``settings.warming``; setting a window to 0 disables
-    the corresponding purge. Failures are logged and swallowed — retention is
-    nice-to-have, never a reason to abort reconcile.
-    """
-    now = datetime.now(UTC)
-    plans = [
-        (
-            settings.warming.log_retention_days,
-            "log_retention_purged",
-            purge_logs_older_than,
-        ),
-        (
-            settings.warming.dialogue_message_retention_days,
-            "dialogue_message_retention_purged",
-            purge_dialogue_messages_older_than,
-        ),
-        (
-            settings.warming.sent_hash_retention_days,
-            "sent_hash_retention_purged",
-            purge_sent_hashes_older_than,
-        ),
-    ]
-    for window_days, event, purge in plans:
-        if window_days <= 0:
-            continue
-        cutoff = (now - timedelta(days=window_days)).isoformat()
-        try:
-            removed = await purge(cutoff)
-        except Exception as exc:  # noqa: BLE001 - retention failures must not block reconcile.
-            await log_event(
-                "WARNING",
-                "retention_purge_failed",
-                extra={"event": event, "error": str(exc)},
-            )
-            continue
-        if removed:
-            await log_event("INFO", event, extra={"removed": removed})
 
 
 async def shutdown_warming_runtime() -> None:
@@ -314,21 +349,38 @@ def _initial_delay_seconds(record: WarmingStateRecord | None, now: datetime) -> 
     return _seams.rng.uniform(0.0, settings.warming.startup_jitter_max_seconds)
 
 
-async def _warming_loop(account_id: str) -> None:  # pragma: no cover - long-running task
+async def _warming_loop(
+    account_id: str,
+    *,
+    run_id: str | None = None,
+) -> None:  # pragma: no cover - long-running task
     """Run cycles forever, timing each from the persisted ``next_run_at``.
 
     Never raises to the caller. On (re)start it respects an existing schedule so
     an app restart does not turn parked accounts into an activity spike.
+
+    ``run_id`` is the generation marker the caller stamped before creating this
+    task. The loop refuses to keep running if the DB ``run_id`` no longer
+    matches (= a newer ``start_warming`` minted a fresh generation), and passes
+    it to ``run_loop_iteration`` so an in-flight cycle won't write through after
+    a restart either (P1.2).
+
+    Round-6 P1: the crash handler also runs the generation check + CAS. Without
+    it, a stale loop that crashed after a restart would stamp ``error`` over
+    the new generation's row, undoing the restart.
     """
     try:
         record = await fetch_warming_state(account_id)
-        if record is not None and record.state == "error":
+        if not _is_live_generation(record, run_id):
             return
         await asyncio.sleep(_initial_delay_seconds(record, datetime.now(UTC)))
         while True:
-            await run_loop_iteration(account_id)
             record = await fetch_warming_state(account_id)
-            if record is not None and record.state == "error":
+            if not _is_live_generation(record, run_id):
+                break
+            await run_loop_iteration(account_id, run_id=run_id)
+            record = await fetch_warming_state(account_id)
+            if not _is_live_generation(record, run_id):
                 break
             await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
     except asyncio.CancelledError:
@@ -340,10 +392,18 @@ async def _warming_loop(account_id: str) -> None:  # pragma: no cover - long-run
             account_id=account_id,
             extra={"error_type": type(exc).__name__, "message": str(exc)},
         )
+        # Round-6 P1: pre-check generation so a stale crash does not even try
+        # to write. The CAS predicate below is the suspenders — if our pre-read
+        # raced a restart, the upsert still refuses to overwrite a fresh
+        # generation's row.
+        latest = await fetch_warming_state(account_id)
+        if not _is_live_generation(latest, run_id):
+            return
         await _set_state(
             account_id,
             "error",
             last_event="loop_crashed",
             last_error=f"{type(exc).__name__}: {exc}",
             heartbeat_at=_now_iso(),
+            expected_run_id=run_id,
         )

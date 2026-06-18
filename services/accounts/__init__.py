@@ -23,7 +23,7 @@ from __future__ import annotations
 
 from core.db import list_accounts
 from services.accounts._table import load_accounts_table
-from services.accounts.lifecycle import add_account, evaluate_account_geo
+from services.accounts.lifecycle import add_account, evaluate_account_geo, remove_account
 from services.accounts.media import (
     add_account_profile_music,
     post_account_story,
@@ -55,6 +55,7 @@ __all__ = [
     "list_accounts",
     "load_accounts_table",
     "post_account_story",
+    "remove_account",
     "save_account_proxy",
     "set_account_profile_photo",
     "update_account_profile",

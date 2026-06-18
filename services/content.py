@@ -13,7 +13,7 @@ import re
 from datetime import UTC, datetime, timedelta
 
 from core.config import settings
-from core.db import record_sent_hash, try_reserve_sent_hash
+from core.db import record_sent_hash, release_sent_hash, try_reserve_sent_hash
 
 _LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/)", re.IGNORECASE)
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
@@ -71,3 +71,17 @@ async def try_reserve_sent(text: str) -> bool:
         return True
     since = (datetime.now(UTC) - timedelta(days=window)).isoformat()
     return await try_reserve_sent_hash(content_hash(text), since)
+
+
+async def release_sent_text(text: str) -> None:
+    """Release a previously-reserved sent-text hash (P2.6).
+
+    Pair with :func:`try_reserve_sent` on a send-failure path: the dedup
+    reservation we took to gate concurrent senders must be dropped so the
+    next retry of the same text isn't filtered as a duplicate. With a zero
+    dedup window try_reserve_sent never touched the store, so this is a no-op.
+    """
+    window = settings.warming.content_dedup_window_days
+    if window <= 0:
+        return
+    await release_sent_hash(content_hash(text))
