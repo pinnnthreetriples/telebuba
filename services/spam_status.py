@@ -8,6 +8,7 @@ use :func:`refresh_spam_status`.
 from __future__ import annotations
 
 import asyncio
+import re
 from datetime import UTC, datetime
 
 from core.config import settings
@@ -17,7 +18,6 @@ from core.telegram_client import check_spam_status
 from schemas.spam_status import SpamStatusKind, SpamStatusProbe, SpamStatusVerdict
 
 _SECONDS_PER_HOUR = 3600
-_UNRECOGNISED_REPLY_MAX = 160
 
 # Substring markers, lowercased, ordered by check priority. ``@SpamBot``
 # localises its reply to the account's interface language, so the same
@@ -49,19 +49,57 @@ _LIMITED_MARKERS = (
     "ограничен",
     "наложены",
 )
+# Latin stem covers en/de/fr/it/pt/es ("automated", "automatisch", "automatique",
+# "automatizzato", "automatizado"); Cyrillic stem covers ru. Anything else with
+# this stem in @SpamBot's reply means automated review is in progress.
+_AUTOMATED_MARKERS = ("automat", "автомат")
+
+# Date patterns — language-agnostic signal that the reply describes a
+# time-bounded limitation ("until <date>"). @SpamBot clean replies never carry
+# dates on any locale we've observed, so finding one almost certainly means
+# the account is currently limited.
+_DATE_PATTERNS: tuple[re.Pattern[str], ...] = (
+    # Numeric: 12.07.2026 / 12/07/2026 / 12-07-26 / 12.7.2026
+    re.compile(r"\b\d{1,2}[./-]\d{1,2}[./-]\d{2,4}\b"),
+    # ISO: 2026-07-12
+    re.compile(r"\b\d{4}-\d{1,2}-\d{1,2}\b"),
+    # Day + month-name + 4-digit year: "12 July 2026", "12. Juli 2026",
+    # "12 июля 2026", "12 de julio de 2026". Month-name as any 3-9 letter
+    # word; the 4-digit year constraint keeps the regex from grabbing
+    # arbitrary "<num> <word> <num>" sequences.
+    re.compile(r"\b\d{1,2}\.?\s+(?:de\s+)?\w{3,9}\.?\s+(?:de\s+)?\d{4}\b", re.UNICODE),
+)
+
+
+def _find_date(text: str) -> str | None:
+    """Return the first date-like substring in ``text``, or ``None``."""
+    for pat in _DATE_PATTERNS:
+        match = pat.search(text)
+        if match:
+            return match.group(0)
+    return None
 
 
 def _extract_until(text: str) -> str | None:
-    """Pull the "until <date>" tail out of a limited-account reply, if present."""
+    """Pull the "until <date>" tail of a limited reply, falling back to any date.
+
+    The English "until" prefix is the cleanest detail when present; for other
+    locales we still surface the date itself so the operator sees when the
+    limitation expires.
+    """
     idx = text.lower().find("until")
-    if idx == -1:
-        return None
-    tail = text[idx:].splitlines()[0].strip().rstrip(".")
-    return tail or None
+    if idx != -1:
+        tail = text[idx:].splitlines()[0].strip().rstrip(".")
+        if tail:
+            return tail
+    return _find_date(text)
 
 
 def _classify_reply_text(text: str) -> tuple[SpamStatusKind, str | None] | None:
-    """Match the reply against the keyword markers. ``None`` = no match yet."""
+    """Match the reply against the explicit keyword markers (en/ru/de).
+
+    ``None`` = no marker matched; caller falls back to the heuristic.
+    """
     lowered = text.lower()
     if any(marker in lowered for marker in _CLEAN_MARKERS):
         return "clean", None
@@ -72,22 +110,36 @@ def _classify_reply_text(text: str) -> tuple[SpamStatusKind, str | None] | None:
     return None
 
 
-def _unrecognised_reply_detail(text: str) -> str:
-    snippet = text.strip()
-    if len(snippet) > _UNRECOGNISED_REPLY_MAX:
-        snippet = snippet[: _UNRECOGNISED_REPLY_MAX - 1] + "…"
-    return f"нераспознанный ответ: {snippet}"
+def _classify_by_heuristic(text: str) -> tuple[SpamStatusKind, str | None]:
+    """Language-agnostic verdict for a non-empty reply when no marker matched.
+
+    Stable invariants of @SpamBot's replies, observed across en/ru/de and
+    documented in Telegram's spam FAQ: clean messages never carry dates;
+    time-bounded limits always do; automated review wording always contains
+    the ``automat`` / ``автомат`` stem. So a reply with a date is limited, a
+    reply mentioning automation is being-checked, and anything else short of
+    those is treated as clean — better than failing closed on locales we
+    don't have explicit keywords for.
+    """
+    date = _find_date(text)
+    if date is not None:
+        return "limited", _extract_until(text) or date
+    lowered = text.lower()
+    if any(marker in lowered for marker in _AUTOMATED_MARKERS):
+        return "unknown", "account is being checked"
+    return "clean", None
 
 
 def classify_spam_probe(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | None]:
-    """Map a raw probe to a (status, detail) verdict by signal words.
+    """Map a raw probe to a (status, detail) verdict.
 
-    Parses by resilient signal words rather than exact strings, because the bot
-    wording changes over time and varies by locale. ``getFullUser`` restriction
-    flags are a secondary signal — they cover terms/country restrictions, not
-    spam limits. When nothing matches, we surface the raw reply in ``detail`` so
-    the operator can see what came back instead of being told "вердикт не
-    получен" with no clue why.
+    Pipeline:
+    1. Probe error → unknown with the exception string in ``detail``.
+    2. Explicit keyword markers (en/ru/de) → precise verdict if any match.
+    3. ``getFullUser.restricted`` flag → limited (Telegram-side hard restriction).
+    4. Non-empty reply with no marker match → language-agnostic heuristic
+       (date → limited, ``automat`` stem → being-checked, otherwise clean).
+    5. Empty / no reply → unknown with no detail.
     """
     if probe.error:
         return "unknown", probe.error
@@ -98,7 +150,7 @@ def classify_spam_probe(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | N
     if probe.restricted:
         return "limited", probe.restriction_reason
     if text.strip():
-        return "unknown", _unrecognised_reply_detail(text)
+        return _classify_by_heuristic(text)
     return "unknown", None
 
 
