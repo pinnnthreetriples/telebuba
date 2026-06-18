@@ -27,6 +27,69 @@ def _clamp_hour(value: object) -> int:  # pragma: no cover
     return max(0, min(23, int(value)))
 
 
+# Recommended quiet-hour presets — picked to match human-believable sleep
+# windows in the account's local timezone. Telegram's 2026 ban system tracks
+# activity vs. local time as a behavioural signal, so a plausible night
+# window is meaningful protection (see plan §9 sources). Each value is the
+# pair "start hour, end hour" in 0-23.
+_QUIET_PRESET_OFF = "off"
+_QUIET_PRESET_CUSTOM = "custom"
+_QUIET_PRESETS: dict[str, tuple[int, int]] = {
+    "night_23_07": (23, 7),
+    "night_00_08": (0, 8),
+    "long_22_09": (22, 9),
+}
+_QUIET_PRESET_LABELS: dict[str, str] = {
+    _QUIET_PRESET_OFF: "Без тихих часов",
+    "night_23_07": "🌙 Ночь 23 → 07 · стандарт",
+    "night_00_08": "🌙 Ночь 00 → 08",
+    "long_22_09": "😴 Длинный отдых 22 → 09",
+    _QUIET_PRESET_CUSTOM: "⚙ Своё расписание",
+}
+
+# Daily-action presets — values from the 2026 warming guides referenced in
+# plan §9: 15 = week 1, 30 = «100% safe» / week 2, 60 = week 3+, 100 = ≥2 mo.
+_DAILY_PRESET_CUSTOM = "custom"
+_DAILY_PRESETS: dict[str, int] = {
+    "unlimited": 0,
+    "careful_15": 15,
+    "safe_30": 30,
+    "active_60": 60,
+    "max_100": 100,
+}
+_DAILY_PRESET_LABELS: dict[str, str] = {
+    "unlimited": "Без лимита",
+    "careful_15": "🐢 15 / сут · неделя 1",
+    "safe_30": "🚶 30 / сут · неделя 2",
+    "active_60": "🏃 60 / сут · прогретый",
+    "max_100": "🚀 100 / сут · ≥2 мес.",
+    _DAILY_PRESET_CUSTOM: "⚙ Своё значение",
+}
+
+
+def _detect_quiet_preset(*, enabled: bool, start: int, end: int) -> str:
+    """Return the quiet-hours preset key matching the saved state.
+
+    ``"off"`` when the toggle is off; the matching preset key when the
+    saved (start, end) pair matches a preset exactly; ``"custom"``
+    otherwise. Pure — UI uses it on load to pick the right select option.
+    """
+    if not enabled:
+        return _QUIET_PRESET_OFF
+    for key, (preset_start, preset_end) in _QUIET_PRESETS.items():
+        if (start, end) == (preset_start, preset_end):
+            return key
+    return _QUIET_PRESET_CUSTOM
+
+
+def _detect_daily_preset(value: int) -> str:
+    """Return the daily-limit preset key matching ``value``, or ``"custom"``."""
+    for key, preset_value in _DAILY_PRESETS.items():
+        if preset_value == value:
+            return key
+    return _DAILY_PRESET_CUSTOM
+
+
 def _section_caption(text: str) -> None:  # pragma: no cover
     ui.label(text).classes(
         "text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1",
@@ -160,6 +223,14 @@ async def _render_config_cards() -> None:  # pragma: no cover
             refs["quiet_start"].value = fresh.quiet_hours_start
             refs["quiet_end"].value = fresh.quiet_hours_end
             refs["daily"].value = fresh.max_daily_actions
+            # Selects mirror the underlying values — re-detect after rollback
+            # so the chosen preset matches what's actually persisted again.
+            refs["quiet_preset"].value = _detect_quiet_preset(
+                enabled=fresh.quiet_hours_enabled,
+                start=fresh.quiet_hours_start,
+                end=fresh.quiet_hours_end,
+            )
+            refs["daily_preset"].value = _detect_daily_preset(fresh.max_daily_actions)
 
     def trigger(_e: object = None) -> asyncio.Task[None]:
         return asyncio.create_task(on_toggle())
@@ -215,11 +286,44 @@ def _render_features_card(
             "Не запускать аккаунт без рабочего прокси, сессии и каналов.",
             lambda: switch(value=current.enforce_readiness),
         )
-        refs["quiet"] = _feature_row(
+        # Hidden state-holder for ``quiet_hours_enabled``. We render the
+        # user-facing control as a preset select; this switch is the boolean
+        # that ``persist()`` reads, kept in sync by the select's on_change.
+        refs["quiet"] = ui.switch(value=current.quiet_hours_enabled).classes("hidden")
+
+        initial_quiet_preset = _detect_quiet_preset(
+            enabled=current.quiet_hours_enabled,
+            start=current.quiet_hours_start,
+            end=current.quiet_hours_end,
+        )
+
+        def on_quiet_preset(e: object) -> None:
+            key = getattr(e, "value", None) or refs["quiet_preset"].value
+            if key == _QUIET_PRESET_OFF:
+                refs["quiet"].value = False
+            elif key == _QUIET_PRESET_CUSTOM:
+                refs["quiet"].value = True
+                # leave start/end alone so the operator edits the current pair
+            elif key in _QUIET_PRESETS:
+                start_hour, end_hour = _QUIET_PRESETS[key]
+                refs["quiet"].value = True
+                refs["quiet_start"].value = start_hour
+                refs["quiet_end"].value = end_hour
+            trigger(e)
+
+        refs["quiet_preset"] = _feature_row(
             "bedtime",
             "Локальное время аккаунта",
-            "Ночью аккаунты ничего не делают — выглядит естественнее.",
-            lambda: switch(value=current.quiet_hours_enabled),
+            "Ночью аккаунты молчат — выглядит как сон по локали аккаунта.",
+            lambda: (
+                ui.select(
+                    _QUIET_PRESET_LABELS,
+                    value=initial_quiet_preset,
+                    on_change=on_quiet_preset,
+                )
+                .props("dense outlined options-dense")
+                .classes("w-56")
+            ),
         )
         quiet_times = ui.row().classes("w-full items-center gap-2 pl-9")
         with quiet_times:
@@ -238,18 +342,51 @@ def _render_features_card(
                 .on_value_change(trigger)
             )
             ui.label("часов").classes("text-xs text-slate-400")
-        quiet_times.bind_visibility_from(refs["quiet"], "value")
+        # Reveal the start/end inputs only for the "custom" preset; presets
+        # write into the same refs but the inputs themselves stay hidden so
+        # the form doesn't look cluttered with controls that aren't actionable.
+        quiet_times.bind_visibility_from(
+            refs["quiet_preset"],
+            "value",
+            value=_QUIET_PRESET_CUSTOM,
+        )
 
-        refs["daily"] = _feature_row(
+        initial_daily_preset = _detect_daily_preset(current.max_daily_actions)
+
+        def on_daily_preset(e: object) -> None:
+            key = getattr(e, "value", None) or refs["daily_preset"].value
+            if key in _DAILY_PRESETS:
+                refs["daily"].value = _DAILY_PRESETS[key]
+            # _DAILY_PRESET_CUSTOM → leave the value alone so the operator edits
+            trigger(e)
+
+        refs["daily_preset"] = _feature_row(
             "speed",
             "Дневной лимит действий",
-            "Максимум действий в сутки на аккаунт. 0 — без лимита.",
+            "Максимум действий в сутки на аккаунт.",
             lambda: (
+                ui.select(
+                    _DAILY_PRESET_LABELS,
+                    value=initial_daily_preset,
+                    on_change=on_daily_preset,
+                )
+                .props("dense outlined options-dense")
+                .classes("w-56")
+            ),
+        )
+        daily_custom = ui.row().classes("w-full items-center gap-2 pl-9")
+        with daily_custom:
+            refs["daily"] = (
                 ui.number(value=current.max_daily_actions, min=0, format="%d")
                 .props("dense outlined debounce=600")
                 .classes("w-24")
                 .on_value_change(trigger)
-            ),
+            )
+            ui.label("действий в сутки").classes("text-xs text-slate-400")
+        daily_custom.bind_visibility_from(
+            refs["daily_preset"],
+            "value",
+            value=_DAILY_PRESET_CUSTOM,
         )
 
 
