@@ -988,15 +988,15 @@ async def test_reconcile_purges_stale_history(monkeypatch: pytest.MonkeyPatch) -
         return fake
 
     monkeypatch.setattr(
-        "services.warming._runtime.purge_logs_older_than",
+        "services.warming._purge.purge_logs_older_than",
         await make_recorder("logs"),
     )
     monkeypatch.setattr(
-        "services.warming._runtime.purge_dialogue_messages_older_than",
+        "services.warming._purge.purge_dialogue_messages_older_than",
         await make_recorder("dialogues"),
     )
     monkeypatch.setattr(
-        "services.warming._runtime.purge_sent_hashes_older_than",
+        "services.warming._purge.purge_sent_hashes_older_than",
         await make_recorder("hashes"),
     )
 
