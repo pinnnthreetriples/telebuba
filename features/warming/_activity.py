@@ -12,7 +12,7 @@ from typing import TYPE_CHECKING
 
 from nicegui import context, ui
 
-from features.warming._board import _BOARD_POLL_SECONDS
+from features.warming._board_styling import _BOARD_POLL_SECONDS
 from schemas.logs import LogFilter
 from services.dialogues import load_dialogue_overview
 from services.logs import load_logs_page

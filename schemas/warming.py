@@ -148,15 +148,9 @@ class WarmingIntensity(BaseModel):
     channels_max: int = Field(ge=1)
     reaction_probability: float = Field(ge=0.0, le=1.0)
     dm_allowed: bool
-    # Auto-scaled daily action budget. Replaces the fleet-wide setting:
-    # each account gets its own cap based on its current phase. 0 = no cap.
     daily_cap: int = Field(default=0, ge=0)
-    # Current lifecycle phase the account is in.
     phase: WarmingPhase = "intro"
-    # 0.0..1.0 — how far into the current phase the account is, by age.
-    # 1.0 means "at the boundary, about to advance". ``None`` for terminal phase.
     progress_to_next: float | None = Field(default=None, ge=0.0, le=1.0)
-    # Whole days until the next phase boundary, ``None`` for terminal phase.
     days_to_next_phase: int | None = Field(default=None, ge=0)
 
 

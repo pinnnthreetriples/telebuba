@@ -216,10 +216,6 @@ def _rename_proxy_type_http_to_https(connection: Connection) -> None:
 
 
 def _add_warming_phase_columns(connection: Connection) -> None:
-    # Persisted lifecycle phase + entry timestamp — used by the warming loop
-    # to detect transitions across cycles and surface the per-account phase
-    # on the card. Both nullable so existing rows survive the migration and
-    # get seeded on their next cycle.
     existing = _sqlite_columns(connection, "warming_account_state")
     if "current_phase" not in existing:
         connection.exec_driver_sql(

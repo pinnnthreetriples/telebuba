@@ -16,6 +16,8 @@ Security guarantees:
 - only the resulting ``.session`` files survive in the configured sessions dir.
 """
 
+# ruff: noqa: ANN401 - opentele2 is imported lazily and untyped; ``Any`` is required.
+
 from __future__ import annotations
 
 import asyncio
@@ -160,6 +162,121 @@ def _find_tdata_dir(root: Path) -> Path | None:
     return None
 
 
+async def _load_tdesktop_from_zip(
+    req: TdataConvertRequest,
+    tmp_dir: Path,
+) -> tuple[Any, Any] | TdataConvertResult:
+    """Extract the zip, locate the tdata dir, load opentele2 ``TDesktop``.
+
+    Returns ``(td, use_current_session)`` on success, or a terminal
+    ``TdataConvertResult`` describing the early-exit reason.
+    """
+    source: bytes | Path = req.content_path if req.content_path is not None else req.content
+    reject = await asyncio.to_thread(_safe_extract_zip, source, tmp_dir)
+    if reject is not None:
+        await log_event(
+            "WARNING",
+            "tdata_convert_zip_rejected",
+            extra={"status": reject, "filename": req.filename},
+        )
+        return TdataConvertResult(status=reject)
+    await log_event(
+        "INFO",
+        "tdata_convert_zip_extracted",
+        extra={"filename": req.filename},
+    )
+
+    tdata_dir = await asyncio.to_thread(_find_tdata_dir, tmp_dir)
+    if tdata_dir is None:
+        await log_event(
+            "WARNING",
+            "tdata_convert_tdata_dir_not_found",
+            extra={"filename": req.filename},
+        )
+        return TdataConvertResult(status="tdata_not_found")
+    await log_event(
+        "INFO",
+        "tdata_convert_tdata_dir_found",
+        extra={"tdata_dir": str(tdata_dir)},
+    )
+
+    tdesktop_factory, use_current_session = _opentele2_runtime()
+    try:
+        td = await asyncio.to_thread(tdesktop_factory, basePath=str(tdata_dir))
+    except Exception as exc:
+        logger.exception("TDesktop load failed")
+        await log_event(
+            "ERROR",
+            "tdata_convert_tdesktop_load_failed",
+            extra={"error_type": type(exc).__name__, "error": str(exc)},
+        )
+        return TdataConvertResult(
+            status="conversion_error",
+            error=f"TDesktop load failed: {exc}",
+        )
+    await log_event(
+        "INFO",
+        "tdata_convert_tdesktop_loaded",
+        extra={"accounts_count": td.accountsCount},
+    )
+    return td, use_current_session
+
+
+async def _convert_one_account(
+    account: Any,
+    index: int,
+    sessions_dir: Path,
+    use_current_session: Any,
+) -> TdataAccountSummary | TdataConvertResult:
+    """Convert one ``TDesktop`` account to a Telethon ``.session`` file.
+
+    Returns the ``TdataAccountSummary`` on success or a terminal
+    ``TdataConvertResult`` describing the failure. The caller accumulates
+    successful summaries and attaches them to the failure result.
+    """
+    user_id: int | None = None
+    with suppress(Exception):
+        user_id = account.UserId
+
+    session_name = f"{user_id or f'tdata_{index}'}.session"
+    session_path = sessions_dir / session_name
+
+    await log_event(
+        "INFO",
+        "tdata_convert_account_starting",
+        extra={"index": index, "user_id": user_id, "session_path": str(session_path)},
+    )
+
+    try:
+        client = await account.ToTelethon(session=str(session_path), flag=use_current_session)
+    except Exception as exc:
+        logger.exception("ToTelethon failed for user_id=%s", user_id)
+        await log_event(
+            "ERROR",
+            "tdata_convert_to_telethon_failed",
+            extra={
+                "index": index,
+                "user_id": user_id,
+                "error_type": type(exc).__name__,
+                "error": str(exc),
+            },
+        )
+        return TdataConvertResult(
+            status="conversion_error",
+            error=f"ToTelethon failed for user_id={user_id}: {exc}",
+        )
+
+    with suppress(Exception):
+        await client.disconnect()
+
+    await log_event(
+        "INFO",
+        "tdata_convert_account_done",
+        extra={"index": index, "user_id": user_id},
+    )
+    return TdataAccountSummary(user_id=user_id, session_path=str(session_path))
+
+
 async def convert_tdata_zip(
     req: TdataConvertRequest,
     sessions_dir: Path,
@@ -168,19 +285,9 @@ async def convert_tdata_zip(
 ) -> TdataConvertResult:
     """Convert a tdata.zip payload into Telethon ``.session`` files.
 
-    Args:
-        req: validated upload payload.
-        sessions_dir: where to write the resulting ``.session`` files. Created if absent.
-        tmp_base: optional directory under which the private temp dir is created.
-            Useful for tests; defaults to the OS temp dir.
-
-    Returns:
-        ``TdataConvertResult`` with status and, on success, the list of accounts
-        whose session files were written.
-
-    A ``log_event`` is fired at every major step so a stuck import can be
-    diagnosed from the activity feed — the last event before silence tells
-    you where it hung.
+    ``tmp_base`` is only used in tests; production uses the OS temp dir. A
+    ``log_event`` is fired at every major step so a stuck import can be
+    diagnosed from the activity feed.
     """
     sessions_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240
     tmp_dir = Path(
@@ -195,115 +302,25 @@ async def convert_tdata_zip(
         extra={"filename": req.filename, "tmp_dir": str(tmp_dir)},
     )
     try:
-        source: bytes | Path = req.content_path if req.content_path is not None else req.content
-        # ZIP extraction of a multi-hundred-MB archive blocks for seconds —
-        # do it on a worker thread so the event loop stays responsive (the UI
-        # progress label must stay reactive while extraction runs).
-        reject = await asyncio.to_thread(_safe_extract_zip, source, tmp_dir)
-        if reject is not None:
-            await log_event(
-                "WARNING",
-                "tdata_convert_zip_rejected",
-                extra={"status": reject, "filename": req.filename},
-            )
-            return TdataConvertResult(status=reject)
-        await log_event(
-            "INFO",
-            "tdata_convert_zip_extracted",
-            extra={"filename": req.filename},
-        )
-
-        tdata_dir = await asyncio.to_thread(_find_tdata_dir, tmp_dir)
-        if tdata_dir is None:
-            await log_event(
-                "WARNING",
-                "tdata_convert_tdata_dir_not_found",
-                extra={"filename": req.filename},
-            )
-            return TdataConvertResult(status="tdata_not_found")
-        await log_event(
-            "INFO",
-            "tdata_convert_tdata_dir_found",
-            extra={"tdata_dir": str(tdata_dir)},
-        )
-
-        tdesktop_factory, use_current_session = _opentele2_runtime()
-        try:
-            td = await asyncio.to_thread(tdesktop_factory, basePath=str(tdata_dir))
-        except Exception as exc:
-            logger.exception("TDesktop load failed")
-            await log_event(
-                "ERROR",
-                "tdata_convert_tdesktop_load_failed",
-                extra={"error_type": type(exc).__name__, "error": str(exc)},
-            )
-            return TdataConvertResult(
-                status="conversion_error",
-                error=f"TDesktop load failed: {exc}",
-            )
-        await log_event(
-            "INFO",
-            "tdata_convert_tdesktop_loaded",
-            extra={"accounts_count": td.accountsCount},
-        )
+        loaded = await _load_tdesktop_from_zip(req, tmp_dir)
+        if isinstance(loaded, TdataConvertResult):
+            return loaded
+        td, use_current_session = loaded
 
         if td.accountsCount == 0:
             return TdataConvertResult(status="no_accounts")
 
         summaries: list[TdataAccountSummary] = []
         for index, account in enumerate(td.accounts):
-            user_id: int | None = None
-            with suppress(Exception):
-                user_id = account.UserId
-
-            session_name = f"{user_id or f'tdata_{index}'}.session"
-            session_path = sessions_dir / session_name
-
-            await log_event(
-                "INFO",
-                "tdata_convert_account_starting",
-                extra={
-                    "index": index,
-                    "user_id": user_id,
-                    "session_path": str(session_path),
-                },
+            outcome = await _convert_one_account(
+                account,
+                index,
+                sessions_dir,
+                use_current_session,
             )
-
-            try:
-                client = await account.ToTelethon(
-                    session=str(session_path),
-                    flag=use_current_session,
-                )
-            except Exception as exc:
-                logger.exception("ToTelethon failed for user_id=%s", user_id)
-                await log_event(
-                    "ERROR",
-                    "tdata_convert_to_telethon_failed",
-                    extra={
-                        "index": index,
-                        "user_id": user_id,
-                        "error_type": type(exc).__name__,
-                        "error": str(exc),
-                    },
-                )
-                return TdataConvertResult(
-                    status="conversion_error",
-                    error=f"ToTelethon failed for user_id={user_id}: {exc}",
-                    accounts=summaries,
-                )
-
-            with suppress(Exception):
-                await client.disconnect()
-
-            await log_event(
-                "INFO",
-                "tdata_convert_account_done",
-                extra={"index": index, "user_id": user_id},
-            )
-
-            summaries.append(
-                TdataAccountSummary(user_id=user_id, session_path=str(session_path)),
-            )
+            if isinstance(outcome, TdataConvertResult):
+                return outcome.model_copy(update={"accounts": summaries})
+            summaries.append(outcome)
 
         await log_event(
             "INFO",
