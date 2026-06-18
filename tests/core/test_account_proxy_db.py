@@ -265,7 +265,7 @@ async def test_delete_account_proxy_removes_settings(tmp_path) -> None:
     await upsert_account_proxy(
         AccountProxyUpsertFactory.build(
             account_id="acc-2",
-            proxy_type="http",
+            proxy_type="https",
             host="proxy.local",
             port=8080,
         ),

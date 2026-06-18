@@ -12,7 +12,7 @@ from schemas.proxy import AccountProxySettings, ProxyCheckResult, ProxyType
 
 _PROXY_TYPE_BY_NAME: dict[ProxyType, SocksProxyType] = {
     "socks5": SocksProxyType.SOCKS5,
-    "http": SocksProxyType.HTTP,
+    "https": SocksProxyType.HTTP,
 }
 _HTTP_STATUS_INDEX = 1
 _MAX_ERROR_LENGTH = 240

@@ -8,7 +8,7 @@ import pytest
 from sqlalchemy import create_engine
 
 from core.db import _get_engine, configure_database  # type: ignore[attr-defined]
-from core.migrations import MIGRATIONS, apply_migrations
+from core.migrations import MIGRATIONS, _rename_proxy_type_http_to_https, apply_migrations
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -103,6 +103,31 @@ def test_legacy_database_is_brought_up_to_date(tmp_path: Path) -> None:
     engine.dispose()
     assert [int(row[0]) for row in applied] == [v for v, _n, _f in MIGRATIONS]
     assert any(row["name"] == "bio" for row in bio_present)
+
+
+def test_rename_proxy_type_http_to_https_migrates_existing_rows() -> None:
+    """Pre-existing rows stored as proxy_type='http' must surface as 'https' after migration."""
+    engine = _get_engine()
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO accounts (account_id, status, created_at, updated_at) "
+            "VALUES ('acc-legacy', 'new', ?, ?)",
+            (now, now),
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO account_proxies "
+            "(account_id, proxy_type, host, port, status, created_at, updated_at) "
+            "VALUES ('acc-legacy', 'http', '1.2.3.4', 8080, 'unknown', ?, ?)",
+            (now, now),
+        )
+        _rename_proxy_type_http_to_https(connection)
+
+    with engine.connect() as connection:
+        proxy_type = connection.exec_driver_sql(
+            "SELECT proxy_type FROM account_proxies WHERE account_id = 'acc-legacy'",
+        ).scalar()
+    assert proxy_type == "https"
 
 
 def test_append_only_versions_are_unique() -> None:

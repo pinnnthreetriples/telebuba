@@ -207,6 +207,14 @@ def _add_warming_state_run_id(connection: Connection) -> None:
         )
 
 
+def _rename_proxy_type_http_to_https(connection: Connection) -> None:
+    if "proxy_type" not in _sqlite_columns(connection, "account_proxies"):
+        return
+    connection.exec_driver_sql(
+        "UPDATE account_proxies SET proxy_type = 'https' WHERE proxy_type = 'http'",
+    )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -218,6 +226,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (6, "add_warming_joined_channels", _add_warming_joined_channels),
     (7, "add_unique_session_name_index", _add_unique_session_name_index),
     (8, "add_warming_state_run_id", _add_warming_state_run_id),
+    (9, "rename_proxy_type_http_to_https", _rename_proxy_type_http_to_https),
 )
 
 

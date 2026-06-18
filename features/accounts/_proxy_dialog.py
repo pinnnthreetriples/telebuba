@@ -157,7 +157,7 @@ async def _open_proxy_dialog(  # pragma: no cover
         ui.label("Настройки прокси").classes("text-base font-semibold")
         form = _ProxyForm(
             proxy_type=ui.select(
-                ["socks5", "http"],
+                ["socks5", "https"],
                 value=str(row.get("proxy_type") or "socks5"),
                 label="Тип",
             ).props("dense outlined"),

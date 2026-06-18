@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-ProxyType = Literal["socks5", "http"]
+ProxyType = Literal["socks5", "https"]
 ProxyStatus = Literal["unknown", "tcp_working", "failed"]
 
 

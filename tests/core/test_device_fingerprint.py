@@ -181,7 +181,7 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
             session_path="sessions/account-3",
             receive_updates=True,
             device=client_profile,
-            proxy_type="http",
+            proxy_type="https",
             proxy_host="proxy.local",
             proxy_port=8080,
             proxy_username="bob",
