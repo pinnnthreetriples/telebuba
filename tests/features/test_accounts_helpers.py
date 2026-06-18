@@ -93,7 +93,6 @@ def test_to_table_row_keeps_real_last_checked() -> None:
 
 def test_service_error_label_translates_exact_and_prefixed_messages() -> None:
     assert _service_error_label("Session file is empty") == "Файл сессии пустой"
-    assert _service_error_label("tdata import failed: boom") == "Импорт tdata не удался: boom"
     assert (
         _service_error_label("Proxy not found for account: acc-1")
         == "Прокси не найден для аккаунта: acc-1"
@@ -103,3 +102,36 @@ def test_service_error_label_translates_exact_and_prefixed_messages() -> None:
     )
     # Unmapped message passes through unchanged.
     assert _service_error_label("something else") == "something else"
+
+
+def test_service_error_label_unknown_tdata_status_keeps_status_visible() -> None:
+    # An unknown status code must still be readable — we don't want to hide
+    # the code, because future telemetry will need it to debug.
+    assert _service_error_label("tdata import failed: boom") == "Импорт tdata не удался: boom"
+
+
+def test_service_error_label_maps_known_tdata_statuses_to_actionable_ru() -> None:
+    # Each documented ``TdataConvertStatus`` value resolves to an actionable
+    # RU label that tells the operator what to fix.
+    invalid_zip = _service_error_label("tdata import failed: invalid_zip")
+    assert "Архив повреждён" in invalid_zip
+    assert "заархивируйте" in invalid_zip.lower()
+
+    tdata_not_found = _service_error_label("tdata import failed: tdata_not_found")
+    assert "tdata" in tdata_not_found
+    assert "целиком" in tdata_not_found
+
+    no_accounts = _service_error_label("tdata import failed: no_accounts")
+    assert "не найдено" in no_accounts.lower()
+
+
+def test_service_error_label_conversion_error_includes_library_detail() -> None:
+    # ``conversion_error`` carries an underlying library message — the operator
+    # usually needs that text to figure out the next move (locked tdata,
+    # revoked session, version mismatch).
+    msg = _service_error_label(
+        "tdata import failed: conversion_error — TDesktop load failed: TDataBadDecryptKey",
+    )
+    assert "Не удалось прочитать tdata" in msg
+    assert "TDataBadDecryptKey" in msg
+    assert "паролем" in msg or "сессия отозвана" in msg

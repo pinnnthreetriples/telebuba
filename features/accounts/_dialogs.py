@@ -16,6 +16,7 @@ from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
+from core.logging import log_event
 from features.accounts._table import _service_error_label
 from schemas.accounts import (
     AccountCheckRequest,
@@ -53,12 +54,65 @@ async def _check_accounts(account_ids: set[str]) -> None:  # pragma: no cover
     ui.notify("Проверка сессий завершена", type="positive")
 
 
+_STATUS_ERROR_LABEL_CLASSES = "text-xs text-red-600 leading-snug whitespace-pre-line break-words"
+_STATUS_PROGRESS_LABEL_CLASSES = (
+    "text-xs text-blue-700 leading-snug whitespace-pre-line break-words"
+)
+
+
+def _build_dialog_status_controls() -> tuple[
+    Callable[[str], None],
+    Callable[[str], None],
+    Callable[[], None],
+]:  # pragma: no cover
+    """Persistent status row for the add-account dialog.
+
+    Returns ``(show_error, show_progress, hide)`` closures. The row replaces
+    the transient toast as the primary feedback channel: a toast disappears
+    in five seconds, and on a failed import that was exactly the bug — the
+    operator saw nothing on screen and assumed nothing had happened. The
+    row stays visible until the next upload starts or the dialog closes.
+    """
+    status_row = ui.row().classes("w-full items-start gap-2")
+    status_row.visible = False
+    with status_row:
+        status_icon = ui.icon("error").classes("text-red-500 shrink-0 mt-0.5")
+        status_label = ui.label("").classes(_STATUS_ERROR_LABEL_CLASSES)
+
+    def show_error(message: str) -> None:
+        status_icon.classes(replace="text-red-500 shrink-0 mt-0.5")
+        status_label.classes(replace=_STATUS_ERROR_LABEL_CLASSES)
+        status_label.text = message
+        status_row.visible = True
+        status_row.update()
+        # Persistent toast so the operator notices even if they look away from
+        # the dialog. ``timeout=0`` keeps it on screen until dismissed.
+        ui.notify(message, type="negative", timeout=0, close_button="Закрыть")
+
+    def show_progress(message: str) -> None:
+        status_icon.classes(replace="text-blue-500 shrink-0 mt-0.5")
+        status_label.classes(replace=_STATUS_PROGRESS_LABEL_CLASSES)
+        status_label.text = message
+        status_row.visible = True
+        status_row.update()
+
+    def hide_status() -> None:
+        status_row.visible = False
+        status_row.update()
+
+    return show_error, show_progress, hide_status
+
+
 async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # pragma: no cover
     with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-96 max-w-full"):
         ui.label("Добавить аккаунт").classes("text-base font-semibold")
         label = ui.input("Отображаемое имя").props("dense outlined")
 
+        show_error, show_progress, hide_status = _build_dialog_status_controls()
+
         async def handle_session_upload(event: UploadEventArguments) -> None:
+            hide_status()
+            show_progress("Импортирую .session…")
             try:
                 await import_account_session(
                     AccountSessionFileImport(
@@ -68,12 +122,28 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
                     ),
                 )
             except ValueError as exc:
-                ui.notify(_service_error_label(str(exc)), type="warning")
+                show_error(_service_error_label(str(exc)))
                 return
+            except Exception as exc:  # noqa: BLE001 — surface anything else to the user instead of swallowing
+                await log_event(
+                    "ERROR",
+                    "account_session_import_failed",
+                    extra={
+                        "filename": event.file.name,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                show_error(f"Не удалось импортировать .session: {type(exc).__name__}: {exc}")
+                return
+            hide_status()
             dialog.close()
+            ui.notify("Аккаунт добавлен", type="positive")
             await refresh()
 
         async def handle_tdata_upload(event: UploadEventArguments) -> None:
+            hide_status()
+            show_progress("Распаковываю архив и читаю tdata…")
             # Stream the upload to a temp file rather than reading the entire
             # archive into RAM (1 GB cap × Pydantic copy = ~2 GB peak otherwise).
             tmp = await asyncio.to_thread(_spool_upload_to_tempfile, event.file)
@@ -86,11 +156,26 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
                     ),
                 )
             except ValueError as exc:
-                ui.notify(_service_error_label(str(exc)), type="warning")
+                show_error(_service_error_label(str(exc)))
+                return
+            except Exception as exc:  # noqa: BLE001 — see handle_session_upload
+                await log_event(
+                    "ERROR",
+                    "account_tdata_import_failed",
+                    extra={
+                        "filename": event.file.name,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
+                show_error(
+                    f"Не удалось импортировать tdata: {type(exc).__name__}: {exc}",
+                )
                 return
             finally:
                 with suppress(OSError):
                     tmp.unlink()
+            hide_status()
             dialog.close()
             ui.notify(
                 f"Импортировано аккаунтов из tdata: {len(result.accounts)}",
@@ -104,7 +189,9 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
             max_file_size=20_000_000,
             auto_upload=True,
             on_upload=handle_session_upload,
-            on_rejected=lambda _event: ui.notify("Файл сессии отклонён", type="warning"),
+            on_rejected=lambda _event: show_error(
+                "Файл сессии отклонён: нужен .session до 20 МБ",
+            ),
         ).props('accept=".session"').classes("w-full")
 
         ui.label("или").classes("self-center text-xs text-slate-500")
@@ -117,9 +204,8 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
             max_file_size=1_000_000_000,
             auto_upload=True,
             on_upload=handle_tdata_upload,
-            on_rejected=lambda _event: ui.notify(
+            on_rejected=lambda _event: show_error(
                 "Архив tdata отклонён: нужен .zip до 1 ГБ",
-                type="warning",
             ),
         ).props('accept=".zip"').classes("w-full")
 
