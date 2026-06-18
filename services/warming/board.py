@@ -38,12 +38,18 @@ if TYPE_CHECKING:
 _HOURS_PER_DAY = 24
 
 # Russian labels for the lifecycle phases shown on the kanban card.
+#
+# Wording rule: nouns/adjectives, never gerunds — the phase is a *stage of
+# maturity*, not an action. The state pill (`state="active"` → «Прогрев»)
+# already occupies the verb space; phase labels stay clearly different so
+# an idle account in the warming-age band doesn't look like it's "currently
+# being warmed".
 _PHASE_LABEL_RU: dict[WarmingPhase, str] = {
-    "intro": "🥚 Знакомство",
-    "settling": "🐣 Обвыкается",
-    "warming": "🐥 Прогревается",
-    "active": "🐤 Активный",
-    "warmed": "🦅 Прогрет",
+    "intro": "🥚 Новый · 0-2 дн",
+    "settling": "🐣 Адаптация · 3-7 дн",
+    "warming": "🐥 Развитие · 8-14 дн",
+    "active": "🐤 Окрепший · 15-29 дн",
+    "warmed": "🦅 Зрелый · 30+ дн",
 }
 
 
