@@ -65,6 +65,44 @@ _STATUS_PROGRESS_LABEL_CLASSES = (
 _TDATA_IMPORT_TIMEOUT_SECONDS = 120
 
 
+async def _run_tdata_pipeline(
+    event: UploadEventArguments,
+    tmp_holder: list[Path | None],
+    label_value: str | None,
+) -> Any:  # noqa: ANN401 - TdataImportResult, kept loose to avoid a feature→service type import cycle.
+    """Spool the upload + run the import, surfacing every step in logs.
+
+    The ``tmp_holder`` list is a one-slot out-parameter so the outer
+    handler can unlink the temp file in its ``finally`` even when this
+    coroutine is cancelled by the timeout — capturing the path inside
+    the awaited coroutine is the only way to retain it across an
+    ``asyncio.wait_for`` cancellation boundary.
+    """
+    await log_event(
+        "INFO",
+        "account_tdata_spool_started",
+        extra={"filename": getattr(event.file, "name", "?")},
+    )
+    tmp = await asyncio.to_thread(_spool_upload_to_tempfile, event.file)
+    tmp_holder[0] = tmp
+    await log_event(
+        "INFO",
+        "account_tdata_spool_completed",
+        extra={
+            "filename": getattr(event.file, "name", "?"),
+            "tmp_path": str(tmp),
+            "tmp_size": tmp.stat().st_size if tmp.exists() else -1,
+        },
+    )
+    return await import_account_tdata(
+        TdataConvertRequest(
+            filename=event.file.name,
+            content_path=tmp,
+            label=label_value or None,
+        ),
+    )
+
+
 def _build_dialog_status_controls() -> tuple[
     Callable[[str], None],
     Callable[[str], None],
@@ -108,7 +146,13 @@ def _build_dialog_status_controls() -> tuple[
     return show_error, show_progress, hide_status
 
 
-async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # pragma: no cover
+async def _open_add_dialog(  # pragma: no cover
+    refresh: Callable[[], Awaitable[None]],
+) -> None:
+    # PLR0915: dialog builder with two upload handlers + status row reads
+    # clearer as one function than three; statement count is structural
+    # (NiceGUI builder chains), not branching complexity.
+    # ruff: noqa: PLR0915
     with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-96 max-w-full"):
         ui.label("Добавить аккаунт").classes("text-base font-semibold")
         label = ui.input("Отображаемое имя").props("dense outlined")
@@ -116,6 +160,15 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
         show_error, show_progress, hide_status = _build_dialog_status_controls()
 
         async def handle_session_upload(event: UploadEventArguments) -> None:
+            # Canary log fires before any potential failure point — if this
+            # event shows up in Live activity but ``account_session_import_*``
+            # doesn't follow, we know the failure is in our code, not in the
+            # NiceGUI upload pipeline or a stale app instance.
+            await log_event(
+                "INFO",
+                "account_session_import_started",
+                extra={"filename": getattr(event.file, "name", "?")},
+            )
             hide_status()
             show_progress("Импортирую .session…")
             try:
@@ -147,33 +200,35 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
             await refresh()
 
         async def handle_tdata_upload(event: UploadEventArguments) -> None:
+            # Canary: first line of the handler is a log_event. If this never
+            # shows up in Live activity, the handler isn't running — either
+            # the app is still on old code (need restart after pull), or
+            # NiceGUI is not dispatching ``on_upload`` for some reason.
+            filename = getattr(event.file, "name", "?")
+            await log_event(
+                "INFO",
+                "account_tdata_import_started",
+                extra={"filename": filename},
+            )
             hide_status()
             show_progress("Распаковываю архив и читаю tdata…")
-            # Stream the upload to a temp file rather than reading the entire
-            # archive into RAM (1 GB cap × Pydantic copy = ~2 GB peak otherwise).
-            tmp = await asyncio.to_thread(_spool_upload_to_tempfile, event.file)
+            tmp: Path | None = None
             try:
-                # Hard ceiling so a stuck conversion (network call inside
-                # opentele2 with no proxy reachable, or a wedged subprocess)
-                # surfaces to the operator instead of pinning the dialog at
-                # "in progress" forever. The per-step log events in
-                # ``core.tdata_import`` will show which step ran last.
+                # Wrap *everything* in the timeout so a wedged spool — not
+                # just a wedged convert — surfaces as a timeout instead of
+                # pinning the dialog. Stream-spooling to a temp file keeps
+                # RAM flat (1 GB cap × Pydantic copy = ~2 GB peak otherwise).
                 result = await asyncio.wait_for(
-                    import_account_tdata(
-                        TdataConvertRequest(
-                            filename=event.file.name,
-                            content_path=tmp,
-                            label=label.value or None,
-                        ),
-                    ),
+                    _run_tdata_pipeline(event, tmp_holder := [None], label.value),
                     timeout=_TDATA_IMPORT_TIMEOUT_SECONDS,
                 )
+                tmp = tmp_holder[0]
             except TimeoutError:
                 await log_event(
                     "ERROR",
                     "account_tdata_import_timeout",
                     extra={
-                        "filename": event.file.name,
+                        "filename": filename,
                         "timeout_seconds": _TDATA_IMPORT_TIMEOUT_SECONDS,
                     },
                 )
@@ -192,7 +247,7 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
                     "ERROR",
                     "account_tdata_import_failed",
                     extra={
-                        "filename": event.file.name,
+                        "filename": filename,
                         "error_type": type(exc).__name__,
                         "error": str(exc),
                     },
@@ -202,8 +257,9 @@ async def _open_add_dialog(refresh: Callable[[], Awaitable[None]]) -> None:  # p
                 )
                 return
             finally:
-                with suppress(OSError):
-                    tmp.unlink()
+                if tmp is not None:
+                    with suppress(OSError):
+                        tmp.unlink()
             hide_status()
             dialog.close()
             ui.notify(
