@@ -326,10 +326,18 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateRecord:
         account_id=data.account_id, **insert_values
     )
     if data.expected_run_id is not None:
+        # Round-4 P1.1: belt+suspenders. The first predicate is the
+        # generation check; the second rejects any UPDATE that would
+        # overwrite a row already in ``idle``. So even if a future caller of
+        # _stop_warming forgets to clear run_id, the stale loop's CAS write
+        # still degrades to a no-op (the operator's idle wins).
         stmt = insert_stmt.on_conflict_do_update(
             index_elements=[_warming_account_state.c.account_id],
             set_=update_values,
-            where=(_warming_account_state.c.run_id == data.expected_run_id),
+            where=(
+                (_warming_account_state.c.run_id == data.expected_run_id)
+                & (_warming_account_state.c.state != "idle")
+            ),
         )
     else:
         stmt = insert_stmt.on_conflict_do_update(

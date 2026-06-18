@@ -193,11 +193,17 @@ async def _stop_warming_locked(account_id: str) -> None:
             )
     account = await fetch_account(account_id)
     if account is not None:
+        # Round-4 P1.1: clear run_id when stopping so the row carries no live
+        # generation. A stale loop's CAS write that targets the previous
+        # run_id therefore cannot match (its WHERE turns the UPDATE into a
+        # no-op). Belt; the CAS-rejects-idle clause in _upsert_warming_state
+        # is the suspenders.
         await _set_state(
             account_id,
             "idle",
             last_event="stopped",
             stopped_at=_now_iso(),
+            run_id=None,
         )
 
 

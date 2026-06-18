@@ -2516,46 +2516,48 @@ async def test_remove_account_stops_runtime_task(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
-async def test_stop_between_run_id_check_and_final_write_loses(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Round-2 P1: CAS upsert prevents stale loop from overwriting a fresh idle.
+async def test_real_stop_clears_run_id_so_stale_final_write_cannot_resurrect_idle() -> None:
+    """Round-4 P1.1: drives the *real* _stop_warming_locked + a stale CAS write.
 
-    Old loop passes the post-cycle guard (run_id still matches), then a stop
-    flips state to ``idle`` AND mints a new (None) run_id slot before the
-    final _set_state lands. With the CAS clause on the upsert, the stale
-    write must turn into a no-op rather than resurrecting ``sleeping``.
+    Earlier round 3 test simulated stop with a hand-written upsert that
+    cleared run_id — that masked a live bug where _stop_warming_locked did
+    NOT clear run_id, so a stale loop's CAS write (run_id still matches)
+    could sneak past and overwrite ``idle`` with ``sleeping``. This test
+    invokes the real stop helper and asserts both legs of the fix:
+    (1) stop clears run_id, (2) even if it did not, the upsert's CAS
+    rejects any UPDATE that would overwrite an idle row.
     """
-    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+    from services.warming._runtime import _stop_warming_locked  # noqa: PLC0415
+    from services.warming._state import _set_state  # noqa: PLC0415
 
     await create_account(AccountCreate(account_id="acc-1"))
-    await _seed_channel()
-    await _set_settings(chat=False, reactions=False, key="")
     await upsert_warming_state(
         WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
     )
 
-    async def cycle_with_stop_after_guard(req):  # type: ignore[no-untyped-def]
-        # Simulate stop_warming firing AFTER the iteration's post-cycle guard
-        # but before the final _set_state — flips state to idle and clears
-        # run_id, mimicking the real stop_warming sequence.
-        await upsert_warming_state(
-            WarmingStateWrite(
-                account_id=req.account_id,
-                state="idle",
-                last_event="stopped",
-                run_id=None,
-            ),
-        )
-        return WarmingCycleResult(account_id=req.account_id, status="ok")
-
-    monkeypatch.setattr(_loop, "run_one_cycle", cycle_with_stop_after_guard)
-
-    await run_loop_iteration("acc-1", run_id="run-a")
+    # Real stop. Must clear run_id (belt) so any stale CAS using run-a misses.
+    await _stop_warming_locked("acc-1")
     state = await fetch_warming_state("acc-1")
     assert state is not None
     assert state.state == "idle"
     assert state.run_id is None
+
+    # Now manually re-stamp run_id to simulate a future regression where
+    # stop forgot to clear it. The CAS-rejects-idle suspenders must still
+    # protect the row from a stale loop's write.
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="idle", run_id="run-a"),
+    )
+    await _set_state(
+        "acc-1",
+        "sleeping",
+        last_event="cycle:ok",
+        expected_run_id="run-a",
+    )
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "idle"  # suspenders held — the stale write was a no-op
+    assert state.last_event != "cycle:ok"
 
 
 @pytest.mark.asyncio
