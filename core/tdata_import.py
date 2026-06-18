@@ -18,6 +18,7 @@ Security guarantees:
 
 from __future__ import annotations
 
+import asyncio
 import importlib
 import io
 import logging
@@ -28,6 +29,7 @@ from contextlib import suppress
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from core.logging import log_event
 from schemas.tdata import (
     TdataAccountSummary,
     TdataConvertRequest,
@@ -139,9 +141,11 @@ async def convert_tdata_zip(
     Returns:
         ``TdataConvertResult`` with status and, on success, the list of accounts
         whose session files were written.
+
+    A ``log_event`` is fired at every major step so a stuck import can be
+    diagnosed from the activity feed — the last event before silence tells
+    you where it hung.
     """
-    # These filesystem ops are one-shot, user-initiated, and microsecond-fast.
-    # Wrapping them in to_thread would add complexity for no measurable gain.
     sessions_dir.mkdir(parents=True, exist_ok=True)  # noqa: ASYNC240
     tmp_dir = Path(
         tempfile.mkdtemp(
@@ -149,25 +153,63 @@ async def convert_tdata_zip(
             dir=str(tmp_base) if tmp_base is not None else None,
         ),
     )
+    await log_event(
+        "INFO",
+        "tdata_convert_started",
+        extra={"filename": req.filename, "tmp_dir": str(tmp_dir)},
+    )
     try:
         source: bytes | Path = req.content_path if req.content_path is not None else req.content
-        reject = _safe_extract_zip(source, tmp_dir)
+        # ZIP extraction of a multi-hundred-MB archive blocks for seconds —
+        # do it on a worker thread so the event loop stays responsive (the UI
+        # progress label must stay reactive while extraction runs).
+        reject = await asyncio.to_thread(_safe_extract_zip, source, tmp_dir)
         if reject is not None:
+            await log_event(
+                "WARNING",
+                "tdata_convert_zip_rejected",
+                extra={"status": reject, "filename": req.filename},
+            )
             return TdataConvertResult(status=reject)
+        await log_event(
+            "INFO",
+            "tdata_convert_zip_extracted",
+            extra={"filename": req.filename},
+        )
 
-        tdata_dir = _find_tdata_dir(tmp_dir)
+        tdata_dir = await asyncio.to_thread(_find_tdata_dir, tmp_dir)
         if tdata_dir is None:
+            await log_event(
+                "WARNING",
+                "tdata_convert_tdata_dir_not_found",
+                extra={"filename": req.filename},
+            )
             return TdataConvertResult(status="tdata_not_found")
+        await log_event(
+            "INFO",
+            "tdata_convert_tdata_dir_found",
+            extra={"tdata_dir": str(tdata_dir)},
+        )
 
         tdesktop_factory, use_current_session = _opentele2_runtime()
         try:
-            td = tdesktop_factory(basePath=str(tdata_dir))
+            td = await asyncio.to_thread(tdesktop_factory, basePath=str(tdata_dir))
         except Exception as exc:
             logger.exception("TDesktop load failed")
+            await log_event(
+                "ERROR",
+                "tdata_convert_tdesktop_load_failed",
+                extra={"error_type": type(exc).__name__, "error": str(exc)},
+            )
             return TdataConvertResult(
                 status="conversion_error",
                 error=f"TDesktop load failed: {exc}",
             )
+        await log_event(
+            "INFO",
+            "tdata_convert_tdesktop_loaded",
+            extra={"accounts_count": td.accountsCount},
+        )
 
         if td.accountsCount == 0:
             return TdataConvertResult(status="no_accounts")
@@ -181,6 +223,16 @@ async def convert_tdata_zip(
             session_name = f"{user_id or f'tdata_{index}'}.session"
             session_path = sessions_dir / session_name
 
+            await log_event(
+                "INFO",
+                "tdata_convert_account_starting",
+                extra={
+                    "index": index,
+                    "user_id": user_id,
+                    "session_path": str(session_path),
+                },
+            )
+
             try:
                 client = await account.ToTelethon(
                     session=str(session_path),
@@ -188,6 +240,16 @@ async def convert_tdata_zip(
                 )
             except Exception as exc:
                 logger.exception("ToTelethon failed for user_id=%s", user_id)
+                await log_event(
+                    "ERROR",
+                    "tdata_convert_to_telethon_failed",
+                    extra={
+                        "index": index,
+                        "user_id": user_id,
+                        "error_type": type(exc).__name__,
+                        "error": str(exc),
+                    },
+                )
                 return TdataConvertResult(
                     status="conversion_error",
                     error=f"ToTelethon failed for user_id={user_id}: {exc}",
@@ -197,10 +259,21 @@ async def convert_tdata_zip(
             with suppress(Exception):
                 await client.disconnect()
 
+            await log_event(
+                "INFO",
+                "tdata_convert_account_done",
+                extra={"index": index, "user_id": user_id},
+            )
+
             summaries.append(
                 TdataAccountSummary(user_id=user_id, session_path=str(session_path)),
             )
 
+        await log_event(
+            "INFO",
+            "tdata_convert_completed",
+            extra={"accounts": len(summaries)},
+        )
         return TdataConvertResult(status="ok", accounts=summaries)
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
