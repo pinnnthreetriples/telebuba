@@ -95,7 +95,9 @@ async def _render_dialogues() -> None:  # pragma: no cover
                 _render_dialogue_body(overview)
 
         await refresh_dialogues()
-        context.client.on_disconnect(ui.timer(_BOARD_POLL_SECONDS, refresh_dialogues).cancel)
+        # See features/warming/__init__.py for why the lambda wrapper is necessary.
+        dialogues_timer = ui.timer(_BOARD_POLL_SECONDS, refresh_dialogues)
+        context.client.on_disconnect(lambda: dialogues_timer.cancel())  # noqa: PLW0108
 
 
 async def _render_activity_log() -> None:  # pragma: no cover
@@ -138,4 +140,6 @@ async def _render_activity_log() -> None:  # pragma: no cover
 
         warming_only_switch.on_value_change(lambda _e: asyncio.create_task(refresh_log()))
         await refresh_log()
-        context.client.on_disconnect(ui.timer(_LOG_POLL_SECONDS, refresh_log).cancel)
+        # See features/warming/__init__.py for why the lambda wrapper is necessary.
+        log_timer = ui.timer(_LOG_POLL_SECONDS, refresh_log)
+        context.client.on_disconnect(lambda: log_timer.cancel())  # noqa: PLW0108

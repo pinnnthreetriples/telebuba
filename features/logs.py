@@ -117,7 +117,9 @@ async def _render_logs_page() -> None:  # pragma: no cover
     status_select.on("update:model-value", refresh_from_event)
 
     await refresh()
-    context.client.on_disconnect(ui.timer(_POLL_INTERVAL_SECONDS, refresh).cancel)
+    # See features/warming/__init__.py for why the lambda wrapper is necessary.
+    poll_timer = ui.timer(_POLL_INTERVAL_SECONDS, refresh)
+    context.client.on_disconnect(lambda: poll_timer.cancel())  # noqa: PLW0108
 
 
 def _to_row_dict(entry: LogEntry) -> dict[str, object]:  # pragma: no cover

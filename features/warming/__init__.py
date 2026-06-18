@@ -110,7 +110,13 @@ async def _render_warming_page() -> None:  # pragma: no cover
             return asyncio.create_task(reload(force=True))
 
         await render_board()
-        context.client.on_disconnect(ui.timer(_BOARD_POLL_SECONDS, reload).cancel)
+        # NiceGUI 3.x's Timer.cancel signature is ``(self, *, with_current_invocation)``;
+        # passing the bound method directly trips ``client.safe_invoke`` (it sees
+        # one parameter and calls ``cancel(client)``, which raises TypeError on
+        # disconnect). Wrap in a no-arg lambda so safe_invoke takes the ``func()``
+        # branch.
+        board_timer = ui.timer(_BOARD_POLL_SECONDS, reload)
+        context.client.on_disconnect(lambda: board_timer.cancel())  # noqa: PLW0108
 
         await _render_dialogues()
         await _render_activity_log()

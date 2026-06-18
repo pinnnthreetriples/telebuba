@@ -13,6 +13,7 @@ keep working.
 
 from __future__ import annotations
 
+import atexit
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
@@ -187,6 +188,20 @@ def configure_database(database_path: Path) -> None:
         _state.engine.dispose()
     _state.database_path = database_path
     _state.engine = None
+
+
+def dispose_engine() -> None:
+    """Release the SQLAlchemy connection pool.
+
+    Registered via ``atexit`` so a clean process exit closes pooled
+    connections and does not leak a ``ResourceWarning: unclosed database``.
+    """
+    if _state.engine is not None:
+        _state.engine.dispose()
+        _state.engine = None
+
+
+atexit.register(dispose_engine)
 
 
 def _get_engine() -> Engine:
