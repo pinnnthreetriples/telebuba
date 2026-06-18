@@ -141,6 +141,13 @@ def _add_unique_session_name_index(connection: Connection) -> None:
     # on every startup. Auto-remediate by keeping the oldest row per
     # session_name and nulling the rest, logging which accounts were touched
     # so the operator can clean up later.
+    #
+    # Round-4 P2.3: when we null a row's session_name, its session file path
+    # silently changes (``_session_path`` falls back to ``account_id`` when
+    # session_name is None). Leaving ``status='alive'`` would mean the next
+    # runtime action opens a non-existent / different session — better to
+    # mark the row ``new`` so the operator re-runs the session check before
+    # we trust it again.
     rows = connection.exec_driver_sql(
         "SELECT account_id, session_name FROM accounts "
         "WHERE session_name IS NOT NULL "
@@ -154,10 +161,13 @@ def _add_unique_session_name_index(connection: Connection) -> None:
             nulled.append((str(account_id), name))
             continue
         seen.add(name)
+    applied_at = datetime.now(UTC).isoformat()
     for account_id, _name in nulled:
         connection.exec_driver_sql(
-            "UPDATE accounts SET session_name = NULL WHERE account_id = ?",
-            (account_id,),
+            "UPDATE accounts "
+            "SET session_name = NULL, status = 'new', updated_at = ? "
+            "WHERE account_id = ?",
+            (applied_at, account_id),
         )
     if nulled:
         # No direct dependency on core.logging here (migrations are import-light);
@@ -171,12 +181,16 @@ def _add_unique_session_name_index(connection: Connection) -> None:
             "  applied_at VARCHAR NOT NULL"
             ")",
         )
-        applied_at = datetime.now(UTC).isoformat()
         for account_id, name in nulled:
             connection.exec_driver_sql(
                 "INSERT INTO schema_remediations (migration, account_id, detail, applied_at) "
                 "VALUES (?, ?, ?, ?)",
-                (7, account_id, f"session_name {name!r} nulled (duplicate)", applied_at),
+                (
+                    7,
+                    account_id,
+                    f"session_name {name!r} nulled (duplicate); status -> 'new'",
+                    applied_at,
+                ),
             )
     connection.exec_driver_sql(
         "CREATE UNIQUE INDEX IF NOT EXISTS ix_accounts_session_name_unique "

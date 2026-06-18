@@ -2741,3 +2741,68 @@ async def test_stale_cycle_started_cas_failure_prevents_telegram_io(
     assert result.detail == "stale run"
     # The point of the fix: NO Telegram actions on behalf of the stale loop.
     assert recorder.actions == []
+
+
+@pytest.mark.asyncio
+async def test_migration_duplicate_session_name_marks_nulled_accounts_not_alive(
+    tmp_path: Path,
+) -> None:
+    """Round-4 P2.3: nulling a duplicate session_name must also flip status.
+
+    Without flipping status, an account left as ``alive`` after losing its
+    session_name silently switches its session file path (``_session_path``
+    falls back to account_id when session_name is None) — the operator
+    thinks the account is healthy while every runtime action talks to a
+    different session file.
+    """
+    from sqlalchemy import create_engine  # noqa: PLC0415
+
+    from core.migrations import apply_migrations  # noqa: PLC0415
+
+    db_path = tmp_path / "legacy_alive.db"
+    engine = create_engine(f"sqlite:///{db_path}", future=True)
+    try:
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TABLE accounts ("
+                "  account_id VARCHAR PRIMARY KEY,"
+                "  label VARCHAR,"
+                "  session_name VARCHAR,"
+                "  status VARCHAR NOT NULL,"
+                "  created_at VARCHAR NOT NULL,"
+                "  updated_at VARCHAR NOT NULL"
+                ")",
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+                "VALUES ('acc-1', 'shared', 'alive', '2026-01-01', '2026-01-01')",
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO accounts (account_id, session_name, status, created_at, updated_at) "
+                "VALUES ('acc-2', 'shared', 'alive', '2026-01-02', '2026-01-02')",
+            )
+        with engine.begin() as connection:
+            connection.exec_driver_sql(
+                "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, name VARCHAR NOT NULL, "
+                "applied_at VARCHAR NOT NULL)",
+            )
+            for version in (1, 2, 3, 4, 5, 6, 8):
+                connection.exec_driver_sql(
+                    "INSERT INTO schema_version VALUES (?, 'stub', '2026-01-01')",
+                    (version,),
+                )
+
+        apply_migrations(engine)
+
+        with engine.connect() as connection:
+            rows = connection.exec_driver_sql(
+                "SELECT account_id, session_name, status FROM accounts ORDER BY account_id",
+            ).all()
+            by_id = {str(row[0]): row for row in rows}
+            assert by_id["acc-1"][1] == "shared"  # oldest kept its name
+            assert by_id["acc-1"][2] == "alive"  # and its status
+            assert by_id["acc-2"][1] is None  # duplicate nulled
+            assert by_id["acc-2"][2] != "alive"  # AND demoted so operator re-checks
+            assert by_id["acc-2"][2] == "new"
+    finally:
+        engine.dispose()
