@@ -95,8 +95,7 @@ async def _render_dialogues() -> None:  # pragma: no cover
                 _render_dialogue_body(overview)
 
         await refresh_dialogues()
-        t = ui.timer(_BOARD_POLL_SECONDS, refresh_dialogues)
-        context.client.on_disconnect(t.cancel)
+        context.client.on_disconnect(ui.timer(_BOARD_POLL_SECONDS, refresh_dialogues).cancel)
 
 
 async def _render_activity_log() -> None:  # pragma: no cover
@@ -139,5 +138,4 @@ async def _render_activity_log() -> None:  # pragma: no cover
 
         warming_only_switch.on_value_change(lambda _e: asyncio.create_task(refresh_log()))
         await refresh_log()
-        t = ui.timer(_LOG_POLL_SECONDS, refresh_log)
-        context.client.on_disconnect(t.cancel)
+        context.client.on_disconnect(ui.timer(_LOG_POLL_SECONDS, refresh_log).cancel)

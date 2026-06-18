@@ -117,8 +117,7 @@ async def _render_logs_page() -> None:  # pragma: no cover
     status_select.on("update:model-value", refresh_from_event)
 
     await refresh()
-    t = ui.timer(_POLL_INTERVAL_SECONDS, refresh)
-    context.client.on_disconnect(t.cancel)
+    context.client.on_disconnect(ui.timer(_POLL_INTERVAL_SECONDS, refresh).cancel)
 
 
 def _to_row_dict(entry: LogEntry) -> dict[str, object]:  # pragma: no cover
