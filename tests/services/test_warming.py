@@ -2806,3 +2806,66 @@ async def test_migration_duplicate_session_name_marks_nulled_accounts_not_alive(
             assert by_id["acc-2"][2] == "new"
     finally:
         engine.dispose()
+
+
+@pytest.mark.asyncio
+async def test_stale_quarantine_cas_failure_prevents_spam_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Round-5 P1: a stale quarantine recovery must not hit @SpamBot.
+
+    Round-4 P1.2 closed the regular cycle path, but ``_recover_from_quarantine``
+    issued ``_seams.refresh_spam_status(account_id, force=True)`` *before*
+    any CAS write — so a stale loop in the quarantine branch would still
+    perform external Telegram I/O on behalf of a generation that the
+    operator had already replaced.
+
+    Force the race: DB row carries the new generation (``run-b``); lie to
+    the iteration's pre-cycle guard so it sees ``run-a`` and steps into
+    ``_recover_from_quarantine``. The CAS-gate inside the recovery branch
+    must short-circuit before the spam probe fires.
+    """
+    from services.warming._loop import run_loop_iteration  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="")
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="quarantine",
+            quarantine_count=0,
+            run_id="run-b",
+        ),
+    )
+
+    real_fetch = _loop.fetch_warming_state
+    fetch_calls = {"n": 0}
+
+    async def fake_fetch(account_id: str):  # type: ignore[no-untyped-def]
+        fetch_calls["n"] += 1
+        if fetch_calls["n"] == 1:
+            real = await real_fetch(account_id)
+            if real is None:
+                return real
+            return real.model_copy(update={"run_id": "run-a"})
+        return await real_fetch(account_id)
+
+    monkeypatch.setattr(_loop, "fetch_warming_state", fake_fetch)
+
+    probe_calls: list[str] = []
+
+    async def fake_probe(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        probe_calls.append(account_id)
+        return SpamStatusVerdict(
+            account_id=account_id,
+            status="clean",
+            detail=None,
+            checked_at="2026-01-01T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", fake_probe)
+
+    result = await run_loop_iteration("acc-1", run_id="run-a")
+    assert result.status == "skipped"
+    assert result.detail == "stale run"
+    assert probe_calls == []

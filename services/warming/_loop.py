@@ -65,11 +65,26 @@ async def _recover_from_quarantine(
     account returns to warming, a still-limited one is re-quarantined until the
     configured repeat cap, after which it is given up on (error + alert).
 
-    ``run_id`` (Round-2 P1): if supplied, every write inside this branch is
-    CAS-guarded against the row's current run_id, so a quarantine probe that
-    raced a new start_warming cannot overwrite the fresh generation.
+    ``run_id`` (Round-2 P1 + Round-5 P1): if supplied, every write is
+    CAS-guarded against the row's current run_id. A new CAS-write fires
+    *before* ``refresh_spam_status`` so a stale loop does not issue the
+    external @SpamBot probe on behalf of a generation that's already been
+    replaced — the round-4 P1.2 fix only protected the regular cycle path,
+    quarantine was still open.
     """
     warm = settings.warming
+    # Round-5 P1: pre-probe CAS. Telegram I/O lives behind this gate.
+    probe_started = await _set_state(
+        account_id,
+        "quarantine",
+        last_event="quarantine_probe_started",
+        heartbeat_at=now.isoformat(),
+        quarantine_count=record.quarantine_count,
+        expected_run_id=run_id,
+    )
+    if run_id is not None and not probe_started.applied:
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+
     verdict = await _seams.refresh_spam_status(account_id, force=True)
     if verdict.status != "limited":
         next_run = (now + timedelta(seconds=warm.startup_jitter_max_seconds)).isoformat()
