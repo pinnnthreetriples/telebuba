@@ -10,7 +10,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING
 
-from nicegui import ui
+from nicegui import context, ui
 
 from features.warming._board import _BOARD_POLL_SECONDS
 from schemas.logs import LogFilter
@@ -95,7 +95,8 @@ async def _render_dialogues() -> None:  # pragma: no cover
                 _render_dialogue_body(overview)
 
         await refresh_dialogues()
-        ui.timer(_BOARD_POLL_SECONDS, refresh_dialogues)
+        t = ui.timer(_BOARD_POLL_SECONDS, refresh_dialogues)
+        context.client.on_disconnect(t.cancel)
 
 
 async def _render_activity_log() -> None:  # pragma: no cover
@@ -138,4 +139,5 @@ async def _render_activity_log() -> None:  # pragma: no cover
 
         warming_only_switch.on_value_change(lambda _e: asyncio.create_task(refresh_log()))
         await refresh_log()
-        ui.timer(_LOG_POLL_SECONDS, refresh_log)
+        t = ui.timer(_LOG_POLL_SECONDS, refresh_log)
+        context.client.on_disconnect(t.cancel)

@@ -10,7 +10,7 @@ from __future__ import annotations
 import json
 from typing import TYPE_CHECKING
 
-from nicegui import ui
+from nicegui import context, ui
 
 from schemas.logs import LogEntry, LogFilter
 from services.logs import load_logs_page
@@ -117,7 +117,8 @@ async def _render_logs_page() -> None:  # pragma: no cover
     status_select.on("update:model-value", refresh_from_event)
 
     await refresh()
-    ui.timer(_POLL_INTERVAL_SECONDS, refresh)
+    t = ui.timer(_POLL_INTERVAL_SECONDS, refresh)
+    context.client.on_disconnect(t.cancel)
 
 
 def _to_row_dict(entry: LogEntry) -> dict[str, object]:  # pragma: no cover
