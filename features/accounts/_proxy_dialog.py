@@ -153,7 +153,6 @@ async def _open_proxy_dialog(  # pragma: no cover
 ) -> None:
     account_id = str(row["account_id"])
     existing = await fetch_account_proxy_settings(account_id)
-    pw_hint = "оставьте пустым, чтобы не менять" if existing and existing.password else ""
     with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[460px] max-w-full"):
         ui.label("Настройки прокси").classes("text-base font-semibold")
         form = _ProxyForm(
@@ -170,9 +169,10 @@ async def _open_proxy_dialog(  # pragma: no cover
                 "Логин",
                 value=(existing.username if existing else None) or "",
             ).props("dense outlined clearable"),
-            password=ui.input("Пароль", placeholder=pw_hint).props(
-                "dense outlined clearable type=password",
-            ),
+            password=ui.input(
+                "Пароль",
+                value=(existing.password if existing else None) or "",
+            ).props("dense outlined clearable type=password"),
         )
         with ui.column().classes(
             "w-full gap-1 rounded border border-slate-200 bg-slate-50 px-3 py-2",
@@ -193,7 +193,11 @@ async def _open_proxy_dialog(  # pragma: no cover
             geo_label=geo_label,
             error_label=error_label,
         )
-        remove = lambda: _remove_proxy(account_id=account_id, dialog=dialog, refresh=refresh)  # noqa: E731
+        remove = lambda: _remove_proxy(  # noqa: E731
+            account_id=account_id,
+            dialog=dialog,
+            refresh=refresh,
+        )
         with ui.row().classes("w-full justify-between gap-2"):
             ui.button(icon="delete", color="negative", on_click=remove).tooltip("Удалить прокси")
             with ui.row().classes("gap-2"):

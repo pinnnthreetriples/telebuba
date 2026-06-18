@@ -165,6 +165,71 @@ async def test_upsert_account_proxy_preserves_check_state_when_identity_unchange
 
 
 @pytest.mark.asyncio
+async def test_upsert_account_proxy_preserves_check_state_when_password_unchanged(
+    tmp_path,
+) -> None:
+    """Re-save with a pre-filled password (same value) must not reset check state.
+
+    Dialog now pre-fills the password, so the caller sends the literal current
+    password on every save. The repo must treat equal passwords as "unchanged".
+    """
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-pwd"))
+    await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(
+            account_id="acc-pwd",
+            host="1.2.3.4",
+            port=9050,
+            username="alice",
+            password="pwd",  # noqa: S106 - test fixture.
+        ),
+    )
+    await update_account_proxy_check(
+        AccountProxyCheckUpdate(account_id="acc-pwd", status="tcp_working", country_code="NL"),
+    )
+
+    re_saved = await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(
+            account_id="acc-pwd",
+            host="1.2.3.4",
+            port=9050,
+            username="alice",
+            password="pwd",  # noqa: S106 - test fixture.
+        ),
+    )
+
+    assert re_saved.status == "tcp_working"
+    assert re_saved.country_code == "NL"
+    assert re_saved.has_password is True
+
+
+@pytest.mark.asyncio
+async def test_upsert_account_proxy_clears_stored_password_when_field_emptied(
+    tmp_path,
+) -> None:
+    """Clearing the dialog password field actually removes the stored password.
+
+    Previously, password=None on update meant "leave unchanged" — but with the
+    pre-fill UX that magic is gone: None means the user wants no password.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-clear"))
+    await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(
+            account_id="acc-clear",
+            password="pwd",  # noqa: S106 - test fixture.
+        ),
+    )
+
+    re_saved = await upsert_account_proxy(
+        AccountProxyUpsertFactory.build(account_id="acc-clear", password=None),
+    )
+
+    assert re_saved.has_password is False
+    assert re_saved.status == "unknown"
+
+
+@pytest.mark.asyncio
 async def test_upsert_account_proxy_resets_check_state_on_identity_change(tmp_path) -> None:
     """Changing host/port/type/username invalidates the prior check — fields must clear."""
     configure_database(tmp_path / "telebuba.db")
