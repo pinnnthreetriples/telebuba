@@ -107,13 +107,8 @@ _CHECK_TEXT = {
 # emerald). The chip's bg/text/ring trio matches; the progress bar reuses the
 # ``-500`` tone for fill. Red is reserved for diagnostic lines elsewhere on
 # the card, so phase colours stop at emerald.
-_PHASE_LABEL_RU = {
-    "intro": "🥚 Знакомство",
-    "settling": "🐣 Обвыкается",
-    "warming": "🐥 Прогревается",
-    "active": "🐤 Активный",
-    "warmed": "🦅 Прогрет",
-}
+# The chip *text* itself comes from ``card.phase_label`` populated by
+# ``services/warming/board.py`` — single source of truth for phase wording.
 _PHASE_CHIP_CLASSES = {
     "intro": "bg-slate-100 text-slate-700 ring-slate-200",
     "settling": "bg-sky-50 text-sky-800 ring-sky-200",
@@ -622,10 +617,10 @@ def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
 
 
 _NEXT_PHASE_SHORT = {
-    "intro": "Обвыкается",
-    "settling": "Прогревается",
-    "warming": "Активный",
-    "active": "Прогрет",
+    "intro": "Адаптация",
+    "settling": "Развитие",
+    "warming": "Окрепший",
+    "active": "Зрелый",
 }
 
 
