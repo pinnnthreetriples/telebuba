@@ -111,8 +111,12 @@ async def telegram_client(request: TelegramClientRequest) -> AsyncIterator[Teleg
 def _proxy_config(profile: TelegramClientProfile) -> dict[str, object] | None:
     if not profile.proxy_type or not profile.proxy_host or profile.proxy_port is None:
         return None
+    # Telethon's proxy dict speaks python-socks names: "socks5" / "http". Our
+    # internal type uses "https" to match how proxy sellers advertise the
+    # protocol — same underlying CONNECT tunnel, just relabelled at the edge.
+    telethon_type = "http" if profile.proxy_type == "https" else profile.proxy_type
     return {
-        "proxy_type": profile.proxy_type,
+        "proxy_type": telethon_type,
         "addr": profile.proxy_host,
         "port": profile.proxy_port,
         "rdns": True,

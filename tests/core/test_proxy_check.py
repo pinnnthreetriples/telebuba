@@ -143,7 +143,7 @@ async def test_check_proxy_connectivity_maps_os_error(monkeypatch: pytest.Monkey
     result = await check_proxy_connectivity(
         AccountProxySettings(
             account_id="acc",
-            proxy_type="http",
+            proxy_type="https",
             host="127.0.0.1",
             port=8080,
         ),

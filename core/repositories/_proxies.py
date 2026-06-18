@@ -96,7 +96,6 @@ async def fetch_account_proxy_settings(account_id: str) -> AccountProxySettings 
 
 
 def _upsert_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
-
     from core.repositories.accounts import _fetch_account  # noqa: PLC0415
 
     if _fetch_account(data.account_id) is None:
@@ -106,20 +105,19 @@ def _upsert_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
     host = data.host.strip()
     username = data.username.strip() if data.username else None
     existing = _fetch_account_proxy_settings(data.account_id)
-    # password=None means "leave unchanged" — dialog never replays it back, so an
-    # empty field cannot be distinguished from no edit. Same rule for identity.
     identity_changed = existing is None or (
         data.proxy_type != existing.proxy_type
         or host != existing.host
         or data.port != existing.port
         or username != existing.username
-        or (data.password is not None and data.password != existing.password)
+        or data.password != existing.password
     )
     values: dict[str, object | None] = {
         "proxy_type": data.proxy_type,
         "host": host,
         "port": data.port,
         "username": username,
+        "password": data.password,
         "updated_at": now,
     }
     if identity_changed:
@@ -138,14 +136,11 @@ def _upsert_account_proxy(data: AccountProxyUpsert) -> AccountProxyRead:
             connection.execute(
                 insert(_account_proxies).values(
                     account_id=data.account_id,
-                    password=data.password,
                     created_at=now,
                     **values,
                 ),
             )
         else:
-            if data.password is not None:
-                values["password"] = data.password
             connection.execute(
                 update(_account_proxies)
                 .where(_account_proxies.c.account_id == data.account_id)
