@@ -116,7 +116,7 @@ async def _render_warming_page() -> None:  # pragma: no cover
         # disconnect). Wrap in a no-arg lambda so safe_invoke takes the ``func()``
         # branch.
         board_timer = ui.timer(_BOARD_POLL_SECONDS, reload)
-        context.client.on_disconnect(lambda: board_timer.cancel())  # noqa: PLW0108
+        context.client.on_disconnect(lambda: board_timer.cancel(with_current_invocation=True))
 
         await _render_dialogues()
         await _render_activity_log()
