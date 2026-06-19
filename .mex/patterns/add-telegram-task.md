@@ -15,7 +15,7 @@ edges:
     condition: when the Telegram action is part of a new feature
   - target: patterns/add-warming-job.md
     condition: when the action runs inside the warming runtime
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Add a Telegram Action

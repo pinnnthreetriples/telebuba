@@ -17,7 +17,7 @@ edges:
     condition: when the question is the rule (no print, gateway via core/logging.py)
   - target: context/telegram.md
     condition: when classifying a Telegram-side event
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Logging

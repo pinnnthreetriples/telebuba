@@ -19,7 +19,7 @@ edges:
     condition: when the Telegram call is part of the runtime workflow
   - target: patterns/add-telegram-task.md
     condition: when adding any new Telethon-using action
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Telegram (Telethon) Integration

@@ -17,7 +17,7 @@ edges:
     condition: when picking a task — load coding rules before starting
   - target: patterns/INDEX.md
     condition: when starting work on a board item — check for a matching pattern first
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Kanban Workflow
@@ -96,7 +96,7 @@ Run the move command from "Common Commands" below with `--single-select-option-i
 
 ### Step 4 — Do the work
 
-- Create a branch named `<type>/<issue-number>-<short-slug>` (e.g. `feat/12-account-creation`, `fix/9-floodwait-backoff`).
+- Create a branch named like `type-issue_number-short_slug` (for example, a `feat` branch for issue 12 on account creation, or a `fix` branch for issue 9 on floodwait backoff).
 - Reference the issue in every commit message: `... (#12)` or `Refs #12`.
 - Follow `context/conventions.md` and any matching `patterns/` runbook.
 

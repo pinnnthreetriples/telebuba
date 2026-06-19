@@ -11,7 +11,7 @@ edges:
     condition: when listing developer commands
   - target: state/active.md
     condition: when a known issue mentions rtk hook unavailability
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # RTK (Rust Token Killer)
@@ -27,7 +27,7 @@ A `PreToolUse` hook on `Bash` rewrites commands to `rtk <cmd>` automatically —
 
 ## Do NOT prefix `rtk` for
 
-- Interactive commands or commands that need a TTY (`uv run python main.py` while developing, `gh auth login`, anything with REPL).
+- Interactive commands or commands that need a TTY (`uv run python` `main.py` while developing, `gh auth login`, anything with REPL).
 - Commands where the user explicitly asks for the raw output.
 - One-shot operations whose output is already terse (e.g. `git push`, `git commit`).
 

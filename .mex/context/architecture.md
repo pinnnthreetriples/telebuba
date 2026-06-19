@@ -23,7 +23,7 @@ edges:
     condition: when working with runtime workflow tasks
   - target: context/logging.md
     condition: when working with the three-tier logging architecture
-last_updated: 2026-06-17
+last_updated: 2026-06-19
 ---
 
 # Architecture
@@ -72,10 +72,10 @@ Four layers, top (UI) to bottom (infra). `schemas/` is the shared types side-ban
 
 ```text
 main.py
-  └─ features/*        UI-thin pages/components/click handlers. NO business logic.
-       └─ services/*   business logic, state transitions, runtime workflow orchestration.
-            └─ core/*  infrastructure gateways: db/repositories, telegram_client, gemini, config, logging.
-                 └─ schemas/*    Pydantic models — pure data, no project imports.
+  └─ features/        UI-thin pages/components/click handlers. NO business logic.
+       └─ services/   business logic, state transitions, runtime workflow orchestration.
+            └─ core/  infrastructure gateways: db/repositories, telegram_client, gemini, config, logging.
+                 └─ schemas/    Pydantic models — pure data, no project imports.
 ```
 
 `schemas/` is shared types, not a downstream layer. All layers may import schema types; schemas must not import layers.
@@ -84,24 +84,24 @@ main.py
 
 | Layer | May import |
 | --- | --- |
-| `features/**` | `services/*`, `core/*`, `schemas/*`, NiceGUI. UI logic only — business logic goes to `services/`. |
-| `services/**` | other `services/*`, `core/*`, `schemas/*`. Composition between services is allowed. |
-| `core/**` | `schemas/*`, stdlib, third-party SDKs. Not `features/*` or `services/*`. |
-| `schemas/*.py` | `pydantic`, `typing`, stdlib typing helpers only. |
-| `tests/**` | anything (verification layer). |
+| `features/` | `services/`, `core/`, `schemas/`, NiceGUI. UI logic only — business logic goes to `services/`. |
+| `services/` | other `services/`, `core/`, `schemas/`. Composition between services is allowed. |
+| `core/` | `schemas/`, stdlib, third-party SDKs. Not `features/` or `services/`. |
+| `schemas/` | `pydantic`, `typing`, stdlib typing helpers only. |
+| `tests/` | anything (verification layer). |
 
 ## Forbidden Imports (each breaks a non-negotiable)
 
 | In… | Must NOT import | Why |
 | --- | --- | --- |
 | any `features/<a>/**` | `features/<b>/**` (another feature) | Rule 1 — Feature Isolation |
-| any `features/**` | `sqlalchemy`, `telethon` | Rule 6 — gateways only via `core/*` |
-| any `services/**` | `sqlalchemy`, `telethon`, raw provider SDK/HTTP clients | Rule 6 — services use `core/` adapters, never SDKs directly |
-| any `services/**` | `nicegui`, anything UI-specific | Rule 11 — services are UI-agnostic |
+| any `features/` | `sqlalchemy`, `telethon` | Rule 6 — gateways only via `core/` |
+| any `services/` | `sqlalchemy`, `telethon`, raw provider SDK/HTTP clients | Rule 6 — services use `core/` adapters, never SDKs directly |
+| any `services/` | `nicegui`, anything UI-specific | Rule 11 — services are UI-agnostic |
 | any module outside `core/logging.py` | `loguru`, `sentry_sdk` | Rule 4 — logging only via `core/logging.py` |
 | any module outside `core/config.py` | `os.environ`, raw `dotenv` | Rule 3 — config only via `core/config.py` |
-| `schemas/*` | `core/*`, `services/*`, `features/*`, any I/O library | Rule 5 — schemas are pure data, no behavior |
-| `core/*` | `services/*`, `features/*` | Rule 5 — core does not know about services or features |
+| `schemas/` | `core/`, `services/`, `features/`, any I/O library | Rule 5 — schemas are pure data, no behavior |
+| `core/` | `services/`, `features/` | Rule 5 — core does not know about services or features |
 
 Rule numbers reference the canonical list in `context/conventions.md`. `.mex/AGENTS.md` mirrors the same rules in one-line form.
 
@@ -123,7 +123,7 @@ Inside a single function or private module, regular Python data structures are f
 - **`core/gemini.py`** — Gemini HTTP gateway. Only place raw Gemini HTTP calls belong.
 - **`core/tdata_import.py`** — opentele2 adapter. Safe-extracts `tdata.zip` and writes Telethon `.session` files.
 - **`core/logging.py`** — loguru file sink + SQLite `logs` + optional Sentry. The only logging gateway.
-- **`schemas/*.py`** — Pydantic models flowing between UI, services, core, and DB. `schemas/telegram_actions.py` declares Telegram actions as typed Pydantic classes.
+- **`schemas/`** — Pydantic models flowing between UI, services, core, and DB. `schemas/telegram_actions.py` declares Telegram actions as typed Pydantic classes.
 - **`services/accounts/`** — account lifecycle/actions, session import/check, proxy operations, profile/media actions; UI-agnostic.
 - **`services/warming/`** — runtime workflow package: channel parsing, settings storage, board read model, pacing/readiness, cycle execution, runtime task ownership.
 - **`features/accounts/` / `features/warming/` / `features/logs.py`** — UI-thin NiceGUI pages; validate, call services, render.

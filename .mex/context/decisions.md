@@ -28,7 +28,7 @@ last_updated: 2026-06-17
 - *Logic in `features/`* (rejected — duplication and feature-boundary violations).
 - *Logic in `core/`* (rejected — core is for infrastructure adapters, not domain rules).
 - *Single-file services layer* (rejected — god-module risk).
-**Consequences:** `services/` is the home of every algorithm/state transition/domain operation. Tests target services directly with mocked `core/*` adapters. Layer matrix in architecture.md has four layers.
+**Consequences:** `services/` is the home of every algorithm/state transition/domain operation. Tests target services directly with mocked `core/` adapters. Layer matrix in architecture.md has four layers.
 
 ### Typed Telegram actions + central executor
 **Date:** 2026-06-10
@@ -95,7 +95,7 @@ last_updated: 2026-06-17
 ### `schemas/` is shared types, not a layer — `core/` may import it
 **Date:** 2026-06-10
 **Status:** Active
-**Decision:** `schemas/*.py` contains only Pydantic models with dependencies on Pydantic and typing/stdlib helpers. Both `features/*` and `core/*` may import from `schemas/`.
+**Decision:** `schemas/` contains only Pydantic models with dependencies on Pydantic and typing/stdlib helpers. Both `features/` and `core/` may import from `schemas/`.
 **Reasoning:** Public gateways must return Pydantic models. If `core/` cannot import `schemas/`, it would return ORM objects or dicts and force every caller to write mappers.
 **Alternatives considered:**
 - *Mapper in `features/`* (rejected — duplication and drift).

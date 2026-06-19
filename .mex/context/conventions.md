@@ -17,7 +17,7 @@ edges:
     condition: when a convention is tied to a specific library
   - target: patterns/add-feature.md
     condition: when adding a new user-facing feature
-last_updated: 2026-06-17
+last_updated: 2026-06-19
 ---
 
 # Conventions
@@ -50,17 +50,17 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
 - See `context/logging.md` for the full logging setup.
 
 ### 5. Layer Isolation (4 layers + shared types)
-- `features/**` imports `services/*`, `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon / another feature.
-- `services/**` imports other `services/*` (composition allowed), `core/*`, `schemas/*` only. Never SQLAlchemy / Telethon directly / `nicegui` / `features/*` / raw provider HTTP clients.
-- `core/**` imports `schemas/*` (shared types), stdlib, and third-party SDKs. Never `services/*` or `features/*`.
-- `schemas/*.py` imports only `pydantic`, `typing`, and safe stdlib typing helpers.
+- `features/` imports `services/`, `core/`, `schemas/` only. Never SQLAlchemy / Telethon / another feature.
+- `services/` imports other `services/` (composition allowed), `core/`, `schemas/` only. Never SQLAlchemy / Telethon directly / `nicegui` / `features/` / raw provider HTTP clients.
+- `core/` imports `schemas/` (shared types), stdlib, and third-party SDKs. Never `services/` or `features/`.
+- `schemas/` imports only `pydantic`, `typing`, and safe stdlib typing helpers.
 - **Why:** `schemas/` is a shared-types layer, not a downstream layer — all layers may import types; types must not import layers. The `services/` layer keeps business logic UI-agnostic and reusable.
 - Full import matrix: `context/architecture.md`.
 
 ### 6. Database & Telegram Client Gateways
 - Database access only through `core/db.py` compatibility re-exports or `core/repositories/<aggregate>.py`.
 - Telegram actions only through `core.telegram_client.execute(account_id, action)` — `action` is a Pydantic class from `schemas/telegram_actions.py`.
-- `sqlalchemy` and `telethon` must not be imported in `services/**` or `features/**`.
+- `sqlalchemy` and `telethon` must not be imported in `services/` or `features/`.
 - **Why:** one place to enforce session lifecycle, typed results, proxy config, error classification, and logging. Declarative actions are testable without mocking Telethon across the app.
 
 ### 7. Test Coverage (maximum strictness — prefer `/tdd` skill)
@@ -101,7 +101,7 @@ Run this checklist explicitly before presenting any code or committing:
 
 - [ ] No imports between feature domains under `features/`?
 - [ ] Business logic lives in `services/`, NOT in `features/`?
-- [ ] No `sqlalchemy` / `telethon` import outside `core/*`?
+- [ ] No `sqlalchemy` / `telethon` import outside `core/`?
 - [ ] Telegram actions go through `core.telegram_client.execute(account_id, action)`, not raw SDK calls?
 - [ ] Every function has type hints?
 - [ ] Every public cross-layer function returns a Pydantic model or `None`?
@@ -158,7 +158,7 @@ Create a new file when:
     — focused render modules
 - **`services/<domain>/` — business logic.**
   State transitions, validation beyond UI, orchestration, account / session /
-  proxy / profile / domain operations, runtime workflows. Calls `core/*`
+  proxy / profile / domain operations, runtime workflows. Calls `core/`
   gateways. Returns Pydantic models.
   Recommended layout:
   - `__init__.py` — public API re-export only

@@ -15,7 +15,7 @@ edges:
     condition: when the service drives Telegram via typed actions
   - target: patterns/add-feature.md
     condition: when a feature is going to call this service
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Add a Service
@@ -25,7 +25,7 @@ last_updated: 2026-06-16
 Read `context/services.md` for the layer definition. Hard rules:
 - Small domain: `services/<domain>.py`. Large domain: `services/<domain>/` package.
 - Pure business logic. No `nicegui`, no `sqlalchemy`, no `telethon`, no raw provider HTTP imports.
-- All I/O goes through `core/*` adapters.
+- All I/O goes through `core/` adapters.
 - Public cross-layer functions take and return Pydantic models from `schemas/` or `None`.
 
 ## Steps
@@ -40,7 +40,7 @@ Read `context/services.md` for the layer definition. Hard rules:
    - Logging: `from core.logging import log_event`.
    - Config: `from core.config import settings` then `settings.<namespace>.<field>`.
 5. **Test — prefer `/tdd`.** Add/update tests under `tests/services/`:
-   - Mock `core/*` adapters.
+   - Mock `core/` adapters.
    - Cover happy path + failure paths.
    - Keep branch coverage ≥ 90%.
 6. **Run gates.** `uv run pytest` and relevant lint/type/security gates.
@@ -60,7 +60,7 @@ Read `context/services.md` for the layer definition. Hard rules:
 - [ ] Public cross-layer functions are async when they perform I/O and take/return Pydantic models
 - [ ] Telegram actions go through `core.telegram_client.execute(account_id, action)` with a typed action schema
 - [ ] Config used as `settings.<namespace>.<field>`
-- [ ] Tests under `tests/services/` mock `core/*`; cover happy + failure paths
+- [ ] Tests under `tests/services/` mock `core/`; cover happy + failure paths
 - [ ] `uv run pytest` passes
 
 ## Debug

@@ -16,7 +16,7 @@ edges:
     condition: when the same command runs locally
   - target: state/active.md
     condition: when CI state changes (red main, new known failure)
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # CI Policy
@@ -67,7 +67,7 @@ subprocess.
 
 ## Triggers and skips
 
-- **`paths-ignore`** on both PR and push: `.mex/**`, `**.md`, `.gitignore`, `LICENSE`. Doc-only commits do not start CI.
+- **`paths-ignore`** on both PR and push: `.mex/`, `**.md`, `.gitignore`, `LICENSE`. Doc-only commits do not start CI.
 - **`workflow_dispatch`** on both `ci` and `nightly` — re-runnable from the GitHub UI.
 - **`concurrency` cancel-in-progress** — a new push cancels the previous run on the same branch.
 
@@ -85,7 +85,7 @@ Selection lives in `conftest.py`.
 ## Caches
 
 - `setup-uv@v6` with `enable-cache: true` — uv caches `.venv` and the package cache per workflow.
-- `actions/cache@v4` keyed on `hashFiles('.pre-commit-config.yaml')` — pre-commit hook envs persist between runs (saves 30–40 s per lint job).
+- The `actions-cache` GitHub Action (v4) keyed on `hashFiles('.pre-commit-config.yaml')` — pre-commit hook envs persist between runs (saves 30–40 s per lint job).
 
 ## Override / override-dependencies policy
 
