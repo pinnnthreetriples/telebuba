@@ -36,5 +36,6 @@ async def _render_accounts_page() -> None:  # pragma: no cover
     section.table.on("check_one", ctrl.check_one)
     section.table.on("edit_profile", ctrl.open_profile)
     section.table.on("edit_proxy", ctrl.open_proxy)
+    section.table.on("delete_account", ctrl.open_delete)
 
     await ctrl.refresh()

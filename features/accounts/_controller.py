@@ -16,6 +16,7 @@ from core.logging import log_event
 from features.accounts._dialogs import (
     _check_accounts,
     _open_add_dialog,
+    _open_delete_dialog,
     _open_profile_dialog,
 )
 from features.accounts._metrics import _refresh_metrics
@@ -117,3 +118,10 @@ class _AccountsController:  # pragma: no cover
             ui.notify("Не удалось определить аккаунт", type="negative")
             return
         await _open_proxy_dialog(row, self.refresh)
+
+    async def open_delete(self, event: object) -> None:
+        row = _row_from_event(event)
+        if not row:
+            ui.notify("Не удалось определить аккаунт", type="negative")
+            return
+        await _open_delete_dialog(row, self.refresh)
