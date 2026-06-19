@@ -119,7 +119,7 @@ async def _render_logs_page() -> None:  # pragma: no cover
     await refresh()
     # See features/warming/__init__.py for why the lambda wrapper is necessary.
     poll_timer = ui.timer(_POLL_INTERVAL_SECONDS, refresh)
-    context.client.on_disconnect(lambda: poll_timer.cancel())  # noqa: PLW0108
+    context.client.on_disconnect(lambda: poll_timer.cancel(with_current_invocation=True))
 
 
 def _to_row_dict(entry: LogEntry) -> dict[str, object]:  # pragma: no cover
