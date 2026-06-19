@@ -110,14 +110,6 @@ _ACTIONS_TEMPLATE = """
 <q-td :props="props">
   <q-btn
     dense round flat
-    icon="refresh"
-    color="primary"
-    @click="() => $parent.$emit('check_one', props.row.account_id)"
-  >
-    <q-tooltip>Проверить аккаунт</q-tooltip>
-  </q-btn>
-  <q-btn
-    dense round flat
     icon="manage_accounts"
     color="primary"
     @click="() => $parent.$emit('edit_profile', props.row)"
@@ -131,6 +123,22 @@ _ACTIONS_TEMPLATE = """
     @click="() => $parent.$emit('edit_proxy', props.row)"
   >
     <q-tooltip>Настройки прокси</q-tooltip>
+  </q-btn>
+  <q-btn
+    dense round flat
+    icon="refresh"
+    color="primary"
+    @click="() => $parent.$emit('check_one', props.row.account_id)"
+  >
+    <q-tooltip>Проверить аккаунт</q-tooltip>
+  </q-btn>
+  <q-btn
+    dense round flat
+    icon="delete"
+    color="negative"
+    @click="() => $parent.$emit('delete_account', props.row)"
+  >
+    <q-tooltip>Удалить аккаунт</q-tooltip>
   </q-btn>
 </q-td>
 """
