@@ -255,6 +255,8 @@ async def _dispatch_list_profile_music(client: TelegramClient) -> TelegramProfil
                 title=_optional_str(getattr(audio, "title", None)),
                 performer=_optional_str(getattr(audio, "performer", None)),
                 duration_seconds=int(getattr(audio, "duration", 0) or 0) or None,
+                access_hash=int(getattr(document, "access_hash", 0) or 0),
+                file_reference=bytes(getattr(document, "file_reference", b"") or b""),
             ),
         )
     return TelegramProfileMusic(items=items, supported=True)

@@ -13,6 +13,7 @@ from telethon.tl.functions.photos import UploadProfilePhotoRequest
 from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
+    InputDocument,
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
     InputPrivacyValueAllowAll,
@@ -20,7 +21,12 @@ from telethon.tl.types import (
     InputPrivacyValueAllowContacts,
 )
 
-from schemas.telegram_actions import AddProfileMusic, PostStory, SetProfilePhoto
+from schemas.telegram_actions import (
+    AddProfileMusic,
+    PostStory,
+    RemoveProfileMusic,
+    SetProfilePhoto,
+)
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
@@ -41,6 +47,9 @@ async def _dispatch_profile_media_action(
             return await _post_story(client, action)
         case AddProfileMusic():
             await _add_profile_music(client, action)
+            return None
+        case RemoveProfileMusic():
+            await _remove_profile_music(client, action)
             return None
         case _:  # pragma: no cover - caller only routes media actions here
             msg = f"Unsupported profile media action_type: {action.action_type}"
@@ -127,6 +136,25 @@ async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) ->
     if isinstance(message_id, int):
         with suppress(Exception):
             await client.delete_messages("me", [message_id], revoke=True)
+
+
+async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMusic) -> None:
+    """Unpin one track from the account's saved profile music.
+
+    ``account.saveMusic`` is dual-purpose — passing ``unsave=True`` removes
+    the document from the saved list. We reuse it instead of pulling a
+    separate ``DeleteSavedMusicRequest`` (which Telethon doesn't ship in 1.43.2).
+    """
+    await client(
+        SaveMusicRequest(
+            id=InputDocument(
+                id=action.file_id,
+                access_hash=action.access_hash,
+                file_reference=action.file_reference,
+            ),
+            unsave=True,
+        ),
+    )
 
 
 def _named_bytes(filename: str, content: bytes) -> BytesIO:

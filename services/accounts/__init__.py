@@ -27,6 +27,7 @@ from services.accounts.lifecycle import add_account, evaluate_account_geo, remov
 from services.accounts.media import (
     add_account_profile_music,
     post_account_story,
+    remove_account_profile_music,
     set_account_profile_photo,
 )
 from services.accounts.profile import update_account_profile
@@ -64,6 +65,7 @@ __all__ = [
     "load_accounts_table",
     "post_account_story",
     "remove_account",
+    "remove_account_profile_music",
     "save_account_proxy",
     "set_account_profile_photo",
     "update_account_profile",

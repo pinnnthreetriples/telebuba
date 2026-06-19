@@ -18,7 +18,9 @@ from nicegui import app, ui
 # optimistic-update helpers — keep them at module scope. AccountProfileSnapshot
 # is annotation-only here (instances come in from the service layer) so it
 # lives in TYPE_CHECKING.
+from schemas.profile_media import AccountProfileMusicRemove
 from schemas.telegram_profile_snapshot import TelegramMusicItem, TelegramStoryThumb
+from services.accounts import remove_account_profile_music
 
 if TYPE_CHECKING:
     import asyncio
@@ -59,6 +61,10 @@ class _DialogRefs:
     Attributes are wired up in ``_open_profile_dialog`` as the elements get
     created — declared here only so type checkers can see the shape.
 
+    ``account_id`` is the Telegram account behind the open dialog — needed
+    by the music-row delete buttons so the click handler can call into the
+    service without re-threading account_id through every render call.
+
     ``current_snapshot`` holds the latest applied snapshot so optimistic
     update helpers (``_apply_optimistic_*``) can mutate-and-rerender without
     a Telegram round-trip after each upload.
@@ -84,6 +90,7 @@ class _DialogRefs:
     refresh_button: ui.button
     error_banner: ui.label
     initial_load_task: asyncio.Task[None]
+    account_id: str
     current_snapshot: AccountProfileSnapshot | None
     client_id: str
     closed: bool
@@ -208,10 +215,52 @@ def _render_music_preview(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -
             return
         with ui.list().props("dense bordered separator").classes("w-full"):
             for track in snapshot.music:
-                with ui.item(), ui.item_section():
-                    ui.item_label(track.title or "Без названия")
-                    if track.performer or track.duration_seconds:
-                        ui.item_label(_format_track_meta(track)).props("caption")
+                _render_music_row(refs, track)
+
+
+def _render_music_row(refs: _DialogRefs, track: TelegramMusicItem) -> None:
+    """Render one music row with title/meta on the left and ✕ delete on the right.
+
+    Optimistic-add tracks (synthetic negative ``file_id`` or empty
+    ``file_reference``) get a disabled delete button — Telethon's ``InputDocument``
+    refuses to identify them without a real ``file_reference``. Hint the user
+    to press ↻ to pull canonical metadata first.
+    """
+    deletable = track.file_id > 0 and bool(track.file_reference)
+    with ui.item():
+        with ui.item_section():
+            ui.item_label(track.title or "Без названия")
+            if track.performer or track.duration_seconds:
+                ui.item_label(_format_track_meta(track)).props("caption")
+        with ui.item_section().props("side"):
+            button = ui.button(
+                icon="close",
+                color="grey-7",
+                on_click=lambda _e=None, t=track: _delete_music_row(refs, t),
+            ).props("flat dense round")
+            if deletable:
+                button.tooltip("Удалить трек из профиля")
+            else:
+                button.disable()
+                button.tooltip("Сначала обновите данные кнопкой ↻ рядом с именем профиля")
+
+
+async def _delete_music_row(refs: _DialogRefs, track: TelegramMusicItem) -> None:
+    """Call the remove-music service, then optimistically drop the row."""
+    try:
+        await remove_account_profile_music(
+            AccountProfileMusicRemove(
+                account_id=refs.account_id,
+                file_id=track.file_id,
+                access_hash=track.access_hash,
+                file_reference=track.file_reference,
+            ),
+        )
+    except ValueError as exc:
+        ui.notify(f"Не удалось удалить: {exc}", type="negative")
+        return
+    ui.notify("Трек удалён из профиля", type="positive")
+    _apply_optimistic_music_remove(refs, track.file_id)
 
 
 def _format_track_meta(track: TelegramMusicItem) -> str:
@@ -346,6 +395,19 @@ def _apply_optimistic_music(
             "music": [*refs.current_snapshot.music, new_track],
             "fetched_at_unix": time.time(),
         },
+    )
+    refs.current_snapshot = new_snapshot
+    _render_music_preview(refs, new_snapshot)
+    _render_header(refs, new_snapshot)
+
+
+def _apply_optimistic_music_remove(refs: _DialogRefs, file_id: int) -> None:
+    """Drop a track from the local music preview after a successful unsave."""
+    if _is_client_dead(refs) or refs.current_snapshot is None:
+        return
+    remaining = [t for t in refs.current_snapshot.music if t.file_id != file_id]
+    new_snapshot = refs.current_snapshot.model_copy(
+        update={"music": remaining, "fetched_at_unix": time.time()},
     )
     refs.current_snapshot = new_snapshot
     _render_music_preview(refs, new_snapshot)

@@ -14,6 +14,7 @@ from core.telegram_client import execute
 from schemas.telegram_actions import (
     AddProfileMusic,
     PostStory,
+    RemoveProfileMusic,
     SetProfilePhoto,
 )
 from services.accounts._uploads import (
@@ -27,6 +28,7 @@ from services.accounts.profile_read import invalidate_account_profile_cache
 
 if TYPE_CHECKING:
     from schemas.profile_media import (
+        AccountProfileMusicRemove,
         AccountProfileMusicUpload,
         AccountProfilePhotoUpload,
         AccountStoryUpload,
@@ -36,6 +38,7 @@ if TYPE_CHECKING:
 __all__ = [
     "add_account_profile_music",
     "post_account_story",
+    "remove_account_profile_music",
     "set_account_profile_photo",
 ]
 
@@ -136,5 +139,27 @@ async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionRe
         "account_profile_music_added",
         account_id=data.account_id,
         extra={"filename": data.filename, "has_title": data.title is not None},
+    )
+    return result
+
+
+async def remove_account_profile_music(data: AccountProfileMusicRemove) -> ActionResult:
+    result = await execute(
+        data.account_id,
+        RemoveProfileMusic(
+            file_id=data.file_id,
+            access_hash=data.access_hash,
+            file_reference=data.file_reference,
+        ),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
+    await log_event(
+        "INFO",
+        "account_profile_music_removed",
+        account_id=data.account_id,
+        extra={"file_id": data.file_id},
     )
     return result

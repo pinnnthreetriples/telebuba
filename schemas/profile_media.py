@@ -31,3 +31,18 @@ class AccountProfileMusicUpload(BaseModel):
     content: bytes = Field(min_length=1)
     title: str | None = Field(default=None, min_length=1)
     performer: str | None = Field(default=None, min_length=1)
+
+
+class AccountProfileMusicRemove(BaseModel):
+    """Unpin a single track from the account's saved profile music.
+
+    All three Telegram identifiers are required — the read-side
+    ``TelegramMusicItem`` always carries them after a real GetSavedMusic
+    fetch. Optimistic-add rows have empty ``file_reference`` and must not
+    reach this service (the UI guards them with a disabled delete button).
+    """
+
+    account_id: str = Field(min_length=1)
+    file_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)

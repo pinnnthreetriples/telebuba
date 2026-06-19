@@ -96,6 +96,21 @@ class AddProfileMusic(BaseModel):
     performer: str | None = Field(default=None, min_length=1)
 
 
+class RemoveProfileMusic(BaseModel):
+    """Unpins one track from the account's saved profile music.
+
+    All three identifier fields are required — Telethon's ``InputDocument``
+    refuses partial refs. ``file_id`` alone is not enough; the read-side
+    ``TelegramMusicItem`` carries ``access_hash`` and ``file_reference`` for
+    exactly this reason.
+    """
+
+    action_type: Literal["remove_profile_music"] = "remove_profile_music"
+    file_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)
+
+
 class GetUserProfile(BaseModel):
     """Read-only: pull the signed-in user's own current profile state."""
 
@@ -130,7 +145,8 @@ TelegramAction = Annotated[
     | SendDirectMessage
     | SetProfilePhoto
     | PostStory
-    | AddProfileMusic,
+    | AddProfileMusic
+    | RemoveProfileMusic,
     Field(discriminator="action_type"),
 ]
 

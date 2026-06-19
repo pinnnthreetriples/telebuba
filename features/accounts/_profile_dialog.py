@@ -135,7 +135,11 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         max_file_size=10_000_000,
         auto_upload=True,
         on_upload=handle_photo_upload,
-        on_rejected=lambda _event: ui.notify("Фото профиля отклонено", type="warning"),
+        on_rejected=lambda _e: ui.notify(
+            "Фото отклонено. Проверь: размер ≤ 10 МБ, формат — JPG/JPEG/PNG/WebP.",
+            type="warning",
+            timeout=8000,
+        ),
     ).props('accept=".jpg,.jpeg,.png,.webp"').classes("w-full")
 
 
@@ -187,7 +191,11 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         max_file_size=100_000_000,
         auto_upload=True,
         on_upload=handle_story_upload,
-        on_rejected=lambda _event: ui.notify("Медиа для сторис отклонено", type="warning"),
+        on_rejected=lambda _e: ui.notify(
+            "Медиа отклонено. Проверь: размер ≤ 100 МБ, формат — JPG/JPEG/PNG/WebP/MP4/MOV.",
+            type="warning",
+            timeout=8000,
+        ),
     ).props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov"').classes("w-full")
 
 
@@ -229,7 +237,11 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         max_file_size=30_000_000,
         auto_upload=True,
         on_upload=handle_music_upload,
-        on_rejected=lambda _event: ui.notify("Музыка отклонена", type="warning"),
+        on_rejected=lambda _e: ui.notify(
+            "Музыка отклонена. Проверь: размер ≤ 30 МБ, формат — MP3 или M4A.",
+            type="warning",
+            timeout=8000,
+        ),
     ).props('accept=".mp3,.m4a"').classes("w-full")
 
 
@@ -239,6 +251,7 @@ async def _open_profile_dialog(
 ) -> None:  # pragma: no cover
     account_id = str(row["account_id"])
     refs = _DialogRefs()
+    refs.account_id = account_id
     refs.current_snapshot = None
     refs.client_id = context.client.id
     refs.closed = False

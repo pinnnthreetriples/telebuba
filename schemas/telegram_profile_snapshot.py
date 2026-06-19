@@ -40,6 +40,11 @@ class TelegramMusicItem(BaseModel):
     title: str | None = None
     performer: str | None = None
     duration_seconds: int | None = None
+    # InputDocument requires all three fields to identify a Telegram document
+    # for deletion. Empty defaults distinguish optimistic-add rows (synthetic
+    # negative ``file_id``) that can't be removed via Telegram until refresh.
+    access_hash: int = 0
+    file_reference: bytes = b""
 
 
 class TelegramProfileMusic(BaseModel):
