@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from nicegui import ui
 
+from core.logging import log_event
 from features.accounts._dialogs import (
     _check_accounts,
     _open_add_dialog,
@@ -78,6 +79,19 @@ class _AccountsController:  # pragma: no cover
             # and stop. Without this the exception escapes into NiceGUI's event
             # loop and only appears in server logs.
             ui.notify(str(exc), type="negative")
+            return
+        except Exception as exc:  # noqa: BLE001 — silent spinner-dismiss leaves the operator with zero feedback
+            await log_event(
+                "ERROR",
+                "account_check_one_failed_unexpected",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__, "error": str(exc)},
+            )
+            ui.notify(
+                f"Проверка {account_id} не прошла: {type(exc).__name__}: {exc}",
+                type="negative",
+                timeout=6000,
+            )
             return
         finally:
             spinner.dismiss()

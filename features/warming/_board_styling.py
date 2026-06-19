@@ -50,6 +50,8 @@ _READINESS_REASON_RU = {
     "no proxy": "нет прокси",
     "proxy failed": "прокси не работает",
     "no channels": "нет каналов",
+    "spam limited": "спам-ограничение",
+    "trust critical": "низкий trust",
 }
 
 _SUMMARY_CHIPS = (
