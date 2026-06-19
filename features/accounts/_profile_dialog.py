@@ -52,8 +52,10 @@ if TYPE_CHECKING:
 
 # Strip Quasar's per-file status icons from every ``ui.upload`` widget on the
 # page — paired with ``hide-upload-btn`` it removes the two ✓ markers users
-# kept misreading as "apply" buttons.
-ui.add_css(""".q-uploader__file-status { display: none !important; }""")
+# kept misreading as "apply" buttons. ``shared=True`` is required by NiceGUI
+# 3.x for module-scope CSS injection (otherwise startup fails with
+# "ui.add_css has been called inside the global scope while using ui.page").
+ui.add_css(""".q-uploader__file-status { display: none !important; }""", shared=True)
 
 
 async def _load_and_apply(
