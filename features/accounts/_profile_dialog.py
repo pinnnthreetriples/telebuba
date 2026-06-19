@@ -50,12 +50,21 @@ if TYPE_CHECKING:
     from nicegui.events import UploadEventArguments
 
 
-# Strip Quasar's per-file status icons from every ``ui.upload`` widget on the
-# page — paired with ``hide-upload-btn`` it removes the two ✓ markers users
-# kept misreading as "apply" buttons. ``shared=True`` is required by NiceGUI
-# 3.x for module-scope CSS injection (otherwise startup fails with
-# "ui.add_css has been called inside the global scope while using ui.page").
-ui.add_css(""".q-uploader__file-status { display: none !important; }""", shared=True)
+# Strip Quasar's "done_all" header check and the per-file "done" round check
+# that QUploader paints after a file completes — users kept reading them as
+# rival "apply" buttons. Inspecting the rendered DOM gave us two precise
+# selectors that hit those icons without touching the "+" add-files button
+# (which lives in the same header row). ``shared=True`` is required by NiceGUI
+# 3.x for module-scope CSS injection.
+ui.add_css(
+    """
+    .q-uploader__header-content > div > a.q-btn:not(:last-of-type),
+    .q-uploader__file-header .q-btn--round {
+        display: none !important;
+    }
+    """,
+    shared=True,
+)
 
 
 async def _load_and_apply(
