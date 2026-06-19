@@ -6,7 +6,6 @@ rendering. Logic lives in ``services.warming``.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
@@ -211,8 +210,11 @@ async def _render_config_cards() -> None:  # pragma: no cover
                 end=fresh.quiet_hours_end,
             )
 
-    def trigger(_e: object = None) -> asyncio.Task[None]:
-        return asyncio.create_task(on_toggle())
+    async def trigger(_e: object = None) -> None:
+        # Stay on the current client's task — wrapping ``on_toggle`` in
+        # ``asyncio.create_task`` drops the slot stack, so the ``ui.notify``
+        # inside trips ``RuntimeError: slot stack ... is empty``.
+        await on_toggle()
 
     def switch(*, value: bool) -> ui.element:
         return ui.switch(value=value, on_change=trigger).props("dense")
@@ -226,7 +228,7 @@ def _render_features_card(
     refs: dict[str, Any],
     *,
     switch: Callable[..., ui.element],
-    trigger: Callable[..., object],
+    trigger: Callable[..., Awaitable[None]],
 ) -> None:  # pragma: no cover
     with ui.card().classes("w-[460px] p-4 gap-2"):
         with ui.row().classes("w-full items-center gap-2"):
@@ -272,7 +274,7 @@ def _render_quiet_hours_block(
     current: WarmingSettings,
     refs: dict[str, Any],
     *,
-    trigger: Callable[..., object],
+    trigger: Callable[..., Awaitable[None]],
 ) -> None:  # pragma: no cover
     # Hidden state-holder for ``quiet_hours_enabled``. The user-facing
     # control is a preset select; this switch is the boolean ``persist()``
@@ -285,7 +287,7 @@ def _render_quiet_hours_block(
         end=current.quiet_hours_end,
     )
 
-    def on_quiet_preset(e: object) -> None:
+    async def on_quiet_preset(e: object) -> None:
         key = getattr(e, "value", None) or refs["quiet_preset"].value
         if key == _QUIET_PRESET_OFF:
             refs["quiet"].value = False
@@ -296,7 +298,7 @@ def _render_quiet_hours_block(
             refs["quiet"].value = True
             refs["quiet_start"].value = start_hour
             refs["quiet_end"].value = end_hour
-        trigger(e)
+        await trigger(e)
 
     refs["quiet_preset"] = _feature_row(
         "bedtime",
