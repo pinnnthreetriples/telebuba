@@ -4,6 +4,13 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Pydantic resolves these annotations at runtime to build the model fields,
+# so they cannot live in a TYPE_CHECKING block.
+from schemas.telegram_profile_snapshot import (  # noqa: TC001
+    TelegramMusicItem,
+    TelegramStoryThumb,
+)
+
 # account_id is later joined into dialogue pair_keys via "|". Restricting the
 # charset here is cheaper than escaping every join site downstream. Allows
 # digit-only Telegram user_ids and the session-name stems we actually use.
@@ -144,3 +151,26 @@ class AccountTableRow(BaseModel):
 class AccountsTableState(BaseModel):
     rows: list[AccountTableRow]
     summary: AccountSummary
+
+
+class AccountProfileSnapshot(BaseModel):
+    """Combined live-profile view rendered by the edit-profile dialog.
+
+    Aggregates the three read-actions (profile, pinned stories, profile music)
+    plus dialog-only UI state (``fetched_at_unix``, ``music_supported``,
+    ``error``). ``error`` is set when Telegram refused the live fetch — the
+    dialog falls back to whatever fields are still populated.
+    """
+
+    account_id: str = Field(min_length=1)
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    phone: str | None = None
+    bio: str | None = None
+    avatar_bytes: bytes | None = None
+    stories: list[TelegramStoryThumb] = Field(default_factory=list)
+    music: list[TelegramMusicItem] = Field(default_factory=list)
+    music_supported: bool = True
+    fetched_at_unix: float = 0.0
+    error: str | None = None
