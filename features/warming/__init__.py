@@ -29,7 +29,12 @@ from typing import TYPE_CHECKING, cast
 from nicegui import context, ui
 
 from features.warming._activity import _render_activity_log, _render_dialogues
-from features.warming._board import _board_signature, _render_board
+from features.warming._board import (
+    _BoardContext,
+    _card_signature,
+    _render_board,
+    _structural_signature,
+)
 from features.warming._board_styling import _BOARD_POLL_SECONDS
 from features.warming._channels import _render_channels_card
 from features.warming._config import _render_config_cards, _render_how_it_works
@@ -87,29 +92,59 @@ async def _render_warming_page() -> None:  # pragma: no cover
         _render_how_it_works()
 
         initial = await load_board()
-        holder: dict[str, object] = {"board": initial, "sig": _board_signature(initial)}
+        holder: dict[str, object] = {
+            "board": initial,
+            "struct_sig": _structural_signature(initial),
+        }
+        card_sigs: dict[str, tuple[object, ...]] = {
+            card.account_id: _card_signature(card) for card in (*initial.idle, *initial.warming)
+        }
+        ctx = _BoardContext(
+            drag=drag,
+            refresh=lambda: force_reload(),  # noqa: PLW0108 — defer until force_reload is bound
+            max_daily=initial.settings.max_daily_actions,
+        )
 
         @ui.refreshable
-        async def render_board() -> None:
-            _render_board(cast("WarmingBoardState", holder["board"]), drag, force_reload)
+        def render_board() -> None:
+            ctx.max_daily = cast(
+                "WarmingBoardState",
+                holder["board"],
+            ).settings.max_daily_actions
+            _render_board(cast("WarmingBoardState", holder["board"]), ctx)
 
         async def reload(*, force: bool = False) -> None:
+            # NiceGUI maintainers' recommended pattern (discussion #2772):
+            # poll into the store, then refresh only the cards whose
+            # signature flipped. Structural changes (column move, count) still
+            # fall back to a full rebuild because the refreshable wiring has
+            # to be re-keyed under the new layout.
             board = await load_board()
-            signature = _board_signature(board)
-            # Skip the DOM rebuild when nothing changed — this is what stops the
-            # Idle column from blinking every poll.
-            if not force and signature == holder["sig"]:
+            new_struct = _structural_signature(board)
+            if force or new_struct != holder["struct_sig"]:
+                holder["board"] = board
+                holder["struct_sig"] = new_struct
+                card_sigs.clear()
+                for card in (*board.idle, *board.warming):
+                    card_sigs[card.account_id] = _card_signature(card)
+                render_board.refresh()
                 return
-            holder["board"] = board
-            holder["sig"] = signature
-            render_board.refresh()
+            for card in (*board.idle, *board.warming):
+                sig = _card_signature(card)
+                if card_sigs.get(card.account_id) == sig:
+                    continue
+                card_sigs[card.account_id] = sig
+                ctx.card_store[card.account_id] = card
+                refresher = ctx.card_refresh.get(card.account_id)
+                if refresher is not None:
+                    refresher.refresh()
 
         def force_reload() -> asyncio.Task[None]:
             # Returned (not discarded) so the task keeps a strong reference and
             # is not garbage-collected mid-flight.
             return asyncio.create_task(reload(force=True))
 
-        await render_board()
+        render_board()
         # NiceGUI 3.x's Timer.cancel signature is ``(self, *, with_current_invocation)``;
         # passing the bound method directly trips ``client.safe_invoke`` (it sees
         # one parameter and calls ``cancel(client)``, which raises TypeError on

@@ -248,7 +248,12 @@ def _phase_progress(
     phase_start_days = 0 if prev_bound is None else prev_bound + 1
     days = age_hours / 24.0
     span = max(1, bound - phase_start_days + 1)
-    progress = min(1.0, max(0.0, (days - phase_start_days) / span))
+    raw_progress = min(1.0, max(0.0, (days - phase_start_days) / span))
+    # Quantise to 1% — the progress bar's smallest visible step is far
+    # coarser than the µs drift introduced by recomputing from ``datetime.now()``
+    # every 4-second board poll. Without this the per-card signature would
+    # flip on every tick and the DOM would rebuild for an idle account.
+    progress = round(raw_progress, 2)
     days_to_next = max(0, bound + 1 - int(days))
     return progress, days_to_next
 

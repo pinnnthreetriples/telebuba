@@ -32,6 +32,8 @@ def _clamp_hour(value: object) -> int:  # pragma: no cover
 # activity vs. local time as a behavioural signal, so a plausible night
 # window is meaningful protection (see plan §9 sources). Each value is the
 # pair "start hour, end hour" in 0-23.
+_TOGGLE_SAVE_TIMEOUT_SECONDS = 10.0
+
 _QUIET_PRESET_OFF = "off"
 _QUIET_PRESET_CUSTOM = "custom"
 _QUIET_PRESETS: dict[str, tuple[int, int]] = {
@@ -187,7 +189,21 @@ async def _render_config_cards() -> None:  # pragma: no cover
             ),
         )
 
+    save_lock = asyncio.Lock()
+
     async def on_toggle() -> None:
+        # Serialise saves: rapid toggles must persist in the order the
+        # operator clicked them. Without the lock two ``save_settings``
+        # calls would race and the row would non-deterministically reflect
+        # the FIRST-finishing request, not the LAST clicked one.
+        try:
+            await asyncio.wait_for(
+                save_lock.acquire(),
+                timeout=_TOGGLE_SAVE_TIMEOUT_SECONDS,
+            )
+        except TimeoutError:
+            ui.notify("Ошибка сохранения: таймаут", type="negative")
+            return
         try:
             await persist(key=None, model=None, clear=False)
             ui.notify("Функции обновлены", type="positive")
@@ -210,9 +226,14 @@ async def _render_config_cards() -> None:  # pragma: no cover
                 start=fresh.quiet_hours_start,
                 end=fresh.quiet_hours_end,
             )
+        finally:
+            save_lock.release()
 
-    def trigger(_e: object = None) -> asyncio.Task[None]:
-        return asyncio.create_task(on_toggle())
+    async def trigger(_e: object = None) -> None:
+        # Async + awaited keeps the client's slot context alive inside
+        # ``on_toggle`` so ``ui.notify`` can resolve ``context.client``.
+        # An ``asyncio.create_task`` wrapper would drop the slot stack.
+        await on_toggle()
 
     def switch(*, value: bool) -> ui.element:
         return ui.switch(value=value, on_change=trigger).props("dense")
@@ -226,7 +247,7 @@ def _render_features_card(
     refs: dict[str, Any],
     *,
     switch: Callable[..., ui.element],
-    trigger: Callable[..., object],
+    trigger: Callable[..., Awaitable[None]],
 ) -> None:  # pragma: no cover
     with ui.card().classes("w-[460px] p-4 gap-2"):
         with ui.row().classes("w-full items-center gap-2"):
@@ -272,7 +293,7 @@ def _render_quiet_hours_block(
     current: WarmingSettings,
     refs: dict[str, Any],
     *,
-    trigger: Callable[..., object],
+    trigger: Callable[..., Awaitable[None]],
 ) -> None:  # pragma: no cover
     # Hidden state-holder for ``quiet_hours_enabled``. The user-facing
     # control is a preset select; this switch is the boolean ``persist()``
@@ -285,7 +306,7 @@ def _render_quiet_hours_block(
         end=current.quiet_hours_end,
     )
 
-    def on_quiet_preset(e: object) -> None:
+    async def on_quiet_preset(e: object) -> None:
         key = getattr(e, "value", None) or refs["quiet_preset"].value
         if key == _QUIET_PRESET_OFF:
             refs["quiet"].value = False
@@ -296,7 +317,7 @@ def _render_quiet_hours_block(
             refs["quiet"].value = True
             refs["quiet_start"].value = start_hour
             refs["quiet_end"].value = end_hour
-        trigger(e)
+        await trigger(e)
 
     refs["quiet_preset"] = _feature_row(
         "bedtime",

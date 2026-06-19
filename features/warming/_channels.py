@@ -24,6 +24,17 @@ def _fmt_date(iso: str) -> str:  # pragma: no cover
     return iso[:16].replace("T", " ") if len(iso) >= 16 else iso  # noqa: PLR2004
 
 
+def _count_submitted_lines(raw: str) -> int:
+    """Approximate the number of channel candidates the operator pasted.
+
+    Mirrors the trivial part of ``services/warming/channels._parse_channels``
+    (split on commas + newlines, drop blanks) so the UI can show a
+    «добавлено N · пропущено M» summary without the service having to
+    return its own counters. Pure — easy to unit-test.
+    """
+    return sum(1 for line in raw.replace(",", "\n").splitlines() if line.strip())
+
+
 async def _render_channels_card() -> None:  # pragma: no cover
     with ui.card().classes("w-[420px] p-4 gap-3"):
         with ui.row().classes("w-full items-center justify-between"):
@@ -64,8 +75,25 @@ async def _render_channels_card() -> None:  # pragma: no cover
             table.update()
 
         async def on_delete(event) -> None:  # noqa: ANN001
-            await remove_channel(RemoveChannelRequest(channel=event.args["channel"]))
+            channel = event.args["channel"]
+            # One misclick deletes the row forever; a tiny modal turns
+            # the trash-can into a two-step action without making the
+            # common case (bulk pruning) much slower.
+            with ui.dialog() as dialog, ui.card().classes("p-4 gap-3"):
+                ui.label(f"Удалить «{channel}» из списка?").classes("text-sm")
+                with ui.row().classes("w-full justify-end gap-2"):
+                    ui.button("Отмена", on_click=lambda: dialog.submit(False))  # noqa: FBT003
+                    ui.button(
+                        "Удалить",
+                        color="red",
+                        on_click=lambda: dialog.submit(True),  # noqa: FBT003
+                    )
+            confirmed = await dialog
+            if not confirmed:
+                return
+            await remove_channel(RemoveChannelRequest(channel=channel))
             await refresh_list()
+            ui.notify(f"Удалён «{channel}»", type="info")
 
         table.on("delete", on_delete)
 
@@ -74,10 +102,23 @@ async def _render_channels_card() -> None:  # pragma: no cover
             if not raw:
                 ui.notify("Введите хотя бы один канал", type="warning")
                 return
-            result = await add_channels(AddChannelsRequest(raw=raw))
+            before_count = len(table.rows)
+            await add_channels(AddChannelsRequest(raw=raw))
             channels_input.value = ""
             await refresh_list()
-            ui.notify(f"Всего каналов: {len(result.channels)}", type="positive")
+            after_count = len(table.rows)
+            added = max(0, after_count - before_count)
+            submitted = _count_submitted_lines(raw)
+            skipped = max(0, submitted - added)
+            if added == 0:
+                ui.notify(
+                    "Ничего не добавлено (дубли или невалидные)",
+                    type="warning",
+                )
+            elif skipped > 0:
+                ui.notify(f"Добавлено {added} · пропущено {skipped}", type="info")
+            else:
+                ui.notify(f"Добавлено {added}", type="positive")
 
         ui.button("Добавить каналы", icon="add", on_click=on_add).props("color=primary").classes(
             "w-full",

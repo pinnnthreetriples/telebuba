@@ -9,21 +9,22 @@ under the aislop file-length cap.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
 from features.warming._board_checks import (
     _check_states,
     _ru_reason,
-    _spam_badge_classes,
-    _spam_badge_label,
-    _spam_notify_type,
-    _spam_outcome_label,
-    _spam_tooltip,
 )
+from features.warming._board_dnd import (
+    drop_into_idle,
+    drop_into_warming,
+    seed_card_refreshable,
+)
+from features.warming._board_spam import render_spam_badge
 from features.warming._board_styling import (
     _CHECK_DOT,
     _CHECK_TEXT,
@@ -39,9 +40,6 @@ from features.warming._board_styling import (
     _TRUST_BADGE,
     _TRUST_BAND_LABEL,
 )
-from schemas.warming import StartWarmingRequest, StopWarmingRequest
-from services.spam_status import refresh_spam_status
-from services.warming import WarmingNotReadyError, start_warming, stop_warming
 
 if TYPE_CHECKING:
     import asyncio
@@ -50,59 +48,73 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingAccountState, WarmingBoardState, WarmingSummary
 
 
-@dataclass(frozen=True)
+@dataclass
 class _BoardContext:  # pragma: no cover
-    """Board-wide render state shared by columns and cards (one per board build)."""
+    """Board-wide render state shared by columns and cards (one per board build).
+
+    ``card_store`` and ``card_refresh`` together implement the per-card refresh
+    dispatch recommended by NiceGUI maintainers (discussion #2772): each card
+    owns its own ``ui.refreshable`` instance, the poll callback updates the
+    store entry and refreshes only the cards whose signature changed.
+    """
 
     drag: dict[str, str | None]
     refresh: Callable[[], asyncio.Task[None]]
     max_daily: int
+    card_store: dict[str, WarmingAccountState] = field(default_factory=dict)
+    card_refresh: dict[str, Any] = field(default_factory=dict)
 
 
-def _board_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma: no cover
-    """A hashable digest of everything the board renders.
+def _structural_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma: no cover
+    """Digest of fields that drive *structural* re-renders (column moves, counts).
 
-    The poll loop compares this between ticks and only rebuilds the DOM when it
-    changes, so a quiet board never blinks.
+    Changes here force a full board rebuild because the per-card refreshables
+    have to be re-wired into the new column layout. Stable for an idle board.
     """
-    cards = (*board.idle, *board.warming)
     return (
         board.channel_count,
         board.active_count,
-        tuple(
-            (
-                card.account_id,
-                card.state,
-                card.health,
-                card.cycles_completed,
-                card.last_event,
-                card.next_run_at,
-                card.last_error,
-                card.last_action,
-                card.last_channel,
-                card.trust_score,
-                card.trust_band,
-                tuple(card.trust_reasons),
-                card.spam_status,
-                card.spam_detail,
-                card.daily_actions,
-                card.dm_allowed,
-                card.quarantine_count,
-                card.flood_wait_until,
-                card.flood_wait_seconds,
-                card.phone_country,
-                card.proxy_country,
-                card.phase,
-                card.daily_cap,
-                card.progress_to_next,
-                card.days_to_next_phase,
-                card.warming_days,
-                None
-                if card.readiness is None
-                else (card.readiness.ready, tuple(card.readiness.reasons)),
-            )
-            for card in cards
-        ),
+        tuple((card.account_id, "idle") for card in board.idle),
+        tuple((card.account_id, "warming") for card in board.warming),
+    )
+
+
+def _card_signature(card: WarmingAccountState) -> tuple[object, ...]:  # pragma: no cover
+    """Digest of fields that drive a *single* card's rendered content.
+
+    ``progress_to_next`` is now quantised to 1 % at the source
+    (``services/warming/pacing.py:_phase_progress``) so the µs drift from
+    recomputing ``age_hours`` every 4-second poll no longer flips this
+    signature. ``card.state`` indirectly carries `dm_allowed` /
+    `flood_wait_*` transitions, which is what the chip strip reads.
+    """
+    return (
+        card.state,
+        card.health,
+        card.cycles_completed,
+        card.last_event,
+        card.next_run_at,
+        card.last_error,
+        card.last_action,
+        card.last_channel,
+        card.trust_score,
+        card.trust_band,
+        tuple(card.trust_reasons),
+        card.spam_status,
+        card.spam_detail,
+        card.daily_actions,
+        card.dm_allowed,
+        card.quarantine_count,
+        card.flood_wait_until,
+        card.flood_wait_seconds,
+        card.phone_country,
+        card.proxy_country,
+        card.phase,
+        card.daily_cap,
+        card.progress_to_next,
+        card.days_to_next_phase,
+        card.warming_days,
+        None if card.readiness is None else (card.readiness.ready, tuple(card.readiness.reasons)),
     )
 
 
@@ -136,11 +148,16 @@ def _render_summary(summary: WarmingSummary) -> None:  # pragma: no cover
 
 def _render_board(
     board: WarmingBoardState,
-    drag: dict[str, str | None],
-    refresh: Callable[[], asyncio.Task[None]],
+    ctx: _BoardContext,
 ) -> None:  # pragma: no cover
+    """Build the whole board: summary chips and two drag columns.
+
+    The per-card refresh dispatch table ``ctx.card_refresh`` is cleared and
+    repopulated here — the caller (the page-level poll loop) re-runs this
+    function only on structural changes (column move, card add/remove).
+    """
+    ctx.card_refresh.clear()
     _render_summary(board.summary)
-    ctx = _BoardContext(drag=drag, refresh=refresh, max_daily=board.settings.max_daily_actions)
     with ui.row().classes("w-full gap-4 items-stretch flex-wrap"):
         _render_column(ctx, "Простой", "idle", board.idle, "border-slate-300")
         _render_column(
@@ -170,13 +187,9 @@ def _render_column(
         if not account_id:
             return
         if key == "warming":
-            try:
-                await start_warming(StartWarmingRequest(account_id=account_id))
-            except WarmingNotReadyError as exc:
-                reasons = "; ".join(_ru_reason(reason) for reason in exc.reasons)
-                ui.notify(f"Нельзя запустить: {reasons}", type="negative")
+            await drop_into_warming(ctx, account_id)
         else:
-            await stop_warming(StopWarmingRequest(account_id=account_id))
+            await drop_into_idle(ctx, account_id)
         ctx.refresh()
 
     column.on("dragover.prevent", lambda: None)
@@ -190,7 +203,7 @@ def _render_column(
         if not cards:
             ui.label("Перетащите аккаунты сюда").classes("text-xs text-slate-400 italic")
         for card in cards:
-            _render_card(ctx, card)
+            seed_card_refreshable(ctx, card, _render_card)
 
 
 def _render_trust_badge(card: WarmingAccountState) -> None:  # pragma: no cover
@@ -223,65 +236,8 @@ def _render_checks(card: WarmingAccountState) -> None:  # pragma: no cover
 
 
 def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
-    """Spam-status badge — always visible, always self-explaining.
-
-    The badge text itself distinguishes a probe error (« ошибка проверки »)
-    from a Telegram-side review (« на проверке Telegram ») from a plain
-    no-probe-yet (« не проверен »); the tooltip carries the underlying
-    ``spam_detail`` (e.g. "TimeoutError: timed out") so the operator knows
-    where to look next.
-    """
-    status = card.spam_status or "unknown"
-    text = _spam_badge_label(status, card.spam_detail)
-    cls = _spam_badge_classes(status, card.spam_detail)
-    tooltip = _spam_tooltip(status, card.spam_detail)
-    with ui.row().classes("w-full items-center gap-2"):
-        badge = ui.label(text).classes(f"w-fit text-[11px] px-2 py-0.5 rounded {cls}")
-        if tooltip:
-            badge.tooltip(tooltip)
-        # Refresh is always available — a stale cached verdict (e.g. after a
-        # proxy fix or a Telegram-side review ending) needs a manual re-probe,
-        # and the operator should not have to delete the row from the DB to
-        # invalidate it. ``refresh_spam_status`` passes ``force=True`` so it
-        # bypasses ``spam_status_ttl_hours`` and actually re-probes @SpamBot.
-        _render_spam_refresh_link(ctx, card.account_id)
-
-
-def _render_spam_refresh_link(ctx: _BoardContext, account_id: str) -> None:  # pragma: no cover
-    """Inline «проверить» link that triggers a real @SpamBot probe.
-
-    Visible feedback in two places:
-    1. ``button.props("loading")`` flips the Quasar button to a spinner while
-       the probe runs — the operator sees the system is working. The button
-       is rebuilt on ``ctx.refresh()`` so the loading state vanishes
-       automatically once the new card renders.
-    2. A toast announces the outcome — colour and text both reflect *which*
-       outcome it is (clean / limited / Telegram-проверяет / ошибка / без
-       вердикта), so the operator always knows whether the probe ran and
-       what came back.
-    """
-
-    async def on_click() -> None:
-        button.props("loading")
-        try:
-            verdict = await refresh_spam_status(account_id, force=True)
-        except Exception as exc:  # noqa: BLE001 — UI handler surfaces any failure
-            ui.notify(f"Не удалось проверить: {exc}", type="negative", timeout=6000)
-            ctx.refresh()
-            return
-        label = _spam_outcome_label(verdict.status, verdict.detail)
-        ui.notify(
-            f"Спам-статус: {label}",
-            type=_spam_notify_type(verdict.status, verdict.detail),
-            timeout=6000,
-        )
-        ctx.refresh()
-
-    button = (
-        ui.button("проверить", on_click=on_click)
-        .props("flat dense no-caps")
-        .classes("text-[11px] text-blue-600 px-1 py-0")
-    )
+    """Thin delegate to ``_board_spam.render_spam_badge``."""
+    render_spam_badge(ctx, card)
 
 
 def _render_card_stats(card: WarmingAccountState, fleet_max_daily: int) -> None:  # pragma: no cover
@@ -298,9 +254,17 @@ def _render_card_stats(card: WarmingAccountState, fleet_max_daily: int) -> None:
     if card.warming_days is not None:
         parts.append(f"в прогреве {card.warming_days} д")
     parts.append("DM ✅" if card.dm_allowed else "DM 🔒")
-    effective_cap = fleet_max_daily if fleet_max_daily > 0 else card.daily_cap
+    if fleet_max_daily > 0:
+        effective_cap = fleet_max_daily
+        cap_suffix = " (override)"
+    else:
+        effective_cap = card.daily_cap
+        cap_suffix = " (фаза)" if effective_cap > 0 else ""
     daily = f"действий {card.daily_actions}"
-    parts.append(f"{daily} / {effective_cap}" if effective_cap > 0 else daily)
+    if effective_cap > 0:
+        parts.append(f"{daily} / {effective_cap}{cap_suffix}")
+    else:
+        parts.append(daily)
     eta = _relative_eta(card.next_run_at)
     if eta:
         parts.append(f"⏭ {eta}")
