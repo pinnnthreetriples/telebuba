@@ -88,6 +88,13 @@ class ProfileMediaSettings(BaseSettings):
     music_max_bytes: int = Field(default=30_000_000, ge=1)
     # .session files = effective credentials. Cap to deter accidental large uploads.
     session_max_bytes: int = Field(default=5_000_000, ge=1)
+    # How long a live-fetched profile snapshot is reused before the next
+    # dialog-open triggers another GetFullUserRequest. 5 min keeps repeated
+    # opens cheap without staling so much that a user sees outdated data.
+    read_snapshot_ttl_seconds: int = Field(default=300, ge=1)
+    # Max tracks pulled by the profile-music preview. Low cap keeps the TL
+    # response light — the tab is a preview list, not a media library.
+    music_preview_limit: int = Field(default=50, ge=1, le=200)
 
 
 class LoggingSettings(BaseSettings):

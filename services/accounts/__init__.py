@@ -30,6 +30,10 @@ from services.accounts.media import (
     set_account_profile_photo,
 )
 from services.accounts.profile import update_account_profile
+from services.accounts.profile_read import (
+    fetch_live_account_profile,
+    invalidate_account_profile_cache,
+)
 from services.accounts.proxy import (
     check_account_proxy,
     delete_account_proxy,
@@ -52,8 +56,10 @@ __all__ = [
     "delete_account_proxy",
     "evaluate_account_geo",
     "fetch_account_proxy_settings",
+    "fetch_live_account_profile",
     "import_account_session",
     "import_account_tdata",
+    "invalidate_account_profile_cache",
     "list_accounts",
     "load_accounts_table",
     "post_account_story",

@@ -23,14 +23,22 @@ from core.telegram_client._client import (
     prepare_telegram_client_profile,
     telegram_client,
 )
+from core.telegram_client._read import (
+    TelegramAccountNotFoundError,
+    TelegramReadError,
+    execute_read,
+)
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
 
 __all__ = [
+    "TelegramAccountNotFoundError",
+    "TelegramReadError",
     "check_spam_status",
     "check_telegram_session",
     "create_telegram_client",
     "execute",
+    "execute_read",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
     "telegram_client",

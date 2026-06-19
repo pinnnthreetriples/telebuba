@@ -96,6 +96,29 @@ class AddProfileMusic(BaseModel):
     performer: str | None = Field(default=None, min_length=1)
 
 
+class GetUserProfile(BaseModel):
+    """Read-only: pull the signed-in user's own current profile state."""
+
+    action_type: Literal["get_user_profile"] = "get_user_profile"
+
+
+class ListPinnedStories(BaseModel):
+    """Read-only: list the account's pinned-on-profile stories."""
+
+    action_type: Literal["list_pinned_stories"] = "list_pinned_stories"
+    limit: int = Field(default=20, ge=1, le=100)
+
+
+class ListProfileMusic(BaseModel):
+    """Read-only: list the music shown on the account's profile.
+
+    Gracefully degrades when the installed Telethon version lacks the music TL
+    methods — the gateway returns an empty list with ``supported=False``.
+    """
+
+    action_type: Literal["list_profile_music"] = "list_profile_music"
+
+
 TelegramAction = Annotated[
     JoinChannel
     | LeaveChannel
@@ -108,6 +131,11 @@ TelegramAction = Annotated[
     | SetProfilePhoto
     | PostStory
     | AddProfileMusic,
+    Field(discriminator="action_type"),
+]
+
+TelegramReadAction = Annotated[
+    GetUserProfile | ListPinnedStories | ListProfileMusic,
     Field(discriminator="action_type"),
 ]
 
