@@ -19,10 +19,9 @@ from telethon.tl.types import ReactionEmoji
 from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
-from core.telegram_client._client import telegram_client
 from core.telegram_client._media import _dispatch_profile_media_action
+from core.telegram_client._pool import get_client
 from core.telegram_client._util import extract_invite_hash
-from schemas.device_fingerprint import TelegramClientRequest
 from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
@@ -96,8 +95,9 @@ async def _generic_error(account_id: str, action: TelegramAction, exc: Exception
 async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: PLR0911
     """Dispatch a typed Telegram action against ``account_id``.
 
-    The only entry point for Telethon calls from outside ``core/``. Builds the
-    account's client (with proxy + device fingerprint), runs the action,
+    The only entry point for Telethon calls from outside ``core/``. Borrows
+    the per-account pooled client (first borrow pays the connect cost; every
+    subsequent call reuses the open MTProto session), runs the action,
     classifies the Telegram rate-limit family (flood-wait / slow-mode /
     premium / peer-flood) separately, logs every outcome, and returns a typed
     ``ActionResult`` — never raises Telethon errors upward.
@@ -112,39 +112,35 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
             error_message="Account not found in database",
         )
 
-    request = TelegramClientRequest(account_id=account_id, session_name=account.session_name)
-    async with telegram_client(request) as client:
-        try:
-            await client.connect()
-            message_id = await _dispatch_action(client, action)
-        except errors.SlowModeWaitError as exc:
-            return await _flood_action_result(
-                account_id, action, status="slow_mode_wait", seconds=exc.seconds
+    try:
+        client = await get_client(account_id)
+        message_id = await _dispatch_action(client, action)
+    except errors.SlowModeWaitError as exc:
+        return await _flood_action_result(
+            account_id, action, status="slow_mode_wait", seconds=exc.seconds
+        )
+    except errors.FloodPremiumWaitError as exc:
+        return await _flood_action_result(
+            account_id, action, status="premium_wait", seconds=exc.seconds
+        )
+    except errors.PeerFloodError:
+        return await _flood_action_result(account_id, action, status="peer_flood", seconds=None)
+    except errors.FloodWaitError as exc:
+        return await _flood_action_result(
+            account_id, action, status="flood_wait", seconds=exc.seconds
+        )
+    except errors.UserAlreadyParticipantError as exc:
+        if action.action_type == "join_channel":
+            await log_event(
+                "INFO",
+                "telegram_join_channel_already_participant",
+                account_id=account_id,
+                extra={"channel": getattr(action, "channel", None)},
             )
-        except errors.FloodPremiumWaitError as exc:
-            return await _flood_action_result(
-                account_id, action, status="premium_wait", seconds=exc.seconds
-            )
-        except errors.PeerFloodError:
-            return await _flood_action_result(account_id, action, status="peer_flood", seconds=None)
-        except errors.FloodWaitError as exc:
-            return await _flood_action_result(
-                account_id, action, status="flood_wait", seconds=exc.seconds
-            )
-        except errors.UserAlreadyParticipantError as exc:
-            if action.action_type == "join_channel":
-                await log_event(
-                    "INFO",
-                    "telegram_join_channel_already_participant",
-                    account_id=account_id,
-                    extra={"channel": getattr(action, "channel", None)},
-                )
-                return ActionResult(
-                    status="ok", action_type=action.action_type, account_id=account_id
-                )
-            return await _generic_error(account_id, action, exc)
-        except Exception as exc:  # noqa: BLE001
-            return await _generic_error(account_id, action, exc)
+            return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+        return await _generic_error(account_id, action, exc)
+    except Exception as exc:  # noqa: BLE001
+        return await _generic_error(account_id, action, exc)
 
     await log_event(
         "INFO",

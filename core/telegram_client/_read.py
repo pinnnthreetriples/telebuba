@@ -28,8 +28,7 @@ from telethon.tl.types import (
 from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
-from core.telegram_client._client import telegram_client
-from schemas.device_fingerprint import TelegramClientRequest
+from core.telegram_client._pool import get_client
 from schemas.telegram_actions import (
     GetUserProfile,
     ListPinnedStories,
@@ -88,16 +87,16 @@ async def execute_read_many(
     account_id: str,
     actions: list[TelegramReadAction],
 ) -> list[BaseModel]:
-    """Dispatch multiple read actions inside ONE Telethon connection.
+    """Dispatch multiple read actions on the per-account pooled client.
 
-    The dialog needs three reads (profile + stories + music) per open. Running
-    them as three parallel ``execute_read`` calls opens three Telethon clients
-    on the same ``.session`` SQLite file and three concurrent ``fetch_account``
-    reads on ``telebuba.db`` — under live warming-runtime load that races into
-    ``OperationalError: database is locked``. Batching through one client +
-    one ``fetch_account`` removes both contention sources.
+    The dialog needs three reads (profile + stories + music) per open.
+    Before the pool landed, each read opened its own Telethon client on the
+    same ``.session`` SQLite file and the three concurrent ``fetch_account``
+    reads on ``telebuba.db`` raced into ``OperationalError: database is
+    locked`` under live warming-runtime load. With the pool, one persistent
+    client serves both the dialog and the warming task; actions still run
+    sequentially in input order on the single MTProto connection.
 
-    Actions execute sequentially inside the open session, in input order.
     Telethon errors (FloodWait, RPC, etc.) are caught and re-raised as
     :class:`TelegramReadError` so the service layer can handle them without
     importing telethon (layer isolation, non-negotiable #5).
@@ -107,21 +106,19 @@ async def execute_read_many(
         msg = f"Account not found: {account_id}"
         raise TelegramAccountNotFoundError(msg)
 
-    request = TelegramClientRequest(account_id=account_id, session_name=account.session_name)
-    async with telegram_client(request) as client:
-        try:
-            await client.connect()
-            results: list[BaseModel] = [
-                await _dispatch_read_action(client, action) for action in actions
-            ]
-        except errors.FloodWaitError as exc:
-            reason = f"FloodWait({exc.seconds}s)"
-            raise TelegramReadError(reason) from exc
-        except errors.RPCError as exc:
-            reason = f"RPC: {type(exc).__name__}"
-            raise TelegramReadError(reason) from exc
-        else:
-            return results
+    try:
+        client = await get_client(account_id)
+        results: list[BaseModel] = [
+            await _dispatch_read_action(client, action) for action in actions
+        ]
+    except errors.FloodWaitError as exc:
+        reason = f"FloodWait({exc.seconds}s)"
+        raise TelegramReadError(reason) from exc
+    except errors.RPCError as exc:
+        reason = f"RPC: {type(exc).__name__}"
+        raise TelegramReadError(reason) from exc
+    else:
+        return results
 
 
 async def _dispatch_read_action(

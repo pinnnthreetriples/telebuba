@@ -9,6 +9,7 @@ from nicegui import app, ui
 
 from core.config import settings
 from core.logging import log_event, setup_logging
+from core.telegram_client import shutdown_telegram_pool
 from features.accounts import register_accounts_page
 from features.accounts._profile_dialog_render import register_disconnect_tracker
 from features.logs import register_logs_page
@@ -68,7 +69,12 @@ def main() -> None:
     # gone. Reconcile on startup, cancel on shutdown.
     app.on_startup(_log_app_started)
     app.on_startup(reconcile_warming_runtime)
+    # Shutdown order matters: drain warming's in-flight Telegram calls FIRST
+    # so they can finish on the pooled client, THEN tear the pool down. The
+    # other way around blows up live ``execute(...)`` calls mid-handshake and
+    # may corrupt the ``.session`` SQLite file.
     app.on_shutdown(shutdown_warming_runtime)
+    app.on_shutdown(shutdown_telegram_pool)
 
     ui.run(
         title="Telebuba",

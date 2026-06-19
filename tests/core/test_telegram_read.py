@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -57,14 +56,19 @@ def _isolate_runtime(
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    @asynccontextmanager
-    async def fake_cm(_request: object):
-        yield client
+    """Replace ``get_client`` with a coroutine that returns ``client``.
+
+    Read paths now borrow from the per-account pool. Tests no longer need
+    to stub the per-call ``telegram_client`` context manager.
+    """
+
+    async def fake_get_client(_account_id: str) -> object:
+        return client
 
     async def fake_fetch(account_id: str):
         return MagicMock(session_name=account_id)
 
-    monkeypatch.setattr("core.telegram_client._read.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._read.get_client", fake_get_client)
     monkeypatch.setattr("core.telegram_client._read.fetch_account", fake_fetch)
 
 
@@ -382,20 +386,19 @@ async def test_download_story_thumb_swallows_rpc_error(
 async def test_execute_read_many_opens_single_client_for_batch(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Regression: dialog fetch opens exactly ONE Telethon client per batch.
+    """Regression: a batch borrows the pool exactly ONCE for N actions.
 
-    The previous code did 3 parallel ``execute_read`` calls which opened 3
-    Telethon clients on the same ``.session`` SQLite + 3 ``fetch_account``
-    queries on ``telebuba.db`` and raced into ``OperationalError: database
-    is locked`` under live warming-runtime load.
+    Originally the dialog opened 3 fresh Telethon clients in parallel and
+    raced into ``OperationalError: database is locked``. Then ``execute_read_many``
+    serialised into one per-call client. Now the pool keeps the client warm
+    across batches, but the *single borrow per batch* invariant still
+    holds — and it's tested at the seam (``get_client`` calls), not at the
+    factory level which lives in the pool's own tests.
     """
-    opens = 0
+    pool_borrows = 0
     handled: list[object] = []
 
     class FakeClient:
-        async def connect(self) -> None:
-            return None
-
         async def get_input_entity(self, _name: str) -> object:
             return MagicMock()
 
@@ -411,16 +414,17 @@ async def test_execute_read_many_opens_single_client_for_batch(
         async def download_profile_photo(self, _target: str, *, file: object) -> object:  # noqa: ARG002
             return None
 
-    @asynccontextmanager
-    async def fake_cm(_request: object):
-        nonlocal opens
-        opens += 1
-        yield FakeClient()
+    shared_client = FakeClient()
+
+    async def fake_get_client(_account_id: str) -> object:
+        nonlocal pool_borrows
+        pool_borrows += 1
+        return shared_client
 
     async def fake_fetch(account_id: str):
         return MagicMock(session_name=account_id)
 
-    monkeypatch.setattr("core.telegram_client._read.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._read.get_client", fake_get_client)
     monkeypatch.setattr("core.telegram_client._read.fetch_account", fake_fetch)
 
     results = await execute_read_many(
@@ -428,5 +432,5 @@ async def test_execute_read_many_opens_single_client_for_batch(
         [GetUserProfile(), ListPinnedStories(), ListProfileMusic()],
     )
 
-    assert opens == 1, "execute_read_many must open exactly one Telegram client per call"
+    assert pool_borrows == 1, "execute_read_many must borrow once per batch"
     assert len(results) == 3, "must return one result per action, in input order"

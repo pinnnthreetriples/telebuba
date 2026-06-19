@@ -56,16 +56,20 @@ def _isolate_runtime(
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    """Replace the telegram_client context manager with one that yields ``client``."""
+    """Replace ``get_client`` with a coroutine that returns ``client``.
 
-    @asynccontextmanager
-    async def fake_cm(_request: object):
-        yield client
+    Action paths now borrow from the per-account pool instead of opening a
+    fresh client per call, so tests no longer need to stub the per-call
+    ``telegram_client`` context manager.
+    """
+
+    async def fake_get_client(_account_id: str) -> object:
+        return client
 
     async def fake_fetch(account_id: str):
         return MagicMock(session_name=account_id)
 
-    monkeypatch.setattr("core.telegram_client._actions.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._actions.get_client", fake_get_client)
     monkeypatch.setattr("core.telegram_client._actions.fetch_account", fake_fetch)
 
 

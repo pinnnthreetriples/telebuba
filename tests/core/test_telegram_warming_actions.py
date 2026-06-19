@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -39,14 +38,13 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    @asynccontextmanager
-    async def fake_cm(_request: object):
-        yield client
+    async def fake_get_client(_account_id: str) -> object:
+        return client
 
     async def fake_fetch(account_id: str):
         return MagicMock(session_name=account_id)
 
-    monkeypatch.setattr("core.telegram_client._actions.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._actions.get_client", fake_get_client)
     monkeypatch.setattr("core.telegram_client._actions.fetch_account", fake_fetch)
 
 
