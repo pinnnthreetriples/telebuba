@@ -128,19 +128,33 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         # Skips the post-write Telegram re-fetch that previously raced the
         # websocket heartbeat dead.
         _apply_optimistic_avatar(refs, content)
+        # Clear the upload widget so its post-success checkmarks don't
+        # linger on the dialog — the Применить button is the single
+        # affordance the user reasons about.
+        photo_upload.reset()
 
-    ui.upload(
-        label="Загрузить фото профиля",
-        multiple=False,
-        max_file_size=10_000_000,
-        auto_upload=True,
-        on_upload=handle_photo_upload,
-        on_rejected=lambda _e: ui.notify(
-            "Фото отклонено. Проверь: размер ≤ 10 МБ, формат — JPG/JPEG/PNG/WebP.",
-            type="warning",
-            timeout=8000,
-        ),
-    ).props('accept=".jpg,.jpeg,.png,.webp"').classes("w-full")
+    photo_upload = (
+        ui.upload(
+            label="Выбрать фото профиля",
+            multiple=False,
+            max_file_size=10_000_000,
+            auto_upload=False,
+            on_upload=handle_photo_upload,
+            on_rejected=lambda _e: ui.notify(
+                "Фото отклонено. Проверь: размер ≤ 10 МБ, формат — JPG/JPEG/PNG/WebP.",
+                type="warning",
+                timeout=8000,
+            ),
+        )
+        .props('accept=".jpg,.jpeg,.png,.webp" hide-upload-btn')
+        .classes("w-full")
+    )
+    ui.button(
+        "Применить",
+        icon="check",
+        color="primary",
+        on_click=lambda: photo_upload.run_method("upload"),
+    ).classes("w-full")
 
 
 def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
@@ -184,19 +198,30 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             return
         ui.notify("Сторис опубликована", type="positive")
         _apply_optimistic_story(refs, story_bytes=content, kind=kind, caption=caption)
+        story_upload.reset()
 
-    ui.upload(
-        label="Загрузить медиа для сторис",
-        multiple=False,
-        max_file_size=100_000_000,
-        auto_upload=True,
-        on_upload=handle_story_upload,
-        on_rejected=lambda _e: ui.notify(
-            "Медиа отклонено. Проверь: размер ≤ 100 МБ, формат — JPG/JPEG/PNG/WebP/MP4/MOV.",
-            type="warning",
-            timeout=8000,
-        ),
-    ).props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov"').classes("w-full")
+    story_upload = (
+        ui.upload(
+            label="Выбрать медиа для сторис",
+            multiple=False,
+            max_file_size=100_000_000,
+            auto_upload=False,
+            on_upload=handle_story_upload,
+            on_rejected=lambda _e: ui.notify(
+                "Медиа отклонено. Проверь: размер ≤ 100 МБ, формат — JPG/JPEG/PNG/WebP/MP4/MOV.",
+                type="warning",
+                timeout=8000,
+            ),
+        )
+        .props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov" hide-upload-btn')
+        .classes("w-full")
+    )
+    ui.button(
+        "Применить",
+        icon="check",
+        color="primary",
+        on_click=lambda: story_upload.run_method("upload"),
+    ).classes("w-full")
 
 
 def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
@@ -230,19 +255,30 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             performer=performer,
             filename=event.file.name,
         )
+        music_upload.reset()
 
-    ui.upload(
-        label="Загрузить музыку",
-        multiple=False,
-        max_file_size=30_000_000,
-        auto_upload=True,
-        on_upload=handle_music_upload,
-        on_rejected=lambda _e: ui.notify(
-            "Музыка отклонена. Проверь: размер ≤ 30 МБ, формат — MP3 или M4A.",
-            type="warning",
-            timeout=8000,
-        ),
-    ).props('accept=".mp3,.m4a"').classes("w-full")
+    music_upload = (
+        ui.upload(
+            label="Выбрать музыку",
+            multiple=False,
+            max_file_size=30_000_000,
+            auto_upload=False,
+            on_upload=handle_music_upload,
+            on_rejected=lambda _e: ui.notify(
+                "Музыка отклонена. Проверь: размер ≤ 30 МБ, формат — MP3 или M4A.",
+                type="warning",
+                timeout=8000,
+            ),
+        )
+        .props('accept=".mp3,.m4a" hide-upload-btn')
+        .classes("w-full")
+    )
+    ui.button(
+        "Применить",
+        icon="check",
+        color="primary",
+        on_click=lambda: music_upload.run_method("upload"),
+    ).classes("w-full")
 
 
 async def _open_profile_dialog(
