@@ -15,7 +15,7 @@ edges:
     condition: when the runtime body performs Telegram I/O
   - target: context/conventions.md
     condition: when shaping schemas and logging
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Add Warming Runtime Work
@@ -58,7 +58,7 @@ Read `context/warming.md`. Hard rules:
 - [ ] No APScheduler dependency or assumptions
 - [ ] Runtime state is persisted where needed
 - [ ] Failure path logs and updates state
-- [ ] No `features/*` import from another feature domain
+- [ ] No `features/` import from another feature domain
 - [ ] Tests cover happy path, persisted-state behavior, and failure path
 - [ ] `uv run pytest` passes
 

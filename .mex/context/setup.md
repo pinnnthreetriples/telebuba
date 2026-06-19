@@ -15,7 +15,7 @@ edges:
     condition: when understanding how components connect during setup
   - target: context/logging.md
     condition: when configuring Sentry DSN or log file location
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Setup
@@ -34,7 +34,7 @@ last_updated: 2026-06-16
 2. Copy `.env.example` → `.env` and fill in keys (see below).
 3. `uv run pre-commit install` — installs the git hooks (already wired on this machine; new clones need to run it once).
 4. SQLite tables are created lazily by `core/db.py` on first DB access.
-5. `uv run python main.py` — starts NiceGUI (warming runtime tasks reconcile on startup).
+5. `uv run python` `main.py` — starts NiceGUI (warming runtime tasks reconcile on startup).
 
 ## Environment Variables
 
@@ -54,7 +54,7 @@ All namespaces: `TELEGRAM__`, `UI__`, `DB__`, `PROXY__`, `PROFILE_MEDIA__`, `LOG
 
 - `uv sync` — install / refresh dependencies from `pyproject.toml` + `uv.lock`.
 - `uv add <pkg>` / `uv add --dev <pkg>` — add a runtime / dev dependency.
-- `uv run python main.py` — run NiceGUI (warming tasks reconcile on startup).
+- `uv run python` `main.py` — run NiceGUI (warming tasks reconcile on startup).
 - `uv run pytest` — full test suite. Strict mode is baked into `pyproject.toml`: warnings → errors, branch coverage ≥ 90%, `asyncio_mode = strict`, Hypothesis `strict` profile (200 examples).
 - `uv run pytest -p no:cacheprovider --hypothesis-profile=dev` — fast inner-loop run (50 Hypothesis examples, fresh cache).
 - `uv run ruff check .` — lint.

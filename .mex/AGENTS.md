@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Always-loaded project anchor. Read first. Project identity, stack, file map, non-negotiables, commands, pointer to ROUTER.md.
-last_updated: 2026-06-17
+last_updated: 2026-06-19
 ---
 
 # Telebuba
@@ -56,7 +56,7 @@ Before adding files, follow `.mex/context/conventions.md` → **File Placement G
 
 ## Commands
 - Install: `uv sync`
-- Dev: `uv run python main.py`
+- Dev: `uv run python` `main.py`
 - Test: `uv run pytest`
 - Lint / format: `uv run ruff check .` / `uv run ruff format .`
 - Types: `uv run ty check .`

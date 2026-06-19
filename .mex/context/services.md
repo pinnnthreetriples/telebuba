@@ -18,7 +18,7 @@ edges:
     condition: when the service drives Telegram actions through the executor
   - target: patterns/add-service.md
     condition: when adding a new service module/package
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Services Layer
@@ -46,7 +46,7 @@ Without `services/`:
 With `services/`:
 - All callers import the service.
 - No cross-feature imports.
-- Tests target service functions directly with mocked `core/*` adapters.
+- Tests target service functions directly with mocked `core/` adapters.
 - Domain logic remains independent from NiceGUI.
 
 ## Rules
@@ -74,14 +74,14 @@ If the root starts collecting unrelated logic, split into focused submodules (e.
 ## What does NOT belong here
 
 - NiceGUI page/component definitions — those are in `features/`.
-- SQLAlchemy / Telethon / loguru imports — those live in `core/*`.
+- SQLAlchemy / Telethon / loguru imports — those live in `core/`.
 - Raw HTTP calls — wrap them in `core/<provider>.py`.
 - Long-running blocking work — `await` cooperatively; if CPU-heavy, offload via `asyncio.to_thread`.
 
 ## Test policy
 
 - Service tests live under `tests/services/` and may be split by subdomain for packages.
-- Mock `core/*` adapters (db, telegram_client, http, logging) — services should be testable without touching real I/O.
+- Mock `core/` adapters (db, telegram_client, http, logging) — services should be testable without touching real I/O.
 - Cover happy path + failure paths for public functions.
 - Strict pytest applies: warnings → errors, branch coverage ≥ 90%, prefer `/tdd` skill.
 

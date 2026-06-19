@@ -15,7 +15,7 @@ edges:
     condition: when the feature performs Telegram I/O
   - target: patterns/add-warming-job.md
     condition: when the feature touches warming runtime work
-last_updated: 2026-06-16
+last_updated: 2026-06-19
 ---
 
 # Add a Feature
@@ -31,8 +31,8 @@ Read `context/conventions.md` and `context/services.md` first. Key constraints:
 ## Steps
 
 1. **Schema first.** Add or extend `schemas/<domain>.py`. Define request/response models the feature and service will use at boundaries. Extend `schemas/telegram_actions.py` only if a new Telegram action is needed.
-2. **Service first.** Add or extend `services/<domain>.py` or `services/<domain>/` with business logic. Public functions take/return Pydantic models and delegate I/O to `core/*`.
-3. **Test the service.** Add/update tests under `tests/services/`. Mock `core/*` adapters. Prefer `/tdd` skill.
+2. **Service first.** Add or extend `services/<domain>.py` or `services/<domain>/` with business logic. Public functions take/return Pydantic models and delegate I/O to `core/`.
+3. **Test the service.** Add/update tests under `tests/services/`. Mock `core/` adapters. Prefer `/tdd` skill.
 4. **Create/update the feature UI.** Add `features/<name>.py` or `features/<name>/`. Keep handlers thin: validate → call service → render.
 5. **Wire it in.** Register the page/route once from `main.py` or the existing feature registration point.
 6. **Test the feature.** Add/update tests under `tests/features/` when logic is testable outside direct NiceGUI rendering. Mock the service; do not re-test service logic here.
