@@ -602,6 +602,60 @@ async def test_set_account_profile_photo_executes_action(
 
 
 @pytest.mark.asyncio
+async def test_media_upload_invalidates_profile_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All three media services call ``invalidate_account_profile_cache``.
+
+    Regression: after PR #96 the dialog cached the live snapshot, but only
+    ``update_account_profile`` invalidated it on save. Media uploads fell
+    through with ``force_refresh=True`` at the UI layer; the new
+    optimistic-update flow removed that, so service-level invalidation is
+    the only safety net left.
+    """
+    invalidated: list[str] = []
+
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        return ActionResult(
+            status="ok",
+            action_type=getattr(action, "action_type", "unknown"),
+            account_id=account_id,
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    await set_account_profile_photo(
+        AccountProfilePhotoUpload(
+            account_id="acc-photo",
+            filename="a.jpg",
+            content=b"jpg",
+        ),
+    )
+    await post_account_story(
+        AccountStoryUpload(
+            account_id="acc-story",
+            filename="s.jpg",
+            content=b"jpg",
+            media_kind="image",
+        ),
+    )
+    await add_account_profile_music(
+        AccountProfileMusicUpload(
+            account_id="acc-music",
+            filename="t.mp3",
+            content=b"mp3",
+        ),
+    )
+
+    assert invalidated == ["acc-photo", "acc-story", "acc-music"]
+
+
+@pytest.mark.asyncio
 async def test_post_account_story_executes_story_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

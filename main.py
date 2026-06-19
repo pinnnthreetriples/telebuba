@@ -10,6 +10,7 @@ from nicegui import app, ui
 from core.config import settings
 from core.logging import log_event, setup_logging
 from features.accounts import register_accounts_page
+from features.accounts._profile_dialog_render import register_disconnect_tracker
 from features.logs import register_logs_page
 from features.warming import register_warming_page
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
@@ -58,6 +59,9 @@ def main() -> None:
     register_accounts_page()
     register_warming_page()
     register_logs_page()
+    # Populate _DEAD_CLIENTS on websocket drop so the profile dialog's apply
+    # paths short-circuit on detached clients instead of warning to stderr.
+    register_disconnect_tracker()
 
     # _RUNTIME (per-account warming loops) lives in process memory; after a
     # restart the DB may still show ``active``/``sleeping`` rows whose task is
@@ -66,7 +70,12 @@ def main() -> None:
     app.on_startup(reconcile_warming_runtime)
     app.on_shutdown(shutdown_warming_runtime)
 
-    ui.run(title="Telebuba", port=settings.ui.port, reload=False)
+    ui.run(
+        title="Telebuba",
+        port=settings.ui.port,
+        reload=False,
+        reconnect_timeout=settings.ui.reconnect_timeout,
+    )
 
 
 if __name__ in {"__main__", "__mp_main__"}:

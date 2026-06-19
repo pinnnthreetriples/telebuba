@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
+from features.accounts import _profile_dialog_render as render
 from features.accounts._proxy_dialog import (
     _proxy_dialog_error,
     _proxy_dialog_geo,
@@ -16,6 +18,10 @@ from features.accounts._table import (
     _service_error_label,
     _to_table_row,
 )
+from schemas.accounts import AccountProfileSnapshot
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def test_remember_selection_replaces_selected_ids() -> None:
@@ -135,3 +141,109 @@ def test_service_error_label_conversion_error_includes_library_detail() -> None:
     assert "Не удалось прочитать tdata" in msg
     assert "TDataBadDecryptKey" in msg
     assert "паролем" in msg or "сессия отозвана" in msg
+
+
+def test_optimistic_avatar_noop_on_dead_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stale-client guard must short-circuit before touching NiceGUI elements.
+
+    Otherwise a fetch landing after dialog hide / WS drop raises
+    "Client has been deleted" warnings on detached elements.
+    """
+    rendered: list[str] = []
+    monkeypatch.setattr(
+        render,
+        "_render_header",
+        lambda _refs, _snap: rendered.append("header"),
+    )
+    monkeypatch.setattr(
+        render,
+        "_render_photo_preview",
+        lambda _c, _snap: rendered.append("photo"),
+    )
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "dead-client-id"
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc")
+    render._DEAD_CLIENTS.add("dead-client-id")
+    try:
+        render._apply_optimistic_avatar(refs, b"new-bytes")
+    finally:
+        render._DEAD_CLIENTS.discard("dead-client-id")
+
+    assert rendered == [], "dead-client guard must skip render path entirely"
+    assert refs.current_snapshot.avatar_bytes is None, "snapshot must not mutate on dead client"
+
+
+def test_optimistic_story_appends_and_keeps_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Optimistic story upload appends a synthetic-id thumb in input order.
+
+    No Telegram round-trip required.
+    """
+    monkeypatch.setattr(render, "_render_stories_preview", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc")
+    # ``stories_container`` is dereferenced as an argument before the mocked
+    # render function is called — give it any placeholder.
+    refs.stories_container = object()  # ty: ignore[invalid-assignment]
+
+    render._apply_optimistic_story(
+        refs,
+        story_bytes=b"img-bytes",
+        kind="image",
+        caption="hi",
+    )
+    render._apply_optimistic_story(
+        refs,
+        story_bytes=b"vid-bytes",
+        kind="video",
+        caption=None,
+    )
+
+    assert refs.current_snapshot is not None
+    assert [s.kind for s in refs.current_snapshot.stories] == ["image", "video"]
+    assert refs.current_snapshot.stories[0].thumb_bytes == b"img-bytes"
+    assert refs.current_snapshot.stories[1].thumb_bytes is None  # video has no thumb yet
+    assert refs.current_snapshot.stories[0].caption == "hi"
+
+
+def test_optimistic_music_uses_form_metadata_and_filename_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``SaveMusicRequest`` returns ``bool`` — nothing to trust.
+
+    Track title falls back to the upload filename when the user left the
+    form blank.
+    """
+    monkeypatch.setattr(render, "_render_music_preview", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc")
+
+    render._apply_optimistic_music(
+        refs,
+        title="Memorabilia",
+        performer="The Heads",
+        filename="memorabilia.mp3",
+    )
+    render._apply_optimistic_music(
+        refs,
+        title=None,
+        performer=None,
+        filename="untagged.mp3",
+    )
+
+    assert refs.current_snapshot is not None
+    titles = [t.title for t in refs.current_snapshot.music]
+    assert titles == ["Memorabilia", "untagged.mp3"]
+    assert refs.current_snapshot.music[0].performer == "The Heads"
+    assert refs.current_snapshot.music[1].performer is None

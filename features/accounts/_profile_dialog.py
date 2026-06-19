@@ -18,9 +18,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from nicegui import ui
+from nicegui import context, ui
 
 from features.accounts._profile_dialog_render import (
+    _apply_optimistic_avatar,
+    _apply_optimistic_music,
+    _apply_optimistic_story,
     _apply_snapshot,
     _DialogRefs,
     _render_loading_header,
@@ -108,19 +111,23 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
     refs.photo_preview_container = ui.element("div").classes("w-full")
 
     async def handle_photo_upload(event: UploadEventArguments) -> None:
+        content = await event.file.read()
         try:
             await set_account_profile_photo(
                 AccountProfilePhotoUpload(
                     account_id=account_id,
                     filename=event.file.name,
-                    content=await event.file.read(),
+                    content=content,
                 ),
             )
         except ValueError as exc:
             ui.notify(_service_error_label(str(exc)), type="negative")
             return
         ui.notify("Фото профиля обновлено", type="positive")
-        await _load_and_apply(account_id, refs, force_refresh=True)
+        # Optimistic UI: the bytes we just uploaded ARE the new avatar.
+        # Skips the post-write Telegram re-fetch that previously raced the
+        # websocket heartbeat dead.
+        _apply_optimistic_avatar(refs, content)
 
     ui.upload(
         label="Загрузить фото профиля",
@@ -153,14 +160,17 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
     protect_story = ui.checkbox("Защитить контент", value=False)
 
     async def handle_story_upload(event: UploadEventArguments) -> None:
+        content = await event.file.read()
+        caption = (story_caption.value or "").strip() or None
+        kind = story_kind.value
         try:
             await post_account_story(
                 AccountStoryUpload(
                     account_id=account_id,
                     filename=event.file.name,
-                    content=await event.file.read(),
-                    media_kind=story_kind.value,
-                    caption=(story_caption.value or "").strip() or None,
+                    content=content,
+                    media_kind=kind,
+                    caption=caption,
                     privacy_preset=story_privacy.value,
                     protect_content=bool(protect_story.value),
                 ),
@@ -169,7 +179,7 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             ui.notify(_service_error_label(str(exc)), type="negative")
             return
         ui.notify("Сторис опубликована", type="positive")
-        await _load_and_apply(account_id, refs, force_refresh=True)
+        _apply_optimistic_story(refs, story_bytes=content, kind=kind, caption=caption)
 
     ui.upload(
         label="Загрузить медиа для сторис",
@@ -190,21 +200,28 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
     music_performer = ui.input("Исполнитель").props("dense outlined clearable")
 
     async def handle_music_upload(event: UploadEventArguments) -> None:
+        title = (music_title.value or "").strip() or None
+        performer = (music_performer.value or "").strip() or None
         try:
             await add_account_profile_music(
                 AccountProfileMusicUpload(
                     account_id=account_id,
                     filename=event.file.name,
                     content=await event.file.read(),
-                    title=(music_title.value or "").strip() or None,
-                    performer=(music_performer.value or "").strip() or None,
+                    title=title,
+                    performer=performer,
                 ),
             )
         except ValueError as exc:
             ui.notify(_service_error_label(str(exc)), type="negative")
             return
         ui.notify("Музыка профиля добавлена", type="positive")
-        await _load_and_apply(account_id, refs, force_refresh=True)
+        _apply_optimistic_music(
+            refs,
+            title=title,
+            performer=performer,
+            filename=event.file.name,
+        )
 
     ui.upload(
         label="Загрузить музыку",
@@ -222,6 +239,9 @@ async def _open_profile_dialog(
 ) -> None:  # pragma: no cover
     account_id = str(row["account_id"])
     refs = _DialogRefs()
+    refs.current_snapshot = None
+    refs.client_id = context.client.id
+    refs.closed = False
     with (
         ui.dialog() as dialog,
         ui.column().classes("bg-white p-4 gap-3 w-[640px] max-w-full"),
@@ -269,16 +289,15 @@ async def _open_profile_dialog(
                 _profile_music_tab(account_id, refs)
 
     _render_loading_header(refs, account_id)
-    refs.closed = False
     refs.initial_load_task = asyncio.create_task(
         _load_and_apply(account_id, refs, force_refresh=False),
     )
 
     def _on_hide() -> None:
-        # Cancel the in-flight fetch AND flip the closed flag so
-        # ``_apply_snapshot`` short-circuits when it lands after dialog hide.
-        # ``cancel()`` alone is not enough — the apply path has no await
-        # points after the fetch, so cancellation can't interrupt it.
+        # Cancel the in-flight fetch AND flip the closed flag so apply paths
+        # short-circuit when they land after dialog hide. ``cancel()`` alone
+        # is not enough — the apply path has no await points after the fetch,
+        # so cancellation can't interrupt it.
         refs.closed = True
         refs.initial_load_task.cancel()
 

@@ -23,6 +23,7 @@ from services.accounts._uploads import (
     _STORY_VIDEO_SUFFIXES,
     _validate_upload,
 )
+from services.accounts.profile_read import invalidate_account_profile_cache
 
 if TYPE_CHECKING:
     from schemas.profile_media import (
@@ -54,6 +55,7 @@ async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionRe
     if result.status != "ok":
         msg = result.error_message or result.status
         raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
         "account_profile_photo_updated",
@@ -94,6 +96,7 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
     if result.status != "ok":
         msg = result.error_message or result.status
         raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
         "account_story_posted",
@@ -127,6 +130,7 @@ async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionRe
     if result.status != "ok":
         msg = result.error_message or result.status
         raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
         "account_profile_music_added",
