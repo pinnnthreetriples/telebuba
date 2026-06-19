@@ -30,6 +30,12 @@ class _DialogRefs:
 
     Attributes are wired up in ``_open_profile_dialog`` as the elements get
     created — declared here only so type checkers can see the shape.
+
+    ``closed`` flips to True in the dialog's ``on('hide', ...)`` handler so
+    the snapshot-apply path can short-circuit synchronously — ``task.cancel()``
+    alone is not enough because ``_apply_snapshot`` has no await points after
+    the fetch completes, so it would otherwise mutate NiceGUI elements on a
+    detached client and log a "Client has been deleted" warning.
     """
 
     first_name: ui.input
@@ -46,6 +52,7 @@ class _DialogRefs:
     refresh_button: ui.button
     error_banner: ui.label
     initial_load_task: asyncio.Task[None]
+    closed: bool = False
 
 
 def _avatar_data_url(image_bytes: bytes | None) -> str | None:
@@ -186,6 +193,10 @@ def _format_track_meta(track: TelegramMusicItem) -> str:
 
 def _apply_snapshot(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
     """Fill every dynamic element from a freshly-loaded snapshot."""
+    if refs.closed:
+        # Dialog was hidden while the fetch was in flight. ``task.cancel()``
+        # can't interrupt this synchronous block, so we guard explicitly.
+        return
     refs.first_name.value = snapshot.first_name or ""
     refs.last_name.value = snapshot.last_name or ""
     refs.username.value = snapshot.username or ""

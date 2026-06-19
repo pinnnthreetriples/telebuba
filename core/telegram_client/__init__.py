@@ -27,6 +27,7 @@ from core.telegram_client._read import (
     TelegramAccountNotFoundError,
     TelegramReadError,
     execute_read,
+    execute_read_many,
 )
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
@@ -39,6 +40,7 @@ __all__ = [
     "create_telegram_client",
     "execute",
     "execute_read",
+    "execute_read_many",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
     "telegram_client",

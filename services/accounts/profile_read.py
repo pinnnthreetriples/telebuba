@@ -1,18 +1,18 @@
 """Live-profile reads for the edit-profile dialog.
 
-Calls the three read actions on the Telegram gateway in parallel, caches the
-combined snapshot in-process for ``profile_media.read_snapshot_ttl_seconds``,
-and degrades gracefully when Telegram refuses the fetch (FloodWait, RPCError,
-missing account) — the dialog still opens and shows whatever it can.
+Calls the three read actions on the Telegram gateway inside ONE Telethon
+session, caches the combined snapshot in-process for
+``profile_media.read_snapshot_ttl_seconds``, and degrades gracefully when
+Telegram refuses the fetch (FloodWait, RPCError, missing account) — the dialog
+still opens and shows whatever it can.
 
 The gateway is imported at module scope so tests monkeypatch
-``services.accounts.profile_read.execute_read`` rather than reaching into the
-gateway internals.
+``services.accounts.profile_read.execute_read_many`` rather than reaching into
+the gateway internals.
 """
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, cast
 
@@ -21,7 +21,7 @@ from core.logging import log_event
 from core.telegram_client import (
     TelegramAccountNotFoundError,
     TelegramReadError,
-    execute_read,
+    execute_read_many,
 )
 from schemas.accounts import AccountProfileSnapshot
 from schemas.telegram_actions import (
@@ -84,10 +84,9 @@ def invalidate_account_profile_cache(account_id: str | None = None) -> None:
 
 async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
     try:
-        profile_model, stories_model, music_model = await asyncio.gather(
-            execute_read(account_id, GetUserProfile()),
-            execute_read(account_id, ListPinnedStories()),
-            execute_read(account_id, ListProfileMusic()),
+        results = await execute_read_many(
+            account_id,
+            [GetUserProfile(), ListPinnedStories(), ListProfileMusic()],
         )
     except TelegramReadError as exc:
         return _error_snapshot(account_id, exc.reason)
@@ -102,9 +101,10 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
         )
         return _error_snapshot(account_id, f"{type(exc).__name__}: {exc}")
 
-    # The gateway returns the snapshot type matching each action. ``cast``
-    # documents the contract for type checkers without paying for a runtime
-    # isinstance check on the happy path.
+    # The gateway returns the snapshot types matching each action's position.
+    # ``cast`` documents the contract for type checkers without paying for a
+    # runtime isinstance check on the happy path.
+    profile_model, stories_model, music_model = results
     return _combine(
         account_id,
         cast("TelegramProfileSnapshot", profile_model),

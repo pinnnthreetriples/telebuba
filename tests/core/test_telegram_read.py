@@ -23,6 +23,7 @@ from core.telegram_client import (
     TelegramAccountNotFoundError,
     TelegramReadError,
     execute_read,
+    execute_read_many,
 )
 from schemas.telegram_actions import (
     GetUserProfile,
@@ -375,3 +376,57 @@ async def test_download_story_thumb_swallows_rpc_error(
     assert len(result.items) == 1
     assert result.items[0].story_id == 99
     assert result.items[0].thumb_bytes is None
+
+
+@pytest.mark.asyncio
+async def test_execute_read_many_opens_single_client_for_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: dialog fetch opens exactly ONE Telethon client per batch.
+
+    The previous code did 3 parallel ``execute_read`` calls which opened 3
+    Telethon clients on the same ``.session`` SQLite + 3 ``fetch_account``
+    queries on ``telebuba.db`` and raced into ``OperationalError: database
+    is locked`` under live warming-runtime load.
+    """
+    opens = 0
+    handled: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _name: str) -> object:
+            return MagicMock()
+
+        async def __call__(self, request: object) -> object:
+            handled.append(request)
+            if isinstance(request, GetFullUserRequest):
+                return MagicMock(full_user=MagicMock(about=None), users=[MagicMock()])
+            if isinstance(request, GetPinnedStoriesRequest):
+                return MagicMock(stories=[])
+            # GetSavedMusicRequest fallback
+            return MagicMock(documents=[])
+
+        async def download_profile_photo(self, _target: str, *, file: object) -> object:  # noqa: ARG002
+            return None
+
+    @asynccontextmanager
+    async def fake_cm(_request: object):
+        nonlocal opens
+        opens += 1
+        yield FakeClient()
+
+    async def fake_fetch(account_id: str):
+        return MagicMock(session_name=account_id)
+
+    monkeypatch.setattr("core.telegram_client._read.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._read.fetch_account", fake_fetch)
+
+    results = await execute_read_many(
+        "acc-batch",
+        [GetUserProfile(), ListPinnedStories(), ListProfileMusic()],
+    )
+
+    assert opens == 1, "execute_read_many must open exactly one Telegram client per call"
+    assert len(results) == 3, "must return one result per action, in input order"

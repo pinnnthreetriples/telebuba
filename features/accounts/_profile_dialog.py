@@ -269,12 +269,18 @@ async def _open_profile_dialog(
                 _profile_music_tab(account_id, refs)
 
     _render_loading_header(refs, account_id)
+    refs.closed = False
     refs.initial_load_task = asyncio.create_task(
         _load_and_apply(account_id, refs, force_refresh=False),
     )
-    # Cancel the in-flight fetch if the user dismisses the dialog before it
-    # returns — otherwise the task lands on detached NiceGUI elements and
-    # surfaces noise in the server log. Task.cancel() is a no-op on a done
-    # task, so wiring it unconditionally is safe.
-    dialog.on("hide", refs.initial_load_task.cancel)
+
+    def _on_hide() -> None:
+        # Cancel the in-flight fetch AND flip the closed flag so
+        # ``_apply_snapshot`` short-circuits when it lands after dialog hide.
+        # ``cancel()`` alone is not enough — the apply path has no await
+        # points after the fetch, so cancellation can't interrupt it.
+        refs.closed = True
+        refs.initial_load_task.cancel()
+
+    dialog.on("hide", _on_hide)
     dialog.open()

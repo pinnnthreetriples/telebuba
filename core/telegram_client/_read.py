@@ -79,8 +79,25 @@ class TelegramReadError(RuntimeError):
 
 
 async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel:
-    """Dispatch a read action against ``account_id`` and return the typed model.
+    """Dispatch a single read action — convenience wrapper around ``execute_read_many``."""
+    results = await execute_read_many(account_id, [action])
+    return results[0]
 
+
+async def execute_read_many(
+    account_id: str,
+    actions: list[TelegramReadAction],
+) -> list[BaseModel]:
+    """Dispatch multiple read actions inside ONE Telethon connection.
+
+    The dialog needs three reads (profile + stories + music) per open. Running
+    them as three parallel ``execute_read`` calls opens three Telethon clients
+    on the same ``.session`` SQLite file and three concurrent ``fetch_account``
+    reads on ``telebuba.db`` — under live warming-runtime load that races into
+    ``OperationalError: database is locked``. Batching through one client +
+    one ``fetch_account`` removes both contention sources.
+
+    Actions execute sequentially inside the open session, in input order.
     Telethon errors (FloodWait, RPC, etc.) are caught and re-raised as
     :class:`TelegramReadError` so the service layer can handle them without
     importing telethon (layer isolation, non-negotiable #5).
@@ -94,13 +111,17 @@ async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel
     async with telegram_client(request) as client:
         try:
             await client.connect()
-            return await _dispatch_read_action(client, action)
+            results: list[BaseModel] = [
+                await _dispatch_read_action(client, action) for action in actions
+            ]
         except errors.FloodWaitError as exc:
             reason = f"FloodWait({exc.seconds}s)"
             raise TelegramReadError(reason) from exc
         except errors.RPCError as exc:
             reason = f"RPC: {type(exc).__name__}"
             raise TelegramReadError(reason) from exc
+        else:
+            return results
 
 
 async def _dispatch_read_action(
