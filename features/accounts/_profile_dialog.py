@@ -20,6 +20,7 @@ from typing import TYPE_CHECKING
 
 from nicegui import context, ui
 
+from features.accounts._profile_dialog_footer import _TabFooter
 from features.accounts._profile_dialog_render import (
     _apply_optimistic_avatar,
     _apply_optimistic_music,
@@ -49,6 +50,12 @@ if TYPE_CHECKING:
     from nicegui.events import UploadEventArguments
 
 
+# Strip Quasar's per-file status icons from every ``ui.upload`` widget on the
+# page — paired with ``hide-upload-btn`` it removes the two ✓ markers users
+# kept misreading as "apply" buttons.
+ui.add_css(""".q-uploader__file-status { display: none !important; }""")
+
+
 async def _load_and_apply(
     account_id: str,
     refs: _DialogRefs,
@@ -65,7 +72,6 @@ def _profile_text_tab(
     account_id: str,
     refs: _DialogRefs,
     refresh: Callable[[], Awaitable[None]],
-    close: Callable[..., object],
 ) -> None:  # pragma: no cover
     refs.first_name = ui.input("Имя", value="").props("dense outlined").classes("w-full")
     refs.last_name = (
@@ -80,7 +86,19 @@ def _profile_text_tab(
     refs.username.disable()
     refs.bio.disable()
 
-    async def save() -> None:
+    def _text_baseline_matches() -> bool:
+        snap = refs.current_snapshot
+        if snap is None:
+            return True
+        cleaned_username = (refs.username.value or "").strip().removeprefix("@")
+        return (
+            (refs.first_name.value or "").strip() == (snap.first_name or "")
+            and (refs.last_name.value or "").strip() == (snap.last_name or "")
+            and cleaned_username == (snap.username or "")
+            and (refs.bio.value or "").strip() == (snap.bio or "")
+        )
+
+    async def _apply() -> None:
         name = (refs.first_name.value or "").strip()
         if not name:
             ui.notify("Имя обязательно", type="warning")
@@ -102,22 +120,66 @@ def _profile_text_tab(
         await refresh()
         await _load_and_apply(account_id, refs, force_refresh=True)
 
-    with ui.row().classes("w-full justify-end gap-2"):
-        ui.button(icon="close", color="grey-7", on_click=close).tooltip("Отмена")
-        ui.button(icon="save", color="primary", on_click=save).tooltip("Сохранить профиль")
+    def _cancel() -> None:
+        snap = refs.current_snapshot
+        if snap is None:
+            return
+        refs.first_name.value = snap.first_name or ""
+        refs.username.value = snap.username or ""
+        refs.last_name.value = snap.last_name or ""
+        refs.bio.value = snap.bio or ""
+
+    footer = _TabFooter(apply=_apply, cancel=_cancel)
+
+    def _check_dirty(_event: object = None) -> None:
+        if _text_baseline_matches():
+            footer.mark_clean()
+        else:
+            footer.mark_dirty()
+
+    refs.first_name.on_value_change(_check_dirty)
+    refs.last_name.on_value_change(_check_dirty)
+    refs.username.on_value_change(_check_dirty)
+    refs.bio.on_value_change(_check_dirty)
 
 
 def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
     refs.photo_preview_container = ui.element("div").classes("w-full")
+    staged: dict[str, object] = {"name": None, "bytes": None}
 
-    async def handle_photo_upload(event: UploadEventArguments) -> None:
-        content = await event.file.read()
+    async def _on_file_uploaded(event: UploadEventArguments) -> None:
+        staged["name"] = event.file.name
+        staged["bytes"] = await event.file.read()
+        footer.mark_dirty()
+
+    photo_upload = (
+        ui.upload(
+            label="Выбрать фото профиля",
+            multiple=False,
+            max_file_size=10_000_000,
+            auto_upload=True,
+            on_upload=_on_file_uploaded,
+            on_rejected=lambda _e: ui.notify(
+                "Фото отклонено. Проверь: размер ≤ 10 МБ, формат — JPG/JPEG/PNG/WebP.",
+                type="warning",
+                timeout=8000,
+            ),
+        )
+        .props('accept=".jpg,.jpeg,.png,.webp" hide-upload-btn flat bordered')
+        .classes("w-full")
+    )
+
+    async def _apply() -> None:
+        name = staged["name"]
+        content = staged["bytes"]
+        if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
+            return
         try:
             await set_account_profile_photo(
                 AccountProfilePhotoUpload(
                     account_id=account_id,
-                    filename=event.file.name,
-                    content=content,
+                    filename=name,
+                    content=bytes(content),
                 ),
             )
         except ValueError as exc:
@@ -125,36 +187,17 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             return
         ui.notify("Фото профиля обновлено", type="positive")
         # Optimistic UI: the bytes we just uploaded ARE the new avatar.
-        # Skips the post-write Telegram re-fetch that previously raced the
-        # websocket heartbeat dead.
-        _apply_optimistic_avatar(refs, content)
-        # Clear the upload widget so its post-success checkmarks don't
-        # linger on the dialog — the Применить button is the single
-        # affordance the user reasons about.
+        _apply_optimistic_avatar(refs, bytes(content))
         photo_upload.reset()
+        staged["name"] = None
+        staged["bytes"] = None
 
-    photo_upload = (
-        ui.upload(
-            label="Выбрать фото профиля",
-            multiple=False,
-            max_file_size=10_000_000,
-            auto_upload=False,
-            on_upload=handle_photo_upload,
-            on_rejected=lambda _e: ui.notify(
-                "Фото отклонено. Проверь: размер ≤ 10 МБ, формат — JPG/JPEG/PNG/WebP.",
-                type="warning",
-                timeout=8000,
-            ),
-        )
-        .props('accept=".jpg,.jpeg,.png,.webp" hide-upload-btn')
-        .classes("w-full")
-    )
-    ui.button(
-        "Применить",
-        icon="check",
-        color="primary",
-        on_click=lambda: photo_upload.run_method("upload"),
-    ).classes("w-full")
+    def _cancel() -> None:
+        photo_upload.reset()
+        staged["name"] = None
+        staged["bytes"] = None
+
+    footer = _TabFooter(apply=_apply, cancel=_cancel)
 
 
 def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
@@ -176,17 +219,43 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
     ).props("dense outlined")
     story_caption = ui.textarea("Подпись").props("dense outlined")
     protect_story = ui.checkbox("Защитить контент", value=False)
+    staged: dict[str, object] = {"name": None, "bytes": None}
 
-    async def handle_story_upload(event: UploadEventArguments) -> None:
-        content = await event.file.read()
+    async def _on_file_uploaded(event: UploadEventArguments) -> None:
+        staged["name"] = event.file.name
+        staged["bytes"] = await event.file.read()
+        footer.mark_dirty()
+
+    story_upload = (
+        ui.upload(
+            label="Выбрать медиа для сторис",
+            multiple=False,
+            max_file_size=100_000_000,
+            auto_upload=True,
+            on_upload=_on_file_uploaded,
+            on_rejected=lambda _e: ui.notify(
+                "Медиа отклонено. Проверь: размер ≤ 100 МБ, формат — JPG/JPEG/PNG/WebP/MP4/MOV.",
+                type="warning",
+                timeout=8000,
+            ),
+        )
+        .props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov" hide-upload-btn flat bordered')
+        .classes("w-full")
+    )
+
+    async def _apply() -> None:
+        name = staged["name"]
+        content = staged["bytes"]
+        if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
+            return
         caption = (story_caption.value or "").strip() or None
         kind = story_kind.value
         try:
             await post_account_story(
                 AccountStoryUpload(
                     account_id=account_id,
-                    filename=event.file.name,
-                    content=content,
+                    filename=name,
+                    content=bytes(content),
                     media_kind=kind,
                     caption=caption,
                     privacy_preset=story_privacy.value,
@@ -197,31 +266,19 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             ui.notify(_service_error_label(str(exc)), type="negative")
             return
         ui.notify("Сторис опубликована", type="positive")
-        _apply_optimistic_story(refs, story_bytes=content, kind=kind, caption=caption)
+        _apply_optimistic_story(refs, story_bytes=bytes(content), kind=kind, caption=caption)
         story_upload.reset()
+        story_caption.value = ""
+        staged["name"] = None
+        staged["bytes"] = None
 
-    story_upload = (
-        ui.upload(
-            label="Выбрать медиа для сторис",
-            multiple=False,
-            max_file_size=100_000_000,
-            auto_upload=False,
-            on_upload=handle_story_upload,
-            on_rejected=lambda _e: ui.notify(
-                "Медиа отклонено. Проверь: размер ≤ 100 МБ, формат — JPG/JPEG/PNG/WebP/MP4/MOV.",
-                type="warning",
-                timeout=8000,
-            ),
-        )
-        .props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov" hide-upload-btn')
-        .classes("w-full")
-    )
-    ui.button(
-        "Применить",
-        icon="check",
-        color="primary",
-        on_click=lambda: story_upload.run_method("upload"),
-    ).classes("w-full")
+    def _cancel() -> None:
+        story_upload.reset()
+        story_caption.value = ""
+        staged["name"] = None
+        staged["bytes"] = None
+
+    footer = _TabFooter(apply=_apply, cancel=_cancel)
 
 
 def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
@@ -231,16 +288,43 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
 
     music_title = ui.input("Название").props("dense outlined clearable")
     music_performer = ui.input("Исполнитель").props("dense outlined clearable")
+    staged: dict[str, object] = {"name": None, "bytes": None}
 
-    async def handle_music_upload(event: UploadEventArguments) -> None:
+    async def _on_file_uploaded(event: UploadEventArguments) -> None:
+        staged["name"] = event.file.name
+        staged["bytes"] = await event.file.read()
+        footer.mark_dirty()
+
+    music_upload = (
+        ui.upload(
+            label="Выбрать музыку",
+            multiple=False,
+            max_file_size=30_000_000,
+            auto_upload=True,
+            on_upload=_on_file_uploaded,
+            on_rejected=lambda _e: ui.notify(
+                "Музыка отклонена. Проверь: размер ≤ 30 МБ, формат — MP3 или M4A.",
+                type="warning",
+                timeout=8000,
+            ),
+        )
+        .props('accept=".mp3,.m4a" hide-upload-btn flat bordered')
+        .classes("w-full")
+    )
+
+    async def _apply() -> None:
+        name = staged["name"]
+        content = staged["bytes"]
+        if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
+            return
         title = (music_title.value or "").strip() or None
         performer = (music_performer.value or "").strip() or None
         try:
             await add_account_profile_music(
                 AccountProfileMusicUpload(
                     account_id=account_id,
-                    filename=event.file.name,
-                    content=await event.file.read(),
+                    filename=name,
+                    content=bytes(content),
                     title=title,
                     performer=performer,
                 ),
@@ -253,32 +337,22 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             refs,
             title=title,
             performer=performer,
-            filename=event.file.name,
+            filename=name,
         )
         music_upload.reset()
+        music_title.value = ""
+        music_performer.value = ""
+        staged["name"] = None
+        staged["bytes"] = None
 
-    music_upload = (
-        ui.upload(
-            label="Выбрать музыку",
-            multiple=False,
-            max_file_size=30_000_000,
-            auto_upload=False,
-            on_upload=handle_music_upload,
-            on_rejected=lambda _e: ui.notify(
-                "Музыка отклонена. Проверь: размер ≤ 30 МБ, формат — MP3 или M4A.",
-                type="warning",
-                timeout=8000,
-            ),
-        )
-        .props('accept=".mp3,.m4a" hide-upload-btn')
-        .classes("w-full")
-    )
-    ui.button(
-        "Применить",
-        icon="check",
-        color="primary",
-        on_click=lambda: music_upload.run_method("upload"),
-    ).classes("w-full")
+    def _cancel() -> None:
+        music_upload.reset()
+        music_title.value = ""
+        music_performer.value = ""
+        staged["name"] = None
+        staged["bytes"] = None
+
+    footer = _TabFooter(apply=_apply, cancel=_cancel)
 
 
 async def _open_profile_dialog(
@@ -329,7 +403,7 @@ async def _open_profile_dialog(
             music_tab = ui.tab("Музыка")
         with ui.tab_panels(tabs, value=text_tab).classes("w-full"):
             with ui.tab_panel(text_tab).classes("gap-3"):
-                _profile_text_tab(account_id, refs, refresh, dialog.close)
+                _profile_text_tab(account_id, refs, refresh)
             with ui.tab_panel(photo_tab).classes("gap-3"):
                 _profile_photo_tab(account_id, refs)
             with ui.tab_panel(story_tab).classes("gap-3"):
