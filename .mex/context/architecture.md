@@ -23,7 +23,7 @@ edges:
     condition: when working with runtime workflow tasks
   - target: context/logging.md
     condition: when working with the three-tier logging architecture
-last_updated: 2026-06-19
+last_updated: 2026-06-20
 ---
 
 # Architecture
@@ -119,6 +119,7 @@ Inside a single function or private module, regular Python data structures are f
 - **`core/config.py`** — typed settings via `pydantic-settings`. Nested namespaces per domain (`settings.warming`, `settings.gemini`, `settings.telegram`, ...). Single source of truth for tunables and secrets.
 - **`core/db.py`** — shared SQLite plumbing only: SQLAlchemy metadata, table definitions, engine lifecycle, generic row/value helpers, and compatibility re-exports. Schema evolution lives in `core/migrations.py` as a versioned, append-only migration registry; `_get_engine()` calls `apply_migrations()` after `create_all()`.
 - **`core/repositories/`** — per-aggregate DB query modules: accounts, warming, logs, content, device_fingerprint, dialogues, spam_status.
+- **`core/repositories/warming_joined.py`** — owns the `warming_joined_channels` table (`is_channel_joined()` / `record_channel_joined()`); kept separate from `warming.py` so the warming cycle can skip re-joining a channel it already joined.
 - **`core/telegram_client/`** — Telethon gateway package. Public imports still come from `core.telegram_client`; implementation is split into focused private modules.
 - **`core/gemini.py`** — Gemini HTTP gateway. Only place raw Gemini HTTP calls belong.
 - **`core/tdata_import.py`** — opentele2 adapter. Safe-extracts `tdata.zip` and writes Telethon `.session` files.

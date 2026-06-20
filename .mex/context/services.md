@@ -18,7 +18,7 @@ edges:
     condition: when the service drives Telegram actions through the executor
   - target: patterns/add-service.md
     condition: when adding a new service module/package
-last_updated: 2026-06-19
+last_updated: 2026-06-20
 ---
 
 # Services Layer
@@ -34,6 +34,10 @@ last_updated: 2026-06-19
 - `services/accounts/` — account lifecycle/actions, session import/check, proxy operations, profile/media actions, account table read model helpers.
 - `services/warming/` — runtime workflow domain package: channels, settings storage, board read model, pacing/readiness, cycle execution, runtime task ownership.
 - `services/trust.py` — trust-score calculation from stored account signals.
+- `services/content.py` — content generation orchestration; calls `core/gemini.py`.
+- `services/dialogues.py` — dialogue partner matching and pair assignment for warming. Returns `DialoguePartnersResult` and `DialoguePairsResult` Pydantic wrappers.
+- `services/logs.py` — log entry query helpers; feeds the NiceGUI Logs page via `features/logs.py`.
+- `services/spam_status.py` — reads and persists account spam/ban signals from Telegram checks.
 - `comments` domain — not yet started.
 
 ## Why it exists

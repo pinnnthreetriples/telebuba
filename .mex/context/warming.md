@@ -52,6 +52,7 @@ services/warming/
 ├── _transitions.py    post-cycle next-run/state + phase-transition helpers
 ├── _loop.py           one loop iteration: gates + quarantine recovery
 ├── _runner.py         long-running loop task wrapper + timing helpers
+├── _purge.py          purge stale runtime state and orphaned task entries
 └── _runtime.py        task ownership, start/stop/reconcile/shutdown
 ```
 
