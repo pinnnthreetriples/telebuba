@@ -339,7 +339,7 @@ def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
             )
     if card.progress_to_next is not None:
         pct = round(card.progress_to_next * 100)
-        with ui.row().classes("h-1 w-full rounded-full bg-slate-200 overflow-hidden"):
+        with ui.row().classes("h-1.5 w-full rounded-full bg-slate-200 overflow-hidden"):
             ui.element("div").classes(f"h-full rounded-full {bar_fill}").style(
                 f"width: {pct}%",
             )

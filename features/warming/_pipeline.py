@@ -259,12 +259,28 @@ def _render_step_rail(  # pragma: no cover
             cls = step_cls[sk]
             tooltip = _step_tooltip(step, card, sk)
             icon_extra = " tb-step-active-icon" if sk == "active" else ""
+            # P1: pick glyph by state, not by topic. Done→check, pending→dash,
+            # current→topic icon, error→error, flood→timer, quar→block.
+            if sk == "active":
+                glyph = step.icon
+            elif sk == "done":
+                glyph = "check"
+            elif sk == "pending":
+                glyph = "remove"
+            elif sk == "error":
+                glyph = "error"
+            elif sk == "flood":
+                glyph = "timer"
+            elif sk == "quar":
+                glyph = "block"
+            else:
+                glyph = step.icon
             with ui.column().classes("items-center gap-0.5 shrink-0"):
                 circle = ui.element("div").classes(
                     f"w-9 h-9 rounded-full flex items-center justify-center shrink-0 {cls}",
                 )
                 with circle:
-                    ui.icon(step.icon).classes(f"text-sm{icon_extra}")
+                    ui.icon(glyph).classes(f"text-sm{icon_extra}")
                 circle.tooltip(tooltip)
                 # Label below circle
                 label_cls = (
@@ -272,6 +288,8 @@ def _render_step_rail(  # pragma: no cover
                     if sk == "active"
                     else "text-green-700"
                     if sk == "done"
+                    else "text-red-700"
+                    if sk == "error"
                     else "text-slate-400"
                 )
                 ui.label(step.label_ru).classes(f"text-[9px] {label_cls} leading-none")
@@ -330,7 +348,7 @@ def _render_active_detail(  # noqa: C901, PLR0912
         "quar": "bg-orange-50 border-orange-100",
         "error": "bg-red-50 border-red-100",
         "sleep": "bg-slate-50 border-slate-100",
-    }.get(kind, "bg-indigo-50 border-indigo-100")
+    }.get(kind, "bg-blue-50 border-blue-100")
 
     text_cls = {
         "flood": "text-amber-800",

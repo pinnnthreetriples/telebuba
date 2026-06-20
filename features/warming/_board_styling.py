@@ -131,10 +131,10 @@ _PHASE_CHIP_CLASSES = {
     "warmed": "bg-emerald-50 text-emerald-800 ring-emerald-200",
 }
 _PHASE_BAR_FILL = {
-    "intro": "bg-slate-400",
+    "intro": "bg-green-500",
     "settling": "bg-sky-500",
     "warming": "bg-amber-500",
-    "active": "bg-lime-500",
+    "active": "bg-indigo-500",
     "warmed": "bg-emerald-500",
 }
 
