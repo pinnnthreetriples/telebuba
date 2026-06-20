@@ -1,4 +1,4 @@
-"""Profile-photos grid: cards, dates, per-photo delete + optimistic helpers.
+"""Profile-photos carousel: slides, dates, per-photo delete + optimistic helpers.
 
 Split out of :mod:`_profile_dialog_render` so neither file blows the aislop
 size budget (the same precedent set when the warming engine was split). The
@@ -29,12 +29,15 @@ if TYPE_CHECKING:
 
 
 def render_photos_grid(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
-    """Render every profile photo as a card with thumbnail, date and ✕ delete.
+    """Render every profile photo as a swipeable carousel of slides.
 
-    The newest photo (index 0) is the currently-visible avatar and gets a
-    "Текущая" badge. Photos with synthetic ids (optimistic-add stubs) render
-    a disabled delete button — Telethon's ``InputPhoto`` refuses to identify
-    them without a real ``file_reference``.
+    Earlier this was a 3-column grid — but with a real account's 10+ photos
+    that pushed the upload widget below the dialog viewport, breaking the
+    "add new photo" affordance. A carousel keeps one slide visible at a
+    time (fixed height) so the upload form stays in sight. Newest photo is
+    slide 0 and gets a "Текущая" badge; optimistic-add stubs render a
+    disabled delete button because Telethon's ``InputPhoto`` refuses to
+    identify them without a real ``file_reference``.
     """
     container = refs.photo_preview_container
     container.clear()
@@ -46,9 +49,17 @@ def render_photos_grid(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> N
         ui.label(f"Всего фотографий: {len(photos)}").classes(
             "text-sm text-grey-7 q-mb-sm",
         )
-        with ui.grid(columns=3).classes("w-full gap-3"):
+        with (
+            ui.carousel(value="0", arrows=True, navigation=True)
+            .props("control-color=primary swipeable animated infinite=false")
+            .classes("w-full bg-grey-2 rounded")
+            .style("height: 360px")
+        ):
             for index, photo in enumerate(photos):
-                _render_photo_card(refs, photo, is_current=index == 0)
+                with ui.carousel_slide(name=str(index)).classes(
+                    "column items-center justify-center p-3 gap-2",
+                ):
+                    _render_photo_card(refs, photo, is_current=index == 0)
 
 
 def _render_photo_card(
@@ -59,29 +70,24 @@ def _render_photo_card(
 ) -> None:
     thumb_url = _avatar_data_url(photo.thumb_bytes)
     deletable = photo.photo_id > 0 and bool(photo.file_reference)
-    with ui.card().classes("p-2 col gap-1 items-stretch overflow-hidden"):
+    if thumb_url:
+        ui.image(thumb_url).classes("max-h-56 object-contain rounded")
+    else:
+        ui.element("div").classes("w-32 h-32 bg-grey-3 rounded")
+    with ui.row().classes("items-center gap-2"):
         if is_current:
-            ui.badge("Текущая", color="primary").classes("self-start")
-        cell = ui.element("div").classes(
-            "w-full aspect-square rounded bg-grey-3 overflow-hidden",
-        )
-        with cell:
-            if thumb_url:
-                ui.image(thumb_url).classes("w-full h-full object-cover")
-        ui.label(_format_photo_date(photo.date_unix)).classes(
-            "text-xs text-grey-7 text-center",
-        )
-        with ui.row().classes("justify-center"):
-            button = ui.button(
-                icon="delete",
-                color="grey-7",
-                on_click=lambda _e=None, p=photo: _delete_photo(refs, p),
-            ).props("flat dense round")
-            if deletable:
-                button.tooltip("Удалить эту фотографию")
-            else:
-                button.disable()
-                button.tooltip("Сначала обновите данные кнопкой ↻ рядом с именем профиля")
+            ui.badge("Текущая", color="primary")
+        ui.label(_format_photo_date(photo.date_unix)).classes("text-xs text-grey-7")
+        button = ui.button(
+            icon="delete",
+            color="grey-7",
+            on_click=lambda _e=None, p=photo: _delete_photo(refs, p),
+        ).props("flat dense round")
+        if deletable:
+            button.tooltip("Удалить эту фотографию")
+        else:
+            button.disable()
+            button.tooltip("Сначала обновите данные кнопкой ↻ рядом с именем профиля")
 
 
 def _format_photo_date(date_unix: int) -> str:
