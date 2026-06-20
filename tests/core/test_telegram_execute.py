@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from io import BytesIO
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from PIL import Image
 from telethon import errors
 from telethon.tl.functions.account import (
     SaveMusicRequest,
@@ -14,8 +16,13 @@ from telethon.tl.functions.account import (
     UpdateUsernameRequest,
 )
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
-from telethon.tl.functions.photos import UploadProfilePhotoRequest
-from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
+from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
+from telethon.tl.functions.stories import (
+    CanSendStoryRequest,
+    DeleteStoriesRequest,
+    SendStoryRequest,
+)
+from telethon.tl.types import InputPhoto
 
 from core.config import settings
 from core.db import configure_database
@@ -29,6 +36,8 @@ from schemas.telegram_actions import (
     LeaveChannel,
     PostComment,
     PostStory,
+    RemoveProfilePhoto,
+    RemoveStory,
     SendDirectMessage,
     SetProfilePhoto,
     UpdateProfile,
@@ -56,16 +65,20 @@ def _isolate_runtime(
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    """Replace the telegram_client context manager with one that yields ``client``."""
+    """Replace ``get_client`` with a coroutine that returns ``client``.
 
-    @asynccontextmanager
-    async def fake_cm(_request: object):
-        yield client
+    Action paths now borrow from the per-account pool instead of opening a
+    fresh client per call, so tests no longer need to stub the per-call
+    ``telegram_client`` context manager.
+    """
+
+    async def fake_get_client(_account_id: str) -> object:
+        return client
 
     async def fake_fetch(account_id: str):
         return MagicMock(session_name=account_id)
 
-    monkeypatch.setattr("core.telegram_client._actions.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._actions.get_client", fake_get_client)
     monkeypatch.setattr("core.telegram_client._actions.fetch_account", fake_fetch)
 
 
@@ -280,6 +293,7 @@ async def test_execute_post_story_dispatches_story_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: list[object] = []
+    uploaded_bytes: list[bytes] = []
 
     class FakeClient:
         async def connect(self) -> None:
@@ -289,8 +303,11 @@ async def test_execute_post_story_dispatches_story_request(
             assert entity == "me"
             return MagicMock()
 
-        async def upload_file(self, _file: object, *, file_name: str) -> object:
+        async def upload_file(self, file: BytesIO, *, file_name: str) -> object:
             assert file_name == "story.jpg"
+            # The story dispatcher normalises images before upload — capture
+            # what actually reaches Telegram so we can assert the resize hit.
+            uploaded_bytes.append(file.read())
             return MagicMock()
 
         async def __call__(self, request: object) -> object:
@@ -299,11 +316,16 @@ async def test_execute_post_story_dispatches_story_request(
 
     _patch_client(monkeypatch, FakeClient())
 
+    # A 4:5 portrait JPEG — Telegram would reject this aspect ratio
+    # server-side; the normalisation step has to letterbox it to 1080x1920.
+    buffer = BytesIO()
+    Image.new("RGB", (400, 500), (255, 0, 0)).save(buffer, format="JPEG")
+
     result = await execute(
         "acc-story",
         PostStory(
             filename="story.jpg",
-            content=b"jpg",
+            content=buffer.getvalue(),
             media_kind="image",
             caption="hi",
             privacy_preset="contacts",
@@ -314,6 +336,58 @@ async def test_execute_post_story_dispatches_story_request(
     assert result.message_id == 777
     assert any(isinstance(req, CanSendStoryRequest) for req in captured)
     assert any(isinstance(req, SendStoryRequest) for req in captured)
+    # Regression guard: the photo that actually hit upload_file must already
+    # be normalised to Telegram's 1080x1920 story canvas — otherwise the
+    # server rejects with PHOTO_INVALID_DIMENSIONS.
+    with Image.open(BytesIO(uploaded_bytes[0])) as sent:
+        assert sent.size == (1080, 1920)
+
+
+def test_normalize_story_image_renders_blurred_background_canvas() -> None:
+    """The story canvas must hit 1080x1920 JPEG with a blurred fill, not black bars.
+
+    Matches the official Telegram Android client's story composition
+    (StoryEntry.java: ``backgroundFile`` is a blurred upscale of the source).
+    Two regression guards:
+
+    - Top-left corner of a coloured-source upload must NOT be pure black —
+      otherwise we slipped back to the old solid-letterbox path.
+    - Centre pixel reads back close to the source colour because the fitted
+      copy sits on top of the blurred background.
+    """
+    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+        _normalize_story_image_for_telegram,
+    )
+
+    source_rgb = (200, 50, 30)
+    wide = BytesIO()
+    Image.new("RGB", (800, 600), source_rgb).save(wide, format="JPEG")
+    out = _normalize_story_image_for_telegram(wide.getvalue())
+
+    with Image.open(BytesIO(out)) as result:
+        assert result.size == (1080, 1920)
+        assert result.mode == "RGB"
+        assert result.format == "JPEG"
+        # ``Image.getpixel`` returns ``float | tuple[int, ...] | None`` per
+        # Pillow's stub union; the convert("RGB") guarantees a 3-tuple
+        # at runtime, but ty needs the narrowing assertion to drop the union.
+        corner = result.convert("RGB").getpixel((10, 10))
+        assert isinstance(corner, tuple)
+        assert corner != (0, 0, 0), "story background must be blurred fill, not black"
+        centre = result.convert("RGB").getpixel((540, 960))
+        assert isinstance(centre, tuple)
+        # Source is solid red — both blurred background and fitted copy
+        # should sit close to the source colour everywhere.
+        assert abs(int(centre[0]) - source_rgb[0]) < 30, "fitted source must dominate the centre"
+
+
+def test_normalize_story_image_rejects_non_image_bytes() -> None:
+    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+        _normalize_story_image_for_telegram,
+    )
+
+    with pytest.raises(ValueError, match="JPG/PNG/WebP"):
+        _normalize_story_image_for_telegram(b"not an image")
 
 
 @pytest.mark.asyncio
@@ -360,6 +434,82 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
     assert result.status == "ok"
     assert deleted == [99]
     assert any(isinstance(req, SaveMusicRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_execute_remove_profile_photo_sends_delete_photos_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Removing one photo must hit ``DeletePhotosRequest`` with the InputPhoto triple.
+
+    Telegram auto-promotes the next photo to current — we don't re-set the
+    avatar from the gateway; the optimistic UI mirrors that promotion locally
+    and the next ↻ refresh re-syncs.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-photo-remove",
+        RemoveProfilePhoto(
+            photo_id=4242,
+            access_hash=7,
+            file_reference=b"\x01\x02",
+        ),
+    )
+
+    assert result.status == "ok"
+    delete_requests = [req for req in captured if isinstance(req, DeletePhotosRequest)]
+    assert len(delete_requests) == 1
+    input_photos = delete_requests[0].id
+    assert len(input_photos) == 1
+    sent = input_photos[0]
+    # ``DeletePhotosRequest.id`` is typed as ``InputPhoto | InputPhotoEmpty``;
+    # narrow with an isinstance so ty knows the access_hash / file_reference
+    # attributes are present.
+    assert isinstance(sent, InputPhoto)
+    assert sent.id == 4242
+    assert sent.access_hash == 7
+    assert sent.file_reference == b"\x01\x02"
+
+
+@pytest.mark.asyncio
+async def test_execute_remove_story_sends_delete_stories_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One ``stories.deleteStories`` call covers both active and pinned removal.
+
+    The endpoint takes a batch ``Vector<int>``; we still pass a single id
+    because the UI deletes one slide at a time, but the call signature must
+    be a list so the server doesn't reject the request as malformed. Bad
+    ids are silently dropped from the response — no error-path test needed.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            return [9876]
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-story-rm", RemoveStory(story_id=9876))
+
+    assert result.status == "ok"
+    delete_requests = [req for req in captured if isinstance(req, DeleteStoriesRequest)]
+    assert len(delete_requests) == 1
+    assert delete_requests[0].id == [9876]
 
 
 @pytest.mark.asyncio

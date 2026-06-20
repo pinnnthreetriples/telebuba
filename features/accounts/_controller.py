@@ -52,6 +52,10 @@ class _AccountsController:  # pragma: no cover
         )
         section.table.rows = [_to_table_row(row.model_dump()) for row in state.rows]
         section.table.update()
+        # Drop selection for rows no longer visible (filter/search changed) so
+        # "Проверить выбранные" can't act on now-hidden accounts.
+        visible = {str(row["account_id"]) for row in section.table.rows}
+        self._selected_ids.intersection_update(visible)
         _refresh_metrics(section, state.summary)
 
     async def check_selected(self, _event: object = None) -> None:

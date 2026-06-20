@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 from types import SimpleNamespace
+from typing import TYPE_CHECKING
 
+from features.accounts import _profile_dialog_photos as photos
+from features.accounts import _profile_dialog_render as render
+from features.accounts import _profile_dialog_stories as stories_mod
+from features.accounts._profile_dialog_tab_story import _infer_story_kind
 from features.accounts._proxy_dialog import (
     _proxy_dialog_error,
     _proxy_dialog_geo,
@@ -15,7 +20,13 @@ from features.accounts._table import (
     _row_from_event,
     _service_error_label,
     _to_table_row,
+    _username_update_value,
 )
+from schemas.accounts import AccountProfileSnapshot
+from schemas.telegram_profile_snapshot import TelegramProfilePhoto, TelegramStoryThumb
+
+if TYPE_CHECKING:
+    import pytest
 
 
 def test_remember_selection_replaces_selected_ids() -> None:
@@ -84,11 +95,59 @@ def test_to_table_row_translates_status_and_never() -> None:
 
 
 def test_to_table_row_keeps_real_last_checked() -> None:
-    row: dict[str, object] = {"status": "new", "last_checked": "5m ago"}
+    # The service now emits a Russian relative string; the UI passes it through
+    # unchanged (only the "never" sentinel is mapped).
+    row: dict[str, object] = {"status": "new", "last_checked": "5 мин назад"}
     translated = _to_table_row(row)
 
     assert translated["status"] == "Новый"
-    assert translated["last_checked"] == "5m ago"
+    assert translated["last_checked"] == "5 мин назад"
+
+
+def test_to_table_row_translates_error_statuses_to_russian() -> None:
+    # Regression for the double-translation bug: the service emits the raw enum,
+    # so network_error/proxy_error/unknown_error must resolve to RU here — these
+    # three previously fell through to English ("Network"/"Proxy"/"Unknown").
+    for status, expected in (
+        ("network_error", "Ошибка сети"),
+        ("proxy_error", "Ошибка прокси"),
+        ("unknown_error", "Неизвестная ошибка"),
+    ):
+        assert _to_table_row({"status": status})["status"] == expected
+        assert _account_status_label(status) == expected
+
+
+def test_username_update_value_skips_unchanged_and_clears() -> None:
+    # Unchanged → None so the gateway skips UpdateUsernameRequest and Telegram
+    # never raises USERNAME_NOT_MODIFIED on a name/bio-only edit.
+    assert _username_update_value("alice", "alice") is None
+    assert _username_update_value("@alice", "alice") is None
+    assert _username_update_value("  alice  ", "alice") is None
+    # No username before, still blank → skip.
+    assert _username_update_value("", None) is None
+    assert _username_update_value("", "") is None
+    # Changed → send the cleaned (no-@, stripped) value.
+    assert _username_update_value("bob", "alice") == "bob"
+    assert _username_update_value("@bob", "alice") == "bob"
+    # Deliberate clear (had a username, field now blank) → empty string goes through.
+    assert _username_update_value("", "alice") == ""
+
+
+def test_infer_story_kind_from_extension() -> None:
+    assert _infer_story_kind("clip.mp4") == "video"
+    assert _infer_story_kind("CLIP.MOV") == "video"
+    assert _infer_story_kind("pic.jpg") == "image"
+    assert _infer_story_kind("pic.PNG") == "image"
+    assert _infer_story_kind("shot.webp") == "image"
+
+
+def test_should_overwrite_guards_inflight_edits() -> None:
+    # Initial load (no prior snapshot) always fills.
+    assert render._should_overwrite("anything", None) is True
+    # Field still equals the last-applied value → safe to refresh.
+    assert render._should_overwrite("alice", "alice") is True
+    # Operator edited the field since last apply → keep their text.
+    assert render._should_overwrite("alic", "alice") is False
 
 
 def test_service_error_label_translates_exact_and_prefixed_messages() -> None:
@@ -102,6 +161,77 @@ def test_service_error_label_translates_exact_and_prefixed_messages() -> None:
     )
     # Unmapped message passes through unchanged.
     assert _service_error_label("something else") == "something else"
+
+
+def test_service_error_label_translates_telegram_story_errors() -> None:
+    """Telegram error codes survive Telethon's English wrapping.
+
+    Telethon wraps the raw error code in a longer sentence (often appended
+    with ``(caused by SomeRequest)``) — the substring matcher has to find
+    the code inside that trailer instead of relying on full-string equality.
+    """
+    raw = (
+        "The photo dimensions are invalid (hint: `pip install pillow` for "
+        "`send_file` to resize images) (caused by SendStoryRequest)"
+    )
+    translated = _service_error_label(raw)
+    assert translated.startswith("Telegram не принял размеры фото")
+    assert "1080×1920" in translated
+
+    code_only = _service_error_label("PHOTO_INVALID_DIMENSIONS (caused by SendStoryRequest)")
+    assert code_only.startswith("Telegram не принял размеры фото")
+
+    video = _service_error_label("VIDEO_FILE_INVALID (caused by SendStoryRequest)")
+    assert "Видео отклонено" in video
+    assert "60" in video
+
+    long_video = _service_error_label("IMAGE_PROCESS_FAILED (caused by SendStoryRequest)")
+    assert "60" in long_video
+
+    media = _service_error_label("MEDIA_INVALID (caused by SaveMusicRequest)")
+    assert "Медиа отклонено" in media
+
+    parts = _service_error_label("FILE_PARTS_INVALID")
+    assert "повреждён" in parts
+
+
+def test_service_error_label_translates_username_and_profile_errors() -> None:
+    """Profile-text errors from ``UpdateUsernameRequest`` etc. surface as RU."""
+    occupied = _service_error_label(
+        "The username is already taken (caused by UpdateUsernameRequest)",
+    )
+    assert "уже занят" in occupied
+    code_only = _service_error_label("USERNAME_OCCUPIED")
+    assert "уже занят" in code_only
+
+    purchase = _service_error_label("USERNAME_PURCHASE_AVAILABLE")
+    assert "Fragment" in purchase
+
+    invalid = _service_error_label("USERNAME_INVALID")
+    assert "5–32" in invalid
+
+    bio_long = _service_error_label("ABOUT_TOO_LONG")
+    assert "70" in bio_long
+
+    bad_name = _service_error_label("FIRSTNAME_INVALID")
+    assert "Имя" in bad_name
+
+
+def test_service_error_label_translates_media_validation_errors() -> None:
+    """Upload-validation errors from ``_validate_upload`` surface as RU.
+
+    The label varies ("story image" / "profile photo" / "profile music"), so the
+    matcher keys off the stable English tail instead of the full string.
+    """
+    too_large = _service_error_label("story image file is too large")
+    assert "слишком большой" in too_large
+
+    empty = _service_error_label("profile photo file is empty")
+    assert "пустой" in empty
+
+    bad_ext = _service_error_label("profile music must be one of: .m4a, .mp3")
+    assert bad_ext.startswith("Неподдерживаемый формат")
+    assert ".mp3" in bad_ext
 
 
 def test_service_error_label_unknown_tdata_status_keeps_status_visible() -> None:
@@ -135,3 +265,232 @@ def test_service_error_label_conversion_error_includes_library_detail() -> None:
     assert "Не удалось прочитать tdata" in msg
     assert "TDataBadDecryptKey" in msg
     assert "паролем" in msg or "сессия отозвана" in msg
+
+
+def test_optimistic_avatar_noop_on_dead_client(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Stale-client guard must short-circuit before touching NiceGUI elements.
+
+    Otherwise a fetch landing after dialog hide / WS drop raises
+    "Client has been deleted" warnings on detached elements.
+    """
+    rendered: list[str] = []
+    monkeypatch.setattr(
+        render,
+        "_render_header",
+        lambda _refs, _snap: rendered.append("header"),
+    )
+    monkeypatch.setattr(
+        photos,
+        "render_photos_grid",
+        lambda _refs, _snap: rendered.append("photo"),
+    )
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "dead-client-id"
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc")
+    render._DEAD_CLIENTS.add("dead-client-id")
+    try:
+        render._apply_optimistic_avatar(refs, b"new-bytes")
+    finally:
+        render._DEAD_CLIENTS.discard("dead-client-id")
+
+    assert rendered == [], "dead-client guard must skip render path entirely"
+    assert refs.current_snapshot.avatar_bytes is None, "snapshot must not mutate on dead client"
+
+
+def test_optimistic_story_appends_and_keeps_order(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Optimistic story upload PRE-pends a synthetic-id thumb (newest-first).
+
+    Service layer sorts by ``date_unix`` desc, so the carousel shows the
+    just-posted story first — the optimistic helper has to mirror that or
+    the user would see their upload land at the bottom of the carousel
+    until ↻ refreshes.
+    """
+    # render module imports ``render_stories_carousel`` at top level, so the
+    # binding lives on the render namespace — patch that one, not stories_mod.
+    monkeypatch.setattr(render, "render_stories_carousel", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc")
+
+    render._apply_optimistic_story(
+        refs,
+        story_bytes=b"img-bytes",
+        kind="image",
+        caption="hi",
+    )
+    render._apply_optimistic_story(
+        refs,
+        story_bytes=b"vid-bytes",
+        kind="video",
+        caption=None,
+    )
+
+    assert refs.current_snapshot is not None
+    # Newest-first ordering: the video was added second so it sits at index 0.
+    assert [s.kind for s in refs.current_snapshot.stories] == ["video", "image"]
+    assert refs.current_snapshot.stories[1].thumb_bytes == b"img-bytes"
+    assert refs.current_snapshot.stories[0].thumb_bytes is None  # video has no thumb yet
+    assert refs.current_snapshot.stories[1].caption == "hi"
+    assert refs.current_snapshot.stories[0].is_active is True
+
+
+def test_optimistic_music_uses_form_metadata_and_filename_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``SaveMusicRequest`` returns ``bool`` — nothing to trust.
+
+    Track title falls back to the upload filename when the user left the
+    form blank.
+    """
+    monkeypatch.setattr(render, "_render_music_preview", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc")
+
+    render._apply_optimistic_music(
+        refs,
+        title="Memorabilia",
+        performer="The Heads",
+        filename="memorabilia.mp3",
+    )
+    render._apply_optimistic_music(
+        refs,
+        title=None,
+        performer=None,
+        filename="untagged.mp3",
+    )
+
+    assert refs.current_snapshot is not None
+    titles = [t.title for t in refs.current_snapshot.music]
+    assert titles == ["Memorabilia", "untagged.mp3"]
+    assert refs.current_snapshot.music[0].performer == "The Heads"
+    assert refs.current_snapshot.music[1].performer is None
+
+
+def test_optimistic_photo_remove_drops_and_promotes_avatar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting the current avatar must promote the next photo locally.
+
+    Telegram's ``DeletePhotosRequest`` auto-promotes the previous photo to
+    current — the optimistic-remove helper mirrors that so the dialog
+    header refreshes without a Telegram round-trip.
+    """
+    monkeypatch.setattr(photos, "render_photos_grid", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    current = TelegramProfilePhoto(
+        photo_id=111,
+        access_hash=1,
+        file_reference=b"\x0a",
+        date_unix=1_700_000_000,
+        thumb_bytes=b"current",
+    )
+    previous = TelegramProfilePhoto(
+        photo_id=222,
+        access_hash=2,
+        file_reference=b"\x0b",
+        date_unix=1_600_000_000,
+        thumb_bytes=b"older",
+    )
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    refs.current_snapshot = AccountProfileSnapshot(
+        account_id="acc",
+        avatar_bytes=b"current",
+        photos=[current, previous],
+    )
+
+    photos.apply_optimistic_photo_remove(refs, current.photo_id)
+
+    assert refs.current_snapshot is not None
+    assert [p.photo_id for p in refs.current_snapshot.photos] == [222]
+    assert refs.current_snapshot.avatar_bytes == b"older"
+
+
+def test_optimistic_photo_remove_noop_on_dead_client() -> None:
+    """Dead-client guard short-circuits before mutating UI state."""
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "dead-photo"
+    photo = TelegramProfilePhoto(
+        photo_id=1,
+        access_hash=1,
+        file_reference=b"\x01",
+        date_unix=0,
+        thumb_bytes=None,
+    )
+    refs.current_snapshot = AccountProfileSnapshot(
+        account_id="acc",
+        photos=[photo],
+    )
+    render._DEAD_CLIENTS.add("dead-photo")
+    try:
+        photos.apply_optimistic_photo_remove(refs, photo.photo_id)
+    finally:
+        render._DEAD_CLIENTS.discard("dead-photo")
+
+    assert refs.current_snapshot.photos == [photo], "must not mutate on dead client"
+
+
+def test_optimistic_story_remove_drops_from_local_carousel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting a story removes it from the local snapshot without a refetch.
+
+    Telegram's ``deleteStories`` returns the IDs it actually removed; the UI
+    layer doesn't inspect that response — the optimistic helper just drops
+    the row by id. Important: the carousel re-renders against the new
+    snapshot, so any sort or dedupe logic upstream gets a fresh chance.
+    """
+    monkeypatch.setattr(stories_mod, "render_stories_carousel", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    kept = TelegramStoryThumb(
+        story_id=111,
+        kind="image",
+        date_unix=1_700_000_000,
+        is_active=True,
+    )
+    doomed = TelegramStoryThumb(
+        story_id=222,
+        kind="video",
+        date_unix=1_600_000_000,
+        is_pinned=True,
+    )
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc", stories=[kept, doomed])
+
+    stories_mod.apply_optimistic_story_remove(refs, doomed.story_id)
+
+    assert refs.current_snapshot is not None
+    assert [s.story_id for s in refs.current_snapshot.stories] == [111]
+
+
+def test_optimistic_story_remove_noop_on_dead_client() -> None:
+    """Dead-client guard short-circuits before mutating snapshot state."""
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "dead-story"
+    story = TelegramStoryThumb(story_id=1, is_active=True)
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc", stories=[story])
+    render._DEAD_CLIENTS.add("dead-story")
+    try:
+        stories_mod.apply_optimistic_story_remove(refs, story.story_id)
+    finally:
+        render._DEAD_CLIENTS.discard("dead-story")
+
+    assert refs.current_snapshot.stories == [story], "must not mutate on dead client"

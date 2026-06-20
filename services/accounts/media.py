@@ -14,6 +14,9 @@ from core.telegram_client import execute
 from schemas.telegram_actions import (
     AddProfileMusic,
     PostStory,
+    RemoveProfileMusic,
+    RemoveProfilePhoto,
+    RemoveStory,
     SetProfilePhoto,
 )
 from services.accounts._uploads import (
@@ -23,11 +26,15 @@ from services.accounts._uploads import (
     _STORY_VIDEO_SUFFIXES,
     _validate_upload,
 )
+from services.accounts.profile_read import invalidate_account_profile_cache
 
 if TYPE_CHECKING:
     from schemas.profile_media import (
+        AccountProfileMusicRemove,
         AccountProfileMusicUpload,
+        AccountProfilePhotoRemove,
         AccountProfilePhotoUpload,
+        AccountStoryRemove,
         AccountStoryUpload,
     )
     from schemas.telegram_actions import ActionResult
@@ -35,6 +42,9 @@ if TYPE_CHECKING:
 __all__ = [
     "add_account_profile_music",
     "post_account_story",
+    "remove_account_profile_music",
+    "remove_account_profile_photo",
+    "remove_account_story",
     "set_account_profile_photo",
 ]
 
@@ -54,6 +64,7 @@ async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionRe
     if result.status != "ok":
         msg = result.error_message or result.status
         raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
         "account_profile_photo_updated",
@@ -94,6 +105,7 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
     if result.status != "ok":
         msg = result.error_message or result.status
         raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
         "account_story_posted",
@@ -127,10 +139,70 @@ async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionRe
     if result.status != "ok":
         msg = result.error_message or result.status
         raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
         "account_profile_music_added",
         account_id=data.account_id,
         extra={"filename": data.filename, "has_title": data.title is not None},
+    )
+    return result
+
+
+async def remove_account_profile_music(data: AccountProfileMusicRemove) -> ActionResult:
+    result = await execute(
+        data.account_id,
+        RemoveProfileMusic(
+            file_id=data.file_id,
+            access_hash=data.access_hash,
+            file_reference=data.file_reference,
+        ),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
+    await log_event(
+        "INFO",
+        "account_profile_music_removed",
+        account_id=data.account_id,
+        extra={"file_id": data.file_id},
+    )
+    return result
+
+
+async def remove_account_profile_photo(data: AccountProfilePhotoRemove) -> ActionResult:
+    result = await execute(
+        data.account_id,
+        RemoveProfilePhoto(
+            photo_id=data.photo_id,
+            access_hash=data.access_hash,
+            file_reference=data.file_reference,
+        ),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
+    await log_event(
+        "INFO",
+        "account_profile_photo_removed",
+        account_id=data.account_id,
+        extra={"photo_id": data.photo_id},
+    )
+    return result
+
+
+async def remove_account_story(data: AccountStoryRemove) -> ActionResult:
+    result = await execute(data.account_id, RemoveStory(story_id=data.story_id))
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
+    await log_event(
+        "INFO",
+        "account_story_removed",
+        account_id=data.account_id,
+        extra={"story_id": data.story_id},
     )
     return result

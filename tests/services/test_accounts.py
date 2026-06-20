@@ -24,7 +24,9 @@ from schemas.accounts import (
 )
 from schemas.profile_media import (
     AccountProfileMusicUpload,
+    AccountProfilePhotoRemove,
     AccountProfilePhotoUpload,
+    AccountStoryRemove,
     AccountStoryUpload,
 )
 from schemas.proxy import (
@@ -39,6 +41,8 @@ from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
     PostStory,
+    RemoveProfilePhoto,
+    RemoveStory,
     SetProfilePhoto,
     UpdateProfile,
 )
@@ -56,6 +60,8 @@ from services.accounts import (
     list_accounts,
     load_accounts_table,
     post_account_story,
+    remove_account_profile_photo,
+    remove_account_story,
     save_account_proxy,
     set_account_profile_photo,
     update_account_profile,
@@ -85,14 +91,14 @@ def _isolate_runtime(
 @pytest.mark.parametrize(
     ("offset_seconds", "expected"),
     [
-        (0, "0s ago"),
-        (45, "45s ago"),
-        (60, "1m ago"),
-        (90, "1m ago"),
-        (3_600, "1h ago"),
-        (3_600 * 5, "5h ago"),
-        (86_400, "1d ago"),
-        (86_400 * 7, "7d ago"),
+        (0, "0 сек назад"),
+        (45, "45 сек назад"),
+        (60, "1 мин назад"),
+        (90, "1 мин назад"),
+        (3_600, "1 ч назад"),
+        (3_600 * 5, "5 ч назад"),
+        (86_400, "1 дн назад"),
+        (86_400 * 7, "7 дн назад"),
     ],
 )
 def test_format_last_checked_relative(offset_seconds: int, expected: str) -> None:
@@ -602,6 +608,60 @@ async def test_set_account_profile_photo_executes_action(
 
 
 @pytest.mark.asyncio
+async def test_media_upload_invalidates_profile_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """All three media services call ``invalidate_account_profile_cache``.
+
+    Regression: after PR #96 the dialog cached the live snapshot, but only
+    ``update_account_profile`` invalidated it on save. Media uploads fell
+    through with ``force_refresh=True`` at the UI layer; the new
+    optimistic-update flow removed that, so service-level invalidation is
+    the only safety net left.
+    """
+    invalidated: list[str] = []
+
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        return ActionResult(
+            status="ok",
+            action_type=getattr(action, "action_type", "unknown"),
+            account_id=account_id,
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    await set_account_profile_photo(
+        AccountProfilePhotoUpload(
+            account_id="acc-photo",
+            filename="a.jpg",
+            content=b"jpg",
+        ),
+    )
+    await post_account_story(
+        AccountStoryUpload(
+            account_id="acc-story",
+            filename="s.jpg",
+            content=b"jpg",
+            media_kind="image",
+        ),
+    )
+    await add_account_profile_music(
+        AccountProfileMusicUpload(
+            account_id="acc-music",
+            filename="t.mp3",
+            content=b"mp3",
+        ),
+    )
+
+    assert invalidated == ["acc-photo", "acc-story", "acc-music"]
+
+
+@pytest.mark.asyncio
 async def test_post_account_story_executes_story_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -656,6 +716,108 @@ async def test_add_account_profile_music_executes_music_action(
 
 
 @pytest.mark.asyncio
+async def test_remove_account_profile_photo_executes_action_and_invalidates_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The remove-photo service must reach Telegram with the InputPhoto id triple.
+
+    Mirrors the music-removal contract: passing only ``photo_id`` is not enough
+    — ``access_hash`` and ``file_reference`` are required for Telethon's
+    ``DeletePhotosRequest``, and the in-process snapshot cache has to be
+    cleared so the next dialog open shows the new photo set.
+    """
+    captured: list[object] = []
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="remove_profile_photo", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    result = await remove_account_profile_photo(
+        AccountProfilePhotoRemove(
+            account_id="account-photo-remove",
+            photo_id=4242,
+            access_hash=7,
+            file_reference=b"\x01\x02",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], RemoveProfilePhoto)
+    assert captured[0].photo_id == 4242
+    assert captured[0].access_hash == 7
+    assert captured[0].file_reference == b"\x01\x02"
+    assert invalidated == ["account-photo-remove"]
+
+
+@pytest.mark.asyncio
+async def test_remove_account_story_executes_action_and_invalidates_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Service must reach Telegram with ``RemoveStory`` + clear the profile cache.
+
+    Telegram's deleteStories doesn't error on unknown IDs (drops them
+    silently), so the only signals we test are the action shape and the
+    cache invalidation — both of which the optimistic UI relies on.
+    """
+    captured: list[object] = []
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="remove_story", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    result = await remove_account_story(
+        AccountStoryRemove(account_id="account-story-remove", story_id=9876),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], RemoveStory)
+    assert captured[0].story_id == 9876
+    assert invalidated == ["account-story-remove"]
+
+
+@pytest.mark.asyncio
+async def test_remove_account_profile_photo_raises_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram refusals surface as ``ValueError`` — the UI shows the message inline."""
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="remove_profile_photo",
+            account_id=account_id,
+            error_type="RPCError",
+            error_message="PHOTO_INVALID",
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    with pytest.raises(ValueError, match="PHOTO_INVALID"):
+        await remove_account_profile_photo(
+            AccountProfilePhotoRemove(
+                account_id="acc",
+                photo_id=1,
+                access_hash=2,
+                file_reference=b"\x03",
+            ),
+        )
+
+
+@pytest.mark.asyncio
 async def test_profile_media_rejects_wrong_extension() -> None:
     with pytest.raises(ValueError, match="profile photo must be one of"):
         await set_account_profile_photo(
@@ -692,6 +854,8 @@ async def test_health_taxonomy_matches_status(
     if status == "new":
         state = await load_accounts_table(AccountFilter())
         assert state.rows[0].health == expected_health
+        # Row carries the RAW status enum — the UI translates it to RU once.
+        assert state.rows[0].status == "new"
         return
 
     async def fake_check(_request: object) -> TelegramSessionCheckResult:
@@ -706,6 +870,11 @@ async def test_health_taxonomy_matches_status(
     await check_account_session(AccountCheckRequest(account_id="acc-h"))
     state = await load_accounts_table(AccountFilter())
     assert state.rows[0].health == expected_health
+    # Row carries the RAW status enum (e.g. "network_error"), not an English
+    # label — the UI is the single translation point. Guards the regression
+    # where the service emitted "Network"/"Proxy"/"Unknown" and the UI RU map
+    # (keyed "Network error"/…) silently failed to translate them.
+    assert state.rows[0].status == status
 
 
 @pytest.mark.asyncio

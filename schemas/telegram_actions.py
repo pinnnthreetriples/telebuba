@@ -96,6 +96,34 @@ class AddProfileMusic(BaseModel):
     performer: str | None = Field(default=None, min_length=1)
 
 
+class RemoveProfilePhoto(BaseModel):
+    """Drops one photo from the account's profile-photo history.
+
+    ``InputPhoto`` requires all three id fields. Removing the current avatar
+    automatically promotes the previous photo to current (Telegram behavior).
+    """
+
+    action_type: Literal["remove_profile_photo"] = "remove_profile_photo"
+    photo_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)
+
+
+class RemoveProfileMusic(BaseModel):
+    """Unpins one track from the account's saved profile music.
+
+    All three identifier fields are required — Telethon's ``InputDocument``
+    refuses partial refs. ``file_id`` alone is not enough; the read-side
+    ``TelegramMusicItem`` carries ``access_hash`` and ``file_reference`` for
+    exactly this reason.
+    """
+
+    action_type: Literal["remove_profile_music"] = "remove_profile_music"
+    file_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)
+
+
 class GetUserProfile(BaseModel):
     """Read-only: pull the signed-in user's own current profile state."""
 
@@ -109,6 +137,30 @@ class ListPinnedStories(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
+class ListActiveStories(BaseModel):
+    """Read-only: list the account's currently-active (≤24 h) stories.
+
+    Mirrors what other users would see in the story ring on the profile —
+    distinct from ``ListPinnedStories`` (permanent-on-profile). A story can
+    appear in both lists; the service layer dedupes by ``story_id``.
+    """
+
+    action_type: Literal["list_active_stories"] = "list_active_stories"
+
+
+class RemoveStory(BaseModel):
+    """Delete one story from the account (active and/or pinned in one call).
+
+    ``stories.deleteStories`` works for both states — there's no separate
+    delete-pinned endpoint. Bad IDs are silently dropped server-side, so
+    callers shouldn't try/except for ``STORY_ID_INVALID`` (the docs don't
+    list it for this method).
+    """
+
+    action_type: Literal["remove_story"] = "remove_story"
+    story_id: int = Field(gt=0)
+
+
 class ListProfileMusic(BaseModel):
     """Read-only: list the music shown on the account's profile.
 
@@ -117,6 +169,17 @@ class ListProfileMusic(BaseModel):
     """
 
     action_type: Literal["list_profile_music"] = "list_profile_music"
+
+
+class ListProfilePhotos(BaseModel):
+    """Read-only: list the account's profile-photo history.
+
+    Newest first. Each item carries the InputPhoto identifiers needed to
+    delete it later via ``RemoveProfilePhoto``.
+    """
+
+    action_type: Literal["list_profile_photos"] = "list_profile_photos"
+    limit: int = Field(default=24, ge=1, le=100)
 
 
 TelegramAction = Annotated[
@@ -130,12 +193,15 @@ TelegramAction = Annotated[
     | SendDirectMessage
     | SetProfilePhoto
     | PostStory
-    | AddProfileMusic,
+    | AddProfileMusic
+    | RemoveProfileMusic
+    | RemoveProfilePhoto
+    | RemoveStory,
     Field(discriminator="action_type"),
 ]
 
 TelegramReadAction = Annotated[
-    GetUserProfile | ListPinnedStories | ListProfileMusic,
+    GetUserProfile | ListPinnedStories | ListActiveStories | ListProfileMusic | ListProfilePhotos,
     Field(discriminator="action_type"),
 ]
 

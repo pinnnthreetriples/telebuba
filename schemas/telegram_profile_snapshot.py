@@ -24,14 +24,45 @@ class TelegramProfileSnapshot(BaseModel):
     avatar_bytes: bytes | None = None
 
 
+StoryPrivacyPreset = Literal[
+    "public",
+    "close_friends",
+    "contacts",
+    "selected_contacts",
+    "unknown",
+]
+
+
 class TelegramStoryThumb(BaseModel):
+    """Lightweight preview of one of the account's stories.
+
+    ``is_pinned`` reflects the ``StoryItem.pinned`` flag (pinned to profile,
+    survives the 24 h window). ``is_active`` is true when the story is in
+    its 24 h visibility window — the two are independent (a story can be
+    pinned but expired, or active but unpinned). ``date_unix`` lets the UI
+    sort newest-first across both lists. ``privacy_preset`` derives from
+    Telegram's ``public`` / ``close_friends`` / ``contacts`` /
+    ``selected_contacts`` flag set; ``unknown`` covers stories with a
+    custom rule vector we don't translate (rare).
+    """
+
     story_id: int
     kind: Literal["image", "video", "unknown"] = "unknown"
     caption: str | None = None
     thumb_bytes: bytes | None = None
+    date_unix: int = 0
+    is_pinned: bool = False
+    is_active: bool = False
+    privacy_preset: StoryPrivacyPreset = "unknown"
 
 
 class TelegramPinnedStories(BaseModel):
+    items: list[TelegramStoryThumb] = Field(default_factory=list)
+
+
+class TelegramActiveStories(BaseModel):
+    """Currently-active (≤24 h) stories of the signed-in account."""
+
     items: list[TelegramStoryThumb] = Field(default_factory=list)
 
 
@@ -40,6 +71,11 @@ class TelegramMusicItem(BaseModel):
     title: str | None = None
     performer: str | None = None
     duration_seconds: int | None = None
+    # InputDocument requires all three fields to identify a Telegram document
+    # for deletion. Empty defaults distinguish optimistic-add rows (synthetic
+    # negative ``file_id``) that can't be removed via Telegram until refresh.
+    access_hash: int = 0
+    file_reference: bytes = b""
 
 
 class TelegramProfileMusic(BaseModel):
@@ -47,3 +83,22 @@ class TelegramProfileMusic(BaseModel):
     # ``False`` when the installed Telethon version lacks the music TL methods —
     # the UI uses this to hide the music preview block entirely.
     supported: bool = True
+
+
+class TelegramProfilePhoto(BaseModel):
+    """One photo from the user's profile-photo history.
+
+    ``GetUserPhotosRequest`` returns these newest-first; index 0 is the
+    photo Telegram is currently showing as the avatar. ``InputPhoto`` needs
+    all three id fields for deletion, mirroring the music-removal pattern.
+    """
+
+    photo_id: int
+    access_hash: int
+    file_reference: bytes
+    date_unix: int = 0
+    thumb_bytes: bytes | None = None
+
+
+class TelegramProfilePhotos(BaseModel):
+    items: list[TelegramProfilePhoto] = Field(default_factory=list)

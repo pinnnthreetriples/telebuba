@@ -16,9 +16,11 @@ from nicegui import ui
 from features.accounts._metrics import _metric_label
 from features.accounts._table import (
     _ACTIONS_TEMPLATE,
+    _DEVICE_TEMPLATE,
     _PROXY_TEMPLATE,
     _STATUS_BADGE_TEMPLATE,
     _TABLE_COLUMNS,
+    _TELEGRAM_TEMPLATE,
     _remember_selection,
 )
 
@@ -67,20 +69,28 @@ def _build_table_section(selected_ids: set[str]) -> _TableSection:  # pragma: no
             new_label = _metric_label("Новые", "0")
 
         with ui.row().classes("w-full items-center gap-2"):
-            query_input = ui.input(placeholder="Поиск").props("dense outlined clearable")
+            query_input = ui.input(placeholder="Поиск").props(
+                "dense outlined clearable debounce=300",
+            )
             query_input.classes("w-80 max-w-full")
             status_select = ui.select(_STATUS_OPTIONS, value="all").props("dense outlined")
             status_select.classes("w-48")
 
-        table = ui.table(
-            columns=_TABLE_COLUMNS,
-            rows=[],
-            row_key="account_id",
-            selection="multiple",
-            pagination=_TABLE_PAGE_SIZE,
-            on_select=lambda event: _remember_selection(event.selection, selected_ids),
-        ).classes("w-full")
+        table = (
+            ui.table(
+                columns=_TABLE_COLUMNS,
+                rows=[],
+                row_key="account_id",
+                selection="multiple",
+                pagination=_TABLE_PAGE_SIZE,
+                on_select=lambda event: _remember_selection(event.selection, selected_ids),
+            )
+            .props("dense flat")
+            .classes("w-full")
+        )
         table.add_slot("body-cell-status", _STATUS_BADGE_TEMPLATE)
+        table.add_slot("body-cell-telegram", _TELEGRAM_TEMPLATE)
+        table.add_slot("body-cell-device", _DEVICE_TEMPLATE)
         table.add_slot("body-cell-proxy", _PROXY_TEMPLATE)
         table.add_slot("body-cell-actions", _ACTIONS_TEMPLATE)
     return _TableSection(

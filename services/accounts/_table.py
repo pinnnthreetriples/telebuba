@@ -14,7 +14,7 @@ from schemas.accounts import (
 )
 
 if TYPE_CHECKING:
-    from schemas.accounts import AccountFilter, AccountRead, AccountStatus
+    from schemas.accounts import AccountFilter, AccountRead
 
 _PERMANENT_ISSUES = {"unauthorized", "session_error", "account_error"}
 _TEMPORARY_ISSUES = {"flood_wait", "network_error", "proxy_error", "unknown_error"}
@@ -53,7 +53,11 @@ def _to_table_row(account: AccountRead) -> AccountTableRow:
     return AccountTableRow(
         account_id=account.account_id,
         label=account.label or account.account_id,
-        status=_status_label(account.status),
+        # Raw status enum — translated to RU once in the UI layer
+        # (features.accounts._table._account_status_label), the same map the
+        # check-result toast uses. Emitting an English label here forced a
+        # second translation that silently fell through for three statuses.
+        status=account.status,
         health=health_for_status(account.status),
         telegram=_telegram_label(account),
         session=account.session_name or account.account_id,
@@ -77,12 +81,12 @@ def _to_table_row(account: AccountRead) -> AccountTableRow:
 
 
 def _format_last_checked(iso_value: str | None, now: datetime | None = None) -> str:
-    """Render an ISO-8601 timestamp as a compact relative string for the UI.
+    """Render an ISO-8601 timestamp as a compact relative RU string for the UI.
 
-    Returns "never" when ``iso_value`` is empty. Otherwise produces
-    ``Ns ago`` / ``Nm ago`` / ``Nh ago`` / ``Nd ago``. Falls back to the
-    raw string if parsing fails — we never want a single bad row to break
-    the whole table.
+    Returns the ``"never"`` sentinel when ``iso_value`` is empty (the UI maps
+    it to «никогда»). Otherwise produces «N сек/мин/ч/дн назад». Falls back to
+    the raw string if parsing fails — we never want a single bad row to break
+    the whole table. Abbreviated units sidestep RU plural agreement.
     """
     if not iso_value:
         return "never"
@@ -95,27 +99,12 @@ def _format_last_checked(iso_value: str | None, now: datetime | None = None) -> 
     reference = now or datetime.now(UTC)
     seconds = max(0, int((reference - moment).total_seconds()))
     if seconds < _SECONDS_PER_MINUTE:
-        return f"{seconds}s ago"
+        return f"{seconds} сек назад"
     if seconds < _SECONDS_PER_HOUR:
-        return f"{seconds // _SECONDS_PER_MINUTE}m ago"
+        return f"{seconds // _SECONDS_PER_MINUTE} мин назад"
     if seconds < _SECONDS_PER_DAY:
-        return f"{seconds // _SECONDS_PER_HOUR}h ago"
-    return f"{seconds // _SECONDS_PER_DAY}d ago"
-
-
-def _status_label(status: AccountStatus) -> str:
-    labels = {
-        "new": "New",
-        "alive": "Alive",
-        "unauthorized": "Unauthorized",
-        "session_error": "Session error",
-        "account_error": "Account error",
-        "flood_wait": "Flood wait",
-        "network_error": "Network",
-        "proxy_error": "Proxy",
-        "unknown_error": "Unknown",
-    }
-    return labels[status]
+        return f"{seconds // _SECONDS_PER_HOUR} ч назад"
+    return f"{seconds // _SECONDS_PER_DAY} дн назад"
 
 
 def _telegram_label(account: AccountRead) -> str:

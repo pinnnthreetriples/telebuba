@@ -39,6 +39,10 @@ class UiSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="UI__", extra="ignore")
 
     port: int = Field(default=8080, ge=1, le=65535)
+    # NiceGUI WS reconnect grace. Default 3 s is too tight when Telethon
+    # uploads 5+ MB media — pyaes block on the loop trips the "Connection
+    # lost" popup. 30 s rides over typical upload bursts.
+    reconnect_timeout: float = Field(default=30.0, gt=0)
 
 
 class DbSettings(BaseSettings):

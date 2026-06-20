@@ -8,6 +8,7 @@ from pydantic import BaseModel, Field
 # so they cannot live in a TYPE_CHECKING block.
 from schemas.telegram_profile_snapshot import (  # noqa: TC001
     TelegramMusicItem,
+    TelegramProfilePhoto,
     TelegramStoryThumb,
 )
 
@@ -156,10 +157,11 @@ class AccountsTableState(BaseModel):
 class AccountProfileSnapshot(BaseModel):
     """Combined live-profile view rendered by the edit-profile dialog.
 
-    Aggregates the three read-actions (profile, pinned stories, profile music)
-    plus dialog-only UI state (``fetched_at_unix``, ``music_supported``,
-    ``error``). ``error`` is set when Telegram refused the live fetch — the
-    dialog falls back to whatever fields are still populated.
+    Aggregates the four read-actions (profile, pinned stories, profile music,
+    profile-photo history) plus dialog-only UI state (``fetched_at_unix``,
+    ``music_supported``, ``error``). ``error`` is set when Telegram refused
+    the live fetch — the dialog falls back to whatever fields are still
+    populated.
     """
 
     account_id: str = Field(min_length=1)
@@ -171,6 +173,7 @@ class AccountProfileSnapshot(BaseModel):
     avatar_bytes: bytes | None = None
     stories: list[TelegramStoryThumb] = Field(default_factory=list)
     music: list[TelegramMusicItem] = Field(default_factory=list)
+    photos: list[TelegramProfilePhoto] = Field(default_factory=list)
     music_supported: bool = True
     fetched_at_unix: float = 0.0
     error: str | None = None

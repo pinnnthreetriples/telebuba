@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 from telethon import errors
+from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.stories import GetPinnedStoriesRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
@@ -23,15 +24,20 @@ from core.telegram_client import (
     TelegramAccountNotFoundError,
     TelegramReadError,
     execute_read,
+    execute_read_many,
 )
 from schemas.telegram_actions import (
     GetUserProfile,
+    ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
+    ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
+    TelegramActiveStories,
     TelegramPinnedStories,
     TelegramProfileMusic,
+    TelegramProfilePhotos,
     TelegramProfileSnapshot,
 )
 
@@ -56,14 +62,19 @@ def _isolate_runtime(
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    @asynccontextmanager
-    async def fake_cm(_request: object):
-        yield client
+    """Replace ``get_client`` with a coroutine that returns ``client``.
+
+    Read paths now borrow from the per-account pool. Tests no longer need
+    to stub the per-call ``telegram_client`` context manager.
+    """
+
+    async def fake_get_client(_account_id: str) -> object:
+        return client
 
     async def fake_fetch(account_id: str):
         return MagicMock(session_name=account_id)
 
-    monkeypatch.setattr("core.telegram_client._read.telegram_client", fake_cm)
+    monkeypatch.setattr("core.telegram_client._read.get_client", fake_get_client)
     monkeypatch.setattr("core.telegram_client._read.fetch_account", fake_fetch)
 
 
@@ -171,7 +182,8 @@ async def test_list_pinned_stories_returns_items(monkeypatch: pytest.MonkeyPatch
             return stories_payload
 
         async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
-            assert thumb == 0
+            # Carousel needs the largest cached preview, not the stripped thumb.
+            assert thumb == -1
             return b"thumb"
 
     _patch_client(monkeypatch, FakeClient())
@@ -185,6 +197,81 @@ async def test_list_pinned_stories_returns_items(monkeypatch: pytest.MonkeyPatch
     assert result.items[0].thumb_bytes == b"thumb"
     assert result.items[1].kind == "video"
     assert any(isinstance(req, GetPinnedStoriesRequest) for req in requested)
+
+
+@pytest.mark.asyncio
+async def test_list_active_stories_extracts_inner_stories_and_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``stories.getPeerStories`` returns a doubly-nested ``stories`` chain.
+
+    The outer ``stories`` attribute is a ``PeerStories`` constructor — the
+    actual ``StoryItem`` list lives one level deeper at
+    ``result.stories.stories``. Regression guard for the same trap the
+    research subagent flagged: many third-party stubs assume the flat
+    layout. Also asserts that the ``StoryItem.pinned`` and privacy-preset
+    flags are carried through to the snapshot row so the UI badges can
+    render without a second round-trip.
+    """
+    from telethon.tl.functions.stories import GetPeerStoriesRequest  # noqa: PLC0415
+
+    pinned_story = MagicMock(
+        id=301,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption="закреп",
+        pinned=True,
+        public=True,
+        close_friends=False,
+        contacts=False,
+        selected_contacts=False,
+        date=datetime(2026, 6, 19, 10, 0, tzinfo=UTC),
+        expire_date=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    fresh_story = MagicMock(
+        id=302,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption=None,
+        pinned=False,
+        public=False,
+        close_friends=True,
+        contacts=False,
+        selected_contacts=False,
+        date=datetime(2026, 6, 20, 9, 0, tzinfo=UTC),
+        expire_date=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    inner_peer_stories = MagicMock(stories=[pinned_story, fresh_story])
+    outer_payload = MagicMock(stories=inner_peer_stories)
+    requested: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            requested.append(request)
+            return outer_payload
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            return b"thumb"
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-active", ListActiveStories())
+
+    assert isinstance(result, TelegramActiveStories)
+    assert any(isinstance(req, GetPeerStoriesRequest) for req in requested)
+    assert [item.story_id for item in result.items] == [301, 302]
+    assert result.items[0].is_pinned is True
+    assert result.items[1].is_pinned is False
+    # Both are active (expire_date in 2099).
+    assert all(item.is_active for item in result.items)
+    assert result.items[0].date_unix == int(
+        datetime(2026, 6, 19, 10, 0, tzinfo=UTC).timestamp(),
+    )
+    # Privacy presets are propagated from the StoryItem flag bits — public
+    # wins over the others when set; close_friends maps cleanly when alone.
+    assert result.items[0].privacy_preset == "public"
+    assert result.items[1].privacy_preset == "close_friends"
 
 
 @pytest.mark.asyncio
@@ -284,6 +371,112 @@ async def test_list_profile_music_when_supported_maps_audio_attributes(
 
 
 @pytest.mark.asyncio
+async def test_list_profile_photos_maps_id_triple_and_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each photo must carry the InputPhoto id triple + a Unix-int date.
+
+    Telethon hands us a ``datetime`` for ``photo.date``; the dispatcher has to
+    flatten it to a plain int so the schema stays Pydantic-friendly and the UI
+    can format without re-importing datetime.
+    """
+    photo_a = MagicMock(
+        id=111,
+        access_hash=22,
+        file_reference=b"\x0a",
+        date=datetime(2025, 3, 4, 12, 0, tzinfo=UTC),
+    )
+    photo_b = MagicMock(
+        id=222,
+        access_hash=33,
+        file_reference=b"\x0b",
+        date=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+    photos_payload = MagicMock(photos=[photo_a, photo_b])
+    requested: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            requested.append(request)
+            return photos_payload
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            assert thumb == -1, "photo grid must fetch the largest preview, not the stripped thumb"
+            return b"thumb"
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-photos", ListProfilePhotos(limit=24))
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert any(isinstance(req, GetUserPhotosRequest) for req in requested)
+    assert [item.photo_id for item in result.items] == [111, 222]
+    assert result.items[0].access_hash == 22
+    assert result.items[0].file_reference == b"\x0a"
+    assert result.items[0].thumb_bytes == b"thumb"
+    assert result.items[0].date_unix == int(
+        datetime(2025, 3, 4, 12, 0, tzinfo=UTC).timestamp(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_profile_photos_empty_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(photos=[])
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-no-photos", ListProfilePhotos())
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert result.items == []
+
+
+@pytest.mark.asyncio
+async def test_list_profile_photos_thumb_failure_is_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One bad thumb must not blow up the whole grid.
+
+    Mirrors the story-thumb safety net: ``download_media`` can fail on
+    privacy-restricted or cache-evicted photos; the dispatcher swallows
+    the RPCError and the card renders without an image instead.
+    """
+    photo = MagicMock(
+        id=1,
+        access_hash=2,
+        file_reference=b"\x01",
+        date=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(photos=[photo])
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            raise errors.RPCError(request=None, message="FILE_REFERENCE_EXPIRED", code=400)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-bad-thumb", ListProfilePhotos())
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert len(result.items) == 1
+    assert result.items[0].photo_id == 1
+    assert result.items[0].thumb_bytes is None
+
+
+@pytest.mark.asyncio
 async def test_execute_read_unknown_account_raises(monkeypatch: pytest.MonkeyPatch) -> None:
     async def fake_fetch(_account_id: str):
         return None
@@ -375,3 +568,57 @@ async def test_download_story_thumb_swallows_rpc_error(
     assert len(result.items) == 1
     assert result.items[0].story_id == 99
     assert result.items[0].thumb_bytes is None
+
+
+@pytest.mark.asyncio
+async def test_execute_read_many_opens_single_client_for_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Regression: a batch borrows the pool exactly ONCE for N actions.
+
+    Originally the dialog opened 3 fresh Telethon clients in parallel and
+    raced into ``OperationalError: database is locked``. Then ``execute_read_many``
+    serialised into one per-call client. Now the pool keeps the client warm
+    across batches, but the *single borrow per batch* invariant still
+    holds — and it's tested at the seam (``get_client`` calls), not at the
+    factory level which lives in the pool's own tests.
+    """
+    pool_borrows = 0
+    handled: list[object] = []
+
+    class FakeClient:
+        async def get_input_entity(self, _name: str) -> object:
+            return MagicMock()
+
+        async def __call__(self, request: object) -> object:
+            handled.append(request)
+            if isinstance(request, GetFullUserRequest):
+                return MagicMock(full_user=MagicMock(about=None), users=[MagicMock()])
+            if isinstance(request, GetPinnedStoriesRequest):
+                return MagicMock(stories=[])
+            # GetSavedMusicRequest fallback
+            return MagicMock(documents=[])
+
+        async def download_profile_photo(self, _target: str, *, file: object) -> object:  # noqa: ARG002
+            return None
+
+    shared_client = FakeClient()
+
+    async def fake_get_client(_account_id: str) -> object:
+        nonlocal pool_borrows
+        pool_borrows += 1
+        return shared_client
+
+    async def fake_fetch(account_id: str):
+        return MagicMock(session_name=account_id)
+
+    monkeypatch.setattr("core.telegram_client._read.get_client", fake_get_client)
+    monkeypatch.setattr("core.telegram_client._read.fetch_account", fake_fetch)
+
+    results = await execute_read_many(
+        "acc-batch",
+        [GetUserProfile(), ListPinnedStories(), ListProfileMusic()],
+    )
+
+    assert pool_borrows == 1, "execute_read_many must borrow once per batch"
+    assert len(results) == 3, "must return one result per action, in input order"

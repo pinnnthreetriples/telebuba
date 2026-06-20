@@ -1,18 +1,18 @@
 """Live-profile reads for the edit-profile dialog.
 
-Calls the three read actions on the Telegram gateway in parallel, caches the
-combined snapshot in-process for ``profile_media.read_snapshot_ttl_seconds``,
-and degrades gracefully when Telegram refuses the fetch (FloodWait, RPCError,
-missing account) — the dialog still opens and shows whatever it can.
+Calls the three read actions on the Telegram gateway inside ONE Telethon
+session, caches the combined snapshot in-process for
+``profile_media.read_snapshot_ttl_seconds``, and degrades gracefully when
+Telegram refuses the fetch (FloodWait, RPCError, missing account) — the dialog
+still opens and shows whatever it can.
 
 The gateway is imported at module scope so tests monkeypatch
-``services.accounts.profile_read.execute_read`` rather than reaching into the
-gateway internals.
+``services.accounts.profile_read.execute_read_many`` rather than reaching into
+the gateway internals.
 """
 
 from __future__ import annotations
 
-import asyncio
 import time
 from typing import TYPE_CHECKING, cast
 
@@ -21,20 +21,25 @@ from core.logging import log_event
 from core.telegram_client import (
     TelegramAccountNotFoundError,
     TelegramReadError,
-    execute_read,
+    execute_read_many,
 )
 from schemas.accounts import AccountProfileSnapshot
 from schemas.telegram_actions import (
     GetUserProfile,
+    ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
+    ListProfilePhotos,
 )
 
 if TYPE_CHECKING:
     from schemas.telegram_profile_snapshot import (
+        TelegramActiveStories,
         TelegramPinnedStories,
         TelegramProfileMusic,
+        TelegramProfilePhotos,
         TelegramProfileSnapshot,
+        TelegramStoryThumb,
     )
 
 __all__ = ["fetch_live_account_profile", "invalidate_account_profile_cache"]
@@ -66,7 +71,11 @@ async def fetch_live_account_profile(
         return cached
 
     snapshot = await _fetch_live_or_error(account_id)
-    _CACHE[account_id] = snapshot
+    # Don't cache failures: a transient FloodWait/RPC/network error would
+    # otherwise pin the dialog to a stale error for the whole TTL, so reopening
+    # (force_refresh=False) would keep showing it instead of retrying.
+    if snapshot.error is None:
+        _CACHE[account_id] = snapshot
     return snapshot
 
 
@@ -84,10 +93,15 @@ def invalidate_account_profile_cache(account_id: str | None = None) -> None:
 
 async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
     try:
-        profile_model, stories_model, music_model = await asyncio.gather(
-            execute_read(account_id, GetUserProfile()),
-            execute_read(account_id, ListPinnedStories()),
-            execute_read(account_id, ListProfileMusic()),
+        results = await execute_read_many(
+            account_id,
+            [
+                GetUserProfile(),
+                ListPinnedStories(),
+                ListActiveStories(),
+                ListProfileMusic(),
+                ListProfilePhotos(),
+            ],
         )
     except TelegramReadError as exc:
         return _error_snapshot(account_id, exc.reason)
@@ -102,14 +116,23 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
         )
         return _error_snapshot(account_id, f"{type(exc).__name__}: {exc}")
 
-    # The gateway returns the snapshot type matching each action. ``cast``
-    # documents the contract for type checkers without paying for a runtime
-    # isinstance check on the happy path.
-    return _combine(
-        account_id,
-        cast("TelegramProfileSnapshot", profile_model),
-        cast("TelegramPinnedStories", stories_model),
-        cast("TelegramProfileMusic", music_model),
+    # The gateway returns the snapshot types matching each action's position.
+    # ``cast`` documents the contract for type checkers without paying for a
+    # runtime isinstance check on the happy path.
+    profile_model, pinned_model, active_model, music_model, photos_model = results
+    profile = cast("TelegramProfileSnapshot", profile_model)
+    music = cast("TelegramProfileMusic", music_model)
+    return AccountProfileSnapshot(
+        account_id=account_id,
+        **profile.model_dump(),
+        stories=_merge_stories(
+            cast("TelegramPinnedStories", pinned_model).items,
+            cast("TelegramActiveStories", active_model).items,
+        ),
+        music=music.items,
+        music_supported=music.supported,
+        photos=cast("TelegramProfilePhotos", photos_model).items,
+        fetched_at_unix=time.time(),
     )
 
 
@@ -121,17 +144,22 @@ def _error_snapshot(account_id: str, error: str) -> AccountProfileSnapshot:
     )
 
 
-def _combine(
-    account_id: str,
-    profile: TelegramProfileSnapshot,
-    stories: TelegramPinnedStories,
-    music: TelegramProfileMusic,
-) -> AccountProfileSnapshot:
-    return AccountProfileSnapshot(
-        account_id=account_id,
-        **profile.model_dump(),
-        stories=stories.items,
-        music=music.items,
-        music_supported=music.supported,
-        fetched_at_unix=time.time(),
-    )
+def _merge_stories(
+    pinned: list[TelegramStoryThumb],
+    active: list[TelegramStoryThumb],
+) -> list[TelegramStoryThumb]:
+    """Dedupe active + pinned by story_id, newest-first by date_unix.
+
+    A story can sit in both lists when it's pinned to the profile AND still
+    inside its 24 h active window. Active entries win the merge because they
+    carry fresher view-count data; the pinned flag is grafted onto the active
+    record so the UI badge still reads correctly.
+    """
+    by_id: dict[int, TelegramStoryThumb] = {item.story_id: item for item in active}
+    for item in pinned:
+        existing = by_id.get(item.story_id)
+        if existing is None:
+            by_id[item.story_id] = item
+        else:
+            by_id[item.story_id] = existing.model_copy(update={"is_pinned": True})
+    return sorted(by_id.values(), key=lambda story: story.date_unix, reverse=True)

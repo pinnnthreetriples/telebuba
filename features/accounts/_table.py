@@ -25,13 +25,19 @@ _TABLE_COLUMNS = [
     _col("label", "Аккаунт", "label"),
     _col("status", "Статус", "status"),
     _col("telegram", "Telegram", "telegram"),
-    _col("session", "Сессия", "session"),
     _col("device", "Устройство", "device"),
     _col("proxy", "Прокси", "proxy"),
     _col("last_checked", "Проверен", "last_checked"),
     _col("actions", "", "account_id", sortable=False, align="right"),
 ]
+# Сессия column dropped — it usually duplicates ``Аккаунт`` (same identifier)
+# and the extra width pushed the row past the dialog edge, forcing a
+# horizontal scrollbar. Per-row session info is still exposed in the edit
+# dialog and the row payload, just not as its own table column.
 
+# Raw ``AccountStatus`` → RU. Single source of truth: the table (via
+# ``_to_table_row``) and the check-result toast both translate the raw enum
+# through this map, so a status reads identically wherever it appears.
 _STATUS_LABEL_RU = {
     "new": "Новый",
     "alive": "Живой",
@@ -42,15 +48,6 @@ _STATUS_LABEL_RU = {
     "network_error": "Ошибка сети",
     "proxy_error": "Ошибка прокси",
     "unknown_error": "Неизвестная ошибка",
-    "New": "Новый",
-    "Alive": "Живой",
-    "Unauthorized": "Не авторизован",
-    "Session error": "Ошибка сессии",
-    "Account error": "Ошибка аккаунта",
-    "Flood wait": "FloodWait",
-    "Network error": "Ошибка сети",
-    "Proxy error": "Ошибка прокси",
-    "Unknown error": "Неизвестная ошибка",
 }
 
 _STATUS_BADGE_TEMPLATE = """
@@ -66,80 +63,96 @@ _STATUS_BADGE_TEMPLATE = """
 
 _PROXY_TEMPLATE = """
 <q-td :props="props">
-  <div v-if="props.row.proxy_host" class="column q-gutter-xs">
-    <div class="row items-center no-wrap q-gutter-xs">
-      <q-chip
-        v-if="props.row.proxy_status === 'tcp_working'"
-        dense
-        square
-        color="positive"
-        text-color="white"
-        label="Работает"
-      />
-      <q-chip
-        v-else-if="props.row.proxy_status === 'failed'"
-        dense
-        square
-        color="negative"
-        text-color="white"
-        label="Ошибка"
-      />
-      <q-chip
-        v-else
-        dense
-        square
-        color="grey-6"
-        text-color="white"
-        label="Не проверен"
-      />
-      <span class="text-weight-medium">{{ props.row.proxy }}</span>
-    </div>
-    <div
-      v-if="props.row.proxy_country_name || props.row.proxy_country_code || props.row.proxy_exit_ip"
-      class="text-caption text-grey-7"
-    >
-      {{ props.row.proxy_country_name || props.row.proxy_country_code || '' }}
-      <span v-if="props.row.proxy_exit_ip"> · {{ props.row.proxy_exit_ip }}</span>
-    </div>
+  <div v-if="props.row.proxy_host">
+    <q-chip
+      dense
+      square
+      :color="props.row.proxy_status === 'tcp_working' ? 'positive'
+              : props.row.proxy_status === 'failed' ? 'negative' : 'grey-6'"
+      text-color="white"
+      :icon="props.row.proxy_status === 'tcp_working' ? 'check_circle'
+             : props.row.proxy_status === 'failed' ? 'error' : 'help_outline'"
+      :label="props.row.proxy_country_code
+              || (props.row.proxy_status === 'tcp_working' ? 'OK'
+                  : props.row.proxy_status === 'failed' ? 'FAIL' : '—')"
+    />
+    <q-tooltip class="bg-grey-9 text-body2">
+      <div class="text-weight-bold q-mb-xs">{{ props.row.proxy }}</div>
+      <div v-if="props.row.proxy_country_name">{{ props.row.proxy_country_name }}</div>
+      <div v-if="props.row.proxy_exit_ip">IP: {{ props.row.proxy_exit_ip }}</div>
+      <div v-if="props.row.proxy_last_error" class="text-negative q-mt-xs">
+        {{ props.row.proxy_last_error }}
+      </div>
+    </q-tooltip>
   </div>
-  <q-chip v-else dense outline square color="grey-6" label="Без прокси" />
+  <q-chip v-else dense outline square color="grey-6" label="—" />
+</q-td>
+"""
+
+# Telegram identity stacks vertically — Display Name → @username → phone —
+# instead of the previous space-pipe-joined single line. Each subsequent
+# line drops to a caption-grey style so the visual hierarchy reads at a
+# glance and the column hugs ~150 px instead of 280 px.
+_TELEGRAM_TEMPLATE = """
+<q-td :props="props">
+  <div class="column" style="line-height:1.25; white-space: normal">
+    <template v-for="(part, idx) in (props.row.telegram || '').split(' | ')" :key="idx">
+      <span :class="idx === 0 ? 'text-weight-medium' : 'text-caption text-grey-7'">
+        {{ part }}
+      </span>
+    </template>
+  </div>
+</q-td>
+"""
+
+_DEVICE_TEMPLATE = """
+<q-td :props="props">
+  <div class="column" style="line-height:1.25; white-space: normal">
+    <template v-for="(part, idx) in (props.row.device || '—').split(' | ')" :key="idx">
+      <span :class="idx === 0 ? 'text-weight-medium' : 'text-caption text-grey-7'">
+        {{ part }}
+      </span>
+    </template>
+  </div>
 </q-td>
 """
 
 _ACTIONS_TEMPLATE = """
-<q-td :props="props">
-  <q-btn
-    dense round flat
-    icon="manage_accounts"
-    color="primary"
-    @click="() => $parent.$emit('edit_profile', props.row)"
-  >
-    <q-tooltip>Редактировать профиль</q-tooltip>
-  </q-btn>
-  <q-btn
-    dense round flat
-    icon="vpn_key"
-    color="primary"
-    @click="() => $parent.$emit('edit_proxy', props.row)"
-  >
-    <q-tooltip>Настройки прокси</q-tooltip>
-  </q-btn>
-  <q-btn
-    dense round flat
-    icon="refresh"
-    color="primary"
-    @click="() => $parent.$emit('check_one', props.row.account_id)"
-  >
-    <q-tooltip>Проверить аккаунт</q-tooltip>
-  </q-btn>
-  <q-btn
-    dense round flat
-    icon="delete"
-    color="negative"
-    @click="() => $parent.$emit('delete_account', props.row)"
-  >
-    <q-tooltip>Удалить аккаунт</q-tooltip>
-  </q-btn>
+<q-td :props="props" class="q-pa-none">
+  <div class="row items-center justify-end no-wrap">
+    <q-btn
+      dense round flat size="sm"
+      icon="manage_accounts"
+      color="primary"
+      @click="() => $parent.$emit('edit_profile', props.row)"
+    >
+      <q-tooltip>Редактировать профиль</q-tooltip>
+    </q-btn>
+    <q-btn
+      dense round flat size="sm"
+      icon="vpn_key"
+      color="primary"
+      @click="() => $parent.$emit('edit_proxy', props.row)"
+    >
+      <q-tooltip>Настройки прокси</q-tooltip>
+    </q-btn>
+    <q-btn
+      dense round flat size="sm"
+      icon="refresh"
+      color="primary"
+      @click="() => $parent.$emit('check_one', props.row.account_id)"
+    >
+      <q-tooltip>Проверить аккаунт</q-tooltip>
+    </q-btn>
+    <q-btn
+      dense round flat size="sm"
+      icon="delete"
+      color="negative"
+      @click="() => $parent.$emit('delete_account', props.row)"
+    >
+      <q-tooltip>Удалить аккаунт</q-tooltip>
+    </q-btn>
+  </div>
 </q-td>
 """
 
@@ -161,6 +174,23 @@ def _to_table_row(row: dict[str, object]) -> dict[str, object]:
 
 def _account_status_label(status: str) -> str:
     return _STATUS_LABEL_RU.get(status, status.replace("_", " "))
+
+
+def _username_update_value(raw: str, snapshot_username: str | None) -> str | None:
+    """Return the username to submit, or ``None`` to skip the update entirely.
+
+    Telegram's ``UpdateUsernameRequest`` raises ``USERNAME_NOT_MODIFIED`` when
+    the value is unchanged, so re-sending the current username on a name/bio-only
+    edit would fail the whole save (name/bio are written first, then the username
+    call errors). Returns ``None`` when the cleaned input matches the loaded
+    snapshot — the caller then omits the username from the action so the
+    gateway's ``if username is not None`` guard skips it. A deliberate clear
+    (snapshot had a username, field now blank) returns ``""`` and goes through.
+    """
+    cleaned = raw.strip().removeprefix("@")
+    if cleaned == (snapshot_username or ""):
+        return None
+    return cleaned
 
 
 # Status-code → human-readable RU label for tdata-import failures. The keys
@@ -245,7 +275,115 @@ def _service_error_label(message: str) -> str:
         return _tdata_error_label(tail.strip())
     if message.startswith("Proxy not found for account:"):
         return message.replace("Proxy not found for account:", "Прокси не найден для аккаунта:", 1)
-    return message
+    return _media_validation_label(message) or _telegram_error_label(message) or message
+
+
+def _media_validation_label(message: str) -> str | None:
+    """Translate the upload-validation errors from ``services.accounts._uploads``.
+
+    ``_validate_upload`` raises ``"<label> file is too large"`` /
+    ``"<label> file is empty"`` / ``"<label> must be one of: <suffixes>"`` with a
+    free-form English label ("story image", "profile photo", "profile music").
+    Match on the stable English tail so the operator gets RU regardless of label.
+    """
+    if "file is too large" in message:
+        return "Файл слишком большой — уменьшите размер и попробуйте снова"
+    if "file is empty" in message:
+        return "Файл пустой — выберите другой"
+    if "must be one of:" in message:
+        allowed = message.split("must be one of:", 1)[1].strip()
+        return f"Неподдерживаемый формат файла. Разрешены: {allowed}"
+    return None
+
+
+def _telegram_error_label(message: str) -> str | None:
+    """Translate common Telethon/Telegram error messages into actionable RU text.
+
+    Substring-matched because Telethon wraps the raw error code in a longer
+    English sentence (often appended with ``(caused by SomeRequest)``); a
+    full-string equality table would miss the actual error inside. Returns
+    ``None`` when no fragment matches so the caller falls through to the
+    raw message — better to show English than to swallow an unknown failure.
+    """
+    fragments: list[tuple[str, str]] = [
+        (
+            "photo dimensions are invalid",
+            "Telegram не принял размеры фото. Используйте JPG 9:16 (рекомендуется 1080×1920)",
+        ),
+        (
+            "PHOTO_INVALID_DIMENSIONS",
+            "Telegram не принял размеры фото. Используйте JPG 9:16 (рекомендуется 1080×1920)",
+        ),
+        (
+            "VIDEO_FILE_INVALID",
+            "Видео отклонено сервером. Проверьте, что это валидный MP4 до 60 секунд",
+        ),
+        (
+            "IMAGE_PROCESS_FAILED",
+            "Telegram не смог обработать видео. Возможно оно длиннее 60 секунд",
+        ),
+        (
+            "MEDIA_FILE_INVALID",
+            "Файл медиа отклонён сервером — попробуйте другой",
+        ),
+        (
+            "MEDIA_TYPE_INVALID",
+            "Тип медиа не подходит для сторис",
+        ),
+        (
+            "MEDIA_VIDEO_STORY_MISSING",
+            "Видео не подошло для сторис — выберите другое",
+        ),
+        (
+            "MEDIA_INVALID",
+            "Медиа отклонено: проверьте формат и размер файла",
+        ),
+        (
+            "FILE_PARTS_INVALID",
+            "Файл повреждён при загрузке, попробуйте ещё раз",
+        ),
+        (
+            "PHOTO_SAVE_FILE_INVALID",
+            "Telegram не смог сохранить фото. Попробуйте другое изображение",
+        ),
+        (
+            "username is already taken",
+            "Этот юзернейм уже занят. Выберите другой",
+        ),
+        (
+            "USERNAME_OCCUPIED",
+            "Этот юзернейм уже занят. Выберите другой",
+        ),
+        (
+            "USERNAME_PURCHASE_AVAILABLE",
+            "Юзернейм занят (доступен для покупки в Fragment). Выберите другой",
+        ),
+        (
+            "USERNAME_INVALID",
+            "Юзернейм не подходит — 5–32 символа, латиница/цифры/_, не начинается с цифры",
+        ),
+        (
+            "USERNAME_NOT_MODIFIED",
+            "Этот юзернейм уже стоит на аккаунте",
+        ),
+        (
+            "FIRSTNAME_INVALID",
+            "Имя не подходит — слишком длинное или содержит запрещённые символы",
+        ),
+        (
+            "LASTNAME_INVALID",
+            "Фамилия не подходит — слишком длинная или содержит запрещённые символы",
+        ),
+        (
+            "ABOUT_TOO_LONG",
+            "Описание слишком длинное (лимит — 70 символов)",
+        ),
+    ]
+    lowered = message.lower()
+    for needle, translation in fragments:
+        if needle.lower() in lowered:
+            return translation
+    return None
 
 
 def _remember_selection(selection: list[dict[str, object]], selected_ids: set[str]) -> None:

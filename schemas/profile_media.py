@@ -31,3 +31,45 @@ class AccountProfileMusicUpload(BaseModel):
     content: bytes = Field(min_length=1)
     title: str | None = Field(default=None, min_length=1)
     performer: str | None = Field(default=None, min_length=1)
+
+
+class AccountProfilePhotoRemove(BaseModel):
+    """Drop a single photo from the account's profile-photo history.
+
+    All three Telegram identifiers come from the canonical
+    ``TelegramProfilePhoto`` snapshot — synthetic optimistic-add rows have
+    empty ``file_reference`` and must not reach this service.
+    """
+
+    account_id: str = Field(min_length=1)
+    photo_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)
+
+
+class AccountStoryRemove(BaseModel):
+    """Delete one story (active and/or pinned) from the account.
+
+    ``story_id`` comes from the live snapshot the UI is displaying. Telegram
+    silently drops unknown IDs from the result vector, so callers can't tell
+    apart "already gone" from "successfully removed" — both paths land here
+    as ``status='ok'``.
+    """
+
+    account_id: str = Field(min_length=1)
+    story_id: int = Field(gt=0)
+
+
+class AccountProfileMusicRemove(BaseModel):
+    """Unpin a single track from the account's saved profile music.
+
+    All three Telegram identifiers are required — the read-side
+    ``TelegramMusicItem`` always carries them after a real GetSavedMusic
+    fetch. Optimistic-add rows have empty ``file_reference`` and must not
+    reach this service (the UI guards them with a disabled delete button).
+    """
+
+    account_id: str = Field(min_length=1)
+    file_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)

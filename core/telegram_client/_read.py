@@ -12,35 +12,37 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from telethon import errors
-from telethon.tl.functions.stories import GetPinnedStoriesRequest
+from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
-    InputPeerSelf,
     InputUserSelf,
-    MessageMediaDocument,
-    MessageMediaPhoto,
 )
 
 from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
-from core.telegram_client._client import telegram_client
-from schemas.device_fingerprint import TelegramClientRequest
+from core.telegram_client._pool import get_client
+from core.telegram_client._read_stories import (
+    dispatch_list_active_stories,
+    dispatch_list_pinned_stories,
+)
 from schemas.telegram_actions import (
     GetUserProfile,
+    ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
+    ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
     TelegramMusicItem,
-    TelegramPinnedStories,
     TelegramProfileMusic,
+    TelegramProfilePhoto,
+    TelegramProfilePhotos,
     TelegramProfileSnapshot,
-    TelegramStoryThumb,
 )
 
 if TYPE_CHECKING:
@@ -79,7 +81,24 @@ class TelegramReadError(RuntimeError):
 
 
 async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel:
-    """Dispatch a read action against ``account_id`` and return the typed model.
+    """Dispatch a single read action — convenience wrapper around ``execute_read_many``."""
+    results = await execute_read_many(account_id, [action])
+    return results[0]
+
+
+async def execute_read_many(
+    account_id: str,
+    actions: list[TelegramReadAction],
+) -> list[BaseModel]:
+    """Dispatch multiple read actions on the per-account pooled client.
+
+    The dialog needs three reads (profile + stories + music) per open.
+    Before the pool landed, each read opened its own Telethon client on the
+    same ``.session`` SQLite file and the three concurrent ``fetch_account``
+    reads on ``telebuba.db`` raced into ``OperationalError: database is
+    locked`` under live warming-runtime load. With the pool, one persistent
+    client serves both the dialog and the warming task; actions still run
+    sequentially in input order on the single MTProto connection.
 
     Telethon errors (FloodWait, RPC, etc.) are caught and re-raised as
     :class:`TelegramReadError` so the service layer can handle them without
@@ -90,17 +109,19 @@ async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel
         msg = f"Account not found: {account_id}"
         raise TelegramAccountNotFoundError(msg)
 
-    request = TelegramClientRequest(account_id=account_id, session_name=account.session_name)
-    async with telegram_client(request) as client:
-        try:
-            await client.connect()
-            return await _dispatch_read_action(client, action)
-        except errors.FloodWaitError as exc:
-            reason = f"FloodWait({exc.seconds}s)"
-            raise TelegramReadError(reason) from exc
-        except errors.RPCError as exc:
-            reason = f"RPC: {type(exc).__name__}"
-            raise TelegramReadError(reason) from exc
+    try:
+        client = await get_client(account_id)
+        results: list[BaseModel] = [
+            await _dispatch_read_action(client, action) for action in actions
+        ]
+    except errors.FloodWaitError as exc:
+        reason = f"FloodWait({exc.seconds}s)"
+        raise TelegramReadError(reason) from exc
+    except errors.RPCError as exc:
+        reason = f"RPC: {type(exc).__name__}"
+        raise TelegramReadError(reason) from exc
+    else:
+        return results
 
 
 async def _dispatch_read_action(
@@ -111,9 +132,13 @@ async def _dispatch_read_action(
         case GetUserProfile():
             return await _dispatch_get_user_profile(client)
         case ListPinnedStories():
-            return await _dispatch_list_pinned_stories(client, action)
+            return await dispatch_list_pinned_stories(client, action)
+        case ListActiveStories():
+            return await dispatch_list_active_stories(client)
         case ListProfileMusic():
             return await _dispatch_list_profile_music(client)
+        case ListProfilePhotos():
+            return await _dispatch_list_profile_photos(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)
@@ -158,57 +183,6 @@ async def _download_self_avatar(client: TelegramClient) -> bytes | None:
     return data if isinstance(data, (bytes, bytearray)) else None
 
 
-async def _dispatch_list_pinned_stories(
-    client: TelegramClient,
-    action: ListPinnedStories,
-) -> TelegramPinnedStories:
-    result = await client(
-        GetPinnedStoriesRequest(peer=InputPeerSelf(), offset_id=0, limit=action.limit),
-    )
-    raw_stories = getattr(result, "stories", []) or []
-    items: list[TelegramStoryThumb] = []
-    for story in raw_stories:
-        story_id = int(getattr(story, "id", 0) or 0)
-        if story_id == 0:
-            continue
-        items.append(
-            TelegramStoryThumb(
-                story_id=story_id,
-                kind=_story_kind(story),
-                caption=_optional_str(getattr(story, "caption", None)),
-                thumb_bytes=await _download_story_thumb(client, story),
-            ),
-        )
-    return TelegramPinnedStories(items=items)
-
-
-def _story_kind(story: object) -> Literal["image", "video", "unknown"]:
-    media = getattr(story, "media", None)
-    if isinstance(media, MessageMediaPhoto):
-        return "image"
-    if isinstance(media, MessageMediaDocument):
-        document = getattr(media, "document", None)
-        mime = str(getattr(document, "mime_type", "") or "")
-        if mime.startswith("video/"):
-            return "video"
-    return "unknown"
-
-
-async def _download_story_thumb(client: TelegramClient, story: object) -> bytes | None:
-    media = getattr(story, "media", None)
-    if media is None:
-        return None
-    try:
-        # ``file=bytes`` (the type) is Telethon's in-memory mode; the stub
-        # under-specifies the union so ty needs the override here.
-        data = await client.download_media(media, file=bytes, thumb=0)  # ty: ignore[invalid-argument-type]
-    except (errors.RPCError, ValueError, TypeError):
-        # ``thumb=0`` fails on some media kinds; the UI can show a placeholder
-        # instead of crashing the whole dialog open.
-        return None
-    return data if isinstance(data, (bytes, bytearray)) else None
-
-
 async def _dispatch_list_profile_music(client: TelegramClient) -> TelegramProfileMusic:
     if not _MUSIC_API_AVAILABLE or GetSavedMusicRequest is None:
         await log_event("INFO", "telegram_list_profile_music_unsupported")
@@ -234,6 +208,8 @@ async def _dispatch_list_profile_music(client: TelegramClient) -> TelegramProfil
                 title=_optional_str(getattr(audio, "title", None)),
                 performer=_optional_str(getattr(audio, "performer", None)),
                 duration_seconds=int(getattr(audio, "duration", 0) or 0) or None,
+                access_hash=int(getattr(document, "access_hash", 0) or 0),
+                file_reference=bytes(getattr(document, "file_reference", b"") or b""),
             ),
         )
     return TelegramProfileMusic(items=items, supported=True)
@@ -244,3 +220,73 @@ def _find_audio_attribute(document: object) -> object | None:
         if isinstance(attribute, DocumentAttributeAudio):
             return attribute
     return None
+
+
+async def _dispatch_list_profile_photos(
+    client: TelegramClient,
+    action: ListProfilePhotos,
+) -> TelegramProfilePhotos:
+    """Pull the account's profile-photo history with a small thumb per photo.
+
+    ``GetUserPhotosRequest`` returns newest-first; the first item is the
+    photo Telegram currently shows as the avatar. Each photo carries the
+    ``InputPhoto`` id triple needed for the matching ``RemoveProfilePhoto``
+    write action.
+    """
+    result = await client(
+        GetUserPhotosRequest(
+            user_id=InputUserSelf(),
+            offset=0,
+            max_id=0,
+            limit=action.limit,
+        ),
+    )
+    raw_photos = getattr(result, "photos", []) or []
+    items: list[TelegramProfilePhoto] = []
+    for photo in raw_photos:
+        photo_id = int(getattr(photo, "id", 0) or 0)
+        if photo_id == 0:
+            continue
+        items.append(
+            TelegramProfilePhoto(
+                photo_id=photo_id,
+                access_hash=int(getattr(photo, "access_hash", 0) or 0),
+                file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
+                date_unix=_photo_date_unix(photo),
+                thumb_bytes=await _download_photo_thumb(client, photo),
+            ),
+        )
+    return TelegramProfilePhotos(items=items)
+
+
+def _photo_date_unix(photo: object) -> int:
+    """Coerce Telethon's ``photo.date`` (a ``datetime``) into a Unix int."""
+    raw = getattr(photo, "date", None)
+    if raw is None:
+        return 0
+    if isinstance(raw, int):
+        return raw
+    timestamp = getattr(raw, "timestamp", None)
+    if callable(timestamp):
+        try:
+            return int(timestamp())
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+async def _download_photo_thumb(client: TelegramClient, photo: object) -> bytes | None:
+    """Pull the largest cached preview for a profile photo.
+
+    ``thumb=-1`` selects the largest available size in ``photo.sizes`` —
+    for profile photos that's the 640 px ``c`` variant, which renders
+    crisp inside the 112 px poster card (and on retina). ``thumb=0``
+    used to fetch the ~160 px stripped preview but stretching it 2x came
+    out visibly pixelated.
+    """
+    try:
+        # ``file=bytes`` (the type) is Telethon's in-memory download mode.
+        data = await client.download_media(photo, file=bytes, thumb=-1)  # ty: ignore[invalid-argument-type]
+    except (errors.RPCError, ValueError, TypeError):
+        return None
+    return data if isinstance(data, (bytes, bytearray)) else None
