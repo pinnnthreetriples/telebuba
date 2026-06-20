@@ -136,6 +136,8 @@ def _encode_args(source: Path, output: Path) -> list[str]:
 
 
 def _thumbnail_args(source: Path, thumb: Path) -> list[str]:
+    # ``-q:v 2`` is mjpeg's near-max quality (range 2-31, lower = better) — the
+    # default ``3`` was visibly noisy when rendered inside the story carousel.
     return [
         "-y",
         "-ss",
@@ -145,7 +147,7 @@ def _thumbnail_args(source: Path, thumb: Path) -> list[str]:
         "-frames:v",
         "1",
         "-q:v",
-        "3",
+        "2",
         str(thumb),
     ]
 

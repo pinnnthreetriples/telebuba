@@ -35,12 +35,13 @@ if TYPE_CHECKING:
 def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
     """Render the account's active + pinned stories as a compact carousel.
 
-    Sized small enough that the "Выбрать медиа для сторис" upload form
-    stays visible inside the dialog viewport without an outer scroll.
-    Slides are already sorted newest-first by the service layer; the
-    carousel starts on slide 0 so the latest story is the first thing
-    the operator sees. The total-count line sits below the carousel —
-    it's reference info, not the headline.
+    Sized small enough that the upload form stays visible inside the dialog
+    viewport. Slides are already sorted newest-first by the service layer;
+    the carousel starts on slide 0 so the latest story is the first thing
+    the operator sees. Quasar's bullet ``navigation`` overlaps content
+    visually inside a fixed-height slide — we keep the arrows for paging
+    and drop the dots; the total-count line below doubles as a position
+    cue ("3 / 13" style is overkill for typical 1–5 stories).
     """
     container = refs.stories_container
     container.clear()
@@ -50,10 +51,10 @@ def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot)
             ui.label("Сторис на аккаунте нет").classes("text-sm text-grey-7")
             return
         with (
-            ui.carousel(value="0", arrows=True, navigation=True)
+            ui.carousel(value="0", arrows=True, navigation=False)
             .props("control-color=primary swipeable animated infinite=false")
             .classes("w-full bg-grey-2 rounded")
-            .style("height: 240px")
+            .style("height: 260px")
         ):
             for index, story in enumerate(stories):
                 with ui.carousel_slide(name=str(index)).classes(
@@ -69,7 +70,9 @@ def _render_story_slide(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
     thumb_url = _avatar_data_url(story.thumb_bytes)
     deletable = story.story_id > 0
     if thumb_url:
-        ui.image(thumb_url).classes("max-h-40 object-contain rounded")
+        # Without navigation dots the slide gets ~36 px more vertical room;
+        # raise the image cap so the preview is bigger and reads sharper.
+        ui.image(thumb_url).classes("max-h-52 object-contain rounded")
     else:
         ui.element("div").classes("w-24 h-24 bg-grey-3 rounded")
     with ui.row().classes("items-center gap-1"):
