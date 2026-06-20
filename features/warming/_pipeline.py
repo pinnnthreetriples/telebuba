@@ -65,9 +65,18 @@ _CYCLE_STEPS: tuple[_Step, ...] = (
     _Step("sleep", "Сон", "bedtime"),
 )
 
-# Reverse lookup so ``_active_step`` can map a ``last_action`` string straight
-# to a step index in O(1). Unknown values fall back to index 0 (online) below.
-_STEP_INDEX: dict[str, int] = {step.name: idx for idx, step in enumerate(_CYCLE_STEPS)}
+# Maps ``last_action`` values emitted by ``services.warming`` to the
+# 0-based index of the step that was JUST COMPLETED. Unknown values fall
+# back to 0 (online). ``read_or_react`` is intentionally pinned to
+# ``react`` (idx 3) because the service collapses read-then-react into a
+# single ``last_action`` string — treating it as ``react`` reflects the
+# latest user-visible activity.
+_ACTION_TO_STEP: dict[str, int] = {
+    "set_online": 0,  # online
+    "join": 1,  # join
+    "read_or_react": 3,  # react (mid-point; read is 2, react is 3)
+    "send_dm": 4,  # chat
+}
 _ERROR_DETAIL_MAX_LEN: int = 60
 _SLEEP_STEP_INDEX: int = 5
 
@@ -80,9 +89,8 @@ def _next_active_index(card: WarmingAccountState) -> int:  # pragma: no cover
     (sleep / 5). Unknown ``last_action`` falls back to 0 (online).
     """
     last = card.last_action or ""
-    if last in _STEP_INDEX:
-        return min(_STEP_INDEX[last] + 1, _SLEEP_STEP_INDEX)
-    return 0
+    base = _ACTION_TO_STEP.get(last, 0)
+    return min(base + 1, _SLEEP_STEP_INDEX)
 
 
 def _active_step(card: WarmingAccountState) -> tuple[int | None, str]:  # pragma: no cover
@@ -109,7 +117,7 @@ def _active_step(card: WarmingAccountState) -> tuple[int | None, str]:  # pragma
     if card.state == "quarantine":
         return (None, "quar")
     if card.state == "error":
-        return (_STEP_INDEX.get(card.last_action or "", 0), "error")
+        return (_ACTION_TO_STEP.get(card.last_action or "", 0), "error")
     if card.state in ("flood_wait", "sleeping"):
         kind = "flood" if card.state == "flood_wait" else "sleep"
         return (_SLEEP_STEP_INDEX, kind)
@@ -237,44 +245,107 @@ def _render_step_rail(  # pragma: no cover
         "flood": _PIPELINE_STEP_FLOOD,
         "quar": _PIPELINE_STEP_QUAR,
     }
-    with ui.row().classes("w-full items-center gap-1"):
+    with ui.row().classes("w-full items-start gap-0 pt-1"):
         for idx, step in enumerate(_CYCLE_STEPS):
             if idx > 0:
                 left_kind = _connector_kind(idx - 1, active_idx, kind)
                 ui.element("div").classes(
                     f"tb-connector flex-1 h-1 rounded-full {connector_cls[left_kind]}",
-                )
+                ).style("margin-top: 13px")
             sk = _step_kind(idx, active_idx, kind)
             cls = step_cls[sk]
             tooltip = _step_tooltip(step, card, sk)
             icon_extra = " tb-step-active-icon" if sk == "active" else ""
-            circle = ui.element("div").classes(
-                f"w-9 h-9 rounded-full flex items-center justify-center shrink-0 {cls}",
-            )
-            with circle:
-                ui.icon(step.icon).classes(f"text-sm{icon_extra}")
-            circle.tooltip(tooltip)
+            with ui.column().classes("items-center gap-0.5 shrink-0"):
+                circle = ui.element("div").classes(
+                    f"w-9 h-9 rounded-full flex items-center justify-center shrink-0 {cls}",
+                )
+                with circle:
+                    ui.icon(step.icon).classes(f"text-sm{icon_extra}")
+                circle.tooltip(tooltip)
+                # Label below circle
+                label_cls = (
+                    "text-indigo-700 font-medium"
+                    if sk == "active"
+                    else "text-green-700"
+                    if sk == "done"
+                    else "text-slate-400"
+                )
+                ui.label(step.label_ru).classes(f"text-[9px] {label_cls} leading-none")
 
 
-def _render_active_detail(  # pragma: no cover
+def _render_active_detail(  # noqa: C901, PLR0912
     card: WarmingAccountState,
     active_idx: int | None,
     kind: str,
-) -> None:
-    """Detail panel under the rail — one line of live data for the live step."""
+) -> None:  # pragma: no cover
+    rows: list[tuple[str, str]] = []  # (icon, text)
+
     if active_idx is None:
         if kind == "quar":
-            text = f"Карантин ({card.quarantine_count} случаев) — цикл приостановлен"
+            rows = [("block", f"Карантин · {card.quarantine_count} случаев — цикл приостановлен")]
         else:
             return
     elif active_idx == _SLEEP_STEP_INDEX and kind == "sleep":
         eta = _relative_eta(card.next_run_at)
-        text = f"Сон до следующего цикла · {eta}" if eta else "Сон до следующего цикла"
+        rows = [
+            ("bedtime", f"Сон до следующего цикла · {eta or '—'}"),
+            ("repeat", f"Цикл #{card.cycles_completed} завершён"),
+        ]
     elif active_idx == _SLEEP_STEP_INDEX and kind == "flood":
-        text = _flood_tooltip(card)
+        rows = [
+            ("timer", _flood_tooltip(card)),
+            (
+                "info",
+                (
+                    f"Flood-wait: {card.flood_wait_seconds} с"
+                    if card.flood_wait_seconds
+                    else "Telegram ограничил аккаунт"
+                ),
+            ),
+        ]
     else:
-        text = _render_step_detail_body(card, active_idx)
-    ui.label(text).classes("text-[11px] text-slate-600 px-1 truncate")
+        step = _CYCLE_STEPS[active_idx]
+        if card.last_channel:
+            rows.append(("tag", f"Канал: {card.last_channel}"))
+        if card.proxy_snapshot:
+            proxy = card.proxy_snapshot
+            if card.proxy_country:
+                proxy = f"{proxy} ({card.proxy_country})"
+            rows.append(("router", f"Прокси: {proxy}"))
+        if card.last_event:
+            rows.append(("bolt", f"Событие: {card.last_event}"))
+        if not rows:
+            rows = [("info", f"{step.label_ru} · данные появятся после следующего опроса")]
+
+    if kind == "error" and card.last_error:
+        err = card.last_error[:70]
+        rows = [("error", err), ("history", f"Последнее действие: {card.last_action or '—'}")]
+
+    bg = {
+        "flood": "bg-amber-50 border-amber-100",
+        "quar": "bg-orange-50 border-orange-100",
+        "error": "bg-red-50 border-red-100",
+        "sleep": "bg-slate-50 border-slate-100",
+    }.get(kind, "bg-indigo-50 border-indigo-100")
+
+    text_cls = {
+        "flood": "text-amber-800",
+        "quar": "text-orange-800",
+        "error": "text-red-700",
+    }.get(kind, "text-indigo-800")
+
+    icon_cls = {
+        "flood": "text-amber-500",
+        "quar": "text-orange-500",
+        "error": "text-red-400",
+    }.get(kind, "text-indigo-400")
+
+    with ui.element("div").classes(f"w-full rounded-lg border px-2 py-1.5 {bg}"):
+        for icon_name, text in rows:
+            with ui.row().classes("w-full items-start gap-1.5"):
+                ui.icon(icon_name).classes(f"text-sm shrink-0 mt-0.5 {icon_cls}")
+                ui.label(text).classes(f"text-[11px] {text_cls} break-words leading-snug")
 
 
 def _render_step_detail_body(  # pragma: no cover
@@ -312,22 +383,43 @@ def _render_cycle_summary(card: WarmingAccountState) -> None:  # pragma: no cove
     / loop skip error'd accounts (mirrors the behaviour of the stats footer).
     """
     with ui.row().classes("w-full items-center gap-3 flex-wrap"):
-        ui.label(f"🔁 {card.cycles_completed}").classes(
-            "text-[11px] text-slate-600 tabular-nums",
+        ui.label(f"Цикл #{card.cycles_completed}").classes(
+            "text-[11px] text-slate-500 tabular-nums",
         )
+        ui.label("·").classes("text-[11px] text-slate-300")
         if card.daily_cap > 0:
+            pct = min(100, round(card.daily_actions / card.daily_cap * 100))
+            filled = round(pct / 20)  # 5 blocks total
+            bar = "█" * filled + "░" * (5 - filled)
             ui.label(f"📊 {card.daily_actions}/{card.daily_cap}").classes(
                 "text-[11px] text-slate-600 tabular-nums",
             )
+            ui.label(bar).classes("text-[10px] text-indigo-400 font-mono tracking-tighter")
+            ui.label(f"{pct}%").classes("text-[11px] text-slate-400 tabular-nums")
         else:
             ui.label(f"📊 {card.daily_actions}").classes(
                 "text-[11px] text-slate-600 tabular-nums",
             )
+        ui.label("·").classes("text-[11px] text-slate-300")
+        dm_cls = (
+            "text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700"
+            if card.dm_allowed
+            else "text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500"
+        )
+        dm_text = "DM ✅" if card.dm_allowed else "DM 🔒"
+        ui.label(dm_text).classes(dm_cls)
+        ui.label("·").classes("text-[11px] text-slate-300")
         if card.state != "error":
             eta = _relative_eta(card.next_run_at)
             if eta:
                 ui.label(f"⏭ {eta}").classes("text-[11px] text-slate-500 tabular-nums")
+        ui.label("·").classes("text-[11px] text-slate-300")
         if card.trust_score is not None:
-            ui.label(f"⛨ {card.trust_score}").classes(
-                "text-[11px] text-slate-500 tabular-nums",
+            trust_cls = (
+                "text-green-700"
+                if card.trust_score >= 70  # noqa: PLR2004
+                else "text-amber-700"
+                if card.trust_score >= 40  # noqa: PLR2004
+                else "text-red-700"
             )
+            ui.label(f"⛨ {card.trust_score}").classes(f"text-[11px] tabular-nums {trust_cls}")
