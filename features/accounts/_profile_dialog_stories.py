@@ -33,13 +33,14 @@ if TYPE_CHECKING:
 
 
 def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
-    """Render the account's active + pinned stories as a swipeable carousel.
+    """Render the account's active + pinned stories as a compact carousel.
 
-    Slides are already sorted newest-first by the service layer; the carousel
-    starts on slide 0 so the most recent story is the first thing the
-    operator sees. Optimistic-add stubs (synthetic non-positive ``story_id``)
-    render with a disabled delete button — Telegram doesn't know about them
-    yet, so a server-side delete would fail.
+    Sized small enough that the "Выбрать медиа для сторис" upload form
+    stays visible inside the dialog viewport without an outer scroll.
+    Slides are already sorted newest-first by the service layer; the
+    carousel starts on slide 0 so the latest story is the first thing
+    the operator sees. The total-count line sits below the carousel —
+    it's reference info, not the headline.
     """
     container = refs.stories_container
     container.clear()
@@ -48,37 +49,35 @@ def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot)
         if not stories:
             ui.label("Сторис на аккаунте нет").classes("text-sm text-grey-7")
             return
-        ui.label(f"Всего сторис: {len(stories)}").classes(
-            "text-sm text-grey-7 q-mb-sm",
-        )
         with (
             ui.carousel(value="0", arrows=True, navigation=True)
             .props("control-color=primary swipeable animated infinite=false")
             .classes("w-full bg-grey-2 rounded")
-            .style("height: 360px")
+            .style("height: 240px")
         ):
             for index, story in enumerate(stories):
                 with ui.carousel_slide(name=str(index)).classes(
-                    "column items-center justify-center p-3 gap-2",
+                    "column items-center justify-center p-2 gap-1",
                 ):
                     _render_story_slide(refs, story)
+        ui.label(f"Всего сторис: {len(stories)}").classes(
+            "text-xs text-grey-7 q-mt-xs",
+        )
 
 
 def _render_story_slide(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
     thumb_url = _avatar_data_url(story.thumb_bytes)
     deletable = story.story_id > 0
     if thumb_url:
-        ui.image(thumb_url).classes("max-h-56 object-contain rounded")
+        ui.image(thumb_url).classes("max-h-40 object-contain rounded")
     else:
-        ui.element("div").classes("w-32 h-32 bg-grey-3 rounded")
-    with ui.row().classes("items-center gap-2"):
+        ui.element("div").classes("w-24 h-24 bg-grey-3 rounded")
+    with ui.row().classes("items-center gap-1"):
         if story.is_active:
             ui.badge("Активна", color="primary")
         if story.is_pinned:
             ui.badge("Закреплена", color="secondary")
         ui.label(_format_story_date(story.date_unix)).classes("text-xs text-grey-7")
-        if story.kind in {"image", "video"}:
-            ui.label(story.kind).classes("text-xs text-grey-7")
         button = ui.button(
             icon="delete",
             color="grey-7",
@@ -88,9 +87,9 @@ def _render_story_slide(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
             button.tooltip("Удалить эту сторис")
         else:
             button.disable()
-            button.tooltip("Сначала обновите данные кнопкой ↻ рядом с именем профиля")
+            button.tooltip("Сначала обновите данные кнопкой ↻")
     if story.caption:
-        ui.label(story.caption).classes("text-xs text-grey-8 text-center")
+        ui.label(story.caption).classes("text-xs text-grey-8 text-center truncate")
 
 
 def _format_story_date(date_unix: int) -> str:

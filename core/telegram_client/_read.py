@@ -292,16 +292,25 @@ def _story_kind(story: object) -> Literal["image", "video", "unknown"]:
 
 
 async def _download_story_thumb(client: TelegramClient, story: object) -> bytes | None:
+    """Pull the largest cached preview for a story's media.
+
+    ``thumb=-1`` selects the largest available size — for photo stories
+    that's the ``c`` 640 px variant, for video stories the largest
+    document thumbnail (typically ~320 px). ``thumb=0`` (the smallest
+    stripped preview, ~160 px) was visibly pixelated when stretched
+    inside the carousel slide.
+    """
     media = getattr(story, "media", None)
     if media is None:
         return None
     try:
         # ``file=bytes`` (the type) is Telethon's in-memory mode; the stub
         # under-specifies the union so ty needs the override here.
-        data = await client.download_media(media, file=bytes, thumb=0)  # ty: ignore[invalid-argument-type]
+        data = await client.download_media(media, file=bytes, thumb=-1)  # ty: ignore[invalid-argument-type]
     except (errors.RPCError, ValueError, TypeError):
-        # ``thumb=0`` fails on some media kinds; the UI can show a placeholder
-        # instead of crashing the whole dialog open.
+        # Some media kinds reject thumbnail download (privacy-restricted,
+        # cache evicted) — the UI shows a placeholder instead of crashing
+        # the whole dialog open.
         return None
     return data if isinstance(data, (bytes, bytearray)) else None
 

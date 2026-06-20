@@ -182,7 +182,8 @@ async def test_list_pinned_stories_returns_items(monkeypatch: pytest.MonkeyPatch
             return stories_payload
 
         async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
-            assert thumb == 0
+            # Carousel needs the largest cached preview, not the stripped thumb.
+            assert thumb == -1
             return b"thumb"
 
     _patch_client(monkeypatch, FakeClient())
