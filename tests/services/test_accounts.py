@@ -24,6 +24,7 @@ from schemas.accounts import (
 )
 from schemas.profile_media import (
     AccountProfileMusicUpload,
+    AccountProfilePhotoRemove,
     AccountProfilePhotoUpload,
     AccountStoryUpload,
 )
@@ -39,6 +40,7 @@ from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
     PostStory,
+    RemoveProfilePhoto,
     SetProfilePhoto,
     UpdateProfile,
 )
@@ -56,6 +58,7 @@ from services.accounts import (
     list_accounts,
     load_accounts_table,
     post_account_story,
+    remove_account_profile_photo,
     save_account_proxy,
     set_account_profile_photo,
     update_account_profile,
@@ -707,6 +710,75 @@ async def test_add_account_profile_music_executes_music_action(
     assert result.status == "ok"
     assert isinstance(captured[0], AddProfileMusic)
     assert captured[0].title == "Track"
+
+
+@pytest.mark.asyncio
+async def test_remove_account_profile_photo_executes_action_and_invalidates_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The remove-photo service must reach Telegram with the InputPhoto id triple.
+
+    Mirrors the music-removal contract: passing only ``photo_id`` is not enough
+    — ``access_hash`` and ``file_reference`` are required for Telethon's
+    ``DeletePhotosRequest``, and the in-process snapshot cache has to be
+    cleared so the next dialog open shows the new photo set.
+    """
+    captured: list[object] = []
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="remove_profile_photo", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    result = await remove_account_profile_photo(
+        AccountProfilePhotoRemove(
+            account_id="account-photo-remove",
+            photo_id=4242,
+            access_hash=7,
+            file_reference=b"\x01\x02",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], RemoveProfilePhoto)
+    assert captured[0].photo_id == 4242
+    assert captured[0].access_hash == 7
+    assert captured[0].file_reference == b"\x01\x02"
+    assert invalidated == ["account-photo-remove"]
+
+
+@pytest.mark.asyncio
+async def test_remove_account_profile_photo_raises_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram refusals surface as ``ValueError`` — the UI shows the message inline."""
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="remove_profile_photo",
+            account_id=account_id,
+            error_type="RPCError",
+            error_message="PHOTO_INVALID",
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    with pytest.raises(ValueError, match="PHOTO_INVALID"):
+        await remove_account_profile_photo(
+            AccountProfilePhotoRemove(
+                account_id="acc",
+                photo_id=1,
+                access_hash=2,
+                file_reference=b"\x03",
+            ),
+        )
 
 
 @pytest.mark.asyncio

@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
 from telethon import errors
+from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.stories import GetPinnedStoriesRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
@@ -28,10 +30,12 @@ from schemas.telegram_actions import (
     GetUserProfile,
     ListPinnedStories,
     ListProfileMusic,
+    ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
     TelegramPinnedStories,
     TelegramProfileMusic,
+    TelegramProfilePhotos,
     TelegramProfileSnapshot,
 )
 
@@ -286,6 +290,112 @@ async def test_list_profile_music_when_supported_maps_audio_attributes(
     assert track.title == "Memorabilia"
     assert track.performer == "The Heads"
     assert track.duration_seconds == 183
+
+
+@pytest.mark.asyncio
+async def test_list_profile_photos_maps_id_triple_and_date(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Each photo must carry the InputPhoto id triple + a Unix-int date.
+
+    Telethon hands us a ``datetime`` for ``photo.date``; the dispatcher has to
+    flatten it to a plain int so the schema stays Pydantic-friendly and the UI
+    can format without re-importing datetime.
+    """
+    photo_a = MagicMock(
+        id=111,
+        access_hash=22,
+        file_reference=b"\x0a",
+        date=datetime(2025, 3, 4, 12, 0, tzinfo=UTC),
+    )
+    photo_b = MagicMock(
+        id=222,
+        access_hash=33,
+        file_reference=b"\x0b",
+        date=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+    photos_payload = MagicMock(photos=[photo_a, photo_b])
+    requested: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            requested.append(request)
+            return photos_payload
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            assert thumb == 0
+            return b"thumb"
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-photos", ListProfilePhotos(limit=24))
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert any(isinstance(req, GetUserPhotosRequest) for req in requested)
+    assert [item.photo_id for item in result.items] == [111, 222]
+    assert result.items[0].access_hash == 22
+    assert result.items[0].file_reference == b"\x0a"
+    assert result.items[0].thumb_bytes == b"thumb"
+    assert result.items[0].date_unix == int(
+        datetime(2025, 3, 4, 12, 0, tzinfo=UTC).timestamp(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_profile_photos_empty_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(photos=[])
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-no-photos", ListProfilePhotos())
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert result.items == []
+
+
+@pytest.mark.asyncio
+async def test_list_profile_photos_thumb_failure_is_swallowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One bad thumb must not blow up the whole grid.
+
+    Mirrors the story-thumb safety net: ``download_media`` can fail on
+    privacy-restricted or cache-evicted photos; the dispatcher swallows
+    the RPCError and the card renders without an image instead.
+    """
+    photo = MagicMock(
+        id=1,
+        access_hash=2,
+        file_reference=b"\x01",
+        date=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(photos=[photo])
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            raise errors.RPCError(request=None, message="FILE_REFERENCE_EXPIRED", code=400)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-bad-thumb", ListProfilePhotos())
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert len(result.items) == 1
+    assert result.items[0].photo_id == 1
+    assert result.items[0].thumb_bytes is None
 
 
 @pytest.mark.asyncio

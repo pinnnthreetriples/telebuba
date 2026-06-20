@@ -8,99 +8,53 @@ file-size budget — the warming package follows the same precedent.
 
 from __future__ import annotations
 
-import base64
 import time
 from typing import TYPE_CHECKING, Literal
 
-from nicegui import app, ui
+from nicegui import ui
+
+from features.accounts._profile_dialog_common import (
+    _DEAD_CLIENTS,
+    _avatar_data_url,
+    _DialogRefs,
+    _is_client_dead,
+    register_disconnect_tracker,
+)
+from features.accounts._profile_dialog_photos import render_photos_grid
 
 # TelegramMusicItem / TelegramStoryThumb are CONSTRUCTED at runtime in the
 # optimistic-update helpers — keep them at module scope. AccountProfileSnapshot
 # is annotation-only here (instances come in from the service layer) so it
 # lives in TYPE_CHECKING.
 from schemas.profile_media import AccountProfileMusicRemove
-from schemas.telegram_profile_snapshot import TelegramMusicItem, TelegramStoryThumb
+from schemas.telegram_profile_snapshot import (
+    TelegramMusicItem,
+    TelegramProfilePhoto,
+    TelegramStoryThumb,
+)
 from services.accounts import remove_account_profile_music
 
 if TYPE_CHECKING:
-    import asyncio
-
     from schemas.accounts import AccountProfileSnapshot
 
+# Re-export the common primitives so callers (main.py, tests) keep working
+# off the historical ``_profile_dialog_render`` import path without churn.
+__all__ = [
+    "_DEAD_CLIENTS",
+    "_DialogRefs",
+    "_apply_optimistic_avatar",
+    "_apply_optimistic_music",
+    "_apply_optimistic_music_remove",
+    "_apply_optimistic_story",
+    "_apply_snapshot",
+    "_avatar_data_url",
+    "_is_client_dead",
+    "_render_loading_header",
+    "register_disconnect_tracker",
+]
 
 _SECONDS_PER_MINUTE = 60
 _MINUTES_PER_HOUR = 60
-
-# Client ids whose websocket dropped. ``app.on_disconnect`` populates this once
-# wired via ``register_disconnect_tracker()`` at app startup. Optimistic
-# updates and ``_apply_snapshot`` consult it before mutating UI elements so
-# they don't surface "Client has been deleted" warnings on detached clients.
-# Multi-tab safe: each dialog tracks its own ``refs.client_id`` and the global
-# set only flags the specific tab that died.
-_DEAD_CLIENTS: set[str] = set()
-
-
-def register_disconnect_tracker() -> None:
-    """Wire ``app.on_disconnect`` once at startup to feed ``_DEAD_CLIENTS``."""
-
-    def _on_disconnect(client: object) -> None:
-        client_id = getattr(client, "id", None)
-        if isinstance(client_id, str):
-            _DEAD_CLIENTS.add(client_id)
-
-    app.on_disconnect(_on_disconnect)
-
-
-def _is_client_dead(refs: _DialogRefs) -> bool:
-    return refs.closed or refs.client_id in _DEAD_CLIENTS
-
-
-class _DialogRefs:
-    """Element handles the background snapshot loader writes into.
-
-    Attributes are wired up in ``_open_profile_dialog`` as the elements get
-    created — declared here only so type checkers can see the shape.
-
-    ``account_id`` is the Telegram account behind the open dialog — needed
-    by the music-row delete buttons so the click handler can call into the
-    service without re-threading account_id through every render call.
-
-    ``current_snapshot`` holds the latest applied snapshot so optimistic
-    update helpers (``_apply_optimistic_*``) can mutate-and-rerender without
-    a Telegram round-trip after each upload.
-
-    ``client_id`` ties the dialog to the originating NiceGUI client so a
-    global ``app.on_disconnect`` handler can flag this exact dialog dead
-    without freezing other open tabs. ``closed`` is the same idea for the
-    Quasar-side ``dialog.on('hide')`` event — flipped synchronously so the
-    apply path can short-circuit before mutating detached elements.
-    """
-
-    first_name: ui.input
-    last_name: ui.input
-    username: ui.input
-    bio: ui.textarea
-    avatar_slot: ui.element
-    identity_slot: ui.element
-    photo_preview_container: ui.element
-    stories_container: ui.element
-    music_section: ui.element
-    music_list_container: ui.element
-    sync_label: ui.label
-    refresh_button: ui.button
-    error_banner: ui.label
-    initial_load_task: asyncio.Task[None]
-    account_id: str
-    current_snapshot: AccountProfileSnapshot | None
-    client_id: str
-    closed: bool
-
-
-def _avatar_data_url(image_bytes: bytes | None) -> str | None:
-    if not image_bytes:
-        return None
-    encoded = base64.b64encode(image_bytes).decode("ascii")
-    return f"data:image/jpeg;base64,{encoded}"
 
 
 def _humanize_ago(fetched_at_unix: float) -> str:
@@ -149,21 +103,6 @@ def _render_header(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
         ui.label(f"{handle}{phone}").classes("text-xs text-grey-7 truncate")
 
     refs.sync_label.set_text(f"Обновлено {_humanize_ago(snapshot.fetched_at_unix)}")
-
-
-def _render_photo_preview(
-    container: ui.element,
-    snapshot: AccountProfileSnapshot,
-) -> None:
-    container.clear()
-    with container:
-        avatar_url = _avatar_data_url(snapshot.avatar_bytes)
-        if avatar_url:
-            with ui.row().classes("items-center gap-3"):
-                ui.image(avatar_url).classes("w-20 h-20 rounded-full object-cover")
-                ui.label("Текущая аватарка").classes("text-sm text-grey-7")
-        else:
-            ui.label("Аватарка не установлена").classes("text-sm text-grey-7")
 
 
 def _render_stories_preview(
@@ -299,7 +238,7 @@ def _apply_snapshot(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None
         refs.error_banner.set_visibility(False)
 
     _render_header(refs, snapshot)
-    _render_photo_preview(refs.photo_preview_container, snapshot)
+    render_photos_grid(refs, snapshot)
     _render_stories_preview(refs.stories_container, snapshot)
     _render_music_preview(refs, snapshot)
 
@@ -325,12 +264,23 @@ def _apply_optimistic_avatar(refs: _DialogRefs, image_bytes: bytes) -> None:
     """
     if _is_client_dead(refs) or refs.current_snapshot is None:
         return
+    optimistic_photo = TelegramProfilePhoto(
+        photo_id=-int(time.time() * 1000),
+        access_hash=0,
+        file_reference=b"\x00",
+        date_unix=int(time.time()),
+        thumb_bytes=image_bytes,
+    )
     new_snapshot = refs.current_snapshot.model_copy(
-        update={"avatar_bytes": image_bytes, "fetched_at_unix": time.time()},
+        update={
+            "avatar_bytes": image_bytes,
+            "photos": [optimistic_photo, *refs.current_snapshot.photos],
+            "fetched_at_unix": time.time(),
+        },
     )
     refs.current_snapshot = new_snapshot
     _render_header(refs, new_snapshot)
-    _render_photo_preview(refs.photo_preview_container, new_snapshot)
+    render_photos_grid(refs, new_snapshot)
 
 
 def _apply_optimistic_story(

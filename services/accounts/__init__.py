@@ -28,6 +28,7 @@ from services.accounts.media import (
     add_account_profile_music,
     post_account_story,
     remove_account_profile_music,
+    remove_account_profile_photo,
     set_account_profile_photo,
 )
 from services.accounts.profile import update_account_profile
@@ -66,6 +67,7 @@ __all__ = [
     "post_account_story",
     "remove_account",
     "remove_account_profile_music",
+    "remove_account_profile_photo",
     "save_account_proxy",
     "set_account_profile_photo",
     "update_account_profile",

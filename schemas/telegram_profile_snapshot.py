@@ -52,3 +52,22 @@ class TelegramProfileMusic(BaseModel):
     # ``False`` when the installed Telethon version lacks the music TL methods —
     # the UI uses this to hide the music preview block entirely.
     supported: bool = True
+
+
+class TelegramProfilePhoto(BaseModel):
+    """One photo from the user's profile-photo history.
+
+    ``GetUserPhotosRequest`` returns these newest-first; index 0 is the
+    photo Telegram is currently showing as the avatar. ``InputPhoto`` needs
+    all three id fields for deletion, mirroring the music-removal pattern.
+    """
+
+    photo_id: int
+    access_hash: int
+    file_reference: bytes
+    date_unix: int = 0
+    thumb_bytes: bytes | None = None
+
+
+class TelegramProfilePhotos(BaseModel):
+    items: list[TelegramProfilePhoto] = Field(default_factory=list)

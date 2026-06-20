@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
+from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.stories import GetPinnedStoriesRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
@@ -33,11 +34,14 @@ from schemas.telegram_actions import (
     GetUserProfile,
     ListPinnedStories,
     ListProfileMusic,
+    ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
     TelegramMusicItem,
     TelegramPinnedStories,
     TelegramProfileMusic,
+    TelegramProfilePhoto,
+    TelegramProfilePhotos,
     TelegramProfileSnapshot,
     TelegramStoryThumb,
 )
@@ -132,6 +136,8 @@ async def _dispatch_read_action(
             return await _dispatch_list_pinned_stories(client, action)
         case ListProfileMusic():
             return await _dispatch_list_profile_music(client)
+        case ListProfilePhotos():
+            return await _dispatch_list_profile_photos(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)
@@ -264,3 +270,71 @@ def _find_audio_attribute(document: object) -> object | None:
         if isinstance(attribute, DocumentAttributeAudio):
             return attribute
     return None
+
+
+async def _dispatch_list_profile_photos(
+    client: TelegramClient,
+    action: ListProfilePhotos,
+) -> TelegramProfilePhotos:
+    """Pull the account's profile-photo history with a small thumb per photo.
+
+    ``GetUserPhotosRequest`` returns newest-first; the first item is the
+    photo Telegram currently shows as the avatar. Each photo carries the
+    ``InputPhoto`` id triple needed for the matching ``RemoveProfilePhoto``
+    write action.
+    """
+    result = await client(
+        GetUserPhotosRequest(
+            user_id=InputUserSelf(),
+            offset=0,
+            max_id=0,
+            limit=action.limit,
+        ),
+    )
+    raw_photos = getattr(result, "photos", []) or []
+    items: list[TelegramProfilePhoto] = []
+    for photo in raw_photos:
+        photo_id = int(getattr(photo, "id", 0) or 0)
+        if photo_id == 0:
+            continue
+        items.append(
+            TelegramProfilePhoto(
+                photo_id=photo_id,
+                access_hash=int(getattr(photo, "access_hash", 0) or 0),
+                file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
+                date_unix=_photo_date_unix(photo),
+                thumb_bytes=await _download_photo_thumb(client, photo),
+            ),
+        )
+    return TelegramProfilePhotos(items=items)
+
+
+def _photo_date_unix(photo: object) -> int:
+    """Coerce Telethon's ``photo.date`` (a ``datetime``) into a Unix int."""
+    raw = getattr(photo, "date", None)
+    if raw is None:
+        return 0
+    if isinstance(raw, int):
+        return raw
+    timestamp = getattr(raw, "timestamp", None)
+    if callable(timestamp):
+        try:
+            return int(timestamp())
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+async def _download_photo_thumb(client: TelegramClient, photo: object) -> bytes | None:
+    """Pull the smallest cached thumbnail for a profile photo.
+
+    ``thumb=0`` selects the lowest-resolution stripped/cached size — enough
+    for a grid cell preview, cheap enough to fetch for 20+ photos without
+    blocking the dialog open noticeably.
+    """
+    try:
+        # ``file=bytes`` (the type) is Telethon's in-memory download mode.
+        data = await client.download_media(photo, file=bytes, thumb=0)  # ty: ignore[invalid-argument-type]
+    except (errors.RPCError, ValueError, TypeError):
+        return None
+    return data if isinstance(data, (bytes, bytearray)) else None

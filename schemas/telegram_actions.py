@@ -96,6 +96,19 @@ class AddProfileMusic(BaseModel):
     performer: str | None = Field(default=None, min_length=1)
 
 
+class RemoveProfilePhoto(BaseModel):
+    """Drops one photo from the account's profile-photo history.
+
+    ``InputPhoto`` requires all three id fields. Removing the current avatar
+    automatically promotes the previous photo to current (Telegram behavior).
+    """
+
+    action_type: Literal["remove_profile_photo"] = "remove_profile_photo"
+    photo_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)
+
+
 class RemoveProfileMusic(BaseModel):
     """Unpins one track from the account's saved profile music.
 
@@ -134,6 +147,17 @@ class ListProfileMusic(BaseModel):
     action_type: Literal["list_profile_music"] = "list_profile_music"
 
 
+class ListProfilePhotos(BaseModel):
+    """Read-only: list the account's profile-photo history.
+
+    Newest first. Each item carries the InputPhoto identifiers needed to
+    delete it later via ``RemoveProfilePhoto``.
+    """
+
+    action_type: Literal["list_profile_photos"] = "list_profile_photos"
+    limit: int = Field(default=24, ge=1, le=100)
+
+
 TelegramAction = Annotated[
     JoinChannel
     | LeaveChannel
@@ -146,12 +170,13 @@ TelegramAction = Annotated[
     | SetProfilePhoto
     | PostStory
     | AddProfileMusic
-    | RemoveProfileMusic,
+    | RemoveProfileMusic
+    | RemoveProfilePhoto,
     Field(discriminator="action_type"),
 ]
 
 TelegramReadAction = Annotated[
-    GetUserProfile | ListPinnedStories | ListProfileMusic,
+    GetUserProfile | ListPinnedStories | ListProfileMusic | ListProfilePhotos,
     Field(discriminator="action_type"),
 ]
 

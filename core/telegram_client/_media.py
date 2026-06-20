@@ -9,13 +9,14 @@ from typing import TYPE_CHECKING
 
 from telethon import utils
 from telethon.tl.functions.account import SaveMusicRequest
-from telethon.tl.functions.photos import UploadProfilePhotoRequest
+from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
 from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
     InputDocument,
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
+    InputPhoto,
     InputPrivacyValueAllowAll,
     InputPrivacyValueAllowCloseFriends,
     InputPrivacyValueAllowContacts,
@@ -25,6 +26,7 @@ from schemas.telegram_actions import (
     AddProfileMusic,
     PostStory,
     RemoveProfileMusic,
+    RemoveProfilePhoto,
     SetProfilePhoto,
 )
 
@@ -50,6 +52,9 @@ async def _dispatch_profile_media_action(
             return None
         case RemoveProfileMusic():
             await _remove_profile_music(client, action)
+            return None
+        case RemoveProfilePhoto():
+            await _remove_profile_photo(client, action)
             return None
         case _:  # pragma: no cover - caller only routes media actions here
             msg = f"Unsupported profile media action_type: {action.action_type}"
@@ -153,6 +158,26 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
                 file_reference=action.file_reference,
             ),
             unsave=True,
+        ),
+    )
+
+
+async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePhoto) -> None:
+    """Drop one photo from the account's profile-photo history.
+
+    ``DeletePhotosRequest`` accepts a list of ``InputPhoto``; if the deleted
+    photo was the current avatar, Telegram automatically promotes the next
+    one — no explicit re-set needed.
+    """
+    await client(
+        DeletePhotosRequest(
+            id=[
+                InputPhoto(
+                    id=action.photo_id,
+                    access_hash=action.access_hash,
+                    file_reference=action.file_reference,
+                ),
+            ],
         ),
     )
 

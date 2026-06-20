@@ -28,12 +28,14 @@ from schemas.telegram_actions import (
     GetUserProfile,
     ListPinnedStories,
     ListProfileMusic,
+    ListProfilePhotos,
 )
 
 if TYPE_CHECKING:
     from schemas.telegram_profile_snapshot import (
         TelegramPinnedStories,
         TelegramProfileMusic,
+        TelegramProfilePhotos,
         TelegramProfileSnapshot,
     )
 
@@ -86,7 +88,12 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
     try:
         results = await execute_read_many(
             account_id,
-            [GetUserProfile(), ListPinnedStories(), ListProfileMusic()],
+            [
+                GetUserProfile(),
+                ListPinnedStories(),
+                ListProfileMusic(),
+                ListProfilePhotos(),
+            ],
         )
     except TelegramReadError as exc:
         return _error_snapshot(account_id, exc.reason)
@@ -104,12 +111,13 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
     # The gateway returns the snapshot types matching each action's position.
     # ``cast`` documents the contract for type checkers without paying for a
     # runtime isinstance check on the happy path.
-    profile_model, stories_model, music_model = results
+    profile_model, stories_model, music_model, photos_model = results
     return _combine(
         account_id,
         cast("TelegramProfileSnapshot", profile_model),
         cast("TelegramPinnedStories", stories_model),
         cast("TelegramProfileMusic", music_model),
+        cast("TelegramProfilePhotos", photos_model),
     )
 
 
@@ -126,6 +134,7 @@ def _combine(
     profile: TelegramProfileSnapshot,
     stories: TelegramPinnedStories,
     music: TelegramProfileMusic,
+    photos: TelegramProfilePhotos,
 ) -> AccountProfileSnapshot:
     return AccountProfileSnapshot(
         account_id=account_id,
@@ -133,5 +142,6 @@ def _combine(
         stories=stories.items,
         music=music.items,
         music_supported=music.supported,
+        photos=photos.items,
         fetched_at_unix=time.time(),
     )

@@ -33,6 +33,20 @@ class AccountProfileMusicUpload(BaseModel):
     performer: str | None = Field(default=None, min_length=1)
 
 
+class AccountProfilePhotoRemove(BaseModel):
+    """Drop a single photo from the account's profile-photo history.
+
+    All three Telegram identifiers come from the canonical
+    ``TelegramProfilePhoto`` snapshot — synthetic optimistic-add rows have
+    empty ``file_reference`` and must not reach this service.
+    """
+
+    account_id: str = Field(min_length=1)
+    photo_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)
+
+
 class AccountProfileMusicRemove(BaseModel):
     """Unpin a single track from the account's saved profile music.
 

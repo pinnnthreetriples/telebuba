@@ -14,8 +14,9 @@ from telethon.tl.functions.account import (
     UpdateUsernameRequest,
 )
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
-from telethon.tl.functions.photos import UploadProfilePhotoRequest
+from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
 from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
+from telethon.tl.types import InputPhoto
 
 from core.config import settings
 from core.db import configure_database
@@ -29,6 +30,7 @@ from schemas.telegram_actions import (
     LeaveChannel,
     PostComment,
     PostStory,
+    RemoveProfilePhoto,
     SendDirectMessage,
     SetProfilePhoto,
     UpdateProfile,
@@ -364,6 +366,51 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
     assert result.status == "ok"
     assert deleted == [99]
     assert any(isinstance(req, SaveMusicRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_execute_remove_profile_photo_sends_delete_photos_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Removing one photo must hit ``DeletePhotosRequest`` with the InputPhoto triple.
+
+    Telegram auto-promotes the next photo to current — we don't re-set the
+    avatar from the gateway; the optimistic UI mirrors that promotion locally
+    and the next ↻ refresh re-syncs.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-photo-remove",
+        RemoveProfilePhoto(
+            photo_id=4242,
+            access_hash=7,
+            file_reference=b"\x01\x02",
+        ),
+    )
+
+    assert result.status == "ok"
+    delete_requests = [req for req in captured if isinstance(req, DeletePhotosRequest)]
+    assert len(delete_requests) == 1
+    input_photos = delete_requests[0].id
+    assert len(input_photos) == 1
+    sent = input_photos[0]
+    # ``DeletePhotosRequest.id`` is typed as ``InputPhoto | InputPhotoEmpty``;
+    # narrow with an isinstance so ty knows the access_hash / file_reference
+    # attributes are present.
+    assert isinstance(sent, InputPhoto)
+    assert sent.id == 4242
+    assert sent.access_hash == 7
+    assert sent.file_reference == b"\x01\x02"
 
 
 @pytest.mark.asyncio

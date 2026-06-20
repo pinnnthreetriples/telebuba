@@ -3,6 +3,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
+from features.accounts import _profile_dialog_photos as photos
 from features.accounts import _profile_dialog_render as render
 from features.accounts._proxy_dialog import (
     _proxy_dialog_error,
@@ -19,6 +20,7 @@ from features.accounts._table import (
     _to_table_row,
 )
 from schemas.accounts import AccountProfileSnapshot
+from schemas.telegram_profile_snapshot import TelegramProfilePhoto
 
 if TYPE_CHECKING:
     import pytest
@@ -156,9 +158,9 @@ def test_optimistic_avatar_noop_on_dead_client(monkeypatch: pytest.MonkeyPatch) 
         lambda _refs, _snap: rendered.append("header"),
     )
     monkeypatch.setattr(
-        render,
-        "_render_photo_preview",
-        lambda _c, _snap: rendered.append("photo"),
+        photos,
+        "render_photos_grid",
+        lambda _refs, _snap: rendered.append("photo"),
     )
 
     refs = render._DialogRefs()
@@ -247,3 +249,70 @@ def test_optimistic_music_uses_form_metadata_and_filename_fallback(
     assert titles == ["Memorabilia", "untagged.mp3"]
     assert refs.current_snapshot.music[0].performer == "The Heads"
     assert refs.current_snapshot.music[1].performer is None
+
+
+def test_optimistic_photo_remove_drops_and_promotes_avatar(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting the current avatar must promote the next photo locally.
+
+    Telegram's ``DeletePhotosRequest`` auto-promotes the previous photo to
+    current — the optimistic-remove helper mirrors that so the dialog
+    header refreshes without a Telegram round-trip.
+    """
+    monkeypatch.setattr(photos, "render_photos_grid", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    current = TelegramProfilePhoto(
+        photo_id=111,
+        access_hash=1,
+        file_reference=b"\x0a",
+        date_unix=1_700_000_000,
+        thumb_bytes=b"current",
+    )
+    previous = TelegramProfilePhoto(
+        photo_id=222,
+        access_hash=2,
+        file_reference=b"\x0b",
+        date_unix=1_600_000_000,
+        thumb_bytes=b"older",
+    )
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    refs.current_snapshot = AccountProfileSnapshot(
+        account_id="acc",
+        avatar_bytes=b"current",
+        photos=[current, previous],
+    )
+
+    photos.apply_optimistic_photo_remove(refs, current.photo_id)
+
+    assert refs.current_snapshot is not None
+    assert [p.photo_id for p in refs.current_snapshot.photos] == [222]
+    assert refs.current_snapshot.avatar_bytes == b"older"
+
+
+def test_optimistic_photo_remove_noop_on_dead_client() -> None:
+    """Dead-client guard short-circuits before mutating UI state."""
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "dead-photo"
+    photo = TelegramProfilePhoto(
+        photo_id=1,
+        access_hash=1,
+        file_reference=b"\x01",
+        date_unix=0,
+        thumb_bytes=None,
+    )
+    refs.current_snapshot = AccountProfileSnapshot(
+        account_id="acc",
+        photos=[photo],
+    )
+    render._DEAD_CLIENTS.add("dead-photo")
+    try:
+        photos.apply_optimistic_photo_remove(refs, photo.photo_id)
+    finally:
+        render._DEAD_CLIENTS.discard("dead-photo")
+
+    assert refs.current_snapshot.photos == [photo], "must not mutate on dead client"

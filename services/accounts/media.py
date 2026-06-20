@@ -15,6 +15,7 @@ from schemas.telegram_actions import (
     AddProfileMusic,
     PostStory,
     RemoveProfileMusic,
+    RemoveProfilePhoto,
     SetProfilePhoto,
 )
 from services.accounts._uploads import (
@@ -30,6 +31,7 @@ if TYPE_CHECKING:
     from schemas.profile_media import (
         AccountProfileMusicRemove,
         AccountProfileMusicUpload,
+        AccountProfilePhotoRemove,
         AccountProfilePhotoUpload,
         AccountStoryUpload,
     )
@@ -39,6 +41,7 @@ __all__ = [
     "add_account_profile_music",
     "post_account_story",
     "remove_account_profile_music",
+    "remove_account_profile_photo",
     "set_account_profile_photo",
 ]
 
@@ -161,5 +164,27 @@ async def remove_account_profile_music(data: AccountProfileMusicRemove) -> Actio
         "account_profile_music_removed",
         account_id=data.account_id,
         extra={"file_id": data.file_id},
+    )
+    return result
+
+
+async def remove_account_profile_photo(data: AccountProfilePhotoRemove) -> ActionResult:
+    result = await execute(
+        data.account_id,
+        RemoveProfilePhoto(
+            photo_id=data.photo_id,
+            access_hash=data.access_hash,
+            file_reference=data.file_reference,
+        ),
+    )
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
+    await log_event(
+        "INFO",
+        "account_profile_photo_removed",
+        account_id=data.account_id,
+        extra={"photo_id": data.photo_id},
     )
     return result

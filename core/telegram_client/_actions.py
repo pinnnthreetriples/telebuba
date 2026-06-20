@@ -32,6 +32,7 @@ from schemas.telegram_actions import (
     ReactToPost,
     ReadChannel,
     RemoveProfileMusic,
+    RemoveProfilePhoto,
     SendDirectMessage,
     SetOnline,
     SetProfilePhoto,
@@ -206,7 +207,13 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
             message_id = await _dispatch_react_to_post(client, action)
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
-        case SetProfilePhoto() | PostStory() | AddProfileMusic() | RemoveProfileMusic():
+        case (
+            SetProfilePhoto()
+            | PostStory()
+            | AddProfileMusic()
+            | RemoveProfileMusic()
+            | RemoveProfilePhoto()
+        ):
             message_id = await _dispatch_profile_media_action(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported action_type: {action.action_type}"
@@ -284,6 +291,8 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:
             extra = {"filename": action.filename}
         case RemoveProfileMusic():
             extra = {"file_id": action.file_id}
+        case RemoveProfilePhoto():
+            extra = {"photo_id": action.photo_id}
         case _:  # pragma: no cover - discriminated union is exhaustive
             extra = {}
     return extra
