@@ -214,17 +214,19 @@ def _step_kind(idx: int, active_idx: int | None, kind: str) -> str:  # pragma: n
 
 
 def render_cycle_pipeline(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Top-level entry point — full pipeline (rail + detail + summary).
+    """Top-level entry point — full pipeline (rail + detail).
 
     Caller is responsible for not calling this for idle cards (see
     ``_board._render_card``). The rendered block lives inside a single
     card element and uses vertical stacking so each section is its own line.
+    The cycle-summary bar is now rendered by ``_board._render_card_footer``
+    (Bug 2 fix: remove duplicate) — this function only renders the rail
+    and the detail panel.
     """
     active_idx, kind = _active_step(card)
     with ui.column().classes("w-full gap-1.5"):
         _render_step_rail(card, active_idx, kind)
         _render_active_detail(card, active_idx, kind)
-        _render_cycle_summary(card)
 
 
 def _render_step_rail(  # pragma: no cover

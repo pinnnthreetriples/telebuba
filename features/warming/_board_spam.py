@@ -29,7 +29,7 @@ def render_spam_badge(
     ctx: _BoardContext,
     card: WarmingAccountState,
 ) -> None:  # pragma: no cover
-    """Spam-status badge — always visible, always self-explaining.
+    """Spam-status label — inline element rendered inside the card footer.
 
     The badge text distinguishes probe-error / Telegram-review / never-probed;
     the tooltip carries the underlying ``spam_detail`` so the operator knows
@@ -63,18 +63,17 @@ def render_spam_badge(
         inflight["busy"] = False
         ctx.refresh()
 
-    with ui.row().classes("w-full items-center gap-2"):
-        if status in ("clean", "limited"):
-            # Spam status known — compact result badge.
-            badge = ui.label(text).classes(
-                f"text-[10px] text-slate-500 bg-slate-50 border border-slate-200 "
-                f"px-2.5 py-0.5 rounded whitespace-nowrap {cls}"
-            )
-            if tooltip:
-                badge.tooltip(tooltip)
-        else:
-            # Not yet probed — clickable label that triggers a real probe.
-            ui.label("Проверить спам").classes(
-                "text-[10px] text-blue-600 bg-blue-50 border border-blue-200 "
-                "px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap"
-            ).on("click", on_click)
+    if status in ("clean", "limited"):
+        # Spam status known — compact result badge, inline in footer row.
+        badge = ui.label(text).classes(
+            f"text-[10px] text-slate-500 bg-slate-50 border border-slate-200 "
+            f"px-2.5 py-0.5 rounded whitespace-nowrap {cls}"
+        )
+        if tooltip:
+            badge.tooltip(tooltip)
+    else:
+        # Not yet probed — clickable label that triggers a real probe, inline.
+        ui.label("Проверить спам").classes(
+            "text-[10px] text-blue-600 bg-blue-50 border border-blue-200 "
+            "px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap"
+        ).on("click", on_click)
