@@ -32,7 +32,7 @@ edges:
     condition: when modifying workflows, debugging red CI, or planning a heavy check
   - target: patterns/INDEX.md
     condition: when starting a task — check the pattern index for a matching pattern
-last_updated: 2026-06-16
+last_updated: 2026-06-20
 ---
 
 # Session Bootstrap

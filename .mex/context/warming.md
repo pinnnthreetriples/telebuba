@@ -18,7 +18,7 @@ edges:
     condition: when changing the warming service package
   - target: patterns/add-warming-job.md
     condition: when adding a new warming runtime task
-last_updated: 2026-06-16
+last_updated: 2026-06-20
 ---
 
 # Warming Runtime
@@ -49,7 +49,9 @@ services/warming/
 ├── _state.py          state transition helpers
 ├── _chat.py           Gemini chat helper + text sanitisation
 ├── _cycle.py          one-cycle execution
-├── _loop.py           one loop iteration + recovery paths
+├── _transitions.py    post-cycle next-run/state + phase-transition helpers
+├── _loop.py           one loop iteration: gates + quarantine recovery
+├── _runner.py         long-running loop task wrapper + timing helpers
 └── _runtime.py        task ownership, start/stop/reconcile/shutdown
 ```
 

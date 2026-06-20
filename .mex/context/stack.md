@@ -18,7 +18,7 @@ edges:
     condition: for runtime workflow details
   - target: context/logging.md
     condition: for the loguru / SQLite / Sentry layout
-last_updated: 2026-06-16
+last_updated: 2026-06-20
 ---
 
 # Stack

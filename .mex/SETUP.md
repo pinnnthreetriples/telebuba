@@ -1,3 +1,7 @@
+---
+last_updated: 2026-06-20
+---
+
 # Setup — Populate This Scaffold
 
 This file contains the prompts to populate the scaffold. It is NOT the dev environment setup — for that, see `context/setup.md` after population.
