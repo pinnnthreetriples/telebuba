@@ -63,45 +63,55 @@ def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
     """Render one poster-style story card with overlay badge + delete button.
 
     Thumbnail fills the card (object-cover, no letterbox bars); badges and
-    the close button are absolutely positioned over the image so the card
-    itself stays a clean 9:16 rectangle. Date is a small caption below the
-    card — keeps the poster uncluttered.
+    the trash button are absolutely positioned over the image so the card
+    itself stays a clean 9:16 rectangle. Date + caption sit below the
+    card as small captions.
     """
     thumb_url = _avatar_data_url(story.thumb_bytes)
     deletable = story.story_id > 0
-    with ui.column().classes("items-center gap-1 shrink-0"):
+    with ui.column().classes("items-center gap-1 shrink-0 w-28"):
         with ui.card().tight().classes("relative overflow-hidden rounded-lg"):
             if thumb_url:
                 ui.image(thumb_url).classes("w-28 h-48 object-cover block")
             else:
                 ui.element("div").classes("w-28 h-48 bg-grey-3")
             if story.is_active:
-                ui.badge("Активна", color="primary").classes(
+                # ``positive`` is Quasar's green; ``primary`` was reading as a
+                # generic blue tag, but story rings on the official Telegram
+                # client are green so the badge should match.
+                ui.badge("Активна", color="positive").classes(
                     "absolute top-1 left-1",
                 ).style("font-size: 9px")
             if story.is_pinned:
                 ui.icon("push_pin", size="xs").classes(
                     "absolute top-1 right-1 text-white",
                 ).style("filter: drop-shadow(0 0 2px rgba(0,0,0,0.6))")
-            close_btn = (
+            delete_btn = (
                 ui.button(
-                    icon="close",
+                    icon="delete",
                     on_click=lambda _e=None, s=story: _delete_story(refs, s),
                 )
-                .props("dense round size=xs color=white")
+                .props("dense round size=sm color=white")
                 .classes(
                     "absolute bottom-1 right-1",
                 )
-                .style("background: rgba(0,0,0,0.55)")
+                .style("background: rgba(0,0,0,0.6)")
             )
             if deletable:
-                close_btn.tooltip("Удалить эту сторис")
+                delete_btn.tooltip("Удалить эту сторис")
             else:
-                close_btn.disable()
-                close_btn.tooltip("Сначала обновите данные кнопкой ↻")
+                delete_btn.disable()
+                delete_btn.tooltip("Сначала обновите данные кнопкой ↻")
         ui.label(_format_story_date(story.date_unix)).classes(
             "text-[10px] text-grey-7",
         )
+        if story.caption:
+            # ``w-28`` on the column pins the caption width to the card so
+            # ``truncate`` clips long copy with an ellipsis instead of pushing
+            # the next card sideways.
+            ui.label(story.caption).classes(
+                "text-[10px] text-grey-8 truncate w-full text-center",
+            ).tooltip(story.caption)
 
 
 def _format_story_date(date_unix: int) -> str:
