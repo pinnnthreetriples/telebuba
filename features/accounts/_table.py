@@ -317,6 +317,38 @@ def _telegram_error_label(message: str) -> str | None:
             "PHOTO_SAVE_FILE_INVALID",
             "Telegram не смог сохранить фото. Попробуйте другое изображение",
         ),
+        (
+            "username is already taken",
+            "Этот юзернейм уже занят. Выберите другой",
+        ),
+        (
+            "USERNAME_OCCUPIED",
+            "Этот юзернейм уже занят. Выберите другой",
+        ),
+        (
+            "USERNAME_PURCHASE_AVAILABLE",
+            "Юзернейм занят (доступен для покупки в Fragment). Выберите другой",
+        ),
+        (
+            "USERNAME_INVALID",
+            "Юзернейм не подходит — 5–32 символа, латиница/цифры/_, не начинается с цифры",
+        ),
+        (
+            "USERNAME_NOT_MODIFIED",
+            "Этот юзернейм уже стоит на аккаунте",
+        ),
+        (
+            "FIRSTNAME_INVALID",
+            "Имя не подходит — слишком длинное или содержит запрещённые символы",
+        ),
+        (
+            "LASTNAME_INVALID",
+            "Фамилия не подходит — слишком длинная или содержит запрещённые символы",
+        ),
+        (
+            "ABOUT_TOO_LONG",
+            "Описание слишком длинное (лимит — 70 символов)",
+        ),
     ]
     lowered = message.lower()
     for needle, translation in fragments:

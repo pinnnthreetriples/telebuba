@@ -145,6 +145,28 @@ def test_service_error_label_translates_telegram_story_errors() -> None:
     assert "повреждён" in parts
 
 
+def test_service_error_label_translates_username_and_profile_errors() -> None:
+    """Profile-text errors from ``UpdateUsernameRequest`` etc. surface as RU."""
+    occupied = _service_error_label(
+        "The username is already taken (caused by UpdateUsernameRequest)",
+    )
+    assert "уже занят" in occupied
+    code_only = _service_error_label("USERNAME_OCCUPIED")
+    assert "уже занят" in code_only
+
+    purchase = _service_error_label("USERNAME_PURCHASE_AVAILABLE")
+    assert "Fragment" in purchase
+
+    invalid = _service_error_label("USERNAME_INVALID")
+    assert "5–32" in invalid
+
+    bio_long = _service_error_label("ABOUT_TOO_LONG")
+    assert "70" in bio_long
+
+    bad_name = _service_error_label("FIRSTNAME_INVALID")
+    assert "Имя" in bad_name
+
+
 def test_service_error_label_unknown_tdata_status_keeps_status_visible() -> None:
     # An unknown status code must still be readable — we don't want to hide
     # the code, because future telemetry will need it to debug.
