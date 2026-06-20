@@ -33,42 +33,25 @@ def render_spam_badge(
 
     The badge text distinguishes probe-error / Telegram-review / never-probed;
     the tooltip carries the underlying ``spam_detail`` so the operator knows
-    where to look next.
+    where to look next. The refresh action is collapsed into the badge itself:
+    when status is unknown, the badge becomes a clickable label that triggers
+    a real @SpamBot probe (debounced via ``inflight``).
     """
     status = card.spam_status or "unknown"
     text = _spam_badge_label(status, card.spam_detail)
     cls = _spam_badge_classes(status, card.spam_detail)
     tooltip = _spam_tooltip(status, card.spam_detail)
-    with ui.row().classes("w-full items-center gap-2"):
-        badge = ui.label(text).classes(f"w-fit text-[11px] px-2 py-0.5 rounded {cls}")
-        if tooltip:
-            badge.tooltip(tooltip)
-        _render_spam_refresh_link(ctx, card.account_id)
-
-
-def _render_spam_refresh_link(
-    ctx: _BoardContext,
-    account_id: str,
-) -> None:  # pragma: no cover
-    """Inline «проверить» link that triggers a real @SpamBot probe.
-
-    Debounced: an operator double-click otherwise launches two parallel
-    probes; only the second toast survives. ``inflight`` + ``disable``
-    serialise the request, ``loading`` shows the spinner.
-    """
     inflight = {"busy": False}
 
     async def on_click() -> None:
         if inflight["busy"]:
             return
         inflight["busy"] = True
-        button.props("loading disable")
         try:
-            verdict = await refresh_spam_status(account_id, force=True)
+            verdict = await refresh_spam_status(card.account_id, force=True)
         except Exception as exc:  # noqa: BLE001 — UI handler surfaces any failure
             ui.notify(f"Не удалось проверить: {exc}", type="negative", timeout=6000)
             inflight["busy"] = False
-            button.props(remove="loading disable")
             ctx.refresh()
             return
         label = _spam_outcome_label(verdict.status, verdict.detail)
@@ -78,11 +61,20 @@ def _render_spam_refresh_link(
             timeout=6000,
         )
         inflight["busy"] = False
-        button.props(remove="loading disable")
         ctx.refresh()
 
-    button = (
-        ui.button("проверить", on_click=on_click)
-        .props("flat dense no-caps")
-        .classes("text-[11px] text-blue-600 px-1 py-0")
-    )
+    with ui.row().classes("w-full items-center gap-2"):
+        if status in ("clean", "limited"):
+            # Spam status known — compact result badge.
+            badge = ui.label(text).classes(
+                f"text-[10px] text-slate-500 bg-slate-50 border border-slate-200 "
+                f"px-2.5 py-0.5 rounded whitespace-nowrap {cls}"
+            )
+            if tooltip:
+                badge.tooltip(tooltip)
+        else:
+            # Not yet probed — clickable label that triggers a real probe.
+            ui.label("Проверить спам").classes(
+                "text-[10px] text-blue-600 bg-blue-50 border border-blue-200 "
+                "px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap"
+            ).on("click", on_click)

@@ -155,3 +155,76 @@ _PIPELINE_STEP_QUAR = "bg-orange-500 text-white"
 _PIPELINE_CONNECTOR_DONE = "bg-green-400"
 _PIPELINE_CONNECTOR_ACTIVE = "tb-flow-line"  # defined in __init__.py _PIPELINE_CSS
 _PIPELINE_CONNECTOR_PENDING = "bg-slate-200"
+
+# ── Card stripe colour by state ───────────────────────────────────────────────
+_STRIPE_CLS: dict[str, str] = {
+    "active": "bg-green-500",
+    "sleeping": "bg-amber-400",
+    "flood_wait": "bg-amber-400",
+    "quarantine": "bg-orange-500",
+    "error": "bg-red-500",
+    "idle": "bg-slate-200",
+}
+
+# ── Trust score display (bare number + coloured label, no badge bg) ────────────
+_TRUST_COLOR: dict[str, str] = {
+    "excellent": "text-green-600",
+    "good": "text-green-600",
+    "watch": "text-amber-600",
+    "at_risk": "text-red-600",
+    "critical": "text-red-600",
+}
+_TRUST_LABEL_RU: dict[str, str] = {
+    "excellent": "Trust — норма",
+    "good": "Trust — норма",
+    "watch": "Trust — внимание",
+    "at_risk": "Trust — риск",
+    "critical": "Trust — риск",
+}
+
+# ── Health-check rectangular chips ────────────────────────────────────────────
+_CHECK_CHIP: dict[str, str] = {
+    "ok": "bg-green-50 border-green-200 text-green-800",
+    "warn": "bg-amber-50 border-amber-200 text-amber-800",
+    "fail": "bg-red-50   border-red-200   text-red-800",
+}
+_CHECK_CHIP_DOT: dict[str, str] = {
+    "ok": "bg-green-500",
+    "warn": "bg-amber-500",
+    "fail": "bg-red-500",
+}
+
+# ── Phase chip — solid fill, rounded (used instead of ring-based _PHASE_CHIP_CLASSES
+#    in the new card layout; _PHASE_BAR_FILL stays as-is) ─────────────────────
+_PHASE_CHIP_SOLID: dict[str, str] = {
+    "intro": "bg-green-100  text-green-800",
+    "settling": "bg-amber-100  text-amber-800",
+    "warming": "bg-blue-100   text-blue-800",
+    "active": "bg-indigo-100 text-indigo-800",
+    "warmed": "bg-emerald-100 text-emerald-800",
+}
+
+# ── Status line (dot colour + dynamic text lookup) ────────────────────────────
+_STATUS_DOT: dict[str, str] = {
+    "active": "bg-green-500",
+    "sleeping": "bg-amber-400",
+    "flood_wait": "bg-amber-500",
+    "quarantine": "bg-orange-500",
+    "error": "bg-red-500",
+}
+_STATUS_ACTION_LABEL: dict[str, str] = {
+    "set_online": "устанавливает онлайн",
+    "join": "вступает в канал",
+    "read_or_react": "ставит реакции",
+    "send_dm": "отправляет сообщение",
+}
+
+# ── Detail panel icon containers (28px squares) ───────────────────────────────
+# Maps `kind` string → (icon_bg_classes, icon_color_classes)
+_DETAIL_ICON_THEME: dict[str, tuple[str, str]] = {
+    "active": ("bg-blue-100", "text-blue-600"),
+    "sleep": ("bg-slate-100", "text-slate-500"),
+    "flood": ("bg-amber-100", "text-amber-600"),
+    "quar": ("bg-orange-100", "text-orange-600"),
+    "error": ("bg-red-100", "text-red-600"),
+}

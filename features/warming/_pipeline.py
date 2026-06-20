@@ -25,6 +25,7 @@ import typing
 from nicegui import ui  # ty: ignore[unresolved-import]
 
 from features.warming._board_styling import (
+    _DETAIL_ICON_THEME,
     _PIPELINE_CONNECTOR_ACTIVE,
     _PIPELINE_CONNECTOR_DONE,
     _PIPELINE_CONNECTOR_PENDING,
@@ -335,17 +336,15 @@ def _render_active_detail(  # noqa: C901, PLR0912
         "error": "text-red-700",
     }.get(kind, "text-indigo-800")
 
-    icon_cls = {
-        "flood": "text-amber-500",
-        "quar": "text-orange-500",
-        "error": "text-red-400",
-    }.get(kind, "text-indigo-400")
-
     with ui.element("div").classes(f"w-full rounded-lg border px-2 py-1.5 {bg}"):
         for icon_name, text in rows:
-            with ui.row().classes("w-full items-start gap-1.5"):
-                ui.icon(icon_name).classes(f"text-sm shrink-0 mt-0.5 {icon_cls}")
-                ui.label(text).classes(f"text-[11px] {text_cls} break-words leading-snug")
+            icon_bg, icon_color = _DETAIL_ICON_THEME.get(kind, ("bg-slate-100", "text-slate-500"))
+            with ui.row().classes("w-full items-start gap-2.5"):
+                with ui.element("div").classes(
+                    f"w-7 h-7 rounded-lg flex items-center justify-center shrink-0 {icon_bg}"
+                ):
+                    ui.icon(icon_name).classes(f"text-base {icon_color}")
+                ui.label(text).classes(f"text-[11px] {text_cls} leading-snug")
 
 
 def _render_step_detail_body(  # pragma: no cover

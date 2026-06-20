@@ -15,10 +15,7 @@ from typing import TYPE_CHECKING, Any
 from nicegui import ui
 
 from features.warming._board_checks import (
-    _CYCLE_FORMS,
     _check_states,
-    _ru_event,
-    _ru_plural,
     _ru_reason,
 )
 from features.warming._board_dnd import (
@@ -28,17 +25,18 @@ from features.warming._board_dnd import (
 )
 from features.warming._board_spam import render_spam_badge
 from features.warming._board_styling import (
-    _CHECK_DOT,
-    _CHECK_TEXT,
-    _ERROR_MAX_LEN,
-    _HEALTH_DOT,
+    _CHECK_CHIP,
+    _CHECK_CHIP_DOT,
     _PHASE_BAR_FILL,
-    _PHASE_CHIP_CLASSES,
+    _PHASE_CHIP_SOLID,
     _STATE_BADGE,
     _STATE_LABEL,
+    _STATUS_ACTION_LABEL,
+    _STATUS_DOT,
+    _STRIPE_CLS,
     _SUMMARY_CHIPS,
-    _TRUST_BADGE,
-    _TRUST_BAND_LABEL,
+    _TRUST_COLOR,
+    _TRUST_LABEL_RU,
     _relative_eta,
 )
 
@@ -197,32 +195,50 @@ def _render_column(
             seed_card_refreshable(ctx, card, _render_card)
 
 
-def _render_trust_badge(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Two-line key metric: score (large) over band label (small)."""
-    band = card.trust_band or ""
-    label_ru = _TRUST_BAND_LABEL.get(band, "")
-    badge_classes = _TRUST_BADGE.get(band, "bg-slate-100 text-slate-600")
-    tooltip = f"Trust {card.trust_score} · {label_ru}" if label_ru else f"Trust {card.trust_score}"
-    with ui.column().classes(
-        f"items-center gap-0 px-2.5 py-1 rounded shrink-0 {badge_classes}",
-    ) as badge:
-        ui.label(f"⛨ {card.trust_score}").classes("text-base font-bold leading-tight")
-        if label_ru:
-            ui.label(label_ru).classes("text-[10px] leading-tight")
-    badge.tooltip(tooltip)
+def _render_card_header(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Name + state pill on left; bare trust score + label on right."""
+    with ui.row().classes("w-full items-start gap-2"):
+        # left: name, state pill, meta row
+        with ui.column().classes("flex-1 min-w-0 gap-0.5"):
+            with ui.row().classes("items-center gap-2 flex-wrap"):
+                ui.label(card.label).classes("text-[13px] font-semibold text-slate-900 truncate")
+                ui.label(_STATE_LABEL.get(card.state, card.state)).classes(
+                    f"text-[10px] px-2 py-0.5 rounded-full shrink-0 "
+                    f"{_STATE_BADGE.get(card.state, 'bg-slate-100 text-slate-600')}"
+                )
+            meta: list[str] = []
+            if card.age_hours is not None:
+                days = int(card.age_hours // 24)
+                meta.append(f"{days} д возраст" if days else f"{int(card.age_hours)} ч возраст")
+            if card.warming_days is not None:
+                meta.append(f"{card.warming_days} дн прогрев")
+            if meta:
+                ui.label(" · ".join(meta)).classes("text-[10px] text-slate-400")
+
+        # right: bare trust number + coloured label (no coloured badge background)
+        if card.trust_score is not None:
+            band = card.trust_band or ""
+            with ui.column().classes("items-end gap-0 shrink-0"):
+                ui.label(str(card.trust_score)).classes(
+                    "text-[20px] font-medium text-slate-900 tabular-nums leading-none"
+                )
+                ui.label(_TRUST_LABEL_RU.get(band, f"Trust {card.trust_score}")).classes(
+                    f"text-[9px] font-medium leading-tight "
+                    f"{_TRUST_COLOR.get(band, 'text-slate-500')}"
+                )
 
 
 def _render_checks(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Strip of seven labelled chips under the trust badge — the full picture.
-
-    Each chip is a small coloured dot + Russian label, with the tooltip
-    explaining the specific signal (e.g. country pair for a geo mismatch).
-    """
-    with ui.row().classes("w-full gap-x-3 gap-y-1 flex-wrap"):
+    """Rectangular health-check chips: coloured dot + Russian label + tooltip."""
+    with ui.row().classes("w-full gap-1 flex-wrap"):
         for label, status, tooltip in _check_states(card):
-            with ui.row().classes("items-center gap-1") as chip:
-                ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 {_CHECK_DOT[status]}")
-                ui.label(label).classes(f"text-[11px] {_CHECK_TEXT[status]}")
+            chip_cls = _CHECK_CHIP.get(status, _CHECK_CHIP["ok"])
+            dot_cls = _CHECK_CHIP_DOT.get(status, "bg-slate-400")
+            with ui.row().classes(
+                f"items-center gap-1.5 px-2 py-1 rounded border text-[10px] {chip_cls}"
+            ) as chip:
+                ui.element("div").classes(f"w-1.5 h-1.5 rounded-full shrink-0 {dot_cls}")
+                ui.label(label)
             chip.tooltip(tooltip)
 
 
@@ -231,86 +247,67 @@ def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  
     render_spam_badge(ctx, card)
 
 
-def _render_card_stats(card: WarmingAccountState, fleet_max_daily: int) -> None:  # pragma: no cover
-    """Single-line stats footer. Per-card daily cap wins over fleet override.
+def _render_status_line(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Coloured dot + action text + secondary label between pipeline and footer."""
+    dot_cls = _STATUS_DOT.get(card.state, "bg-slate-400")
 
-    The fleet ``max_daily_actions`` override is persisted in the DB settings
-    row — when it's > 0 (legacy installs) it caps regardless of phase.
-    Otherwise the per-account ``card.daily_cap`` (phase + trust) applies.
-    """
-    parts: list[str] = []
-    if card.age_hours is not None:
-        days = int(card.age_hours // 24)
-        parts.append(f"возраст {days} д" if days else f"возраст {int(card.age_hours)} ч")
-    if card.warming_days is not None:
-        parts.append(f"в прогреве {card.warming_days} д")
-    parts.append("DM ✅" if card.dm_allowed else "DM 🔒")
-    if fleet_max_daily > 0:
-        effective_cap = fleet_max_daily
-        cap_suffix = " (.env)"
+    if card.state == "active":
+        primary = _STATUS_ACTION_LABEL.get(card.last_action or "", "выполняет цикл")
+        secondary = "выполняется сейчас"
+    elif card.state == "error":
+        action = card.last_action or "цикл"
+        primary = f"ошибка: {action}"
+        secondary = "ожидает повторной попытки"
+    elif card.state == "flood_wait":
+        eta = _relative_eta(card.flood_wait_until)
+        primary = "flood-wait активен"
+        secondary = f"ещё {eta}" if eta and eta != "сейчас" else "истекает"
+    elif card.state == "sleeping":
+        primary = "спит по расписанию"
+        secondary = "низкая активность"
+    elif card.state == "quarantine":
+        primary = "карантин"
+        secondary = "цикл приостановлен"
     else:
-        effective_cap = card.daily_cap
-        cap_suffix = " (фаза)" if effective_cap > 0 else ""
-    daily = f"действий {card.daily_actions}"
-    if effective_cap > 0:
-        parts.append(f"{daily} / {effective_cap}{cap_suffix}")
-    else:
-        parts.append(daily)
-    eta = _relative_eta(card.next_run_at)
-    if eta and card.state != "error":
-        # An error'd account is never auto-resumed (reconcile/loop skip it), so a
-        # next-run countdown would be a false promise. Suppress it for error.
-        parts.append(f"⏭ {eta}")
-    ui.label(" · ".join(parts)).classes("text-[11px] text-slate-500 truncate")
-
-
-def _render_flood_wait_line(card: WarmingAccountState) -> None:  # pragma: no cover
-    if card.state != "flood_wait":
         return
-    remaining = _relative_eta(card.flood_wait_until)
-    if remaining is None and card.flood_wait_seconds is None:
-        return
-    if remaining == "сейчас":
-        # Deadline passed but the loop hasn't flipped state yet — "ещё сейчас"
-        # reads as nonsense, so show a neutral "expiring" instead.
-        text = "🕒 flood-wait истекает"
-    elif remaining:
-        text = f"🕒 flood-wait ещё {remaining}"
-    else:
-        text = f"🕒 flood-wait {card.flood_wait_seconds} с"
-    ui.label(text).classes("text-[11px] text-amber-700 truncate")
+
+    with ui.row().classes("w-full items-center gap-2"):
+        ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 {dot_cls}")
+        ui.label(primary + "...").classes("text-[11px] text-slate-700 truncate flex-1")
+        ui.label(secondary).classes("text-[10px] text-slate-400 shrink-0")
 
 
-def _render_quarantine_line(card: WarmingAccountState) -> None:  # pragma: no cover
-    if card.quarantine_count <= 0:
-        return
-    ui.label(f"карантинов: {card.quarantine_count}").classes("text-[11px] text-orange-700 truncate")
+def _render_card_footer(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
+    """Cycle · daily actions · DM status · spam button (right-aligned)."""
+    with ui.row().classes("w-full items-center"):
+        ui.label(f"Цикл #{card.cycles_completed}").classes(
+            "text-[10px] text-slate-500 tabular-nums"
+        )
+        _footer_sep()
+
+        cap = ctx.max_daily if ctx.max_daily > 0 else card.daily_cap
+        if cap > 0:
+            ui.label(f"Действия {card.daily_actions}/{cap}").classes(
+                "text-[10px] text-slate-500 tabular-nums"
+            )
+        else:
+            ui.label(f"Действия {card.daily_actions}").classes(
+                "text-[10px] text-slate-500 tabular-nums"
+            )
+        _footer_sep()
+
+        if card.dm_allowed:
+            ui.label("DM разрешён").classes("text-[10px] text-green-600 font-medium")
+        else:
+            ui.label("DM заблокирован").classes("text-[10px] text-slate-400")
+
+        ui.element("div").classes("flex-1")  # push spam button to right
+        _render_spam_badge(ctx, card)
 
 
-def _render_error_line(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Explain the failure whenever the card is in an error state.
-
-    Rendered even when ``last_error`` is empty — some error transitions carry no
-    detail, and an error card must never go silent (it used to render nothing,
-    leaving only the red pill while the stats line showed a phantom countdown).
-    """
-    if card.state != "error":
-        return
-    parts = ["ошибка"]
-    if card.last_action:
-        parts.append(card.last_action)
-    if card.last_channel:
-        parts.append(f"в {card.last_channel}")
-    head = " · ".join(parts)
-    if not card.last_error:
-        ui.label(head).classes("text-[11px] text-red-600 truncate")
-        return
-    body = card.last_error
-    if len(body) > _ERROR_MAX_LEN:
-        body = body[: _ERROR_MAX_LEN - 1] + "…"
-    ui.label(f"{head}: {body}").classes("text-[11px] text-red-600 truncate").tooltip(
-        card.last_error,
-    )
+def _footer_sep() -> None:  # pragma: no cover
+    """1px vertical separator between footer items."""
+    ui.element("div").classes("w-px h-3 bg-slate-200 mx-2 shrink-0")
 
 
 def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
@@ -323,11 +320,11 @@ def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
     """
     if card.phase is None or card.phase_label is None:
         return
-    chip_classes = _PHASE_CHIP_CLASSES.get(card.phase, _PHASE_CHIP_CLASSES["intro"])
+    chip_classes = _PHASE_CHIP_SOLID.get(card.phase, _PHASE_CHIP_SOLID["intro"])
     bar_fill = _PHASE_BAR_FILL.get(card.phase, _PHASE_BAR_FILL["intro"])
     with ui.row().classes("w-full items-center justify-between gap-2"):
         ui.label(card.phase_label).classes(
-            f"w-fit text-[11px] px-2 py-0.5 rounded-full ring-1 font-medium {chip_classes}",
+            f"w-fit text-[10px] px-2 py-0.5 rounded font-medium {chip_classes}",
         )
         if card.phase != "warmed" and card.days_to_next_phase is not None:
             next_phase_label = _next_phase_label_short(card.phase)
@@ -355,54 +352,45 @@ def _next_phase_label_short(phase: str) -> str:  # pragma: no cover
 
 
 def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
+    stripe_cls = _STRIPE_CLS.get(card.state, "bg-slate-200")
     pulse = " tb-active" if card.state == "active" else ""
+
+    # Use a raw div — NOT ui.card() — for full stripe + border-radius control.
     element = (
-        ui.card()
+        ui.element("div")
         .props("draggable")
         .classes(
-            f"w-full p-4 gap-3 cursor-grab bg-white border border-slate-200 rounded-md{pulse}",
+            f"w-full flex rounded-xl overflow-hidden bg-white cursor-grab shadow-sm"
+            f" hover:shadow-md transition-shadow{pulse}"
         )
     )
     element.on("dragstart", lambda aid=card.account_id: ctx.drag.update(account_id=aid))
-    with element:
-        # Header — dot, name, state pill, trust badge (key metric, two-line).
-        with ui.row().classes("w-full items-center gap-2"):
-            ui.element("div").classes(
-                f"w-3 h-3 rounded-full shrink-0 {_HEALTH_DOT.get(card.health, 'bg-slate-400')}",
-            )
-            ui.label(card.label).classes("text-sm font-semibold truncate flex-1")
-            ui.label(_STATE_LABEL.get(card.state, card.state)).classes(
-                f"text-[11px] px-2 py-0.5 rounded shrink-0 {_STATE_BADGE.get(card.state, '')}",
-            )
-            if card.trust_score is not None:
-                _render_trust_badge(card)
-        # Per-signal checks — the "positive signals" view of the trust score.
-        if card.trust_score is not None:
-            _render_checks(card)
-        # Lifecycle phase: chip + milestone hint + progress bar.
-        _render_phase_block(card)
-        # Animated warming pipeline (6-step cycle rail + detail + summary).
-        # Gated so idle-column cards stay pixel-for-pixel identical to pre-pipeline.
-        if card.state != "idle":
-            # Lazy import keeps the idle-card render path zero-cost — the
-            # pipeline module is only loaded for warming-column cards.
-            from features.warming._pipeline import (  # noqa: PLC0415
-                render_cycle_pipeline,
-            )
 
-            render_cycle_pipeline(card)
-        # Spam status (always shown).
-        _render_spam_badge(ctx, card)
-        # Activity line + stats.
-        meta = f"{card.cycles_completed} {_ru_plural(card.cycles_completed, _CYCLE_FORMS)}"
-        if card.last_event:
-            meta = f"{meta} · {_ru_event(card.last_event)}"
-        ui.label(meta).classes("text-[11px] text-slate-500 truncate")
-        _render_card_stats(card, ctx.max_daily)
-        # Conditional diagnostic lines — only render when relevant.
-        _render_flood_wait_line(card)
-        _render_quarantine_line(card)
-        _render_error_line(card)
-        if card.readiness and not card.readiness.ready:
-            reasons = ", ".join(_ru_reason(reason) for reason in card.readiness.reasons)
-            ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
+    with element:
+        # Coloured left stripe (6px)
+        ui.element("div").classes(f"w-1.5 shrink-0 {stripe_cls}")
+
+        # Card body
+        with ui.element("div").classes("flex-1 min-w-0 p-4 flex flex-col gap-3"):
+            _render_card_header(card)
+
+            if card.trust_score is not None:
+                _render_checks(card)
+
+            _render_phase_block(card)
+
+            # Pipeline + status line for non-idle accounts
+            if card.state != "idle":
+                from features.warming._pipeline import (  # noqa: PLC0415
+                    render_cycle_pipeline,
+                )
+
+                render_cycle_pipeline(card)
+                _render_status_line(card)
+
+            # Readiness blocker — idle accounts that cannot be started yet
+            if card.state == "idle" and card.readiness and not card.readiness.ready:
+                reasons = ", ".join(_ru_reason(r) for r in card.readiness.reasons)
+                ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
+
+            _render_card_footer(ctx, card)
