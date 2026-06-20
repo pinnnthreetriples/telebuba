@@ -376,6 +376,21 @@ def test_check_states_proxy_chip_fails_on_no_proxy_via_readiness() -> None:
     assert "нет" in proxy_tip
 
 
+def test_check_states_intro_phase_keeps_age_chip_amber() -> None:
+    # 48-72h account: the trust "new account" penalty has aged off but the phase
+    # is still intro (72h floor). The возраст chip stays amber so it does not
+    # contradict the «Новый» phase chip (#98).
+    card = _base_card().model_copy(update={"phase": "intro", "trust_reasons": []})
+    age_status, _ = _by_label(_check_states(card))["возраст"]
+    assert age_status == "warn"
+
+
+def test_check_states_settled_phase_age_chip_is_ok() -> None:
+    card = _base_card().model_copy(update={"phase": "settling", "trust_reasons": []})
+    age_status, _ = _by_label(_check_states(card))["возраст"]
+    assert age_status == "ok"
+
+
 # --- readiness reason translation: every reason gets a Russian rendering ----
 
 

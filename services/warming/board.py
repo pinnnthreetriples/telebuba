@@ -176,7 +176,11 @@ def _build_summary(cards: list[WarmingAccountState]) -> WarmingSummary:
         total=len(cards),
         warming=sum(1 for card in cards if is_warming(card.state)),
         active=sum(1 for card in cards if card.state == "active"),
-        ready=sum(1 for card in cards if card.readiness is not None and card.readiness.ready),
+        ready=sum(
+            1
+            for card in cards
+            if not is_warming(card.state) and card.readiness is not None and card.readiness.ready
+        ),
         attention=sum(1 for card in cards if card.state in _ATTENTION_STATES),
         trust_healthy=sum(1 for card in cards if card.trust_band in _TRUST_HEALTHY_BANDS),
         trust_watch=sum(1 for card in cards if card.trust_band == "watch"),

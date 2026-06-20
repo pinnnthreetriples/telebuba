@@ -3047,3 +3047,16 @@ async def test_quarantine_recovery_defers_during_quiet_hours(
     assert record is not None
     assert record.state == "quarantine"
     assert record.next_run_at is not None
+
+
+@pytest.mark.asyncio
+async def test_summary_ready_counts_only_startable_accounts() -> None:
+    """«Готовы» must count startable (idle) accounts, not already-warming ones (#98)."""
+    await _seed_ready_account("acc-idle")
+    await _seed_ready_account("acc-warm")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-warm", state="active"))
+
+    board = await warming.load_board()
+
+    assert board.summary.warming == 1
+    assert board.summary.ready == 1  # only acc-idle; acc-warm is already warming

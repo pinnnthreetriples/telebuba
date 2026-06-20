@@ -76,6 +76,16 @@ def _structural_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pr
         board.active_count,
         tuple((card.account_id, "idle") for card in board.idle),
         tuple((card.account_id, "warming") for card in board.warming),
+        # Summary roll-ups can drift without a column move (e.g. sleeping→error
+        # flips `attention`, a trust-band shift flips the trust counts), so they
+        # must be in the digest or the header chips go stale against the cards.
+        (
+            board.summary.ready,
+            board.summary.attention,
+            board.summary.trust_healthy,
+            board.summary.trust_watch,
+            board.summary.trust_risk,
+        ),
     )
 
 
@@ -266,7 +276,9 @@ def _render_card_stats(card: WarmingAccountState, fleet_max_daily: int) -> None:
     else:
         parts.append(daily)
     eta = _relative_eta(card.next_run_at)
-    if eta:
+    if eta and card.state != "error":
+        # An error'd account is never auto-resumed (reconcile/loop skip it), so a
+        # next-run countdown would be a false promise. Suppress it for error.
         parts.append(f"⏭ {eta}")
     ui.label(" · ".join(parts)).classes("text-[11px] text-slate-500 truncate")
 
@@ -292,8 +304,13 @@ def _render_quarantine_line(card: WarmingAccountState) -> None:  # pragma: no co
 
 
 def _render_error_line(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Show last error only when the card is in an error state and we have a message."""
-    if card.state != "error" or not card.last_error:
+    """Explain the failure whenever the card is in an error state.
+
+    Rendered even when ``last_error`` is empty — some error transitions carry no
+    detail, and an error card must never go silent (it used to render nothing,
+    leaving only the red pill while the stats line showed a phantom countdown).
+    """
+    if card.state != "error":
         return
     parts = ["ошибка"]
     if card.last_action:
@@ -301,6 +318,9 @@ def _render_error_line(card: WarmingAccountState) -> None:  # pragma: no cover
     if card.last_channel:
         parts.append(f"в {card.last_channel}")
     head = " · ".join(parts)
+    if not card.last_error:
+        ui.label(head).classes("text-[11px] text-red-600 truncate")
+        return
     body = card.last_error
     if len(body) > _ERROR_MAX_LEN:
         body = body[: _ERROR_MAX_LEN - 1] + "…"
