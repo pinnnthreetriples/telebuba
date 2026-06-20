@@ -85,6 +85,22 @@ _PIPELINE_CSS = """
     transform-origin: 50% 50%;
     animation: tb-step-spin 2.4s linear infinite;
 }
+/* Live status ticker — dot + text pulse in sync; ellipsis fades in/out. */
+@keyframes tb-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+@keyframes tb-live-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.4); }
+}
+@keyframes tb-live-dots {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+.tb-live { animation: tb-live 1.3s ease-in-out infinite; }
+.tb-live-dot { animation: tb-live-dot 1.3s ease-in-out infinite; transform-origin: 50% 50%; }
+.tb-live-dots { animation: tb-live-dots 1.6s ease-in-out infinite; }
 """
 
 ui.add_css(_PIPELINE_CSS, shared=True)

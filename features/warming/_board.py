@@ -199,32 +199,23 @@ def _render_column(
 def _render_card_header(card: WarmingAccountState) -> None:  # pragma: no cover
     """Name + state pill on left; bare trust score + label on right."""
     with ui.row().classes("w-full items-start gap-2"):
-        # left: name, state pill, meta row
-        with ui.column().classes("flex-1 min-w-0 gap-0.5"):
-            with ui.row().classes("items-center gap-2 flex-wrap"):
-                ui.label(card.label).classes("text-[13px] font-semibold text-slate-900 truncate")
-                ui.label(_STATE_LABEL.get(card.state, card.state)).classes(
-                    f"text-[10px] px-2 py-0.5 rounded-full shrink-0 "
-                    f"{_STATE_BADGE.get(card.state, 'bg-slate-100 text-slate-600')}"
-                )
-            meta: list[str] = []
-            if card.age_hours is not None:
-                days = int(card.age_hours // 24)
-                meta.append(f"{days} д возраст" if days else f"{int(card.age_hours)} ч возраст")
-            if card.warming_days is not None:
-                meta.append(f"{card.warming_days} дн прогрев")
-            if meta:
-                ui.label(" · ".join(meta)).classes("text-[10px] text-slate-400")
+        # left: name + state pill
+        with ui.row().classes("flex-1 min-w-0 items-center gap-2 flex-wrap"):
+            ui.label(card.label).classes("text-[13px] font-semibold text-slate-900 truncate")
+            ui.label(_STATE_LABEL.get(card.state, card.state)).classes(
+                f"text-[10px] px-2 py-0.5 rounded-full shrink-0 "
+                f"{_STATE_BADGE.get(card.state, 'bg-slate-100 text-slate-600')}"
+            )
 
         # right: bare trust number + coloured label (no coloured badge background)
         if card.trust_score is not None:
             band = card.trust_band or ""
             with ui.column().classes("items-end gap-0 shrink-0"):
                 ui.label(str(card.trust_score)).classes(
-                    "text-[20px] font-medium text-slate-900 tabular-nums leading-none"
+                    "text-[28px] font-bold text-slate-900 tabular-nums leading-none"
                 )
                 ui.label(_TRUST_LABEL_RU.get(band, f"Trust {card.trust_score}")).classes(
-                    f"text-[9px] font-medium leading-tight "
+                    f"text-[10px] font-medium leading-tight "
                     f"{_TRUST_COLOR.get(band, 'text-slate-500')}"
                 )
 
@@ -239,7 +230,7 @@ def _render_checks(card: WarmingAccountState) -> None:  # pragma: no cover
                 f"items-center gap-1.5 px-2 py-1 rounded border text-[10px] {chip_cls}"
             ) as chip:
                 ui.element("div").classes(f"w-1.5 h-1.5 rounded-full shrink-0 {dot_cls}")
-                ui.label(label)
+                ui.label(label.capitalize())
             chip.tooltip(tooltip)
 
 
@@ -265,7 +256,7 @@ def _render_status_line(card: WarmingAccountState) -> None:  # pragma: no cover
         secondary = f"ещё {eta}" if eta and eta != "сейчас" else "истекает"
     elif card.state == "sleeping":
         primary = "спит по расписанию"
-        secondary = "низкая активность"
+        secondary = ""  # detail lives in the info box below — avoid the dup
     elif card.state == "quarantine":
         primary = "карантин"
         secondary = "цикл приостановлен"
@@ -273,9 +264,12 @@ def _render_status_line(card: WarmingAccountState) -> None:  # pragma: no cover
         return
 
     with ui.row().classes("w-full items-center gap-2"):
-        ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 {dot_cls}")
-        ui.label(primary + "...").classes("text-[11px] text-slate-700 truncate flex-1")
-        ui.label(secondary).classes("text-[10px] text-slate-400 shrink-0")
+        ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 tb-live-dot {dot_cls}")
+        with ui.row().classes("items-baseline gap-0 flex-1 min-w-0"):
+            ui.label(primary).classes("text-[11px] text-slate-700 truncate tb-live")
+            ui.label("...").classes("text-[11px] text-slate-700 shrink-0 tb-live-dots")
+        if secondary:
+            ui.label(secondary).classes("text-[10px] text-slate-400 shrink-0")
 
 
 def _render_card_footer(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
@@ -298,9 +292,13 @@ def _render_card_footer(ctx: _BoardContext, card: WarmingAccountState) -> None: 
         _footer_sep()
 
         if card.dm_allowed:
-            ui.label("DM разрешён").classes("text-[10px] text-green-600 font-medium")
+            ui.label("DM разрешён").classes(
+                "text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium"
+            )
         else:
-            ui.label("DM заблокирован").classes("text-[10px] text-slate-400")
+            ui.label("DM заблокирован").classes(
+                "text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500"
+            )
 
         ui.element("div").classes("flex-1")  # push spam button to right
         _render_spam_badge(ctx, card)
@@ -334,22 +332,22 @@ def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
         )
         if card.phase != "warmed" and card.days_to_next_phase is not None:
             next_phase_label = _next_phase_label_short(card.phase)
-            ui.label(f"до «{next_phase_label}»: {card.days_to_next_phase} д").classes(
+            ui.label(f"до {next_phase_label}: {card.days_to_next_phase} д").classes(
                 "text-[11px] text-slate-500 tabular-nums shrink-0",
             )
     if card.progress_to_next is not None:
         pct = round(card.progress_to_next * 100)
+        # min-width keeps a low-but-nonzero pct visible instead of a blank bar.
+        bar_style = f"width: {pct}%" + ("; min-width: 6px" if pct > 0 else "")
         with ui.row().classes("h-1.5 w-full rounded-full bg-slate-200 overflow-hidden"):
-            ui.element("div").classes(f"h-full rounded-full {bar_fill}").style(
-                f"width: {pct}%",
-            )
+            ui.element("div").classes(f"h-full rounded-full {bar_fill}").style(bar_style)
 
 
 _NEXT_PHASE_SHORT = {
-    "intro": "Адаптация",
-    "settling": "Развитие",
-    "warming": "Окрепший",
-    "active": "Зрелый",
+    "intro": "Адаптации",
+    "settling": "Развития",
+    "warming": "Окрепшего",
+    "active": "Зрелого",
 }
 
 
@@ -391,8 +389,7 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
                     render_cycle_pipeline,
                 )
 
-                render_cycle_pipeline(card)
-                _render_status_line(card)
+                render_cycle_pipeline(card, status_line=lambda: _render_status_line(card))
 
             # Readiness blocker — idle accounts that cannot be started yet
             if card.state == "idle" and card.readiness and not card.readiness.ready:

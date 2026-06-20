@@ -35,10 +35,13 @@ from features.warming._board_styling import (
     _PIPELINE_STEP_FLOOD,
     _PIPELINE_STEP_PENDING,
     _PIPELINE_STEP_QUAR,
+    _PIPELINE_STEP_SLEEP,
     _relative_eta,
 )
 
 if typing.TYPE_CHECKING:
+    from collections.abc import Callable
+
     from schemas.warming import WarmingAccountState
 
 
@@ -213,19 +216,24 @@ def _step_kind(idx: int, active_idx: int | None, kind: str) -> str:  # pragma: n
     return {"flood": "flood", "error": "error"}.get(kind, "active")
 
 
-def render_cycle_pipeline(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Top-level entry point — full pipeline (rail + detail).
+def render_cycle_pipeline(
+    card: WarmingAccountState,
+    status_line: Callable[[], None] | None = None,
+) -> None:  # pragma: no cover
+    """Top-level entry point — full pipeline (rail + status line + detail).
 
     Caller is responsible for not calling this for idle cards (see
     ``_board._render_card``). The rendered block lives inside a single
     card element and uses vertical stacking so each section is its own line.
-    The cycle-summary bar is now rendered by ``_board._render_card_footer``
-    (Bug 2 fix: remove duplicate) — this function only renders the rail
-    and the detail panel.
+    ``status_line`` (the "what's happening now" row) is rendered between the
+    rail and the detail panel when supplied. The cycle-summary bar is
+    rendered by ``_board._render_card_footer`` (Bug 2 fix: remove duplicate).
     """
     active_idx, kind = _active_step(card)
     with ui.column().classes("w-full gap-1.5"):
         _render_step_rail(card, active_idx, kind)
+        if status_line is not None:
+            status_line()
         _render_active_detail(card, active_idx, kind)
 
 
@@ -257,8 +265,15 @@ def _render_step_rail(  # pragma: no cover
                 ).style("margin-top: 13px")
             sk = _step_kind(idx, active_idx, kind)
             cls = step_cls[sk]
+            # A resting "sleep" node maps to the active slot but gets a calm
+            # blue treatment (no pulse) instead of the energetic indigo.
+            if sk == "active" and kind == "sleep":
+                cls = _PIPELINE_STEP_SLEEP
             tooltip = _step_tooltip(step, card, sk)
-            icon_extra = " tb-step-active-icon" if sk == "active" else ""
+            # Spin only while a cycle is actually running — a resting "sleep"
+            # node maps to the same visual slot but must not spin (a spinning
+            # moon reads wrong for a sleeping account).
+            icon_extra = " tb-step-active-icon" if sk == "active" and kind == "active" else ""
             # P1: pick glyph by state, not by topic. Done→check, pending→dash,
             # current→topic icon, error→error, flood→timer, quar→block.
             if sk == "active":
@@ -292,7 +307,7 @@ def _render_step_rail(  # pragma: no cover
                     if sk == "error"
                     else "text-slate-400"
                 )
-                ui.label(step.label_ru).classes(f"text-[9px] {label_cls} leading-none")
+                ui.label(step.label_ru).classes(f"text-[10px] {label_cls} leading-none")
 
 
 def _render_active_detail(  # noqa: C901, PLR0912
@@ -310,8 +325,9 @@ def _render_active_detail(  # noqa: C901, PLR0912
     elif active_idx == _SLEEP_STEP_INDEX and kind == "sleep":
         eta = _relative_eta(card.next_run_at)
         rows = [
-            ("bedtime", f"Сон до следующего цикла · {eta or '—'}"),
-            ("repeat", f"Цикл #{card.cycles_completed} завершён"),
+            ("hotel", "Аккаунт в паузе сна"),
+            ("schedule", f"Пробуждение через {eta}" if eta else "Пробуждение по расписанию"),
+            ("bar_chart", "Низкая активность — норма"),
         ]
     elif active_idx == _SLEEP_STEP_INDEX and kind == "flood":
         rows = [
@@ -359,7 +375,7 @@ def _render_active_detail(  # noqa: C901, PLR0912
     with ui.element("div").classes(f"w-full rounded-lg border px-2 py-1.5 {bg}"):
         for icon_name, text in rows:
             icon_bg, icon_color = _DETAIL_ICON_THEME.get(kind, ("bg-slate-100", "text-slate-500"))
-            with ui.row().classes("w-full items-start gap-2.5"):
+            with ui.row().classes("w-full items-center gap-2.5"):
                 with ui.element("div").classes(
                     f"w-7 h-7 rounded-lg flex items-center justify-center shrink-0 {icon_bg}"
                 ):

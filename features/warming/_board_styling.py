@@ -152,6 +152,7 @@ _PIPELINE_STEP_PENDING = "bg-slate-200 text-slate-400"
 _PIPELINE_STEP_ERROR = "bg-red-500 text-white"
 _PIPELINE_STEP_FLOOD = "bg-amber-500 text-white"
 _PIPELINE_STEP_QUAR = "bg-orange-500 text-white"
+_PIPELINE_STEP_SLEEP = "bg-blue-400 text-white ring-4 ring-blue-100"
 _PIPELINE_CONNECTOR_DONE = "bg-green-400"
 _PIPELINE_CONNECTOR_ACTIVE = "tb-flow-line"  # defined in __init__.py _PIPELINE_CSS
 _PIPELINE_CONNECTOR_PENDING = "bg-slate-200"
