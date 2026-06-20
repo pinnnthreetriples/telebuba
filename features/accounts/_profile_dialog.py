@@ -16,6 +16,7 @@ neither file blows the aislop size budget.
 from __future__ import annotations
 
 import asyncio
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nicegui import context, ui
@@ -367,6 +368,9 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
     )
 
     music_title = ui.input("Название").props("dense outlined clearable").classes("w-full")
+    music_title.tooltip(
+        "Если оставить пустым — используем имя файла без расширения",
+    )
     music_performer = ui.input("Исполнитель").props("dense outlined clearable").classes("w-full")
 
     ui.separator().classes("q-mt-md")
@@ -380,7 +384,12 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         content = staged["bytes"]
         if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
             return
-        title = (music_title.value or "").strip() or None
+        # Fallback to the upload's filename stem when the operator left the
+        # Название field empty — otherwise Telethon sends ``title=None`` and
+        # Telegram falls back to its own "Audio" placeholder, which the
+        # operator doesn't want when the filename already reads as a song
+        # title (e.g. ``Lana — Born to Die.mp3``).
+        title = (music_title.value or "").strip() or Path(name).stem or None
         performer = (music_performer.value or "").strip() or None
         try:
             await add_account_profile_music(
