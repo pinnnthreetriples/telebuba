@@ -28,6 +28,7 @@ from features.warming._board_checks import (
     _spam_outcome_label,
     _spam_tooltip,
 )
+from features.warming._channels import _count_submitted_lines
 from schemas.warming import WarmingAccountState, WarmingReadiness
 
 
@@ -419,6 +420,14 @@ def test_relative_eta_sub_minute_reads_less_than_one_minute() -> None:
 def test_relative_eta_past_reads_now() -> None:
     past = (datetime.now(UTC) - timedelta(seconds=5)).isoformat()
     assert _relative_eta(past) == "сейчас"
+
+
+def test_count_submitted_lines_counts_space_separated() -> None:
+    # The service splits on [\s,]+; the UI counter must match so «пропущено» is
+    # not under-reported for space-separated input (#102).
+    assert _count_submitted_lines("@a @b @c") == 3
+    assert _count_submitted_lines("@a, @b\n@c") == 3
+    assert _count_submitted_lines("   ") == 0
 
 
 # --- readiness reason translation: every reason gets a Russian rendering ----
