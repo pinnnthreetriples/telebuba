@@ -112,6 +112,34 @@ def test_service_error_label_translates_exact_and_prefixed_messages() -> None:
     assert _service_error_label("something else") == "something else"
 
 
+def test_service_error_label_translates_telegram_story_errors() -> None:
+    """Telegram error codes survive Telethon's English wrapping.
+
+    Telethon wraps the raw error code in a longer sentence (often appended
+    with ``(caused by SomeRequest)``) — the substring matcher has to find
+    the code inside that trailer instead of relying on full-string equality.
+    """
+    raw = (
+        "The photo dimensions are invalid (hint: `pip install pillow` for "
+        "`send_file` to resize images) (caused by SendStoryRequest)"
+    )
+    translated = _service_error_label(raw)
+    assert translated.startswith("Telegram не принял размеры фото")
+    assert "1080×1920" in translated
+
+    code_only = _service_error_label("PHOTO_INVALID_DIMENSIONS (caused by SendStoryRequest)")
+    assert code_only.startswith("Telegram не принял размеры фото")
+
+    video = _service_error_label("VIDEO_FILE_INVALID (caused by SendStoryRequest)")
+    assert "Видео не подошло" in video
+
+    media = _service_error_label("MEDIA_INVALID (caused by SaveMusicRequest)")
+    assert "Медиа отклонено" in media
+
+    parts = _service_error_label("FILE_PARTS_INVALID")
+    assert "повреждён" in parts
+
+
 def test_service_error_label_unknown_tdata_status_keeps_status_visible() -> None:
     # An unknown status code must still be readable — we don't want to hide
     # the code, because future telemetry will need it to debug.

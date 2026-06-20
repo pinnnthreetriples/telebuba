@@ -245,7 +245,49 @@ def _service_error_label(message: str) -> str:
         return _tdata_error_label(tail.strip())
     if message.startswith("Proxy not found for account:"):
         return message.replace("Proxy not found for account:", "Прокси не найден для аккаунта:", 1)
-    return message
+    return _telegram_error_label(message) or message
+
+
+def _telegram_error_label(message: str) -> str | None:
+    """Translate common Telethon/Telegram error messages into actionable RU text.
+
+    Substring-matched because Telethon wraps the raw error code in a longer
+    English sentence (often appended with ``(caused by SomeRequest)``); a
+    full-string equality table would miss the actual error inside. Returns
+    ``None`` when no fragment matches so the caller falls through to the
+    raw message — better to show English than to swallow an unknown failure.
+    """
+    fragments: list[tuple[str, str]] = [
+        (
+            "photo dimensions are invalid",
+            "Telegram не принял размеры фото. Используйте JPG 9:16 (рекомендуется 1080×1920)",
+        ),
+        (
+            "PHOTO_INVALID_DIMENSIONS",
+            "Telegram не принял размеры фото. Используйте JPG 9:16 (рекомендуется 1080×1920)",
+        ),
+        (
+            "VIDEO_FILE_INVALID",
+            "Видео не подошло формату сторис. Используйте MP4 9:16 до 30 секунд",
+        ),
+        (
+            "MEDIA_INVALID",
+            "Медиа отклонено: проверьте формат и размер файла",
+        ),
+        (
+            "FILE_PARTS_INVALID",
+            "Файл повреждён при загрузке, попробуйте ещё раз",
+        ),
+        (
+            "PHOTO_SAVE_FILE_INVALID",
+            "Telegram не смог сохранить фото. Попробуйте другое изображение",
+        ),
+    ]
+    lowered = message.lower()
+    for needle, translation in fragments:
+        if needle.lower() in lowered:
+            return translation
+    return None
 
 
 def _remember_selection(selection: list[dict[str, object]], selected_ids: set[str]) -> None:

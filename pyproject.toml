@@ -10,6 +10,7 @@ dependencies = [
     "nicegui>=3.13.0",
     "opentele2>=1.2.1",
     "phonenumbers>=9.0.32",
+    "pillow>=11.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.11.0",
     "python-dotenv>=1.2.2",
@@ -197,7 +198,11 @@ extend_exclude = ["tools"]
 [tool.deptry.per_rule_ignores]
 # opentele2 is imported lazily via importlib.import_module in core/tdata_import.py
 # (so the tdata path stays optional), which deptry's static scan can't see.
-DEP002 = ["opentele2"]
+# pillow is an optional runtime dependency of Telethon — ``send_file`` /
+# ``SendStoryRequest`` detect it via ``try: from PIL import Image`` to resize
+# images that would otherwise hit ``PHOTO_INVALID_DIMENSIONS``. We never import
+# PIL ourselves, so deptry's static scan sees no usage.
+DEP002 = ["opentele2", "pillow"]
 # hypothesis is used in conftest.py (test infrastructure). deptry treats the
 # root conftest as production code and flags the dev-only import; it is correct
 # that hypothesis is a dev dependency.
