@@ -187,7 +187,6 @@ def _check_states(
     current_now = now if now is not None else datetime.now(UTC)
     return [
         _check_session(reasons),
-        _check_spam(card),
         _check_proxy(reasons, readiness_reasons),
         _check_geo(card, reasons),
         _check_new_account(card, reasons, new_account_hours),

@@ -9,6 +9,7 @@ under the aislop file-length cap.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -310,6 +311,11 @@ def _footer_sep() -> None:  # pragma: no cover
     ui.element("div").classes("w-px h-3 bg-slate-200 mx-2 shrink-0")
 
 
+def _strip_emoji(text: str) -> str:  # pragma: no cover
+    """Remove leading emoji and surrounding whitespace from a label string."""
+    return re.sub(r"^[\U00010000-\U0010ffff☀-⟿\s]+", "", text).strip()
+
+
 def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
     """Phase chip + milestone hint + thin 4px progress bar.
 
@@ -323,7 +329,7 @@ def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
     chip_classes = _PHASE_CHIP_SOLID.get(card.phase, _PHASE_CHIP_SOLID["intro"])
     bar_fill = _PHASE_BAR_FILL.get(card.phase, _PHASE_BAR_FILL["intro"])
     with ui.row().classes("w-full items-center justify-between gap-2"):
-        ui.label(card.phase_label).classes(
+        ui.label(_strip_emoji(card.phase_label)).classes(
             f"w-fit text-[10px] px-2 py-0.5 rounded font-medium {chip_classes}",
         )
         if card.phase != "warmed" and card.days_to_next_phase is not None:
