@@ -32,7 +32,10 @@ if TYPE_CHECKING:
     from schemas.telegram_profile_snapshot import TelegramStoryThumb
 
 
-def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
+def render_stories_carousel(  # pragma: no cover - NiceGUI render path, exercised in browser
+    refs: _DialogRefs,
+    snapshot: AccountProfileSnapshot,
+) -> None:
     """Render the account's stories as a compact row of poster-style cards.
 
     Replaced the fixed-height swipeable carousel: a 9:16 thumbnail looks
@@ -76,7 +79,10 @@ _PRIVACY_TOOLTIPS: Final[dict[str, str]] = {
 }
 
 
-def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
+def _render_story_card(  # pragma: no cover - NiceGUI render path
+    refs: _DialogRefs,
+    story: TelegramStoryThumb,
+) -> None:
     """Render one poster-style story card with overlay badges + delete button.
 
     Top-left stacks the status badges (Активна / privacy preset); top-right
@@ -144,7 +150,10 @@ def _format_story_date(date_unix: int) -> str:
     return datetime.fromtimestamp(date_unix, tz=UTC).strftime("%d.%m %H:%M")
 
 
-async def _delete_story(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
+async def _delete_story(  # pragma: no cover - NiceGUI click handler
+    refs: _DialogRefs,
+    story: TelegramStoryThumb,
+) -> None:
     try:
         await remove_account_story(
             AccountStoryRemove(account_id=refs.account_id, story_id=story.story_id),

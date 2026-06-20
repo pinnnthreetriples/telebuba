@@ -16,7 +16,6 @@ neither file blows the aislop size budget.
 from __future__ import annotations
 
 import asyncio
-from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nicegui import context, ui
@@ -24,23 +23,17 @@ from nicegui import context, ui
 from features.accounts._profile_dialog_footer import _TabFooter
 from features.accounts._profile_dialog_render import (
     _apply_optimistic_avatar,
-    _apply_optimistic_music,
-    _apply_optimistic_story,
     _apply_snapshot,
     _DialogRefs,
     _render_loading_header,
 )
+from features.accounts._profile_dialog_tab_music import build_music_tab
+from features.accounts._profile_dialog_tab_story import build_story_tab
 from features.accounts._table import _service_error_label
 from schemas.accounts import AccountProfileUpdateRequest
-from schemas.profile_media import (
-    AccountProfileMusicUpload,
-    AccountProfilePhotoUpload,
-    AccountStoryUpload,
-)
+from schemas.profile_media import AccountProfilePhotoUpload
 from services.accounts import (
-    add_account_profile_music,
     fetch_live_account_profile,
-    post_account_story,
     set_account_profile_photo,
     update_account_profile,
 )
@@ -228,204 +221,11 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
 
 
 def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
-    staged: dict[str, object] = {"name": None, "bytes": None}
-
-    async def _on_file_uploaded(event: UploadEventArguments) -> None:
-        staged["name"] = event.file.name
-        staged["bytes"] = await event.file.read()
-        footer.mark_dirty()
-
-    # New story comes first — operator's primary task on this tab is publishing,
-    # not auditing the existing ring. Upload widget sits at the top, settings
-    # right under it, and the existing-stories rail goes to the bottom as
-    # historical context.
-    story_upload = (
-        ui.upload(
-            label="Выбрать медиа для сторис",
-            multiple=False,
-            max_file_size=100_000_000,
-            auto_upload=True,
-            on_upload=_on_file_uploaded,
-            on_rejected=lambda _e: ui.notify(
-                "Медиа отклонено. Проверь: размер ≤ 100 МБ, формат — JPG/JPEG/PNG/WebP/MP4/MOV.",
-                type="warning",
-                timeout=8000,
-            ),
-        )
-        .props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov" hide-upload-btn flat bordered')
-        .classes("w-full")
-    )
-    ui.label(
-        "Изображение: рекомендуется 1080×1920 (9:16) · "
-        "Видео: любой формат — перекодируем в 9:16 до 60 сек",
-    ).classes("text-xs text-grey-7")
-
-    # Form controls grouped on one line so the tab stays compact.
-    with ui.row().classes("w-full no-wrap gap-2"):
-        story_kind = (
-            ui.select(
-                {"image": "Изображение", "video": "Видео"},
-                value="image",
-                label="Медиа",
-            )
-            .props("dense outlined")
-            .classes("col")
-        )
-        story_privacy = (
-            ui.select(
-                {
-                    "contacts": "Контакты",
-                    "close_friends": "Близкие друзья",
-                    "public": "Публично",
-                },
-                value="contacts",
-                label="Приватность",
-            )
-            .props("dense outlined")
-            .classes("col")
-        )
-    story_caption = ui.textarea("Подпись").props("dense outlined autogrow").classes("w-full")
-    protect_story = ui.checkbox("Защитить контент (запрет на пересылку)", value=False)
-
-    # Existing-stories rail lives at the bottom — historical context the
-    # operator scans after deciding what to post. The render layer writes
-    # into ``refs.stories_container`` so the snapshot loader stays unchanged.
-    ui.separator().classes("q-mt-md")
-    ui.label("Текущие сторис").classes("text-sm text-grey-8 q-mt-sm")
-    refs.stories_container = ui.element("div").classes("w-full")
-
-    async def _apply() -> None:
-        name = staged["name"]
-        content = staged["bytes"]
-        if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
-            return
-        caption = (story_caption.value or "").strip() or None
-        kind = story_kind.value
-        try:
-            await post_account_story(
-                AccountStoryUpload(
-                    account_id=account_id,
-                    filename=name,
-                    content=bytes(content),
-                    media_kind=kind,
-                    caption=caption,
-                    privacy_preset=story_privacy.value,
-                    protect_content=bool(protect_story.value),
-                ),
-            )
-        except ValueError as exc:
-            ui.notify(_service_error_label(str(exc)), type="negative")
-            return
-        ui.notify("Сторис опубликована", type="positive")
-        story_upload.reset()
-        story_caption.value = ""
-        staged["name"] = None
-        staged["bytes"] = None
-        # Optimistic update can only render image stories (we have raw bytes);
-        # video uploads would show an empty placeholder until ↻. A force-
-        # refresh from Telegram is one extra round-trip but lands the real
-        # thumbnail, real story_id, and real expire_date in a single shot —
-        # the apply button's loading state already covers the brief wait.
-        if kind == "image":
-            _apply_optimistic_story(refs, story_bytes=bytes(content), kind=kind, caption=caption)
-        await _load_and_apply(account_id, refs, force_refresh=True)
-
-    def _cancel() -> None:
-        story_upload.reset()
-        story_caption.value = ""
-        staged["name"] = None
-        staged["bytes"] = None
-
-    footer = _TabFooter(apply=_apply, cancel=_cancel)
+    build_story_tab(account_id, refs, _load_and_apply)
 
 
 def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
-    staged: dict[str, object] = {"name": None, "bytes": None}
-
-    async def _on_file_uploaded(event: UploadEventArguments) -> None:
-        staged["name"] = event.file.name
-        staged["bytes"] = await event.file.read()
-        footer.mark_dirty()
-
-    # Upload widget at top — primary task is adding a track. The existing-
-    # music list lives at the bottom as audit context. Same pattern as the
-    # photo + story tabs so the operator forms a single mental model.
-    music_upload = (
-        ui.upload(
-            label="Выбрать музыку",
-            multiple=False,
-            max_file_size=30_000_000,
-            auto_upload=True,
-            on_upload=_on_file_uploaded,
-            on_rejected=lambda _e: ui.notify(
-                "Музыка отклонена. Проверь: размер ≤ 30 МБ, формат — MP3 или M4A.",
-                type="warning",
-                timeout=8000,
-            ),
-        )
-        .props('accept=".mp3,.m4a" hide-upload-btn flat bordered')
-        .classes("w-full")
-    )
-
-    music_title = ui.input("Название").props("dense outlined clearable").classes("w-full")
-    music_title.tooltip(
-        "Если оставить пустым — используем имя файла без расширения",
-    )
-    music_performer = ui.input("Исполнитель").props("dense outlined clearable").classes("w-full")
-
-    ui.separator().classes("q-mt-md")
-    ui.label("Текущая музыка").classes("text-sm text-grey-8 q-mt-sm")
-    refs.music_section = ui.column().classes("w-full gap-2")
-    with refs.music_section:
-        refs.music_list_container = ui.element("div").classes("w-full")
-
-    async def _apply() -> None:
-        name = staged["name"]
-        content = staged["bytes"]
-        if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
-            return
-        # Fallback to the upload's filename stem when the operator left the
-        # Название field empty — otherwise Telethon sends ``title=None`` and
-        # Telegram falls back to its own "Audio" placeholder, which the
-        # operator doesn't want when the filename already reads as a song
-        # title (e.g. ``Lana — Born to Die.mp3``).
-        title = (music_title.value or "").strip() or Path(name).stem or None
-        performer = (music_performer.value or "").strip() or None
-        try:
-            await add_account_profile_music(
-                AccountProfileMusicUpload(
-                    account_id=account_id,
-                    filename=name,
-                    content=bytes(content),
-                    title=title,
-                    performer=performer,
-                ),
-            )
-        except ValueError as exc:
-            ui.notify(_service_error_label(str(exc)), type="negative")
-            return
-        ui.notify("Музыка профиля добавлена", type="positive")
-        _apply_optimistic_music(
-            refs,
-            title=title,
-            performer=performer,
-            filename=name,
-        )
-        music_upload.reset()
-        music_title.value = ""
-        music_performer.value = ""
-        staged["name"] = None
-        staged["bytes"] = None
-        await _load_and_apply(account_id, refs, force_refresh=True)
-
-    def _cancel() -> None:
-        music_upload.reset()
-        music_title.value = ""
-        music_performer.value = ""
-        staged["name"] = None
-        staged["bytes"] = None
-
-    footer = _TabFooter(apply=_apply, cancel=_cancel)
+    build_music_tab(account_id, refs, _load_and_apply)
 
 
 async def _open_profile_dialog(

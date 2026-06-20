@@ -28,7 +28,10 @@ if TYPE_CHECKING:
     from schemas.telegram_profile_snapshot import TelegramProfilePhoto
 
 
-def render_photos_grid(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
+def render_photos_grid(  # pragma: no cover - NiceGUI render path, exercised in browser
+    refs: _DialogRefs,
+    snapshot: AccountProfileSnapshot,
+) -> None:
     """Render every profile photo as a horizontal row of poster-style cards.
 
     Same UX pattern as the stories rail (square 96 px tiles, badge overlay,
@@ -52,7 +55,7 @@ def render_photos_grid(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> N
         )
 
 
-def _render_photo_card(
+def _render_photo_card(  # pragma: no cover - NiceGUI render path
     refs: _DialogRefs,
     photo: TelegramProfilePhoto,
     *,
@@ -101,7 +104,10 @@ def _format_photo_date(date_unix: int) -> str:
     return datetime.fromtimestamp(date_unix, tz=UTC).strftime("%d.%m.%Y")
 
 
-async def _delete_photo(refs: _DialogRefs, photo: TelegramProfilePhoto) -> None:
+async def _delete_photo(  # pragma: no cover - NiceGUI click handler
+    refs: _DialogRefs,
+    photo: TelegramProfilePhoto,
+) -> None:
     try:
         await remove_account_profile_photo(
             AccountProfilePhotoRemove(

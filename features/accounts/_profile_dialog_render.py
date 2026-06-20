@@ -78,7 +78,10 @@ def _initials(first_name: str | None, last_name: str | None, account_id: str) ->
     return "?"
 
 
-def _render_header(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
+def _render_header(  # pragma: no cover - NiceGUI render path
+    refs: _DialogRefs,
+    snapshot: AccountProfileSnapshot,
+) -> None:
     """Refill the avatar + identity slots and stamp the sync timestamp."""
     refs.avatar_slot.clear()
     with refs.avatar_slot:
@@ -106,7 +109,10 @@ def _render_header(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
     refs.sync_label.set_text(f"Обновлено {_humanize_ago(snapshot.fetched_at_unix)}")
 
 
-def _render_music_preview(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
+def _render_music_preview(  # pragma: no cover - NiceGUI render path
+    refs: _DialogRefs,
+    snapshot: AccountProfileSnapshot,
+) -> None:
     # If the installed Telethon lacks the music TL methods, hide the whole tab
     # content above the upload form — a permanently-empty list is worse than
     # nothing.
@@ -123,7 +129,10 @@ def _render_music_preview(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -
                 _render_music_row(refs, track)
 
 
-def _render_music_row(refs: _DialogRefs, track: TelegramMusicItem) -> None:
+def _render_music_row(  # pragma: no cover - NiceGUI render path
+    refs: _DialogRefs,
+    track: TelegramMusicItem,
+) -> None:
     """Render one music row with title/meta on the left and ✕ delete on the right.
 
     Optimistic-add tracks (synthetic negative ``file_id`` or empty
@@ -150,7 +159,10 @@ def _render_music_row(refs: _DialogRefs, track: TelegramMusicItem) -> None:
                 button.tooltip("Сначала обновите данные кнопкой ↻ рядом с именем профиля")
 
 
-async def _delete_music_row(refs: _DialogRefs, track: TelegramMusicItem) -> None:
+async def _delete_music_row(  # pragma: no cover - NiceGUI click handler
+    refs: _DialogRefs,
+    track: TelegramMusicItem,
+) -> None:
     """Call the remove-music service, then optimistically drop the row."""
     try:
         await remove_account_profile_music(
@@ -179,7 +191,10 @@ def _format_track_meta(track: TelegramMusicItem) -> str:
     return " · ".join(parts)
 
 
-def _apply_snapshot(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
+def _apply_snapshot(  # pragma: no cover - NiceGUI render path
+    refs: _DialogRefs,
+    snapshot: AccountProfileSnapshot,
+) -> None:
     """Fill every dynamic element from a freshly-loaded snapshot."""
     if _is_client_dead(refs):
         # Dialog was hidden or websocket dropped while the fetch was in flight.
@@ -209,7 +224,10 @@ def _apply_snapshot(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None
     _render_music_preview(refs, snapshot)
 
 
-def _render_loading_header(refs: _DialogRefs, account_id: str) -> None:
+def _render_loading_header(  # pragma: no cover - NiceGUI render path
+    refs: _DialogRefs,
+    account_id: str,
+) -> None:
     refs.avatar_slot.clear()
     with refs.avatar_slot:
         ui.spinner(size="md")

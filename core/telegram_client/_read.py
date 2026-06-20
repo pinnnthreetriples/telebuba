@@ -12,24 +12,24 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from telethon import errors
 from telethon.tl.functions.photos import GetUserPhotosRequest
-from telethon.tl.functions.stories import GetPeerStoriesRequest, GetPinnedStoriesRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
-    InputPeerSelf,
     InputUserSelf,
-    MessageMediaDocument,
-    MessageMediaPhoto,
 )
 
 from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._pool import get_client
+from core.telegram_client._read_stories import (
+    dispatch_list_active_stories,
+    dispatch_list_pinned_stories,
+)
 from schemas.telegram_actions import (
     GetUserProfile,
     ListActiveStories,
@@ -38,15 +38,11 @@ from schemas.telegram_actions import (
     ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
-    StoryPrivacyPreset,
-    TelegramActiveStories,
     TelegramMusicItem,
-    TelegramPinnedStories,
     TelegramProfileMusic,
     TelegramProfilePhoto,
     TelegramProfilePhotos,
     TelegramProfileSnapshot,
-    TelegramStoryThumb,
 )
 
 if TYPE_CHECKING:
@@ -136,9 +132,9 @@ async def _dispatch_read_action(
         case GetUserProfile():
             return await _dispatch_get_user_profile(client)
         case ListPinnedStories():
-            return await _dispatch_list_pinned_stories(client, action)
+            return await dispatch_list_pinned_stories(client, action)
         case ListActiveStories():
-            return await _dispatch_list_active_stories(client)
+            return await dispatch_list_active_stories(client)
         case ListProfileMusic():
             return await _dispatch_list_profile_music(client)
         case ListProfilePhotos():
@@ -183,158 +179,6 @@ async def _download_self_avatar(client: TelegramClient) -> bytes | None:
         # Some accounts return a photo ref that can't be downloaded (e.g.
         # privacy-restricted self-photos). Treat as "no avatar" rather than
         # killing the whole snapshot fetch.
-        return None
-    return data if isinstance(data, (bytes, bytearray)) else None
-
-
-async def _dispatch_list_pinned_stories(
-    client: TelegramClient,
-    action: ListPinnedStories,
-) -> TelegramPinnedStories:
-    result = await client(
-        GetPinnedStoriesRequest(peer=InputPeerSelf(), offset_id=0, limit=action.limit),
-    )
-    raw_stories = getattr(result, "stories", []) or []
-    items = [await _story_thumb(client, story, is_pinned=True) for story in raw_stories]
-    return TelegramPinnedStories(items=[item for item in items if item is not None])
-
-
-async def _dispatch_list_active_stories(client: TelegramClient) -> TelegramActiveStories:
-    """Pull the account's currently-active (≤24 h) stories.
-
-    ``stories.getPeerStories`` returns ``stories.PeerStories`` whose outer
-    ``stories`` attribute is a ``PeerStories`` constructor — the actual
-    ``StoryItem`` list lives one level deeper at ``result.stories.stories``.
-    Each item's ``pinned`` flag preserves whether it's also profile-pinned,
-    so the service layer can dedupe against ``ListPinnedStories`` without
-    a second round-trip.
-    """
-    result = await client(GetPeerStoriesRequest(peer=InputPeerSelf()))
-    outer = getattr(result, "stories", None)
-    raw_stories = getattr(outer, "stories", []) or []
-    items = [
-        await _story_thumb(client, story, is_pinned=bool(getattr(story, "pinned", False)))
-        for story in raw_stories
-    ]
-    return TelegramActiveStories(items=[item for item in items if item is not None])
-
-
-async def _story_thumb(
-    client: TelegramClient,
-    story: object,
-    *,
-    is_pinned: bool,
-) -> TelegramStoryThumb | None:
-    """Build a snapshot row from a Telethon ``StoryItem``.
-
-    Returns ``None`` for items without an ``id`` so the caller can skip them
-    instead of carrying placeholder rows downstream. ``is_active`` is derived
-    from ``expire_date`` — the pinned-stories endpoint returns expired items
-    too, while the peer-stories endpoint only returns active ones.
-    """
-    story_id = int(getattr(story, "id", 0) or 0)
-    if story_id == 0:
-        return None
-    return TelegramStoryThumb(
-        story_id=story_id,
-        kind=_story_kind(story),
-        caption=_optional_str(getattr(story, "caption", None)),
-        thumb_bytes=await _download_story_thumb(client, story),
-        date_unix=_story_date_unix(story),
-        is_pinned=is_pinned,
-        is_active=_story_is_active(story),
-        privacy_preset=_story_privacy_preset(story),
-    )
-
-
-def _story_privacy_preset(story: object) -> StoryPrivacyPreset:
-    """Map Telegram's flag-based privacy bits to a single preset string.
-
-    ``StoryItem`` carries four mutually-exclusive flag bits — ``public``,
-    ``close_friends``, ``contacts``, ``selected_contacts`` — that match the
-    preset choices in the publish form. Order matters: ``public`` wins over
-    everything (broadest audience), then ``close_friends`` (deliberate
-    narrowing), then ``selected_contacts`` (custom list), then ``contacts``
-    (the implicit default). Stories with only a raw ``privacy`` rule vector
-    and none of the convenience flags fall through to ``unknown``.
-    """
-    if bool(getattr(story, "public", False)):
-        return "public"
-    if bool(getattr(story, "close_friends", False)):
-        return "close_friends"
-    if bool(getattr(story, "selected_contacts", False)):
-        return "selected_contacts"
-    if bool(getattr(story, "contacts", False)):
-        return "contacts"
-    return "unknown"
-
-
-def _story_date_unix(story: object) -> int:
-    """Flatten Telethon's ``StoryItem.date`` (a ``datetime``) into a Unix int."""
-    raw = getattr(story, "date", None)
-    if raw is None:
-        return 0
-    if isinstance(raw, int):
-        return raw
-    timestamp = getattr(raw, "timestamp", None)
-    if callable(timestamp):
-        try:
-            return int(timestamp())
-        except (TypeError, ValueError):
-            return 0
-    return 0
-
-
-def _story_is_active(story: object) -> bool:
-    """True when ``StoryItem.expire_date`` is still in the future."""
-    import time  # noqa: PLC0415 — local import keeps the top-level imports lean
-
-    expire = getattr(story, "expire_date", None)
-    if expire is None:
-        return False
-    if isinstance(expire, int):
-        return expire > int(time.time())
-    timestamp = getattr(expire, "timestamp", None)
-    if callable(timestamp):
-        try:
-            return timestamp() > time.time()
-        except (TypeError, ValueError):
-            return False
-    return False
-
-
-def _story_kind(story: object) -> Literal["image", "video", "unknown"]:
-    media = getattr(story, "media", None)
-    if isinstance(media, MessageMediaPhoto):
-        return "image"
-    if isinstance(media, MessageMediaDocument):
-        document = getattr(media, "document", None)
-        mime = str(getattr(document, "mime_type", "") or "")
-        if mime.startswith("video/"):
-            return "video"
-    return "unknown"
-
-
-async def _download_story_thumb(client: TelegramClient, story: object) -> bytes | None:
-    """Pull the largest cached preview for a story's media.
-
-    ``thumb=-1`` selects the largest available size — for photo stories
-    that's the ``c`` 640 px variant, for video stories the largest
-    document thumbnail (typically ~320 px). ``thumb=0`` (the smallest
-    stripped preview, ~160 px) was visibly pixelated when stretched
-    inside the carousel slide.
-    """
-    media = getattr(story, "media", None)
-    if media is None:
-        return None
-    try:
-        # ``file=bytes`` (the type) is Telethon's in-memory mode; the stub
-        # under-specifies the union so ty needs the override here.
-        data = await client.download_media(media, file=bytes, thumb=-1)  # ty: ignore[invalid-argument-type]
-    except (errors.RPCError, ValueError, TypeError):
-        # Some media kinds reject thumbnail download (privacy-restricted,
-        # cache evicted) — the UI shows a placeholder instead of crashing
-        # the whole dialog open.
         return None
     return data if isinstance(data, (bytes, bytearray)) else None
 
