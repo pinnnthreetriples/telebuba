@@ -131,7 +131,11 @@ def test_service_error_label_translates_telegram_story_errors() -> None:
     assert code_only.startswith("Telegram не принял размеры фото")
 
     video = _service_error_label("VIDEO_FILE_INVALID (caused by SendStoryRequest)")
-    assert "Видео не подошло" in video
+    assert "Видео отклонено" in video
+    assert "60" in video
+
+    long_video = _service_error_label("IMAGE_PROCESS_FAILED (caused by SendStoryRequest)")
+    assert "60" in long_video
 
     media = _service_error_label("MEDIA_INVALID (caused by SaveMusicRequest)")
     assert "Медиа отклонено" in media

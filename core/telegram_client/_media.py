@@ -14,6 +14,7 @@ from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhoto
 from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
+    DocumentAttributeVideo,
     InputDocument,
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
@@ -23,6 +24,7 @@ from telethon.tl.types import (
     InputPrivacyValueAllowContacts,
 )
 
+from core.telegram_client._video import normalize_story_video_for_telegram
 from schemas.telegram_actions import (
     AddProfileMusic,
     PostStory,
@@ -100,16 +102,34 @@ async def _story_media(
         content = _normalize_story_image_for_telegram(content)
         uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
         return InputMediaUploadedPhoto(file=uploaded)
-    uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
-    attributes, mime_type = utils.get_attributes(
-        _named_bytes(filename, content),
-        mime_type=mimetypes.guess_type(filename)[0] or "video/mp4",
-        supports_streaming=True,
+    # Video story — re-encode through ffmpeg to H.264/AAC MP4 at 720x1280
+    # (matches the Android client) and pass an explicit JPEG thumbnail so
+    # inline previews don't render as a black frame. The mime_type and
+    # supports_streaming flag are both mandatory for stories: missing either
+    # makes Telegram treat the upload as a generic document, not a video.
+    video_bytes, thumb_bytes, duration, width, height = await normalize_story_video_for_telegram(
+        content
+    )
+    uploaded_video = await client.upload_file(
+        _named_bytes("story.mp4", video_bytes),
+        file_name="story.mp4",
+    )
+    uploaded_thumb = await client.upload_file(
+        _named_bytes("thumb.jpg", thumb_bytes),
+        file_name="thumb.jpg",
     )
     return InputMediaUploadedDocument(
-        file=uploaded,
-        mime_type=mime_type,
-        attributes=attributes,
+        file=uploaded_video,
+        thumb=uploaded_thumb,
+        mime_type="video/mp4",
+        attributes=[
+            DocumentAttributeVideo(
+                duration=max(int(duration), 1),
+                w=width,
+                h=height,
+                supports_streaming=True,
+            ),
+        ],
     )
 
 

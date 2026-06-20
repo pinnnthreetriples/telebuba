@@ -253,11 +253,13 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         .props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov" hide-upload-btn flat bordered')
         .classes("w-full")
     )
-    # Sets expectations before the upload — Telegram rejects anything outside
-    # 9:16 server-side, and with Pillow installed Telethon resizes photos to
-    # fit but cannot resize video (no ffmpeg dependency).
+    # Sets expectations before the upload — Telegram enforces 9:16 server-side
+    # for both photos and videos. We normalise photos via Pillow (letterbox
+    # onto blurred background) and re-encode videos via ffmpeg (center-crop
+    # to 720x1280), so the operator can drop any common format and it works.
     ui.label(
-        "Изображение: рекомендуется 1080×1920 (9:16) · Видео: MP4 9:16, до 30 сек",
+        "Изображение: рекомендуется 1080×1920 (9:16) · "
+        "Видео: любой формат — перекодируем в 9:16 до 60 сек",
     ).classes("text-xs text-grey-7")
 
     async def _apply() -> None:
