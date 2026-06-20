@@ -19,7 +19,7 @@ edges:
     condition: when the Telegram call is part of the runtime workflow
   - target: patterns/add-telegram-task.md
     condition: when adding any new Telethon-using action
-last_updated: 2026-06-19
+last_updated: 2026-06-20
 ---
 
 # Telegram (Telethon) Integration
@@ -36,13 +36,17 @@ last_updated: 2026-06-19
 
 ```text
 core/telegram_client/
-├── __init__.py    public API re-exports
-├── _client.py     client construction + lifecycle
-├── _session.py    session liveness checks
-├── _spam.py       account status probe helpers
-├── _actions.py    typed action executor + dispatch
-├── _media.py      profile media actions
-└── _util.py       shared helper code
+├── __init__.py        public API re-exports
+├── _client.py         client construction + lifecycle
+├── _pool.py           client pool: reuse and lifecycle management for concurrent account operations
+├── _session.py        session liveness checks
+├── _spam.py           account status probe helpers
+├── _actions.py        typed action executor + dispatch
+├── _media.py          profile media actions
+├── _read.py           message read actions (fetch dialogs, read messages)
+├── _read_stories.py   story read actions
+├── _video.py          video/media download and upload actions
+└── _util.py           shared helper code
 ```
 
 Tests that patch internals should patch the submodule that owns the binding. App code should use the public API from `core.telegram_client`.

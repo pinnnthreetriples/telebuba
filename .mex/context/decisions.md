@@ -12,12 +12,26 @@ edges:
     condition: when a decision relates to system structure
   - target: context/stack.md
     condition: when a decision relates to technology choice
-last_updated: 2026-06-17
+last_updated: 2026-06-20
 ---
 
 # Decisions
 
 ## Decision Log
+
+### Warming audit — scheduling, resilience, and UX fixes
+**Date:** 2026-06-20
+**Status:** Implemented
+**Decision:** Fixed 11 issues in the warming runtime: scheduling/ban-risk, board indicators, cycle resilience, RU localization, channel feedback, reconcile aborting quarantine recovery, cap=1 lockout, trust-ceiling progress, one-sided faded-pair DMs, case-sensitive invite dedup, stale doc.
+**Files changed:** `services/warming/_loop.py`, `_runtime.py`, `_chat.py`.
+**Result:** 536 tests green, coverage ≥ 90%.
+
+### Accounts QA audit — 15 fixes, single-source localization
+**Date:** 2026-06-20
+**Status:** Implemented (PR #104)
+**Decision:** Single-source RU localization: service emits raw `AccountStatus` + RU relative time; `_account_status_label` is the only translation point. UI sends `username=None` when unchanged to avoid `USERNAME_NOT_MODIFIED`. Error snapshots not cached. Footer hides only on success. Story kind inferred from extension. Delete errors translated. Search debounce added. Uploader CSS scoped to `.tb-profile-dialog`.
+**Files changed:** `features/accounts/_table.py`, `services/accounts/_table.py`.
+**Result:** 543 tests green, coverage ≥ 90%.
 
 ### Introduce `services/` layer between `features/` and `core/`
 **Date:** 2026-06-10

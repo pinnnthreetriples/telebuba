@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Always-loaded project anchor. Read first. Project identity, stack, file map, non-negotiables, commands, pointer to ROUTER.md.
-last_updated: 2026-06-19
+last_updated: 2026-06-20
 ---
 
 # Telebuba
@@ -21,15 +21,31 @@ telebuba/
 ├── .env.example            committed template; must mirror core/config.py
 ├── core/                   infrastructure gateways; only layer touching third-party SDKs
 │   ├── db.py               shared SQLite plumbing + compatibility re-exports
+│   ├── migrations.py       versioned append-only migration registry; apply_migrations() runs on engine init
+│   ├── device_fingerprint.py  generates/reads immutable per-account device profile
+│   ├── phone_geo.py        phone number → geo lookup helper
+│   ├── proxy_check.py      connectivity check for proxy configs
+│   ├── tdata_import.py     converts tdata.zip to Telethon .session files (safe-extract)
 │   ├── repositories/       per-aggregate DB query modules
+│   │   ├── _proxies.py        internal proxy query helpers
+│   │   └── warming_joined.py  tracks channels an account already joined (join-dedup)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
+│   │   ├── _pool.py           client pool management
+│   │   ├── _read.py           message reading actions
+│   │   ├── _read_stories.py   story reading actions
+│   │   └── _video.py          video/media actions
 │   ├── config.py           pydantic-settings, nested namespaces
 │   ├── gemini.py           HTTP gateway for Gemini
 │   └── logging.py          loguru + SQLite logs + optional Sentry
 ├── schemas/                Pydantic models; shared types, no behavior, no I/O
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile/proxy operations
-│   └── warming/            runtime workflow domain package
+│   ├── warming/            runtime workflow domain package
+│   ├── content.py          content generation orchestration
+│   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
+│   ├── logs.py             log query helpers for the Logs page
+│   ├── spam_status.py      account spam/ban signal helpers
+│   └── trust.py            trust-score calculation from stored signals
 ├── features/               UI-thin NiceGUI pages/components; delegates to services
 │   ├── accounts/
 │   ├── warming/
@@ -67,6 +83,12 @@ Before adding files, follow `.mex/context/conventions.md` → **File Placement G
 ## Scaffold Growth
 After meaningful work, run GROW (full text in `ROUTER.md` Behavioural Contract):
 - **Ground / Record / Orient / Write / Board.** Live state lives in `state/active.md`; board moves per `context/kanban.md`.
+
+### Memory hygiene
+1. **GROW before every PR** — update `state/active.md` and bump `last_updated` *before* opening the PR, not after merge.
+2. **New module = new File Map line** — adding any new Python module under `core/`, `services/`, or their subpackages means adding it to the File Map above in the same change.
+3. **`.serena/` is deprecated** — do not use it; `.mex/` is the single source of truth. If Serena regenerates files there, delete them or add a deprecation header.
+4. **One skill, one source** — edit `.claude/skills/` first, then sync to `.agents/skills/`.
 
 ## Skills
 Project-local skills in `.claude/skills/` (matt-pocock). Full triggers in `context/skills.md`.
