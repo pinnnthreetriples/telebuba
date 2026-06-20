@@ -26,6 +26,7 @@ from core.telegram_client import (
 from schemas.accounts import AccountProfileSnapshot
 from schemas.telegram_actions import (
     GetUserProfile,
+    ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
@@ -33,10 +34,12 @@ from schemas.telegram_actions import (
 
 if TYPE_CHECKING:
     from schemas.telegram_profile_snapshot import (
+        TelegramActiveStories,
         TelegramPinnedStories,
         TelegramProfileMusic,
         TelegramProfilePhotos,
         TelegramProfileSnapshot,
+        TelegramStoryThumb,
     )
 
 __all__ = ["fetch_live_account_profile", "invalidate_account_profile_cache"]
@@ -91,6 +94,7 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
             [
                 GetUserProfile(),
                 ListPinnedStories(),
+                ListActiveStories(),
                 ListProfileMusic(),
                 ListProfilePhotos(),
             ],
@@ -111,13 +115,20 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
     # The gateway returns the snapshot types matching each action's position.
     # ``cast`` documents the contract for type checkers without paying for a
     # runtime isinstance check on the happy path.
-    profile_model, stories_model, music_model, photos_model = results
-    return _combine(
-        account_id,
-        cast("TelegramProfileSnapshot", profile_model),
-        cast("TelegramPinnedStories", stories_model),
-        cast("TelegramProfileMusic", music_model),
-        cast("TelegramProfilePhotos", photos_model),
+    profile_model, pinned_model, active_model, music_model, photos_model = results
+    profile = cast("TelegramProfileSnapshot", profile_model)
+    music = cast("TelegramProfileMusic", music_model)
+    return AccountProfileSnapshot(
+        account_id=account_id,
+        **profile.model_dump(),
+        stories=_merge_stories(
+            cast("TelegramPinnedStories", pinned_model).items,
+            cast("TelegramActiveStories", active_model).items,
+        ),
+        music=music.items,
+        music_supported=music.supported,
+        photos=cast("TelegramProfilePhotos", photos_model).items,
+        fetched_at_unix=time.time(),
     )
 
 
@@ -129,19 +140,22 @@ def _error_snapshot(account_id: str, error: str) -> AccountProfileSnapshot:
     )
 
 
-def _combine(
-    account_id: str,
-    profile: TelegramProfileSnapshot,
-    stories: TelegramPinnedStories,
-    music: TelegramProfileMusic,
-    photos: TelegramProfilePhotos,
-) -> AccountProfileSnapshot:
-    return AccountProfileSnapshot(
-        account_id=account_id,
-        **profile.model_dump(),
-        stories=stories.items,
-        music=music.items,
-        music_supported=music.supported,
-        photos=photos.items,
-        fetched_at_unix=time.time(),
-    )
+def _merge_stories(
+    pinned: list[TelegramStoryThumb],
+    active: list[TelegramStoryThumb],
+) -> list[TelegramStoryThumb]:
+    """Dedupe active + pinned by story_id, newest-first by date_unix.
+
+    A story can sit in both lists when it's pinned to the profile AND still
+    inside its 24 h active window. Active entries win the merge because they
+    carry fresher view-count data; the pinned flag is grafted onto the active
+    record so the UI badge still reads correctly.
+    """
+    by_id: dict[int, TelegramStoryThumb] = {item.story_id: item for item in active}
+    for item in pinned:
+        existing = by_id.get(item.story_id)
+        if existing is None:
+            by_id[item.story_id] = item
+        else:
+            by_id[item.story_id] = existing.model_copy(update={"is_pinned": True})
+    return sorted(by_id.values(), key=lambda story: story.date_unix, reverse=True)

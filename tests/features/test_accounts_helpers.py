@@ -5,6 +5,7 @@ from typing import TYPE_CHECKING
 
 from features.accounts import _profile_dialog_photos as photos
 from features.accounts import _profile_dialog_render as render
+from features.accounts import _profile_dialog_stories as stories_mod
 from features.accounts._proxy_dialog import (
     _proxy_dialog_error,
     _proxy_dialog_geo,
@@ -20,7 +21,7 @@ from features.accounts._table import (
     _to_table_row,
 )
 from schemas.accounts import AccountProfileSnapshot
-from schemas.telegram_profile_snapshot import TelegramProfilePhoto
+from schemas.telegram_profile_snapshot import TelegramProfilePhoto, TelegramStoryThumb
 
 if TYPE_CHECKING:
     import pytest
@@ -212,20 +213,22 @@ def test_optimistic_avatar_noop_on_dead_client(monkeypatch: pytest.MonkeyPatch) 
 def test_optimistic_story_appends_and_keeps_order(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Optimistic story upload appends a synthetic-id thumb in input order.
+    """Optimistic story upload PRE-pends a synthetic-id thumb (newest-first).
 
-    No Telegram round-trip required.
+    Service layer sorts by ``date_unix`` desc, so the carousel shows the
+    just-posted story first — the optimistic helper has to mirror that or
+    the user would see their upload land at the bottom of the carousel
+    until ↻ refreshes.
     """
-    monkeypatch.setattr(render, "_render_stories_preview", lambda *_a, **_k: None)
+    # render module imports ``render_stories_carousel`` at top level, so the
+    # binding lives on the render namespace — patch that one, not stories_mod.
+    monkeypatch.setattr(render, "render_stories_carousel", lambda *_a, **_k: None)
     monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
 
     refs = render._DialogRefs()
     refs.closed = False
     refs.client_id = "live"
     refs.current_snapshot = AccountProfileSnapshot(account_id="acc")
-    # ``stories_container`` is dereferenced as an argument before the mocked
-    # render function is called — give it any placeholder.
-    refs.stories_container = object()  # ty: ignore[invalid-assignment]
 
     render._apply_optimistic_story(
         refs,
@@ -241,10 +244,12 @@ def test_optimistic_story_appends_and_keeps_order(
     )
 
     assert refs.current_snapshot is not None
-    assert [s.kind for s in refs.current_snapshot.stories] == ["image", "video"]
-    assert refs.current_snapshot.stories[0].thumb_bytes == b"img-bytes"
-    assert refs.current_snapshot.stories[1].thumb_bytes is None  # video has no thumb yet
-    assert refs.current_snapshot.stories[0].caption == "hi"
+    # Newest-first ordering: the video was added second so it sits at index 0.
+    assert [s.kind for s in refs.current_snapshot.stories] == ["video", "image"]
+    assert refs.current_snapshot.stories[1].thumb_bytes == b"img-bytes"
+    assert refs.current_snapshot.stories[0].thumb_bytes is None  # video has no thumb yet
+    assert refs.current_snapshot.stories[1].caption == "hi"
+    assert refs.current_snapshot.stories[0].is_active is True
 
 
 def test_optimistic_music_uses_form_metadata_and_filename_fallback(
@@ -348,3 +353,55 @@ def test_optimistic_photo_remove_noop_on_dead_client() -> None:
         render._DEAD_CLIENTS.discard("dead-photo")
 
     assert refs.current_snapshot.photos == [photo], "must not mutate on dead client"
+
+
+def test_optimistic_story_remove_drops_from_local_carousel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting a story removes it from the local snapshot without a refetch.
+
+    Telegram's ``deleteStories`` returns the IDs it actually removed; the UI
+    layer doesn't inspect that response — the optimistic helper just drops
+    the row by id. Important: the carousel re-renders against the new
+    snapshot, so any sort or dedupe logic upstream gets a fresh chance.
+    """
+    monkeypatch.setattr(stories_mod, "render_stories_carousel", lambda *_a, **_k: None)
+    monkeypatch.setattr(render, "_render_header", lambda *_a, **_k: None)
+
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "live"
+    kept = TelegramStoryThumb(
+        story_id=111,
+        kind="image",
+        date_unix=1_700_000_000,
+        is_active=True,
+    )
+    doomed = TelegramStoryThumb(
+        story_id=222,
+        kind="video",
+        date_unix=1_600_000_000,
+        is_pinned=True,
+    )
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc", stories=[kept, doomed])
+
+    stories_mod.apply_optimistic_story_remove(refs, doomed.story_id)
+
+    assert refs.current_snapshot is not None
+    assert [s.story_id for s in refs.current_snapshot.stories] == [111]
+
+
+def test_optimistic_story_remove_noop_on_dead_client() -> None:
+    """Dead-client guard short-circuits before mutating snapshot state."""
+    refs = render._DialogRefs()
+    refs.closed = False
+    refs.client_id = "dead-story"
+    story = TelegramStoryThumb(story_id=1, is_active=True)
+    refs.current_snapshot = AccountProfileSnapshot(account_id="acc", stories=[story])
+    render._DEAD_CLIENTS.add("dead-story")
+    try:
+        stories_mod.apply_optimistic_story_remove(refs, story.story_id)
+    finally:
+        render._DEAD_CLIENTS.discard("dead-story")
+
+    assert refs.current_snapshot.stories == [story], "must not mutate on dead client"

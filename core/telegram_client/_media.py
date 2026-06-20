@@ -11,13 +11,18 @@ from PIL import Image, ImageFilter, UnidentifiedImageError
 from telethon import utils
 from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
-from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
+from telethon.tl.functions.stories import (
+    CanSendStoryRequest,
+    DeleteStoriesRequest,
+    SendStoryRequest,
+)
 from telethon.tl.types import (
     DocumentAttributeAudio,
     DocumentAttributeVideo,
     InputDocument,
     InputMediaUploadedDocument,
     InputMediaUploadedPhoto,
+    InputPeerSelf,
     InputPhoto,
     InputPrivacyValueAllowAll,
     InputPrivacyValueAllowCloseFriends,
@@ -30,6 +35,7 @@ from schemas.telegram_actions import (
     PostStory,
     RemoveProfileMusic,
     RemoveProfilePhoto,
+    RemoveStory,
     SetProfilePhoto,
 )
 
@@ -58,6 +64,9 @@ async def _dispatch_profile_media_action(
             return None
         case RemoveProfilePhoto():
             await _remove_profile_photo(client, action)
+            return None
+        case RemoveStory():
+            await _remove_story(client, action)
             return None
         case _:  # pragma: no cover - caller only routes media actions here
             msg = f"Unsupported profile media action_type: {action.action_type}"
@@ -267,6 +276,17 @@ async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePho
             ],
         ),
     )
+
+
+async def _remove_story(client: TelegramClient, action: RemoveStory) -> None:
+    """Delete one story (active or pinned — single endpoint covers both).
+
+    Per the official docs, ``stories.deleteStories`` returns the IDs that
+    were actually removed. We don't inspect the response: a missing ID
+    means the story was already gone (concurrent delete, expired between
+    snapshot and click), which is fine for an idempotent operation.
+    """
+    await client(DeleteStoriesRequest(peer=InputPeerSelf(), id=[action.story_id]))
 
 
 def _named_bytes(filename: str, content: bytes) -> BytesIO:

@@ -26,6 +26,7 @@ from schemas.profile_media import (
     AccountProfileMusicUpload,
     AccountProfilePhotoRemove,
     AccountProfilePhotoUpload,
+    AccountStoryRemove,
     AccountStoryUpload,
 )
 from schemas.proxy import (
@@ -41,6 +42,7 @@ from schemas.telegram_actions import (
     AddProfileMusic,
     PostStory,
     RemoveProfilePhoto,
+    RemoveStory,
     SetProfilePhoto,
     UpdateProfile,
 )
@@ -59,6 +61,7 @@ from services.accounts import (
     load_accounts_table,
     post_account_story,
     remove_account_profile_photo,
+    remove_account_story,
     save_account_proxy,
     set_account_profile_photo,
     update_account_profile,
@@ -751,6 +754,39 @@ async def test_remove_account_profile_photo_executes_action_and_invalidates_cach
     assert captured[0].access_hash == 7
     assert captured[0].file_reference == b"\x01\x02"
     assert invalidated == ["account-photo-remove"]
+
+
+@pytest.mark.asyncio
+async def test_remove_account_story_executes_action_and_invalidates_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Service must reach Telegram with ``RemoveStory`` + clear the profile cache.
+
+    Telegram's deleteStories doesn't error on unknown IDs (drops them
+    silently), so the only signals we test are the action shape and the
+    cache invalidation — both of which the optimistic UI relies on.
+    """
+    captured: list[object] = []
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="remove_story", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    result = await remove_account_story(
+        AccountStoryRemove(account_id="account-story-remove", story_id=9876),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], RemoveStory)
+    assert captured[0].story_id == 9876
+    assert invalidated == ["account-story-remove"]
 
 
 @pytest.mark.asyncio

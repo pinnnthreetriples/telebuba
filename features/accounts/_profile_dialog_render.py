@@ -21,6 +21,7 @@ from features.accounts._profile_dialog_common import (
     register_disconnect_tracker,
 )
 from features.accounts._profile_dialog_photos import render_photos_grid
+from features.accounts._profile_dialog_stories import render_stories_carousel
 
 # TelegramMusicItem / TelegramStoryThumb are CONSTRUCTED at runtime in the
 # optimistic-update helpers — keep them at module scope. AccountProfileSnapshot
@@ -103,41 +104,6 @@ def _render_header(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
         ui.label(f"{handle}{phone}").classes("text-xs text-grey-7 truncate")
 
     refs.sync_label.set_text(f"Обновлено {_humanize_ago(snapshot.fetched_at_unix)}")
-
-
-def _render_stories_preview(
-    container: ui.element,
-    snapshot: AccountProfileSnapshot,
-) -> None:
-    container.clear()
-    with container:
-        if not snapshot.stories:
-            ui.label("Закреплённых сторис нет").classes("text-sm text-grey-7")
-            return
-        ui.label(f"Закреплено сторис: {len(snapshot.stories)}").classes(
-            "text-sm text-grey-7",
-        )
-        with (
-            ui.scroll_area().classes("w-full h-32"),
-            ui.row().classes("gap-2 no-wrap"),
-        ):
-            for story in snapshot.stories:
-                _render_story_thumb(story)
-
-
-def _render_story_thumb(story: TelegramStoryThumb) -> None:
-    thumb_url = _avatar_data_url(story.thumb_bytes)
-    cell = ui.element("div").classes(
-        "w-20 h-28 rounded bg-grey-3 overflow-hidden relative shrink-0",
-    )
-    with cell:
-        if thumb_url:
-            ui.image(thumb_url).classes("w-full h-full object-cover")
-        ui.label(story.kind).classes(
-            "absolute bottom-0 left-0 right-0 text-center text-[10px] bg-black/40 text-white",
-        )
-        if story.caption:
-            cell.tooltip(story.caption)
 
 
 def _render_music_preview(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
@@ -239,7 +205,7 @@ def _apply_snapshot(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None
 
     _render_header(refs, snapshot)
     render_photos_grid(refs, snapshot)
-    _render_stories_preview(refs.stories_container, snapshot)
+    render_stories_carousel(refs, snapshot)
     _render_music_preview(refs, snapshot)
 
 
@@ -290,13 +256,15 @@ def _apply_optimistic_story(
     kind: Literal["image", "video"],
     caption: str | None,
 ) -> None:
-    """Append a freshly-posted story to the local preview list.
+    """Prepend a freshly-posted story to the local carousel.
 
     We don't have Telegram's real ``story_id`` yet (would need to parse the
     ``Updates`` from ``SendStoryRequest``), so we use a negative synthetic
-    id — the UI only uses it as a list key. Image bytes go directly as the
-    thumb; video shows the placeholder until the next ↻ refresh pulls the
-    server-generated thumbnail.
+    id — the UI only uses it as a list key, and the carousel's delete button
+    disables itself when it sees a non-positive id. Image bytes go directly
+    as the thumb; video shows the grey placeholder until the next ↻ refresh
+    pulls the server-generated thumbnail. ``is_active=True`` makes the slide
+    carry the right badge before the refresh.
     """
     if _is_client_dead(refs) or refs.current_snapshot is None:
         return
@@ -306,15 +274,17 @@ def _apply_optimistic_story(
         kind=kind,
         caption=caption,
         thumb_bytes=thumb_bytes,
+        date_unix=int(time.time()),
+        is_active=True,
     )
     new_snapshot = refs.current_snapshot.model_copy(
         update={
-            "stories": [*refs.current_snapshot.stories, new_thumb],
+            "stories": [new_thumb, *refs.current_snapshot.stories],
             "fetched_at_unix": time.time(),
         },
     )
     refs.current_snapshot = new_snapshot
-    _render_stories_preview(refs.stories_container, new_snapshot)
+    render_stories_carousel(refs, new_snapshot)
     _render_header(refs, new_snapshot)
 
 

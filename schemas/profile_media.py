@@ -47,6 +47,19 @@ class AccountProfilePhotoRemove(BaseModel):
     file_reference: bytes = Field(min_length=1)
 
 
+class AccountStoryRemove(BaseModel):
+    """Delete one story (active and/or pinned) from the account.
+
+    ``story_id`` comes from the live snapshot the UI is displaying. Telegram
+    silently drops unknown IDs from the result vector, so callers can't tell
+    apart "already gone" from "successfully removed" — both paths land here
+    as ``status='ok'``.
+    """
+
+    account_id: str = Field(min_length=1)
+    story_id: int = Field(gt=0)
+
+
 class AccountProfileMusicRemove(BaseModel):
     """Unpin a single track from the account's saved profile music.
 

@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
 from telethon.tl.functions.photos import GetUserPhotosRequest
-from telethon.tl.functions.stories import GetPinnedStoriesRequest
+from telethon.tl.functions.stories import GetPeerStoriesRequest, GetPinnedStoriesRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
@@ -32,11 +32,13 @@ from core.logging import log_event
 from core.telegram_client._pool import get_client
 from schemas.telegram_actions import (
     GetUserProfile,
+    ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
+    TelegramActiveStories,
     TelegramMusicItem,
     TelegramPinnedStories,
     TelegramProfileMusic,
@@ -134,6 +136,8 @@ async def _dispatch_read_action(
             return await _dispatch_get_user_profile(client)
         case ListPinnedStories():
             return await _dispatch_list_pinned_stories(client, action)
+        case ListActiveStories():
+            return await _dispatch_list_active_stories(client)
         case ListProfileMusic():
             return await _dispatch_list_profile_music(client)
         case ListProfilePhotos():
@@ -190,20 +194,89 @@ async def _dispatch_list_pinned_stories(
         GetPinnedStoriesRequest(peer=InputPeerSelf(), offset_id=0, limit=action.limit),
     )
     raw_stories = getattr(result, "stories", []) or []
-    items: list[TelegramStoryThumb] = []
-    for story in raw_stories:
-        story_id = int(getattr(story, "id", 0) or 0)
-        if story_id == 0:
-            continue
-        items.append(
-            TelegramStoryThumb(
-                story_id=story_id,
-                kind=_story_kind(story),
-                caption=_optional_str(getattr(story, "caption", None)),
-                thumb_bytes=await _download_story_thumb(client, story),
-            ),
-        )
-    return TelegramPinnedStories(items=items)
+    items = [await _story_thumb(client, story, is_pinned=True) for story in raw_stories]
+    return TelegramPinnedStories(items=[item for item in items if item is not None])
+
+
+async def _dispatch_list_active_stories(client: TelegramClient) -> TelegramActiveStories:
+    """Pull the account's currently-active (≤24 h) stories.
+
+    ``stories.getPeerStories`` returns ``stories.PeerStories`` whose outer
+    ``stories`` attribute is a ``PeerStories`` constructor — the actual
+    ``StoryItem`` list lives one level deeper at ``result.stories.stories``.
+    Each item's ``pinned`` flag preserves whether it's also profile-pinned,
+    so the service layer can dedupe against ``ListPinnedStories`` without
+    a second round-trip.
+    """
+    result = await client(GetPeerStoriesRequest(peer=InputPeerSelf()))
+    outer = getattr(result, "stories", None)
+    raw_stories = getattr(outer, "stories", []) or []
+    items = [
+        await _story_thumb(client, story, is_pinned=bool(getattr(story, "pinned", False)))
+        for story in raw_stories
+    ]
+    return TelegramActiveStories(items=[item for item in items if item is not None])
+
+
+async def _story_thumb(
+    client: TelegramClient,
+    story: object,
+    *,
+    is_pinned: bool,
+) -> TelegramStoryThumb | None:
+    """Build a snapshot row from a Telethon ``StoryItem``.
+
+    Returns ``None`` for items without an ``id`` so the caller can skip them
+    instead of carrying placeholder rows downstream. ``is_active`` is derived
+    from ``expire_date`` — the pinned-stories endpoint returns expired items
+    too, while the peer-stories endpoint only returns active ones.
+    """
+    story_id = int(getattr(story, "id", 0) or 0)
+    if story_id == 0:
+        return None
+    return TelegramStoryThumb(
+        story_id=story_id,
+        kind=_story_kind(story),
+        caption=_optional_str(getattr(story, "caption", None)),
+        thumb_bytes=await _download_story_thumb(client, story),
+        date_unix=_story_date_unix(story),
+        is_pinned=is_pinned,
+        is_active=_story_is_active(story),
+    )
+
+
+def _story_date_unix(story: object) -> int:
+    """Flatten Telethon's ``StoryItem.date`` (a ``datetime``) into a Unix int."""
+    raw = getattr(story, "date", None)
+    if raw is None:
+        return 0
+    if isinstance(raw, int):
+        return raw
+    timestamp = getattr(raw, "timestamp", None)
+    if callable(timestamp):
+        try:
+            return int(timestamp())
+        except (TypeError, ValueError):
+            return 0
+    return 0
+
+
+def _story_is_active(story: object) -> bool:
+    """True when ``StoryItem.expire_date`` is still in the future."""
+    import time  # noqa: PLC0415 — local import keeps the top-level imports lean
+
+    expire = getattr(story, "expire_date", None)
+    if expire is None:
+        return False
+    if isinstance(expire, int):
+        return expire > int(time.time())
+    timestamp = getattr(expire, "timestamp", None)
+    if callable(timestamp):
+        try:
+            return timestamp() > time.time()
+        except (TypeError, ValueError):
+            return False
+    return False
 
 
 def _story_kind(story: object) -> Literal["image", "video", "unknown"]:

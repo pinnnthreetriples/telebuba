@@ -33,6 +33,7 @@ from schemas.telegram_actions import (
     ReadChannel,
     RemoveProfileMusic,
     RemoveProfilePhoto,
+    RemoveStory,
     SendDirectMessage,
     SetOnline,
     SetProfilePhoto,
@@ -213,6 +214,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
             | AddProfileMusic()
             | RemoveProfileMusic()
             | RemoveProfilePhoto()
+            | RemoveStory()
         ):
             message_id = await _dispatch_profile_media_action(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
@@ -293,6 +295,8 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:
             extra = {"file_id": action.file_id}
         case RemoveProfilePhoto():
             extra = {"photo_id": action.photo_id}
+        case RemoveStory():
+            extra = {"story_id": action.story_id}
         case _:  # pragma: no cover - discriminated union is exhaustive
             extra = {}
     return extra

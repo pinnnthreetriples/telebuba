@@ -13,11 +13,13 @@ from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountProfileSnapshot
 from schemas.telegram_actions import (
     GetUserProfile,
+    ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
+    TelegramActiveStories,
     TelegramMusicItem,
     TelegramPinnedStories,
     TelegramProfileMusic,
@@ -77,7 +79,29 @@ def _stub_execute_read_many(
             elif isinstance(action, ListPinnedStories):
                 results.append(
                     TelegramPinnedStories(
-                        items=[TelegramStoryThumb(story_id=101, kind="image", caption="hi")],
+                        items=[
+                            TelegramStoryThumb(
+                                story_id=101,
+                                kind="image",
+                                caption="hi",
+                                date_unix=1_600_000_000,
+                                is_pinned=True,
+                            ),
+                        ],
+                    ),
+                )
+            elif isinstance(action, ListActiveStories):
+                results.append(
+                    TelegramActiveStories(
+                        items=[
+                            TelegramStoryThumb(
+                                story_id=202,
+                                kind="video",
+                                caption="active",
+                                date_unix=1_700_000_000,
+                                is_active=True,
+                            ),
+                        ],
                     ),
                 )
             elif isinstance(action, ListProfileMusic):
@@ -128,7 +152,11 @@ async def test_fetch_live_profile_returns_combined_snapshot(
     assert snapshot.first_name == "Alice"
     assert snapshot.bio == "Hi there"
     assert snapshot.avatar_bytes == b"jpeg"
-    assert [story.story_id for story in snapshot.stories] == [101]
+    # Active first (newer date_unix), then pinned, deduped — pinned-only #101
+    # and active-only #202 appear once each in date-descending order.
+    assert [story.story_id for story in snapshot.stories] == [202, 101]
+    assert snapshot.stories[0].is_active is True
+    assert snapshot.stories[1].is_pinned is True
     assert [track.title for track in snapshot.music] == ["Track"]
     assert snapshot.music_supported is True
     assert [photo.photo_id for photo in snapshot.photos] == [900]
@@ -137,13 +165,14 @@ async def test_fetch_live_profile_returns_combined_snapshot(
 
     # Single batch — regression guard: prior code did 3 parallel execute_read
     # calls and raced into "database is locked" under warming-runtime load.
-    # The fourth read (photo history) joined the batch when the photos tab
-    # grew from a single-avatar preview to a full grid.
-    assert len(calls) == 1, "fetch_live_account_profile must open ONE gateway session, not four"
+    # Photo history and active-stories joined the batch later; the
+    # one-session-per-fetch invariant must still hold for all five reads.
+    assert len(calls) == 1, "fetch_live_account_profile must open ONE gateway session, not five"
     action_types = {type(action).__name__ for action in calls[0]}
     assert action_types == {
         "GetUserProfile",
         "ListPinnedStories",
+        "ListActiveStories",
         "ListProfileMusic",
         "ListProfilePhotos",
     }

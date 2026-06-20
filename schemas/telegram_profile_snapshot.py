@@ -25,13 +25,31 @@ class TelegramProfileSnapshot(BaseModel):
 
 
 class TelegramStoryThumb(BaseModel):
+    """Lightweight preview of one of the account's stories.
+
+    ``is_pinned`` reflects the ``StoryItem.pinned`` flag (pinned to profile,
+    survives the 24 h window). ``is_active`` is true when the story is in
+    its 24 h visibility window — the two are independent (a story can be
+    pinned but expired, or active but unpinned). ``date_unix`` lets the UI
+    sort newest-first across both lists.
+    """
+
     story_id: int
     kind: Literal["image", "video", "unknown"] = "unknown"
     caption: str | None = None
     thumb_bytes: bytes | None = None
+    date_unix: int = 0
+    is_pinned: bool = False
+    is_active: bool = False
 
 
 class TelegramPinnedStories(BaseModel):
+    items: list[TelegramStoryThumb] = Field(default_factory=list)
+
+
+class TelegramActiveStories(BaseModel):
+    """Currently-active (≤24 h) stories of the signed-in account."""
+
     items: list[TelegramStoryThumb] = Field(default_factory=list)
 
 

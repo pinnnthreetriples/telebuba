@@ -28,11 +28,13 @@ from core.telegram_client import (
 )
 from schemas.telegram_actions import (
     GetUserProfile,
+    ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
+    TelegramActiveStories,
     TelegramPinnedStories,
     TelegramProfileMusic,
     TelegramProfilePhotos,
@@ -194,6 +196,69 @@ async def test_list_pinned_stories_returns_items(monkeypatch: pytest.MonkeyPatch
     assert result.items[0].thumb_bytes == b"thumb"
     assert result.items[1].kind == "video"
     assert any(isinstance(req, GetPinnedStoriesRequest) for req in requested)
+
+
+@pytest.mark.asyncio
+async def test_list_active_stories_extracts_inner_stories_and_flags(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``stories.getPeerStories`` returns a doubly-nested ``stories`` chain.
+
+    The outer ``stories`` attribute is a ``PeerStories`` constructor — the
+    actual ``StoryItem`` list lives one level deeper at
+    ``result.stories.stories``. Regression guard for the same trap the
+    research subagent flagged: many third-party stubs assume the flat
+    layout. Also asserts that the ``StoryItem.pinned`` flag is carried
+    through into ``is_pinned`` so the service-layer dedupe can grant the
+    badge to entries that are simultaneously active and pinned.
+    """
+    from telethon.tl.functions.stories import GetPeerStoriesRequest  # noqa: PLC0415
+
+    pinned_story = MagicMock(
+        id=301,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption="закреп",
+        pinned=True,
+        date=datetime(2026, 6, 19, 10, 0, tzinfo=UTC),
+        expire_date=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    fresh_story = MagicMock(
+        id=302,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption=None,
+        pinned=False,
+        date=datetime(2026, 6, 20, 9, 0, tzinfo=UTC),
+        expire_date=datetime(2099, 1, 1, tzinfo=UTC),
+    )
+    inner_peer_stories = MagicMock(stories=[pinned_story, fresh_story])
+    outer_payload = MagicMock(stories=inner_peer_stories)
+    requested: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            requested.append(request)
+            return outer_payload
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            return b"thumb"
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-active", ListActiveStories())
+
+    assert isinstance(result, TelegramActiveStories)
+    assert any(isinstance(req, GetPeerStoriesRequest) for req in requested)
+    assert [item.story_id for item in result.items] == [301, 302]
+    assert result.items[0].is_pinned is True
+    assert result.items[1].is_pinned is False
+    # Both are active (expire_date in 2099).
+    assert all(item.is_active for item in result.items)
+    assert result.items[0].date_unix == int(
+        datetime(2026, 6, 19, 10, 0, tzinfo=UTC).timestamp(),
+    )
 
 
 @pytest.mark.asyncio

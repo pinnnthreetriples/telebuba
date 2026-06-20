@@ -137,6 +137,30 @@ class ListPinnedStories(BaseModel):
     limit: int = Field(default=20, ge=1, le=100)
 
 
+class ListActiveStories(BaseModel):
+    """Read-only: list the account's currently-active (≤24 h) stories.
+
+    Mirrors what other users would see in the story ring on the profile —
+    distinct from ``ListPinnedStories`` (permanent-on-profile). A story can
+    appear in both lists; the service layer dedupes by ``story_id``.
+    """
+
+    action_type: Literal["list_active_stories"] = "list_active_stories"
+
+
+class RemoveStory(BaseModel):
+    """Delete one story from the account (active and/or pinned in one call).
+
+    ``stories.deleteStories`` works for both states — there's no separate
+    delete-pinned endpoint. Bad IDs are silently dropped server-side, so
+    callers shouldn't try/except for ``STORY_ID_INVALID`` (the docs don't
+    list it for this method).
+    """
+
+    action_type: Literal["remove_story"] = "remove_story"
+    story_id: int = Field(gt=0)
+
+
 class ListProfileMusic(BaseModel):
     """Read-only: list the music shown on the account's profile.
 
@@ -171,12 +195,13 @@ TelegramAction = Annotated[
     | PostStory
     | AddProfileMusic
     | RemoveProfileMusic
-    | RemoveProfilePhoto,
+    | RemoveProfilePhoto
+    | RemoveStory,
     Field(discriminator="action_type"),
 ]
 
 TelegramReadAction = Annotated[
-    GetUserProfile | ListPinnedStories | ListProfileMusic | ListProfilePhotos,
+    GetUserProfile | ListPinnedStories | ListActiveStories | ListProfileMusic | ListProfilePhotos,
     Field(discriminator="action_type"),
 ]
 

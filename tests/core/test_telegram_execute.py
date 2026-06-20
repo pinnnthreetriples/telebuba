@@ -17,7 +17,11 @@ from telethon.tl.functions.account import (
 )
 from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
-from telethon.tl.functions.stories import CanSendStoryRequest, SendStoryRequest
+from telethon.tl.functions.stories import (
+    CanSendStoryRequest,
+    DeleteStoriesRequest,
+    SendStoryRequest,
+)
 from telethon.tl.types import InputPhoto
 
 from core.config import settings
@@ -33,6 +37,7 @@ from schemas.telegram_actions import (
     PostComment,
     PostStory,
     RemoveProfilePhoto,
+    RemoveStory,
     SendDirectMessage,
     SetProfilePhoto,
     UpdateProfile,
@@ -474,6 +479,37 @@ async def test_execute_remove_profile_photo_sends_delete_photos_request(
     assert sent.id == 4242
     assert sent.access_hash == 7
     assert sent.file_reference == b"\x01\x02"
+
+
+@pytest.mark.asyncio
+async def test_execute_remove_story_sends_delete_stories_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One ``stories.deleteStories`` call covers both active and pinned removal.
+
+    The endpoint takes a batch ``Vector<int>``; we still pass a single id
+    because the UI deletes one slide at a time, but the call signature must
+    be a list so the server doesn't reject the request as malformed. Bad
+    ids are silently dropped from the response — no error-path test needed.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            return [9876]
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-story-rm", RemoveStory(story_id=9876))
+
+    assert result.status == "ok"
+    delete_requests = [req for req in captured if isinstance(req, DeleteStoriesRequest)]
+    assert len(delete_requests) == 1
+    assert delete_requests[0].id == [9876]
 
 
 @pytest.mark.asyncio

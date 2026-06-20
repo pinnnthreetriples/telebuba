@@ -16,6 +16,7 @@ from schemas.telegram_actions import (
     PostStory,
     RemoveProfileMusic,
     RemoveProfilePhoto,
+    RemoveStory,
     SetProfilePhoto,
 )
 from services.accounts._uploads import (
@@ -33,6 +34,7 @@ if TYPE_CHECKING:
         AccountProfileMusicUpload,
         AccountProfilePhotoRemove,
         AccountProfilePhotoUpload,
+        AccountStoryRemove,
         AccountStoryUpload,
     )
     from schemas.telegram_actions import ActionResult
@@ -42,6 +44,7 @@ __all__ = [
     "post_account_story",
     "remove_account_profile_music",
     "remove_account_profile_photo",
+    "remove_account_story",
     "set_account_profile_photo",
 ]
 
@@ -186,5 +189,20 @@ async def remove_account_profile_photo(data: AccountProfilePhotoRemove) -> Actio
         "account_profile_photo_removed",
         account_id=data.account_id,
         extra={"photo_id": data.photo_id},
+    )
+    return result
+
+
+async def remove_account_story(data: AccountStoryRemove) -> ActionResult:
+    result = await execute(data.account_id, RemoveStory(story_id=data.story_id))
+    if result.status != "ok":
+        msg = result.error_message or result.status
+        raise ValueError(msg)
+    invalidate_account_profile_cache(data.account_id)
+    await log_event(
+        "INFO",
+        "account_story_removed",
+        account_id=data.account_id,
+        extra={"story_id": data.story_id},
     )
     return result
