@@ -84,6 +84,16 @@ _ACTION_TO_STEP: dict[str, int] = {
 _ERROR_DETAIL_MAX_LEN: int = 60
 _SLEEP_STEP_INDEX: int = 5
 
+# Visual-state → Material glyph. "active" (and any unknown) fall back to the
+# step's own topic icon via .get(), so the table only lists the overrides.
+_STEP_GLYPH: dict[str, str] = {
+    "done": "check",
+    "pending": "remove",
+    "error": "error",
+    "flood": "timer",
+    "quar": "block",
+}
+
 
 def _next_active_index(card: WarmingAccountState) -> int:  # pragma: no cover
     """Return the index of the step that is active given an ``active`` state.
@@ -274,22 +284,8 @@ def _render_step_rail(  # pragma: no cover
             # node maps to the same visual slot but must not spin (a spinning
             # moon reads wrong for a sleeping account).
             icon_extra = " tb-step-active-icon" if sk == "active" and kind == "active" else ""
-            # P1: pick glyph by state, not by topic. Done→check, pending→dash,
-            # current→topic icon, error→error, flood→timer, quar→block.
-            if sk == "active":
-                glyph = step.icon
-            elif sk == "done":
-                glyph = "check"
-            elif sk == "pending":
-                glyph = "remove"
-            elif sk == "error":
-                glyph = "error"
-            elif sk == "flood":
-                glyph = "timer"
-            elif sk == "quar":
-                glyph = "block"
-            else:
-                glyph = step.icon
+            # Glyph by visual state; "active"/unknown keep the step's topic icon.
+            glyph = _STEP_GLYPH.get(sk, step.icon)
             with ui.column().classes("items-center gap-0.5 shrink-0"):
                 circle = ui.element("div").classes(
                     f"w-9 h-9 rounded-full flex items-center justify-center shrink-0 {cls}",
@@ -381,80 +377,3 @@ def _render_active_detail(  # noqa: C901, PLR0912
                 ):
                     ui.icon(icon_name).classes(f"text-base {icon_color}")
                 ui.label(text).classes(f"text-[11px] {text_cls} leading-snug")
-
-
-def _render_step_detail_body(  # pragma: no cover
-    card: WarmingAccountState,
-    step_idx: int,
-) -> str:
-    """Compose the detail string for a non-sleep active step.
-
-    Pulls channel / proxy / last event straight off the polled card. Each
-    piece is optional and only added when present, so the line never reads
-    as a row of dashes.
-    """
-    step = _CYCLE_STEPS[step_idx]
-    parts: list[str] = []
-    if card.last_channel:
-        parts.append(f"канал: {card.last_channel}")
-    if card.proxy_snapshot:
-        proxy = card.proxy_snapshot
-        if card.proxy_country:
-            proxy = f"{proxy} ({card.proxy_country})"
-        parts.append(f"прокси: {proxy}")
-    if card.last_event:
-        parts.append(f"событие: {card.last_event}")
-    if not parts:
-        return f"{step.label_ru} · данные появятся в следующем опросе"
-    return f"{step.label_ru} · " + " · ".join(parts)
-
-
-def _render_cycle_summary(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Single-line cycle counter strip — cycles, daily cap, next run, trust.
-
-    Kept on a single row with the same 11 px slate text as the rest of the
-    card so the visual rhythm doesn't break. The next-run chip is suppressed
-    in the error state — a stale ETA would be a false promise since reconcile
-    / loop skip error'd accounts (mirrors the behaviour of the stats footer).
-    """
-    with ui.row().classes("w-full items-center gap-3 flex-wrap"):
-        ui.label(f"Цикл #{card.cycles_completed}").classes(
-            "text-[11px] text-slate-500 tabular-nums",
-        )
-        ui.label("·").classes("text-[11px] text-slate-300")
-        if card.daily_cap > 0:
-            pct = min(100, round(card.daily_actions / card.daily_cap * 100))
-            filled = round(pct / 20)  # 5 blocks total
-            bar = "█" * filled + "░" * (5 - filled)
-            ui.label(f"📊 {card.daily_actions}/{card.daily_cap}").classes(
-                "text-[11px] text-slate-600 tabular-nums",
-            )
-            ui.label(bar).classes("text-[10px] text-indigo-400 font-mono tracking-tighter")
-            ui.label(f"{pct}%").classes("text-[11px] text-slate-400 tabular-nums")
-        else:
-            ui.label(f"📊 {card.daily_actions}").classes(
-                "text-[11px] text-slate-600 tabular-nums",
-            )
-        ui.label("·").classes("text-[11px] text-slate-300")
-        dm_cls = (
-            "text-[10px] px-1.5 py-0.5 rounded bg-green-100 text-green-700"
-            if card.dm_allowed
-            else "text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500"
-        )
-        dm_text = "DM ✅" if card.dm_allowed else "DM 🔒"
-        ui.label(dm_text).classes(dm_cls)
-        ui.label("·").classes("text-[11px] text-slate-300")
-        if card.state != "error":
-            eta = _relative_eta(card.next_run_at)
-            if eta:
-                ui.label(f"⏭ {eta}").classes("text-[11px] text-slate-500 tabular-nums")
-        ui.label("·").classes("text-[11px] text-slate-300")
-        if card.trust_score is not None:
-            trust_cls = (
-                "text-green-700"
-                if card.trust_score >= 70  # noqa: PLR2004
-                else "text-amber-700"
-                if card.trust_score >= 40  # noqa: PLR2004
-                else "text-red-700"
-            )
-            ui.label(f"⛨ {card.trust_score}").classes(f"text-[11px] tabular-nums {trust_cls}")

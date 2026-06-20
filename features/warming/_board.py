@@ -240,28 +240,28 @@ def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  
 
 
 def _render_status_line(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Coloured dot + action text + secondary label between pipeline and footer."""
-    dot_cls = _STATUS_DOT.get(card.state, "bg-slate-400")
+    """Coloured dot + action text + secondary between pipeline and footer.
 
-    if card.state == "active":
-        primary = _STATUS_ACTION_LABEL.get(card.last_action or "", "выполняет цикл")
-        secondary = "выполняется сейчас"
-    elif card.state == "error":
-        action = card.last_action or "цикл"
-        primary = f"ошибка: {action}"
-        secondary = "ожидает повторной попытки"
-    elif card.state == "flood_wait":
-        eta = _relative_eta(card.flood_wait_until)
-        primary = "flood-wait активен"
-        secondary = f"ещё {eta}" if eta and eta != "сейчас" else "истекает"
-    elif card.state == "sleeping":
-        primary = "спит по расписанию"
-        secondary = ""  # detail lives in the info box below — avoid the dup
-    elif card.state == "quarantine":
-        primary = "карантин"
-        secondary = "цикл приостановлен"
-    else:
+    Per-state text is a dict lookup, not an if/elif dispatch on card.state.
+    "sleeping" leaves the secondary empty — that detail lives in the info box
+    below (avoid the duplicate).
+    """
+    eta = _relative_eta(card.flood_wait_until)
+    flood_secondary = f"ещё {eta}" if eta and eta != "сейчас" else "истекает"
+    text = {
+        "active": (
+            _STATUS_ACTION_LABEL.get(card.last_action or "", "выполняет цикл"),
+            "выполняется сейчас",
+        ),
+        "error": (f"ошибка: {card.last_action or 'цикл'}", "ожидает повторной попытки"),
+        "flood_wait": ("flood-wait активен", flood_secondary),
+        "sleeping": ("спит по расписанию", ""),
+        "quarantine": ("карантин", "цикл приостановлен"),
+    }.get(card.state)
+    if text is None:
         return
+    primary, secondary = text
+    dot_cls = _STATUS_DOT.get(card.state, "bg-slate-400")
 
     with ui.row().classes("w-full items-center gap-2"):
         ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 tb-live-dot {dot_cls}")
