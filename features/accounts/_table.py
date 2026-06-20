@@ -69,80 +69,96 @@ _STATUS_BADGE_TEMPLATE = """
 
 _PROXY_TEMPLATE = """
 <q-td :props="props">
-  <div v-if="props.row.proxy_host" class="column q-gutter-xs">
-    <div class="row items-center no-wrap q-gutter-xs">
-      <q-chip
-        v-if="props.row.proxy_status === 'tcp_working'"
-        dense
-        square
-        color="positive"
-        text-color="white"
-        label="Работает"
-      />
-      <q-chip
-        v-else-if="props.row.proxy_status === 'failed'"
-        dense
-        square
-        color="negative"
-        text-color="white"
-        label="Ошибка"
-      />
-      <q-chip
-        v-else
-        dense
-        square
-        color="grey-6"
-        text-color="white"
-        label="Не проверен"
-      />
-      <span class="text-weight-medium">{{ props.row.proxy }}</span>
-    </div>
-    <div
-      v-if="props.row.proxy_country_name || props.row.proxy_country_code || props.row.proxy_exit_ip"
-      class="text-caption text-grey-7"
-    >
-      {{ props.row.proxy_country_name || props.row.proxy_country_code || '' }}
-      <span v-if="props.row.proxy_exit_ip"> · {{ props.row.proxy_exit_ip }}</span>
-    </div>
+  <div v-if="props.row.proxy_host">
+    <q-chip
+      dense
+      square
+      :color="props.row.proxy_status === 'tcp_working' ? 'positive'
+              : props.row.proxy_status === 'failed' ? 'negative' : 'grey-6'"
+      text-color="white"
+      :icon="props.row.proxy_status === 'tcp_working' ? 'check_circle'
+             : props.row.proxy_status === 'failed' ? 'error' : 'help_outline'"
+      :label="props.row.proxy_country_code
+              || (props.row.proxy_status === 'tcp_working' ? 'OK'
+                  : props.row.proxy_status === 'failed' ? 'FAIL' : '—')"
+    />
+    <q-tooltip class="bg-grey-9 text-body2">
+      <div class="text-weight-bold q-mb-xs">{{ props.row.proxy }}</div>
+      <div v-if="props.row.proxy_country_name">{{ props.row.proxy_country_name }}</div>
+      <div v-if="props.row.proxy_exit_ip">IP: {{ props.row.proxy_exit_ip }}</div>
+      <div v-if="props.row.proxy_last_error" class="text-negative q-mt-xs">
+        {{ props.row.proxy_last_error }}
+      </div>
+    </q-tooltip>
   </div>
-  <q-chip v-else dense outline square color="grey-6" label="Без прокси" />
+  <q-chip v-else dense outline square color="grey-6" label="—" />
+</q-td>
+"""
+
+# Telegram identity stacks vertically — Display Name → @username → phone —
+# instead of the previous space-pipe-joined single line. Each subsequent
+# line drops to a caption-grey style so the visual hierarchy reads at a
+# glance and the column hugs ~150 px instead of 280 px.
+_TELEGRAM_TEMPLATE = """
+<q-td :props="props">
+  <div class="column" style="line-height:1.25; white-space: normal">
+    <template v-for="(part, idx) in (props.row.telegram || '').split(' | ')" :key="idx">
+      <span :class="idx === 0 ? 'text-weight-medium' : 'text-caption text-grey-7'">
+        {{ part }}
+      </span>
+    </template>
+  </div>
+</q-td>
+"""
+
+_DEVICE_TEMPLATE = """
+<q-td :props="props">
+  <div class="column" style="line-height:1.25; white-space: normal">
+    <template v-for="(part, idx) in (props.row.device || '—').split(' | ')" :key="idx">
+      <span :class="idx === 0 ? 'text-weight-medium' : 'text-caption text-grey-7'">
+        {{ part }}
+      </span>
+    </template>
+  </div>
 </q-td>
 """
 
 _ACTIONS_TEMPLATE = """
-<q-td :props="props">
-  <q-btn
-    dense round flat
-    icon="manage_accounts"
-    color="primary"
-    @click="() => $parent.$emit('edit_profile', props.row)"
-  >
-    <q-tooltip>Редактировать профиль</q-tooltip>
-  </q-btn>
-  <q-btn
-    dense round flat
-    icon="vpn_key"
-    color="primary"
-    @click="() => $parent.$emit('edit_proxy', props.row)"
-  >
-    <q-tooltip>Настройки прокси</q-tooltip>
-  </q-btn>
-  <q-btn
-    dense round flat
-    icon="refresh"
-    color="primary"
-    @click="() => $parent.$emit('check_one', props.row.account_id)"
-  >
-    <q-tooltip>Проверить аккаунт</q-tooltip>
-  </q-btn>
-  <q-btn
-    dense round flat
-    icon="delete"
-    color="negative"
-    @click="() => $parent.$emit('delete_account', props.row)"
-  >
-    <q-tooltip>Удалить аккаунт</q-tooltip>
-  </q-btn>
+<q-td :props="props" class="q-pa-none">
+  <div class="row items-center justify-end no-wrap">
+    <q-btn
+      dense round flat size="sm"
+      icon="manage_accounts"
+      color="primary"
+      @click="() => $parent.$emit('edit_profile', props.row)"
+    >
+      <q-tooltip>Редактировать профиль</q-tooltip>
+    </q-btn>
+    <q-btn
+      dense round flat size="sm"
+      icon="vpn_key"
+      color="primary"
+      @click="() => $parent.$emit('edit_proxy', props.row)"
+    >
+      <q-tooltip>Настройки прокси</q-tooltip>
+    </q-btn>
+    <q-btn
+      dense round flat size="sm"
+      icon="refresh"
+      color="primary"
+      @click="() => $parent.$emit('check_one', props.row.account_id)"
+    >
+      <q-tooltip>Проверить аккаунт</q-tooltip>
+    </q-btn>
+    <q-btn
+      dense round flat size="sm"
+      icon="delete"
+      color="negative"
+      @click="() => $parent.$emit('delete_account', props.row)"
+    >
+      <q-tooltip>Удалить аккаунт</q-tooltip>
+    </q-btn>
+  </div>
 </q-td>
 """
 
