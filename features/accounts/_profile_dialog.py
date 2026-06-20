@@ -227,7 +227,7 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
 
     # New story comes first — operator's primary task on this tab is publishing,
     # not auditing the existing ring. Upload widget sits at the top, settings
-    # right under it, and the existing-stories carousel goes to the bottom as
+    # right under it, and the existing-stories rail goes to the bottom as
     # historical context.
     story_upload = (
         ui.upload(
@@ -277,7 +277,7 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
     story_caption = ui.textarea("Подпись").props("dense outlined autogrow").classes("w-full")
     protect_story = ui.checkbox("Защитить контент (запрет на пересылку)", value=False)
 
-    # Existing-stories carousel lives at the bottom — historical context the
+    # Existing-stories rail lives at the bottom — historical context the
     # operator scans after deciding what to post. The render layer writes
     # into ``refs.stories_container`` so the snapshot loader stays unchanged.
     ui.separator().classes("q-mt-md")
@@ -307,11 +307,18 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             ui.notify(_service_error_label(str(exc)), type="negative")
             return
         ui.notify("Сторис опубликована", type="positive")
-        _apply_optimistic_story(refs, story_bytes=bytes(content), kind=kind, caption=caption)
         story_upload.reset()
         story_caption.value = ""
         staged["name"] = None
         staged["bytes"] = None
+        # Optimistic update can only render image stories (we have raw bytes);
+        # video uploads would show an empty placeholder until ↻. A force-
+        # refresh from Telegram is one extra round-trip but lands the real
+        # thumbnail, real story_id, and real expire_date in a single shot —
+        # the apply button's loading state already covers the brief wait.
+        if kind == "image":
+            _apply_optimistic_story(refs, story_bytes=bytes(content), kind=kind, caption=caption)
+        await _load_and_apply(account_id, refs, force_refresh=True)
 
     def _cancel() -> None:
         story_upload.reset()

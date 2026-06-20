@@ -63,9 +63,9 @@ def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
     """Render one poster-style story card with overlay badge + delete button.
 
     Thumbnail fills the card (object-cover, no letterbox bars); badges and
-    the trash button are absolutely positioned over the image so the card
-    itself stays a clean 9:16 rectangle. Date + caption sit below the
-    card as small captions.
+    the delete button are absolutely positioned over the image so the card
+    itself stays a clean 9:16 rectangle. Date + caption sit below the card
+    as small captions.
     """
     thumb_url = _avatar_data_url(story.thumb_bytes)
     deletable = story.story_id > 0
@@ -86,16 +86,18 @@ def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
                 ui.icon("push_pin", size="xs").classes(
                     "absolute top-1 right-1 text-white",
                 ).style("filter: drop-shadow(0 0 2px rgba(0,0,0,0.6))")
+            # ``color=negative`` (red) is Quasar's destructive-action colour —
+            # it auto-picks white for the icon, no custom scrim needed.
+            # Previously ``color=white`` painted a white background and
+            # auto-picked a DARK icon, which a hand-applied dark .style()
+            # background then hid completely.
             delete_btn = (
                 ui.button(
                     icon="delete",
                     on_click=lambda _e=None, s=story: _delete_story(refs, s),
                 )
-                .props("dense round size=sm color=white")
-                .classes(
-                    "absolute bottom-1 right-1",
-                )
-                .style("background: rgba(0,0,0,0.6)")
+                .props("dense round size=sm color=negative")
+                .classes("absolute bottom-1 right-1")
             )
             if deletable:
                 delete_btn.tooltip("Удалить эту сторис")
