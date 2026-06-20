@@ -7,9 +7,38 @@ with the rest of ``features/warming``.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Literal
 
 NotifyType = Literal["positive", "negative", "warning", "info", "ongoing"]
+
+
+def _relative_eta(iso: str | None) -> str | None:  # pragma: no cover
+    """Human ETA from now to an ISO timestamp, e.g. ``7 ч`` / ``12 мин``.
+
+    Lives here so it can be reused by sibling UI renderers (the pipeline, the
+    board card stats, the sleep step tooltip) without each one reaching across
+    the package. ``_board`` re-exports it for backward compatibility with
+    existing tests that import it from there.
+    """
+    if not iso:
+        return None
+    try:
+        target = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if target.tzinfo is None:
+        target = target.replace(tzinfo=UTC)
+    delta = (target - datetime.now(UTC)).total_seconds()
+    if delta <= 0:
+        return "сейчас"
+    if delta < _ETA_HOUR_SECONDS:
+        # Sub-minute reads as "<1 мин", not a misleading "0 мин".
+        return "<1 мин" if delta < 60 else f"{int(delta // 60)} мин"  # noqa: PLR2004
+    if delta < _ETA_DAY_SECONDS:
+        return f"{int(delta // _ETA_HOUR_SECONDS)} ч"
+    return f"{int(delta // _ETA_DAY_SECONDS)} д"
+
 
 _BOARD_POLL_SECONDS = 4.0
 _ETA_HOUR_SECONDS = 3600
@@ -108,3 +137,19 @@ _PHASE_BAR_FILL = {
     "active": "bg-lime-500",
     "warmed": "bg-emerald-500",
 }
+
+# Pipeline rail — per-step circle + per-connector bar classes. The actual
+# colours/animations live in ``features/warming/__init__.py`` under
+# ``ui.add_css(shared=True)`` so the keyframes (``tb-flow``,
+# ``tb-step-spin``) and the active-state ring stay in one place. The semantic
+# names here let ``_pipeline.py`` pick a class by current step state without
+# hardcoding colours at the call site.
+_PIPELINE_STEP_DONE = "tb-step-done"
+_PIPELINE_STEP_ACTIVE = "tb-step-active"
+_PIPELINE_STEP_PENDING = "tb-step-pending"
+_PIPELINE_STEP_ERROR = "tb-step-error"
+_PIPELINE_STEP_FLOOD = "tb-step-flood"
+_PIPELINE_STEP_QUAR = "tb-step-quar"
+_PIPELINE_CONNECTOR_DONE = "tb-connector-done"
+_PIPELINE_CONNECTOR_ACTIVE = "tb-connector-active"
+_PIPELINE_CONNECTOR_PENDING = "tb-connector-pending"

@@ -10,7 +10,6 @@ under the aislop file-length cap.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
@@ -32,8 +31,6 @@ from features.warming._board_styling import (
     _CHECK_DOT,
     _CHECK_TEXT,
     _ERROR_MAX_LEN,
-    _ETA_DAY_SECONDS,
-    _ETA_HOUR_SECONDS,
     _HEALTH_DOT,
     _PHASE_BAR_FILL,
     _PHASE_CHIP_CLASSES,
@@ -42,6 +39,7 @@ from features.warming._board_styling import (
     _SUMMARY_CHIPS,
     _TRUST_BADGE,
     _TRUST_BAND_LABEL,
+    _relative_eta,
 )
 
 if TYPE_CHECKING:
@@ -129,27 +127,6 @@ def _card_signature(card: WarmingAccountState) -> tuple[object, ...]:  # pragma:
         card.warming_days,
         None if card.readiness is None else (card.readiness.ready, tuple(card.readiness.reasons)),
     )
-
-
-def _relative_eta(iso: str | None) -> str | None:  # pragma: no cover
-    """Human ETA from now to an ISO timestamp, e.g. ``7 ч`` / ``12 мин``."""
-    if not iso:
-        return None
-    try:
-        target = datetime.fromisoformat(iso)
-    except ValueError:
-        return None
-    if target.tzinfo is None:
-        target = target.replace(tzinfo=UTC)
-    delta = (target - datetime.now(UTC)).total_seconds()
-    if delta <= 0:
-        return "сейчас"
-    if delta < _ETA_HOUR_SECONDS:
-        # Sub-minute reads as "<1 мин", not a misleading "0 мин".
-        return "<1 мин" if delta < 60 else f"{int(delta // 60)} мин"  # noqa: PLR2004
-    if delta < _ETA_DAY_SECONDS:
-        return f"{int(delta // _ETA_HOUR_SECONDS)} ч"
-    return f"{int(delta // _ETA_DAY_SECONDS)} д"
 
 
 def _render_summary(summary: WarmingSummary) -> None:  # pragma: no cover
@@ -404,6 +381,16 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
             _render_checks(card)
         # Lifecycle phase: chip + milestone hint + progress bar.
         _render_phase_block(card)
+        # Animated warming pipeline (6-step cycle rail + detail + summary).
+        # Gated so idle-column cards stay pixel-for-pixel identical to pre-pipeline.
+        if card.state != "idle":
+            # Lazy import keeps the idle-card render path zero-cost — the
+            # pipeline module is only loaded for warming-column cards.
+            from features.warming._pipeline import (  # noqa: PLC0415
+                render_cycle_pipeline,
+            )
+
+            render_cycle_pipeline(card)
         # Spam status (always shown).
         _render_spam_badge(ctx, card)
         # Activity line + stats.

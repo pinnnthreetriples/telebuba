@@ -55,6 +55,40 @@ _WARMING_CSS = """
 .tb-dropzone { transition: background-color 0.2s ease, border-color 0.2s ease; }
 """
 
+# Pipeline-only keyframes + classes. Registered via ui.add_css(shared=True) so
+# the animations are available to every card on every client, not just the
+# page that triggered the import.
+_PIPELINE_CSS = """
+@keyframes tb-flow {
+    0% { background-position: 0% 50%; opacity: 0.55; }
+    50% { background-position: 100% 50%; opacity: 1; }
+    100% { background-position: 0% 50%; opacity: 0.55; }
+}
+.tb-flow-line {
+    height: 2px;
+    border-radius: 9999px;
+    background: linear-gradient(
+        90deg,
+        rgba(34, 197, 94, 0) 0%,
+        rgba(34, 197, 94, 0.85) 50%,
+        rgba(34, 197, 94, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: tb-flow 1.6s linear infinite;
+}
+@keyframes tb-step-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.tb-step-active-icon {
+    display: inline-block;
+    transform-origin: 50% 50%;
+    animation: tb-step-spin 2.4s linear infinite;
+}
+"""
+
+ui.add_css(_PIPELINE_CSS, shared=True)
+
 
 def register_warming_page() -> None:  # pragma: no cover
     @ui.page("/warming", title="Telebuba — Прогрев")

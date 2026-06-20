@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-06-20
+last_updated: 2026-06-20 (bumped this session — Animated Warming Pipeline UI branch landed)
 ---
 
 # Active State
@@ -38,6 +38,7 @@ This file is the only place that should change after every meaningful task. `ROU
 - Scaffold memory refresh completed on 2026-06-16: `.mex/AGENTS.md`, architecture/conventions/decisions/stack/services/logging/telegram/warming contexts, and related patterns now describe package-based domains, direct executor, repositories, no structlog, and no APScheduler for warming.
 - Warming audit (#98–#102 + 6 review bugs): fixed scheduling/ban-risk, board indicators, cycle resilience, localization, channel feedback, reconcile quarantine recovery, cap=1 lockout, trust-ceiling progress, one-sided faded-pair DMs, case-sensitive invite dedup. 536 tests green.
 - Accounts QA audit PR #104: 15 findings fixed — single-source RU localization, username=None on unchanged, error snapshot not cached, footer hides on success only, story kind from extension, delete errors translated, search debounce, uploader CSS scoped. 543 tests green.
+- Animated Warming Pipeline UI (branch `feature/warming-pipeline-ui`) — **Done**: per-account 6-step horizontal cycle pipeline (online → join → read → react → chat → sleep) with a live active-step detail panel and a cycle summary bar, rendered inside every warming-column kanban card. Reads only the existing polled `WarmingAccountState` (no new schema, no new polling, no layer boundary crossings). Implementation lives in the new `features/warming/_pipeline.py` (UI-only); styles + relative-ETA helper in `features/warming/_board_styling.py`; CSS keyframes (`tb-flow`, `tb-step-spin`) in `features/warming/__init__.py` via `ui.add_css(shared=True)`. The `_render_card()` call site is gated by `if card.state != "idle"` so idle-column cards remain pixel-for-pixel unchanged. `_relative_eta()` was relocated from `_board.py` to `_board_styling.py` so existing callers resolve unchanged. File Map updated in `.mex/AGENTS.md`. `ruff check` clean (0 new findings vs. main). `ty check` clean (0 new findings vs. main — single new `unresolved-import: nicegui has no member 'ui'` suppressed with `# ty: ignore[unresolved-import]`, matching the pre-existing env issue shared by 5+ sibling warming files).
 
 ## Not Yet Built
 
