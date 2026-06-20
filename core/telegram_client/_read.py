@@ -326,15 +326,17 @@ def _photo_date_unix(photo: object) -> int:
 
 
 async def _download_photo_thumb(client: TelegramClient, photo: object) -> bytes | None:
-    """Pull the smallest cached thumbnail for a profile photo.
+    """Pull the largest cached preview for a profile photo.
 
-    ``thumb=0`` selects the lowest-resolution stripped/cached size — enough
-    for a grid cell preview, cheap enough to fetch for 20+ photos without
-    blocking the dialog open noticeably.
+    ``thumb=-1`` selects the largest available size in ``photo.sizes`` —
+    for profile photos that's the 640 px ``c`` variant, which renders
+    crisp inside the 360 px carousel slide (and on retina). ``thumb=0``
+    used to fetch the ~160 px stripped preview but stretching it 2x came
+    out visibly pixelated.
     """
     try:
         # ``file=bytes`` (the type) is Telethon's in-memory download mode.
-        data = await client.download_media(photo, file=bytes, thumb=0)  # ty: ignore[invalid-argument-type]
+        data = await client.download_media(photo, file=bytes, thumb=-1)  # ty: ignore[invalid-argument-type]
     except (errors.RPCError, ValueError, TypeError):
         return None
     return data if isinstance(data, (bytes, bytearray)) else None

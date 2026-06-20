@@ -326,7 +326,7 @@ async def test_list_profile_photos_maps_id_triple_and_date(
             return photos_payload
 
         async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
-            assert thumb == 0
+            assert thumb == -1, "photo grid must fetch the largest preview, not the stripped thumb"
             return b"thumb"
 
     _patch_client(monkeypatch, FakeClient())
