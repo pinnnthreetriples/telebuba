@@ -21,13 +21,10 @@ from schemas.warming import WarmingAccountState
 
 
 def _card(state: str, last_action: str | None = None) -> WarmingAccountState:
-    return WarmingAccountState(
-        account_id="acc-1",
-        label="Acc 1",
-        state=state,
-        health="idle",
-        last_action=last_action,
-    )
+    # model_copy(update=...) takes a dict[str, Any], so state/last_action skip
+    # the field Literal check — same pattern as test_warming_board_helpers.
+    base = WarmingAccountState(account_id="acc-1", label="Acc 1", state="idle", health="idle")
+    return base.model_copy(update={"state": state, "last_action": last_action})
 
 
 @pytest.mark.parametrize(
