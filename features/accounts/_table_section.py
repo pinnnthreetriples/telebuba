@@ -69,7 +69,9 @@ def _build_table_section(selected_ids: set[str]) -> _TableSection:  # pragma: no
             new_label = _metric_label("Новые", "0")
 
         with ui.row().classes("w-full items-center gap-2"):
-            query_input = ui.input(placeholder="Поиск").props("dense outlined clearable")
+            query_input = ui.input(placeholder="Поиск").props(
+                "dense outlined clearable debounce=300",
+            )
             query_input.classes("w-80 max-w-full")
             status_select = ui.select(_STATUS_OPTIONS, value="all").props("dense outlined")
             status_select.classes("w-48")

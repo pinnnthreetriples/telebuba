@@ -280,7 +280,7 @@ async def _download_photo_thumb(client: TelegramClient, photo: object) -> bytes 
 
     ``thumb=-1`` selects the largest available size in ``photo.sizes`` —
     for profile photos that's the 640 px ``c`` variant, which renders
-    crisp inside the 360 px carousel slide (and on retina). ``thumb=0``
+    crisp inside the 112 px poster card (and on retina). ``thumb=0``
     used to fetch the ~160 px stripped preview but stretching it 2x came
     out visibly pixelated.
     """

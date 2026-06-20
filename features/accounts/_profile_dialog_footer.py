@@ -31,7 +31,7 @@ class _TabFooter:
     def __init__(
         self,
         *,
-        apply: Callable[[], Awaitable[None]],
+        apply: Callable[[], Awaitable[bool]],
         cancel: Callable[[], None],
     ) -> None:
         self._apply_handler = apply
@@ -61,11 +61,15 @@ class _TabFooter:
         self.apply_btn.props("loading")
         self.cancel_btn.disable()
         try:
-            await self._apply_handler()
+            succeeded = await self._apply_handler()
         finally:
             self.apply_btn.props(remove="loading")
             self.cancel_btn.enable()
-        self.mark_clean()
+        # Keep the dirty footer visible after a failed apply (taken username,
+        # flood, validation) so the operator can fix and retry without having
+        # to re-touch a field to bring the buttons back.
+        if succeeded:
+            self.mark_clean()
 
     def _on_cancel(self) -> None:
         self._cancel_handler()

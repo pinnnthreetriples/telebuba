@@ -165,7 +165,7 @@ async def _download_story_thumb(client: TelegramClient, story: object) -> bytes 
     that's the ``c`` 640 px variant, for video stories the largest
     document thumbnail (typically ~320 px). ``thumb=0`` (the smallest
     stripped preview, ~160 px) was visibly pixelated when stretched
-    inside the carousel slide.
+    inside the 112 px poster card.
     """
     media = getattr(story, "media", None)
     if media is None:

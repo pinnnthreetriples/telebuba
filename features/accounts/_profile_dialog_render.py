@@ -22,6 +22,7 @@ from features.accounts._profile_dialog_common import (
 )
 from features.accounts._profile_dialog_photos import render_photos_grid
 from features.accounts._profile_dialog_stories import render_stories_carousel
+from features.accounts._table import _service_error_label
 
 # TelegramMusicItem / TelegramStoryThumb are CONSTRUCTED at runtime in the
 # optimistic-update helpers — keep them at module scope. AccountProfileSnapshot
@@ -174,7 +175,7 @@ async def _delete_music_row(  # pragma: no cover - NiceGUI click handler
             ),
         )
     except ValueError as exc:
-        ui.notify(f"Не удалось удалить: {exc}", type="negative")
+        ui.notify(f"Не удалось удалить: {_service_error_label(str(exc))}", type="negative")
         return
     ui.notify("Трек удалён из профиля", type="positive")
     _apply_optimistic_music_remove(refs, track.file_id)
@@ -191,6 +192,49 @@ def _format_track_meta(track: TelegramMusicItem) -> str:
     return " · ".join(parts)
 
 
+def _should_overwrite(current_value: str, previous_value: str | None) -> bool:
+    """Whether a refresh may replace a text input's current value.
+
+    ``previous_value is None`` flags the initial load (no prior snapshot) — always
+    fill. Otherwise only overwrite when the field still equals what we last applied,
+    i.e. the operator hasn't edited it since; a ↻ landing mid-edit keeps their text.
+    """
+    return previous_value is None or current_value == previous_value
+
+
+def _apply_text_inputs(  # pragma: no cover - NiceGUI render path
+    refs: _DialogRefs,
+    snapshot: AccountProfileSnapshot,
+    previous: AccountProfileSnapshot | None,
+) -> None:
+    """Fill the four text inputs, preserving edits made since the last apply.
+
+    ``previous`` is the snapshot we last applied (``None`` on the first load).
+    A field is only overwritten when it still equals what we last wrote, so a ↻
+    refresh landing mid-edit keeps the operator's typing — see ``_should_overwrite``.
+    """
+    # (input, new value, previously-applied value). ``None`` prev means the
+    # first load (always fill); ``previous.X or ""`` keeps an empty prior field
+    # distinct from "no snapshot yet" so a typed-into-empty field isn't clobbered.
+    fields = (
+        (
+            refs.first_name,
+            snapshot.first_name,
+            None if previous is None else (previous.first_name or ""),
+        ),
+        (
+            refs.last_name,
+            snapshot.last_name,
+            None if previous is None else (previous.last_name or ""),
+        ),
+        (refs.username, snapshot.username, None if previous is None else (previous.username or "")),
+        (refs.bio, snapshot.bio, None if previous is None else (previous.bio or "")),
+    )
+    for field, new_value, prev_value in fields:
+        if _should_overwrite(field.value or "", prev_value):
+            field.value = new_value or ""
+
+
 def _apply_snapshot(  # pragma: no cover - NiceGUI render path
     refs: _DialogRefs,
     snapshot: AccountProfileSnapshot,
@@ -201,11 +245,9 @@ def _apply_snapshot(  # pragma: no cover - NiceGUI render path
         # ``task.cancel()`` can't interrupt this synchronous block, so we
         # guard explicitly.
         return
+    previous = refs.current_snapshot
     refs.current_snapshot = snapshot
-    refs.first_name.value = snapshot.first_name or ""
-    refs.last_name.value = snapshot.last_name or ""
-    refs.username.value = snapshot.username or ""
-    refs.bio.value = snapshot.bio or ""
+    _apply_text_inputs(refs, snapshot, previous)
     refs.first_name.enable()
     refs.last_name.enable()
     refs.username.enable()

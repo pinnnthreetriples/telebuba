@@ -29,7 +29,7 @@ from features.accounts._profile_dialog_render import (
 )
 from features.accounts._profile_dialog_tab_music import build_music_tab
 from features.accounts._profile_dialog_tab_story import build_story_tab
-from features.accounts._table import _service_error_label
+from features.accounts._table import _service_error_label, _username_update_value
 from schemas.accounts import AccountProfileUpdateRequest
 from schemas.profile_media import AccountProfilePhotoUpload
 from services.accounts import (
@@ -48,18 +48,20 @@ if TYPE_CHECKING:
 # that QUploader paints after a file completes — users kept reading them as
 # rival "apply" buttons. Inspecting the rendered DOM gave us two precise
 # selectors that hit those icons without touching the "+" add-files button
-# (which lives in the same header row). ``shared=True`` is required by NiceGUI
+# (which lives in the same header row). Scoped under ``.tb-profile-dialog`` (the
+# dialog root class) so it does NOT touch other uploaders in the app, e.g. the
+# add-account .session/tdata pickers. ``shared=True`` is required by NiceGUI
 # 3.x for module-scope CSS injection.
 ui.add_css(
     """
-    .q-uploader__header-content > div > a.q-btn:not(:last-of-type),
-    .q-uploader__file-header .q-btn--round {
+    .tb-profile-dialog .q-uploader__header-content > div > a.q-btn:not(:last-of-type),
+    .tb-profile-dialog .q-uploader__file-header .q-btn--round {
         display: none !important;
     }
     /* Hide the empty file-list pane until a file is staged — Quasar paints
        a tall placeholder area there by default which makes the uploader
        feel huge on tabs where only the header drop-zone needs to show. */
-    .q-uploader:not(:has(.q-uploader__file)) .q-uploader__list {
+    .tb-profile-dialog .q-uploader:not(:has(.q-uploader__file)) .q-uploader__list {
         display: none;
     }
     """,
@@ -109,27 +111,32 @@ def _profile_text_tab(
             and (refs.bio.value or "").strip() == (snap.bio or "")
         )
 
-    async def _apply() -> None:
+    async def _apply() -> bool:
         name = (refs.first_name.value or "").strip()
         if not name:
             ui.notify("Имя обязательно", type="warning")
-            return
+            return False
+        snap = refs.current_snapshot
         try:
             await update_account_profile(
                 AccountProfileUpdateRequest(
                     account_id=account_id,
                     first_name=name,
                     last_name=(refs.last_name.value or "").strip(),
-                    username=(refs.username.value or "").strip().removeprefix("@"),
+                    username=_username_update_value(
+                        refs.username.value or "",
+                        snap.username if snap else None,
+                    ),
                     bio=(refs.bio.value or "").strip(),
                 ),
             )
         except ValueError as exc:
             ui.notify(_service_error_label(str(exc)), type="negative")
-            return
+            return False
         ui.notify("Профиль обновлён", type="positive")
         await refresh()
         await _load_and_apply(account_id, refs, force_refresh=True)
+        return True
 
     def _cancel() -> None:
         snap = refs.current_snapshot
@@ -186,11 +193,11 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
     ui.label("Текущие фото").classes("text-sm text-grey-8 q-mt-sm")
     refs.photo_preview_container = ui.element("div").classes("w-full")
 
-    async def _apply() -> None:
+    async def _apply() -> bool:
         name = staged["name"]
         content = staged["bytes"]
         if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
-            return
+            return False
         try:
             await set_account_profile_photo(
                 AccountProfilePhotoUpload(
@@ -201,7 +208,7 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             )
         except ValueError as exc:
             ui.notify(_service_error_label(str(exc)), type="negative")
-            return
+            return False
         ui.notify("Фото профиля обновлено", type="positive")
         # Optimistic update gives instant feedback (we have the raw bytes),
         # then force-refresh pulls canonical state — photo_id, file_reference
@@ -211,6 +218,7 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         staged["name"] = None
         staged["bytes"] = None
         await _load_and_apply(account_id, refs, force_refresh=True)
+        return True
 
     def _cancel() -> None:
         photo_upload.reset()
@@ -240,7 +248,7 @@ async def _open_profile_dialog(
     refs.closed = False
     with (
         ui.dialog() as dialog,
-        ui.column().classes("bg-white p-4 gap-3 w-[640px] max-w-full"),
+        ui.column().classes("tb-profile-dialog bg-white p-4 gap-3 w-[640px] max-w-full"),
     ):
         ui.label("Редактировать профиль").classes("text-base font-semibold")
         with ui.row().classes(

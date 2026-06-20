@@ -71,7 +71,11 @@ async def fetch_live_account_profile(
         return cached
 
     snapshot = await _fetch_live_or_error(account_id)
-    _CACHE[account_id] = snapshot
+    # Don't cache failures: a transient FloodWait/RPC/network error would
+    # otherwise pin the dialog to a stale error for the whole TTL, so reopening
+    # (force_refresh=False) would keep showing it instead of retrying.
+    if snapshot.error is None:
+        _CACHE[account_id] = snapshot
     return snapshot
 
 

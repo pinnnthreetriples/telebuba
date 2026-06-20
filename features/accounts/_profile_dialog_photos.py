@@ -20,6 +20,7 @@ from features.accounts._profile_dialog_common import (
     _DialogRefs,
     _is_client_dead,
 )
+from features.accounts._table import _service_error_label
 from schemas.profile_media import AccountProfilePhotoRemove
 from services.accounts import remove_account_profile_photo
 
@@ -118,7 +119,7 @@ async def _delete_photo(  # pragma: no cover - NiceGUI click handler
             ),
         )
     except ValueError as exc:
-        ui.notify(f"Не удалось удалить: {exc}", type="negative")
+        ui.notify(f"Не удалось удалить: {_service_error_label(str(exc))}", type="negative")
         return
     ui.notify("Фотография удалена", type="positive")
     apply_optimistic_photo_remove(refs, photo.photo_id)

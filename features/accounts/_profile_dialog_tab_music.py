@@ -42,8 +42,8 @@ def build_music_tab(  # pragma: no cover - NiceGUI builder
         lambda: footer.mark_dirty(),  # noqa: PLW0108 — closure binds after footer is assigned
     )
 
-    async def _on_apply() -> None:
-        await _apply_music(account_id, refs, form, load_and_apply)
+    async def _on_apply() -> bool:
+        return await _apply_music(account_id, refs, form, load_and_apply)
 
     def _on_cancel() -> None:
         form.upload.reset()
@@ -100,11 +100,11 @@ async def _apply_music(  # pragma: no cover - click handler
     refs: _DialogRefs,
     form: _MusicTabForm,
     load_and_apply: Callable[..., Awaitable[None]],
-) -> None:
+) -> bool:
     name = form.staged["name"]
     content = form.staged["bytes"]
     if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
-        return
+        return False
     # Blank Название back-fills to the file stem so Telegram shows the upload
     # filename instead of its own "Audio" placeholder.
     title = (form.title.value or "").strip() or Path(name).stem or None
@@ -121,7 +121,7 @@ async def _apply_music(  # pragma: no cover - click handler
         )
     except ValueError as exc:
         ui.notify(_service_error_label(str(exc)), type="negative")
-        return
+        return False
     ui.notify("Музыка профиля добавлена", type="positive")
     _apply_optimistic_music(refs, title=title, performer=performer, filename=name)
     form.upload.reset()
@@ -130,3 +130,4 @@ async def _apply_music(  # pragma: no cover - click handler
     form.staged["name"] = None
     form.staged["bytes"] = None
     await load_and_apply(account_id, refs, force_refresh=True)
+    return True

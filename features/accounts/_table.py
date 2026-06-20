@@ -35,6 +35,9 @@ _TABLE_COLUMNS = [
 # horizontal scrollbar. Per-row session info is still exposed in the edit
 # dialog and the row payload, just not as its own table column.
 
+# Raw ``AccountStatus`` → RU. Single source of truth: the table (via
+# ``_to_table_row``) and the check-result toast both translate the raw enum
+# through this map, so a status reads identically wherever it appears.
 _STATUS_LABEL_RU = {
     "new": "Новый",
     "alive": "Живой",
@@ -45,15 +48,6 @@ _STATUS_LABEL_RU = {
     "network_error": "Ошибка сети",
     "proxy_error": "Ошибка прокси",
     "unknown_error": "Неизвестная ошибка",
-    "New": "Новый",
-    "Alive": "Живой",
-    "Unauthorized": "Не авторизован",
-    "Session error": "Ошибка сессии",
-    "Account error": "Ошибка аккаунта",
-    "Flood wait": "FloodWait",
-    "Network error": "Ошибка сети",
-    "Proxy error": "Ошибка прокси",
-    "Unknown error": "Неизвестная ошибка",
 }
 
 _STATUS_BADGE_TEMPLATE = """
@@ -182,6 +176,23 @@ def _account_status_label(status: str) -> str:
     return _STATUS_LABEL_RU.get(status, status.replace("_", " "))
 
 
+def _username_update_value(raw: str, snapshot_username: str | None) -> str | None:
+    """Return the username to submit, or ``None`` to skip the update entirely.
+
+    Telegram's ``UpdateUsernameRequest`` raises ``USERNAME_NOT_MODIFIED`` when
+    the value is unchanged, so re-sending the current username on a name/bio-only
+    edit would fail the whole save (name/bio are written first, then the username
+    call errors). Returns ``None`` when the cleaned input matches the loaded
+    snapshot — the caller then omits the username from the action so the
+    gateway's ``if username is not None`` guard skips it. A deliberate clear
+    (snapshot had a username, field now blank) returns ``""`` and goes through.
+    """
+    cleaned = raw.strip().removeprefix("@")
+    if cleaned == (snapshot_username or ""):
+        return None
+    return cleaned
+
+
 # Status-code → human-readable RU label for tdata-import failures. The keys
 # match the ``TdataConvertStatus`` values returned by ``core.tdata_import``.
 # Wording follows the 2026 best-practice categories surfaced by the research
@@ -264,7 +275,25 @@ def _service_error_label(message: str) -> str:
         return _tdata_error_label(tail.strip())
     if message.startswith("Proxy not found for account:"):
         return message.replace("Proxy not found for account:", "Прокси не найден для аккаунта:", 1)
-    return _telegram_error_label(message) or message
+    return _media_validation_label(message) or _telegram_error_label(message) or message
+
+
+def _media_validation_label(message: str) -> str | None:
+    """Translate the upload-validation errors from ``services.accounts._uploads``.
+
+    ``_validate_upload`` raises ``"<label> file is too large"`` /
+    ``"<label> file is empty"`` / ``"<label> must be one of: <suffixes>"`` with a
+    free-form English label ("story image", "profile photo", "profile music").
+    Match on the stable English tail so the operator gets RU regardless of label.
+    """
+    if "file is too large" in message:
+        return "Файл слишком большой — уменьшите размер и попробуйте снова"
+    if "file is empty" in message:
+        return "Файл пустой — выберите другой"
+    if "must be one of:" in message:
+        allowed = message.split("must be one of:", 1)[1].strip()
+        return f"Неподдерживаемый формат файла. Разрешены: {allowed}"
+    return None
 
 
 def _telegram_error_label(message: str) -> str | None:

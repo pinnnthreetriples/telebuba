@@ -247,6 +247,35 @@ async def test_fetch_live_profile_flood_wait_returns_error_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_fetch_live_profile_does_not_cache_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed fetch must NOT be cached — reopening the dialog should retry.
+
+    Otherwise a transient FloodWait/RPC error pins the dialog to a stale error
+    for the whole TTL even on a plain (force_refresh=False) reopen.
+    """
+    calls: list[int] = []
+
+    async def fake_execute_read_many(_account_id: str, _actions: list[object]) -> list[object]:
+        calls.append(1)
+        reason = "FloodWait(7s)"
+        raise TelegramReadError(reason)
+
+    monkeypatch.setattr(
+        "services.accounts.profile_read.execute_read_many",
+        fake_execute_read_many,
+    )
+
+    first = await fetch_live_account_profile("acc-err")
+    second = await fetch_live_account_profile("acc-err")
+
+    assert first.error is not None
+    assert second.error is not None
+    assert len(calls) == 2, "error snapshots must not be cached — second open re-fetches"
+
+
+@pytest.mark.asyncio
 async def test_fetch_live_profile_unexpected_error_returns_error_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

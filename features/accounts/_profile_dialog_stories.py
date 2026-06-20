@@ -24,6 +24,7 @@ from features.accounts._profile_dialog_common import (
     _DialogRefs,
     _is_client_dead,
 )
+from features.accounts._table import _service_error_label
 from schemas.profile_media import AccountStoryRemove
 from services.accounts import remove_account_story
 
@@ -159,7 +160,7 @@ async def _delete_story(  # pragma: no cover - NiceGUI click handler
             AccountStoryRemove(account_id=refs.account_id, story_id=story.story_id),
         )
     except ValueError as exc:
-        ui.notify(f"Не удалось удалить: {exc}", type="negative")
+        ui.notify(f"Не удалось удалить: {_service_error_label(str(exc))}", type="negative")
         return
     ui.notify("Сторис удалена", type="positive")
     apply_optimistic_story_remove(refs, story.story_id)

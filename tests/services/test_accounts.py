@@ -91,14 +91,14 @@ def _isolate_runtime(
 @pytest.mark.parametrize(
     ("offset_seconds", "expected"),
     [
-        (0, "0s ago"),
-        (45, "45s ago"),
-        (60, "1m ago"),
-        (90, "1m ago"),
-        (3_600, "1h ago"),
-        (3_600 * 5, "5h ago"),
-        (86_400, "1d ago"),
-        (86_400 * 7, "7d ago"),
+        (0, "0 сек назад"),
+        (45, "45 сек назад"),
+        (60, "1 мин назад"),
+        (90, "1 мин назад"),
+        (3_600, "1 ч назад"),
+        (3_600 * 5, "5 ч назад"),
+        (86_400, "1 дн назад"),
+        (86_400 * 7, "7 дн назад"),
     ],
 )
 def test_format_last_checked_relative(offset_seconds: int, expected: str) -> None:
@@ -854,6 +854,8 @@ async def test_health_taxonomy_matches_status(
     if status == "new":
         state = await load_accounts_table(AccountFilter())
         assert state.rows[0].health == expected_health
+        # Row carries the RAW status enum — the UI translates it to RU once.
+        assert state.rows[0].status == "new"
         return
 
     async def fake_check(_request: object) -> TelegramSessionCheckResult:
@@ -868,6 +870,11 @@ async def test_health_taxonomy_matches_status(
     await check_account_session(AccountCheckRequest(account_id="acc-h"))
     state = await load_accounts_table(AccountFilter())
     assert state.rows[0].health == expected_health
+    # Row carries the RAW status enum (e.g. "network_error"), not an English
+    # label — the UI is the single translation point. Guards the regression
+    # where the service emitted "Network"/"Proxy"/"Unknown" and the UI RU map
+    # (keyed "Network error"/…) silently failed to translate them.
+    assert state.rows[0].status == status
 
 
 @pytest.mark.asyncio

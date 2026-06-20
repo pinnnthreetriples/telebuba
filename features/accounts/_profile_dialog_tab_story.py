@@ -10,6 +10,7 @@ lets the dialog module stay focused on layout assembly.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from nicegui import ui
@@ -26,6 +27,7 @@ if TYPE_CHECKING:
     from nicegui.events import UploadEventArguments
 
     from features.accounts._profile_dialog_common import _DialogRefs
+    from schemas.profile_media import StoryMediaKind
 
 
 @dataclass(slots=True)
@@ -33,11 +35,24 @@ class _StoryTabForm:
     """Widget handles + staged-upload buffer the apply handler needs."""
 
     upload: ui.upload
-    kind: ui.select
     privacy: ui.select
     caption: ui.textarea
     protect: ui.checkbox
     staged: dict[str, object]
+
+
+_VIDEO_SUFFIXES = {".mp4", ".mov"}
+
+
+def _infer_story_kind(filename: str) -> StoryMediaKind:
+    """Image vs video from the file extension.
+
+    The upload ``accept`` filter only admits jpg/png/webp (image) and mp4/mov
+    (video), so the extension is authoritative. Inferring it removes the manual
+    «Медиа» dropdown that defaulted to image — uploading a video without flipping
+    it produced a server rejection and a broken optimistic preview.
+    """
+    return "video" if Path(filename).suffix.lower() in _VIDEO_SUFFIXES else "image"
 
 
 def build_story_tab(  # pragma: no cover - NiceGUI builder, exercised in browser
@@ -50,8 +65,8 @@ def build_story_tab(  # pragma: no cover - NiceGUI builder, exercised in browser
         lambda: footer.mark_dirty(),  # noqa: PLW0108 — closure binds after footer is assigned
     )
 
-    async def _on_apply() -> None:
-        await _apply_story(account_id, refs, form, load_and_apply)
+    async def _on_apply() -> bool:
+        return await _apply_story(account_id, refs, form, load_and_apply)
 
     def _on_cancel() -> None:
         form.upload.reset()
@@ -82,7 +97,8 @@ def _build_story_form(  # pragma: no cover - UI assembly
             auto_upload=True,
             on_upload=_on_file_uploaded,
             on_rejected=lambda _e: ui.notify(
-                "Медиа отклонено. Проверь: размер ≤ 100 МБ, формат — JPG/JPEG/PNG/WebP/MP4/MOV.",
+                "Медиа отклонено. Проверь: изображение ≤ 10 МБ, видео ≤ 100 МБ; "
+                "форматы — JPG/JPEG/PNG/WebP/MP4/MOV.",
                 type="warning",
                 timeout=8000,
             ),
@@ -91,34 +107,28 @@ def _build_story_form(  # pragma: no cover - UI assembly
         .classes("w-full")
     )
     ui.label(
-        "Изображение: рекомендуется 1080×1920 (9:16) · "
-        "Видео: любой формат — перекодируем в 9:16 до 60 сек",
+        "Изображение: JPG/PNG/WebP 9:16 (рекомендуется 1080×1920), до 10 МБ · "
+        "Видео: MP4/MOV — перекодируем в 9:16 до 60 сек, до 100 МБ",
     ).classes("text-xs text-grey-7")
 
-    with ui.row().classes("w-full no-wrap gap-2"):
-        kind = (
-            ui.select(
-                {"image": "Изображение", "video": "Видео"},
-                value="image",
-                label="Медиа",
-            )
-            .props("dense outlined")
-            .classes("col")
+    privacy = (
+        ui.select(
+            {
+                "contacts": "Контакты",
+                "close_friends": "Близкие друзья",
+                "public": "Публично",
+            },
+            value="contacts",
+            label="Приватность",
         )
-        privacy = (
-            ui.select(
-                {
-                    "contacts": "Контакты",
-                    "close_friends": "Близкие друзья",
-                    "public": "Публично",
-                },
-                value="contacts",
-                label="Приватность",
-            )
-            .props("dense outlined")
-            .classes("col")
-        )
-    caption = ui.textarea("Подпись").props("dense outlined autogrow").classes("w-full")
+        .props("dense outlined")
+        .classes("w-full")
+    )
+    caption = (
+        ui.textarea("Подпись")
+        .props("dense outlined autogrow maxlength=1024 counter")
+        .classes("w-full")
+    )
     protect = ui.checkbox("Защитить контент (запрет на пересылку)", value=False)
 
     ui.separator().classes("q-mt-md")
@@ -126,7 +136,6 @@ def _build_story_form(  # pragma: no cover - UI assembly
     refs.stories_container = ui.element("div").classes("w-full")
     return _StoryTabForm(
         upload=upload,
-        kind=kind,
         privacy=privacy,
         caption=caption,
         protect=protect,
@@ -139,13 +148,13 @@ async def _apply_story(  # pragma: no cover - click handler
     refs: _DialogRefs,
     form: _StoryTabForm,
     load_and_apply: Callable[..., Awaitable[None]],
-) -> None:
+) -> bool:
     name = form.staged["name"]
     content = form.staged["bytes"]
     if not isinstance(name, str) or not isinstance(content, (bytes, bytearray)):
-        return
+        return False
     caption = (form.caption.value or "").strip() or None
-    kind = form.kind.value
+    kind = _infer_story_kind(name)
     try:
         await post_account_story(
             AccountStoryUpload(
@@ -160,7 +169,7 @@ async def _apply_story(  # pragma: no cover - click handler
         )
     except ValueError as exc:
         ui.notify(_service_error_label(str(exc)), type="negative")
-        return
+        return False
     ui.notify("Сторис опубликована", type="positive")
     form.upload.reset()
     form.caption.value = ""
@@ -172,3 +181,4 @@ async def _apply_story(  # pragma: no cover - click handler
     if kind == "image":
         _apply_optimistic_story(refs, story_bytes=bytes(content), kind=kind, caption=caption)
     await load_and_apply(account_id, refs, force_refresh=True)
+    return True

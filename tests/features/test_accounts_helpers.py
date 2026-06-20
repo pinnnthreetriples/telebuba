@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from features.accounts import _profile_dialog_photos as photos
 from features.accounts import _profile_dialog_render as render
 from features.accounts import _profile_dialog_stories as stories_mod
+from features.accounts._profile_dialog_tab_story import _infer_story_kind
 from features.accounts._proxy_dialog import (
     _proxy_dialog_error,
     _proxy_dialog_geo,
@@ -19,6 +20,7 @@ from features.accounts._table import (
     _row_from_event,
     _service_error_label,
     _to_table_row,
+    _username_update_value,
 )
 from schemas.accounts import AccountProfileSnapshot
 from schemas.telegram_profile_snapshot import TelegramProfilePhoto, TelegramStoryThumb
@@ -93,11 +95,59 @@ def test_to_table_row_translates_status_and_never() -> None:
 
 
 def test_to_table_row_keeps_real_last_checked() -> None:
-    row: dict[str, object] = {"status": "new", "last_checked": "5m ago"}
+    # The service now emits a Russian relative string; the UI passes it through
+    # unchanged (only the "never" sentinel is mapped).
+    row: dict[str, object] = {"status": "new", "last_checked": "5 мин назад"}
     translated = _to_table_row(row)
 
     assert translated["status"] == "Новый"
-    assert translated["last_checked"] == "5m ago"
+    assert translated["last_checked"] == "5 мин назад"
+
+
+def test_to_table_row_translates_error_statuses_to_russian() -> None:
+    # Regression for the double-translation bug: the service emits the raw enum,
+    # so network_error/proxy_error/unknown_error must resolve to RU here — these
+    # three previously fell through to English ("Network"/"Proxy"/"Unknown").
+    for status, expected in (
+        ("network_error", "Ошибка сети"),
+        ("proxy_error", "Ошибка прокси"),
+        ("unknown_error", "Неизвестная ошибка"),
+    ):
+        assert _to_table_row({"status": status})["status"] == expected
+        assert _account_status_label(status) == expected
+
+
+def test_username_update_value_skips_unchanged_and_clears() -> None:
+    # Unchanged → None so the gateway skips UpdateUsernameRequest and Telegram
+    # never raises USERNAME_NOT_MODIFIED on a name/bio-only edit.
+    assert _username_update_value("alice", "alice") is None
+    assert _username_update_value("@alice", "alice") is None
+    assert _username_update_value("  alice  ", "alice") is None
+    # No username before, still blank → skip.
+    assert _username_update_value("", None) is None
+    assert _username_update_value("", "") is None
+    # Changed → send the cleaned (no-@, stripped) value.
+    assert _username_update_value("bob", "alice") == "bob"
+    assert _username_update_value("@bob", "alice") == "bob"
+    # Deliberate clear (had a username, field now blank) → empty string goes through.
+    assert _username_update_value("", "alice") == ""
+
+
+def test_infer_story_kind_from_extension() -> None:
+    assert _infer_story_kind("clip.mp4") == "video"
+    assert _infer_story_kind("CLIP.MOV") == "video"
+    assert _infer_story_kind("pic.jpg") == "image"
+    assert _infer_story_kind("pic.PNG") == "image"
+    assert _infer_story_kind("shot.webp") == "image"
+
+
+def test_should_overwrite_guards_inflight_edits() -> None:
+    # Initial load (no prior snapshot) always fills.
+    assert render._should_overwrite("anything", None) is True
+    # Field still equals the last-applied value → safe to refresh.
+    assert render._should_overwrite("alice", "alice") is True
+    # Operator edited the field since last apply → keep their text.
+    assert render._should_overwrite("alic", "alice") is False
 
 
 def test_service_error_label_translates_exact_and_prefixed_messages() -> None:
@@ -165,6 +215,23 @@ def test_service_error_label_translates_username_and_profile_errors() -> None:
 
     bad_name = _service_error_label("FIRSTNAME_INVALID")
     assert "Имя" in bad_name
+
+
+def test_service_error_label_translates_media_validation_errors() -> None:
+    """Upload-validation errors from ``_validate_upload`` surface as RU.
+
+    The label varies ("story image" / "profile photo" / "profile music"), so the
+    matcher keys off the stable English tail instead of the full string.
+    """
+    too_large = _service_error_label("story image file is too large")
+    assert "слишком большой" in too_large
+
+    empty = _service_error_label("profile photo file is empty")
+    assert "пустой" in empty
+
+    bad_ext = _service_error_label("profile music must be one of: .m4a, .mp3")
+    assert bad_ext.startswith("Неподдерживаемый формат")
+    assert ".mp3" in bad_ext
 
 
 def test_service_error_label_unknown_tdata_status_keeps_status_visible() -> None:
