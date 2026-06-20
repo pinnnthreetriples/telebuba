@@ -3291,3 +3291,45 @@ async def test_daily_gate_allows_one_cycle_for_a_cap_of_one() -> None:
     parked = await _loop._gate_daily_limit("acc-1", 1, (1, today), now, run_id=None)
     assert parked is not None
     assert parked.detail == "daily limit"
+
+
+@pytest.mark.asyncio
+async def test_open_with_partner_rests_on_a_faded_pair(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The opener must not keep sending one-sided DMs to a faded pair (#review)."""
+    from services.warming._chat import _open_with_partner  # noqa: PLC0415
+
+    monkeypatch.setattr(settings.warming, "dialogue_max_turns", 1)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await create_account(AccountCreate(account_id="acc-2"))
+    # The pair has already hit the turn cap within the window -> faded.
+    await record_dialogue_message("acc-1", "acc-2", "привет!", replied=False)
+
+    sent: list[tuple[str, TelegramAction]] = []
+
+    async def capture(account_id: str, action: TelegramAction) -> ActionResult:
+        sent.append((account_id, action))
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    async def gen(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="howdy")
+
+    monkeypatch.setattr(_seams, "execute", capture)
+    monkeypatch.setattr(_seams, "generate_text", gen)
+    secret = await load_warming_settings()
+    accounts = {
+        "acc-1": _account(account_id="acc-1", user_id=1),
+        "acc-2": _account(account_id="acc-2", user_id=2),
+    }
+
+    result = await _open_with_partner("acc-1", ["acc-2"], secret, accounts)
+
+    assert result.messages_sent == 0
+    assert sent == []  # faded pair -> opener rests, no one-sided DM
+
+
+def test_parse_channels_keeps_case_distinct_invite_hashes() -> None:
+    """Invite hashes are case-sensitive; usernames are not (#review)."""
+    from services.warming.channels import _parse_channels  # noqa: PLC0415
+
+    assert _parse_channels("t.me/+AbCdEfGh12 t.me/+abcdefgh12") == ["+AbCdEfGh12", "+abcdefgh12"]
+    assert _parse_channels("@Alpha @alpha") == ["Alpha"]
