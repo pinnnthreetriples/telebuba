@@ -7,7 +7,7 @@ from contextlib import suppress
 from io import BytesIO
 from typing import TYPE_CHECKING
 
-from PIL import Image, UnidentifiedImageError
+from PIL import Image, ImageFilter, UnidentifiedImageError
 from telethon import utils
 from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
@@ -114,32 +114,62 @@ async def _story_media(
 
 
 def _normalize_story_image_for_telegram(content: bytes) -> bytes:
-    """Pad and resize a photo to Telegram's story canvas (1080x1920 JPEG).
+    """Compose a photo onto Telegram's 1080x1920 story canvas (JPEG q90).
 
-    Scales the source to fit inside 1080x1920 keeping its aspect ratio, then
-    centers it on a black canvas — no cropping, the operator's framing
-    survives intact. Anything else gets rejected server-side with
-    ``PHOTO_INVALID_DIMENSIONS`` regardless of how big or small the original
-    was. JPEG quality 90 keeps the file in the ~200-400 KB range.
+    The source is fitted into the canvas without cropping; the empty
+    margins are filled with a heavily-blurred enlarged copy of the same
+    photo, matching how the official Telegram Android client composes
+    stories (StoryEntry.java: ``backgroundFile`` is a blurred upscale of
+    the source). Solid-color letterbox is functionally accepted by the
+    server but looks visibly cheaper than the official UX. Anything
+    outside the 9:16 aspect window gets rejected with
+    ``PHOTO_INVALID_DIMENSIONS``, so this step is required, not optional.
     """
     target_width, target_height = 1080, 1920
     try:
         with Image.open(BytesIO(content)) as opened:
             opened.load()
             source = opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
-        source.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
-        canvas = Image.new("RGB", (target_width, target_height), (0, 0, 0))
-        offset = (
-            (target_width - source.width) // 2,
-            (target_height - source.height) // 2,
-        )
-        canvas.paste(source, offset)
     except UnidentifiedImageError as exc:
         msg = "Изображение не удалось прочитать — выберите JPG/PNG/WebP"
         raise ValueError(msg) from exc
+
+    canvas = _blurred_story_background(source, target_width, target_height)
+    fitted = source.copy()
+    fitted.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
+    canvas.paste(
+        fitted,
+        (
+            (target_width - fitted.width) // 2,
+            (target_height - fitted.height) // 2,
+        ),
+    )
     output = BytesIO()
     canvas.save(output, format="JPEG", quality=90)
     return output.getvalue()
+
+
+def _blurred_story_background(
+    source: Image.Image,
+    target_width: int,
+    target_height: int,
+) -> Image.Image:
+    """Render the blurred-cover fill that goes behind the fitted source.
+
+    Scale-and-center-crops the source so it covers the full 1080x1920 canvas,
+    then applies a strong Gaussian blur so the edges read as ambient colour
+    rather than a recognisable second copy of the image. Mirrors the
+    official Android client's story background composition.
+    """
+    cover_scale = max(target_width / source.width, target_height / source.height)
+    scaled = source.resize(
+        (int(source.width * cover_scale), int(source.height * cover_scale)),
+        Image.Resampling.LANCZOS,
+    )
+    left = (scaled.width - target_width) // 2
+    top = (scaled.height - target_height) // 2
+    cropped = scaled.crop((left, top, left + target_width, top + target_height))
+    return cropped.filter(ImageFilter.GaussianBlur(radius=50))
 
 
 def _story_privacy_rules(preset: str) -> list[TypeInputPrivacyRule]:

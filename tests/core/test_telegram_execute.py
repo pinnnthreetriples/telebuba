@@ -338,27 +338,42 @@ async def test_execute_post_story_dispatches_story_request(
         assert sent.size == (1080, 1920)
 
 
-def test_normalize_story_image_letterboxes_to_1080x1920() -> None:
-    """The story-canvas normaliser must hit exactly 1080x1920 RGB JPEG.
+def test_normalize_story_image_renders_blurred_background_canvas() -> None:
+    """The story canvas must hit 1080x1920 JPEG with a blurred fill, not black bars.
 
-    Telegram's PHOTO_INVALID_DIMENSIONS triggers on anything outside its
-    narrow story aspect window — and Telethon's send_file resize would only
-    enforce a 1280 px chat-photo cap even if we went through it, which we
-    don't. Letterboxing preserves the operator's framing (no crop) and the
-    output is guaranteed-acceptable.
+    Matches the official Telegram Android client's story composition
+    (StoryEntry.java: ``backgroundFile`` is a blurred upscale of the source).
+    Two regression guards:
+
+    - Top-left corner of a coloured-source upload must NOT be pure black —
+      otherwise we slipped back to the old solid-letterbox path.
+    - Centre pixel reads back close to the source colour because the fitted
+      copy sits on top of the blurred background.
     """
     from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
         _normalize_story_image_for_telegram,
     )
 
+    source_rgb = (200, 50, 30)
     wide = BytesIO()
-    Image.new("RGB", (800, 600), (10, 20, 30)).save(wide, format="JPEG")
+    Image.new("RGB", (800, 600), source_rgb).save(wide, format="JPEG")
     out = _normalize_story_image_for_telegram(wide.getvalue())
 
     with Image.open(BytesIO(out)) as result:
         assert result.size == (1080, 1920)
         assert result.mode == "RGB"
         assert result.format == "JPEG"
+        # ``Image.getpixel`` returns ``float | tuple[int, ...] | None`` per
+        # Pillow's stub union; the convert("RGB") guarantees a 3-tuple
+        # at runtime, but ty needs the narrowing assertion to drop the union.
+        corner = result.convert("RGB").getpixel((10, 10))
+        assert isinstance(corner, tuple)
+        assert corner != (0, 0, 0), "story background must be blurred fill, not black"
+        centre = result.convert("RGB").getpixel((540, 960))
+        assert isinstance(centre, tuple)
+        # Source is solid red — both blurred background and fitted copy
+        # should sit close to the source colour everywhere.
+        assert abs(int(centre[0]) - source_rgb[0]) < 30, "fitted source must dominate the centre"
 
 
 def test_normalize_story_image_rejects_non_image_bytes() -> None:
