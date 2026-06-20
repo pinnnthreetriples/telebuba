@@ -7,6 +7,7 @@ from contextlib import suppress
 from io import BytesIO
 from typing import TYPE_CHECKING
 
+from PIL import Image, UnidentifiedImageError
 from telethon import utils
 from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
@@ -90,9 +91,16 @@ async def _story_media(
     content: bytes,
     media_kind: str,
 ) -> TypeInputMedia:
-    uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
     if media_kind == "image":
+        # Telegram rejects story photos that don't match its narrow aspect
+        # window with PHOTO_INVALID_DIMENSIONS. Telethon's send_file resize
+        # only enforces the chat-photo 1280 px cap, and we go through the
+        # lower-level upload_file path that skips it entirely — so we have
+        # to normalise to 1080x1920 ourselves before the upload.
+        content = _normalize_story_image_for_telegram(content)
+        uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
         return InputMediaUploadedPhoto(file=uploaded)
+    uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
     attributes, mime_type = utils.get_attributes(
         _named_bytes(filename, content),
         mime_type=mimetypes.guess_type(filename)[0] or "video/mp4",
@@ -103,6 +111,35 @@ async def _story_media(
         mime_type=mime_type,
         attributes=attributes,
     )
+
+
+def _normalize_story_image_for_telegram(content: bytes) -> bytes:
+    """Pad and resize a photo to Telegram's story canvas (1080x1920 JPEG).
+
+    Scales the source to fit inside 1080x1920 keeping its aspect ratio, then
+    centers it on a black canvas — no cropping, the operator's framing
+    survives intact. Anything else gets rejected server-side with
+    ``PHOTO_INVALID_DIMENSIONS`` regardless of how big or small the original
+    was. JPEG quality 90 keeps the file in the ~200-400 KB range.
+    """
+    target_width, target_height = 1080, 1920
+    try:
+        with Image.open(BytesIO(content)) as opened:
+            opened.load()
+            source = opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
+        source.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
+        canvas = Image.new("RGB", (target_width, target_height), (0, 0, 0))
+        offset = (
+            (target_width - source.width) // 2,
+            (target_height - source.height) // 2,
+        )
+        canvas.paste(source, offset)
+    except UnidentifiedImageError as exc:
+        msg = "Изображение не удалось прочитать — выберите JPG/PNG/WebP"
+        raise ValueError(msg) from exc
+    output = BytesIO()
+    canvas.save(output, format="JPEG", quality=90)
+    return output.getvalue()
 
 
 def _story_privacy_rules(preset: str) -> list[TypeInputPrivacyRule]:

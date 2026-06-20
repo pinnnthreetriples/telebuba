@@ -3,10 +3,12 @@
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
+from io import BytesIO
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from PIL import Image
 from telethon import errors
 from telethon.tl.functions.account import (
     SaveMusicRequest,
@@ -286,6 +288,7 @@ async def test_execute_post_story_dispatches_story_request(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured: list[object] = []
+    uploaded_bytes: list[bytes] = []
 
     class FakeClient:
         async def connect(self) -> None:
@@ -295,8 +298,11 @@ async def test_execute_post_story_dispatches_story_request(
             assert entity == "me"
             return MagicMock()
 
-        async def upload_file(self, _file: object, *, file_name: str) -> object:
+        async def upload_file(self, file: BytesIO, *, file_name: str) -> object:
             assert file_name == "story.jpg"
+            # The story dispatcher normalises images before upload — capture
+            # what actually reaches Telegram so we can assert the resize hit.
+            uploaded_bytes.append(file.read())
             return MagicMock()
 
         async def __call__(self, request: object) -> object:
@@ -305,11 +311,16 @@ async def test_execute_post_story_dispatches_story_request(
 
     _patch_client(monkeypatch, FakeClient())
 
+    # A 4:5 portrait JPEG — Telegram would reject this aspect ratio
+    # server-side; the normalisation step has to letterbox it to 1080x1920.
+    buffer = BytesIO()
+    Image.new("RGB", (400, 500), (255, 0, 0)).save(buffer, format="JPEG")
+
     result = await execute(
         "acc-story",
         PostStory(
             filename="story.jpg",
-            content=b"jpg",
+            content=buffer.getvalue(),
             media_kind="image",
             caption="hi",
             privacy_preset="contacts",
@@ -320,6 +331,43 @@ async def test_execute_post_story_dispatches_story_request(
     assert result.message_id == 777
     assert any(isinstance(req, CanSendStoryRequest) for req in captured)
     assert any(isinstance(req, SendStoryRequest) for req in captured)
+    # Regression guard: the photo that actually hit upload_file must already
+    # be normalised to Telegram's 1080x1920 story canvas — otherwise the
+    # server rejects with PHOTO_INVALID_DIMENSIONS.
+    with Image.open(BytesIO(uploaded_bytes[0])) as sent:
+        assert sent.size == (1080, 1920)
+
+
+def test_normalize_story_image_letterboxes_to_1080x1920() -> None:
+    """The story-canvas normaliser must hit exactly 1080x1920 RGB JPEG.
+
+    Telegram's PHOTO_INVALID_DIMENSIONS triggers on anything outside its
+    narrow story aspect window — and Telethon's send_file resize would only
+    enforce a 1280 px chat-photo cap even if we went through it, which we
+    don't. Letterboxing preserves the operator's framing (no crop) and the
+    output is guaranteed-acceptable.
+    """
+    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+        _normalize_story_image_for_telegram,
+    )
+
+    wide = BytesIO()
+    Image.new("RGB", (800, 600), (10, 20, 30)).save(wide, format="JPEG")
+    out = _normalize_story_image_for_telegram(wide.getvalue())
+
+    with Image.open(BytesIO(out)) as result:
+        assert result.size == (1080, 1920)
+        assert result.mode == "RGB"
+        assert result.format == "JPEG"
+
+
+def test_normalize_story_image_rejects_non_image_bytes() -> None:
+    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+        _normalize_story_image_for_telegram,
+    )
+
+    with pytest.raises(ValueError, match="JPG/PNG/WebP"):
+        _normalize_story_image_for_telegram(b"not an image")
 
 
 @pytest.mark.asyncio
