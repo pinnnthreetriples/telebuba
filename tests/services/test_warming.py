@@ -917,6 +917,14 @@ async def test_reconcile_warming_runtime_restarts_active_loops(
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    # Isolate the restart mechanism; the readiness gate on reconcile is covered
+    # by test_reconcile_parks_unready_account_when_enforced (#99).
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
 
@@ -2913,3 +2921,129 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
     assert state.run_id == "run-b"
     assert state.last_event != "loop_crashed"
     assert state.last_error is None
+
+
+# --------------------------------------------------------------------------- #
+# Audit #99 — scheduling / readiness consistency
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_reconcile_parks_unready_account_when_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reconcile must not resurrect an account start_warming would refuse (#99)."""
+    started: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    await _seed_channel()
+    # No proxy => evaluate_readiness fails, exactly as start_warming would.
+    await create_account(AccountCreate(account_id="acc-unready"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-unready", state="active"))
+
+    await warming.reconcile_warming_runtime()
+
+    assert "acc-unready" not in warming._RUNTIME
+    await asyncio.sleep(0)
+    assert "acc-unready" not in started
+    record = await fetch_warming_state("acc-unready")
+    assert record is not None
+    assert record.state == "error"
+    assert record.last_event == "reconcile_not_ready"
+    assert record.last_error
+
+
+@pytest.mark.asyncio
+async def test_reconcile_restarts_ready_account_when_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ready account is still restarted with the readiness gate enabled (#99)."""
+
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    await _seed_ready_account("acc-ready")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-ready", state="active"))
+
+    await warming.reconcile_warming_runtime()
+
+    assert "acc-ready" in warming._RUNTIME
+
+
+@pytest.mark.asyncio
+async def test_daily_cap_park_shifts_into_active_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Post-cap wake honours active hours, not a bare 00:00 UTC instant (#99)."""
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+
+    async def fake_tz(_account_id: str) -> str:
+        return "Europe/Istanbul"  # UTC+3, no DST
+
+    monkeypatch.setattr(_loop, "_account_tz", fake_tz)
+    await create_account(AccountCreate(account_id="acc-1"))
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+
+    result = await _loop._gate_daily_limit("acc-1", 3, (3, "2026-06-12"), now, run_id=None)
+
+    assert result is not None
+    assert result.detail == "daily limit"
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.next_run_at is not None
+    parked = datetime.fromisoformat(record.next_run_at)
+    # 00:00 UTC is 03:00 in Istanbul (outside 8-23) → shifted forward to 08:00 local.
+    assert parked != _loop._next_utc_midnight(now)
+    assert parked.astimezone(ZoneInfo("Europe/Istanbul")).hour == 8
+
+
+@pytest.mark.asyncio
+async def test_quarantine_recovery_defers_during_quiet_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A quarantine re-probe must not fire @SpamBot inside quiet hours (#99)."""
+    probes: list[str] = []
+
+    async def fake_probe(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        probes.append(account_id)
+        return _verdict(account_id, "clean")
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", fake_probe)
+    monkeypatch.setattr(_loop, "_in_quiet_hours", lambda *_args: True)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        quiet_hours_enabled=True,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="quarantine"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "quiet hours"
+    assert probes == []  # no @SpamBot I/O during quiet hours
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "quarantine"
+    assert record.next_run_at is not None

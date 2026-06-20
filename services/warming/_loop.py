@@ -66,6 +66,7 @@ async def _recover_from_quarantine(
     record: WarmingStateRecord,
     now: datetime,
     *,
+    controls: WarmingSettingsSecret,
     run_id: str | None = None,
 ) -> WarmingCycleResult:
     """Re-check a quarantined account: resume if cleared, escalate otherwise.
@@ -82,6 +83,28 @@ async def _recover_from_quarantine(
     quarantine was still open.
     """
     warm = settings.warming
+    # Quiet hours apply to the quarantine re-probe too: the @SpamBot ``/start``
+    # below is live Telegram I/O, so defer it to the end of the quiet window
+    # rather than break the "no actions inside quiet hours" guarantee. State and
+    # quarantine_count are preserved so recovery resumes after the window.
+    if controls.quiet_hours_enabled:
+        local_now = await _local_now(account_id, now)
+        if _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
+            next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
+            deferred = await _set_state(
+                account_id,
+                "quarantine",
+                last_event="quarantine_quiet_hours",
+                next_run_at=next_run,
+                heartbeat_at=now.isoformat(),
+                quarantine_count=record.quarantine_count,
+                expected_run_id=run_id,
+            )
+            if run_id is not None and not deferred.applied:
+                return WarmingCycleResult(
+                    account_id=account_id, status="skipped", detail="stale run"
+                )
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
     # Round-5 P1: pre-probe CAS. Telegram I/O lives behind this gate.
     probe_started = await _set_state(
         account_id,
@@ -284,7 +307,10 @@ async def _gate_daily_limit(
     daily_count, daily_date = daily
     if effective_cap <= 0 or daily_count < effective_cap:
         return None
-    next_run = _next_utc_midnight(now).isoformat()
+    next_run = _shift_to_active_hours(
+        _next_utc_midnight(now),
+        await _account_tz(account_id),
+    ).isoformat()
     write = await _set_state(
         account_id,
         "sleeping",
@@ -374,7 +400,9 @@ async def run_loop_iteration(
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
 
     if record is not None and record.state == "quarantine":
-        return await _recover_from_quarantine(account_id, record, now, run_id=run_id)
+        return await _recover_from_quarantine(
+            account_id, record, now, controls=controls, run_id=run_id
+        )
 
     quiet = await _gate_quiet_hours(account_id, controls, now, run_id=run_id)
     if quiet is not None:

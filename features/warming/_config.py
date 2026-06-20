@@ -312,6 +312,12 @@ def _render_quiet_hours_block(
             refs["quiet"].value = False
         elif key == _QUIET_PRESET_CUSTOM:
             refs["quiet"].value = True
+            # A start==end window reads as "no quiet hours" to the engine
+            # (_in_quiet_hours), so a custom preset left at the 0→0 default
+            # would show as enabled yet stay silent. Seed a sane night window.
+            if _clamp_hour(refs["quiet_start"].value) == _clamp_hour(refs["quiet_end"].value):
+                refs["quiet_start"].value = 23
+                refs["quiet_end"].value = 7
         elif key in _QUIET_PRESETS:
             start_hour, end_hour = _QUIET_PRESETS[key]
             refs["quiet"].value = True

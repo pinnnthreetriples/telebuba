@@ -245,6 +245,8 @@ async def reconcile_warming_runtime() -> None:
     membership-changed), so running it on every reconcile is cheap.
     """
     records = await list_warming_states()
+    controls = await load_warming_settings()
+    channel_count = len((await list_warming_channels()).channels)
     restarted = 0
     for record in records:
         # ``error`` is part of ``_ACTIVE_STATES`` so the UI keeps the card in
@@ -274,6 +276,32 @@ async def reconcile_warming_runtime() -> None:
                     stopped_at=_now_iso(),
                 )
                 continue
+            if controls.enforce_readiness:
+                readiness = evaluate_readiness(
+                    account,
+                    channel_count,
+                    spam=await get_spam_status(record.account_id),
+                    trust_score=await account_trust_score(record.account_id),
+                )
+                if not readiness.ready:
+                    # Same gate as start_warming: a proxy that died / a fresh
+                    # spam-limit / trust-critical drift mid-warming must not be
+                    # silently resurrected on restart (start_warming would
+                    # refuse it). Park it so the operator has to acknowledge.
+                    await _set_state(
+                        record.account_id,
+                        "error",
+                        last_event="reconcile_not_ready",
+                        last_error="; ".join(readiness.reasons),
+                        heartbeat_at=_now_iso(),
+                    )
+                    await log_event(
+                        "WARNING",
+                        "warming_reconcile_not_ready",
+                        account_id=record.account_id,
+                        extra={"reasons": readiness.reasons},
+                    )
+                    continue
             # P1.2: mint a fresh generation marker so this restarted loop owns
             # the row going forward; any pre-restart cycle that somehow lives
             # on (it shouldn't, post-restart, but be defensive) will see the
