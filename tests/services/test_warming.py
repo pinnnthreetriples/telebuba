@@ -54,11 +54,12 @@ from schemas.warming import (
     WarmingSettingsUpdate,
     WarmingStateRecord,
     WarmingStateWrite,
+    WarmingStateWriteResult,
 )
 from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
-from services.warming import _loop, _runtime, _seams
+from services.warming import _loop, _runner, _runtime, _seams
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -917,6 +918,14 @@ async def test_reconcile_warming_runtime_restarts_active_loops(
         await asyncio.sleep(3600)
 
     monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    # Isolate the restart mechanism; the readiness gate on reconcile is covered
+    # by test_reconcile_parks_unready_account_when_enforced (#99).
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
 
@@ -2223,14 +2232,14 @@ async def test_warming_loop_exits_when_state_becomes_idle_after_iteration(
         await upsert_warming_state(WarmingStateWrite(account_id=account_id, state="idle"))
         return WarmingCycleResult(account_id=account_id, status="ok")
 
-    monkeypatch.setattr(_runtime, "run_loop_iteration", fake_iteration)
-    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
-    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "run_loop_iteration", fake_iteration)
+    monkeypatch.setattr(_runner, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
 
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
 
-    await _runtime._warming_loop("acc-1")
+    await _runner._warming_loop("acc-1")
 
     assert iterations == ["acc-1"]
     state = await fetch_warming_state("acc-1")
@@ -2888,8 +2897,8 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
         WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
     )
 
-    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
-    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
 
     async def crash_after_replacing_generation(
         account_id: str, *, run_id: str | None = None
@@ -2902,9 +2911,9 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
         msg = "boom from stale loop"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(_runtime, "run_loop_iteration", crash_after_replacing_generation)
+    monkeypatch.setattr(_runner, "run_loop_iteration", crash_after_replacing_generation)
 
-    await _runtime._warming_loop("acc-1", run_id="run-a")
+    await _runner._warming_loop("acc-1", run_id="run-a")
 
     state = await fetch_warming_state("acc-1")
     assert state is not None
@@ -2913,3 +2922,414 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
     assert state.run_id == "run-b"
     assert state.last_event != "loop_crashed"
     assert state.last_error is None
+
+
+# --------------------------------------------------------------------------- #
+# Audit #99 — scheduling / readiness consistency
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_reconcile_parks_unready_account_when_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reconcile must not resurrect an account start_warming would refuse (#99)."""
+    started: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    await _seed_channel()
+    # No proxy => evaluate_readiness fails, exactly as start_warming would.
+    await create_account(AccountCreate(account_id="acc-unready"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-unready", state="active"))
+
+    await warming.reconcile_warming_runtime()
+
+    assert "acc-unready" not in warming._RUNTIME
+    await asyncio.sleep(0)
+    assert "acc-unready" not in started
+    record = await fetch_warming_state("acc-unready")
+    assert record is not None
+    assert record.state == "error"
+    assert record.last_event == "reconcile_not_ready"
+    assert record.last_error
+
+
+@pytest.mark.asyncio
+async def test_reconcile_restarts_ready_account_when_enforced(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ready account is still restarted with the readiness gate enabled (#99)."""
+
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    await _seed_ready_account("acc-ready")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-ready", state="active"))
+
+    await warming.reconcile_warming_runtime()
+
+    assert "acc-ready" in warming._RUNTIME
+
+
+@pytest.mark.asyncio
+async def test_daily_cap_park_shifts_into_active_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Post-cap wake honours active hours, not a bare 00:00 UTC instant (#99)."""
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+
+    async def fake_tz(_account_id: str) -> str:
+        return "Europe/Istanbul"  # UTC+3, no DST
+
+    monkeypatch.setattr(_loop, "_account_tz", fake_tz)
+    await create_account(AccountCreate(account_id="acc-1"))
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+
+    result = await _loop._gate_daily_limit("acc-1", 3, (3, "2026-06-12"), now, run_id=None)
+
+    assert result is not None
+    assert result.detail == "daily limit"
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.next_run_at is not None
+    parked = datetime.fromisoformat(record.next_run_at)
+    # 00:00 UTC is 03:00 in Istanbul (outside 8-23) → shifted forward to 08:00 local.
+    assert parked != _loop._next_utc_midnight(now)
+    assert parked.astimezone(ZoneInfo("Europe/Istanbul")).hour == 8
+
+
+@pytest.mark.asyncio
+async def test_quarantine_recovery_defers_during_quiet_hours(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A quarantine re-probe must not fire @SpamBot inside quiet hours (#99)."""
+    probes: list[str] = []
+
+    async def fake_probe(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        probes.append(account_id)
+        return _verdict(account_id, "clean")
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", fake_probe)
+    monkeypatch.setattr(_loop, "_in_quiet_hours", lambda *_args: True)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        quiet_hours_enabled=True,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="quarantine"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "quiet hours"
+    assert probes == []  # no @SpamBot I/O during quiet hours
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "quarantine"
+    assert record.next_run_at is not None
+
+
+@pytest.mark.asyncio
+async def test_summary_ready_counts_only_startable_accounts() -> None:
+    """«Готовы» must count startable (idle) accounts, not already-warming ones (#98)."""
+    await _seed_ready_account("acc-idle")
+    await _seed_ready_account("acc-warm")
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-warm", state="active"))
+
+    board = await warming.load_board()
+
+    assert board.summary.warming == 1
+    assert board.summary.ready == 1  # only acc-idle; acc-warm is already warming
+
+
+# --------------------------------------------------------------------------- #
+# Audit #100 — cycle resilience / edge cases
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_lone_set_online_failure_sleeps_not_errors(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A transient SetOnline failure must not park a healthy account in error (#100)."""
+
+    async def execute(account_id: str, action: TelegramAction) -> ActionResult:
+        status = "failed" if action.action_type == "set_online" else "ok"
+        return ActionResult(status=status, action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(_seams, "execute", execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    await warming.run_loop_iteration("acc-1")
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "sleeping"
+
+
+@pytest.mark.asyncio
+async def test_flood_wait_without_duration_parks_well_into_the_future() -> None:
+    """An unknown flood duration must cool down, not collapse to a 0s retry (#100)."""
+    before = datetime.now(UTC)
+    _, next_run_dt, next_state = await _loop._calculate_next_run(
+        "acc-1",
+        WarmingCycleResult(account_id="acc-1", status="flood_wait", flood_wait_seconds=None),
+    )
+    assert next_state == "flood_wait"
+    floor = settings.warming.cycle_sleep_min_hours * 3600 - 5
+    assert (next_run_dt - before).total_seconds() >= floor
+
+    # A concrete duration (even tiny) is still honoured as Telegram instructed.
+    _, soon_dt, _ = await _loop._calculate_next_run(
+        "acc-1",
+        WarmingCycleResult(account_id="acc-1", status="flood_wait", flood_wait_seconds=5),
+    )
+    assert (soon_dt - datetime.now(UTC)).total_seconds() < 60
+
+
+@pytest.mark.asyncio
+async def test_no_reaction_after_failed_read(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A failed read must not trigger a reaction on the same channel (#100)."""
+    seen: list[str] = []
+
+    async def execute(account_id: str, action: TelegramAction) -> ActionResult:
+        seen.append(action.action_type)
+        status = "failed" if action.action_type == "read_channel" else "ok"
+        return ActionResult(status=status, action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(_seams, "execute", execute)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert "react_to_post" not in seen
+    assert result.reactions_sent == 0
+
+
+@pytest.mark.asyncio
+async def test_cycle_skipped_when_only_set_online_fits(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One slot below the cap → park, don't burn a sleep on a presence-only cycle (#100)."""
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        max_daily_actions=3,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    today = datetime.now(UTC).date().isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            daily_actions=2,  # one below the cap of 3 — only SetOnline would fit
+            daily_count_date=today,
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "daily limit"
+    assert recorder.actions == []  # no presence-only cycle ran
+
+
+@pytest.mark.asyncio
+async def test_phase_advanced_not_logged_when_finalize_cas_rejected(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No phantom phase_advanced when the final CAS write is rejected (#100)."""
+    await create_account(AccountCreate(account_id="acc-1"))
+    today = datetime.now(UTC).date().isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            run_id="run-a",
+            current_phase="intro",
+        ),
+    )
+    events: list[str] = []
+
+    async def fake_log(_level: str, event: str, **_kwargs: object) -> None:
+        events.append(event)
+
+    monkeypatch.setattr(_loop, "log_event", fake_log)
+
+    async def rejecting_set_state(
+        account_id: str,
+        _state: object = None,
+        **_kwargs: object,
+    ) -> WarmingStateWriteResult:
+        # Simulate the CAS rejecting the final write (a newer generation took the
+        # row): return applied=False without mutating state.
+        record = await fetch_warming_state(account_id)
+        assert record is not None
+        return WarmingStateWriteResult(record=record, applied=False)
+
+    monkeypatch.setattr(_loop, "_set_state", rejecting_set_state)
+
+    await _loop._finalize_after_cycle(
+        "acc-1",
+        WarmingCycleResult(account_id="acc-1", status="ok"),
+        365 * 24.0,  # huge age → phase would jump from the stale "intro"
+        (0, today),
+        run_id="run-a",
+    )
+
+    assert "phase_advanced" not in events
+
+
+@pytest.mark.asyncio
+async def test_phase_advanced_logged_when_finalize_applies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The transition is still announced when the write actually lands (#100)."""
+    await create_account(AccountCreate(account_id="acc-1"))
+    today = datetime.now(UTC).date().isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            run_id="run-a",
+            current_phase="intro",
+        ),
+    )
+    events: list[str] = []
+
+    async def fake_log(_level: str, event: str, **_kwargs: object) -> None:
+        events.append(event)
+
+    monkeypatch.setattr(_loop, "log_event", fake_log)
+
+    await _loop._finalize_after_cycle(
+        "acc-1",
+        WarmingCycleResult(account_id="acc-1", status="ok"),
+        365 * 24.0,
+        (0, today),
+        run_id="run-a",
+    )
+
+    assert "phase_advanced" in events
+
+
+# --------------------------------------------------------------------------- #
+# Review follow-ups — regressions found while verifying the fixes
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_reconcile_resumes_quarantine_recovery_despite_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reconcile readiness gate must not abort an engine-managed quarantine recovery."""
+    started: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    # No proxy => evaluate_readiness would fail, but quarantine is engine-managed
+    # recovery and must keep running so it can re-probe and recover/escalate.
+    await create_account(AccountCreate(account_id="acc-q"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-q", state="quarantine"))
+
+    await warming.reconcile_warming_runtime()
+
+    assert "acc-q" in warming._RUNTIME
+    record = await fetch_warming_state("acc-q")
+    assert record is not None
+    assert record.state == "quarantine"  # not parked to error by the readiness gate
+
+
+@pytest.mark.asyncio
+async def test_daily_gate_allows_one_cycle_for_a_cap_of_one() -> None:
+    """A tiny cap (e.g. a legacy override of 1) must still run once a day, not park forever."""
+    await create_account(AccountCreate(account_id="acc-1"))
+    today = datetime.now(UTC).date().isoformat()
+    now = datetime.now(UTC)
+
+    # cap=1, nothing done yet -> the gate lets the cycle proceed (returns None).
+    assert await _loop._gate_daily_limit("acc-1", 1, (0, today), now, run_id=None) is None
+    # cap=1, the one action already spent today -> park.
+    parked = await _loop._gate_daily_limit("acc-1", 1, (1, today), now, run_id=None)
+    assert parked is not None
+    assert parked.detail == "daily limit"
+
+
+@pytest.mark.asyncio
+async def test_open_with_partner_rests_on_a_faded_pair(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The opener must not keep sending one-sided DMs to a faded pair (#review)."""
+    from services.warming._chat import _open_with_partner  # noqa: PLC0415
+
+    monkeypatch.setattr(settings.warming, "dialogue_max_turns", 1)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await create_account(AccountCreate(account_id="acc-2"))
+    # The pair has already hit the turn cap within the window -> faded.
+    await record_dialogue_message("acc-1", "acc-2", "привет!", replied=False)
+
+    sent: list[tuple[str, TelegramAction]] = []
+
+    async def capture(account_id: str, action: TelegramAction) -> ActionResult:
+        sent.append((account_id, action))
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    async def gen(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="howdy")
+
+    monkeypatch.setattr(_seams, "execute", capture)
+    monkeypatch.setattr(_seams, "generate_text", gen)
+    secret = await load_warming_settings()
+    accounts = {
+        "acc-1": _account(account_id="acc-1", user_id=1),
+        "acc-2": _account(account_id="acc-2", user_id=2),
+    }
+
+    result = await _open_with_partner("acc-1", ["acc-2"], secret, accounts)
+
+    assert result.messages_sent == 0
+    assert sent == []  # faded pair -> opener rests, no one-sided DM
+
+
+def test_parse_channels_keeps_case_distinct_invite_hashes() -> None:
+    """Invite hashes are case-sensitive; usernames are not (#review)."""
+    from services.warming.channels import _parse_channels  # noqa: PLC0415
+
+    assert _parse_channels("t.me/+AbCdEfGh12 t.me/+abcdefgh12") == ["+AbCdEfGh12", "+abcdefgh12"]
+    assert _parse_channels("@Alpha @alpha") == ["Alpha"]

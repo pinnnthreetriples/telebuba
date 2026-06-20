@@ -145,13 +145,15 @@ class WarmingSettings(BaseSettings):
     # Refuse to start warming an account that is not ready (dead session, no
     # proxy, no channels). Set False to bypass the pre-start gate.
     enforce_readiness: bool = True
-    # Quiet hours (UTC): when enabled, an account performs no actions inside the
-    # [start, end) hour window and parks until it ends. start == end disables it.
+    # Quiet hours (account-local time, from the phone's timezone): when enabled,
+    # an account performs no actions inside the [start, end) hour window and
+    # parks until it ends. start == end disables it.
     quiet_hours_enabled: bool = False
     quiet_hours_start: int = Field(default=0, ge=0, le=23)
     quiet_hours_end: int = Field(default=0, ge=0, le=23)
     # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
-    # When the day's count reaches the cap the account parks until UTC midnight.
+    # When the day's count reaches the cap the account parks until the next daily
+    # reset (UTC date rollover), shifted into its local active-hours window.
     max_daily_actions: int = Field(default=0, ge=0)
     # Age-based ramp ("balanced" profile): a fresh account behaves quietly and
     # grows to full intensity over ``ramp_full_age_hours``. Disable to make every

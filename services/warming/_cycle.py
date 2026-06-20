@@ -83,7 +83,10 @@ async def _read_and_react(  # noqa: PLR0913
     elif read_result.status in _HALT_STATUSES:
         return reads, reactions, read_result, failures, attempts
     await _human_pause(warm.reading_min_seconds, warm.reading_max_seconds)
-    can_react = True
+    # Don't react to a channel whose read just failed: it's a pointless extra
+    # request on a ban-risk account and yields a contradictory status=failed +
+    # reactions_sent=1 result (#100).
+    can_react = read_result.status == "ok"
     if remaining_actions is not None and (attempts_so_far + attempts) >= remaining_actions:
         can_react = False
 
@@ -282,6 +285,10 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
 
     warm = settings.warming
     account = await fetch_account(account_id)
+    # ponytail: trust_band is intentionally omitted here — only phase/daily_cap
+    # depend on it and those are enforced by the loop (remaining_actions), not
+    # read in this cycle. Pass it in if channel/reaction/DM intensity ever
+    # becomes trust-dependent (#100).
     intensity = compute_intensity(_account_age_hours(account, datetime.now(UTC)))
     tally = _ChannelTally()
     messages_sent = 0

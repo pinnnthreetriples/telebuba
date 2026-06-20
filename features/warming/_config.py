@@ -181,7 +181,8 @@ async def _render_config_cards() -> None:  # pragma: no cover
                 quiet_hours_start=_clamp_hour(refs["quiet_start"].value),
                 quiet_hours_end=_clamp_hour(refs["quiet_end"].value),
                 # Auto-cap is per-account; this fleet-wide value is preserved
-                # verbatim as an .env-driven override (UI no longer exposes it).
+                # verbatim — a legacy override persisted in the DB settings row
+                # (UI no longer exposes it).
                 max_daily_actions=current.max_daily_actions,
                 gemini_api_key=key,
                 gemini_model=model,
@@ -312,6 +313,12 @@ def _render_quiet_hours_block(
             refs["quiet"].value = False
         elif key == _QUIET_PRESET_CUSTOM:
             refs["quiet"].value = True
+            # A start==end window reads as "no quiet hours" to the engine
+            # (_in_quiet_hours), so a custom preset left at the 0→0 default
+            # would show as enabled yet stay silent. Seed a sane night window.
+            if _clamp_hour(refs["quiet_start"].value) == _clamp_hour(refs["quiet_end"].value):
+                refs["quiet_start"].value = 23
+                refs["quiet_end"].value = 7
         elif key in _QUIET_PRESETS:
             start_hour, end_hour = _QUIET_PRESETS[key]
             refs["quiet"].value = True
@@ -359,10 +366,10 @@ def _render_quiet_hours_block(
     # Per-account daily cap is now auto, derived from each account's
     # warming phase + trust band — see services.warming.pacing. The
     # legacy fleet-wide ``max_daily_actions`` setting stays in the schema
-    # as an .env-driven override but is no longer surfaced in the UI:
-    # ``persist()`` passes ``current.max_daily_actions`` through verbatim,
-    # so an operator who previously set 60 keeps that override until
-    # they clear it in .env.
+    # but is no longer surfaced in the UI: ``persist()`` passes
+    # ``current.max_daily_actions`` through verbatim, so a previously-set
+    # override persists in the DB settings row (the .env default applies
+    # only when the column is unset).
 
 
 def _render_gemini_card(

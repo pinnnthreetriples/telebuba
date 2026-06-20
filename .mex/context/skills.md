@@ -17,7 +17,7 @@ edges:
     condition: for board-related skills (to-prd, to-issues)
   - target: context/conventions.md
     condition: when /tdd is invoked — rule 7 sets the strict test policy
-last_updated: 2026-06-16
+last_updated: 2026-06-20
 ---
 
 # Skills

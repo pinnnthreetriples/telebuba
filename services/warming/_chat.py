@@ -237,9 +237,19 @@ async def _open_with_partner(
         and accounts[partner].user_id is not None
         and sender_id < partner
     ]
-    if not candidates:
+    # Skip partners this pair has already exhausted within the window. The reply
+    # path fades (sends nothing) once dialogue_max_turns is hit; an opener that
+    # ignored the fade would keep sending fresh one-sided DMs the partner never
+    # answers — the spam signature warming avoids. Let the pair rest until the
+    # window rolls off, mirroring _reply_to_partner's _conversation_faded gate.
+    eligible = [
+        account
+        for account in candidates
+        if not await _conversation_faded(sender_id, account.account_id)
+    ]
+    if not eligible:
         return ChatResult()
-    target = _seams.rng.choice(candidates)
+    target = _seams.rng.choice(eligible)
     if target.user_id is None:
         return ChatResult()
     gen = await _generate_chat_text(sender_id, secret)

@@ -20,8 +20,8 @@ from __future__ import annotations
 
 import pytest
 
-from features.warming._board import _card_signature
-from schemas.warming import WarmingAccountState
+from features.warming._board import _card_signature, _structural_signature
+from schemas.warming import WarmingAccountState, WarmingBoardState
 from services.warming.pacing import _phase_progress
 
 
@@ -86,3 +86,23 @@ def test_card_signature_reacts_to_real_mutations(field: str, value: object) -> N
     assert _card_signature(base) != _card_signature(changed), (
         f"signature did not react to mutation of {field}"
     )
+
+
+def _board(**summary_overrides: object) -> WarmingBoardState:
+    return WarmingBoardState.model_validate(
+        {
+            "channels": {"channels": []},
+            "settings": {"gemini_model": "m", "updated_at": "t"},
+            "channel_count": 0,
+            "active_count": 0,
+            "summary": dict(summary_overrides),
+        },
+    )
+
+
+@pytest.mark.parametrize("field", ["ready", "attention", "trust_watch"])
+def test_structural_signature_reacts_to_summary_drift(field: str) -> None:
+    """Summary roll-ups must flip the structural signature so header chips refresh (#98)."""
+    base = _board()
+    changed = _board(**{field: 3})
+    assert _structural_signature(base) != _structural_signature(changed)
