@@ -144,12 +144,14 @@ _PHASE_BAR_FILL = {
 # ``tb-step-spin``) and the active-state ring stay in one place. The semantic
 # names here let ``_pipeline.py`` pick a class by current step state without
 # hardcoding colours at the call site.
-_PIPELINE_STEP_DONE = "tb-step-done"
-_PIPELINE_STEP_ACTIVE = "tb-step-active"
-_PIPELINE_STEP_PENDING = "tb-step-pending"
-_PIPELINE_STEP_ERROR = "tb-step-error"
-_PIPELINE_STEP_FLOOD = "tb-step-flood"
-_PIPELINE_STEP_QUAR = "tb-step-quar"
-_PIPELINE_CONNECTOR_DONE = "tb-connector-done"
-_PIPELINE_CONNECTOR_ACTIVE = "tb-connector-active"
-_PIPELINE_CONNECTOR_PENDING = "tb-connector-pending"
+_PIPELINE_STEP_DONE = "bg-green-500 text-white"
+_PIPELINE_STEP_ACTIVE = (
+    "bg-indigo-600 text-white ring-4 ring-indigo-200 animate-pulse shadow-md shadow-indigo-200"
+)
+_PIPELINE_STEP_PENDING = "bg-slate-200 text-slate-400"
+_PIPELINE_STEP_ERROR = "bg-red-500 text-white"
+_PIPELINE_STEP_FLOOD = "bg-amber-500 text-white"
+_PIPELINE_STEP_QUAR = "bg-orange-500 text-white"
+_PIPELINE_CONNECTOR_DONE = "bg-green-400"
+_PIPELINE_CONNECTOR_ACTIVE = "tb-flow-line"  # defined in __init__.py _PIPELINE_CSS
+_PIPELINE_CONNECTOR_PENDING = "bg-slate-200"

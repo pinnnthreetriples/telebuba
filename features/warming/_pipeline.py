@@ -57,12 +57,12 @@ class _Step:  # pragma: no cover
 
 
 _CYCLE_STEPS: tuple[_Step, ...] = (
-    _Step("online", "Онлайн", "⚡"),
-    _Step("join", "Каналы", "➕"),
-    _Step("read", "Чтение", "👁"),
-    _Step("react", "Реакции", "❤"),
-    _Step("chat", "Чат", "💬"),
-    _Step("sleep", "Сон", "💤"),
+    _Step("online", "Онлайн", "wifi"),
+    _Step("join", "Каналы", "add_circle"),
+    _Step("read", "Чтение", "chrome_reader_mode"),
+    _Step("react", "Реакции", "thumb_up"),
+    _Step("chat", "Чат", "forum"),
+    _Step("sleep", "Сон", "bedtime"),
 )
 
 # Reverse lookup so ``_active_step`` can map a ``last_action`` string straight
@@ -249,10 +249,10 @@ def _render_step_rail(  # pragma: no cover
             tooltip = _step_tooltip(step, card, sk)
             icon_extra = " tb-step-active-icon" if sk == "active" else ""
             circle = ui.element("div").classes(
-                f"w-7 h-7 rounded-full flex items-center justify-center text-xs shrink-0 {cls}",
+                f"w-9 h-9 rounded-full flex items-center justify-center shrink-0 {cls}",
             )
             with circle:
-                ui.label(step.icon).classes(f"leading-none{icon_extra}")
+                ui.icon(step.icon).classes(f"text-sm{icon_extra}")
             circle.tooltip(tooltip)
 
 
