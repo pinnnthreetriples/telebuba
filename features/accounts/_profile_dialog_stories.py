@@ -33,15 +33,16 @@ if TYPE_CHECKING:
 
 
 def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
-    """Render the account's active + pinned stories as a compact carousel.
+    """Render the account's stories as a compact row of poster-style cards.
 
-    Sized small enough that the upload form stays visible inside the dialog
-    viewport. Slides are already sorted newest-first by the service layer;
-    the carousel starts on slide 0 so the latest story is the first thing
-    the operator sees. Quasar's bullet ``navigation`` overlaps content
-    visually inside a fixed-height slide — we keep the arrows for paging
-    and drop the dots; the total-count line below doubles as a position
-    cue ("3 / 13" style is overkill for typical 1–5 stories).
+    Replaced the fixed-height swipeable carousel: a 9:16 thumbnail looks
+    narrow in a wide slide, and the per-slide metadata floated awkwardly
+    beside the image. A horizontal row of small poster cards reads like
+    the official Telegram story rail — each story is its own 112×192
+    9:16 card with a "Активна"/"Закреплена" badge overlay, a tiny ✕
+    delete button, and a date caption underneath. Many stories scroll
+    horizontally; one story is just a single neat card without empty
+    carousel chrome.
     """
     container = refs.stories_container
     container.clear()
@@ -50,55 +51,66 @@ def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot)
         if not stories:
             ui.label("Сторис на аккаунте нет").classes("text-sm text-grey-7")
             return
-        with (
-            ui.carousel(value="0", arrows=True, navigation=False)
-            .props("control-color=primary swipeable animated infinite=false")
-            .classes("w-full bg-grey-2 rounded")
-            .style("height: 260px")
-        ):
-            for index, story in enumerate(stories):
-                with ui.carousel_slide(name=str(index)).classes(
-                    "column items-center justify-center p-2 gap-1",
-                ):
-                    _render_story_slide(refs, story)
+        with ui.row().classes("w-full no-wrap gap-3 overflow-x-auto q-pt-sm q-pb-xs"):
+            for story in stories:
+                _render_story_card(refs, story)
         ui.label(f"Всего сторис: {len(stories)}").classes(
             "text-xs text-grey-7 q-mt-xs",
         )
 
 
-def _render_story_slide(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
+def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
+    """Render one poster-style story card with overlay badge + delete button.
+
+    Thumbnail fills the card (object-cover, no letterbox bars); badges and
+    the close button are absolutely positioned over the image so the card
+    itself stays a clean 9:16 rectangle. Date is a small caption below the
+    card — keeps the poster uncluttered.
+    """
     thumb_url = _avatar_data_url(story.thumb_bytes)
     deletable = story.story_id > 0
-    if thumb_url:
-        # Without navigation dots the slide gets ~36 px more vertical room;
-        # raise the image cap so the preview is bigger and reads sharper.
-        ui.image(thumb_url).classes("max-h-52 object-contain rounded")
-    else:
-        ui.element("div").classes("w-24 h-24 bg-grey-3 rounded")
-    with ui.row().classes("items-center gap-1"):
-        if story.is_active:
-            ui.badge("Активна", color="primary")
-        if story.is_pinned:
-            ui.badge("Закреплена", color="secondary")
-        ui.label(_format_story_date(story.date_unix)).classes("text-xs text-grey-7")
-        button = ui.button(
-            icon="delete",
-            color="grey-7",
-            on_click=lambda _e=None, s=story: _delete_story(refs, s),
-        ).props("flat dense round")
-        if deletable:
-            button.tooltip("Удалить эту сторис")
-        else:
-            button.disable()
-            button.tooltip("Сначала обновите данные кнопкой ↻")
-    if story.caption:
-        ui.label(story.caption).classes("text-xs text-grey-8 text-center truncate")
+    with ui.column().classes("items-center gap-1 shrink-0"):
+        with ui.card().tight().classes("relative overflow-hidden rounded-lg"):
+            if thumb_url:
+                ui.image(thumb_url).classes("w-28 h-48 object-cover block")
+            else:
+                ui.element("div").classes("w-28 h-48 bg-grey-3")
+            if story.is_active:
+                ui.badge("Активна", color="primary").classes(
+                    "absolute top-1 left-1",
+                ).style("font-size: 9px")
+            if story.is_pinned:
+                ui.icon("push_pin", size="xs").classes(
+                    "absolute top-1 right-1 text-white",
+                ).style("filter: drop-shadow(0 0 2px rgba(0,0,0,0.6))")
+            close_btn = (
+                ui.button(
+                    icon="close",
+                    on_click=lambda _e=None, s=story: _delete_story(refs, s),
+                )
+                .props("dense round size=xs color=white")
+                .classes(
+                    "absolute bottom-1 right-1",
+                )
+                .style("background: rgba(0,0,0,0.55)")
+            )
+            if deletable:
+                close_btn.tooltip("Удалить эту сторис")
+            else:
+                close_btn.disable()
+                close_btn.tooltip("Сначала обновите данные кнопкой ↻")
+        ui.label(_format_story_date(story.date_unix)).classes(
+            "text-[10px] text-grey-7",
+        )
 
 
 def _format_story_date(date_unix: int) -> str:
+    # Short ``dd.mm HH:MM`` — full year would line-wrap the 112 px card
+    # caption, and the year is rarely informative for stories with a
+    # 24 h lifetime.
     if date_unix <= 0:
-        return "Дата неизвестна"
-    return datetime.fromtimestamp(date_unix, tz=UTC).strftime("%d.%m.%Y %H:%M")
+        return "—"
+    return datetime.fromtimestamp(date_unix, tz=UTC).strftime("%d.%m %H:%M")
 
 
 async def _delete_story(refs: _DialogRefs, story: TelegramStoryThumb) -> None:

@@ -62,6 +62,12 @@ ui.add_css(
     .q-uploader__file-header .q-btn--round {
         display: none !important;
     }
+    /* Hide the empty file-list pane until a file is staged — Quasar paints
+       a tall placeholder area there by default which makes the uploader
+       feel huge on tabs where only the header drop-zone needs to show. */
+    .q-uploader:not(:has(.q-uploader__file)) .q-uploader__list {
+        display: none;
+    }
     """,
     shared=True,
 )

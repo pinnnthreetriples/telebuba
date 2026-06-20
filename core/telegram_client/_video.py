@@ -66,6 +66,11 @@ async def normalize_story_video_for_telegram(
     the encode — the caller passes them straight into the
     ``DocumentAttributeVideo`` constructor without trusting the source.
 
+    The thumbnail is extracted from the **source** video (not the
+    re-encoded MP4) with the same 9:16 crop applied, so it stays consistent
+    with what was published while avoiding the H.264 generation loss that
+    made freshly-uploaded story thumbs look soft inside the UI carousel.
+
     Raises :class:`StoryVideoNormalisationError` (a ``ValueError``) with a
     Russian-language message when ffmpeg is missing, the input is corrupt,
     or the encode fails — the UI layer catches it via the existing
@@ -85,7 +90,7 @@ async def normalize_story_video_for_telegram(
         )
         await _run_ffmpeg(
             ffmpeg_bin,
-            _thumbnail_args(output_path, thumb_path),
+            _thumbnail_args(source_path, thumb_path),
             failure_message="Превью видео извлечь не удалось",
         )
         duration = await _extract_duration_seconds(ffmpeg_bin, output_path)
@@ -136,14 +141,19 @@ def _encode_args(source: Path, output: Path) -> list[str]:
 
 
 def _thumbnail_args(source: Path, thumb: Path) -> list[str]:
-    # ``-q:v 2`` is mjpeg's near-max quality (range 2-31, lower = better) — the
-    # default ``3`` was visibly noisy when rendered inside the story carousel.
+    # Apply the same 9:16 crop+scale as the main encode so the thumbnail
+    # matches the actually-published video, but pull the frame straight
+    # from the source. That skips the H.264 CRF 23 generation loss that
+    # made re-encoded thumbs look noticeably softer. ``-q:v 2`` is mjpeg's
+    # near-max quality (range 2-31, lower = better).
     return [
         "-y",
         "-ss",
         "0.5",
         "-i",
         str(source),
+        "-vf",
+        _FFMPEG_ENCODE_FILTER,
         "-frames:v",
         "1",
         "-q:v",
