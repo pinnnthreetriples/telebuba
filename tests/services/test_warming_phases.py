@@ -153,3 +153,12 @@ def test_compute_intensity_trust_capped_phase_hides_progress() -> None:
     assert intensity.phase == "settling"
     assert intensity.progress_to_next is None
     assert intensity.days_to_next_phase is None
+
+
+def test_compute_intensity_hides_progress_at_trust_ceiling_boundary() -> None:
+    # A "watch" account aged into its ceiling phase ("active") must not show a
+    # countdown to "warmed" it can't reach while trust stays at watch.
+    intensity = compute_intensity(20 * 24.0, trust_band="watch")
+    assert intensity.phase == "active"
+    assert intensity.progress_to_next is None
+    assert intensity.days_to_next_phase is None

@@ -3240,3 +3240,54 @@ async def test_phase_advanced_logged_when_finalize_applies(
     )
 
     assert "phase_advanced" in events
+
+
+# --------------------------------------------------------------------------- #
+# Review follow-ups — regressions found while verifying the fixes
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_reconcile_resumes_quarantine_recovery_despite_readiness(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reconcile readiness gate must not abort an engine-managed quarantine recovery."""
+    started: list[str] = []
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        started.append(account_id)
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    # No proxy => evaluate_readiness would fail, but quarantine is engine-managed
+    # recovery and must keep running so it can re-probe and recover/escalate.
+    await create_account(AccountCreate(account_id="acc-q"))
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-q", state="quarantine"))
+
+    await warming.reconcile_warming_runtime()
+
+    assert "acc-q" in warming._RUNTIME
+    record = await fetch_warming_state("acc-q")
+    assert record is not None
+    assert record.state == "quarantine"  # not parked to error by the readiness gate
+
+
+@pytest.mark.asyncio
+async def test_daily_gate_allows_one_cycle_for_a_cap_of_one() -> None:
+    """A tiny cap (e.g. a legacy override of 1) must still run once a day, not park forever."""
+    await create_account(AccountCreate(account_id="acc-1"))
+    today = datetime.now(UTC).date().isoformat()
+    now = datetime.now(UTC)
+
+    # cap=1, nothing done yet -> the gate lets the cycle proceed (returns None).
+    assert await _loop._gate_daily_limit("acc-1", 1, (0, today), now, run_id=None) is None
+    # cap=1, the one action already spent today -> park.
+    parked = await _loop._gate_daily_limit("acc-1", 1, (1, today), now, run_id=None)
+    assert parked is not None
+    assert parked.detail == "daily limit"

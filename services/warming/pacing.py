@@ -276,12 +276,13 @@ def compute_intensity(
     warm = settings.warming
     phase = effective_phase(age_hours, trust_band)
     progress, days_to_next = _phase_progress(phase, age_hours)
-    if _PHASE_ORDER.index(_phase_cap_by_trust(trust_band)) < _PHASE_ORDER.index(
+    if _PHASE_ORDER.index(_phase_cap_by_trust(trust_band)) <= _PHASE_ORDER.index(
         _phase_from_age(age_hours),
     ):
-        # Phase is held below the age phase by the trust ceiling: age-based
-        # progress would sit at 100% / "0 days to next" forever, implying a
-        # promotion that can't happen while trust stays low. Hide the milestone.
+        # Phase is pinned at (or below) the trust ceiling: the age-based progress
+        # would point at a next phase the trust band won't permit — a permanent
+        # 100%/"0 д", or a steady countdown to an unreachable promotion while the
+        # account sits at the top of its ceiling phase. Hide the milestone.
         progress, days_to_next = None, None
     daily_cap = _PHASE_DAILY_CAP[phase]
     if not warm.ramp_enabled:

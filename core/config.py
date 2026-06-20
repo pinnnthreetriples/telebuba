@@ -148,7 +148,8 @@ class WarmingSettings(BaseSettings):
     quiet_hours_start: int = Field(default=0, ge=0, le=23)
     quiet_hours_end: int = Field(default=0, ge=0, le=23)
     # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
-    # When the day's count reaches the cap the account parks until UTC midnight.
+    # When the day's count reaches the cap the account parks until the next daily
+    # reset (UTC date rollover), shifted into its local active-hours window.
     max_daily_actions: int = Field(default=0, ge=0)
     # Age-based ramp ("balanced" profile): a fresh account behaves quietly and
     # grows to full intensity over ``ramp_full_age_hours``. Disable to make every

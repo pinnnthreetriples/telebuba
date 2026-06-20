@@ -338,8 +338,11 @@ async def _gate_daily_limit(
     daily_count, daily_date = daily
     # Leave room for at least one real action after the mandatory SetOnline:
     # a cycle that could only fit the presence ping would burn a 12-30h sleep on
-    # zero warming work, so park instead of starting it (#100).
-    if effective_cap <= 0 or daily_count <= effective_cap - _MIN_CYCLE_ACTIONS:
+    # zero warming work, so park instead of starting it (#100). Floor the headroom
+    # at the cap itself so a tiny cap (e.g. a legacy .env override of 1) still runs
+    # once a day rather than being parked forever.
+    headroom = min(_MIN_CYCLE_ACTIONS, effective_cap)
+    if effective_cap <= 0 or daily_count <= effective_cap - headroom:
         return None
     next_run = _shift_to_active_hours(
         _next_utc_midnight(now),

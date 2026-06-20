@@ -276,7 +276,12 @@ async def reconcile_warming_runtime() -> None:
                     stopped_at=_now_iso(),
                 )
                 continue
-            if controls.enforce_readiness:
+            # Only gate the operator-startable cycling states. quarantine and
+            # flood_wait are engine-managed recovery/cooldown states with their
+            # own gates (a quarantined account is *expected* to read spam=limited
+            # while it re-probes); applying the start_warming readiness gate to
+            # them would abort an in-progress recovery and park it in error.
+            if controls.enforce_readiness and fresh.state in ("active", "sleeping"):
                 readiness = evaluate_readiness(
                     account,
                     channel_count,
