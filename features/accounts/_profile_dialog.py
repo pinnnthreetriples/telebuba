@@ -212,24 +212,6 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
 
 
 def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
-    refs.stories_container = ui.element("div").classes("w-full")
-
-    story_kind = ui.select(
-        {"image": "Изображение", "video": "Видео"},
-        value="image",
-        label="Медиа",
-    ).props("dense outlined")
-    story_privacy = ui.select(
-        {
-            "contacts": "Контакты",
-            "close_friends": "Близкие друзья",
-            "public": "Публично",
-        },
-        value="contacts",
-        label="Приватность",
-    ).props("dense outlined")
-    story_caption = ui.textarea("Подпись").props("dense outlined")
-    protect_story = ui.checkbox("Защитить контент", value=False)
     staged: dict[str, object] = {"name": None, "bytes": None}
 
     async def _on_file_uploaded(event: UploadEventArguments) -> None:
@@ -237,6 +219,10 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         staged["bytes"] = await event.file.read()
         footer.mark_dirty()
 
+    # New story comes first — operator's primary task on this tab is publishing,
+    # not auditing the existing ring. Upload widget sits at the top, settings
+    # right under it, and the existing-stories carousel goes to the bottom as
+    # historical context.
     story_upload = (
         ui.upload(
             label="Выбрать медиа для сторис",
@@ -253,14 +239,44 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         .props('accept=".jpg,.jpeg,.png,.webp,.mp4,.mov" hide-upload-btn flat bordered')
         .classes("w-full")
     )
-    # Sets expectations before the upload — Telegram enforces 9:16 server-side
-    # for both photos and videos. We normalise photos via Pillow (letterbox
-    # onto blurred background) and re-encode videos via ffmpeg (center-crop
-    # to 720x1280), so the operator can drop any common format and it works.
     ui.label(
         "Изображение: рекомендуется 1080×1920 (9:16) · "
         "Видео: любой формат — перекодируем в 9:16 до 60 сек",
     ).classes("text-xs text-grey-7")
+
+    # Form controls grouped on one line so the tab stays compact.
+    with ui.row().classes("w-full no-wrap gap-2"):
+        story_kind = (
+            ui.select(
+                {"image": "Изображение", "video": "Видео"},
+                value="image",
+                label="Медиа",
+            )
+            .props("dense outlined")
+            .classes("col")
+        )
+        story_privacy = (
+            ui.select(
+                {
+                    "contacts": "Контакты",
+                    "close_friends": "Близкие друзья",
+                    "public": "Публично",
+                },
+                value="contacts",
+                label="Приватность",
+            )
+            .props("dense outlined")
+            .classes("col")
+        )
+    story_caption = ui.textarea("Подпись").props("dense outlined autogrow").classes("w-full")
+    protect_story = ui.checkbox("Защитить контент (запрет на пересылку)", value=False)
+
+    # Existing-stories carousel lives at the bottom — historical context the
+    # operator scans after deciding what to post. The render layer writes
+    # into ``refs.stories_container`` so the snapshot loader stays unchanged.
+    ui.separator().classes("q-mt-md")
+    ui.label("Текущие сторис").classes("text-sm text-grey-8 q-mt-sm")
+    refs.stories_container = ui.element("div").classes("w-full")
 
     async def _apply() -> None:
         name = staged["name"]
