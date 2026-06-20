@@ -25,12 +25,15 @@ _TABLE_COLUMNS = [
     _col("label", "Аккаунт", "label"),
     _col("status", "Статус", "status"),
     _col("telegram", "Telegram", "telegram"),
-    _col("session", "Сессия", "session"),
     _col("device", "Устройство", "device"),
     _col("proxy", "Прокси", "proxy"),
     _col("last_checked", "Проверен", "last_checked"),
     _col("actions", "", "account_id", sortable=False, align="right"),
 ]
+# Сессия column dropped — it usually duplicates ``Аккаунт`` (same identifier)
+# and the extra width pushed the row past the dialog edge, forcing a
+# horizontal scrollbar. Per-row session info is still exposed in the edit
+# dialog and the row payload, just not as its own table column.
 
 _STATUS_LABEL_RU = {
     "new": "Новый",

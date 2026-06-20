@@ -29,15 +29,13 @@ if TYPE_CHECKING:
 
 
 def render_photos_grid(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> None:
-    """Render every profile photo as a swipeable carousel of slides.
+    """Render every profile photo as a horizontal row of poster-style cards.
 
-    Earlier this was a 3-column grid — but with a real account's 10+ photos
-    that pushed the upload widget below the dialog viewport, breaking the
-    "add new photo" affordance. A carousel keeps one slide visible at a
-    time (fixed height) so the upload form stays in sight. Newest photo is
-    slide 0 and gets a "Текущая" badge; optimistic-add stubs render a
-    disabled delete button because Telethon's ``InputPhoto`` refuses to
-    identify them without a real ``file_reference``.
+    Same UX pattern as the stories rail (square 96 px tiles, badge overlay,
+    overlay delete) — keeps the four edit tabs visually consistent. Newest
+    photo is leftmost and gets a green "Текущая" badge; optimistic-add stubs
+    render with a disabled delete button because Telethon's ``InputPhoto``
+    refuses to identify them without a real ``file_reference``.
     """
     container = refs.photo_preview_container
     container.clear()
@@ -46,20 +44,12 @@ def render_photos_grid(refs: _DialogRefs, snapshot: AccountProfileSnapshot) -> N
         if not photos:
             ui.label("Фотографий в профиле нет").classes("text-sm text-grey-7")
             return
-        ui.label(f"Всего фотографий: {len(photos)}").classes(
-            "text-sm text-grey-7 q-mb-sm",
-        )
-        with (
-            ui.carousel(value="0", arrows=True, navigation=True)
-            .props("control-color=primary swipeable animated infinite=false")
-            .classes("w-full bg-grey-2 rounded")
-            .style("height: 360px")
-        ):
+        with ui.row().classes("w-full no-wrap gap-3 overflow-x-auto q-pt-sm q-pb-xs"):
             for index, photo in enumerate(photos):
-                with ui.carousel_slide(name=str(index)).classes(
-                    "column items-center justify-center p-3 gap-2",
-                ):
-                    _render_photo_card(refs, photo, is_current=index == 0)
+                _render_photo_card(refs, photo, is_current=index == 0)
+        ui.label(f"Всего фотографий: {len(photos)}").classes(
+            "text-xs text-grey-7 q-mt-xs",
+        )
 
 
 def _render_photo_card(
@@ -68,26 +58,41 @@ def _render_photo_card(
     *,
     is_current: bool,
 ) -> None:
+    """Render one square poster card with overlay badge + delete button.
+
+    Profile photos are typically square / portrait, so the card is a clean
+    112 px square with ``object-cover`` — matches the stories rail style.
+    """
     thumb_url = _avatar_data_url(photo.thumb_bytes)
     deletable = photo.photo_id > 0 and bool(photo.file_reference)
-    if thumb_url:
-        ui.image(thumb_url).classes("max-h-56 object-contain rounded")
-    else:
-        ui.element("div").classes("w-32 h-32 bg-grey-3 rounded")
-    with ui.row().classes("items-center gap-2"):
-        if is_current:
-            ui.badge("Текущая", color="primary")
-        ui.label(_format_photo_date(photo.date_unix)).classes("text-xs text-grey-7")
-        button = ui.button(
-            icon="delete",
-            color="grey-7",
-            on_click=lambda _e=None, p=photo: _delete_photo(refs, p),
-        ).props("flat dense round")
-        if deletable:
-            button.tooltip("Удалить эту фотографию")
-        else:
-            button.disable()
-            button.tooltip("Сначала обновите данные кнопкой ↻ рядом с именем профиля")
+    with ui.column().classes("items-center gap-1 shrink-0 w-28"):
+        with ui.card().tight().classes("relative overflow-hidden rounded-lg"):
+            if thumb_url:
+                ui.image(thumb_url).classes("w-28 h-28 object-cover block")
+            else:
+                ui.element("div").classes("w-28 h-28 bg-grey-3")
+            if is_current:
+                # ``positive`` (green) mirrors the active-story badge in the
+                # stories rail — the operator scans both tabs the same way.
+                ui.badge("Текущая", color="positive").classes(
+                    "absolute top-1 left-1",
+                ).style("font-size: 9px")
+            delete_btn = (
+                ui.button(
+                    icon="delete",
+                    on_click=lambda _e=None, p=photo: _delete_photo(refs, p),
+                )
+                .props("dense round size=sm color=negative")
+                .classes("absolute bottom-1 right-1")
+            )
+            if deletable:
+                delete_btn.tooltip("Удалить эту фотографию")
+            else:
+                delete_btn.disable()
+                delete_btn.tooltip("Сначала обновите данные кнопкой ↻")
+        ui.label(_format_photo_date(photo.date_unix)).classes(
+            "text-[10px] text-grey-7",
+        )
 
 
 def _format_photo_date(date_unix: int) -> str:

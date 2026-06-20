@@ -72,14 +72,18 @@ def _build_table_section(selected_ids: set[str]) -> _TableSection:  # pragma: no
             status_select = ui.select(_STATUS_OPTIONS, value="all").props("dense outlined")
             status_select.classes("w-48")
 
-        table = ui.table(
-            columns=_TABLE_COLUMNS,
-            rows=[],
-            row_key="account_id",
-            selection="multiple",
-            pagination=_TABLE_PAGE_SIZE,
-            on_select=lambda event: _remember_selection(event.selection, selected_ids),
-        ).classes("w-full")
+        table = (
+            ui.table(
+                columns=_TABLE_COLUMNS,
+                rows=[],
+                row_key="account_id",
+                selection="multiple",
+                pagination=_TABLE_PAGE_SIZE,
+                on_select=lambda event: _remember_selection(event.selection, selected_ids),
+            )
+            .props("dense flat")
+            .classes("w-full")
+        )
         table.add_slot("body-cell-status", _STATUS_BADGE_TEMPLATE)
         table.add_slot("body-cell-proxy", _PROXY_TEMPLATE)
         table.add_slot("body-cell-actions", _ACTIONS_TEMPLATE)

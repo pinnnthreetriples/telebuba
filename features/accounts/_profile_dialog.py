@@ -161,7 +161,6 @@ def _profile_text_tab(
 
 
 def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
-    refs.photo_preview_container = ui.element("div").classes("w-full")
     staged: dict[str, object] = {"name": None, "bytes": None}
 
     async def _on_file_uploaded(event: UploadEventArguments) -> None:
@@ -169,6 +168,9 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         staged["bytes"] = await event.file.read()
         footer.mark_dirty()
 
+    # Upload widget at top — primary operator task on this tab is publishing
+    # a new avatar. Existing-photos rail lives at the bottom as historical
+    # context, mirroring the stories tab layout.
     photo_upload = (
         ui.upload(
             label="Выбрать фото профиля",
@@ -185,6 +187,10 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         .props('accept=".jpg,.jpeg,.png,.webp" hide-upload-btn flat bordered')
         .classes("w-full")
     )
+
+    ui.separator().classes("q-mt-md")
+    ui.label("Текущие фото").classes("text-sm text-grey-8 q-mt-sm")
+    refs.photo_preview_container = ui.element("div").classes("w-full")
 
     async def _apply() -> None:
         name = staged["name"]
@@ -203,11 +209,14 @@ def _profile_photo_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
             ui.notify(_service_error_label(str(exc)), type="negative")
             return
         ui.notify("Фото профиля обновлено", type="positive")
-        # Optimistic UI: the bytes we just uploaded ARE the new avatar.
+        # Optimistic update gives instant feedback (we have the raw bytes),
+        # then force-refresh pulls canonical state — photo_id, file_reference
+        # for future deletion, and Telegram's normalised dimensions.
         _apply_optimistic_avatar(refs, bytes(content))
         photo_upload.reset()
         staged["name"] = None
         staged["bytes"] = None
+        await _load_and_apply(account_id, refs, force_refresh=True)
 
     def _cancel() -> None:
         photo_upload.reset()
@@ -330,12 +339,6 @@ def _profile_story_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
 
 
 def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: no cover
-    refs.music_section = ui.column().classes("w-full gap-2")
-    with refs.music_section:
-        refs.music_list_container = ui.element("div").classes("w-full")
-
-    music_title = ui.input("Название").props("dense outlined clearable")
-    music_performer = ui.input("Исполнитель").props("dense outlined clearable")
     staged: dict[str, object] = {"name": None, "bytes": None}
 
     async def _on_file_uploaded(event: UploadEventArguments) -> None:
@@ -343,6 +346,9 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         staged["bytes"] = await event.file.read()
         footer.mark_dirty()
 
+    # Upload widget at top — primary task is adding a track. The existing-
+    # music list lives at the bottom as audit context. Same pattern as the
+    # photo + story tabs so the operator forms a single mental model.
     music_upload = (
         ui.upload(
             label="Выбрать музыку",
@@ -359,6 +365,15 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         .props('accept=".mp3,.m4a" hide-upload-btn flat bordered')
         .classes("w-full")
     )
+
+    music_title = ui.input("Название").props("dense outlined clearable").classes("w-full")
+    music_performer = ui.input("Исполнитель").props("dense outlined clearable").classes("w-full")
+
+    ui.separator().classes("q-mt-md")
+    ui.label("Текущая музыка").classes("text-sm text-grey-8 q-mt-sm")
+    refs.music_section = ui.column().classes("w-full gap-2")
+    with refs.music_section:
+        refs.music_list_container = ui.element("div").classes("w-full")
 
     async def _apply() -> None:
         name = staged["name"]
@@ -392,6 +407,7 @@ def _profile_music_tab(account_id: str, refs: _DialogRefs) -> None:  # pragma: n
         music_performer.value = ""
         staged["name"] = None
         staged["bytes"] = None
+        await _load_and_apply(account_id, refs, force_refresh=True)
 
     def _cancel() -> None:
         music_upload.reset()
