@@ -209,9 +209,9 @@ async def test_list_active_stories_extracts_inner_stories_and_flags(
     actual ``StoryItem`` list lives one level deeper at
     ``result.stories.stories``. Regression guard for the same trap the
     research subagent flagged: many third-party stubs assume the flat
-    layout. Also asserts that the ``StoryItem.pinned`` flag is carried
-    through into ``is_pinned`` so the service-layer dedupe can grant the
-    badge to entries that are simultaneously active and pinned.
+    layout. Also asserts that the ``StoryItem.pinned`` and privacy-preset
+    flags are carried through to the snapshot row so the UI badges can
+    render without a second round-trip.
     """
     from telethon.tl.functions.stories import GetPeerStoriesRequest  # noqa: PLC0415
 
@@ -220,6 +220,10 @@ async def test_list_active_stories_extracts_inner_stories_and_flags(
         media=MagicMock(spec=MessageMediaPhoto),
         caption="закреп",
         pinned=True,
+        public=True,
+        close_friends=False,
+        contacts=False,
+        selected_contacts=False,
         date=datetime(2026, 6, 19, 10, 0, tzinfo=UTC),
         expire_date=datetime(2099, 1, 1, tzinfo=UTC),
     )
@@ -228,6 +232,10 @@ async def test_list_active_stories_extracts_inner_stories_and_flags(
         media=MagicMock(spec=MessageMediaPhoto),
         caption=None,
         pinned=False,
+        public=False,
+        close_friends=True,
+        contacts=False,
+        selected_contacts=False,
         date=datetime(2026, 6, 20, 9, 0, tzinfo=UTC),
         expire_date=datetime(2099, 1, 1, tzinfo=UTC),
     )
@@ -260,6 +268,10 @@ async def test_list_active_stories_extracts_inner_stories_and_flags(
     assert result.items[0].date_unix == int(
         datetime(2026, 6, 19, 10, 0, tzinfo=UTC).timestamp(),
     )
+    # Privacy presets are propagated from the StoryItem flag bits — public
+    # wins over the others when set; close_friends maps cleanly when alone.
+    assert result.items[0].privacy_preset == "public"
+    assert result.items[1].privacy_preset == "close_friends"
 
 
 @pytest.mark.asyncio

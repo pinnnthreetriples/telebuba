@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import time
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Final
 
 from nicegui import ui
 
@@ -59,13 +59,29 @@ def render_stories_carousel(refs: _DialogRefs, snapshot: AccountProfileSnapshot)
         )
 
 
-def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
-    """Render one poster-style story card with overlay badge + delete button.
+# Short labels for the privacy badge — kept compact so the chip fits inside
+# the 112 px poster card without wrapping. ``unknown`` (a custom-rule story
+# the server didn't flatten into a preset) renders no badge at all.
+_PRIVACY_LABELS: Final[dict[str, str]] = {
+    "public": "Все",
+    "close_friends": "Близкие",
+    "contacts": "Контакты",
+    "selected_contacts": "Выбранные",
+}
+_PRIVACY_TOOLTIPS: Final[dict[str, str]] = {
+    "public": "Видно всем",
+    "close_friends": "Только близкие друзья",
+    "contacts": "Только контакты",
+    "selected_contacts": "Выбранные контакты",
+}
 
-    Thumbnail fills the card (object-cover, no letterbox bars); badges and
-    the delete button are absolutely positioned over the image so the card
-    itself stays a clean 9:16 rectangle. Date + caption sit below the card
-    as small captions.
+
+def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
+    """Render one poster-style story card with overlay badges + delete button.
+
+    Top-left stacks the status badges (Активна / privacy preset); top-right
+    carries the pinned indicator; bottom-right carries the trash button.
+    Date + caption sit below the card as small captions.
     """
     thumb_url = _avatar_data_url(story.thumb_bytes)
     deletable = story.story_id > 0
@@ -75,22 +91,25 @@ def _render_story_card(refs: _DialogRefs, story: TelegramStoryThumb) -> None:
                 ui.image(thumb_url).classes("w-28 h-48 object-cover block")
             else:
                 ui.element("div").classes("w-28 h-48 bg-grey-3")
-            if story.is_active:
-                # ``positive`` is Quasar's green; ``primary`` was reading as a
-                # generic blue tag, but story rings on the official Telegram
-                # client are green so the badge should match.
-                ui.badge("Активна", color="positive").classes(
-                    "absolute top-1 left-1",
-                ).style("font-size: 9px")
+            # Status badges stack vertically at top-left so privacy sits
+            # directly under "Активна" — clearer hierarchy than scattering
+            # chips across two corners.
+            with ui.column().classes("absolute top-1 left-1 gap-1 items-start"):
+                if story.is_active:
+                    # ``positive`` is Quasar's green; story rings on the
+                    # official Telegram client are green so the badge matches.
+                    ui.badge("Активна", color="positive").style("font-size: 9px")
+                privacy_label = _PRIVACY_LABELS.get(story.privacy_preset)
+                if privacy_label is not None:
+                    ui.badge(privacy_label, color="grey-8").style(
+                        "font-size: 9px",
+                    ).tooltip(_PRIVACY_TOOLTIPS[story.privacy_preset])
             if story.is_pinned:
                 ui.icon("push_pin", size="xs").classes(
                     "absolute top-1 right-1 text-white",
                 ).style("filter: drop-shadow(0 0 2px rgba(0,0,0,0.6))")
             # ``color=negative`` (red) is Quasar's destructive-action colour —
             # it auto-picks white for the icon, no custom scrim needed.
-            # Previously ``color=white`` painted a white background and
-            # auto-picked a DARK icon, which a hand-applied dark .style()
-            # background then hid completely.
             delete_btn = (
                 ui.button(
                     icon="delete",

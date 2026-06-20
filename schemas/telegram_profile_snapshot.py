@@ -24,6 +24,15 @@ class TelegramProfileSnapshot(BaseModel):
     avatar_bytes: bytes | None = None
 
 
+StoryPrivacyPreset = Literal[
+    "public",
+    "close_friends",
+    "contacts",
+    "selected_contacts",
+    "unknown",
+]
+
+
 class TelegramStoryThumb(BaseModel):
     """Lightweight preview of one of the account's stories.
 
@@ -31,7 +40,10 @@ class TelegramStoryThumb(BaseModel):
     survives the 24 h window). ``is_active`` is true when the story is in
     its 24 h visibility window — the two are independent (a story can be
     pinned but expired, or active but unpinned). ``date_unix`` lets the UI
-    sort newest-first across both lists.
+    sort newest-first across both lists. ``privacy_preset`` derives from
+    Telegram's ``public`` / ``close_friends`` / ``contacts`` /
+    ``selected_contacts`` flag set; ``unknown`` covers stories with a
+    custom rule vector we don't translate (rare).
     """
 
     story_id: int
@@ -41,6 +53,7 @@ class TelegramStoryThumb(BaseModel):
     date_unix: int = 0
     is_pinned: bool = False
     is_active: bool = False
+    privacy_preset: StoryPrivacyPreset = "unknown"
 
 
 class TelegramPinnedStories(BaseModel):

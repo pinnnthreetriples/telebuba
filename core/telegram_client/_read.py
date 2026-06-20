@@ -38,6 +38,7 @@ from schemas.telegram_actions import (
     ListProfilePhotos,
 )
 from schemas.telegram_profile_snapshot import (
+    StoryPrivacyPreset,
     TelegramActiveStories,
     TelegramMusicItem,
     TelegramPinnedStories,
@@ -242,7 +243,30 @@ async def _story_thumb(
         date_unix=_story_date_unix(story),
         is_pinned=is_pinned,
         is_active=_story_is_active(story),
+        privacy_preset=_story_privacy_preset(story),
     )
+
+
+def _story_privacy_preset(story: object) -> StoryPrivacyPreset:
+    """Map Telegram's flag-based privacy bits to a single preset string.
+
+    ``StoryItem`` carries four mutually-exclusive flag bits — ``public``,
+    ``close_friends``, ``contacts``, ``selected_contacts`` — that match the
+    preset choices in the publish form. Order matters: ``public`` wins over
+    everything (broadest audience), then ``close_friends`` (deliberate
+    narrowing), then ``selected_contacts`` (custom list), then ``contacts``
+    (the implicit default). Stories with only a raw ``privacy`` rule vector
+    and none of the convenience flags fall through to ``unknown``.
+    """
+    if bool(getattr(story, "public", False)):
+        return "public"
+    if bool(getattr(story, "close_friends", False)):
+        return "close_friends"
+    if bool(getattr(story, "selected_contacts", False)):
+        return "selected_contacts"
+    if bool(getattr(story, "contacts", False)):
+        return "contacts"
+    return "unknown"
 
 
 def _story_date_unix(story: object) -> int:
