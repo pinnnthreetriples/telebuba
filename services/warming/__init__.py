@@ -25,12 +25,11 @@ from __future__ import annotations
 from services.warming._chat import _sanitize_chat_text
 from services.warming._cycle import _human_delay, run_one_cycle
 from services.warming._loop import run_loop_iteration
+from services.warming._runner import _initial_delay_seconds, _loop_sleep_seconds
 from services.warming._runtime import (
     _RUNTIME,
     UnknownAccountError,
     WarmingNotReadyError,
-    _initial_delay_seconds,
-    _loop_sleep_seconds,
     _stop_warming_locked,
     account_lock,
     reconcile_warming_runtime,

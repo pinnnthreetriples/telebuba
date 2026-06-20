@@ -59,7 +59,7 @@ from schemas.warming import (
 from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
-from services.warming import _loop, _runtime, _seams
+from services.warming import _loop, _runner, _runtime, _seams
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -2232,14 +2232,14 @@ async def test_warming_loop_exits_when_state_becomes_idle_after_iteration(
         await upsert_warming_state(WarmingStateWrite(account_id=account_id, state="idle"))
         return WarmingCycleResult(account_id=account_id, status="ok")
 
-    monkeypatch.setattr(_runtime, "run_loop_iteration", fake_iteration)
-    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
-    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "run_loop_iteration", fake_iteration)
+    monkeypatch.setattr(_runner, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
 
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
 
-    await _runtime._warming_loop("acc-1")
+    await _runner._warming_loop("acc-1")
 
     assert iterations == ["acc-1"]
     state = await fetch_warming_state("acc-1")
@@ -2897,8 +2897,8 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
         WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
     )
 
-    monkeypatch.setattr(_runtime, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
-    monkeypatch.setattr(_runtime, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
 
     async def crash_after_replacing_generation(
         account_id: str, *, run_id: str | None = None
@@ -2911,9 +2911,9 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
         msg = "boom from stale loop"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(_runtime, "run_loop_iteration", crash_after_replacing_generation)
+    monkeypatch.setattr(_runner, "run_loop_iteration", crash_after_replacing_generation)
 
-    await _runtime._warming_loop("acc-1", run_id="run-a")
+    await _runner._warming_loop("acc-1", run_id="run-a")
 
     state = await fetch_warming_state("acc-1")
     assert state is not None
