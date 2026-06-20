@@ -16,7 +16,10 @@ from typing import TYPE_CHECKING, Any
 from nicegui import ui
 
 from features.warming._board_checks import (
+    _CYCLE_FORMS,
     _check_states,
+    _ru_event,
+    _ru_plural,
     _ru_reason,
 )
 from features.warming._board_dnd import (
@@ -142,7 +145,8 @@ def _relative_eta(iso: str | None) -> str | None:  # pragma: no cover
     if delta <= 0:
         return "сейчас"
     if delta < _ETA_HOUR_SECONDS:
-        return f"{int(delta // 60)} мин"
+        # Sub-minute reads as "<1 мин", not a misleading "0 мин".
+        return "<1 мин" if delta < 60 else f"{int(delta // 60)} мин"  # noqa: PLR2004
     if delta < _ETA_DAY_SECONDS:
         return f"{int(delta // _ETA_HOUR_SECONDS)} ч"
     return f"{int(delta // _ETA_DAY_SECONDS)} д"
@@ -253,9 +257,9 @@ def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  
 def _render_card_stats(card: WarmingAccountState, fleet_max_daily: int) -> None:  # pragma: no cover
     """Single-line stats footer. Per-card daily cap wins over fleet override.
 
-    The fleet ``max_daily_actions`` setting is now an .env-driven override —
-    when it's > 0 (legacy installs) it caps regardless of phase. Otherwise
-    the per-account ``card.daily_cap`` (derived from phase + trust) applies.
+    The fleet ``max_daily_actions`` override is persisted in the DB settings
+    row — when it's > 0 (legacy installs) it caps regardless of phase.
+    Otherwise the per-account ``card.daily_cap`` (phase + trust) applies.
     """
     parts: list[str] = []
     if card.age_hours is not None:
@@ -266,7 +270,7 @@ def _render_card_stats(card: WarmingAccountState, fleet_max_daily: int) -> None:
     parts.append("DM ✅" if card.dm_allowed else "DM 🔒")
     if fleet_max_daily > 0:
         effective_cap = fleet_max_daily
-        cap_suffix = " (override)"
+        cap_suffix = " (.env)"
     else:
         effective_cap = card.daily_cap
         cap_suffix = " (фаза)" if effective_cap > 0 else ""
@@ -289,11 +293,14 @@ def _render_flood_wait_line(card: WarmingAccountState) -> None:  # pragma: no co
     remaining = _relative_eta(card.flood_wait_until)
     if remaining is None and card.flood_wait_seconds is None:
         return
-    text = (
-        f"🕒 flood-wait ещё {remaining}"
-        if remaining
-        else f"🕒 flood-wait {card.flood_wait_seconds} с"
-    )
+    if remaining == "сейчас":
+        # Deadline passed but the loop hasn't flipped state yet — "ещё сейчас"
+        # reads as nonsense, so show a neutral "expiring" instead.
+        text = "🕒 flood-wait истекает"
+    elif remaining:
+        text = f"🕒 flood-wait ещё {remaining}"
+    else:
+        text = f"🕒 flood-wait {card.flood_wait_seconds} с"
     ui.label(text).classes("text-[11px] text-amber-700 truncate")
 
 
@@ -400,9 +407,9 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
         # Spam status (always shown).
         _render_spam_badge(ctx, card)
         # Activity line + stats.
-        meta = f"циклов {card.cycles_completed}"
+        meta = f"{card.cycles_completed} {_ru_plural(card.cycles_completed, _CYCLE_FORMS)}"
         if card.last_event:
-            meta = f"{meta} · {card.last_event}"
+            meta = f"{meta} · {_ru_event(card.last_event)}"
         ui.label(meta).classes("text-[11px] text-slate-500 truncate")
         _render_card_stats(card, ctx.max_daily)
         # Conditional diagnostic lines — only render when relevant.

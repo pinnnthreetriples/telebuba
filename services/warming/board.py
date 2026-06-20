@@ -45,7 +45,7 @@ _HOURS_PER_DAY = 24
 # an idle account in the warming-age band doesn't look like it's "currently
 # being warmed".
 _PHASE_LABEL_RU: dict[WarmingPhase, str] = {
-    "intro": "🥚 Новый · 0-2 дн",
+    "intro": "🥚 Новый · 0-3 дн",
     "settling": "🐣 Адаптация · 3-7 дн",
     "warming": "🐥 Развитие · 8-14 дн",
     "active": "🐤 Окрепший · 15-29 дн",

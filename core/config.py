@@ -141,8 +141,9 @@ class WarmingSettings(BaseSettings):
     # Refuse to start warming an account that is not ready (dead session, no
     # proxy, no channels). Set False to bypass the pre-start gate.
     enforce_readiness: bool = True
-    # Quiet hours (UTC): when enabled, an account performs no actions inside the
-    # [start, end) hour window and parks until it ends. start == end disables it.
+    # Quiet hours (account-local time, from the phone's timezone): when enabled,
+    # an account performs no actions inside the [start, end) hour window and
+    # parks until it ends. start == end disables it.
     quiet_hours_enabled: bool = False
     quiet_hours_start: int = Field(default=0, ge=0, le=23)
     quiet_hours_end: int = Field(default=0, ge=0, le=23)

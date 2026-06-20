@@ -52,8 +52,10 @@ def _seconds_until(next_run_at_iso: str, now: datetime) -> float:
 
 
 def _in_quiet_hours(now: datetime, start_hour: int, end_hour: int) -> bool:
-    """True when ``now``'s UTC hour falls in the ``[start, end)`` window.
+    """True when the hour of ``now`` falls in the ``[start, end)`` window.
 
+    Callers pass account-local time (see ``_local_now``), so the operator's
+    start/end hours are interpreted in the account's own timezone, not UTC.
     ``start == end`` means "no window" (always False). The window wraps midnight
     when ``start > end`` (e.g. 23→7).
     """
@@ -66,7 +68,7 @@ def _in_quiet_hours(now: datetime, start_hour: int, end_hour: int) -> bool:
 
 
 def _quiet_hours_end_at(now: datetime, end_hour: int) -> datetime:
-    """The next UTC datetime at ``end_hour:00`` strictly after ``now``."""
+    """The next datetime at ``end_hour:00`` strictly after ``now`` (in ``now``'s tz)."""
     candidate = now.replace(hour=end_hour, minute=0, second=0, microsecond=0)
     if candidate <= now:
         candidate += timedelta(days=1)

@@ -31,6 +31,57 @@ def _ru_reason(reason: str) -> str:  # pragma: no cover
     return reason
 
 
+_CYCLE_FORMS = ("цикл", "цикла", "циклов")
+
+# Engine ``last_event`` tokens are stable English keys (pinned by tests); translate
+# them at the UI edge only, mirroring _READINESS_REASON_RU.
+_LAST_EVENT_RU = {
+    "queued": "в очереди",
+    "cycle_started": "цикл начат",
+    "quiet_hours": "тихие часы",
+    "daily_limit": "дневной лимит",
+    "stopped": "остановлен",
+    "reconcile_orphan": "сирота при перезапуске",
+    "reconcile_not_ready": "не готов при перезапуске",
+    "loop_crashed": "сбой цикла",
+    "quarantine_probe_started": "проверка карантина",
+    "quarantine_recovered": "вышел из карантина",
+    "quarantine_extended": "карантин продлён",
+    "quarantine_exhausted": "карантин исчерпан",
+    "quarantine_quiet_hours": "карантин (тихие часы)",
+}
+
+_CYCLE_STATUS_RU = {
+    "ok": "цикл выполнен",
+    "skipped": "цикл пропущен",
+    "failed": "цикл с ошибками",
+    "error": "цикл: ошибка",
+    "flood_wait": "цикл: flood-wait",
+    "peer_flood": "цикл: peer-flood",
+}
+
+
+def _ru_event(last_event: str) -> str:
+    """Translate an engine ``last_event`` token into a Russian card label."""
+    if last_event.startswith("cycle:"):
+        status = last_event[len("cycle:") :]
+        return _CYCLE_STATUS_RU.get(status, f"цикл: {status}")
+    return _LAST_EVENT_RU.get(last_event, last_event)
+
+
+def _ru_plural(count: int, forms: tuple[str, str, str]) -> str:
+    """Pick the Russian noun form for ``count`` — ``forms`` = (one, few, many)."""
+    tens = abs(count) % 100
+    if 11 <= tens <= 14:  # noqa: PLR2004 - the teens always take the "many" form
+        return forms[2]
+    ones = tens % 10
+    if ones == 1:
+        return forms[0]
+    if 2 <= ones <= 4:  # noqa: PLR2004 - 2-4 take the "few" form
+        return forms[1]
+    return forms[2]
+
+
 def _spam_badge_label(status: str, detail: str | None) -> str:
     """Russian badge text, distinguishing unknown sub-states.
 

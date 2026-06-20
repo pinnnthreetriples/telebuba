@@ -9,16 +9,18 @@ fires — a missed field means a stale card, an over-broad one means flicker).
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
-from features.warming._board import _card_signature
+from features.warming._board import _card_signature, _relative_eta
 from features.warming._board_checks import (
     _check_flood,
     _check_proxy,
     _check_states,
     _format_new_account_threshold,
+    _ru_event,
+    _ru_plural,
     _ru_reason,
     _spam_badge_classes,
     _spam_badge_label,
@@ -389,6 +391,34 @@ def test_check_states_settled_phase_age_chip_is_ok() -> None:
     card = _base_card().model_copy(update={"phase": "settling", "trust_reasons": []})
     age_status, _ = _by_label(_check_states(card))["возраст"]
     assert age_status == "ok"
+
+
+# --- audit #101: Russian wording helpers --------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("count", "form"),
+    [(1, "цикл"), (2, "цикла"), (4, "цикла"), (5, "циклов"), (11, "циклов"), (21, "цикл")],
+)
+def test_ru_plural_cycle_forms(count: int, form: str) -> None:
+    assert _ru_plural(count, ("цикл", "цикла", "циклов")) == form
+
+
+def test_ru_event_translates_known_cycle_and_unknown_tokens() -> None:
+    assert _ru_event("daily_limit") == "дневной лимит"
+    assert _ru_event("cycle:ok") == "цикл выполнен"
+    assert _ru_event("cycle:weird") == "цикл: weird"  # unknown status keeps the suffix
+    assert _ru_event("totally_unknown") == "totally_unknown"  # falls back to the raw token
+
+
+def test_relative_eta_sub_minute_reads_less_than_one_minute() -> None:
+    soon = (datetime.now(UTC) + timedelta(seconds=30)).isoformat()
+    assert _relative_eta(soon) == "<1 мин"
+
+
+def test_relative_eta_past_reads_now() -> None:
+    past = (datetime.now(UTC) - timedelta(seconds=5)).isoformat()
+    assert _relative_eta(past) == "сейчас"
 
 
 # --- readiness reason translation: every reason gets a Russian rendering ----
