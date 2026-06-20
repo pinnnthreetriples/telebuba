@@ -202,17 +202,6 @@ def _check_session(reasons: set[str]) -> tuple[str, str, str]:
     return ("сессия", "ok", "сессия живая")
 
 
-def _check_spam(card: WarmingAccountState) -> tuple[str, str, str]:
-    """None and "unknown" both map to warn (data missing, not a risk)."""
-    status = card.spam_status or "unknown"
-    tooltip = _spam_tooltip(status, card.spam_detail)
-    if status == "clean":
-        return ("@SpamBot", "ok", tooltip)
-    if status == "limited":
-        return ("@SpamBot", "fail", tooltip)
-    return ("@SpamBot", "warn", tooltip)
-
-
 def _check_proxy(
     trust_reasons: set[str],
     readiness_reasons: set[str],

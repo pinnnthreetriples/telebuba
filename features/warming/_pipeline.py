@@ -95,7 +95,7 @@ _STEP_GLYPH: dict[str, str] = {
 }
 
 
-def _next_active_index(card: WarmingAccountState) -> int:  # pragma: no cover
+def _next_active_index(card: WarmingAccountState) -> int:
     """Return the index of the step that is active given an ``active`` state.
 
     Uses ``last_action`` to map to the step that was *just* completed and
@@ -107,7 +107,7 @@ def _next_active_index(card: WarmingAccountState) -> int:  # pragma: no cover
     return min(base + 1, _SLEEP_STEP_INDEX)
 
 
-def _active_step(card: WarmingAccountState) -> tuple[int | None, str]:  # pragma: no cover
+def _active_step(card: WarmingAccountState) -> tuple[int | None, str]:
     """Pick the index (0..5) and overall kind of the active step.
 
     Returns ``(None, "quar")`` when no step is currently active (quarantine
@@ -198,7 +198,7 @@ def _step_tooltip(step: _Step, card: WarmingAccountState, kind: str) -> str:  # 
     return _active_tooltip(step, card)
 
 
-def _connector_kind(left_idx: int, active_idx: int | None, kind: str) -> str:  # pragma: no cover
+def _connector_kind(left_idx: int, active_idx: int | None, kind: str) -> str:
     """Pick the styling for the connector between step ``left_idx`` and ``left_idx + 1``.
 
     - ``done``    — the step on the left is already past.
@@ -215,7 +215,7 @@ def _connector_kind(left_idx: int, active_idx: int | None, kind: str) -> str:  #
     return "pending"
 
 
-def _step_kind(idx: int, active_idx: int | None, kind: str) -> str:  # pragma: no cover
+def _step_kind(idx: int, active_idx: int | None, kind: str) -> str:
     """Determine the visual state of step ``idx`` given the active resolution."""
     if kind == "quar":
         return "quar"

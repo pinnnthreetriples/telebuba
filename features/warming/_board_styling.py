@@ -43,14 +43,7 @@ def _relative_eta(iso: str | None) -> str | None:  # pragma: no cover
 _BOARD_POLL_SECONDS = 4.0
 _ETA_HOUR_SECONDS = 3600
 _ETA_DAY_SECONDS = 86_400
-_ERROR_MAX_LEN = 80
 
-_HEALTH_DOT = {
-    "ok": "bg-green-500",
-    "warn": "bg-amber-500",
-    "fail": "bg-red-500",
-    "idle": "bg-slate-400",
-}
 _STATE_LABEL = {
     "idle": "Простой",
     "active": "Прогрев",
@@ -93,43 +86,6 @@ _SUMMARY_CHIPS = (
     ("⛨ риск", "trust_risk", "bg-red-100 text-red-700"),
 )
 
-_TRUST_BADGE = {
-    "excellent": "bg-green-100 text-green-700",
-    "good": "bg-emerald-100 text-emerald-700",
-    "watch": "bg-amber-100 text-amber-700",
-    "at_risk": "bg-orange-100 text-orange-700",
-    "critical": "bg-red-100 text-red-700",
-}
-_TRUST_BAND_LABEL = {
-    "excellent": "отлично",
-    "good": "норма",
-    "watch": "под наблюдением",
-    "at_risk": "риск",
-    "critical": "критично",
-}
-
-# Visual treatment for the per-check chips: dot colour + label colour.
-_CHECK_DOT = {
-    "ok": "bg-green-500",
-    "warn": "bg-amber-500",
-    "fail": "bg-red-500",
-}
-_CHECK_TEXT = {
-    "ok": "text-slate-600",
-    "warn": "text-amber-700",
-    "fail": "text-red-700",
-}
-
-# Phase chip styling — semantic colour ramp (slate → sky → amber → lime →
-# emerald). The chip's bg/text/ring trio matches; the progress bar reuses the
-# ``-500`` tone for fill.
-_PHASE_CHIP_CLASSES = {
-    "intro": "bg-slate-100 text-slate-700 ring-slate-200",
-    "settling": "bg-sky-50 text-sky-800 ring-sky-200",
-    "warming": "bg-amber-50 text-amber-800 ring-amber-200",
-    "active": "bg-lime-50 text-lime-800 ring-lime-200",
-    "warmed": "bg-emerald-50 text-emerald-800 ring-emerald-200",
-}
 _PHASE_BAR_FILL = {
     "intro": "bg-green-500",
     "settling": "bg-sky-500",
@@ -195,8 +151,7 @@ _CHECK_CHIP_DOT: dict[str, str] = {
     "fail": "bg-red-500",
 }
 
-# ── Phase chip — solid fill, rounded (used instead of ring-based _PHASE_CHIP_CLASSES
-#    in the new card layout; _PHASE_BAR_FILL stays as-is) ─────────────────────
+# ── Phase chip (solid fill, rounded) ─────────────────────────────────────────
 _PHASE_CHIP_SOLID: dict[str, str] = {
     "intro": "bg-green-100  text-green-800",
     "settling": "bg-amber-100  text-amber-800",

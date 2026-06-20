@@ -17,7 +17,6 @@ from features.warming._board import _card_signature, _relative_eta
 from features.warming._board_checks import (
     _check_flood,
     _check_proxy,
-    _check_spam,
     _check_states,
     _format_new_account_threshold,
     _ru_event,
@@ -93,26 +92,6 @@ def test_check_states_geo_unknown_is_warn() -> None:
     assert geo_status == "warn"
 
 
-def test_check_states_spam_unknown_is_warn() -> None:
-    card = _base_card().model_copy(update={"spam_status": None})
-
-    _, spam_status, spam_tip = _check_spam(card)
-
-    assert spam_status == "warn"
-    assert "нажмите" in spam_tip  # tooltip hints at the action
-
-
-def test_check_states_spam_limited_is_fail_with_detail() -> None:
-    card = _base_card().model_copy(
-        update={"spam_status": "limited", "spam_detail": "until 2026-08-12"},
-    )
-
-    _, spam_status, spam_tip = _check_spam(card)
-
-    assert spam_status == "fail"
-    assert spam_tip == "until 2026-08-12"
-
-
 def test_check_states_quarantine_count_in_tooltip() -> None:
     card = _base_card().model_copy(update={"quarantine_count": 3})
 
@@ -137,29 +116,6 @@ def test_check_states_new_account_is_warn_not_fail() -> None:
     age_status, _ = _by_label(_check_states(card))["возраст"]
 
     assert age_status == "warn"
-
-
-def test_check_states_spam_unknown_with_error_surfaces_detail() -> None:
-    """When the probe failed, the chip tooltip carries the actual exception."""
-    card = _base_card().model_copy(
-        update={"spam_status": "unknown", "spam_detail": "TimeoutError: timed out"},
-    )
-
-    _, spam_status, spam_tip = _check_spam(card)
-
-    assert spam_status == "warn"
-    assert "TimeoutError" in spam_tip
-
-
-def test_check_states_spam_unknown_being_checked_mentions_telegram() -> None:
-    card = _base_card().model_copy(
-        update={"spam_status": "unknown", "spam_detail": "account is being checked"},
-    )
-
-    _, spam_status, spam_tip = _check_spam(card)
-
-    assert spam_status == "warn"
-    assert "Telegram" in spam_tip
 
 
 # --- spam helper functions (used by badge / chip / toast) ----------------------
