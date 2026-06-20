@@ -31,6 +31,57 @@ def _ru_reason(reason: str) -> str:  # pragma: no cover
     return reason
 
 
+_CYCLE_FORMS = ("цикл", "цикла", "циклов")
+
+# Engine ``last_event`` tokens are stable English keys (pinned by tests); translate
+# them at the UI edge only, mirroring _READINESS_REASON_RU.
+_LAST_EVENT_RU = {
+    "queued": "в очереди",
+    "cycle_started": "цикл начат",
+    "quiet_hours": "тихие часы",
+    "daily_limit": "дневной лимит",
+    "stopped": "остановлен",
+    "reconcile_orphan": "сирота при перезапуске",
+    "reconcile_not_ready": "не готов при перезапуске",
+    "loop_crashed": "сбой цикла",
+    "quarantine_probe_started": "проверка карантина",
+    "quarantine_recovered": "вышел из карантина",
+    "quarantine_extended": "карантин продлён",
+    "quarantine_exhausted": "карантин исчерпан",
+    "quarantine_quiet_hours": "карантин (тихие часы)",
+}
+
+_CYCLE_STATUS_RU = {
+    "ok": "цикл выполнен",
+    "skipped": "цикл пропущен",
+    "failed": "цикл с ошибками",
+    "error": "цикл: ошибка",
+    "flood_wait": "цикл: flood-wait",
+    "peer_flood": "цикл: peer-flood",
+}
+
+
+def _ru_event(last_event: str) -> str:
+    """Translate an engine ``last_event`` token into a Russian card label."""
+    if last_event.startswith("cycle:"):
+        status = last_event[len("cycle:") :]
+        return _CYCLE_STATUS_RU.get(status, f"цикл: {status}")
+    return _LAST_EVENT_RU.get(last_event, last_event)
+
+
+def _ru_plural(count: int, forms: tuple[str, str, str]) -> str:
+    """Pick the Russian noun form for ``count`` — ``forms`` = (one, few, many)."""
+    tens = abs(count) % 100
+    if 11 <= tens <= 14:  # noqa: PLR2004 - the teens always take the "many" form
+        return forms[2]
+    ones = tens % 10
+    if ones == 1:
+        return forms[0]
+    if 2 <= ones <= 4:  # noqa: PLR2004 - 2-4 take the "few" form
+        return forms[1]
+    return forms[2]
+
+
 def _spam_badge_label(status: str, detail: str | None) -> str:
     """Russian badge text, distinguishing unknown sub-states.
 
@@ -139,7 +190,7 @@ def _check_states(
         _check_spam(card),
         _check_proxy(reasons, readiness_reasons),
         _check_geo(card, reasons),
-        _check_new_account(reasons, new_account_hours),
+        _check_new_account(card, reasons, new_account_hours),
         _check_flood(card, reasons, current_now),
         _check_quarantine(card),
     ]
@@ -202,6 +253,7 @@ def _check_geo(card: WarmingAccountState, reasons: set[str]) -> tuple[str, str, 
 
 
 def _check_new_account(
+    card: WarmingAccountState,
     reasons: set[str],
     new_account_hours: float,
 ) -> tuple[str, str, str]:
@@ -209,11 +261,15 @@ def _check_new_account(
 
     Tooltip uses the configured threshold from ``settings.trust.new_account_hours``
     rather than a hard-coded «48 ч» so the chip stays honest if the cutoff
-    moves.
+    moves. While the account is still in the ``intro`` phase (held by the 72h
+    hard floor) the chip stays amber even once the trust "new account" penalty
+    has aged off, so it doesn't contradict the «🥚 Новый» phase chip.
     """
     threshold_label = _format_new_account_threshold(new_account_hours)
     if "new account" in reasons:
         return ("возраст", "warn", f"новый аккаунт ({threshold_label})")
+    if card.phase == "intro":
+        return ("возраст", "warn", "этап «Новый» (до 72 ч)")
     return ("возраст", "ok", f"возраст ≥ {threshold_label.lstrip('< ')}")
 
 

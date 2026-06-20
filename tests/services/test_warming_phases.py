@@ -144,3 +144,21 @@ def test_compute_intensity_progress_present_for_non_terminal_phase() -> None:
     assert intensity.phase == "warming"
     assert intensity.progress_to_next is not None
     assert intensity.days_to_next_phase is not None
+
+
+def test_compute_intensity_trust_capped_phase_hides_progress() -> None:
+    # A year-old account pinned to ``settling`` by critical trust would otherwise
+    # show 100% progress / "0 days to next" forever (#98). Hide the milestone.
+    intensity = compute_intensity(365 * 24.0, trust_band="critical")
+    assert intensity.phase == "settling"
+    assert intensity.progress_to_next is None
+    assert intensity.days_to_next_phase is None
+
+
+def test_compute_intensity_hides_progress_at_trust_ceiling_boundary() -> None:
+    # A "watch" account aged into its ceiling phase ("active") must not show a
+    # countdown to "warmed" it can't reach while trust stays at watch.
+    intensity = compute_intensity(20 * 24.0, trust_band="watch")
+    assert intensity.phase == "active"
+    assert intensity.progress_to_next is None
+    assert intensity.days_to_next_phase is None

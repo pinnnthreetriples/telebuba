@@ -6,8 +6,11 @@ UI-thin per non-negotiable #1; excluded from coverage. Logic lives in
 
 from __future__ import annotations
 
+import re
+
 from nicegui import ui
 
+from core.config import settings
 from schemas.warming import AddChannelsRequest, RemoveChannelRequest
 from services.warming import add_channels, load_board, remove_channel
 
@@ -25,14 +28,14 @@ def _fmt_date(iso: str) -> str:  # pragma: no cover
 
 
 def _count_submitted_lines(raw: str) -> int:
-    """Approximate the number of channel candidates the operator pasted.
+    r"""Count the channel candidates the operator pasted.
 
-    Mirrors the trivial part of ``services/warming/channels._parse_channels``
-    (split on commas + newlines, drop blanks) so the UI can show a
-    «добавлено N · пропущено M» summary without the service having to
-    return its own counters. Pure — easy to unit-test.
+    Splits on the same ``[\s,]+`` pattern as the service parser
+    (``services/warming/channels._parse_channels``) — including spaces — so the
+    «добавлено N · пропущено M» summary doesn't under-report skips for
+    space-separated input. Pure — easy to unit-test.
     """
-    return sum(1 for line in raw.replace(",", "\n").splitlines() if line.strip())
+    return sum(1 for token in re.split(r"[\s,]+", raw.strip()) if token)
 
 
 async def _render_channels_card() -> None:  # pragma: no cover
@@ -45,7 +48,7 @@ async def _render_channels_card() -> None:  # pragma: no cover
         channels_input = (
             ui.textarea(
                 label="Добавить каналы",
-                placeholder="@channel, https://t.me/channel — по одному в строке или через запятую",
+                placeholder="@channel, t.me/channel — запятая, пробел или новая строка",
             )
             .props("dense outlined autogrow")
             .classes("w-full")
@@ -111,10 +114,11 @@ async def _render_channels_card() -> None:  # pragma: no cover
             submitted = _count_submitted_lines(raw)
             skipped = max(0, submitted - added)
             if added == 0:
-                ui.notify(
-                    "Ничего не добавлено (дубли или невалидные)",
-                    type="warning",
-                )
+                cap = settings.warming.max_channels_total
+                if after_count >= cap:
+                    ui.notify(f"Список заполнен (лимит {cap} каналов)", type="warning")
+                else:
+                    ui.notify("Ничего не добавлено (дубли или невалидные)", type="warning")
             elif skipped > 0:
                 ui.notify(f"Добавлено {added} · пропущено {skipped}", type="info")
             else:

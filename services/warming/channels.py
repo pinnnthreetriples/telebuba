@@ -59,17 +59,27 @@ def _normalize_channel(token: str) -> str | None:  # noqa: PLR0911
     return cleaned if _CHANNEL_TOKEN_RE.match(cleaned) else None
 
 
+def _dedup_key(channel: str) -> str:
+    """Case-folding key for dedup.
+
+    Public usernames are case-insensitive, but private-invite hashes ("+HASH")
+    are case-sensitive — two genuinely different invites that differ only in
+    letter case must not collapse to one and silently drop the second.
+    """
+    return channel if channel.startswith("+") else channel.lower()
+
+
 def _parse_channels(raw: str) -> list[str]:
     seen: list[str] = []
-    lowered_seen: set[str] = set()
+    seen_keys: set[str] = set()
     for token in re.split(r"[\s,]+", raw.strip()):
         normalized = _normalize_channel(token)
         if normalized is None:
             continue
-        key = normalized.lower()
-        if key in lowered_seen:
+        key = _dedup_key(normalized)
+        if key in seen_keys:
             continue
-        lowered_seen.add(key)
+        seen_keys.add(key)
         seen.append(normalized)
     return seen
 
@@ -92,7 +102,7 @@ async def add_channels(data: AddChannelsRequest) -> WarmingChannelList:
     warm = settings.warming
     parsed = parsed[: warm.max_channels_per_add]
     existing = await list_warming_channels()
-    existing_keys = {ch.channel.lower() for ch in existing.channels}
+    existing_keys = {_dedup_key(ch.channel) for ch in existing.channels}
     headroom = max(0, warm.max_channels_total - len(existing_keys))
 
     channels = existing
@@ -105,10 +115,10 @@ async def add_channels(data: AddChannelsRequest) -> WarmingChannelList:
                 extra={"limit": warm.max_channels_total},
             )
             break
-        if channel.lower() in existing_keys:
+        if _dedup_key(channel) in existing_keys:
             continue
         channels = await add_warming_channel(channel)
-        existing_keys.add(channel.lower())
+        existing_keys.add(_dedup_key(channel))
         added += 1
     await log_event(
         "INFO",

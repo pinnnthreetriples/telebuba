@@ -18,9 +18,12 @@ from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._state import _set_state
+from services.warming._transitions import (
+    _calculate_next_run,
+    _matches_active_run,
+    _resolve_phase_after_cycle,
+)
 from services.warming.pacing import (
-    _PHASE_ORDER,
-    _SECONDS_PER_HOUR,
     _account_age_hours,
     _account_tz,
     _in_quiet_hours,
@@ -35,30 +38,15 @@ from services.warming.pacing import (
 
 if TYPE_CHECKING:
     from schemas.warming import (
-        WarmingPhase,
         WarmingSettingsSecret,
-        WarmingState,
         WarmingStateRecord,
     )
 
 
-def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -> bool:
-    """True iff ``record`` is alive and (when supplied) matches ``run_id`` (P1.2).
-
-    ``error`` and ``idle`` are both terminal as far as the runtime loop is
-    concerned (the operator has to ack and restart an error'd account; idle
-    is the stopped state). Without rejecting ``error`` here, a direct
-    ``run_loop_iteration(account_id)`` call (run_id=None) could resurrect a
-    cycle on an account the runtime wrapper would have refused to start —
-    inconsistent with reconcile, which skips error rows.
-    """
-    if record is None:
-        return run_id is None  # no DB row + no expectation → trivially "match"
-    if record.state in ("idle", "error"):
-        return False
-    if run_id is None:
-        return True
-    return record.run_id == run_id
+# A cycle always spends one action on the SetOnline presence flip; require room
+# for at least one real action (join/read/react) beyond it before starting, or
+# the cycle would burn a 12-30h sleep doing nothing useful.
+_MIN_CYCLE_ACTIONS = 2
 
 
 async def _recover_from_quarantine(
@@ -66,6 +54,7 @@ async def _recover_from_quarantine(
     record: WarmingStateRecord,
     now: datetime,
     *,
+    controls: WarmingSettingsSecret,
     run_id: str | None = None,
 ) -> WarmingCycleResult:
     """Re-check a quarantined account: resume if cleared, escalate otherwise.
@@ -82,6 +71,28 @@ async def _recover_from_quarantine(
     quarantine was still open.
     """
     warm = settings.warming
+    # Quiet hours apply to the quarantine re-probe too: the @SpamBot ``/start``
+    # below is live Telegram I/O, so defer it to the end of the quiet window
+    # rather than break the "no actions inside quiet hours" guarantee. State and
+    # quarantine_count are preserved so recovery resumes after the window.
+    if controls.quiet_hours_enabled:
+        local_now = await _local_now(account_id, now)
+        if _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
+            next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
+            deferred = await _set_state(
+                account_id,
+                "quarantine",
+                last_event="quarantine_quiet_hours",
+                next_run_at=next_run,
+                heartbeat_at=now.isoformat(),
+                quarantine_count=record.quarantine_count,
+                expected_run_id=run_id,
+            )
+            if run_id is not None and not deferred.applied:
+                return WarmingCycleResult(
+                    account_id=account_id, status="skipped", detail="stale run"
+                )
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
     # Round-5 P1: pre-probe CAS. Telegram I/O lives behind this gate.
     probe_started = await _set_state(
         account_id,
@@ -152,90 +163,6 @@ async def _recover_from_quarantine(
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
 
 
-async def _calculate_next_run(
-    account_id: str,
-    result: WarmingCycleResult,
-) -> tuple[int, datetime, WarmingState]:
-    warm = settings.warming
-    actions_done = result.attempted_actions
-
-    next_state: WarmingState
-    if result.status == "peer_flood":
-        sleep_seconds = warm.quarantine_hours * _SECONDS_PER_HOUR
-        next_state = "quarantine"
-    elif result.status == "flood_wait":
-        sleep_seconds = float(result.flood_wait_seconds) if result.flood_wait_seconds else 0.0
-        next_state = "flood_wait"
-    elif result.status == "failed":
-        sleep_seconds = _seams.rng.uniform(
-            warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
-            warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
-        )
-        work_actions = (
-            result.channels_joined
-            + result.channels_read
-            + result.reactions_sent
-            + result.messages_sent
-        )
-        next_state = "sleeping" if work_actions > 0 else "error"
-    else:
-        sleep_seconds = _seams.rng.uniform(
-            warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
-            warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
-        )
-        next_state = "sleeping"
-
-    next_run_dt = datetime.now(UTC) + timedelta(seconds=sleep_seconds)
-    if result.status not in {"peer_flood", "flood_wait"}:
-        next_run_dt = _shift_to_active_hours(next_run_dt, await _account_tz(account_id))
-
-    return actions_done, next_run_dt, next_state
-
-
-async def _resolve_phase_after_cycle(
-    account_id: str,
-    age_hours: float,
-    latest: WarmingStateRecord | None,
-) -> tuple[WarmingPhase, str]:
-    """Compute the post-cycle phase, fire ``phase_advanced`` if it changed.
-
-    Returns ``(new_phase, phase_entered_iso)`` for the upsert. We recompute
-    trust here on purpose: the cycle may have just shifted spam/quarantine/
-    flood signals, and the phase should react in the same write. Seed-only
-    semantics for the first ever cycle (``prev is None`` → no event, just
-    stamp the entry timestamp).
-    """
-    post_trust = await account_trust_score(account_id)
-    post_intensity = compute_intensity(age_hours, trust_band=post_trust.band)
-    new_phase = post_intensity.phase
-    prev_phase = latest.current_phase if latest is not None else None
-    phase_changed = prev_phase is not None and prev_phase != new_phase
-    if phase_changed and prev_phase is not None:
-        direction = (
-            "forward"
-            if _PHASE_ORDER.index(new_phase) > _PHASE_ORDER.index(prev_phase)
-            else "regression"
-        )
-        await log_event(
-            "INFO" if direction == "forward" else "WARNING",
-            "phase_advanced",
-            account_id=account_id,
-            extra={
-                "from_phase": prev_phase,
-                "to_phase": new_phase,
-                "direction": direction,
-                "trust_score": post_trust.score,
-                "cycle_index": (latest.cycles_completed if latest else 0) + 1,
-            },
-        )
-    phase_entered_iso = (
-        _now_iso()
-        if prev_phase is None or phase_changed
-        else (latest.phase_entered_at if latest and latest.phase_entered_at else _now_iso())
-    )
-    return new_phase, phase_entered_iso
-
-
 async def _gate_quiet_hours(
     account_id: str,
     controls: WarmingSettingsSecret,
@@ -282,9 +209,18 @@ async def _gate_daily_limit(
     exit early, or ``None`` when the cycle may proceed.
     """
     daily_count, daily_date = daily
-    if effective_cap <= 0 or daily_count < effective_cap:
+    # Leave room for at least one real action after the mandatory SetOnline:
+    # a cycle that could only fit the presence ping would burn a 12-30h sleep on
+    # zero warming work, so park instead of starting it (#100). Floor the headroom
+    # at the cap itself so a tiny cap (e.g. a legacy .env override of 1) still runs
+    # once a day rather than being parked forever.
+    headroom = min(_MIN_CYCLE_ACTIONS, effective_cap)
+    if effective_cap <= 0 or daily_count <= effective_cap - headroom:
         return None
-    next_run = _next_utc_midnight(now).isoformat()
+    next_run = _shift_to_active_hours(
+        _next_utc_midnight(now),
+        await _account_tz(account_id),
+    ).isoformat()
     write = await _set_state(
         account_id,
         "sleeping",
@@ -327,12 +263,12 @@ async def _finalize_after_cycle(
     if latest is not None and latest.state == "idle":
         return result
 
-    new_phase, phase_entered_iso = await _resolve_phase_after_cycle(
+    new_phase, phase_entered_iso, phase_event = await _resolve_phase_after_cycle(
         account_id,
         age_hours,
         latest,
     )
-    await _set_state(
+    write = await _set_state(
         account_id,
         next_state,
         last_event=f"cycle:{result.status}",
@@ -351,6 +287,17 @@ async def _finalize_after_cycle(
         current_phase=new_phase,
         phase_entered_at=phase_entered_iso,
     )
+    # Announce the phase transition only once the write actually landed: if the
+    # CAS rejected it (a newer generation took the row between the read above and
+    # this write), the transition never happened, so a logged event would be a
+    # phantom (#100).
+    if phase_event is not None and (run_id is None or write.applied):
+        await log_event(
+            phase_event.level,
+            "phase_advanced",
+            account_id=account_id,
+            extra=phase_event.extra,
+        )
     return result
 
 
@@ -374,7 +321,9 @@ async def run_loop_iteration(
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
 
     if record is not None and record.state == "quarantine":
-        return await _recover_from_quarantine(account_id, record, now, run_id=run_id)
+        return await _recover_from_quarantine(
+            account_id, record, now, controls=controls, run_id=run_id
+        )
 
     quiet = await _gate_quiet_hours(account_id, controls, now, run_id=run_id)
     if quiet is not None:
