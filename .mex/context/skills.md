@@ -26,8 +26,8 @@ last_updated: 2026-06-21
 
 Global skills the user has set as defaults. Every session applies them without being asked.
 
-- **`karpathy-guidelines`** — coding behaviour: surface assumptions, prefer the minimum code, surgical changes only, transform tasks into verifiable goals. Applies to every write/review/refactor action.
-- **`ponytail ultra`** — code minimisation: YAGNI extremist, deletion before addition, challenge the requirement before building. Active every response. `/ponytail-review` runs automatically after every code task. `/ponytail-audit` on whole-repo work. `/ponytail-debt` to harvest deferred shortcuts.
+- **karpathy guidelines** — coding behaviour: surface assumptions, prefer the minimum code, surgical changes only, transform tasks into verifiable goals. Applies to every write/review/refactor action. Lives as text in the user's global Claude Code config (no longer a separate invokable skill).
+- **`ponytail` (full mode)** — code minimisation via the ladder: stdlib/native before custom code, shortest working diff, shortest explanation. Active every response. `/ponytail-review` runs automatically after every code task. `/ponytail-audit` on whole-repo work. `/ponytail-debt` to harvest deferred shortcuts.
 
 ## Agent Skills (project-local — invoke on the listed trigger)
 
