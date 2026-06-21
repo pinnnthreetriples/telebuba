@@ -184,15 +184,16 @@ def _apply_read_result(
 
 
 async def _run_channel_loop(  # noqa: PLR0913, C901
-    account_id: str,
+    data: WarmingCycleRequest,
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
     intensity: WarmingIntensity,
     attempts_so_far: int,
-    remaining_actions: int | None,
     on_step: _OnStep | None = None,
 ) -> _ChannelTally:
     warm = settings.warming
+    account_id = data.account_id
+    remaining_actions = data.remaining_actions
     tally = _ChannelTally()
 
     def _can_attempt() -> bool:
@@ -354,7 +355,7 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(channels, _seams.rng.randint(lower, upper))
         channel_tally = await _run_channel_loop(
-            account_id, chosen, secret, intensity, tally.attempts, data.remaining_actions, on_step
+            data, chosen, secret, intensity, tally.attempts, on_step
         )
 
         tally.joined += channel_tally.joined
