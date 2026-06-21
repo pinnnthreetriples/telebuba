@@ -30,12 +30,14 @@ def _card(state: str, last_action: str | None = None) -> WarmingAccountState:
 @pytest.mark.parametrize(
     ("last_action", "expected"),
     [
-        ("set_online", 1),
-        ("join", 2),
-        ("read_or_react", 4),
-        ("send_dm", _SLEEP_STEP_INDEX),  # clamped at the sleep step, not 5+1
-        (None, 1),
-        ("unknown", 1),  # unknown action falls back to online -> next is 1
+        ("set_online", 0),
+        ("join", 1),
+        ("read", 2),
+        ("react", 3),
+        ("read_or_react", 3),  # error-path token still maps to react
+        ("send_dm", 4),
+        (None, 0),  # not-yet-started -> online lights up
+        ("unknown", 0),  # unknown action falls back to online
     ],
 )
 def test_next_active_index(last_action: str | None, expected: int) -> None:
@@ -50,7 +52,12 @@ def test_next_active_index(last_action: str | None, expected: int) -> None:
         ("sleeping", None, (_SLEEP_STEP_INDEX, "sleep")),
         ("error", "send_dm", (4, "error")),
         ("error", None, (0, "error")),  # unknown action pins the error to online
-        ("active", "join", (2, "active")),
+        ("active", None, (0, "active")),  # just started -> online live
+        ("active", "set_online", (0, "active")),
+        ("active", "join", (1, "active")),
+        ("active", "read", (2, "active")),
+        ("active", "react", (3, "active")),
+        ("active", "send_dm", (4, "active")),
         ("idle", None, (None, "active")),  # caller gates idle; defensive default
     ],
 )

@@ -171,6 +171,8 @@ _STATUS_DOT: dict[str, str] = {
 _STATUS_ACTION_LABEL: dict[str, str] = {
     "set_online": "устанавливает онлайн",
     "join": "вступает в канал",
+    "read": "читает каналы",
+    "react": "ставит реакции",
     "read_or_react": "ставит реакции",
     "send_dm": "отправляет сообщение",
 }

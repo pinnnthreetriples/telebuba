@@ -69,16 +69,18 @@ _CYCLE_STEPS: tuple[_Step, ...] = (
     _Step("sleep", "Сон", "bedtime"),
 )
 
-# Maps ``last_action`` values emitted by ``services.warming`` to the
-# 0-based index of the step that was JUST COMPLETED. Unknown values fall
-# back to 0 (online). ``read_or_react`` is intentionally pinned to
-# ``react`` (idx 3) because the service collapses read-then-react into a
-# single ``last_action`` string — treating it as ``react`` reflects the
-# latest user-visible activity.
+# Maps ``last_action`` values emitted by ``services.warming`` to the 0-based
+# index of the rail step. The engine writes ``last_action`` live mid-cycle, so
+# for an ``active`` card it is the step running *right now*; for an ``error``
+# card it is the step that failed. Unknown values fall back to 0 (online).
+# ``read_or_react`` stays pinned to ``react`` (idx 3) for the error path, which
+# still collapses read-then-react into that single token.
 _ACTION_TO_STEP: dict[str, int] = {
     "set_online": 0,  # online
     "join": 1,  # join
-    "read_or_react": 3,  # react (mid-point; read is 2, react is 3)
+    "read": 2,  # read
+    "react": 3,  # react
+    "read_or_react": 3,  # react (error path: collapsed read+react token)
     "send_dm": 4,  # chat
 }
 _ERROR_DETAIL_MAX_LEN: int = 60
@@ -104,15 +106,14 @@ _STEP_LABEL_CLS: dict[str, str] = {
 
 
 def _next_active_index(card: WarmingAccountState) -> int:
-    """Return the index of the step that is active given an ``active`` state.
+    """Return the index of the step running *now* given an ``active`` state.
 
-    Uses ``last_action`` to map to the step that was *just* completed and
-    returns the *next* step in the sequence, clamped at ``_SLEEP_STEP_INDEX``
-    (sleep / 5). Unknown ``last_action`` falls back to 0 (online).
+    ``last_action`` is written live by the engine mid-cycle, so it names the
+    step in progress; map it straight to its rail index. ``None``/unknown → 0
+    (online), so a just-started cycle lights up online. Clamped at
+    ``_SLEEP_STEP_INDEX`` (5) defensively.
     """
-    last = card.last_action or ""
-    base = _ACTION_TO_STEP.get(last, 0)
-    return min(base + 1, _SLEEP_STEP_INDEX)
+    return min(_ACTION_TO_STEP.get(card.last_action or "", 0), _SLEEP_STEP_INDEX)
 
 
 def _active_step(card: WarmingAccountState) -> tuple[int | None, str]:
@@ -130,10 +131,10 @@ def _active_step(card: WarmingAccountState) -> tuple[int | None, str]:
                          ``online`` (idx 0) so the error has a step to land on.
     - ``flood_wait``  → ``(_SLEEP_STEP_INDEX, "flood")`` — engine paused on sleep step.
     - ``sleeping``    → ``(_SLEEP_STEP_INDEX, "sleep")`` — between-cycle cooldown.
-    - ``active``      → ``(last-action-idx + 1, "active")`` — the *next* step
-                         after what was just done is live. Clamped at 5
-                         (sleep) so a finished-action edge case doesn't wrap.
-                         Unknown ``last_action`` falls back to idx 0 (online).
+    - ``active``      → ``(last-action-idx, "active")`` — the step the engine
+                         is running right now (``last_action`` is updated live
+                         mid-cycle). Unknown / not-yet-started ``last_action``
+                         falls back to idx 0 (online).
     - ``idle``        → ``(None, "active")`` — caller gates; defensive only.
     """
     if card.state == "quarantine":
