@@ -383,6 +383,71 @@ async def test_loop_iteration_persists_live_progress(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
+async def test_loop_iteration_survives_progress_write_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A raising progress write (e.g. a transient SQLite lock) must not abort the
+    # cycle or park a healthy account in error — the hook is cosmetic, best-effort.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    real_set_state = _loop._set_state
+
+    async def _flaky(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
+        # Only the mid-cycle progress writes blow up (state=active, no last_event);
+        # the cycle_started / finalize boundary writes go through untouched.
+        if state == "active" and kwargs.get("last_event") is None:
+            msg = "database is locked"
+            raise RuntimeError(msg)
+        return await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(_loop, "_set_state", _flaky)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "ok"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state != "error"
+
+
+@pytest.mark.asyncio
+async def test_loop_iteration_clears_stale_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The rail advances last_action live but never updates last_channel, so a
+    # prior cycle's failed channel must be cleared at cycle start, not left to
+    # surface stale under a fresh active step.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="sleeping", last_channel="old-chan"),
+    )
+
+    active_channels: list[str | None] = []
+    real_set_state = _loop._set_state
+
+    async def _spy(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
+        write = await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
+        if state == "active":
+            active_channels.append(write.record.last_channel)
+        return write
+
+    monkeypatch.setattr(_loop, "_set_state", _spy)
+
+    await warming.run_loop_iteration("acc-1")
+
+    assert active_channels  # the cycle reached at least the cycle_started write
+    assert "old-chan" not in active_channels
+
+
+@pytest.mark.asyncio
 async def test_quarantine_recovers_when_cleared(monkeypatch: pytest.MonkeyPatch) -> None:
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(

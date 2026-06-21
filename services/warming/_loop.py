@@ -356,6 +356,7 @@ async def run_loop_iteration(
         heartbeat_at=now.isoformat(),
         last_error=None,
         last_action="set_online",
+        last_channel=None,
         daily_actions=daily_count,
         daily_count_date=daily_date,
         expected_run_id=run_id,
@@ -370,19 +371,29 @@ async def run_loop_iteration(
     async def _on_step(step: str) -> None:
         # ponytail: best-effort, monotonic progress write. CAS-guarded by run_id
         # but the result is ignored — the cycle isn't abortable mid-flight, so a
-        # stale generation's write simply degrades to a no-op.
+        # stale generation's write degrades to a no-op. A raising write (e.g. a
+        # transient SQLite lock) is swallowed too: this is cosmetic rail progress
+        # and must never abort the live cycle or park a healthy account in error.
         nonlocal max_step
         idx = _PROGRESS_STEPS.index(step) if step in _PROGRESS_STEPS else -1
         if idx <= max_step:
             return
         max_step = idx
-        await _set_state(
-            account_id,
-            "active",
-            last_action=step,
-            heartbeat_at=_now_iso(),
-            expected_run_id=run_id,
-        )
+        try:
+            await _set_state(
+                account_id,
+                "active",
+                last_action=step,
+                heartbeat_at=_now_iso(),
+                expected_run_id=run_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - cosmetic progress, never abort the cycle.
+            await log_event(
+                "WARNING",
+                "warming_progress_write_failed",
+                account_id=account_id,
+                extra={"step": step, "error_type": type(exc).__name__, "message": str(exc)},
+            )
 
     remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
     result = await run_one_cycle(
