@@ -17,7 +17,7 @@ edges:
     condition: for board-related skills (to-prd, to-issues)
   - target: context/conventions.md
     condition: when /tdd is invoked — rule 7 sets the strict test policy
-last_updated: 2026-06-20
+last_updated: 2026-06-21
 ---
 
 # Skills
@@ -49,6 +49,7 @@ Installed in `.claude/skills/`. The agent does NOT auto-run them — invoke via 
 
 - **`/to-prd`** — turn the current conversation into a PRD on the issue tracker. **Trigger:** user says "this should be a PRD" or after a long discussion that decided non-trivial scope.
 - **`/to-issues`** — split a plan / PRD into independently-grabbable board items (tracer-bullet vertical slices). **Trigger:** after a PRD lands, or whenever a single conversation has grown several actionable threads. Outputs go to `Backlog` per `context/kanban.md`.
+- **`/triage`** — move issues / external PRs through a state machine of triage roles (categorise → verify → grill → write agent brief). **Trigger:** explicit `/triage` only (`disable-model-invocation: true`). Applies the 5 GitHub triage labels — see `docs/agents/triage-labels.md`. Readiness still owned by the board column, not the label (see `docs/agents/issue-tracker.md`).
 
 ### Setup / safety
 
@@ -61,5 +62,5 @@ This block is what `setup-matt-pocock-skills` would produce. Hand-written so the
 
 - **Issue tracker:** GitHub Issues on the `telebuba` repo (owner: `pinnnthreetriples`). Use `gh` (or `D:/gh.exe` on Windows if `gh` is not in PATH).
 - **Project board:** GitHub Project #2 (`telebuba`) — full protocol and column IDs in `context/kanban.md`. Status: `Backlog` → `Ready` → `In progress` → `In review` → `Done`.
-- **Triage labels:** none yet. When the first label is created, add it here and to `state/active.md`.
+- **Triage labels:** 5 canonical roles created on GitHub — `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`. Mapping: `docs/agents/triage-labels.md`.
 - **Domain docs:** `.mex/ROUTER.md` is the entrypoint; `.mex/context/` and `.mex/patterns/` are the domain source of truth. `state/active.md` carries live state.
