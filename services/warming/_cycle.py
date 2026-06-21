@@ -33,8 +33,15 @@ from services.warming.pacing import (
 )
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from schemas.telegram_actions import ActionResult
     from schemas.warming import WarmingChannel, WarmingIntensity, WarmingSettingsSecret
+
+    # Live progress hook: the loop passes a callback that persists the named
+    # step (set_online/join/read/react/send_dm) so the board rail can advance
+    # mid-cycle. None = no-op (every non-loop caller and most tests).
+    _OnStep = Callable[[str], Awaitable[None]]
 
 
 def _human_delay(min_seconds: float, max_seconds: float) -> float:
@@ -57,6 +64,12 @@ def _human_delay(min_seconds: float, max_seconds: float) -> float:
 
 async def _human_pause(min_seconds: float, max_seconds: float) -> None:
     await asyncio.sleep(_human_delay(min_seconds, max_seconds))
+
+
+async def _emit_step(on_step: _OnStep | None, step: str) -> None:
+    """Fire the live-progress hook for ``step`` when the loop supplied one."""
+    if on_step is not None:
+        await on_step(step)
 
 
 async def _read_and_react(  # noqa: PLR0913
@@ -170,15 +183,17 @@ def _apply_read_result(
     return True
 
 
-async def _run_channel_loop(  # noqa: PLR0913
-    account_id: str,
+async def _run_channel_loop(  # noqa: PLR0913, C901
+    data: WarmingCycleRequest,
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
     intensity: WarmingIntensity,
     attempts_so_far: int,
-    remaining_actions: int | None,
+    on_step: _OnStep | None = None,
 ) -> _ChannelTally:
     warm = settings.warming
+    account_id = data.account_id
+    remaining_actions = data.remaining_actions
     tally = _ChannelTally()
 
     def _can_attempt() -> bool:
@@ -194,6 +209,7 @@ async def _run_channel_loop(  # noqa: PLR0913
             tally.attempts += 1
             if join_result.status == "ok":
                 await record_channel_joined(account_id, channel.channel)
+                await _emit_step(on_step, "join")
             if _apply_join_result(tally, join_result, channel.channel):
                 break
             await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
@@ -207,6 +223,11 @@ async def _run_channel_loop(  # noqa: PLR0913
             attempts_so_far=attempts_so_far + tally.attempts,
             remaining_actions=remaining_actions,
         )
+        reads, reactions, *_ = outcome
+        if reads:
+            await _emit_step(on_step, "read")
+        if reactions:
+            await _emit_step(on_step, "react")
         if _apply_read_result(tally, outcome, channel.channel):
             break
         await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
@@ -270,8 +291,16 @@ async def _build_cycle_result(
     return result
 
 
-async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noqa: C901, PLR0912, PLR0915
-    """Perform exactly one warming pass for an account. The testable core."""
+async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915
+    data: WarmingCycleRequest,
+    *,
+    on_step: _OnStep | None = None,
+) -> WarmingCycleResult:
+    """Perform exactly one warming pass for an account. The testable core.
+
+    ``on_step`` (optional) is fired with the canonical step name after each
+    successful action so the loop can persist live mid-cycle progress.
+    """
     account_id = data.account_id
     secret = await load_warming_settings()
     channels = (await list_warming_channels()).channels
@@ -319,13 +348,14 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
             return await _build_cycle_result(account_id, tally, messages_sent)
 
         online_set = True
+        await _emit_step(on_step, "set_online")
         await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
 
         upper = min(intensity.channels_max, len(channels))
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(channels, _seams.rng.randint(lower, upper))
         channel_tally = await _run_channel_loop(
-            account_id, chosen, secret, intensity, tally.attempts, data.remaining_actions
+            data, chosen, secret, intensity, tally.attempts, on_step
         )
 
         tally.joined += channel_tally.joined
@@ -350,6 +380,8 @@ async def run_one_cycle(data: WarmingCycleRequest) -> WarmingCycleResult:  # noq
         ):
             chat_result = await _maybe_inter_account_chat(account_id, secret)
             messages_sent = chat_result.messages_sent
+            if messages_sent:
+                await _emit_step(on_step, "send_dm")
             tally.attempts += chat_result.attempted_actions
             tally.failures += chat_result.failures
             if chat_result.last_failed_action:

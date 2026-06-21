@@ -48,6 +48,12 @@ if TYPE_CHECKING:
 # the cycle would burn a 12-30h sleep doing nothing useful.
 _MIN_CYCLE_ACTIONS = 2
 
+# Canonical order of the live-progress tokens ``run_one_cycle`` emits. The loop
+# maps a token to its position here to keep the rail advancing forward only —
+# the channel loop revisits join/read/react per channel, so a raw write would
+# bounce the rail backward.
+_PROGRESS_STEPS: tuple[str, ...] = ("set_online", "join", "read", "react", "send_dm")
+
 
 async def _recover_from_quarantine(
     account_id: str,
@@ -349,6 +355,8 @@ async def run_loop_iteration(
         last_event="cycle_started",
         heartbeat_at=now.isoformat(),
         last_error=None,
+        last_action="set_online",
+        last_channel=None,
         daily_actions=daily_count,
         daily_count_date=daily_date,
         expected_run_id=run_id,
@@ -356,9 +364,41 @@ async def run_loop_iteration(
     if run_id is not None and not started.applied:
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
 
+    # set_online is already seeded on the cycle_started write above, so the rail
+    # lights up "online" the moment the cycle starts; the hook advances from join.
+    max_step = 0
+
+    async def _on_step(step: str) -> None:
+        # ponytail: best-effort, monotonic progress write. CAS-guarded by run_id
+        # but the result is ignored — the cycle isn't abortable mid-flight, so a
+        # stale generation's write degrades to a no-op. A raising write (e.g. a
+        # transient SQLite lock) is swallowed too: this is cosmetic rail progress
+        # and must never abort the live cycle or park a healthy account in error.
+        nonlocal max_step
+        idx = _PROGRESS_STEPS.index(step) if step in _PROGRESS_STEPS else -1
+        if idx <= max_step:
+            return
+        max_step = idx
+        try:
+            await _set_state(
+                account_id,
+                "active",
+                last_action=step,
+                heartbeat_at=_now_iso(),
+                expected_run_id=run_id,
+            )
+        except Exception as exc:  # noqa: BLE001 - cosmetic progress, never abort the cycle.
+            await log_event(
+                "WARNING",
+                "warming_progress_write_failed",
+                account_id=account_id,
+                extra={"step": step, "error_type": type(exc).__name__, "message": str(exc)},
+            )
+
     remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
     result = await run_one_cycle(
         WarmingCycleRequest(account_id=account_id, remaining_actions=remaining),
+        on_step=_on_step,
     )
     return await _finalize_after_cycle(
         account_id,

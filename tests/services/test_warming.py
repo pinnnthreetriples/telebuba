@@ -9,7 +9,7 @@ from __future__ import annotations
 import asyncio
 import random
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -214,6 +214,25 @@ async def test_cycle_reacts_when_enabled(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.mark.asyncio
+async def test_cycle_emits_progress_steps(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+
+    steps: list[str] = []
+
+    async def _record(step: str) -> None:
+        steps.append(step)
+
+    await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"), on_step=_record)
+
+    assert steps == ["set_online", "join", "read", "react"]
+
+
+@pytest.mark.asyncio
 async def test_cycle_stops_on_flood_wait(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     recorder.flood_on.add("join_channel")
@@ -331,6 +350,101 @@ async def test_loop_iteration_quarantines_on_peer_flood(monkeypatch: pytest.Monk
     state = await fetch_warming_state("acc-1")
     assert state is not None
     assert state.state == "quarantine"
+
+
+@pytest.mark.asyncio
+async def test_loop_iteration_persists_live_progress(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    active_actions: list[str | None] = []
+    real_set_state = _loop._set_state
+
+    async def _spy(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
+        if state == "active":
+            active_actions.append(cast("str | None", kwargs.get("last_action")))
+        return await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(_loop, "_set_state", _spy)
+
+    await warming.run_loop_iteration("acc-1")
+
+    # cycle_started seeds set_online; the monotonic hook advances the rail forward
+    # only (no backward bounce across the per-channel join/read/react). The exact
+    # tail depends on the daily-action cap, so assert a forward-only prefix that
+    # has at least reached the channel-read step.
+    assert active_actions == list(_loop._PROGRESS_STEPS[: len(active_actions)])
+    assert "read" in active_actions
+
+
+@pytest.mark.asyncio
+async def test_loop_iteration_survives_progress_write_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A raising progress write (e.g. a transient SQLite lock) must not abort the
+    # cycle or park a healthy account in error — the hook is cosmetic, best-effort.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    real_set_state = _loop._set_state
+
+    async def _flaky(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
+        # Only the mid-cycle progress writes blow up (state=active, no last_event);
+        # the cycle_started / finalize boundary writes go through untouched.
+        if state == "active" and kwargs.get("last_event") is None:
+            msg = "database is locked"
+            raise RuntimeError(msg)
+        return await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr(_loop, "_set_state", _flaky)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "ok"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state != "error"
+
+
+@pytest.mark.asyncio
+async def test_loop_iteration_clears_stale_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The rail advances last_action live but never updates last_channel, so a
+    # prior cycle's failed channel must be cleared at cycle start, not left to
+    # surface stale under a fresh active step.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="sleeping", last_channel="old-chan"),
+    )
+
+    active_channels: list[str | None] = []
+    real_set_state = _loop._set_state
+
+    async def _spy(account_id: str, state: str, **kwargs: object) -> WarmingStateWriteResult:
+        write = await real_set_state(account_id, state, **kwargs)  # ty: ignore[invalid-argument-type]
+        if state == "active":
+            active_channels.append(write.record.last_channel)
+        return write
+
+    monkeypatch.setattr(_loop, "_set_state", _spy)
+
+    await warming.run_loop_iteration("acc-1")
+
+    assert active_channels  # the cycle reached at least the cycle_started write
+    assert "old-chan" not in active_channels
 
 
 @pytest.mark.asyncio
@@ -1871,7 +1985,7 @@ async def test_stop_does_not_get_overwritten_by_inflight_cycle(
 
     # Patch ``run_one_cycle`` to simulate stop_warming firing mid-cycle:
     # the operator wrote ``idle`` while the loop was still inside this call.
-    async def cycle_with_stop_inside(req):  # type: ignore[no-untyped-def]
+    async def cycle_with_stop_inside(req, **_kwargs):  # type: ignore[no-untyped-def]
         await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="idle"))
         return WarmingCycleResult(account_id=req.account_id, status="ok")
 
@@ -2287,7 +2401,7 @@ async def test_old_cycle_cannot_overwrite_new_manual_start(
         WarmingStateWrite(account_id="acc-1", state="active", run_id=run_id_a),
     )
 
-    async def cycle_with_restart_inside(req):  # type: ignore[no-untyped-def]
+    async def cycle_with_restart_inside(req, **_kwargs):  # type: ignore[no-untyped-def]
         # Simulate start_warming firing during this in-flight cycle: it minted
         # a fresh run_id and wrote it (along with state='active') to the row.
         await upsert_warming_state(
