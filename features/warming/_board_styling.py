@@ -7,21 +7,43 @@ with the rest of ``features/warming``.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import Literal
 
 NotifyType = Literal["positive", "negative", "warning", "info", "ongoing"]
 
+
+def _relative_eta(iso: str | None) -> str | None:  # pragma: no cover
+    """Human ETA from now to an ISO timestamp, e.g. ``7 ч`` / ``12 мин``.
+
+    Lives here so it can be reused by sibling UI renderers (the pipeline, the
+    board card stats, the sleep step tooltip) without each one reaching across
+    the package. ``_board`` re-exports it for backward compatibility with
+    existing tests that import it from there.
+    """
+    if not iso:
+        return None
+    try:
+        target = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if target.tzinfo is None:
+        target = target.replace(tzinfo=UTC)
+    delta = (target - datetime.now(UTC)).total_seconds()
+    if delta <= 0:
+        return "сейчас"
+    if delta < _ETA_HOUR_SECONDS:
+        # Sub-minute reads as "<1 мин", not a misleading "0 мин".
+        return "<1 мин" if delta < 60 else f"{int(delta // 60)} мин"  # noqa: PLR2004
+    if delta < _ETA_DAY_SECONDS:
+        return f"{int(delta // _ETA_HOUR_SECONDS)} ч"
+    return f"{int(delta // _ETA_DAY_SECONDS)} д"
+
+
 _BOARD_POLL_SECONDS = 4.0
 _ETA_HOUR_SECONDS = 3600
 _ETA_DAY_SECONDS = 86_400
-_ERROR_MAX_LEN = 80
 
-_HEALTH_DOT = {
-    "ok": "bg-green-500",
-    "warn": "bg-amber-500",
-    "fail": "bg-red-500",
-    "idle": "bg-slate-400",
-}
 _STATE_LABEL = {
     "idle": "Простой",
     "active": "Прогрев",
@@ -64,47 +86,101 @@ _SUMMARY_CHIPS = (
     ("⛨ риск", "trust_risk", "bg-red-100 text-red-700"),
 )
 
-_TRUST_BADGE = {
-    "excellent": "bg-green-100 text-green-700",
-    "good": "bg-emerald-100 text-emerald-700",
-    "watch": "bg-amber-100 text-amber-700",
-    "at_risk": "bg-orange-100 text-orange-700",
-    "critical": "bg-red-100 text-red-700",
-}
-_TRUST_BAND_LABEL = {
-    "excellent": "отлично",
-    "good": "норма",
-    "watch": "под наблюдением",
-    "at_risk": "риск",
-    "critical": "критично",
+_PHASE_BAR_FILL = {
+    "intro": "bg-green-500",
+    "settling": "bg-sky-500",
+    "warming": "bg-amber-500",
+    "active": "bg-indigo-500",
+    "warmed": "bg-emerald-500",
 }
 
-# Visual treatment for the per-check chips: dot colour + label colour.
-_CHECK_DOT = {
+# Pipeline rail — per-step circle + per-connector bar classes. The actual
+# colours/animations live in ``features/warming/__init__.py`` under
+# ``ui.add_css(shared=True)`` so the keyframes (``tb-flow``,
+# ``tb-step-spin``) and the active-state ring stay in one place. The semantic
+# names here let ``_pipeline.py`` pick a class by current step state without
+# hardcoding colours at the call site.
+_PIPELINE_STEP_DONE = "bg-green-500 text-white"
+_PIPELINE_STEP_ACTIVE = (
+    "bg-indigo-600 text-white ring-4 ring-indigo-200 animate-pulse shadow-md shadow-indigo-200"
+)
+_PIPELINE_STEP_PENDING = "bg-slate-200 text-slate-400"
+_PIPELINE_STEP_ERROR = "bg-red-500 text-white"
+_PIPELINE_STEP_FLOOD = "bg-amber-500 text-white"
+_PIPELINE_STEP_QUAR = "bg-orange-500 text-white"
+_PIPELINE_STEP_SLEEP = "bg-blue-400 text-white ring-4 ring-blue-100"
+_PIPELINE_CONNECTOR_DONE = "bg-green-400"
+_PIPELINE_CONNECTOR_ACTIVE = "tb-flow-line"  # defined in __init__.py _PIPELINE_CSS
+_PIPELINE_CONNECTOR_PENDING = "bg-slate-200"
+
+# ── Card stripe colour by state ───────────────────────────────────────────────
+_STRIPE_CLS: dict[str, str] = {
+    "active": "bg-green-500",
+    "sleeping": "bg-amber-400",
+    "flood_wait": "bg-amber-400",
+    "quarantine": "bg-orange-500",
+    "error": "bg-red-500",
+    "idle": "bg-slate-200",
+}
+
+# ── Trust score display (bare number + coloured label, no badge bg) ────────────
+_TRUST_COLOR: dict[str, str] = {
+    "excellent": "text-green-600",
+    "good": "text-green-600",
+    "watch": "text-amber-600",
+    "at_risk": "text-red-600",
+    "critical": "text-red-600",
+}
+_TRUST_LABEL_RU: dict[str, str] = {
+    "excellent": "Trust — норма",
+    "good": "Trust — норма",
+    "watch": "Trust — внимание",
+    "at_risk": "Trust — риск",
+    "critical": "Trust — риск",
+}
+
+# ── Health-check rectangular chips ────────────────────────────────────────────
+_CHECK_CHIP: dict[str, str] = {
+    "ok": "bg-green-50 border-green-200 text-green-800",
+    "warn": "bg-amber-50 border-amber-200 text-amber-800",
+    "fail": "bg-red-50   border-red-200   text-red-800",
+}
+_CHECK_CHIP_DOT: dict[str, str] = {
     "ok": "bg-green-500",
     "warn": "bg-amber-500",
     "fail": "bg-red-500",
 }
-_CHECK_TEXT = {
-    "ok": "text-slate-600",
-    "warn": "text-amber-700",
-    "fail": "text-red-700",
+
+# ── Phase chip (solid fill, rounded) ─────────────────────────────────────────
+_PHASE_CHIP_SOLID: dict[str, str] = {
+    "intro": "bg-green-100  text-green-800",
+    "settling": "bg-amber-100  text-amber-800",
+    "warming": "bg-blue-100   text-blue-800",
+    "active": "bg-indigo-100 text-indigo-800",
+    "warmed": "bg-emerald-100 text-emerald-800",
 }
 
-# Phase chip styling — semantic colour ramp (slate → sky → amber → lime →
-# emerald). The chip's bg/text/ring trio matches; the progress bar reuses the
-# ``-500`` tone for fill.
-_PHASE_CHIP_CLASSES = {
-    "intro": "bg-slate-100 text-slate-700 ring-slate-200",
-    "settling": "bg-sky-50 text-sky-800 ring-sky-200",
-    "warming": "bg-amber-50 text-amber-800 ring-amber-200",
-    "active": "bg-lime-50 text-lime-800 ring-lime-200",
-    "warmed": "bg-emerald-50 text-emerald-800 ring-emerald-200",
+# ── Status line (dot colour + dynamic text lookup) ────────────────────────────
+_STATUS_DOT: dict[str, str] = {
+    "active": "bg-green-500",
+    "sleeping": "bg-amber-400",
+    "flood_wait": "bg-amber-500",
+    "quarantine": "bg-orange-500",
+    "error": "bg-red-500",
 }
-_PHASE_BAR_FILL = {
-    "intro": "bg-slate-400",
-    "settling": "bg-sky-500",
-    "warming": "bg-amber-500",
-    "active": "bg-lime-500",
-    "warmed": "bg-emerald-500",
+_STATUS_ACTION_LABEL: dict[str, str] = {
+    "set_online": "устанавливает онлайн",
+    "join": "вступает в канал",
+    "read_or_react": "ставит реакции",
+    "send_dm": "отправляет сообщение",
+}
+
+# ── Detail panel icon containers (28px squares) ───────────────────────────────
+# Maps `kind` string → (icon_bg_classes, icon_color_classes)
+_DETAIL_ICON_THEME: dict[str, tuple[str, str]] = {
+    "active": ("bg-blue-100", "text-blue-600"),
+    "sleep": ("bg-slate-100", "text-slate-500"),
+    "flood": ("bg-amber-100", "text-amber-600"),
+    "quar": ("bg-orange-100", "text-orange-600"),
+    "error": ("bg-red-100", "text-red-600"),
 }

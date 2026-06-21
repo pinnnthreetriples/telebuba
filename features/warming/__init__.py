@@ -55,6 +55,56 @@ _WARMING_CSS = """
 .tb-dropzone { transition: background-color 0.2s ease, border-color 0.2s ease; }
 """
 
+# Pipeline-only keyframes + classes. Registered via ui.add_css(shared=True) so
+# the animations are available to every card on every client, not just the
+# page that triggered the import.
+_PIPELINE_CSS = """
+@keyframes tb-flow {
+    0% { background-position: 0% 50%; opacity: 0.55; }
+    50% { background-position: 100% 50%; opacity: 1; }
+    100% { background-position: 0% 50%; opacity: 0.55; }
+}
+.tb-flow-line {
+    height: 2px;
+    border-radius: 9999px;
+    background: linear-gradient(
+        90deg,
+        rgba(34, 197, 94, 0) 0%,
+        rgba(34, 197, 94, 0.85) 50%,
+        rgba(34, 197, 94, 0) 100%
+    );
+    background-size: 200% 100%;
+    animation: tb-flow 1.6s linear infinite;
+}
+@keyframes tb-step-spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
+.tb-step-active-icon {
+    display: inline-block;
+    transform-origin: 50% 50%;
+    animation: tb-step-spin 2.4s linear infinite;
+}
+/* Live status ticker — dot + text pulse in sync; ellipsis fades in/out. */
+@keyframes tb-live {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+}
+@keyframes tb-live-dot {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.4; transform: scale(1.4); }
+}
+@keyframes tb-live-dots {
+    0%, 100% { opacity: 0; }
+    50% { opacity: 1; }
+}
+.tb-live { animation: tb-live 1.3s ease-in-out infinite; }
+.tb-live-dot { animation: tb-live-dot 1.3s ease-in-out infinite; transform-origin: 50% 50%; }
+.tb-live-dots { animation: tb-live-dots 1.6s ease-in-out infinite; }
+"""
+
+ui.add_css(_PIPELINE_CSS, shared=True)
+
 
 def register_warming_page() -> None:  # pragma: no cover
     @ui.page("/warming", title="Telebuba — Прогрев")

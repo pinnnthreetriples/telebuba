@@ -187,7 +187,6 @@ def _check_states(
     current_now = now if now is not None else datetime.now(UTC)
     return [
         _check_session(reasons),
-        _check_spam(card),
         _check_proxy(reasons, readiness_reasons),
         _check_geo(card, reasons),
         _check_new_account(card, reasons, new_account_hours),
@@ -201,17 +200,6 @@ def _check_session(reasons: set[str]) -> tuple[str, str, str]:
     if session_bad:
         return ("сессия", "fail", f"сессия: {session_bad[len('status ') :]}")
     return ("сессия", "ok", "сессия живая")
-
-
-def _check_spam(card: WarmingAccountState) -> tuple[str, str, str]:
-    """None and "unknown" both map to warn (data missing, not a risk)."""
-    status = card.spam_status or "unknown"
-    tooltip = _spam_tooltip(status, card.spam_detail)
-    if status == "clean":
-        return ("@SpamBot", "ok", tooltip)
-    if status == "limited":
-        return ("@SpamBot", "fail", tooltip)
-    return ("@SpamBot", "warn", tooltip)
 
 
 def _check_proxy(
