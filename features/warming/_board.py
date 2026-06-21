@@ -337,8 +337,9 @@ def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
             )
     if card.progress_to_next is not None:
         pct = round(card.progress_to_next * 100)
-        # min-width keeps a low-but-nonzero pct visible instead of a blank bar.
-        bar_style = f"width: {pct}%" + ("; min-width: 6px" if pct > 0 else "")
+        # Guard on the raw value, not the rounded pct: a tiny progress (0.004)
+        # rounds to 0 but should still show a sliver, not a blank bar.
+        bar_style = f"width: {pct}%" + ("; min-width: 6px" if card.progress_to_next > 0 else "")
         with ui.row().classes("h-1.5 w-full rounded-full bg-slate-200 overflow-hidden"):
             ui.element("div").classes(f"h-full rounded-full {bar_fill}").style(bar_style)
 
@@ -391,8 +392,10 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
 
                 render_cycle_pipeline(card, status_line=lambda: _render_status_line(card))
 
-            # Readiness blocker — idle accounts that cannot be started yet
-            if card.state == "idle" and card.readiness and not card.readiness.ready:
+            # Readiness blocker — shown whenever readiness fails, not only idle:
+            # a running account can degrade (proxy down, session dead, channels
+            # removed), and the operator needs the blocking reasons either way.
+            if card.readiness and not card.readiness.ready:
                 reasons = ", ".join(_ru_reason(r) for r in card.readiness.reasons)
                 ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
 

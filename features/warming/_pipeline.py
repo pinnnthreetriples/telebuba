@@ -93,6 +93,14 @@ _STEP_GLYPH: dict[str, str] = {
     "flood": "timer",
     "quar": "block",
 }
+# Rail label colour by visual state; unknown (e.g. "pending") → muted.
+_STEP_LABEL_CLS: dict[str, str] = {
+    "active": "text-indigo-700 font-medium",
+    "done": "text-green-700",
+    "error": "text-red-700",
+    "flood": "text-amber-700",
+    "quar": "text-orange-700",
+}
 
 
 def _next_active_index(card: WarmingAccountState) -> int:
@@ -293,16 +301,8 @@ def _render_step_rail(  # pragma: no cover
                 with circle:
                     ui.icon(glyph).classes(f"text-sm{icon_extra}")
                 circle.tooltip(tooltip)
-                # Label below circle
-                label_cls = (
-                    "text-indigo-700 font-medium"
-                    if sk == "active"
-                    else "text-green-700"
-                    if sk == "done"
-                    else "text-red-700"
-                    if sk == "error"
-                    else "text-slate-400"
-                )
+                # Label below circle — colour by visual state.
+                label_cls = _STEP_LABEL_CLS.get(sk, "text-slate-400")
                 ui.label(step.label_ru).classes(f"text-[10px] {label_cls} leading-none")
 
 
@@ -332,7 +332,7 @@ def _render_active_detail(  # noqa: C901, PLR0912
                 "info",
                 (
                     f"Flood-wait: {card.flood_wait_seconds} с"
-                    if card.flood_wait_seconds
+                    if card.flood_wait_seconds is not None
                     else "Telegram ограничил аккаунт"
                 ),
             ),
@@ -352,7 +352,9 @@ def _render_active_detail(  # noqa: C901, PLR0912
             rows = [("info", f"{step.label_ru} · данные появятся после следующего опроса")]
 
     if kind == "error" and card.last_error:
-        err = card.last_error[:70]
+        err = card.last_error
+        if len(err) > _ERROR_DETAIL_MAX_LEN:
+            err = err[: _ERROR_DETAIL_MAX_LEN - 1] + "…"
         rows = [("error", err), ("history", f"Последнее действие: {card.last_action or '—'}")]
 
     bg = {
@@ -366,11 +368,12 @@ def _render_active_detail(  # noqa: C901, PLR0912
         "flood": "text-amber-800",
         "quar": "text-orange-800",
         "error": "text-red-700",
+        "sleep": "text-slate-700",
     }.get(kind, "text-indigo-800")
 
+    icon_bg, icon_color = _DETAIL_ICON_THEME.get(kind, ("bg-slate-100", "text-slate-500"))
     with ui.element("div").classes(f"w-full rounded-lg border px-2 py-1.5 {bg}"):
         for icon_name, text in rows:
-            icon_bg, icon_color = _DETAIL_ICON_THEME.get(kind, ("bg-slate-100", "text-slate-500"))
             with ui.row().classes("w-full items-center gap-2.5"):
                 with ui.element("div").classes(
                     f"w-7 h-7 rounded-lg flex items-center justify-center shrink-0 {icon_bg}"
