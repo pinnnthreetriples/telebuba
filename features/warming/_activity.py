@@ -6,12 +6,12 @@ UI-thin per non-negotiable #1; excluded from coverage. Logic lives in
 
 from __future__ import annotations
 
-import json
 from typing import TYPE_CHECKING
 
 from nicegui import context, ui
 
 from features.warming._board_styling import _BOARD_POLL_SECONDS
+from features.warming._termlog import _event_label, _humanize_detail
 from schemas.logs import LogFilter
 from services.dialogues import load_dialogue_overview
 from services.logs import load_logs_page
@@ -32,16 +32,18 @@ _LOG_ROW_BORDER = {
 
 def _render_log_row(entry: LogEntry) -> None:  # pragma: no cover
     border = _LOG_ROW_BORDER.get(entry.status, "border-slate-300")
+    # Plain-Russian: friendly label + humanised reason instead of the raw event
+    # name + JSON. Same wording as the per-card «Логи аккаунта» panel.
+    _, label = _event_label(entry)
+    detail = _humanize_detail(entry.event, entry.extra)
     with ui.row().classes(f"w-full items-center gap-2 pl-2 border-l-4 {border}"):
         ui.label(entry.created_at[11:19]).classes("text-[11px] text-slate-400 w-16 shrink-0")
         ui.label(entry.account_id or "—").classes(
             "text-[11px] text-slate-500 w-28 shrink-0 truncate",
         )
-        ui.label(entry.event).classes("text-xs font-medium truncate")
-        if entry.extra:
-            ui.label(json.dumps(entry.extra, ensure_ascii=False)).classes(
-                "text-[11px] text-slate-400 truncate",
-            )
+        ui.label(label).classes("text-xs font-medium")
+        if detail:
+            ui.label(detail).classes("text-[11px] text-slate-500 truncate")
 
 
 def _render_dialogue_body(overview: DialogueOverview) -> None:  # pragma: no cover

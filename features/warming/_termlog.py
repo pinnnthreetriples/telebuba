@@ -18,6 +18,8 @@ from typing import TYPE_CHECKING
 
 from nicegui import ui
 
+from features.warming._board_checks import _ru_reason
+
 if TYPE_CHECKING:
     from features.warming._board import _BoardContext
     from schemas.logs import LogEntry
@@ -104,6 +106,12 @@ _EVENT_LABEL: dict[str, tuple[str, str]] = {
     "warming_set_offline_failed": ("wifi_off", "Офлайн не удался"),
     "warming_progress_write_failed": ("warning", "Сбой записи прогресса"),
     "warming_loop_crashed": ("error", "Сбой цикла"),
+    "warming_reconcile_not_ready": ("block", "Не готов к запуску"),
+    "warming_chat_generation_failed": ("error", "Не сгенерировал сообщение"),
+    "warming_stop_task_error": ("warning", "Ошибка остановки задачи"),
+    "warming_dialogue_pair_refresh_failed": ("error", "Сбой пересборки пар"),
+    "warming_shutdown_timeout": ("warning", "Задачи не завершились вовремя"),
+    "warming_channel_limit_reached": ("block", "Достигнут лимит каналов"),
     # Quarantine.
     "warming_quarantine_recovered": ("lock_open", "Карантин снят"),
     "warming_quarantine_extended": ("lock_clock", "Карантин продлён"),
@@ -124,6 +132,9 @@ def _event_label(entry: LogEntry) -> tuple[str, str]:
     known = _EVENT_LABEL.get(entry.event)
     if known is not None:
         return known
+    # Telegram rate-limit family — one rule covers every action's flood variants.
+    if entry.event.endswith(("_flood_wait", "_slow_mode_wait", "_premium_wait", "_peer_flood")):
+        return ("timer", "Лимит Telegram")
     return ("circle", entry.event.replace("_", " "))
 
 
@@ -148,6 +159,32 @@ def _toggle_expanded(state: dict[str, bool], account_id: str) -> bool:
     return new_value
 
 
+def _humanize_detail(event: str, extra: dict[str, object]) -> str:  # noqa: PLR0911 - flat translation dispatch reads clearer as early returns.
+    """Plain-Russian one-line reason for a log row (operator-facing).
+
+    Translates the common warming failures; unknown payloads fall back to the
+    raw message, then to a compact ``key=value`` dump — so nothing reads as a
+    cryptic event name + JSON.
+    """
+    seconds = extra.get("seconds")
+    if seconds is not None:
+        return f"ждём {seconds} с"
+    reasons = extra.get("reasons")
+    if isinstance(reasons, list) and reasons:
+        return ", ".join(_ru_reason(str(reason)) for reason in reasons)
+    message = str(extra.get("message") or "")
+    if extra.get("error_type") == "AuthKeyDuplicatedError":
+        return "сессия использовалась с двух устройств — больше не работает"
+    if "No user has" in message or "Cannot find any entity" in message:
+        return "канал не найден"
+    if event == "warming_cycle_completed":
+        return f"ошибок в цикле: {extra.get('failures') or 0}"
+    channel = extra.get("channel")
+    if channel is not None:
+        return str(channel)
+    return message or _format_extra(extra)
+
+
 def _render_termlog_row(entry: LogEntry) -> None:  # pragma: no cover
     accent = _TERMLOG_ACCENT.get(entry.status, "")
     icon, label = _event_label(entry)
@@ -158,7 +195,7 @@ def _render_termlog_row(entry: LogEntry) -> None:  # pragma: no cover
         ui.label(entry.created_at[11:19]).classes("tb-termlog-time")
         ui.icon(icon).classes(f"text-sm {accent}")
         ui.label(label).classes(label_cls)
-        summary = _format_extra(entry.extra)
+        summary = _humanize_detail(entry.event, entry.extra)
         if summary:
             ui.label(summary).classes("tb-termlog-kv")
 

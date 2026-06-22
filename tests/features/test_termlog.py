@@ -12,6 +12,7 @@ from features.warming._termlog import (
     _EVENT_LABEL,
     _event_label,
     _format_extra,
+    _humanize_detail,
     _toggle_expanded,
 )
 from schemas.logs import LogEntry, LogStatus
@@ -47,6 +48,45 @@ def test_event_label_unknown_humanises() -> None:
     icon, label = _event_label(_entry("some_brand_new_event"))
     assert icon == "circle"
     assert label == "some brand new event"
+
+
+def test_event_label_flood_family_collapses_to_one_label() -> None:
+    # Any action's rate-limit variant maps to the same label without enumerating.
+    for event in (
+        "telegram_join_channel_flood_wait",
+        "telegram_read_channel_slow_mode_wait",
+        "telegram_send_dm_peer_flood",
+    ):
+        assert _event_label(_entry(event, status="warning")) == ("timer", "Лимит Telegram")
+
+
+@pytest.mark.parametrize(
+    ("event", "extra", "expected"),
+    [
+        (
+            "telegram_join_channel_failed",
+            {"message": 'No user has "x" as username'},
+            "канал не найден",
+        ),
+        (
+            "telegram_pool_connect_failed",
+            {"error_type": "AuthKeyDuplicatedError", "message": "ignored"},
+            "сессия использовалась с двух устройств — больше не работает",
+        ),
+        ("warming_cycle_completed", {"failures": 2, "status": "failed"}, "ошибок в цикле: 2"),
+        ("telegram_join_channel_flood_wait", {"seconds": 30}, "ждём 30 с"),
+        ("telegram_read_channel", {"channel": "durov"}, "durov"),
+        ("warming_loop_crashed", {"message": "boom"}, "boom"),
+        ("warming_started", {}, ""),
+    ],
+)
+def test_humanize_detail(event: str, extra: dict[str, object], expected: str) -> None:
+    assert _humanize_detail(event, extra) == expected
+
+
+def test_humanize_detail_translates_reasons() -> None:
+    out = _humanize_detail("warming_reconcile_not_ready", {"reasons": ["no proxy", "no channels"]})
+    assert out == "нет прокси, нет каналов"
 
 
 def test_event_label_map_entries_are_nonempty_pairs() -> None:
