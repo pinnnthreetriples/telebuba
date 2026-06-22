@@ -49,6 +49,9 @@ class LogFilter(BaseModel):
     status: LogStatusFilter = "all"
     account_id: str = ""
     limit: int = Field(default=200, ge=1, le=1000)
+    # When True, drop ``success`` rows — i.e. only warnings + errors. Powers the
+    # board's global "problems" feed (every account's failures in one place).
+    problems_only: bool = False
 
 
 class LogsSummary(BaseModel):

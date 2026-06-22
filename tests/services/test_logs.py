@@ -66,6 +66,22 @@ async def test_status_filter_limits_to_one_class() -> None:
 
 
 @pytest.mark.asyncio
+async def test_problems_only_returns_warnings_and_errors() -> None:
+    await _seed_sample_events()
+
+    state = await load_logs_page(LogFilter(problems_only=True))
+
+    assert state.summary.total == 2
+    assert state.summary.warning == 1
+    assert state.summary.error == 1
+    assert state.summary.success == 0
+    # newest-first: the error (acc-2) was seeded after the warning (acc-1)
+    assert state.entries[0].status == "error"
+    assert state.entries[0].account_id == "acc-2"
+    assert state.entries[1].status == "warning"
+
+
+@pytest.mark.asyncio
 async def test_account_filter_limits_to_one_account() -> None:
     await _seed_sample_events()
 

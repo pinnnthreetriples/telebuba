@@ -86,6 +86,8 @@ def _list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
     statement = select(_logs).order_by(_logs.c.id.desc()).limit(log_filter.limit)
     if log_filter.status != "all":
         statement = statement.where(_logs.c.status == log_filter.status)
+    if log_filter.problems_only:
+        statement = statement.where(_logs.c.status != "success")
     if log_filter.account_id:
         statement = statement.where(_logs.c.account_id == log_filter.account_id)
     with _get_engine().connect() as connection:

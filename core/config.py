@@ -212,6 +212,9 @@ class WarmingSettings(BaseSettings):
     active_hours_enabled: bool = True
     active_hours_start: int = Field(default=8, ge=0, le=23)
     active_hours_end: int = Field(default=23, ge=0, le=23)
+    # How many of an account's most recent log rows the expandable per-card
+    # activity panel on the warming board shows (newest-first).
+    card_log_limit: int = Field(default=30, ge=1, le=200)
 
 
 class GeminiSettings(BaseSettings):

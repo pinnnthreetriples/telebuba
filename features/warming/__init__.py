@@ -28,6 +28,7 @@ from typing import TYPE_CHECKING, cast
 
 from nicegui import context, ui
 
+from core.config import settings
 from features.warming._activity import _render_activity_log, _render_dialogues
 from features.warming._board import (
     _BoardContext,
@@ -38,6 +39,9 @@ from features.warming._board import (
 from features.warming._board_styling import _BOARD_POLL_SECONDS
 from features.warming._channels import _render_channels_card
 from features.warming._config import _render_config_cards, _render_how_it_works
+from features.warming._termlog import _toggle_expanded
+from schemas.logs import LogFilter
+from services.logs import load_logs_page
 from services.warming import load_board
 
 if TYPE_CHECKING:
@@ -126,6 +130,45 @@ def _build_header() -> None:  # pragma: no cover
         ui.link("Логи", "/logs").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
 
 
+async def _refresh_card_logs(ctx: _BoardContext, account_id: str) -> bool:  # pragma: no cover
+    # Fetch this account's recent rows for its open log panel. Returns True only
+    # when the visible set changed, so an open panel refreshes exactly when a new
+    # step lands (no per-poll flicker).
+    page = await load_logs_page(
+        LogFilter(account_id=account_id, limit=settings.warming.card_log_limit),
+    )
+    new_sig = tuple(entry.id for entry in page.entries)
+    if ctx.card_log_sig.get(account_id) == new_sig:
+        return False
+    ctx.card_log_sig[account_id] = new_sig
+    ctx.card_logs[account_id] = page.entries
+    return True
+
+
+async def _refresh_expanded_logs(
+    ctx: _BoardContext,
+    board: WarmingBoardState,
+) -> None:  # pragma: no cover
+    for card in (*board.idle, *board.warming):
+        if not ctx.card_expanded.get(card.account_id):
+            continue
+        if await _refresh_card_logs(ctx, card.account_id):
+            ctx.card_store[card.account_id] = card
+            refresher = ctx.card_refresh.get(card.account_id)
+            if refresher is not None:
+                refresher.refresh()
+
+
+async def _toggle_card_log(ctx: _BoardContext, account_id: str) -> None:  # pragma: no cover
+    # Click handler for a card's log arrow: flip the panel, fetch its logs
+    # immediately on open, then refresh just that card.
+    if _toggle_expanded(ctx.card_expanded, account_id):
+        await _refresh_card_logs(ctx, account_id)
+    refresher = ctx.card_refresh.get(account_id)
+    if refresher is not None:
+        refresher.refresh()
+
+
 async def _render_warming_page() -> None:  # pragma: no cover
     ui.add_head_html(f"<style>{_WARMING_CSS}</style>")
     ui.query("body").classes("bg-slate-50 text-slate-950")
@@ -188,6 +231,9 @@ async def _render_warming_page() -> None:  # pragma: no cover
                 refresher = ctx.card_refresh.get(card.account_id)
                 if refresher is not None:
                     refresher.refresh()
+            await _refresh_expanded_logs(ctx, board)
+
+        ctx.on_toggle_log = lambda account_id: _toggle_card_log(ctx, account_id)
 
         def force_reload() -> asyncio.Task[None]:
             # Returned (not discarded) so the task keeps a strong reference and
