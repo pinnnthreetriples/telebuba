@@ -24,6 +24,17 @@ if TYPE_CHECKING:
     from features.warming._board import _BoardContext
     from schemas.warming import WarmingAccountState
 
+# A known-status badge («Спам: чисто/ограничен») reveals a re-probe button on
+# hover: the result text swaps to a blue «Проверить» (white-on-blue), so a
+# checked account can still be re-probed on demand. Registered once, shared.
+_SPAM_RECHECK_CSS = """
+.tb-spam-recheck .tb-spam-probe { display: none; color: #ffffff; }
+.tb-spam-recheck:hover { background: #2563eb; border-color: #2563eb; }
+.tb-spam-recheck:hover .tb-spam-result { display: none; }
+.tb-spam-recheck:hover .tb-spam-probe { display: inline; }
+"""
+ui.add_css(_SPAM_RECHECK_CSS, shared=True)
+
 
 def render_spam_badge(
     ctx: _BoardContext,
@@ -64,13 +75,18 @@ def render_spam_badge(
         ctx.refresh()
 
     if status in ("clean", "limited"):
-        # Spam status known — compact result badge, inline in footer row.
-        badge = ui.label(text).classes(
-            f"text-[10px] text-slate-500 bg-slate-50 border border-slate-200 "
-            f"px-2.5 py-0.5 rounded whitespace-nowrap {cls}"
+        # Status known — compact result badge that reveals a re-probe button on
+        # hover (blue «Проверить»), so a checked account can still be rechecked.
+        badge = ui.element("div").classes(
+            f"tb-spam-recheck inline-flex items-center text-[10px] text-slate-500 bg-slate-50 "
+            f"border border-slate-200 px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap {cls}"
         )
+        with badge:
+            ui.label(text).classes("tb-spam-result")
+            ui.label("Проверить").classes("tb-spam-probe")
         if tooltip:
             badge.tooltip(tooltip)
+        badge.on("click", on_click)
     else:
         # Not yet probed — clickable label that triggers a real probe, inline.
         ui.label("Проверить спам").classes(
