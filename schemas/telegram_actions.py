@@ -279,3 +279,17 @@ class ActionResult(BaseModel):
     flood_wait_seconds: int | None = None
     error_type: str | None = None
     error_message: str | None = None
+
+
+class NewPostEvent(BaseModel):
+    """A fresh channel broadcast post surfaced by the push listener.
+
+    Gateway output contract for ``subscribe_posts``: ``channel`` is the
+    ORIGINAL subscription string the caller passed (not the resolved peer id)
+    so the engine can map the post back to its campaign binding.
+    """
+
+    channel: str = Field(min_length=1)
+    post_id: int
+    text: str = ""
+    has_media: bool = False
