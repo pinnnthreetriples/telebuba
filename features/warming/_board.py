@@ -40,11 +40,13 @@ from features.warming._board_styling import (
     _TRUST_LABEL_RU,
     _relative_eta,
 )
+from features.warming._termlog import render_card_log_panel
 
 if TYPE_CHECKING:
     import asyncio
-    from collections.abc import Callable
+    from collections.abc import Callable, Coroutine
 
+    from schemas.logs import LogEntry
     from schemas.warming import WarmingAccountState, WarmingBoardState, WarmingSummary
 
 
@@ -63,6 +65,12 @@ class _BoardContext:  # pragma: no cover
     max_daily: int
     card_store: dict[str, WarmingAccountState] = field(default_factory=dict)
     card_refresh: dict[str, Any] = field(default_factory=dict)
+    # Per-card activity-log panel state — kept here (not in the per-card
+    # refreshable) so an open panel and its fetched rows survive the 4s poll.
+    card_expanded: dict[str, bool] = field(default_factory=dict)
+    card_logs: dict[str, list[LogEntry]] = field(default_factory=dict)
+    card_log_sig: dict[str, tuple[int, ...]] = field(default_factory=dict)
+    on_toggle_log: Callable[[str], Coroutine[object, object, None]] | None = None
 
 
 def _structural_signature(board: WarmingBoardState) -> tuple[object, ...]:  # pragma: no cover
@@ -399,4 +407,5 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
                 reasons = ", ".join(_ru_reason(r) for r in card.readiness.reasons)
                 ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
 
+            render_card_log_panel(ctx, card)
             _render_card_footer(ctx, card)

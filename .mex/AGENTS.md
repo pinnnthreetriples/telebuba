@@ -49,7 +49,8 @@ telebuba/
 ├── features/               UI-thin NiceGUI pages/components; delegates to services
 │   ├── accounts/
 │   ├── warming/
-│   │   └── _pipeline.py       animated 6-step cycle rail + active-step detail + summary
+│   │   ├── _pipeline.py       animated 6-step cycle rail + active-step detail + summary
+│   │   └── _termlog.py        expandable per-account dark "terminal" activity log on each card
 │   └── logs.py
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```

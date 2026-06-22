@@ -6,7 +6,6 @@ UI-thin per non-negotiable #1; excluded from coverage. Logic lives in
 
 from __future__ import annotations
 
-import asyncio
 import json
 from typing import TYPE_CHECKING
 
@@ -101,45 +100,35 @@ async def _render_dialogues() -> None:  # pragma: no cover
 
 
 async def _render_activity_log() -> None:  # pragma: no cover
+    # Global problems feed: every account's warnings + errors in one place, so an
+    # operator sees a failure anywhere without expanding individual cards. The
+    # success-level "what happened" stream now lives per-card («Логи аккаунта»).
     with ui.card().classes("w-full p-4 gap-2"):
         with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("bolt").classes("text-amber-500")
-            ui.label("Живая активность").classes("text-base font-semibold")
-            ui.space()
-            warming_only_switch = ui.switch("Только прогрев", value=True).props("dense")
+            ui.icon("report").classes("text-red-500")
+            ui.label("Ошибки и предупреждения").classes("text-base font-semibold")
+            ui.label("по всем аккаунтам").classes("text-xs text-slate-400")
         log_box = ui.column().classes("w-full gap-1 max-h-80 overflow-auto")
         seen: dict[str, object] = {"sig": None}
 
         async def refresh_log() -> None:
-            # Pull more than _LOG_LIMIT when filtering so the warming-only view
-            # is not empty after a burst of unrelated events.
-            limit = _LOG_LIMIT * 4 if warming_only_switch.value else _LOG_LIMIT
-            state = await load_logs_page(LogFilter(limit=limit))
+            state = await load_logs_page(LogFilter(problems_only=True, limit=_LOG_LIMIT))
             entries = state.entries
-            if warming_only_switch.value:
-                entries = [
-                    entry
-                    for entry in entries
-                    if entry.event.startswith("warming_")
-                    or entry.event.startswith("telegram_")
-                    or entry.event.startswith("dialogue_")
-                    or entry.event == "phase_advanced"
-                ]
-            entries = entries[:_LOG_LIMIT]
             # Only rebuild when the visible set of entries changed — otherwise the
             # feed re-mounts every poll and visibly blinks.
-            signature = (warming_only_switch.value, tuple(entry.id for entry in entries))
+            signature = tuple(entry.id for entry in entries)
             if signature == seen["sig"]:
                 return
             seen["sig"] = signature
             log_box.clear()
             with log_box:
                 if not entries:
-                    ui.label("Ожидание активности…").classes("text-xs text-slate-400")
+                    ui.label("Ошибок нет — все аккаунты работают штатно.").classes(
+                        "text-xs text-slate-400",
+                    )
                 for entry in entries:
                     _render_log_row(entry)
 
-        warming_only_switch.on_value_change(lambda _e: asyncio.create_task(refresh_log()))
         await refresh_log()
         # See features/warming/__init__.py for why the lambda wrapper is necessary.
         log_timer = ui.timer(_LOG_POLL_SECONDS, refresh_log)
