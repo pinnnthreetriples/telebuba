@@ -340,3 +340,67 @@ async def test_campaign_channel_without_accounts_yields_no_outcomes(
     assert result.outcomes == []
     assert read.calls == []  # no accounts → never even resolved the group
     assert join.calls == []
+
+
+# --------------------------------------------------------------------------- #
+# resolve-step failure isolation (execute_read RAISES, it doesn't return)
+# --------------------------------------------------------------------------- #
+
+
+class _RaisingReadStub:
+    """Read stub that RAISES for designated channels (simulates execute_read flood/RPC)."""
+
+    def __init__(self, *, raise_on: set[str], linked_chat_id: int = 1) -> None:
+        self.raise_on = raise_on
+        self.result = LinkedDiscussionGroupResult(
+            linked_chat_id=linked_chat_id,
+            comments_enabled=True,
+        )
+        self.calls: list[tuple[str, TelegramReadAction]] = []
+
+    async def execute_read(self, account_id: str, action: TelegramReadAction) -> object:
+        self.calls.append((account_id, action))
+        channel = getattr(action, "channel", "")
+        if channel in self.raise_on:
+            msg = f"FloodWait resolving {channel}"
+            raise RuntimeError(msg)
+        return self.result
+
+
+@pytest.mark.asyncio
+async def test_resolve_failure_is_failed_not_raised(monkeypatch: pytest.MonkeyPatch) -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    read = _RaisingReadStub(raise_on={"@oops"})
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@oops")
+
+    assert outcome.state == "failed"  # resolve raise is caught, not propagated
+    assert outcome.reason == "resolve_failed"
+    assert join.calls == []  # never reached the join
+    assert await fetch_readiness("acc-1", "@oops") is None
+
+
+@pytest.mark.asyncio
+async def test_campaign_resolve_failure_does_not_abort_rest(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@bad")  # linked first → processed first
+    await link_channel_to_campaign(campaign.campaign_id, "@good")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    read = _RaisingReadStub(raise_on={"@bad"})
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    result = await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    states = {o.channel: o.state for o in result.outcomes}
+    assert states["@bad"] == "failed"  # resolve raise recorded, loop not aborted
+    assert states["@good"] == "ready"  # the later channel still onboarded

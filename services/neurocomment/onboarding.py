@@ -51,7 +51,14 @@ _RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "pe
 
 async def onboard_account_channel(account_id: str, channel: str) -> AccountChannelOnboarding:
     """Prepare one account to comment on one channel; persist its readiness."""
-    linked = await _resolve_linked_group(account_id, channel)
+    linked = await _safe_resolve(account_id, channel)
+    if linked is None:
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="failed",
+            reason="resolve_failed",
+        )
     if not linked.comments_enabled:
         # comments_off is a channel property, not a per-account state, so we
         # record no readiness row — the campaign loop also short-circuits it.
@@ -81,6 +88,25 @@ async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussi
         comments_enabled=linked.comments_enabled,
     )
     return linked
+
+
+async def _safe_resolve(account_id: str, channel: str) -> LinkedDiscussionGroupResult | None:
+    """Resolve+cache a channel's linked group; on any gateway failure, log and return None.
+
+    ``execute_read`` *raises* (``TelegramReadError`` on flood/RPC, account-not-found,
+    or a wrong type) rather than returning a typed error, so one channel's resolve
+    must never abort the campaign loop — mirrors ``_join_pair_safely``.
+    """
+    try:
+        return await _resolve_linked_group(account_id, channel)
+    except Exception as exc:  # noqa: BLE001 - one channel must never abort the campaign
+        await log_event(
+            "ERROR",
+            "neurocomment_onboard_resolve_failed",
+            account_id=account_id,
+            extra={"channel": channel, "error_type": type(exc).__name__},
+        )
+        return None
 
 
 async def _classify_join(
@@ -170,15 +196,24 @@ async def _channel_comments_enabled(
     channel: str,
     outcomes: list[AccountChannelOnboarding],
 ) -> bool:
-    """Resolve+cache the channel's group once; on comments_off, record per account.
+    """Resolve+cache the channel's group once; record per-account skips, return joinable?.
 
-    Uses the first account's session for the read (any member-less read works);
-    appends a ``comments_off`` outcome per account when disabled and returns
-    ``False`` so the caller skips the joins entirely.
+    Uses the first account's session for the read (any member-less read works). A
+    resolve failure records a ``failed`` outcome per account; comments-off records a
+    ``comments_off`` outcome per account. Either way returns ``False`` so the caller
+    skips the joins — one bad channel never aborts the campaign.
     """
     if not accounts:
         return False
-    linked = await _resolve_linked_group(accounts[0], channel)
+    linked = await _safe_resolve(accounts[0], channel)
+    if linked is None:
+        outcomes.extend(
+            AccountChannelOnboarding(
+                account_id=account_id, channel=channel, state="failed", reason="resolve_failed"
+            )
+            for account_id in accounts
+        )
+        return False
     if linked.comments_enabled:
         return True
     outcomes.extend(
