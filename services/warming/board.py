@@ -145,7 +145,9 @@ async def load_board() -> WarmingBoardState:
             card.spam_status = spam.status
             card.spam_detail = spam.detail
         card.age_hours = age_hours
-        card.dm_allowed = intensity.dm_allowed
+        # П11: the card shows DM allowed only when age + trust band AND current
+        # readiness all permit it — matching what the engine will actually do.
+        card.dm_allowed = intensity.dm_allowed and readiness.ready
         card.phone_country = country_for_phone(account.phone)
         card.proxy_country = (account.proxy_country_code or "").upper() or None
         card.phase = intensity.phase

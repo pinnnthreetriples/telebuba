@@ -109,14 +109,28 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
+        # П7: restarting an already-warming account keeps the original stint
+        # anchor so "дней в прогреве" counts from the first start; a genuine
+        # start from idle/stopped (re)stamps it.
+        existing = await fetch_warming_state(data.account_id)
+        started_at = (
+            existing.started_at
+            if existing and existing.started_at and is_warming(existing.state)
+            else _now_iso()
+        )
         await _set_state(
             data.account_id,
             "active",
             last_event="queued",
             next_run_at=None,
-            started_at=_now_iso(),
+            started_at=started_at,
             stopped_at=None,
             last_error=None,
+            # П6: clear the previous run's furthest-step/channel so the just-
+            # queued card shows "online", not a stale send_dm/react on an old
+            # channel until the first cycle write lands.
+            last_action=None,
+            last_channel=None,
             flood_wait_seconds=None,
             flood_wait_until=None,
             proxy_snapshot=_proxy_snapshot(account),

@@ -370,11 +370,14 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915
         tally.flooded = channel_tally.flooded
         tally.peer_flooded = channel_tally.peer_flooded
 
+        # П11: honour the loop's trust+readiness-aware dm_allowed when supplied;
+        # direct callers (data.dm_allowed is None) fall back to the age-only flag.
+        dm_ok = data.dm_allowed if data.dm_allowed is not None else intensity.dm_allowed
         if (
             _can_attempt()
             and not tally.flooded
             and not tally.peer_flooded
-            and intensity.dm_allowed
+            and dm_ok
             and secret.inter_account_chat
             and secret.gemini_api_key
         ):

@@ -43,6 +43,7 @@ _LAST_EVENT_RU = {
     "stopped": "остановлен",
     "reconcile_orphan": "сирота при перезапуске",
     "reconcile_not_ready": "не готов при перезапуске",
+    "cycle_not_ready": "не готов к циклу",
     "loop_crashed": "сбой цикла",
     "quarantine_probe_started": "проверка карантина",
     "quarantine_recovered": "вышел из карантина",
@@ -296,9 +297,14 @@ def _check_quarantine(card: WarmingAccountState) -> tuple[str, str, str]:
 
     Labelled «карантин (внутр.)» to remind the operator this is the
     runtime peer-flood cooldown counter, not an account-level ban
-    indicator. Telegram does not see this number.
+    indicator. Telegram does not see this number. Red only while the
+    account is *actively* quarantined; a non-zero count on a running /
+    idle account is shown amber as history, so a restarted account does
+    not look blocked by a past counter (audit П10).
     """
     q = card.quarantine_count
+    if card.state == "quarantine":
+        return ("карантин (внутр.)", "fail", f"активный карантин · случаев: {q}")
     if q > 0:
-        return ("карантин (внутр.)", "fail", f"карантинов: {q}")
+        return ("карантин (внутр.)", "warn", f"история карантинов: {q}")
     return ("карантин (внутр.)", "ok", "карантинов нет")

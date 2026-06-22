@@ -126,10 +126,13 @@ async def _seed_channel() -> None:
     await warming.add_channels(AddChannelsRequest(raw="@channel_one"))
 
 
-async def _set_settings(*, chat: bool, reactions: bool, key: str | None) -> None:
+async def _set_settings(
+    *, chat: bool, reactions: bool, key: str | None, enforce_readiness: bool = True
+) -> None:
     await save_warming_settings(
         inter_account_chat=chat,
         reactions_enabled=reactions,
+        enforce_readiness=enforce_readiness,
         gemini_api_key=key,
     )
 
@@ -293,6 +296,20 @@ def test_compute_intensity_full_when_ramp_disabled(monkeypatch: pytest.MonkeyPat
     assert full.dm_allowed is True
 
 
+def test_compute_intensity_dm_gated_by_trust_band(monkeypatch: pytest.MonkeyPatch) -> None:
+    # DM permission now also depends on trust band, not age alone (audit П11):
+    # only excellent/good/watch may DM; at_risk/critical may not.
+    _configure_ramp(monkeypatch)
+    assert warming.compute_intensity(500.0, trust_band="good").dm_allowed is True
+    assert warming.compute_intensity(500.0, trust_band="watch").dm_allowed is True
+    assert warming.compute_intensity(500.0, trust_band="at_risk").dm_allowed is False
+    assert warming.compute_intensity(500.0, trust_band="critical").dm_allowed is False
+    # A healthy band cannot un-block DM for a too-young account.
+    assert warming.compute_intensity(0.0, trust_band="good").dm_allowed is False
+    # No band passed → age-only, so direct callers (run_one_cycle) are unchanged.
+    assert warming.compute_intensity(500.0).dm_allowed is True
+
+
 @pytest.mark.asyncio
 async def test_cycle_skips_dm_for_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
     # A freshly created account (age ~0) must not send DMs under the cold-start
@@ -424,7 +441,9 @@ async def test_loop_iteration_clears_stale_channel(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     monkeypatch.setattr(settings.warming, "ramp_enabled", False)
     await _seed_channel()
-    await _set_settings(chat=False, reactions=False, key="")
+    # enforce_readiness off: this test is about stale-channel clearing, not the
+    # П3 readiness gate (the bare account would otherwise be parked).
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(
         WarmingStateWrite(account_id="acc-1", state="sleeping", last_channel="old-chan"),
@@ -445,6 +464,91 @@ async def test_loop_iteration_clears_stale_channel(monkeypatch: pytest.MonkeyPat
 
     assert active_channels  # the cycle reached at least the cycle_started write
     assert "old-chan" not in active_channels
+
+
+@pytest.mark.asyncio
+async def test_no_channels_cycle_does_not_increment_counter(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A cycle that finds no channels is a no-op skip — it must not bump
+    # cycles_completed (false progress) (audit П9). enforce_readiness is off so
+    # the loop reaches the cycle's skip path rather than the П3 readiness gate.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.cycles_completed == 0
+    assert record.state == "sleeping"
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_parks_degraded_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A running account that degrades mid-warming (spam-limited here) must be
+    # parked to error when enforce_readiness is on — not warmed on while the
+    # card already shows the blocker (audit П3).
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_ready_account("acc-1")
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id="acc-1",
+            status="limited",
+            detail="restricted until 2026-12-31",
+            checked_at="2026-06-22T00:00:00+00:00",
+        ),
+    )
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="sleeping"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "error"
+    assert recorder.actions == []  # no cycle ran
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "error"
+    assert "spam" in (record.last_error or "")
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_runs_ready_account_under_enforcement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The gate is a guard, not a blanket block: a still-ready account cycles
+    # normally with enforce_readiness on (audit П3).
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_ready_account("acc-1")
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=True,
+        gemini_api_key="",
+    )
+    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="sleeping"))
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "ok"
+    assert "set_online" in recorder.types()
 
 
 @pytest.mark.asyncio
@@ -530,6 +634,30 @@ async def _seed_two_warming_accounts() -> None:
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-2", state="active"))
     await assign_pairs()
+
+
+@pytest.mark.asyncio
+async def test_cycle_dm_gate_honours_request_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The loop passes a trust+readiness-aware dm_allowed into the cycle; when it
+    # is False the cycle must not DM even if age/chat/key would otherwise allow
+    # it (audit П11). None (direct callers) keeps the age-only behaviour.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="hi there")
+
+    monkeypatch.setattr(_seams, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+
+    result = await warming.run_one_cycle(
+        WarmingCycleRequest(account_id="acc-1", dm_allowed=False),
+    )
+
+    assert result.messages_sent == 0
 
 
 @pytest.mark.asyncio
@@ -1349,6 +1477,76 @@ async def test_manual_start_clears_stale_next_run_at(
 
 
 @pytest.mark.asyncio
+async def test_start_warming_clears_stale_action_and_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Right after Start the card must not show the previous run's action/channel
+    # (audit П6); the cycle hasn't begun yet, so they must be cleared at queue.
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await _seed_ready_account("acc-1")
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            last_action="send_dm",
+            last_channel="old-chan",
+        ),
+    )
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.last_event == "queued"
+    assert record.last_action is None
+    assert record.last_channel is None
+
+
+@pytest.mark.asyncio
+async def test_start_warming_preserves_started_at_on_restart(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Restarting an already-warming account keeps the original stint anchor so
+    # "дней в прогреве" counts from the first start, not this restart (audit П7).
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await _seed_ready_account("acc-1")
+    original = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="sleeping", started_at=original),
+    )
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.started_at == original
+
+
+@pytest.mark.asyncio
+async def test_start_warming_from_idle_stamps_started_at(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A genuine start (no prior warming row) stamps a fresh anchor.
+    async def fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+    await _seed_ready_account("acc-1")
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.started_at is not None
+
+
+@pytest.mark.asyncio
 async def test_load_board_attaches_readiness() -> None:
     await create_account(AccountCreate(account_id="acc-1"))  # not ready
 
@@ -1531,10 +1729,13 @@ async def test_run_loop_iteration_parks_when_daily_cap_reached(
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
+    # A fresh account is intro-capped at 3 by the auto cap (П2 retired the
+    # fleet-wide override); enforce_readiness off so the daily gate is the one
+    # that fires, not the П3 readiness gate.
     await save_warming_settings(
         inter_account_chat=False,
         reactions_enabled=False,
-        max_daily_actions=3,
+        enforce_readiness=False,
         gemini_api_key="",
     )
     await create_account(AccountCreate(account_id="acc-1"))
@@ -1557,6 +1758,42 @@ async def test_run_loop_iteration_parks_when_daily_cap_reached(
     assert record is not None
     assert record.state == "sleeping"
     assert record.next_run_at is not None
+
+
+@pytest.mark.asyncio
+async def test_legacy_max_daily_override_is_ignored(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A legacy fleet-wide max_daily_actions persisted in the DB must NOT override
+    # the per-account auto cap from phase/trust (audit П2). A fresh account is
+    # intro-capped at 3, so daily_actions=3 parks despite the 999 override.
+    # enforce_readiness off so the daily gate is reached, not the П3 readiness gate.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        max_daily_actions=999,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    today = datetime.now(UTC).date().isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            daily_actions=3,
+            daily_count_date=today,
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "daily limit"
+    assert recorder.actions == []
 
 
 @pytest.mark.asyncio
@@ -1980,7 +2217,8 @@ async def test_stop_does_not_get_overwritten_by_inflight_cycle(
 
     await create_account(AccountCreate(account_id="acc-1"))
     await _seed_channel()
-    await _set_settings(chat=False, reactions=False, key="")
+    # enforce_readiness off: this is a stop/CAS race test, not the П3 gate.
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
 
     # Patch ``run_one_cycle`` to simulate stop_warming firing mid-cycle:
@@ -2392,7 +2630,8 @@ async def test_old_cycle_cannot_overwrite_new_manual_start(
 
     await create_account(AccountCreate(account_id="acc-1"))
     await _seed_channel()
-    await _set_settings(chat=False, reactions=False, key="")
+    # enforce_readiness off: this is a run_id/CAS race test, not the П3 gate.
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
 
     # Stage the DB: run_id_b is the "new" generation; the old cycle holds run_id_a.
     run_id_a = "old-run"
@@ -2829,7 +3068,8 @@ async def test_stale_cycle_started_cas_failure_prevents_telegram_io(
 
     await create_account(AccountCreate(account_id="acc-1"))
     await _seed_channel()
-    await _set_settings(chat=False, reactions=False, key="")
+    # enforce_readiness off: this is a stale-cycle CAS test, not the П3 gate.
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
     # DB row carries the NEW generation already.
     await upsert_warming_state(
         WarmingStateWrite(
@@ -3253,10 +3493,12 @@ async def test_cycle_skipped_when_only_set_online_fits(
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
+    # Fresh account → intro auto cap of 3 (П2 retired the fleet override);
+    # enforce_readiness off so the daily gate fires, not the П3 readiness gate.
     await save_warming_settings(
         inter_account_chat=False,
         reactions_enabled=False,
-        max_daily_actions=3,
+        enforce_readiness=False,
         gemini_api_key="",
     )
     await create_account(AccountCreate(account_id="acc-1"))

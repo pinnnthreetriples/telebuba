@@ -174,7 +174,7 @@ async def _render_warming_page() -> None:  # pragma: no cover
     ui.query("body").classes("bg-slate-50 text-slate-950")
     _build_header()
 
-    drag: dict[str, str | None] = {"account_id": None}
+    drag: dict[str, str | None] = {"account_id": None, "source": None}
 
     with ui.column().classes("w-full max-w-[1400px] mx-auto p-4 gap-4"):
         ui.label("Прогрев аккаунтов").classes("text-xl font-semibold")
@@ -195,15 +195,10 @@ async def _render_warming_page() -> None:  # pragma: no cover
         ctx = _BoardContext(
             drag=drag,
             refresh=lambda: force_reload(),  # noqa: PLW0108 — defer until force_reload is bound
-            max_daily=initial.settings.max_daily_actions,
         )
 
         @ui.refreshable
         def render_board() -> None:
-            ctx.max_daily = cast(
-                "WarmingBoardState",
-                holder["board"],
-            ).settings.max_daily_actions
             _render_board(cast("WarmingBoardState", holder["board"]), ctx)
 
         async def reload(*, force: bool = False) -> None:

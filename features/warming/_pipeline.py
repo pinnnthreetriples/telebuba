@@ -6,11 +6,13 @@ calls, no new polling) and is rendered inside every warming-column kanban
 card by ``features/warming/_board.py``.
 
 The six steps are static (online → join → read → react → chat → sleep); the
-``_active_step()`` resolver picks which one is *live* right now based on
-``card.state`` and ``card.last_action``. The active step pulses, its icon
-spins, and a gradient connector flows from the last completed step into the
-active one. The detail panel beneath shows live channel/proxy/action data for
-the active step; the summary bar at the bottom shows cycle counters.
+``_active_step()`` resolver picks the *furthest step the cycle has reached*
+from ``card.state`` and ``card.last_action`` (the loop advances ``last_action``
+monotonically — see ``_loop._on_step`` — so the rail shows cycle progress, not
+the instantaneous action). The active step pulses, its icon spins, and a
+gradient connector flows from the last completed step into it. The detail panel
+beneath shows channel/proxy/action data for that step; the summary bar at the
+bottom shows cycle counters.
 
 The rail is gated by the caller — ``_render_card`` only invokes
 ``render_cycle_pipeline`` when ``card.state != "idle"``, so idle-column cards
@@ -22,8 +24,9 @@ from __future__ import annotations
 import dataclasses
 import typing
 
-from nicegui import ui  # ty: ignore[unresolved-import]
+from nicegui import ui
 
+from features.warming._board_checks import _ru_event
 from features.warming._board_styling import (
     _DETAIL_ICON_THEME,
     _PIPELINE_CONNECTOR_ACTIVE,
@@ -70,11 +73,12 @@ _CYCLE_STEPS: tuple[_Step, ...] = (
 )
 
 # Maps ``last_action`` values emitted by ``services.warming`` to the 0-based
-# index of the rail step. The engine writes ``last_action`` live mid-cycle, so
-# for an ``active`` card it is the step running *right now*; for an ``error``
-# card it is the step that failed. Unknown values fall back to 0 (online).
-# ``read_or_react`` stays pinned to ``react`` (idx 3) for the error path, which
-# still collapses read-then-react into that single token.
+# index of the rail step. The loop advances ``last_action`` monotonically
+# (``_loop._on_step``), so for an ``active`` card it is the *furthest step the
+# cycle has reached* — not necessarily the instantaneous action — and for an
+# ``error`` card it is the step that failed. Unknown values fall back to 0
+# (online). ``read_or_react`` stays pinned to ``react`` (idx 3) for the error
+# path, which still collapses read-then-react into that single token.
 _ACTION_TO_STEP: dict[str, int] = {
     "set_online": 0,  # online
     "join": 1,  # join
@@ -106,12 +110,12 @@ _STEP_LABEL_CLS: dict[str, str] = {
 
 
 def _next_active_index(card: WarmingAccountState) -> int:
-    """Return the index of the step running *now* given an ``active`` state.
+    """Return the index of the furthest step reached given an ``active`` state.
 
-    ``last_action`` is written live by the engine mid-cycle, so it names the
-    step in progress; map it straight to its rail index. ``None``/unknown → 0
-    (online), so a just-started cycle lights up online. Clamped at
-    ``_SLEEP_STEP_INDEX`` (5) defensively.
+    ``last_action`` advances monotonically through the cycle (see
+    ``_loop._on_step``), so it names the furthest step reached; map it straight
+    to its rail index. ``None``/unknown → 0 (online), so a just-started cycle
+    lights up online. Clamped at ``_SLEEP_STEP_INDEX`` (5) defensively.
     """
     return min(_ACTION_TO_STEP.get(card.last_action or "", 0), _SLEEP_STEP_INDEX)
 
@@ -131,9 +135,9 @@ def _active_step(card: WarmingAccountState) -> tuple[int | None, str]:
                          ``online`` (idx 0) so the error has a step to land on.
     - ``flood_wait``  → ``(_SLEEP_STEP_INDEX, "flood")`` — engine paused on sleep step.
     - ``sleeping``    → ``(_SLEEP_STEP_INDEX, "sleep")`` — between-cycle cooldown.
-    - ``active``      → ``(last-action-idx, "active")`` — the step the engine
-                         is running right now (``last_action`` is updated live
-                         mid-cycle). Unknown / not-yet-started ``last_action``
+    - ``active``      → ``(last-action-idx, "active")`` — the furthest step the
+                         cycle has reached (``last_action`` advances
+                         monotonically). Unknown / not-yet-started ``last_action``
                          falls back to idx 0 (online).
     - ``idle``        → ``(None, "active")`` — caller gates; defensive only.
     """
@@ -348,7 +352,7 @@ def _render_active_detail(  # noqa: C901, PLR0912
                 proxy = f"{proxy} ({card.proxy_country})"
             rows.append(("router", f"Прокси: {proxy}"))
         if card.last_event:
-            rows.append(("bolt", f"Событие: {card.last_event}"))
+            rows.append(("bolt", f"Событие: {_ru_event(card.last_event)}"))
         if not rows:
             rows = [("info", f"{step.label_ru} · данные появятся после следующего опроса")]
 

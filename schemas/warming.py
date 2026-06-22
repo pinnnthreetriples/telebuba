@@ -88,6 +88,9 @@ class WarmingSettings(BaseModel):
     quiet_hours_enabled: bool = False
     quiet_hours_start: int = Field(default=0, ge=0, le=23)
     quiet_hours_end: int = Field(default=0, ge=0, le=23)
+    # Deprecated (audit П2): the fleet-wide override is retired — the engine uses
+    # the per-account auto cap (phase + trust) only. Kept so existing rows load;
+    # no longer read by the cycle or surfaced in the UI.
     max_daily_actions: int = Field(default=0, ge=0)
     has_gemini_key: bool = False
     gemini_model: str = Field(min_length=1)
@@ -344,6 +347,9 @@ class StopWarmingRequest(BaseModel):
 class WarmingCycleRequest(BaseModel):
     account_id: str = Field(min_length=1)
     remaining_actions: int | None = None
+    # Trust+readiness-aware DM permission computed by the loop (П11). ``None``
+    # means "decide from age alone" so direct callers keep the old behaviour.
+    dm_allowed: bool | None = None
 
 
 CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]
