@@ -12,8 +12,12 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
+from core.db import get_spam_status, list_warming_channels
+from core.logging import log_event
+from schemas.warming import WarmingCycleResult
 from services.trust import account_trust_score
 from services.warming import _seams
+from services.warming._state import _set_state
 from services.warming.pacing import (
     _PHASE_ORDER,
     _SECONDS_PER_HOUR,
@@ -21,13 +25,16 @@ from services.warming.pacing import (
     _now_iso,
     _shift_to_active_hours,
     compute_intensity,
+    evaluate_readiness,
 )
 
 if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
     from schemas.logs import LogLevel
+    from schemas.trust import TrustScore
     from schemas.warming import (
-        WarmingCycleResult,
         WarmingPhase,
+        WarmingSettingsSecret,
         WarmingState,
         WarmingStateRecord,
     )
@@ -57,6 +64,64 @@ def _matches_active_run(record: WarmingStateRecord | None, run_id: str | None) -
     if run_id is None:
         return True
     return record.run_id == run_id
+
+
+async def _gate_readiness(  # noqa: PLR0913 - explicit readiness signals read clearer than a bag.
+    account: AccountRead | None,
+    controls: WarmingSettingsSecret,
+    record: WarmingStateRecord | None,
+    trust: TrustScore,
+    now: datetime,
+    *,
+    run_id: str | None,
+) -> WarmingCycleResult | None:
+    """Park the account if readiness degraded mid-warming (audit П3).
+
+    Re-gates the operator-cycling states (active/sleeping) before each cycle so a
+    degraded account — dead proxy, spam-limited, trust-critical, channels removed
+    — is parked to error rather than warmed on while the card already shows the
+    blocker. quarantine returns earlier and flood_wait is an engine-managed
+    cooldown, so both are skipped (mirrors ``reconcile_warming_runtime``). Returns
+    the terminal ``WarmingCycleResult`` when the iteration should exit, else
+    ``None`` when the cycle may proceed.
+    """
+    if (
+        not controls.enforce_readiness
+        or account is None
+        or record is None
+        or record.state not in ("active", "sleeping")
+    ):
+        return None
+    account_id = account.account_id
+    channel_count = len((await list_warming_channels()).channels)
+    readiness = evaluate_readiness(
+        account,
+        channel_count,
+        spam=await get_spam_status(account_id),
+        trust_score=trust,
+    )
+    if readiness.ready:
+        return None
+    reasons = "; ".join(readiness.reasons)
+    write = await _set_state(
+        account_id,
+        "error",
+        last_event="cycle_not_ready",
+        last_error=reasons,
+        heartbeat_at=now.isoformat(),
+        expected_run_id=run_id,
+    )
+    # A concurrent stop/restart flipped the run_id; if the CAS rejected our park,
+    # a newer generation owns the row, so don't log a phantom (mirrors the gates).
+    if run_id is not None and not write.applied:
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+    await log_event(
+        "WARNING",
+        "warming_cycle_not_ready",
+        account_id=account_id,
+        extra={"reasons": readiness.reasons},
+    )
+    return WarmingCycleResult(account_id=account_id, status="error", detail=reasons)
 
 
 async def _calculate_next_run(

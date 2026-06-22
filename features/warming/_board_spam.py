@@ -87,8 +87,18 @@ def render_spam_badge(
         if tooltip:
             badge.tooltip(tooltip)
         badge.on("click", on_click)
+    elif card.spam_detail:
+        # Telegram-review or a probe error: surface the computed status text +
+        # colour + tooltip (not a generic button), still clickable to re-probe —
+        # the operator must not lose that context behind «Проверить спам» (П5).
+        badge = ui.label(text).classes(
+            f"text-[10px] px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap {cls}"
+        )
+        if tooltip:
+            badge.tooltip(tooltip)
+        badge.on("click", on_click)
     else:
-        # Not yet probed — clickable label that triggers a real probe, inline.
+        # Never probed — prominent call-to-action to run the first probe.
         ui.label("Проверить спам").classes(
             "text-[10px] text-blue-600 bg-blue-50 border border-blue-200 "
             "px-2.5 py-0.5 rounded cursor-pointer whitespace-nowrap"

@@ -92,13 +92,25 @@ def test_check_states_geo_unknown_is_warn() -> None:
     assert geo_status == "warn"
 
 
-def test_check_states_quarantine_count_in_tooltip() -> None:
-    card = _base_card().model_copy(update={"quarantine_count": 3})
+def test_check_states_quarantine_history_is_warn_not_fail() -> None:
+    # q>0 but not *currently* quarantined → history, not an active blocker (audit П10):
+    # a restarted account must not look blocked by a past peer-flood counter.
+    card = _base_card().model_copy(update={"quarantine_count": 3})  # _base_card state="idle"
+
+    q_status, q_tip = _by_label(_check_states(card))["карантин (внутр.)"]
+
+    assert q_status == "warn"
+    assert "история" in q_tip
+    assert "3" in q_tip
+
+
+def test_check_states_active_quarantine_is_fail() -> None:
+    card = _base_card().model_copy(update={"state": "quarantine", "quarantine_count": 1})
 
     q_status, q_tip = _by_label(_check_states(card))["карантин (внутр.)"]
 
     assert q_status == "fail"
-    assert "3" in q_tip
+    assert "актив" in q_tip
 
 
 def test_check_states_session_failure_propagates_reason_to_tooltip() -> None:
@@ -363,6 +375,7 @@ def test_ru_plural_cycle_forms(count: int, form: str) -> None:
 
 def test_ru_event_translates_known_cycle_and_unknown_tokens() -> None:
     assert _ru_event("daily_limit") == "дневной лимит"
+    assert _ru_event("cycle_not_ready") == "не готов к циклу"  # П3 park event (audit review)
     assert _ru_event("cycle:ok") == "цикл выполнен"
     assert _ru_event("cycle:weird") == "цикл: weird"  # unknown status keeps the suffix
     assert _ru_event("totally_unknown") == "totally_unknown"  # falls back to the raw token

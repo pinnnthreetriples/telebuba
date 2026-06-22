@@ -236,8 +236,11 @@ async def _render_config_cards() -> None:  # pragma: no cover
         # An ``asyncio.create_task`` wrapper would drop the slot stack.
         await on_toggle()
 
-    def switch(*, value: bool) -> ui.element:
-        return ui.switch(value=value, on_change=trigger).props("dense")
+    def switch(*, value: bool, enabled: bool = True) -> ui.element:
+        control = ui.switch(value=value, on_change=trigger).props("dense")
+        if not enabled:
+            control.props("disable")
+        return control
 
     _render_features_card(current, refs, switch=switch, trigger=trigger)
     _render_gemini_card(current, persist=persist)
@@ -264,8 +267,12 @@ def _render_features_card(
             "forum",
             "Переписка между аккаунтами",
             "ИИ-сообщения между вашими аккаунтами (нужен ключ Gemini).",
-            lambda: switch(value=current.inter_account_chat),
+            lambda: switch(value=current.inter_account_chat, enabled=current.has_gemini_key),
         )
+        if not current.has_gemini_key:
+            ui.label("Без ключа Gemini в .env переписка не отправляется.").classes(
+                "text-[11px] text-amber-600 pl-9 -mt-1",
+            )
         refs["reactions"] = _feature_row(
             "favorite",
             "Реакции на посты",
@@ -284,7 +291,8 @@ def _render_features_card(
         refs["readiness"] = _feature_row(
             "verified_user",
             "Проверка перед стартом",
-            "Не запускать аккаунт без рабочего прокси, сессии и каналов.",
+            "Не запускать аккаунт без рабочего прокси, живой сессии и каналов, "
+            "а также при спам-ограничении или критическом trust.",
             lambda: switch(value=current.enforce_readiness),
         )
         _render_quiet_hours_block(current, refs, trigger=trigger)

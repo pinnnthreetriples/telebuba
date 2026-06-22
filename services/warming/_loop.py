@@ -20,6 +20,7 @@ from services.warming._cycle import run_one_cycle
 from services.warming._state import _set_state
 from services.warming._transitions import (
     _calculate_next_run,
+    _gate_readiness,
     _matches_active_run,
     _resolve_phase_after_cycle,
 )
@@ -280,7 +281,10 @@ async def _finalize_after_cycle(
         last_event=f"cycle:{result.status}",
         last_cycle_at=_now_iso(),
         next_run_at=next_run,
-        increment_cycle=True,
+        # П9: a "skipped" cycle (no channels configured) did no warming work,
+        # so it must not bump the counter and fake progress. Every other status
+        # (ok/failed/flood/peer_flood) ran real actions and counts.
+        increment_cycle=result.status != "skipped",
         heartbeat_at=_now_iso(),
         last_action=result.last_failed_action,
         last_channel=result.last_failed_channel,
@@ -307,7 +311,7 @@ async def _finalize_after_cycle(
     return result
 
 
-async def run_loop_iteration(
+async def run_loop_iteration(  # noqa: PLR0911 - sequential pre-cycle gates, each early-exits.
     account_id: str,
     *,
     run_id: str | None = None,
@@ -338,10 +342,17 @@ async def run_loop_iteration(
     account = await fetch_account(account_id)
     age_hours = _account_age_hours(account, now)
     trust = await account_trust_score(account_id)
+
+    not_ready = await _gate_readiness(account, controls, record, trust, now, run_id=run_id)
+    if not_ready is not None:
+        return not_ready
+
     intensity = compute_intensity(age_hours, trust_band=trust.band)
-    effective_cap = (
-        controls.max_daily_actions if controls.max_daily_actions > 0 else intensity.daily_cap
-    )
+    # П2: the per-account auto cap (phase + trust band) is the single source of
+    # truth. The legacy fleet-wide ``controls.max_daily_actions`` override is
+    # retired — no longer read here, so a stale nonzero DB value can no longer
+    # silently neuter the auto cap (and there was no UI to clear it).
+    effective_cap = intensity.daily_cap
 
     daily = _roll_daily(record, now.date().isoformat())
     daily_count, daily_date = daily
@@ -397,7 +408,14 @@ async def run_loop_iteration(
 
     remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
     result = await run_one_cycle(
-        WarmingCycleRequest(account_id=account_id, remaining_actions=remaining),
+        WarmingCycleRequest(
+            account_id=account_id,
+            remaining_actions=remaining,
+            # П11: trust+age-aware DM permission (readiness already enforced by
+            # the gate above when enabled). The cycle's own intensity is
+            # trust-blind, so pass the loop's trust-aware value instead.
+            dm_allowed=intensity.dm_allowed,
+        ),
         on_step=_on_step,
     )
     return await _finalize_after_cycle(

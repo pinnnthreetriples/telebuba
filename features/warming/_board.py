@@ -41,6 +41,7 @@ from features.warming._board_styling import (
     _relative_eta,
 )
 from features.warming._termlog import render_card_log_panel
+from schemas.warming import is_warming
 
 if TYPE_CHECKING:
     import asyncio
@@ -62,7 +63,6 @@ class _BoardContext:  # pragma: no cover
 
     drag: dict[str, str | None]
     refresh: Callable[[], asyncio.Task[None]]
-    max_daily: int
     card_store: dict[str, WarmingAccountState] = field(default_factory=dict)
     card_refresh: dict[str, Any] = field(default_factory=dict)
     # Per-card activity-log panel state — kept here (not in the per-card
@@ -181,8 +181,14 @@ def _render_column(
 
     async def on_drop() -> None:
         account_id = ctx.drag["account_id"]
+        source = ctx.drag.get("source")
         ctx.drag["account_id"] = None
+        ctx.drag["source"] = None
         if not account_id:
+            return
+        if source == key:
+            # Same-column drop — not a move; ignore so an accidental drag does
+            # not restart (start_warming) or stop (stop_warming) the loop (П4).
             return
         if key == "warming":
             await drop_into_warming(ctx, account_id)
@@ -259,7 +265,7 @@ def _render_status_line(card: WarmingAccountState) -> None:  # pragma: no cover
     text = {
         "active": (
             _STATUS_ACTION_LABEL.get(card.last_action or "", "выполняет цикл"),
-            "выполняется сейчас",
+            "этап цикла",
         ),
         "error": (f"ошибка: {card.last_action or 'цикл'}", "ожидает повторной попытки"),
         "flood_wait": ("flood-wait активен", flood_secondary),
@@ -288,7 +294,7 @@ def _render_card_footer(ctx: _BoardContext, card: WarmingAccountState) -> None: 
         )
         _footer_sep()
 
-        cap = ctx.max_daily if ctx.max_daily > 0 else card.daily_cap
+        cap = card.daily_cap  # П2: auto per-account cap; fleet override retired
         if cap > 0:
             ui.label(f"Действия {card.daily_actions}/{cap}").classes(
                 "text-[10px] text-slate-500 tabular-nums"
@@ -377,7 +383,13 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
             f" hover:shadow-md transition-shadow{pulse}"
         )
     )
-    element.on("dragstart", lambda aid=card.account_id: ctx.drag.update(account_id=aid))
+    # Record the source column so a drop back into the same column is a no-op
+    # (audit П4): "warming" mirrors load_board's is_warming column split.
+    source = "warming" if is_warming(card.state) else "idle"
+    element.on(
+        "dragstart",
+        lambda aid=card.account_id, src=source: ctx.drag.update(account_id=aid, source=src),
+    )
 
     with element:
         # Coloured left stripe (6px)

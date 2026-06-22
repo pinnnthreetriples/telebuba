@@ -204,6 +204,10 @@ _TRUST_PHASE_CEILING: dict[str, WarmingPhase] = {
 # the highest-risk window regardless of other signals.
 _PHASE_HARD_FLOOR_AGE_HOURS = 72.0
 
+# Trust bands permitted to send DMs (audit П11). DM is the highest-risk action,
+# so ``at_risk``/``critical`` accounts are blocked even once old enough.
+_DM_ALLOWED_BANDS: Final = frozenset({"excellent", "good", "watch"})
+
 
 def _phase_from_age(age_hours: float) -> WarmingPhase:
     """Phase by calendar age alone, ignoring trust."""
@@ -285,12 +289,14 @@ def compute_intensity(
         # account sits at the top of its ceiling phase. Hide the milestone.
         progress, days_to_next = None, None
     daily_cap = _PHASE_DAILY_CAP[phase]
+    # П11: DM is gated by trust band (when known) on top of the age gate below.
+    dm_band_ok = trust_band is None or trust_band in _DM_ALLOWED_BANDS
     if not warm.ramp_enabled:
         return WarmingIntensity(
             channels_min=warm.channels_per_cycle_min,
             channels_max=warm.channels_per_cycle_max,
             reaction_probability=warm.reaction_probability,
-            dm_allowed=True,
+            dm_allowed=dm_band_ok,
             daily_cap=daily_cap,
             phase=phase,
             progress_to_next=progress,
@@ -311,7 +317,7 @@ def compute_intensity(
         channels_min=channels_min,
         channels_max=channels_max,
         reaction_probability=min(1.0, max(0.0, reaction_probability)),
-        dm_allowed=age_hours >= warm.dm_min_age_hours,
+        dm_allowed=(age_hours >= warm.dm_min_age_hours) and dm_band_ok,
         daily_cap=daily_cap,
         phase=phase,
         progress_to_next=progress,
