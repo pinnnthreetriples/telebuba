@@ -27,7 +27,9 @@ from core.telegram_client import (
     execute_read_many,
 )
 from schemas.telegram_actions import (
+    GetLinkedDiscussionGroup,
     GetUserProfile,
+    LinkedDiscussionGroupResult,
     ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
@@ -474,6 +476,48 @@ async def test_list_profile_photos_thumb_failure_is_swallowed(
     assert len(result.items) == 1
     assert result.items[0].photo_id == 1
     assert result.items[0].thumb_bytes is None
+
+
+@pytest.mark.asyncio
+async def test_get_linked_discussion_group_present(monkeypatch: pytest.MonkeyPatch) -> None:
+    from telethon.tl.functions.channels import GetFullChannelRequest  # noqa: PLC0415
+
+    requested: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            requested.append(request)
+            return MagicMock(full_chat=MagicMock(linked_chat_id=-100123))
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-linked", GetLinkedDiscussionGroup(channel="@news"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.linked_chat_id == -100123
+    assert result.comments_enabled is True
+    assert any(isinstance(req, GetFullChannelRequest) for req in requested)
+
+
+@pytest.mark.asyncio
+async def test_get_linked_discussion_group_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(full_chat=MagicMock(linked_chat_id=None))
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-nolink", GetLinkedDiscussionGroup(channel="@nocomments"))
+
+    assert isinstance(result, LinkedDiscussionGroupResult)
+    assert result.linked_chat_id is None
+    assert result.comments_enabled is False
 
 
 @pytest.mark.asyncio

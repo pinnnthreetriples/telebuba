@@ -31,6 +31,34 @@ class PostComment(BaseModel):
     text: str = Field(min_length=1)
 
 
+class CommentOnPost(BaseModel):
+    """Post a comment under a channel post via the linked discussion group.
+
+    Telethon's ``send_message(channel, text, comment_to=post_id)`` routes the
+    message into the channel's linked group; the account must already be a
+    member of that group (onboarding handles the join).
+    """
+
+    action_type: Literal["comment_on_post"] = "comment_on_post"
+    channel: str = Field(min_length=1)
+    post_id: int
+    text: str = Field(min_length=1)
+
+
+class ClickButton(BaseModel):
+    """Click an inline keyboard button on a message — e.g. a captcha prompt.
+
+    Selector is index-first: ``button_index`` if given, else ``button_text``;
+    with neither set the gateway clicks the first button.
+    """
+
+    action_type: Literal["click_button"] = "click_button"
+    chat_id: int
+    message_id: int
+    button_index: int | None = None
+    button_text: str | None = None
+
+
 class UpdateProfile(BaseModel):
     action_type: Literal["update_profile"] = "update_profile"
     first_name: str = Field(min_length=1)
@@ -124,6 +152,13 @@ class RemoveProfileMusic(BaseModel):
     file_reference: bytes = Field(min_length=1)
 
 
+class GetLinkedDiscussionGroup(BaseModel):
+    """Read-only: resolve a channel's linked discussion group (for comments)."""
+
+    action_type: Literal["get_linked_discussion_group"] = "get_linked_discussion_group"
+    channel: str = Field(min_length=1)
+
+
 class GetUserProfile(BaseModel):
     """Read-only: pull the signed-in user's own current profile state."""
 
@@ -186,6 +221,8 @@ TelegramAction = Annotated[
     JoinChannel
     | LeaveChannel
     | PostComment
+    | CommentOnPost
+    | ClickButton
     | UpdateProfile
     | SetOnline
     | ReadChannel
@@ -201,9 +238,25 @@ TelegramAction = Annotated[
 ]
 
 TelegramReadAction = Annotated[
-    GetUserProfile | ListPinnedStories | ListActiveStories | ListProfileMusic | ListProfilePhotos,
+    GetLinkedDiscussionGroup
+    | GetUserProfile
+    | ListPinnedStories
+    | ListActiveStories
+    | ListProfileMusic
+    | ListProfilePhotos,
     Field(discriminator="action_type"),
 ]
+
+
+class LinkedDiscussionGroupResult(BaseModel):
+    """Gateway output for ``GetLinkedDiscussionGroup``.
+
+    ``linked_chat_id`` is the discussion group's chat id, or ``None`` when the
+    channel has comments disabled / no linked group.
+    """
+
+    linked_chat_id: int | None = None
+    comments_enabled: bool
 
 
 ActionStatus = Literal[

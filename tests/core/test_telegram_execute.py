@@ -32,6 +32,8 @@ from core.telegram_client._actions import _typing_seconds
 from schemas.device_fingerprint import TelegramClientProfile
 from schemas.telegram_actions import (
     AddProfileMusic,
+    ClickButton,
+    CommentOnPost,
     JoinChannel,
     LeaveChannel,
     PostComment,
@@ -236,6 +238,194 @@ async def test_execute_post_comment_returns_message_id(
     assert result.status == "ok"
     assert result.message_id == 4242
     assert result.action_type == "post_comment"
+
+
+@pytest.mark.asyncio
+async def test_execute_comment_on_post_returns_message_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    sent_message = MagicMock(id=8181)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_message(self, entity: str, text: str, *, comment_to: int) -> object:
+            assert entity == "@news"
+            assert text == "great post"
+            assert comment_to == 55
+            return sent_message
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-comment",
+        CommentOnPost(channel="@news", post_id=55, text="great post"),
+    )
+
+    assert result.status == "ok"
+    assert result.action_type == "comment_on_post"
+    assert result.message_id == 8181
+
+
+@pytest.mark.asyncio
+async def test_execute_comment_on_post_handles_flood_wait(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_message(self, _entity: str, _text: str, *, comment_to: int) -> object:  # noqa: ARG002
+            raise errors.FloodWaitError(request=None, capture=17)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-comment-flood",
+        CommentOnPost(channel="@news", post_id=55, text="hi"),
+    )
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 17
+
+
+@pytest.mark.asyncio
+async def test_execute_comment_on_post_write_forbidden_surfaces_error_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A domain error must surface its exception class name for #117 to branch on."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_message(self, _entity: str, _text: str, *, comment_to: int) -> object:  # noqa: ARG002
+            raise errors.ChatWriteForbiddenError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-comment-forbidden",
+        CommentOnPost(channel="@news", post_id=55, text="hi"),
+    )
+
+    assert result.status == "failed"
+    assert result.error_type == "ChatWriteForbiddenError"
+
+
+@pytest.mark.asyncio
+async def test_execute_click_button_clicks_by_index(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clicked: list[object] = []
+    message = MagicMock()
+
+    async def fake_click(i: object = None, *, text: object = None) -> object:
+        clicked.append((i, text))
+        return MagicMock()
+
+    message.click = fake_click
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_messages(self, chat_id: int, *, ids: int) -> object:
+            assert chat_id == 123
+            assert ids == 456
+            return message
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-click",
+        ClickButton(chat_id=123, message_id=456, button_index=2),
+    )
+
+    assert result.status == "ok"
+    assert result.action_type == "click_button"
+    assert clicked == [(2, None)]
+
+
+@pytest.mark.asyncio
+async def test_execute_click_button_clicks_by_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clicked: list[object] = []
+    message = MagicMock()
+
+    async def fake_click(i: object = None, *, text: object = None) -> object:
+        clicked.append((i, text))
+        return MagicMock()
+
+    message.click = fake_click
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_messages(self, _chat_id: int, *, ids: int) -> object:  # noqa: ARG002
+            return message
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-click-text",
+        ClickButton(chat_id=123, message_id=456, button_text="I am not a robot"),
+    )
+
+    assert result.status == "ok"
+    assert clicked == [(None, "I am not a robot")]
+
+
+@pytest.mark.asyncio
+async def test_execute_click_button_defaults_to_first_button(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    clicked: list[object] = []
+    message = MagicMock()
+
+    async def fake_click(i: object = None, *, text: object = None) -> object:
+        clicked.append((i, text))
+        return MagicMock()
+
+    message.click = fake_click
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_messages(self, _chat_id: int, *, ids: int) -> object:  # noqa: ARG002
+            return message
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-click-default", ClickButton(chat_id=1, message_id=2))
+
+    assert result.status == "ok"
+    assert clicked == [(0, None)]
+
+
+@pytest.mark.asyncio
+async def test_execute_click_button_no_message_is_noop_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If the message is gone there is nothing to click — succeed as a no-op."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_messages(self, _chat_id: int, *, ids: int) -> object:  # noqa: ARG002
+            return None
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-click-missing", ClickButton(chat_id=1, message_id=2))
+
+    assert result.status == "ok"
+    assert result.message_id is None
 
 
 @pytest.mark.asyncio
