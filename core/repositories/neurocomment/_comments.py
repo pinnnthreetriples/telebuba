@@ -10,15 +10,19 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import (
+    _neurocomment_campaign_accounts,
     _neurocomment_comments,
     _neurocomment_linked_groups,
     _neurocomment_readiness,
 )
 from schemas.neurocomment import (
+    CommentList,
     CommentRecord,
     CommentStatus,
     LinkedDiscussionGroup,
+    LinkedGroupList,
     NeurocommentReadiness,
+    ReadinessList,
 )
 
 if TYPE_CHECKING:
@@ -36,6 +40,24 @@ def _fetch_linked_group(channel: str) -> LinkedDiscussionGroup | None:
 
 async def fetch_linked_group(channel: str) -> LinkedDiscussionGroup | None:
     return await asyncio.to_thread(_fetch_linked_group, channel)
+
+
+def _list_linked_groups(channels: list[str]) -> LinkedGroupList:
+    if not channels:
+        return LinkedGroupList()
+    statement = select(_neurocomment_linked_groups).where(
+        _neurocomment_linked_groups.c.channel.in_(channels),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return LinkedGroupList(
+        groups=[LinkedDiscussionGroup.model_validate(dict(row)) for row in rows],
+    )
+
+
+async def list_linked_groups(channels: list[str]) -> LinkedGroupList:
+    """Cached linked-group resolutions for a set of channels (bulk read for the board)."""
+    return await asyncio.to_thread(_list_linked_groups, channels)
 
 
 def _upsert_linked_group(
@@ -288,3 +310,40 @@ async def count_account_channel_comments_since(
         channel,
         since_iso,
     )
+
+
+def _list_campaign_readiness(campaign_id: str) -> ReadinessList:
+    # Readiness is per-(account, channel); scope to the campaign's accounts so
+    # the board reads every pair in one query instead of N per-card fetches.
+    accounts = select(_neurocomment_campaign_accounts.c.account_id).where(
+        _neurocomment_campaign_accounts.c.campaign_id == campaign_id,
+    )
+    statement = select(_neurocomment_readiness).where(
+        _neurocomment_readiness.c.account_id.in_(accounts),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return ReadinessList(
+        readiness=[NeurocommentReadiness.model_validate(dict(row)) for row in rows],
+    )
+
+
+async def list_campaign_readiness(campaign_id: str) -> ReadinessList:
+    """All readiness rows for a campaign's accounts (bulk read for the board)."""
+    return await asyncio.to_thread(_list_campaign_readiness, campaign_id)
+
+
+def _list_posted_comments_since(campaign_id: str, since_iso: str) -> CommentList:
+    statement = select(_neurocomment_comments).where(
+        (_neurocomment_comments.c.campaign_id == campaign_id)
+        & (_neurocomment_comments.c.status == "posted")
+        & (_neurocomment_comments.c.created_at >= since_iso),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return CommentList(comments=[_row_to_comment(row) for row in rows])
+
+
+async def list_posted_comments_since(campaign_id: str, since_iso: str) -> CommentList:
+    """A campaign's ``posted`` comments with ``created_at >= since`` (bulk read for the board)."""
+    return await asyncio.to_thread(_list_posted_comments_since, campaign_id, since_iso)

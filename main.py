@@ -13,7 +13,12 @@ from core.telegram_client import shutdown_telegram_pool
 from features.accounts import register_accounts_page
 from features.accounts._profile_dialog_render import register_disconnect_tracker
 from features.logs import register_logs_page
+from features.neurocomment import register_neurocomment_page
 from features.warming import register_warming_page
+from services.neurocomment import (
+    reconcile_neurocomment_on_startup,
+    shutdown_neurocomment_on_shutdown,
+)
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
 
 _GIT_SHA_TIMEOUT_SECONDS = 2
@@ -59,6 +64,7 @@ def main() -> None:
     setup_logging()
     register_accounts_page()
     register_warming_page()
+    register_neurocomment_page()
     register_logs_page()
     # Populate _DEAD_CLIENTS on websocket drop so the profile dialog's apply
     # paths short-circuit on detached clients instead of warning to stderr.
@@ -69,11 +75,16 @@ def main() -> None:
     # gone. Reconcile on startup, cancel on shutdown.
     app.on_startup(_log_app_started)
     app.on_startup(reconcile_warming_runtime)
+    # Neurocomment runtime is event-driven (a listener + per-post tasks); like
+    # warming it lives in process memory, so resume the persisted listener on
+    # boot and tear it down on exit.
+    app.on_startup(reconcile_neurocomment_on_startup)
     # Shutdown order matters: drain warming's in-flight Telegram calls FIRST
     # so they can finish on the pooled client, THEN tear the pool down. The
     # other way around blows up live ``execute(...)`` calls mid-handshake and
     # may corrupt the ``.session`` SQLite file.
     app.on_shutdown(shutdown_warming_runtime)
+    app.on_shutdown(shutdown_neurocomment_on_shutdown)
     app.on_shutdown(shutdown_telegram_pool)
 
     ui.run(
