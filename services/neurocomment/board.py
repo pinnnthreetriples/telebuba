@@ -138,7 +138,6 @@ def _build_card(
         comments_last_hour=last_hour,
         max_comments_per_hour=nc.max_comments_per_hour,
         comments_today=len(posted),
-        max_comments_per_channel_per_day=nc.max_comments_per_channel_per_day,
         last_comment_at=last_comment_at,
         readiness=[
             AccountChannelReadiness(

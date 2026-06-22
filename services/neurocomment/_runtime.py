@@ -98,11 +98,17 @@ async def start_neurocomment(listener_account_id: str) -> None:
 
 
 async def stop_neurocomment() -> None:
-    """Stop the runtime for the persisted listener account and clear it."""
+    """Stop the runtime for the persisted listener account and clear it.
+
+    The persisted id is cleared even if shutdown raises, so "stop" reliably
+    stops: a fresh boot must never resume a listener the operator turned off.
+    """
     listener_account_id = await get_listener_account_id()
-    if listener_account_id is not None:
-        await shutdown_neurocomment_runtime(listener_account_id)
-    await set_listener_account_id(None)
+    try:
+        if listener_account_id is not None:
+            await shutdown_neurocomment_runtime(listener_account_id)
+    finally:
+        await set_listener_account_id(None)
 
 
 async def reconcile_neurocomment_on_startup() -> None:

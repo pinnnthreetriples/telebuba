@@ -212,7 +212,6 @@ class NeurocommentAccountCard(BaseModel):
     comments_last_hour: int
     max_comments_per_hour: int
     comments_today: int
-    max_comments_per_channel_per_day: int
     last_comment_at: str | None = None
     readiness: list[AccountChannelReadiness] = Field(default_factory=list)
 
