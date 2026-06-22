@@ -254,6 +254,27 @@ class TrustSettings(BaseSettings):
     new_account_hours: float = Field(default=48.0, ge=0.0)
 
 
+class NeurocommentSettings(BaseSettings):
+    """Tunables for the neurocomment engine — pacing, caps, retries (no magic numbers)."""
+
+    model_config = SettingsConfigDict(env_prefix="NEUROCOMMENT__", extra="ignore")
+
+    # Human-like pause before replying to a fresh post.
+    reply_delay_min_seconds: float = Field(default=3.0, ge=0.0)
+    reply_delay_max_seconds: float = Field(default=10.0, ge=0.0)
+    # Spacing between discussion-group joins at campaign onboarding.
+    join_delay_min_seconds: float = Field(default=30.0, ge=0.0)
+    join_delay_max_seconds: float = Field(default=60.0, ge=0.0)
+    # Per-account throughput ceiling.
+    max_comments_per_hour: int = Field(default=10, ge=1)
+    # Comment length guardrail (words).
+    comment_max_words: int = Field(default=30, ge=1)
+    # Per-(account, channel) daily comment cap (0 = no cap).
+    max_comments_per_channel_per_day: int = Field(default=3, ge=0)
+    # Retries for a failed comment attempt before giving up.
+    max_retries: int = Field(default=2, ge=0, le=5)
+
+
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
@@ -266,6 +287,7 @@ class Settings(BaseSettings):
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
     trust: TrustSettings = Field(default_factory=TrustSettings)
+    neurocomment: NeurocommentSettings = Field(default_factory=NeurocommentSettings)
 
 
 def load_settings() -> Settings:

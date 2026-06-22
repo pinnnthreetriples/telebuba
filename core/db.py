@@ -327,6 +327,25 @@ from core.repositories.logs import (  # noqa: E402, F401
     list_recent_logs,
     purge_logs_older_than,
 )
+from core.repositories.neurocomment import (  # noqa: E402, F401
+    ChannelAlreadyAssignedError,
+    assign_account_to_campaign,
+    claim_comment,
+    create_campaign,
+    deactivate_channel,
+    fetch_campaign,
+    fetch_comment,
+    fetch_linked_group,
+    fetch_readiness,
+    link_channel_to_campaign,
+    list_campaign_accounts,
+    list_campaign_channels,
+    list_campaigns,
+    mark_comment_failed,
+    mark_comment_posted,
+    upsert_linked_group,
+    upsert_readiness,
+)
 from core.repositories.spam_status import (  # noqa: E402, F401
     get_spam_status,
     list_spam_statuses,

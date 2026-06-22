@@ -28,7 +28,8 @@ telebuba/
 │   ├── tdata_import.py     converts tdata.zip to Telethon .session files (safe-extract)
 │   ├── repositories/       per-aggregate DB query modules
 │   │   ├── _proxies.py        internal proxy query helpers
-│   │   └── warming_joined.py  tracks channels an account already joined (join-dedup)
+│   │   ├── warming_joined.py  tracks channels an account already joined (join-dedup)
+│   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
 │   │   ├── _pool.py           client pool management
 │   │   ├── _read.py           message reading actions
