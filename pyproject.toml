@@ -221,6 +221,6 @@ paths = ["core", "features", "schemas", "services"]
 # Only mutates lines that are already covered by tests.
 # ============================================================================
 [tool.mutmut]
-source_paths = ["services", "core"]
-pytest_add_cli_args_test_selection = ["tests/services", "tests/core"]
+source_paths = ["services", "core", "schemas", "features"]
+pytest_add_cli_args_test_selection = ["tests/services", "tests/core", "tests/features"]
 mutate_only_covered_lines = true
