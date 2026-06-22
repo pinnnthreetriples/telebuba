@@ -100,20 +100,38 @@ async def _render_dialogues() -> None:  # pragma: no cover
 
 
 async def _render_activity_log() -> None:  # pragma: no cover
-    # Global problems feed: every account's warnings + errors in one place, so an
-    # operator sees a failure anywhere without expanding individual cards. The
-    # success-level "what happened" stream now lives per-card («Логи аккаунта»).
+    # Global problems feed: warming-related warnings + errors from every account
+    # in one collapsible place, so a failure anywhere is visible without expanding
+    # cards. Scoped to warming events (we are on the warming page) and to
+    # warning/error level — the success per-step stream lives per-card.
     with ui.card().classes("w-full p-4 gap-2"):
-        with ui.row().classes("w-full items-center gap-2"):
+        open_state = {"value": True}
+        header = ui.row().classes("w-full items-center gap-2 cursor-pointer select-none")
+        with header:
+            chevron = ui.icon("expand_more").classes("text-slate-400")
             ui.icon("report").classes("text-red-500")
             ui.label("Ошибки и предупреждения").classes("text-base font-semibold")
-            ui.label("по всем аккаунтам").classes("text-xs text-slate-400")
+            ui.label("по всем аккаунтам прогрева").classes("text-xs text-slate-400")
         log_box = ui.column().classes("w-full gap-1 max-h-80 overflow-auto")
         seen: dict[str, object] = {"sig": None}
 
+        def _toggle() -> None:
+            open_state["value"] = not open_state["value"]
+            log_box.set_visibility(open_state["value"])
+            chevron.props(f"name={'expand_more' if open_state['value'] else 'chevron_right'}")
+
+        header.on("click", _toggle)
+
         async def refresh_log() -> None:
             state = await load_logs_page(LogFilter(problems_only=True, limit=_LOG_LIMIT))
-            entries = state.entries
+            # On the warming page → only warming-related problems (skip unrelated
+            # subsystems like account CRUD / proxy checks).
+            entries = [
+                entry
+                for entry in state.entries
+                if entry.event.startswith(("warming_", "telegram_", "dialogue_"))
+                or entry.event == "phase_advanced"
+            ]
             # Only rebuild when the visible set of entries changed — otherwise the
             # feed re-mounts every poll and visibly blinks.
             signature = tuple(entry.id for entry in entries)
@@ -123,7 +141,7 @@ async def _render_activity_log() -> None:  # pragma: no cover
             log_box.clear()
             with log_box:
                 if not entries:
-                    ui.label("Ошибок нет — все аккаунты работают штатно.").classes(
+                    ui.label("Ошибок нет — прогрев идёт штатно.").classes(
                         "text-xs text-slate-400",
                     )
                 for entry in entries:
