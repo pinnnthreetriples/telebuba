@@ -107,6 +107,7 @@ _EVENT_LABEL: dict[str, tuple[str, str]] = {
     "warming_progress_write_failed": ("warning", "Сбой записи прогресса"),
     "warming_loop_crashed": ("error", "Сбой цикла"),
     "warming_reconcile_not_ready": ("block", "Не готов к запуску"),
+    "warming_cycle_not_ready": ("block", "Не готов к циклу"),
     "warming_chat_generation_failed": ("error", "Не сгенерировал сообщение"),
     "warming_stop_task_error": ("warning", "Ошибка остановки задачи"),
     "warming_dialogue_pair_refresh_failed": ("error", "Сбой пересборки пар"),

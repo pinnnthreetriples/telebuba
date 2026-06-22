@@ -38,6 +38,7 @@ def _entry(event: str, *, status: LogStatus = "success") -> LogEntry:
         ("telegram_read_channel", ("chrome_reader_mode", "Прочитал канал")),
         ("warming_cycle_completed", ("done_all", "Цикл завершён")),
         ("phase_advanced", ("trending_up", "Новая фаза")),
+        ("warming_cycle_not_ready", ("block", "Не готов к циклу")),
     ],
 )
 def test_event_label_known(event: str, expected: tuple[str, str]) -> None:

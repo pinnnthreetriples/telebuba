@@ -44,6 +44,7 @@ from schemas.proxy import AccountProxyCheckUpdate, AccountProxyUpsert
 from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.telegram_session import TelegramSessionCheckResult
+from schemas.trust import TrustScore
 from schemas.warming import (
     AddChannelsRequest,
     RemoveChannelRequest,
@@ -1555,6 +1556,27 @@ async def test_load_board_attaches_readiness() -> None:
     card = board.idle[0]
     assert card.readiness is not None
     assert card.readiness.ready is False
+
+
+@pytest.mark.asyncio
+async def test_load_board_dm_chip_mirrors_engine_readiness_enforcement(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The DM chip must match what the engine does: readiness gates DM only when
+    # enforce_readiness is on. With it off the engine skips the readiness gate,
+    # so a not-ready but DM-eligible account must still show DM allowed (review).
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    monkeypatch.setattr(
+        "services.warming.board.account_trust_score_from",
+        lambda **_: TrustScore(account_id="acc-1", score=90, band="good"),
+    )
+    await create_account(AccountCreate(account_id="acc-1"))  # no proxy/session/channels → not ready
+
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    assert (await warming.load_board()).idle[0].dm_allowed is True
+
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=True)
+    assert (await warming.load_board()).idle[0].dm_allowed is False
 
 
 # --------------------------------------------------------------------------- #
