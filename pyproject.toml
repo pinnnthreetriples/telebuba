@@ -230,11 +230,14 @@ source_paths = ["services", "schemas"]
 pytest_add_cli_args_test_selection = ["tests"]
 mutate_only_covered_lines = true
 # mutmut copies source into a `mutants/` dir and runs pytest from INSIDE it, so
-# the test suite, the root conftest, the pytest config, and the .env.example that
-# tests/test_architecture.py reads must be copied in too. Without this, pytest
-# collects zero tests inside mutants/ and mutmut aborts with "no test case for
-# any mutant" — which is what broke every nightly run since mutmut landed.
-also_copy = ["tests", "conftest.py", "pyproject.toml", ".env.example"]
+# everything the suite needs must be copied in too, or collection fails there:
+#   - core/, features/ — imported by the tests (e.g. services tests use core.db)
+#     but NOT in source_paths, so copied verbatim (present, never mutated);
+#   - tests/, the root conftest.py, pyproject.toml (pytest config), and the
+#     .env.example that tests/test_architecture.py reads.
+# Without this, pytest hits ModuleNotFoundError / collects zero tests inside
+# mutants/ and mutmut aborts before testing a single mutant.
+also_copy = ["core", "features", "tests", "conftest.py", "pyproject.toml", ".env.example"]
 # Drop the project addopts for the per-mutant runs: the strict --cov /
 # --cov-fail-under=90 gates would make every partial run exit non-zero and
 # corrupt mutmut's kill/survive signal. asyncio_mode / filterwarnings live in
