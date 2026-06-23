@@ -12,3 +12,16 @@ updates:
       actions:
         patterns:
           - "*"
+
+  # Auto-update Telethon (our core Telegram SDK). The "pip" ecosystem is uv-aware
+  # and reads uv.lock; scoped to telethon only via `allow` so we don't get PR
+  # spam for the whole Python tree, and don't fight the manual CVE pins in
+  # pyproject's [tool.uv] override-dependencies.
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 5
+    allow:
+      - dependency-name: "telethon"
