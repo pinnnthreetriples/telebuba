@@ -238,7 +238,10 @@ def _mark_comment(
             update(_neurocomment_comments)
             .where(
                 (_neurocomment_comments.c.channel == channel)
-                & (_neurocomment_comments.c.post_id == post_id),
+                & (_neurocomment_comments.c.post_id == post_id)
+                # Idempotent: never re-transition a claim that already reached a
+                # terminal outcome (a late failure can't unposted a posted comment).
+                & _neurocomment_comments.c.status.notin_(("posted", "failed")),
             )
             .values(**values),
         )
@@ -250,9 +253,13 @@ async def mark_comment_posted(
     post_id: int,
     *,
     comment_text: str,
-    comment_msg_id: int,
+    comment_msg_id: int | None,
 ) -> CommentRecord | None:
-    """Mark a claimed comment as posted. ``None`` if the post was never claimed."""
+    """Mark a claimed comment as posted.
+
+    Idempotent: an already-terminal claim is not re-transitioned, so the returned
+    record is the *current* row — ``None`` only when no row exists.
+    """
     return await asyncio.to_thread(
         _mark_comment,
         channel,
@@ -264,7 +271,11 @@ async def mark_comment_posted(
 
 
 async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | None:
-    """Mark a claimed comment as failed. ``None`` if the post was never claimed."""
+    """Mark a claimed comment as failed.
+
+    Idempotent: an already-terminal claim is not re-transitioned, so the returned
+    record is the *current* row — ``None`` only when no row exists.
+    """
     return await asyncio.to_thread(_mark_comment, channel, post_id, status="failed")
 
 

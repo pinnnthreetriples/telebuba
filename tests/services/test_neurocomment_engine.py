@@ -188,6 +188,21 @@ async def test_happy_path_posts_and_marks_posted(monkeypatch: pytest.MonkeyPatch
     assert record.comment_text == "a nice comment"
 
 
+@pytest.mark.asyncio
+async def test_posted_with_unknown_msg_id_stores_none(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub(status="ok", message_id=None)
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "posted"
+    # No real id from Telegram → NULL, not an ambiguous 0 sentinel.
+    assert record.comment_msg_id is None
+
+
 # --------------------------------------------------------------------------- #
 # Idempotency
 # --------------------------------------------------------------------------- #
@@ -391,6 +406,24 @@ def test_set_cooldown_keeps_the_later_expiry() -> None:
     assert _state.in_cooldown("acc-x", now + timedelta(hours=1)) is True
 
 
+def test_channel_cooldown_does_not_block_other_channels() -> None:
+    now = datetime.now(UTC)
+    _state.set_cooldown("acc-x", now + timedelta(hours=1), channel="@a")
+    assert _state.in_cooldown("acc-x", now, "@a") is True
+    assert _state.in_cooldown("acc-x", now, "@b") is False
+    # An account-wide cooldown (channel=None) blocks every channel.
+    _state.set_cooldown("acc-x", now + timedelta(hours=1))
+    assert _state.in_cooldown("acc-x", now, "@b") is True
+
+
+def test_in_cooldown_evicts_expired_keys() -> None:
+    now = datetime.now(UTC)
+    _state.set_cooldown("acc-x", now - timedelta(seconds=1), channel="@a")
+    assert _state.in_cooldown("acc-x", now, "@a") is False
+    # The expired key is dropped, not left to accumulate.
+    assert ("acc-x", "@a") not in _state._COOLDOWN_UNTIL
+
+
 @pytest.mark.asyncio
 async def test_account_in_cooldown_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")
@@ -516,6 +549,28 @@ async def test_peer_flood_uses_config_cooldown(monkeypatch: pytest.MonkeyPatch) 
     # Cooldown extends past the (zero-duration) peer_flood using the config default.
     later = datetime.now(UTC) + timedelta(seconds=3600)
     assert _state.in_cooldown("acc-1", later) is True
+
+
+@pytest.mark.asyncio
+async def test_slow_mode_cools_only_that_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    campaign_id = await _make_campaign("@a", "acc-1")
+    await link_channel_to_campaign(campaign_id, "@b")
+    await upsert_readiness("acc-1", "@b", joined=True, captcha_passed=True, ready=True)
+    comment = _CommentStub(status="slow_mode_wait", flood_wait_seconds=300)
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@a", post_id=1, text="hi"))
+    # Slow-mode is per-chat: @a is cooled, the account stays usable elsewhere.
+    comment.status = "ok"
+    comment.message_id = 7
+    await engine.handle_new_post(NewPostEvent(channel="@b", post_id=2, text="hi"))
+
+    rec_a = await fetch_comment("@a", 1)
+    assert rec_a is not None
+    assert rec_a.status == "failed"  # slow-mode → failed + per-channel cooldown
+    rec_b = await fetch_comment("@b", 2)
+    assert rec_b is not None
+    assert rec_b.status == "posted"  # not blocked by @a's channel cooldown
 
 
 @pytest.mark.asyncio

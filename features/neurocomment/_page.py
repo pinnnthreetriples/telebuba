@@ -185,9 +185,14 @@ async def _render_account_picker(campaign_id: str) -> ui.select:  # pragma: no c
     options = {acc.account_id: (acc.label or acc.account_id) for acc in accounts}
 
     async def on_toggle(account_id: str, checked: bool) -> None:  # noqa: FBT001
-        if checked:
-            await assign_account_to_campaign(campaign_id, account_id)
-            ui.notify("Аккаунт добавлен в кампанию", type="positive")
+        if not checked:
+            return
+        await assign_account_to_campaign(campaign_id, account_id)
+        assigned.add(account_id)
+        # Refresh the listener choices so a just-assigned account is selectable
+        # without a page reload.
+        listener_select.set_options({aid: options.get(aid, aid) for aid in assigned})
+        ui.notify("Аккаунт добавлен в кампанию", type="positive")
 
     with ui.column().classes("w-full gap-1"):
         if not accounts:
@@ -205,13 +210,14 @@ async def _render_account_picker(campaign_id: str) -> ui.select:  # pragma: no c
         "text-sm font-medium mt-2",
     )
     # Listener choices = the campaign's assigned accounts (the listener must be a
-    # serving account). Empty until at least one account is assigned.
-    listener_options = {aid: options.get(aid, aid) for aid in assigned}
-    return (
-        ui.select(listener_options, label="Слушатель")
+    # serving account). Empty until at least one account is assigned; on_toggle
+    # keeps it in sync as accounts are added.
+    listener_select = (
+        ui.select({aid: options.get(aid, aid) for aid in assigned}, label="Слушатель")
         .props("dense outlined")
         .classes("w-full max-w-[400px]")
     )
+    return listener_select
 
 
 async def _render_actions(campaign_id: str, listener_select) -> None:  # noqa: ANN001  # pragma: no cover
