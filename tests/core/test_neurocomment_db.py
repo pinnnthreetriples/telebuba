@@ -33,6 +33,7 @@ from core.db import (  # type: ignore[attr-defined]
     list_campaigns,
     mark_comment_failed,
     mark_comment_posted,
+    remove_account_from_campaign,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -139,6 +140,45 @@ async def test_account_serves_many_campaigns() -> None:
     assert [link.account_id for link in in_a.links] == ["acc-1"]
     in_b = await list_campaign_accounts(b.campaign_id)
     assert [link.campaign_id for link in in_b.links] == [b.campaign_id]
+
+
+@pytest.mark.asyncio
+async def test_remove_account_from_campaign_removes_link() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    await remove_account_from_campaign(campaign.campaign_id, "acc-1")
+
+    remaining = await list_campaign_accounts(campaign.campaign_id)
+    assert remaining.links == []
+
+
+@pytest.mark.asyncio
+async def test_remove_account_from_campaign_is_scoped_to_campaign() -> None:
+    # Removing acc-1 from campaign A must NOT touch its link in campaign B (the
+    # m2m is per-pair; shared readiness across campaigns must stay intact).
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    a = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    b = await create_campaign(CampaignCreate(name="B", prompt="p"))
+    await assign_account_to_campaign(a.campaign_id, "acc-1")
+    await assign_account_to_campaign(b.campaign_id, "acc-1")
+
+    await remove_account_from_campaign(a.campaign_id, "acc-1")
+
+    assert (await list_campaign_accounts(a.campaign_id)).links == []
+    in_b = await list_campaign_accounts(b.campaign_id)
+    assert [link.account_id for link in in_b.links] == ["acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_remove_account_from_campaign_is_idempotent_when_absent() -> None:
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+
+    # No link exists — removing is a no-op, not an error.
+    await remove_account_from_campaign(campaign.campaign_id, "ghost")
+
+    assert (await list_campaign_accounts(campaign.campaign_id)).links == []
 
 
 @pytest.mark.asyncio
