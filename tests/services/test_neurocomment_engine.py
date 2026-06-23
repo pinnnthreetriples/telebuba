@@ -416,6 +416,14 @@ def test_channel_cooldown_does_not_block_other_channels() -> None:
     assert _state.in_cooldown("acc-x", now, "@b") is True
 
 
+def test_in_cooldown_evicts_expired_keys() -> None:
+    now = datetime.now(UTC)
+    _state.set_cooldown("acc-x", now - timedelta(seconds=1), channel="@a")
+    assert _state.in_cooldown("acc-x", now, "@a") is False
+    # The expired key is dropped, not left to accumulate.
+    assert ("acc-x", "@a") not in _state._COOLDOWN_UNTIL
+
+
 @pytest.mark.asyncio
 async def test_account_in_cooldown_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")

@@ -25,12 +25,23 @@ def set_cooldown(account_id: str, until: datetime, channel: str | None = None) -
 
 
 def in_cooldown(account_id: str, now: datetime, channel: str | None = None) -> bool:
-    """True while the account is cooled account-wide or on ``channel``."""
-    for key in ((account_id, None), (account_id, channel)):
+    """True while the account is cooled account-wide or on ``channel``.
+
+    Lazily evicts each inspected key once it expires, so the live key set stays
+    bounded. ponytail: a channel never re-checked keeps its expired key until the
+    process restarts (in-memory, single-process); add a periodic sweep only if a
+    long-lived listener watches very many channels.
+    """
+    cooled = False
+    for key in {(account_id, None), (account_id, channel)}:
         until = _COOLDOWN_UNTIL.get(key)
-        if until is not None and until > now:
-            return True
-    return False
+        if until is None:
+            continue
+        if until > now:
+            cooled = True
+        else:
+            del _COOLDOWN_UNTIL[key]
+    return cooled
 
 
 def clear_cooldown(account_id: str, channel: str | None = None) -> None:
