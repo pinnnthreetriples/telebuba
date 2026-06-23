@@ -127,6 +127,7 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
             .props("dense outlined")
             .classes("w-full max-w-[400px]")
         )
+        await _render_runtime_controls()
         await section()
 
 
@@ -167,8 +168,8 @@ async def _render_setup(campaign_id: str) -> None:  # pragma: no cover
     with ui.card().classes("w-full p-4 gap-4"):
         ui.label("Настройка кампании").classes("text-base font-semibold")
         await _render_channel_pool(campaign_id)
-        listener_select = await _render_account_picker(campaign_id)
-        await _render_actions(campaign_id, listener_select)
+        await _render_account_picker(campaign_id)
+        await _render_actions(campaign_id)
 
 
 async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
@@ -215,24 +216,18 @@ async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
     await refresh()
 
 
-async def _render_account_picker(campaign_id: str) -> ui.select:  # pragma: no cover
+async def _render_account_picker(campaign_id: str) -> None:  # pragma: no cover
     ui.label("Аккаунты").classes("text-sm font-medium")
     accounts = (await list_accounts()).accounts
     assigned = {link.account_id for link in (await list_campaign_accounts(campaign_id)).links}
-    options = {acc.account_id: (acc.label or acc.account_id) for acc in accounts}
 
     async def on_toggle(account_id: str, checked: bool) -> None:  # noqa: FBT001
         if checked:
             await assign_account_to_campaign(campaign_id, account_id)
-            assigned.add(account_id)
             ui.notify("Аккаунт добавлен в кампанию", type="positive")
         else:
             await remove_account_from_campaign(campaign_id, account_id)
-            assigned.discard(account_id)
             ui.notify("Аккаунт убран из кампании", type="info")
-        # Keep the listener choices in sync so a just-(un)assigned account
-        # appears/disappears without a page reload.
-        listener_select.set_options({aid: options.get(aid, aid) for aid in assigned})
 
     with ui.column().classes("w-full gap-1"):
         if not accounts:
@@ -241,32 +236,36 @@ async def _render_account_picker(campaign_id: str) -> ui.select:  # pragma: no c
             )
         for acc in accounts:
             ui.checkbox(
-                options[acc.account_id],
+                acc.label or acc.account_id,
                 value=acc.account_id in assigned,
                 on_change=lambda e, aid=acc.account_id: on_toggle(aid, e.value),
             ).props("dense")
 
-    ui.label("Аккаунт-слушатель (читает посты и раздаёт их на комментирование)").classes(
-        "text-sm font-medium mt-2",
-    )
-    # Listener choices = the campaign's assigned accounts (the listener must be a
-    # serving account). Empty until at least one account is assigned; on_toggle
-    # keeps it in sync as accounts are added.
-    listener_select = (
-        ui.select({aid: options.get(aid, aid) for aid in assigned}, label="Слушатель")
-        .props("dense outlined")
-        .classes("w-full max-w-[400px]")
-    )
-    return listener_select
+
+async def _render_actions(campaign_id: str) -> None:  # pragma: no cover
+    async def on_onboard() -> None:
+        result = await onboard_campaign(campaign_id)
+        ready = sum(1 for o in result.outcomes if o.state == "ready")
+        ui.notify(f"Онбординг: готово пар — {ready} из {len(result.outcomes)}", type="info")
+
+    ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
 
 
-async def _render_actions(campaign_id: str, listener_select) -> None:  # noqa: ANN001  # pragma: no cover
-    with ui.column().classes("w-full gap-1"):
-
-        async def on_onboard() -> None:
-            result = await onboard_campaign(campaign_id)
-            ready = sum(1 for o in result.outcomes if o.state == "ready")
-            ui.notify(f"Онбординг: готово пар — {ready} из {len(result.outcomes)}", type="info")
+async def _render_runtime_controls() -> None:  # pragma: no cover
+    # Fleet-wide runtime: ONE listener reads posts across all active campaigns and
+    # the engine routes each post to its own campaign. Rendered once (not per
+    # campaign) so the controls match the single-listener runtime.
+    accounts = (await list_accounts()).accounts
+    with ui.card().classes("w-full p-4 gap-2"):
+        ui.label("Запуск нейрокомментинга (весь флот)").classes("text-base font-semibold")
+        listener_select = (
+            ui.select(
+                {acc.account_id: (acc.label or acc.account_id) for acc in accounts},
+                label="Аккаунт-слушатель",
+            )
+            .props("dense outlined")
+            .classes("w-full max-w-[400px]")
+        )
 
         async def on_start() -> None:
             listener = listener_select.value
@@ -281,16 +280,11 @@ async def _render_actions(campaign_id: str, listener_select) -> None:  # noqa: A
             ui.notify("Нейрокомментинг остановлен", type="info")
 
         with ui.row().classes("w-full items-center gap-2"):
-            ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
             ui.button("Запустить", icon="play_arrow", on_click=on_start).props("color=positive")
             ui.button("Остановить", icon="stop", on_click=on_stop).props("color=negative outline")
-        # The neurocomment runtime is one fleet-wide listener over the union of all
-        # active campaigns' channels (engine routes each post to its own campaign).
-        # Make that explicit so "Остановить" isn't mistaken for campaign-scoped.
         ui.label(
-            "Онбординг — для выбранной кампании. Запуск и остановка — на весь флот: "
-            "нейрокомментинг использует одного слушателя на все активные кампании, "
-            "поэтому «Остановить» останавливает все кампании сразу.",
+            "Один слушатель на все активные кампании; движок раздаёт посты по их "
+            "кампаниям. «Остановить» останавливает весь флот.",
         ).classes("text-xs text-slate-500")
 
 
