@@ -10,6 +10,7 @@ to keep each file small:
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
+- ``_listener``— standing NewMessage subscription → typed NewPostEvent callback
 - ``_media``   — profile photo / story / music actions
 
 Tests that monkeypatch internals target the submodule that owns the name
@@ -24,6 +25,11 @@ from core.telegram_client._client import (
     prepare_session_check_profile,
     prepare_telegram_client_profile,
     telegram_client,
+)
+from core.telegram_client._listener import (
+    stop_post_listener,
+    subscribe_posts,
+    update_post_subscription,
 )
 from core.telegram_client._pool import (
     TelegramClientPoolError,
@@ -53,5 +59,8 @@ __all__ = [
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
     "shutdown_telegram_pool",
+    "stop_post_listener",
+    "subscribe_posts",
     "telegram_client",
+    "update_post_subscription",
 ]
