@@ -435,6 +435,13 @@ def test_channel_backoff_escalates_and_caps() -> None:
     assert _state.channel_in_backoff("@a", now) is True
 
 
+def test_channel_backoff_first_trip_respects_cap() -> None:
+    now = datetime.now(UTC)
+    # A misconfigured base > max must still be capped on the very first trip.
+    seconds = _state.trip_channel_backoff("@a", now, base_seconds=5000.0, max_seconds=1000.0)
+    assert seconds == 1000.0
+
+
 def test_channel_backoff_is_per_channel() -> None:
     now = datetime.now(UTC)
     _state.trip_channel_backoff("@a", now, base_seconds=3600.0, max_seconds=7200.0)

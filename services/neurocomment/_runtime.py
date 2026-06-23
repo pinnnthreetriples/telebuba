@@ -204,11 +204,20 @@ async def _sweep_once() -> None:
 
 async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datetime) -> None:
     """Re-read one channel's recent comments; trip its back-off if too many are gone."""
+    if _state.channel_in_backoff(channel, now):
+        # Already cooled — skip the read and don't re-escalate. The same vanished
+        # comments stay in the lookback window for hours, so re-counting them every
+        # sweep would walk the back-off to its cap from a single deletion episode;
+        # escalation must advance only after a cooldown lapses and deletions persist.
+        return
     msg_ids = [c.comment_msg_id for c in comments if c.comment_msg_id is not None]
     if not msg_ids:
         return
     nc = settings.neurocomment
-    reader = comments[0].account_id  # posted there, so a member who can read the group
+    # ponytail: reads as one comment-author (a group member). If that account was
+    # later kicked, get_messages may report all ids gone (false trip) or raise (handled
+    # below); add a reader quorum / membership check only if the canary shows false trips.
+    reader = comments[0].account_id
     try:
         result = await _seams.execute_read(
             reader,

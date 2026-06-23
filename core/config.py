@@ -281,7 +281,7 @@ class NeurocommentSettings(BaseSettings):
     link_only_max_word_chars: int = Field(default=10, ge=0)
     # Grace period to await in-flight on-post tasks on shutdown before cancelling.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
-    # --- Ф2: deletion sweep → escalating channel back-off ---
+    # Ф2 deletion-sweep → escalating channel back-off.
     # How often the periodic sweep re-reads recent comments (0 disables the sweep).
     deletion_sweep_interval_seconds: float = Field(default=1800.0, ge=0.0)
     # How far back the sweep re-checks posted comments for deletion.

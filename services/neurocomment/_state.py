@@ -71,7 +71,7 @@ def trip_channel_backoff(
     ``2**prior`` to stay overflow-proof if a channel keeps tripping for a long time.
     """
     prior = _CHANNEL_TRIPS.get(channel, 0)
-    seconds = base_seconds
+    seconds = min(base_seconds, max_seconds)  # honour the cap even on the first trip
     for _ in range(prior):
         if seconds >= max_seconds:
             break

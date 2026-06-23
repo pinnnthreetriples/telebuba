@@ -438,3 +438,25 @@ async def test_sweep_disabled_when_interval_zero(monkeypatch: pytest.MonkeyPatch
         assert _runtime._SWEEP_TASK is None  # sweep disabled by config
     finally:
         await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_sweep_does_not_re_escalate_while_cooled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 2)
+    await _campaign_with_posted_comments("@a", [101, 102, 103])
+
+    reads = 0
+
+    async def fake_read(_account_id: str, action: CheckMessagesAlive) -> CheckMessagesAliveResult:
+        nonlocal reads
+        reads += 1
+        return CheckMessagesAliveResult(missing_ids=list(action.message_ids))  # all gone
+
+    monkeypatch.setattr("services.neurocomment._seams.execute_read", fake_read)
+
+    await _runtime._sweep_once()  # trips once
+    await _runtime._sweep_once()  # already cooled → skipped: no re-read, no re-escalation
+
+    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is True
+    assert _state._CHANNEL_TRIPS["@a"] == 1  # escalated exactly once, not per sweep
+    assert reads == 1  # the second sweep skipped the gateway read entirely
