@@ -36,6 +36,28 @@ last_updated: 2026-06-23
 - **Semantic dedup = local token-set Jaccard**, NOT Gemini embeddings — an embedding call on the first-commenter hot path is the wrong latency trade; group+window scoped, threshold `0` disables it. Exact-hash `try_reserve_sent` stays the atomic claim.
 - New gateway read action `CheckMessagesAlive`; all knobs in `settings.neurocomment`.
 
+### Neurocomment account selection — bulk signal load + cached spam on the post path
+**Date:** 2026-06-23
+**Status:** Implemented
+**Decision:** `engine._select_account` loads every selection signal in **one bulk pass** (accounts, per-channel readiness, warming state, cached spam, device fingerprints, and two `GROUP BY account_id` quota counts), then scores candidates purely in memory (mirrors `services/neurocomment/board`). Spam on the post path is read **from cache only** (`list_spam_statuses`); @SpamBot is **never re-probed during selection**. A one-shot spam probe is moved to **campaign onboarding** (`_probe_account_spam`) so a serving account always carries a verdict.
+**Reasoning:** The old path ran ~7 DB reads + a spam refresh + a trust read **per candidate** — O(N) per post — and a stale-cache candidate triggered a live @SpamBot probe on the hot path. Probing @SpamBot per post is itself a ban signal (the `refresh_spam_status` docstring says so). Bulk-loading makes selection cost flat in fleet size (the stated growth goal); cached-only spam removes the hot-path network call; onboarding owns freshness. `evaluate_readiness` blocks only on `spam == "limited"` and trust ignores `"unknown"`, so cached-only never *newly* blocks an account — it only stops re-probing.
+**Alternatives considered:**
+- *Keep per-account `refresh_spam_status` on selection* (rejected — doesn't scale, re-probes @SpamBot on the hot path).
+- *Hybrid: bulk DB + refresh only the chosen candidate's stale spam* (rejected — reintroduces hot-path network for the common case; complexity for no anti-ban win).
+**Consequences:** New `core/repositories/neurocomment/_quota.py` holds the per-account + bulk grouped count readers (extracted from `_comments.py` once it crossed the aislop 400-line budget). Migration **#13** adds three composite indexes (`account_id,status,created_at` / `channel,account_id,status,created_at` / `campaign_id,channel,status,created_at`) sized to the bulk query shapes — EXPLAIN QUERY PLAN confirms all three are used (two covering). `_recent_channel_comments` now uses a channel-scoped SQL read instead of load-all-and-filter. The per-account count readers stay as public API + the parity-test oracle. Story-image normalization is offloaded via `asyncio.to_thread` (was blocking the NiceGUI loop). **Deferred (`# ponytail`):** the select→claim micro-race (a per-account lock would close it); unbounded per-post tasks (semaphore if volume grows).
+
+### Architecture enforcement — features→core allowlist as an executable firewall
+**Date:** 2026-06-23
+**Status:** Implemented
+**Decision:** The "UI-thin" rule (#1) + gateway rule (#6) are now an **executable test**, not prose: `tests/test_architecture.py` enforces that `features/**` may import from `core` **only** `core.config` + `core.logging`; every other core module (db, repositories, telegram_client, gemini) fails the build. The firewall also runs as a **pre-push hook** (`arch-guard`).
+**Reasoning:** Documentation is a "wish" for an agent; only a failing check constrains it. The prior arch test banned only `sqlalchemy`/`telethon` from features, so `features/neurocomment/_page.py` had drifted to importing `core.db` (9 functions) + a repository — a #1/#6 violation prose didn't hold. An allowlist (config+logging) is more future-proof than a denylist: it also blocks the next temptation (`core.telegram_client`, `core.gemini`).
+**Alternatives considered:**
+- *`import-linter` or a bespoke `tools/arch_guard.py` + YAML DSL* (rejected — the repo's AST-based `test_architecture.py` already does this; a second tool/DSL is duplication).
+- *Denylist `{core.db, core.repositories}`* (rejected — misses future core modules).
+- *GitHub branch-protection required checks* (unavailable — private repo on the free plan; the pre-push hook + red CI are the teeth instead; GitHub Pro would enable hard merge-blocking).
+- *PR checklist / CODEOWNERS* (rejected for the agent problem — both gate human review, not the agent, and are theater on a solo repo).
+**Consequences:** `_page.py`'s direct `core.db`/repository use moved behind a new `services/neurocomment/campaigns.py`; its `link_channel` converts the repository's `ChannelAlreadyAssignedError` into a typed `ChannelLinkOutcome` so the exception never crosses into the UI (#2). The account list comes via the existing `services.accounts` re-export. The campaign-setup service functions are thin pass-throughs — the accepted cost of the layer rule.
+
 ### Warming audit — scheduling, resilience, and UX fixes
 **Date:** 2026-06-20
 **Status:** Implemented

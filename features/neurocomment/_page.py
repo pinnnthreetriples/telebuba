@@ -12,22 +12,19 @@ from typing import TYPE_CHECKING
 from nicegui import context, ui
 
 from core.config import settings
-from core.db import (
+from schemas.neurocomment import CampaignCreate
+from services.accounts import list_accounts
+from services.neurocomment import (
     assign_account_to_campaign,
     create_campaign,
     deactivate_channel,
-    link_channel_to_campaign,
-    list_accounts,
+    link_channel,
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
-    remove_account_from_campaign,
-)
-from core.repositories.neurocomment import ChannelAlreadyAssignedError
-from schemas.neurocomment import CampaignCreate
-from services.neurocomment import (
     load_neurocomment_board,
     onboard_campaign,
+    remove_account_from_campaign,
     start_neurocomment,
     stop_neurocomment,
 )
@@ -200,9 +197,8 @@ async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
         if not channel:
             ui.notify("Введите канал", type="warning")
             return
-        try:
-            await link_channel_to_campaign(campaign_id, channel)
-        except ChannelAlreadyAssignedError:
+        outcome = await link_channel(campaign_id, channel)
+        if outcome.status == "already_assigned":
             ui.notify("Канал уже активен в другой кампании", type="warning")
             return
         channel_input.value = ""

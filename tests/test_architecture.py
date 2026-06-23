@@ -23,6 +23,11 @@ from core.config import Settings, settings
 
 _ROOT = Path(__file__).resolve().parent.parent
 
+# Features are UI-thin: from `core` they may import only these cross-cutting modules
+# (settings + logging). Every other core module — db, repositories, telegram_client,
+# gemini — is a gateway / business concern reached through `services/`.
+_FEATURES_CORE_ALLOWED = frozenset({"core.config", "core.logging"})
+
 
 def _imported_modules(path: Path) -> set[str]:
     """All absolute imports in ``path`` as fully-qualified module names."""
@@ -79,6 +84,23 @@ def _feature_of(path: Path) -> str | None:
 def test_features_do_not_import_telethon_or_sqlalchemy() -> None:
     # Features are UI-thin: no DB or Telegram SDK at all.
     assert _violations("features", {"sqlalchemy", "telethon"}) == []
+
+
+def test_features_import_from_core_only_config_and_logging() -> None:
+    """Features may touch ``core`` only via config + logging — the executable form of #1/#6.
+
+    A feature that reaches ``core.db``, a repository, or ``core.telegram_client`` directly
+    fails the build, not just review: business logic and gateways live behind ``services/``.
+    """
+    out: list[str] = []
+    for path in _python_modules("features"):
+        for module in _imported_modules(path):
+            if module != "core" and not module.startswith("core."):
+                continue
+            top_two = ".".join(module.split(".")[:2])
+            if top_two not in _FEATURES_CORE_ALLOWED:
+                out.append(f"{path.relative_to(_ROOT).as_posix()} imports {module}")
+    assert out == [], f"features may import only core.config / core.logging, found: {out}"
 
 
 def test_no_cross_feature_imports() -> None:

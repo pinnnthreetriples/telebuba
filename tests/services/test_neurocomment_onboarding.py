@@ -24,6 +24,7 @@ from core.db import (
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
+from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, LinkedDiscussionGroupResult
 from services import neurocomment
 from services.neurocomment import _seams, onboarding
@@ -42,6 +43,8 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
     reset_logging_for_tests()
     setup_logging()
+    # onboard_campaign probes each account's spam once; keep it off the network.
+    monkeypatch.setattr(_seams, "refresh_spam_status", _clean_spam)
     yield
     reset_logging_for_tests()
 
@@ -101,6 +104,12 @@ def _no_sleep(records: list[float]) -> object:
         records.append(seconds)
 
     return _sleep
+
+
+async def _clean_spam(account_id: str, **_kwargs: object) -> SpamStatusVerdict:
+    return SpamStatusVerdict(
+        account_id=account_id, status="clean", checked_at="2026-01-01T00:00:00"
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -411,3 +420,59 @@ async def test_campaign_resolve_failure_does_not_abort_rest(
     states = {o.channel: o.state for o in result.outcomes}
     assert states["@bad"] == "failed"  # resolve raise recorded, loop not aborted
     assert states["@good"] == "ready"  # the later channel still onboarded
+
+
+@pytest.mark.asyncio
+async def test_campaign_probes_spam_once_per_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    for acc in ("acc-1", "acc-2"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@one")
+    await link_channel_to_campaign(campaign.campaign_id, "@two")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
+
+    probed: list[str] = []
+
+    async def _record(account_id: str, **_kwargs: object) -> SpamStatusVerdict:
+        probed.append(account_id)
+        return SpamStatusVerdict(
+            account_id=account_id, status="clean", checked_at="2026-01-01T00:00:00"
+        )
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", _record)
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(_seams.rng, "uniform", lambda _a, _b: 0.0)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    # Once per serving account, not once per (account, channel) pair (2 accts x 2 chans).
+    assert sorted(probed) == ["acc-1", "acc-2"]
+
+
+@pytest.mark.asyncio
+async def test_campaign_spam_probe_failure_does_not_abort(monkeypatch: pytest.MonkeyPatch) -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    async def _boom(_account_id: str, **_kwargs: object) -> object:
+        msg = "spambot unreachable"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", _boom)
+    read = _ReadStub(linked_chat_id=1, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    result = await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    # A spam-probe failure is logged, never fatal — onboarding still joins.
+    assert [o.state for o in result.outcomes] == ["ready"]

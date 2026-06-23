@@ -20,19 +20,22 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.db import (
     claim_comment,
-    count_account_channel_comments_since,
-    count_account_comments_since,
-    fetch_account,
+    count_channel_comments_per_account_since,
+    count_comments_per_account_since,
     fetch_active_campaign_for_channel,
-    fetch_readiness,
+    list_accounts,
     list_campaign_accounts,
     list_campaign_channels,
-    list_posted_comments_since,
+    list_campaign_readiness,
+    list_device_fingerprints,
+    list_posted_comments_for_channel_since,
+    list_spam_statuses,
+    list_warming_states,
     mark_comment_failed,
     mark_comment_posted,
     upsert_readiness,
@@ -48,11 +51,15 @@ from services.content import (
     try_reserve_sent,
 )
 from services.neurocomment import _seams, _state
-from services.trust import account_trust_score
+from services.trust import account_trust_score_from
 from services.warming.pacing import evaluate_readiness
 
 if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
+    from schemas.device_fingerprint import DeviceFingerprint
     from schemas.neurocomment import NeurocommentCampaign
+    from schemas.spam_status import SpamStatusVerdict
+    from schemas.warming import WarmingStateRecord
 
 # Joined the group but writes are forbidden → a captcha/gate we detect and skip
 # (mirrors onboarding's set). Flip readiness so the pair is no longer selected.
@@ -158,59 +165,127 @@ def _is_link_only(text: str) -> bool:
     return len(stripped) <= settings.neurocomment.link_only_max_word_chars
 
 
+class _SelectionPool(NamedTuple):
+    """Bulk-loaded signals to score every candidate in one pass (no per-account I/O)."""
+
+    accounts: dict[str, AccountRead]
+    ready_account_ids: frozenset[str]  # accounts ready for THIS channel
+    states: dict[str, WarmingStateRecord]
+    spam: dict[str, SpamStatusVerdict]
+    fingerprints: dict[str, DeviceFingerprint]
+    hourly_counts: dict[str, int]
+    daily_counts: dict[str, int]
+
+
+async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) -> _SelectionPool:
+    """Bulk-read every selection signal once (mirrors ``services.neurocomment.board``)."""
+    nc = settings.neurocomment
+    accounts = {acc.account_id: acc for acc in (await list_accounts()).accounts}
+    ready_account_ids = frozenset(
+        r.account_id
+        for r in (await list_campaign_readiness(campaign_id)).readiness
+        if r.channel == channel and r.ready
+    )
+    states = {rec.account_id: rec for rec in await list_warming_states()}
+    spam = await list_spam_statuses()
+    fingerprints = await list_device_fingerprints()
+
+    hour_ago = (now - timedelta(hours=1)).isoformat()
+    hourly_rows = (await count_comments_per_account_since(hour_ago)).counts
+    hourly = {c.account_id: c.count for c in hourly_rows}
+    daily: dict[str, int] = {}
+    if nc.max_comments_per_channel_per_day > 0:
+        day_ago = (now - timedelta(days=1)).isoformat()
+        daily_rows = (await count_channel_comments_per_account_since(channel, day_ago)).counts
+        daily = {c.account_id: c.count for c in daily_rows}
+    return _SelectionPool(
+        accounts=accounts,
+        ready_account_ids=ready_account_ids,
+        states=states,
+        spam=spam,
+        fingerprints=fingerprints,
+        hourly_counts=hourly,
+        daily_counts=daily,
+    )
+
+
 async def _select_account(campaign: NeurocommentCampaign, channel: str) -> str | None:
-    """Pick one ready, healthy, under-quota, non-cooled account at random."""
-    links = (await list_campaign_accounts(campaign.campaign_id)).links
+    """Pick one ready, healthy, under-quota, non-cooled account at random.
+
+    Every signal is bulk-loaded once (mirroring ``services.neurocomment.board``), so
+    selection scores N candidates from a handful of queries instead of ~7 per
+    account — the cost stays flat as the fleet grows. Spam status is read from the
+    cache and never re-probed here: probing @SpamBot per post is itself a ban
+    signal, so warming/onboarding own spam freshness.
+    """
+    account_ids = [
+        link.account_id for link in (await list_campaign_accounts(campaign.campaign_id)).links
+    ]
+    if not account_ids:
+        return None
     channel_count = max(1, len((await list_campaign_channels(campaign.campaign_id)).links))
     now = datetime.now(UTC)
+    pool = await _load_selection_pool(campaign.campaign_id, channel, now)
     candidates = [
-        link.account_id
-        for link in links
-        if await _is_eligible(link.account_id, channel, channel_count, now)
+        account_id
+        for account_id in account_ids
+        if _is_eligible(account_id, channel, channel_count, now, pool)
     ]
     if not candidates:
         return None
     return _seams.rng.choice(candidates)
 
 
-async def _is_eligible(account_id: str, channel: str, channel_count: int, now: datetime) -> bool:
+def _is_eligible(
+    account_id: str,
+    channel: str,
+    channel_count: int,
+    now: datetime,
+    pool: _SelectionPool,
+) -> bool:
     if _state.in_cooldown(account_id, now, channel):
         return False
-    readiness = await fetch_readiness(account_id, channel)
-    if readiness is None or not readiness.ready:
+    if account_id not in pool.ready_account_ids:
         return False
-    if not await _is_healthy(account_id, channel_count):
-        return False
-    return await _under_quota(account_id, channel, now)
-
-
-async def _is_healthy(account_id: str, channel_count: int) -> bool:
-    """Reuse the warming readiness gate as the account health check."""
-    account = await fetch_account(account_id)
+    account = pool.accounts.get(account_id)
     if account is None:
         return False
-    spam = await _seams.refresh_spam_status(account_id, force=False)
-    trust = await account_trust_score(account_id)
+    if not _is_healthy(account, channel_count, now, pool):
+        return False
+    return _under_quota(account_id, pool)
+
+
+def _is_healthy(
+    account: AccountRead,
+    channel_count: int,
+    now: datetime,
+    pool: _SelectionPool,
+) -> bool:
+    """Warming readiness gate + Trust Score, scored from already-loaded signals."""
+    spam = pool.spam.get(account.account_id)
+    fingerprint = pool.fingerprints.get(account.account_id)
+    trust = account_trust_score_from(
+        account=account,
+        record=pool.states.get(account.account_id),
+        spam=spam,
+        lang_code=fingerprint.system_lang_code if fingerprint else None,
+        now=now,
+    )
     health = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
     return health.ready
 
 
-async def _under_quota(account_id: str, channel: str, now: datetime) -> bool:
+def _under_quota(account_id: str, pool: _SelectionPool) -> bool:
     # Quota counts in-flight claims AND delivered comments (status in claimed/posted),
     # so a burst arriving inside one account's reply-delay window can't stack past the
     # cap — each claim consumes quota the moment it is won.
     # ponytail: a sub-millisecond race still exists in the select->claim gap; a
     # per-account asyncio.Lock would close it fully if it ever bites.
     nc = settings.neurocomment
-    hour_ago = (now - timedelta(hours=1)).isoformat()
-    if await count_account_comments_since(account_id, hour_ago) >= nc.max_comments_per_hour:
-        return False
-    if nc.max_comments_per_channel_per_day > 0:
-        day_ago = (now - timedelta(days=1)).isoformat()
-        used = await count_account_channel_comments_since(account_id, channel, day_ago)
-        if used >= nc.max_comments_per_channel_per_day:
-            return False
-    return True
+    day_cap = nc.max_comments_per_channel_per_day
+    over_hour = pool.hourly_counts.get(account_id, 0) >= nc.max_comments_per_hour
+    over_day = day_cap > 0 and pool.daily_counts.get(account_id, 0) >= day_cap
+    return not (over_hour or over_day)
 
 
 async def _generate_and_post(
@@ -279,8 +354,8 @@ async def _recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
     if nc.semantic_dedup_threshold <= 0:
         return []
     since = (datetime.now(UTC) - timedelta(hours=nc.semantic_dedup_window_hours)).isoformat()
-    posted = await list_posted_comments_since(campaign_id, since)
-    return [c.comment_text or "" for c in posted.comments if c.channel == channel]
+    posted = await list_posted_comments_for_channel_since(campaign_id, channel, since)
+    return [c.comment_text or "" for c in posted.comments]
 
 
 def _build_request(prompt: str, post_text: str) -> GeminiRequest:
