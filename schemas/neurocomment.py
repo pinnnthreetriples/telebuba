@@ -114,3 +114,37 @@ class CommentRecord(BaseModel):
     comment_msg_id: int | None = None
     created_at: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
+
+
+# --------------------------------------------------------------------------- #
+# Onboarding (issue #117) — prepare (account, channel) pairs ahead of a post.
+# --------------------------------------------------------------------------- #
+
+OnboardingState = Literal[
+    "ready",
+    "comments_off",
+    "join_by_request",
+    "captcha_gated",
+    "joining",
+    "failed",
+]
+
+
+class AccountChannelOnboarding(BaseModel):
+    """Outcome of preparing one account to comment on one channel.
+
+    ``reason`` carries a short human note for the non-``ready`` states (the
+    flood-wait detail, the failing error type, etc.).
+    """
+
+    account_id: str = Field(min_length=1)
+    channel: str = Field(min_length=1)
+    state: OnboardingState
+    reason: str | None = None
+
+
+class CampaignOnboardingResult(BaseModel):
+    """Per-campaign roll-up of every (account, channel) onboarding outcome."""
+
+    campaign_id: str = Field(min_length=1)
+    outcomes: list[AccountChannelOnboarding] = Field(default_factory=list)

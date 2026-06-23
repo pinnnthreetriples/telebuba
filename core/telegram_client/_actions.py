@@ -12,7 +12,11 @@ from telethon.tl.functions.account import (
     UpdateStatusRequest,
     UpdateUsernameRequest,
 )
-from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
+from telethon.tl.functions.channels import (
+    GetFullChannelRequest,
+    JoinChannelRequest,
+    LeaveChannelRequest,
+)
 from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 
@@ -28,6 +32,7 @@ from schemas.telegram_actions import (
     ClickButton,
     CommentOnPost,
     JoinChannel,
+    JoinDiscussionGroup,
     LeaveChannel,
     PostComment,
     PostStory,
@@ -134,10 +139,10 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
             account_id, action, status="flood_wait", seconds=exc.seconds
         )
     except errors.UserAlreadyParticipantError as exc:
-        if action.action_type == "join_channel":
+        if action.action_type in {"join_channel", "join_discussion_group"}:
             await log_event(
                 "INFO",
-                "telegram_join_channel_already_participant",
+                f"telegram_{action.action_type}_already_participant",
                 account_id=account_id,
                 extra={"channel": getattr(action, "channel", None)},
             )
@@ -195,6 +200,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
                 await client(ImportChatInviteRequest(hash=hash_str))
             else:
                 await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+        case JoinDiscussionGroup():
+            await _dispatch_join_discussion_group(client, action)
         case LeaveChannel():
             await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
         case PostComment():
@@ -282,6 +289,35 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     return message_id
 
 
+async def _dispatch_join_discussion_group(
+    client: TelegramClient,
+    action: JoinDiscussionGroup,
+) -> None:
+    """Resolve ``channel``'s linked discussion group and join it.
+
+    ``GetFullChannelRequest`` returns a ``messages.ChatFull`` whose ``full_chat``
+    carries ``linked_chat_id`` and whose ``chats`` list holds the resolved
+    ``Channel`` entities (with ``access_hash``). We join that entity directly —
+    the linked group has no username, so it can't be joined by handle. A
+    ``None`` ``linked_chat_id`` (comments disabled) raises ``ValueError`` so the
+    executor classifies it as a generic failure rather than silently no-op.
+    """
+    full = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+    linked = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
+    if linked is None:
+        msg = f"No linked discussion group for {action.channel!r}"
+        raise ValueError(msg)
+    linked_id = int(linked)
+    entity = next(
+        (chat for chat in getattr(full, "chats", []) if int(getattr(chat, "id", 0)) == linked_id),
+        None,
+    )
+    if entity is None:
+        msg = f"Linked group {linked_id} not in ChatFull.chats for {action.channel!r}"
+        raise ValueError(msg)
+    await client(JoinChannelRequest(channel=entity))
+
+
 async def _dispatch_click_button(client: TelegramClient, action: ClickButton) -> None:
     """Click an inline button on a stored message; no-op if the message is gone.
 
@@ -302,7 +338,7 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
     """Compact summary of an action for log extras — no payload secrets."""
     extra: dict[str, object]
     match action:
-        case JoinChannel() | LeaveChannel() | ReadChannel() | ReactToPost():
+        case JoinChannel() | JoinDiscussionGroup() | LeaveChannel() | ReadChannel() | ReactToPost():
             extra = {"channel": action.channel}
         case PostComment():
             extra = {"chat_id": action.chat_id}

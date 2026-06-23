@@ -20,6 +20,18 @@ class JoinChannel(BaseModel):
     channel: str = Field(min_length=1)
 
 
+class JoinDiscussionGroup(BaseModel):
+    """Join the discussion group linked to ``channel`` (for commenting).
+
+    The linked group usually has no username, so it can't be joined by handle.
+    The gateway resolves it from the parent channel (``GetFullChannelRequest``)
+    and joins the resolved ``Channel`` entity — entity juggling stays in core/.
+    """
+
+    action_type: Literal["join_discussion_group"] = "join_discussion_group"
+    channel: str = Field(min_length=1)
+
+
 class LeaveChannel(BaseModel):
     action_type: Literal["leave_channel"] = "leave_channel"
     channel: str = Field(min_length=1)
@@ -219,6 +231,7 @@ class ListProfilePhotos(BaseModel):
 
 TelegramAction = Annotated[
     JoinChannel
+    | JoinDiscussionGroup
     | LeaveChannel
     | PostComment
     | CommentOnPost

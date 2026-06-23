@@ -15,7 +15,11 @@ from telethon.tl.functions.account import (
     UpdateProfileRequest,
     UpdateUsernameRequest,
 )
-from telethon.tl.functions.channels import JoinChannelRequest, LeaveChannelRequest
+from telethon.tl.functions.channels import (
+    GetFullChannelRequest,
+    JoinChannelRequest,
+    LeaveChannelRequest,
+)
 from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
 from telethon.tl.functions.stories import (
     CanSendStoryRequest,
@@ -35,6 +39,7 @@ from schemas.telegram_actions import (
     ClickButton,
     CommentOnPost,
     JoinChannel,
+    JoinDiscussionGroup,
     LeaveChannel,
     PostComment,
     PostStory,
@@ -881,3 +886,89 @@ async def test_execute_handles_generic_failure(monkeypatch: pytest.MonkeyPatch) 
     assert result.status == "failed"
     assert result.error_type == "RuntimeError"
     assert result.error_message == "boom"
+
+
+# --------------------------------------------------------------------------- #
+# JoinDiscussionGroup — resolve the linked group from the parent, then join it
+# --------------------------------------------------------------------------- #
+
+
+def _chat_full(linked_chat_id: int | None, *, chat_ids: tuple[int, ...]) -> MagicMock:
+    """Build a fake ``messages.ChatFull`` with a ``full_chat`` + ``chats`` list."""
+    full = MagicMock()
+    full.full_chat = MagicMock(linked_chat_id=linked_chat_id)
+    full.chats = [MagicMock(id=cid) for cid in chat_ids]
+    return full
+
+
+@pytest.mark.asyncio
+async def test_join_discussion_group_joins_resolved_entity(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    captured: list[object] = []
+    linked_entity = MagicMock(id=4423)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, GetFullChannelRequest):
+                full = MagicMock()
+                full.full_chat = MagicMock(linked_chat_id=4423)
+                full.chats = [MagicMock(id=999), linked_entity]
+                return full
+            return None
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-1", JoinDiscussionGroup(channel="@news"))
+
+    assert result.status == "ok"
+    assert result.action_type == "join_discussion_group"
+    join_reqs = [r for r in captured if isinstance(r, JoinChannelRequest)]
+    assert len(join_reqs) == 1
+    # joined the resolved linked entity, not the parent channel
+    assert join_reqs[0].channel is linked_entity
+
+
+@pytest.mark.asyncio
+async def test_join_discussion_group_already_participant_is_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, GetFullChannelRequest):
+                return _chat_full(4423, chat_ids=(4423,))
+            raise errors.UserAlreadyParticipantError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-2", JoinDiscussionGroup(channel="@news"))
+
+    assert result.status == "ok"
+    assert result.action_type == "join_discussion_group"
+
+
+@pytest.mark.asyncio
+async def test_join_discussion_group_no_linked_group_classified_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            assert isinstance(request, GetFullChannelRequest)
+            return _chat_full(None, chat_ids=())
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-3", JoinDiscussionGroup(channel="@silent"))
+
+    assert result.status == "failed"
+    assert result.error_type == "ValueError"
