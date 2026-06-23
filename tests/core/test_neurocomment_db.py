@@ -205,6 +205,20 @@ async def test_comment_claim_is_idempotent_and_records_outcome() -> None:
     assert await mark_comment_posted("@chan", 999, comment_text="x", comment_msg_id=1) is None
 
 
+@pytest.mark.asyncio
+async def test_mark_comment_does_not_override_a_terminal_status() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    assert await claim_comment("@chan", 100, campaign.campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 100, comment_text="nice", comment_msg_id=555)
+
+    # A late failure must not flip an already-posted claim back to failed.
+    result = await mark_comment_failed("@chan", 100)
+    assert result is not None
+    assert result.status == "posted"
+    assert result.comment_text == "nice"
+
+
 # --------------------------------------------------------------------------- #
 # Engine helpers (issue #118): throughput windows + listener watch set.
 # --------------------------------------------------------------------------- #

@@ -238,7 +238,10 @@ def _mark_comment(
             update(_neurocomment_comments)
             .where(
                 (_neurocomment_comments.c.channel == channel)
-                & (_neurocomment_comments.c.post_id == post_id),
+                & (_neurocomment_comments.c.post_id == post_id)
+                # Idempotent: never re-transition a claim that already reached a
+                # terminal outcome (a late failure can't unposted a posted comment).
+                & _neurocomment_comments.c.status.notin_(("posted", "failed")),
             )
             .values(**values),
         )
@@ -250,7 +253,7 @@ async def mark_comment_posted(
     post_id: int,
     *,
     comment_text: str,
-    comment_msg_id: int,
+    comment_msg_id: int | None,
 ) -> CommentRecord | None:
     """Mark a claimed comment as posted. ``None`` if the post was never claimed."""
     return await asyncio.to_thread(

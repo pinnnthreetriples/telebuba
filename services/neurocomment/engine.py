@@ -157,7 +157,7 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> str |
 
 
 async def _is_eligible(account_id: str, channel: str, channel_count: int, now: datetime) -> bool:
-    if _state.in_cooldown(account_id, now):
+    if _state.in_cooldown(account_id, now, channel):
         return False
     readiness = await fetch_readiness(account_id, channel)
     if readiness is None or not readiness.ready:
@@ -265,12 +265,12 @@ async def _classify_post(
     result: ActionResult,
 ) -> None:
     if result.status == "ok":
-        _state.clear_cooldown(account_id)
+        _state.clear_cooldown(account_id, event.channel)
         await mark_comment_posted(
             event.channel,
             event.post_id,
             comment_text=text,
-            comment_msg_id=result.message_id or 0,
+            comment_msg_id=result.message_id,
         )
         await log_event(
             "INFO",
@@ -287,7 +287,10 @@ async def _classify_post(
     if result.status in _COOLDOWN_STATUSES:
         # ponytail: MVP drops the lost post — it is NOT requeued for another
         # account. Post volume is low; a requeue is a follow-up if it bites.
-        _apply_cooldown(account_id, result.flood_wait_seconds)
+        # slow-mode is per-chat → cool only this channel; flood/peer-flood/premium
+        # are account-wide.
+        scope = event.channel if result.status == "slow_mode_wait" else None
+        _apply_cooldown(account_id, result.flood_wait_seconds, scope)
         event_name = "neurocomment_post_cooldown"
     elif result.error_type in _GATE_ERRORS:
         # Lazy captcha/gate: stop selecting this (account, channel) until re-onboarded.
@@ -309,10 +312,10 @@ async def _classify_post(
     )
 
 
-def _apply_cooldown(account_id: str, flood_wait_seconds: int | None) -> None:
-    """Park the account: use the flood duration, else the peer-flood config default."""
+def _apply_cooldown(account_id: str, flood_wait_seconds: int | None, channel: str | None) -> None:
+    """Park ``(account, channel)``: flood duration, else the peer-flood config default."""
     seconds = flood_wait_seconds
     if seconds is None:
         # peer_flood (and any wait without a duration) → config cooldown.
         seconds = int(settings.neurocomment.peer_flood_cooldown_seconds)
-    _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds))
+    _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds), channel)

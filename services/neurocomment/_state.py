@@ -10,26 +10,33 @@ from __future__ import annotations
 
 from datetime import datetime  # noqa: TC003 - runtime type for the public helpers
 
-# account_id -> earliest UTC time the account may comment again.
-_COOLDOWN_UNTIL: dict[str, datetime] = {}
+# (account_id, channel) -> earliest UTC time it may comment again. channel=None is
+# an account-wide cooldown (flood/peer-flood); a channel scopes it to that chat
+# (slow-mode is per-chat, so it must not park the account everywhere).
+_COOLDOWN_UNTIL: dict[tuple[str, str | None], datetime] = {}
 
 
-def set_cooldown(account_id: str, until: datetime) -> None:
-    """Park an account until ``until`` (extends an existing, later cooldown)."""
-    current = _COOLDOWN_UNTIL.get(account_id)
+def set_cooldown(account_id: str, until: datetime, channel: str | None = None) -> None:
+    """Park ``(account, channel)`` until ``until`` (extends an existing, later cooldown)."""
+    key = (account_id, channel)
+    current = _COOLDOWN_UNTIL.get(key)
     if current is None or until > current:
-        _COOLDOWN_UNTIL[account_id] = until
+        _COOLDOWN_UNTIL[key] = until
 
 
-def in_cooldown(account_id: str, now: datetime) -> bool:
-    """True while the account is still inside its cooldown window."""
-    until = _COOLDOWN_UNTIL.get(account_id)
-    return until is not None and until > now
+def in_cooldown(account_id: str, now: datetime, channel: str | None = None) -> bool:
+    """True while the account is cooled account-wide or on ``channel``."""
+    for key in ((account_id, None), (account_id, channel)):
+        until = _COOLDOWN_UNTIL.get(key)
+        if until is not None and until > now:
+            return True
+    return False
 
 
-def clear_cooldown(account_id: str) -> None:
-    """Drop an account's cooldown (called on a successful post)."""
-    _COOLDOWN_UNTIL.pop(account_id, None)
+def clear_cooldown(account_id: str, channel: str | None = None) -> None:
+    """Drop an account's account-wide and ``channel`` cooldowns (called on a successful post)."""
+    _COOLDOWN_UNTIL.pop((account_id, None), None)
+    _COOLDOWN_UNTIL.pop((account_id, channel), None)
 
 
 def reset_for_tests() -> None:

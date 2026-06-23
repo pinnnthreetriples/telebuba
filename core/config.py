@@ -14,7 +14,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from pydantic import Field
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -281,6 +281,16 @@ class NeurocommentSettings(BaseSettings):
     link_only_max_word_chars: int = Field(default=10, ge=0)
     # Grace period to await in-flight on-post tasks on shutdown before cancelling.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
+
+    @model_validator(mode="after")
+    def _check_delay_bounds(self) -> NeurocommentSettings:
+        if self.reply_delay_min_seconds > self.reply_delay_max_seconds:
+            msg = "reply_delay_min_seconds must not exceed reply_delay_max_seconds"
+            raise ValueError(msg)
+        if self.join_delay_min_seconds > self.join_delay_max_seconds:
+            msg = "join_delay_min_seconds must not exceed join_delay_max_seconds"
+            raise ValueError(msg)
+        return self
 
 
 class Settings(BaseSettings):
