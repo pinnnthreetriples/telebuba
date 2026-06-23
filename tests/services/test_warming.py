@@ -118,8 +118,13 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     reset_logging_for_tests()
     setup_logging()
     warming._RUNTIME.clear()
+    # _ACCOUNT_LOCKS are module-level and bound to the loop alive when created;
+    # clear them too so each test gets fresh locks — needed when a runner like
+    # mutmut drives several pytest sessions in one process (the loop changes).
+    warming._ACCOUNT_LOCKS.clear()
     yield
     warming._RUNTIME.clear()
+    warming._ACCOUNT_LOCKS.clear()
     reset_logging_for_tests()
 
 
