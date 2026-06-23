@@ -171,6 +171,21 @@ class GetLinkedDiscussionGroup(BaseModel):
     channel: str = Field(min_length=1)
 
 
+class CheckMessagesAlive(BaseModel):
+    """Read-only: re-read ``message_ids`` in ``channel``'s linked discussion group.
+
+    The neurocomment deletion sweep posts comments via ``comment_to``, so they
+    live in the channel's linked discussion group, not the broadcast channel.
+    The gateway resolves that group and batch-reads the ids; a ``get_messages``
+    ``None`` means the message was deleted/inaccessible → its id is returned in
+    ``missing_ids``.
+    """
+
+    action_type: Literal["check_messages_alive"] = "check_messages_alive"
+    channel: str = Field(min_length=1)
+    message_ids: list[int]
+
+
 class GetUserProfile(BaseModel):
     """Read-only: pull the signed-in user's own current profile state."""
 
@@ -252,6 +267,7 @@ TelegramAction = Annotated[
 
 TelegramReadAction = Annotated[
     GetLinkedDiscussionGroup
+    | CheckMessagesAlive
     | GetUserProfile
     | ListPinnedStories
     | ListActiveStories
@@ -270,6 +286,12 @@ class LinkedDiscussionGroupResult(BaseModel):
 
     linked_chat_id: int | None = None
     comments_enabled: bool
+
+
+class CheckMessagesAliveResult(BaseModel):
+    """Gateway output for ``CheckMessagesAlive`` — the ids that no longer exist."""
+
+    missing_ids: list[int]
 
 
 ActionStatus = Literal[

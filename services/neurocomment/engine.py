@@ -94,6 +94,16 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         )
         return
 
+    if _state.channel_in_backoff(event.channel, datetime.now(UTC)):
+        # The deletion sweep backed this channel off (mass comment deletions); skip
+        # before account selection so we stop commenting until the cooldown expires.
+        await log_event(
+            "INFO",
+            "neurocomment_channel_cooled",
+            extra={"channel": event.channel, "post_id": event.post_id},
+        )
+        return
+
     account_id = await _select_account(campaign, event.channel)
     if account_id is None:
         await log_event(

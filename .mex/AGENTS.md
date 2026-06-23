@@ -32,7 +32,7 @@ telebuba/
 │   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
 │   │   ├── _pool.py           client pool management
-│   │   ├── _read.py           message reading actions
+│   │   ├── _read.py           message reading actions (incl. CheckMessagesAlive deletion probe)
 │   │   ├── _read_stories.py   story reading actions
 │   │   ├── _listener.py       standing post listener (subscribe_posts/stop_post_listener) for neurocomment
 │   │   └── _video.py          video/media actions
@@ -43,7 +43,7 @@ telebuba/
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile/proxy operations
 │   ├── warming/            runtime workflow domain package
-│   ├── neurocomment/       campaign comment automation: onboarding.py (pre-join+readiness), engine.py (on-post pipeline handle_new_post), _runtime.py (listener wiring + per-post task ownership + start/stop/reconcile-on-startup entrypoints), board.py (work-view read model, bulk-loaded), _state.py (transient cooldowns), _seams.py (execute/generate_text/refresh_spam_status/rng)
+│   ├── neurocomment/       campaign comment automation: onboarding.py (pre-join+readiness), engine.py (on-post pipeline handle_new_post), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints), board.py (work-view read model, bulk-loaded), _state.py (transient per-account cooldowns + escalating channel deletion back-off), _seams.py (execute/generate_text/refresh_spam_status/rng)
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
 │   ├── logs.py             log query helpers for the Logs page

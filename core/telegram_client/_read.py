@@ -12,7 +12,7 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, cast
 
 from telethon import errors
 from telethon.tl.functions.channels import GetFullChannelRequest
@@ -32,6 +32,8 @@ from core.telegram_client._read_stories import (
     dispatch_list_pinned_stories,
 )
 from schemas.telegram_actions import (
+    CheckMessagesAlive,
+    CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
     GetUserProfile,
     LinkedDiscussionGroupResult,
@@ -127,13 +129,15 @@ async def execute_read_many(
         return results
 
 
-async def _dispatch_read_action(
+async def _dispatch_read_action(  # noqa: PLR0911 - one return per read-action case
     client: TelegramClient,
     action: TelegramReadAction,
 ) -> BaseModel:
     match action:
         case GetLinkedDiscussionGroup():
             return await _dispatch_get_linked_group(client, action)
+        case CheckMessagesAlive():
+            return await _dispatch_check_messages_alive(client, action)
         case GetUserProfile():
             return await _dispatch_get_user_profile(client)
         case ListPinnedStories():
@@ -165,6 +169,42 @@ async def _dispatch_get_linked_group(
         linked_chat_id=linked_id,
         comments_enabled=linked_id is not None,
     )
+
+
+async def _dispatch_check_messages_alive(
+    client: TelegramClient,
+    action: CheckMessagesAlive,
+) -> CheckMessagesAliveResult:
+    """Re-read ``message_ids`` in ``channel``'s linked discussion group; ``None`` → gone.
+
+    Comments are posted via ``comment_to``, so they live in the channel's linked
+    discussion group, not the broadcast channel. Resolve that group from
+    ``GetFullChannelRequest`` (mirrors ``_dispatch_join_discussion_group``: the
+    bare ``linked_chat_id`` has no access_hash, so we take the resolved entity
+    from ``chats``) and batch-read the ids. ``get_messages`` yields ``None`` for a
+    message that was deleted or is no longer visible. Comments disabled or the
+    group unresolved → we cannot verify, so report nothing missing.
+    """
+    full = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+    linked = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
+    if linked is None:
+        return CheckMessagesAliveResult(missing_ids=[])
+    linked_id = int(linked)
+    entity = next(
+        (chat for chat in getattr(full, "chats", []) if int(getattr(chat, "id", 0)) == linked_id),
+        None,
+    )
+    if entity is None:
+        return CheckMessagesAliveResult(missing_ids=[])
+    # get_messages(ids=[...]) returns a list aligned to ids (None where a message is
+    # gone); the stub's union also admits the single-id Message form we never use here.
+    messages = cast(
+        "list[object | None]", await client.get_messages(entity, ids=action.message_ids)
+    )
+    missing = [
+        mid for mid, message in zip(action.message_ids, messages, strict=True) if message is None
+    ]
+    return CheckMessagesAliveResult(missing_ids=missing)
 
 
 def _optional_str(value: object) -> str | None:
