@@ -32,6 +32,7 @@ from core.db import (
     fetch_readiness,
     list_campaign_accounts,
     list_campaign_channels,
+    list_posted_comments_since,
     mark_comment_failed,
     mark_comment_posted,
     upsert_readiness,
@@ -39,7 +40,13 @@ from core.db import (
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import ActionResult, CommentOnPost, NewPostEvent
-from services.content import has_link, is_acceptable, release_sent_text, try_reserve_sent
+from services.content import (
+    has_link,
+    is_acceptable,
+    release_sent_text,
+    similarity,
+    try_reserve_sent,
+)
 from services.neurocomment import _seams, _state
 from services.trust import account_trust_score
 from services.warming.pacing import evaluate_readiness
@@ -202,7 +209,7 @@ async def _generate_and_post(
     account_id: str,
 ) -> None:
     """Generate + light-check a comment, pause, post, and classify the outcome."""
-    text = await _generate_acceptable(campaign, event.text)
+    text = await _generate_acceptable(campaign, event.channel, event.text)
     if text is None:
         await mark_comment_failed(event.channel, event.post_id)
         await log_event(
@@ -223,13 +230,21 @@ async def _generate_and_post(
     await _classify_post(event, account_id, text, result)
 
 
-async def _generate_acceptable(campaign: NeurocommentCampaign, post_text: str) -> str | None:
-    """Generate a comment that passes word-count + filter + dedup, or ``None``.
+async def _generate_acceptable(
+    campaign: NeurocommentCampaign,
+    channel: str,
+    post_text: str,
+) -> str | None:
+    """Generate a comment passing word-count + filter + exact-hash + semantic dedup, or ``None``.
 
-    Tries once plus ``max_retries`` regenerations. A reserved-but-rejected text is
-    released so a later attempt isn't filtered as its own duplicate.
+    Tries once plus ``max_retries`` regenerations. The exact-hash reservation is the
+    atomic claim; the semantic check (token-set Jaccard vs the channel's recent posted
+    comments) is layered after it as a cross-account near-duplicate guard. A
+    reserved-but-rejected text is released so a later attempt isn't filtered as its own
+    duplicate.
     """
     nc = settings.neurocomment
+    recent = await _recent_channel_comments(campaign.campaign_id, channel)
     for _ in range(nc.max_retries + 1):
         generated = await _seams.generate_text(_build_request(campaign.prompt, post_text))
         if generated.status != "ok" or not generated.text:
@@ -239,8 +254,21 @@ async def _generate_acceptable(campaign: NeurocommentCampaign, post_text: str) -
             continue
         if not await try_reserve_sent(candidate):
             continue
+        if any(similarity(candidate, prev) >= nc.semantic_dedup_threshold for prev in recent):
+            await release_sent_text(candidate)
+            continue
         return candidate
     return None
+
+
+async def _recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
+    """The channel's recent posted comment texts for semantic dedup (empty when disabled)."""
+    nc = settings.neurocomment
+    if nc.semantic_dedup_threshold <= 0:
+        return []
+    since = (datetime.now(UTC) - timedelta(hours=nc.semantic_dedup_window_hours)).isoformat()
+    posted = await list_posted_comments_since(campaign_id, since)
+    return [c.comment_text or "" for c in posted.comments if c.channel == channel]
 
 
 def _build_request(prompt: str, post_text: str) -> GeminiRequest:

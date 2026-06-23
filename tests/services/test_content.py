@@ -32,6 +32,18 @@ def test_normalize_collapses_case_and_punctuation() -> None:
     assert content.content_hash("Hello, World!") == content.content_hash("hello world")
 
 
+def test_similarity_token_set_jaccard() -> None:
+    # Same token set once normalised (case/punctuation dropped) → 1.0.
+    assert content.similarity("Great post!", "great post") == 1.0
+    # Disjoint vocabularies → 0.0.
+    assert content.similarity("alpha beta", "gamma delta") == 0.0
+    # Partial overlap is intersection / union: {a,b,c} vs {b,c,d} = 2/4.
+    assert content.similarity("a b c", "b c d") == pytest.approx(0.5)
+    # Two empty strings are identical; one empty is fully dissimilar.
+    assert content.similarity("", "") == 1.0
+    assert content.similarity("hello", "") == 0.0
+
+
 def test_has_link() -> None:
     assert content.has_link("see https://example.com")
     assert content.has_link("join t.me/foo")

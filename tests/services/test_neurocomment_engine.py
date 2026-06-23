@@ -462,6 +462,98 @@ async def test_duplicate_then_unique_regenerates_and_posts(
 
 
 @pytest.mark.asyncio
+async def test_near_duplicate_comment_is_rejected_and_regenerated(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.5)
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_window_hours", 24.0)
+    # A near-identical comment was already posted on this channel.
+    assert await claim_comment("@chan", 1, campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 1, comment_text="alpha beta gamma", comment_msg_id=1)
+    # First candidate paraphrases it (same token set → Jaccard 1.0), second is fresh.
+    gen = _GenStub("alpha beta gamma", "delta epsilon zeta")
+    comment = _CommentStub(status="ok", message_id=7)
+    _patch_io(monkeypatch, comment=comment, gen=gen)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    assert gen.calls == 2  # regenerated past the near-duplicate
+    record = await fetch_comment("@chan", 2)
+    assert record is not None
+    assert record.status == "posted"
+    assert record.comment_text == "delta epsilon zeta"
+
+
+@pytest.mark.asyncio
+async def test_distinct_comment_is_accepted_without_regeneration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.5)
+    assert await claim_comment("@chan", 1, campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 1, comment_text="alpha beta gamma", comment_msg_id=1)
+    # Shares no tokens with the posted comment → below threshold → accepted first try.
+    gen = _GenStub("delta epsilon zeta")
+    comment = _CommentStub(status="ok", message_id=7)
+    _patch_io(monkeypatch, comment=comment, gen=gen)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    assert gen.calls == 1
+    record = await fetch_comment("@chan", 2)
+    assert record is not None
+    assert record.status == "posted"
+    assert record.comment_text == "delta epsilon zeta"
+
+
+@pytest.mark.asyncio
+async def test_semantic_dedup_threshold_zero_disables_check(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.0)
+    assert await claim_comment("@chan", 1, campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 1, comment_text="alpha beta gamma", comment_msg_id=1)
+    # Same token set as a posted comment — would be rejected if the check were on.
+    gen = _GenStub("alpha beta gamma")
+    comment = _CommentStub(status="ok", message_id=7)
+    _patch_io(monkeypatch, comment=comment, gen=gen)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    assert gen.calls == 1  # no regeneration: the semantic gate is off
+    record = await fetch_comment("@chan", 2)
+    assert record is not None
+    assert record.status == "posted"
+    assert record.comment_text == "alpha beta gamma"
+
+
+@pytest.mark.asyncio
+async def test_semantic_dedup_is_scoped_to_the_posting_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign_id = await _make_campaign("@a", "acc-1")
+    await link_channel_to_campaign(campaign_id, "@b")
+    await upsert_readiness("acc-1", "@b", joined=True, captcha_passed=True, ready=True)
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.5)
+    # An identical comment exists, but on a different channel (@b) of the same campaign.
+    assert await claim_comment("@b", 1, campaign_id, "acc-1") is True
+    await mark_comment_posted("@b", 1, comment_text="alpha beta gamma", comment_msg_id=1)
+    gen = _GenStub("alpha beta gamma")
+    comment = _CommentStub(status="ok", message_id=7)
+    _patch_io(monkeypatch, comment=comment, gen=gen)
+
+    await engine.handle_new_post(NewPostEvent(channel="@a", post_id=2, text="hi"))
+
+    # @b's comment must not gate @a → posts on the first try.
+    assert gen.calls == 1
+    record = await fetch_comment("@a", 2)
+    assert record is not None
+    assert record.status == "posted"
+
+
+@pytest.mark.asyncio
 async def test_exhausting_retries_marks_failed_and_does_not_post(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
