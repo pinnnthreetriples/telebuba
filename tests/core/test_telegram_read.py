@@ -27,6 +27,8 @@ from core.telegram_client import (
     execute_read_many,
 )
 from schemas.telegram_actions import (
+    CheckMessagesAlive,
+    CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
     GetUserProfile,
     LinkedDiscussionGroupResult,
@@ -518,6 +520,78 @@ async def test_get_linked_discussion_group_absent(monkeypatch: pytest.MonkeyPatc
     assert isinstance(result, LinkedDiscussionGroupResult)
     assert result.linked_chat_id is None
     assert result.comments_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_check_messages_alive_reports_deleted_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ``get_messages`` ``None`` for an id means that comment was deleted/gone."""
+    from telethon.tl.functions.channels import GetFullChannelRequest  # noqa: PLC0415
+
+    group = MagicMock(id=999)
+    read_calls: list[list[int]] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            assert isinstance(request, GetFullChannelRequest)
+            return MagicMock(full_chat=MagicMock(linked_chat_id=999), chats=[group])
+
+        async def get_messages(self, entity: object, *, ids: list[int]) -> list[object | None]:
+            assert entity is group  # reads the resolved linked discussion group
+            read_calls.append(ids)
+            return [None if mid == 2 else MagicMock() for mid in ids]
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-x", CheckMessagesAlive(channel="@news", message_ids=[1, 2, 3]))
+
+    assert isinstance(result, CheckMessagesAliveResult)
+    assert result.missing_ids == [2]
+    assert read_calls == [[1, 2, 3]]
+
+
+@pytest.mark.asyncio
+async def test_check_messages_alive_no_linked_group_reports_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Comments disabled / unlinked → can't verify, so report nothing gone."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(full_chat=MagicMock(linked_chat_id=None), chats=[])
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-x", CheckMessagesAlive(channel="@news", message_ids=[1, 2]))
+
+    assert isinstance(result, CheckMessagesAliveResult)
+    assert result.missing_ids == []
+
+
+@pytest.mark.asyncio
+async def test_check_messages_alive_unresolved_group_reports_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Linked id present but its entity missing from ChatFull → no false positives."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(full_chat=MagicMock(linked_chat_id=999), chats=[MagicMock(id=111)])
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-x", CheckMessagesAlive(channel="@news", message_ids=[1]))
+
+    assert isinstance(result, CheckMessagesAliveResult)
+    assert result.missing_ids == []
 
 
 @pytest.mark.asyncio

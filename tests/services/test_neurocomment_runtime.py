@@ -9,22 +9,34 @@ warming runtime tests' approach to task tracking + shutdown.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
 
 from core.config import settings
 from core.db import (
+    claim_comment,
     configure_database,
+    create_account,
     create_campaign,
     get_listener_account_id,
     link_channel_to_campaign,
+    mark_comment_posted,
     set_listener_account_id,
 )
 from core.logging import reset_logging_for_tests, setup_logging
+from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
-from schemas.telegram_actions import ActionResult, ActionStatus, JoinChannel, NewPostEvent
-from services.neurocomment import _runtime
+from schemas.telegram_actions import (
+    ActionResult,
+    ActionStatus,
+    CheckMessagesAlive,
+    CheckMessagesAliveResult,
+    JoinChannel,
+    NewPostEvent,
+)
+from services.neurocomment import _runtime, _state
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -39,8 +51,10 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     reset_logging_for_tests()
     setup_logging()
     _runtime.reset_for_tests()
+    _state.reset_for_tests()
     yield
     _runtime.reset_for_tests()
+    _state.reset_for_tests()
 
 
 class _ListenerSpy:
@@ -106,6 +120,8 @@ async def test_reconcile_subscribes_with_active_watch_channels(
     # The listener account is joined to every watched channel before subscribing.
     assert {ch for _aid, ch in exec_spy.joined} == {"@a", "@b"}
     assert all(aid == "listener-1" for aid, _ch in exec_spy.joined)
+    # reconcile also started the deletion sweep — tear it down (strict-mode loop hygiene).
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 
 @pytest.mark.asyncio
@@ -136,6 +152,7 @@ async def test_reconcile_join_failure_does_not_block_subscribe(
     # A failed join must not stop the listener from subscribing.
     assert len(spy.subscribed) == 1
     assert spy.subscribed[0][1] == ["@a"]
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 
 @pytest.mark.asyncio
@@ -309,3 +326,115 @@ async def test_shutdown_on_shutdown_does_nothing_when_stopped(
     await _runtime.shutdown_neurocomment_on_shutdown()
 
     assert spy.shut_down == []
+
+
+# --------------------------------------------------------------------------- #
+# Deletion sweep (#131): periodic re-read → escalating channel back-off.
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_reconcile_starts_sweep_and_shutdown_cancels_it(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    _patch_execute(monkeypatch, _ExecuteSpy())
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    try:
+        assert _runtime._SWEEP_TASK is not None
+        assert not _runtime._SWEEP_TASK.done()
+    finally:
+        await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+    assert _runtime._SWEEP_TASK is None
+
+
+@pytest.mark.asyncio
+async def test_reconcile_with_no_channels_does_not_start_sweep(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_listener(monkeypatch, _ListenerSpy())
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    assert _runtime._SWEEP_TASK is None
+
+
+async def _campaign_with_posted_comments(channel: str, msg_ids: list[int]) -> None:
+    """Active campaign on ``channel`` with one ``posted`` comment per ``msg_ids`` entry."""
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, channel)
+    await create_account(AccountCreate(account_id="acc-1", label="acc-1", session_name="acc-1"))
+    for post_id, msg_id in enumerate(msg_ids, start=1):
+        await claim_comment(channel, post_id, campaign.campaign_id, "acc-1")
+        await mark_comment_posted(channel, post_id, comment_text="x", comment_msg_id=msg_id)
+
+
+@pytest.mark.asyncio
+async def test_sweep_trips_backoff_when_deletions_reach_threshold(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 2)
+    await _campaign_with_posted_comments("@a", [101, 102, 103])
+
+    async def fake_read(_account_id: str, action: CheckMessagesAlive) -> CheckMessagesAliveResult:
+        # Two of the three comments have vanished — at the threshold.
+        gone = [mid for mid in action.message_ids if mid in (101, 102)]
+        return CheckMessagesAliveResult(missing_ids=gone)
+
+    monkeypatch.setattr("services.neurocomment._seams.execute_read", fake_read)
+
+    await _runtime._sweep_once()
+
+    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is True
+
+
+@pytest.mark.asyncio
+async def test_sweep_below_threshold_does_not_trip(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 3)
+    await _campaign_with_posted_comments("@a", [101, 102, 103])
+
+    async def fake_read(_account_id: str, _action: CheckMessagesAlive) -> CheckMessagesAliveResult:
+        return CheckMessagesAliveResult(missing_ids=[101])  # one gone, below threshold 3
+
+    monkeypatch.setattr("services.neurocomment._seams.execute_read", fake_read)
+
+    await _runtime._sweep_once()
+
+    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is False
+
+
+@pytest.mark.asyncio
+async def test_sweep_read_failure_does_not_trip_or_crash(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 1)
+    await _campaign_with_posted_comments("@a", [101, 102])
+
+    async def boom(_account_id: str, _action: CheckMessagesAlive) -> CheckMessagesAliveResult:
+        msg = "read failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("services.neurocomment._seams.execute_read", boom)
+
+    await _runtime._sweep_once()  # one channel's read failure must not abort the sweep
+
+    assert _state.channel_in_backoff("@a", datetime.now(UTC)) is False
+
+
+@pytest.mark.asyncio
+async def test_sweep_disabled_when_interval_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", 0.0)
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    _patch_execute(monkeypatch, _ExecuteSpy())
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    try:
+        assert _runtime._SWEEP_TASK is None  # sweep disabled by config
+    finally:
+        await _runtime.shutdown_neurocomment_runtime("listener-1")

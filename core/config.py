@@ -281,6 +281,16 @@ class NeurocommentSettings(BaseSettings):
     link_only_max_word_chars: int = Field(default=10, ge=0)
     # Grace period to await in-flight on-post tasks on shutdown before cancelling.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
+    # --- Ф2: deletion sweep → escalating channel back-off ---
+    # How often the periodic sweep re-reads recent comments (0 disables the sweep).
+    deletion_sweep_interval_seconds: float = Field(default=1800.0, ge=0.0)
+    # How far back the sweep re-checks posted comments for deletion.
+    deletion_sweep_lookback_hours: float = Field(default=24.0, ge=0.0)
+    # Vanished comments within the window needed to trip a channel's back-off.
+    channel_backoff_min_deletions: int = Field(default=3, ge=1)
+    # First back-off duration; doubles per consecutive trip, capped at the max.
+    channel_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
+    channel_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:
