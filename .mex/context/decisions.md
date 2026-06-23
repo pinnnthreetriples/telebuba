@@ -12,7 +12,7 @@ edges:
     condition: when a decision relates to system structure
   - target: context/stack.md
     condition: when a decision relates to technology choice
-last_updated: 2026-06-22
+last_updated: 2026-06-23
 ---
 
 # Decisions
@@ -30,6 +30,11 @@ last_updated: 2026-06-22
 - *Lazy join+captcha at first post* (rejected — slow first comment, captcha latency on the hot path).
 **Consequences:** New `services/neurocomment/` mirrors warming's *patterns* (per-account asyncio.Task ownership, pacing/readiness, CAS state, board, seams), not its code; reuses `trust`/`spam_status`/`evaluate_readiness` and warming anti-ban primitives. A new gateway **listener** capability (push) is added alongside the existing pull `execute`. State model is event-driven (`idle → commenting → cooldown` + `flood_wait`/`quarantine`/`error`; listener `listening`/`error`) — no `sleeping`-until-next-run. Daily limit is the account's own (warming → graduate-to-pool → comment are sequential phases, so no shared counter). New tables keyed by `campaign_id`. A deterministic product-mention ratio (%) plus a "K organic comments first" gate were considered and cut (YAGNI, per user): the product instruction and anti-detection wording live in the campaign prompt. Revisit a code-enforced ratio only if a guaranteed promo fraction is needed (a prompt cannot reliably hold a frequency across independent calls). Quality gate is lightweight (prompt-driven) first; split LLM-judge + semantic dedup, image-captcha (Gemini vision), and comment-deletion back-off are deferred to later phases. Supersedes the `services/comments/` placeholder name in `state/active.md`.
 **Ф0 update (2026-06-22):** spike #113 PROVED `comment_to` end-to-end (real outsider account: resolve channel → resolve linked group → real join → comment posted). Gate passed → Ф1 (#114–#119) unblocked. Captcha-SOLVING was NOT proven (test channel had no entry captcha) → Ф1 onboarding (#117) reduced to **detect-and-skip**; actual captcha-solving deferred to spike #120 (Ф2). Reconfirmed: `comment_to` requires group membership → pre-join at onboarding stays mandatory.
+**Ф2 anti-detect update (2026-06-23, specced via grill — not yet built):** the deferred "comment-deletion back-off" and "semantic dedup" are now resolved.
+- **Deletion detection = poll re-read**, NOT `events.MessageDeleted`. Telethon's deletion event is doc-confirmed unreliable and only carries `chat_id` for channels/supergroups *if* the receiving account is inside that group's update stream — the listener only watches channel broadcasts. `get_messages(ids=[…])`→`None` is the deterministic, batchable check. It runs as one **periodic asyncio sweep**, so the runtime becomes **event-driven + a periodic deletion sweep** (still a plain interval, not cron/APScheduler — does not reopen that decision).
+- **Back-off = escalating in-memory channel cooldown** — mirrors the per-account `_state` cooldown but keyed by channel; recomputed each sweep (self-healing on restart), no migration. A WARNING surfaces on the existing errors feed.
+- **Semantic dedup = local token-set Jaccard**, NOT Gemini embeddings — an embedding call on the first-commenter hot path is the wrong latency trade; group+window scoped, threshold `0` disables it. Exact-hash `try_reserve_sent` stays the atomic claim.
+- New gateway read action `CheckMessagesAlive`; all knobs in `settings.neurocomment`.
 
 ### Warming audit — scheduling, resilience, and UX fixes
 **Date:** 2026-06-20

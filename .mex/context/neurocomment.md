@@ -89,6 +89,14 @@ All tunables live in `core/config.py` under `settings.neurocomment` (no magic nu
 
 The live canary on real accounts and the ban-observation calibration are **operator-run** (human-in-the-loop): start with conservative `settings.neurocomment` defaults, run a small canary against real Telegram, watch for spam/ban signals, and tune the knobs. The code never auto-runs a real-account canary.
 
+## Planned — Ф2 anti-detect (specced, not built)
+
+Two deferred guards, resolved via grill (see `context/decisions.md` → Ф2 update). Not yet in code — kept here as the design anchor.
+
+- **Comment-deletion → channel back-off.** A periodic asyncio **sweep** (the lone non-event loop) re-reads recently-posted comments via a new gateway action `CheckMessagesAlive` (`get_messages(ids=[…])`→`None`, NOT the unreliable `MessageDeleted` event). Too many of a channel's comments gone within the window → trip an **escalating in-memory channel cooldown** (mirrors the per-account `_state` cooldown, recomputed each sweep, self-healing), and the engine stops selecting accounts for that channel until it expires.
+- **Semantic dedup across accounts.** Local **token-set Jaccard** over normalized text (no Gemini embeddings — hot-path latency), group+window scoped, plugged into the `_generate_acceptable` retry loop after exact-hash. Threshold `0` disables it.
+- New knobs (to land with the code, mirrored in `.env.example`): `deletion_sweep_interval_seconds`, `deletion_sweep_lookback_hours`, `channel_backoff_min_deletions`, `channel_backoff_base_seconds`, `channel_backoff_max_seconds`, `semantic_dedup_threshold`, `semantic_dedup_window_hours`.
+
 ## What does NOT belong here
 
 - No direct Telethon/SQLAlchemy in `services/` or `features/` — go through `core.telegram_client` / `core/repositories`.
