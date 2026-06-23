@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import insert, select, update
+from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -196,6 +196,26 @@ def _assign_account_to_campaign(campaign_id: str, account_id: str) -> None:
 async def assign_account_to_campaign(campaign_id: str, account_id: str) -> None:
     """Add an account to a campaign (idempotent). An account may serve many campaigns."""
     await asyncio.to_thread(_assign_account_to_campaign, campaign_id, account_id)
+
+
+def _remove_account_from_campaign(campaign_id: str, account_id: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_neurocomment_campaign_accounts).where(
+                (_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
+                & (_neurocomment_campaign_accounts.c.account_id == account_id),
+            ),
+        )
+
+
+async def remove_account_from_campaign(campaign_id: str, account_id: str) -> None:
+    """Drop an account↔campaign link (hard delete; idempotent if the link is absent).
+
+    Scoped to the one ``(campaign_id, account_id)`` pair — an account serving other
+    campaigns keeps those links, and per-``(account, channel)`` readiness (shared
+    across campaigns) is untouched.
+    """
+    await asyncio.to_thread(_remove_account_from_campaign, campaign_id, account_id)
 
 
 def _list_campaign_accounts(campaign_id: str) -> CampaignAccountList:

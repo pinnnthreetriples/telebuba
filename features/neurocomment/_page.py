@@ -21,6 +21,7 @@ from core.db import (
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
+    remove_account_from_campaign,
 )
 from core.repositories.neurocomment import ChannelAlreadyAssignedError
 from schemas.neurocomment import CampaignCreate
@@ -32,7 +33,7 @@ from services.neurocomment import (
 )
 
 if TYPE_CHECKING:
-    from schemas.neurocomment import NeurocommentBoard
+    from schemas.neurocomment import CampaignList, NeurocommentBoard
 
 _BOARD_POLL_SECONDS = 4.0
 
@@ -45,6 +46,11 @@ _CHANNEL_STATUS_RU: dict[str, str] = {
     "throttled": "Лимит исчерпан",
 }
 _HEALTH_RU: dict[str, str] = {"ready": "Готов", "blocked": "Заблокирован"}
+_CAMPAIGN_STATUS_RU: dict[str, str] = {
+    "active": "Активна",
+    "paused": "На паузе",
+    "archived": "В архиве",
+}
 
 
 def channel_status_label(status: str) -> str:
@@ -55,6 +61,18 @@ def channel_status_label(status: str) -> str:
 def health_label(health: str) -> str:
     """Russian label for an account-card health (fallback: raw value)."""
     return _HEALTH_RU.get(health, health)
+
+
+def campaign_status_label(status: str) -> str:
+    """Russian label for a campaign status (fallback: raw status)."""
+    return _CAMPAIGN_STATUS_RU.get(status, status)
+
+
+def campaign_options(campaigns: CampaignList) -> dict[str, str]:
+    """Switcher options: campaign id → ``name · <status>`` label."""
+    return {
+        c.campaign_id: f"{c.name} · {campaign_status_label(c.status)}" for c in campaigns.campaigns
+    }
 
 
 def _build_header() -> None:  # pragma: no cover
@@ -81,16 +99,35 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
     _build_header()
     with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
         ui.label("Нейрокомментинг").classes("text-xl font-semibold")
-        campaigns = (await list_campaigns()).campaigns
-        if not campaigns:
-            await _render_create_campaign(on_created=_reload_page)
-            return
-        # MVP: drive the most recent active-or-any campaign. A campaign switcher
-        # is a follow-up; the operator runs one campaign at a time here.
-        campaign_id = campaigns[-1].campaign_id
         await _render_create_campaign(on_created=_reload_page)
-        await _render_setup(campaign_id)
-        await _render_work_view(campaign_id)
+        campaign_list = await list_campaigns()
+        if not campaign_list.campaigns:
+            return
+
+        # Campaign switcher: pick which campaign to set up / work. Defaults to the
+        # most recent campaign (the prior single-campaign default); switching
+        # re-renders the section below.
+        @ui.refreshable
+        async def section() -> None:
+            # Setup + work view for the selected campaign. The work view owns its
+            # own poll timer, recreated (and the old one dropped) on each switch.
+            await _render_setup(switcher.value)
+            await _render_work_view(switcher.value)
+
+        def on_switch() -> None:
+            section.refresh()
+
+        switcher = (
+            ui.select(
+                campaign_options(campaign_list),
+                label="Кампания",
+                value=campaign_list.campaigns[-1].campaign_id,
+                on_change=on_switch,
+            )
+            .props("dense outlined")
+            .classes("w-full max-w-[400px]")
+        )
+        await section()
 
 
 def _reload_page() -> None:  # pragma: no cover
@@ -185,14 +222,17 @@ async def _render_account_picker(campaign_id: str) -> ui.select:  # pragma: no c
     options = {acc.account_id: (acc.label or acc.account_id) for acc in accounts}
 
     async def on_toggle(account_id: str, checked: bool) -> None:  # noqa: FBT001
-        if not checked:
-            return
-        await assign_account_to_campaign(campaign_id, account_id)
-        assigned.add(account_id)
-        # Refresh the listener choices so a just-assigned account is selectable
-        # without a page reload.
+        if checked:
+            await assign_account_to_campaign(campaign_id, account_id)
+            assigned.add(account_id)
+            ui.notify("Аккаунт добавлен в кампанию", type="positive")
+        else:
+            await remove_account_from_campaign(campaign_id, account_id)
+            assigned.discard(account_id)
+            ui.notify("Аккаунт убран из кампании", type="info")
+        # Keep the listener choices in sync so a just-(un)assigned account
+        # appears/disappears without a page reload.
         listener_select.set_options({aid: options.get(aid, aid) for aid in assigned})
-        ui.notify("Аккаунт добавлен в кампанию", type="positive")
 
     with ui.column().classes("w-full gap-1"):
         if not accounts:
@@ -221,7 +261,7 @@ async def _render_account_picker(campaign_id: str) -> ui.select:  # pragma: no c
 
 
 async def _render_actions(campaign_id: str, listener_select) -> None:  # noqa: ANN001  # pragma: no cover
-    with ui.row().classes("w-full items-center gap-2"):
+    with ui.column().classes("w-full gap-1"):
 
         async def on_onboard() -> None:
             result = await onboard_campaign(campaign_id)
@@ -240,9 +280,18 @@ async def _render_actions(campaign_id: str, listener_select) -> None:  # noqa: A
             await stop_neurocomment()
             ui.notify("Нейрокомментинг остановлен", type="info")
 
-        ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
-        ui.button("Запустить", icon="play_arrow", on_click=on_start).props("color=positive")
-        ui.button("Остановить", icon="stop", on_click=on_stop).props("color=negative outline")
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
+            ui.button("Запустить", icon="play_arrow", on_click=on_start).props("color=positive")
+            ui.button("Остановить", icon="stop", on_click=on_stop).props("color=negative outline")
+        # The neurocomment runtime is one fleet-wide listener over the union of all
+        # active campaigns' channels (engine routes each post to its own campaign).
+        # Make that explicit so "Остановить" isn't mistaken for campaign-scoped.
+        ui.label(
+            "Онбординг — для выбранной кампании. Запуск и остановка — на весь флот: "
+            "нейрокомментинг использует одного слушателя на все активные кампании, "
+            "поэтому «Остановить» останавливает все кампании сразу.",
+        ).classes("text-xs text-slate-500")
 
 
 async def _render_work_view(campaign_id: str) -> None:  # pragma: no cover

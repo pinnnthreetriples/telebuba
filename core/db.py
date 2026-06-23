@@ -351,6 +351,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_posted_comments_since,
     mark_comment_failed,
     mark_comment_posted,
+    remove_account_from_campaign,
     set_listener_account_id,
     upsert_linked_group,
     upsert_readiness,

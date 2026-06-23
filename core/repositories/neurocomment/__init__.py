@@ -23,6 +23,7 @@ from core.repositories.neurocomment._campaigns import (
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
+    remove_account_from_campaign,
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
@@ -68,6 +69,7 @@ __all__ = [
     "list_posted_comments_since",
     "mark_comment_failed",
     "mark_comment_posted",
+    "remove_account_from_campaign",
     "set_listener_account_id",
     "upsert_linked_group",
     "upsert_readiness",
