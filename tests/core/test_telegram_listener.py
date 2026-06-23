@@ -86,15 +86,16 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
     monkeypatch.setattr("core.telegram_client._listener.get_client", fake_get_client)
 
 
-def _make_event(
+def _make_event(  # noqa: PLR0913 - test helper mirrors the Telethon message fields
     *,
     chat_id: int,
     post_id: int,
     text: str | None,
     media: object,
     post: object,
+    fwd_from: object = None,
 ) -> object:
-    message = MagicMock(id=post_id, message=text, media=media, post=post)
+    message = MagicMock(id=post_id, message=text, media=media, post=post, fwd_from=fwd_from)
     return MagicMock(message=message, chat_id=chat_id)
 
 
@@ -252,6 +253,65 @@ async def test_no_backfill_catch_up_never_called(monkeypatch: pytest.MonkeyPatch
     await callback(_make_event(chat_id=-100, post_id=1, text="x", media=None, post=True))
 
     assert client.catch_up_called is False
+
+
+@pytest.mark.asyncio
+async def test_forwarded_post_sets_is_forward(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+    received: list[NewPostEvent] = []
+
+    async def on_post(event: NewPostEvent) -> None:
+        received.append(event)
+
+    await subscribe_posts("listener-fwd", ["@news"], on_post)
+    callback, _ = client.handlers[0]
+
+    # A forwarded/reposted broadcast (fwd_from present) must be flagged so the
+    # engine can drop it — this is the field the engine's forward filter reads.
+    await callback(
+        _make_event(
+            chat_id=-100, post_id=5, text="reposted", media=None, post=True, fwd_from=object()
+        ),
+    )
+
+    assert received[0].is_forward is True
+
+
+@pytest.mark.asyncio
+async def test_unresolvable_channel_is_skipped_others_still_subscribe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+    received: list[NewPostEvent] = []
+
+    async def on_post(event: NewPostEvent) -> None:
+        received.append(event)
+
+    # "@gone" is absent from PEER_IDS -> get_peer_id raises; "@news" resolves.
+    await subscribe_posts("listener-bad", ["@gone", "@news"], on_post)
+
+    # One bad channel must NOT abort the batch — the good channel still listens.
+    assert len(client.handlers) == 1
+    callback, _ = client.handlers[0]
+    await callback(_make_event(chat_id=-100, post_id=1, text="x", media=None, post=True))
+    assert received[0].channel == "@news"
+
+
+@pytest.mark.asyncio
+async def test_all_unresolvable_registers_no_handler(monkeypatch: pytest.MonkeyPatch) -> None:
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    # Every channel fails to resolve -> register nothing: events.NewMessage(chats=[])
+    # would otherwise watch EVERY chat.
+    await subscribe_posts("listener-allbad", ["@gone", "@missing"], on_post)
+
+    assert client.handlers == []
 
 
 @pytest.mark.asyncio

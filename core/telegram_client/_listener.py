@@ -57,12 +57,28 @@ async def subscribe_posts(
 
     client = await get_client(account_id)
     channel_by_peer_id: dict[int, str] = {}
+    resolved: list[str] = []
     for channel in channels:
-        peer_id = await client.get_peer_id(channel)
+        try:
+            peer_id = await client.get_peer_id(channel)
+        except Exception as exc:  # noqa: BLE001 - one bad channel must not disable the whole listener
+            await log_event(
+                "WARNING",
+                "post_listener_channel_unresolved",
+                account_id=account_id,
+                extra={"channel": channel, "error_type": type(exc).__name__},
+            )
+            continue
         channel_by_peer_id[peer_id] = channel
+        resolved.append(channel)
+
+    if not resolved:
+        # Nothing resolved → do NOT register: events.NewMessage(chats=[]) would
+        # watch EVERY chat. An empty whitelist must mean "listen to nothing".
+        return
 
     handler = _make_handler(channel_by_peer_id, on_post)
-    client.add_event_handler(handler, events.NewMessage(chats=channels))
+    client.add_event_handler(handler, events.NewMessage(chats=resolved))
     _HANDLERS[account_id] = handler
 
 
@@ -101,6 +117,7 @@ def _make_handler(
             post_id=message.id,
             text=message.message or "",
             has_media=message.media is not None,
+            is_forward=message.fwd_from is not None,
         )
         try:
             await on_post(post)

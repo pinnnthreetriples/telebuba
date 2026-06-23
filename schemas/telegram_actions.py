@@ -293,3 +293,4 @@ class NewPostEvent(BaseModel):
     post_id: int
     text: str = ""
     has_media: bool = False
+    is_forward: bool = False
