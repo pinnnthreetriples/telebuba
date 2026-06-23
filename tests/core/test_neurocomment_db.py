@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -15,14 +16,18 @@ from core.db import (  # type: ignore[attr-defined]
     assign_account_to_campaign,
     claim_comment,
     configure_database,
+    count_account_channel_comments_since,
+    count_account_comments_since,
     create_account,
     create_campaign,
     deactivate_channel,
+    fetch_active_campaign_for_channel,
     fetch_campaign,
     fetch_comment,
     fetch_linked_group,
     fetch_readiness,
     link_channel_to_campaign,
+    list_active_watch_channels,
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
@@ -198,3 +203,83 @@ async def test_comment_claim_is_idempotent_and_records_outcome() -> None:
 
     # marking a post nobody claimed yields None
     assert await mark_comment_posted("@chan", 999, comment_text="x", comment_msg_id=1) is None
+
+
+# --------------------------------------------------------------------------- #
+# Engine helpers (issue #118): throughput windows + listener watch set.
+# --------------------------------------------------------------------------- #
+
+
+async def _post_one(channel: str, post_id: int, campaign_id: str, account_id: str) -> None:
+    assert await claim_comment(channel, post_id, campaign_id, account_id) is True
+    await mark_comment_posted(channel, post_id, comment_text="hi", comment_msg_id=post_id)
+
+
+@pytest.mark.asyncio
+async def test_count_account_comments_since_counts_claimed_and_posted_in_window() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+
+    await _post_one("@chan", 1, campaign.campaign_id, "acc-1")
+    await _post_one("@chan", 2, campaign.campaign_id, "acc-1")
+    # An in-flight claim counts too: it must consume quota immediately so a burst
+    # arriving inside the reply-delay window can't stack past the cap.
+    assert await claim_comment("@chan", 3, campaign.campaign_id, "acc-1") is True
+
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    future = (datetime.now(UTC) + timedelta(hours=1)).isoformat()
+    assert await count_account_comments_since("acc-1", past) == 3
+    assert await count_account_comments_since("acc-1", future) == 0
+    assert await count_account_comments_since("other", past) == 0
+
+
+@pytest.mark.asyncio
+async def test_count_account_channel_comments_since_is_channel_scoped() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+
+    await _post_one("@one", 1, campaign.campaign_id, "acc-1")
+    await _post_one("@one", 2, campaign.campaign_id, "acc-1")
+    await _post_one("@two", 3, campaign.campaign_id, "acc-1")
+
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    assert await count_account_channel_comments_since("acc-1", "@one", past) == 2
+    assert await count_account_channel_comments_since("acc-1", "@two", past) == 1
+    assert await count_account_channel_comments_since("acc-1", "@none", past) == 0
+
+
+@pytest.mark.asyncio
+async def test_fetch_active_campaign_for_channel_returns_active_only() -> None:
+    active = await create_campaign(CampaignCreate(name="Live", prompt="p", status="active"))
+    paused = await create_campaign(CampaignCreate(name="Off", prompt="p", status="paused"))
+
+    await link_channel_to_campaign(active.campaign_id, "@live")
+    await link_channel_to_campaign(paused.campaign_id, "@paused")
+    # An inactive channel link in an active campaign is not a watch target.
+    await link_channel_to_campaign(active.campaign_id, "@dropped")
+    await deactivate_channel(active.campaign_id, "@dropped")
+
+    found = await fetch_active_campaign_for_channel("@live")
+    assert found is not None
+    assert found.campaign_id == active.campaign_id
+
+    # Active link but the campaign itself is paused → no match.
+    assert await fetch_active_campaign_for_channel("@paused") is None
+    # Link deactivated → no match.
+    assert await fetch_active_campaign_for_channel("@dropped") is None
+    assert await fetch_active_campaign_for_channel("@never") is None
+
+
+@pytest.mark.asyncio
+async def test_list_active_watch_channels_only_active_links_and_campaigns() -> None:
+    active = await create_campaign(CampaignCreate(name="Live", prompt="p", status="active"))
+    paused = await create_campaign(CampaignCreate(name="Off", prompt="p", status="paused"))
+
+    await link_channel_to_campaign(active.campaign_id, "@a")
+    await link_channel_to_campaign(active.campaign_id, "@b")
+    await link_channel_to_campaign(paused.campaign_id, "@p")
+    await link_channel_to_campaign(active.campaign_id, "@gone")
+    await deactivate_channel(active.campaign_id, "@gone")
+
+    watch = await list_active_watch_channels()
+    assert set(watch.channels) == {"@a", "@b"}

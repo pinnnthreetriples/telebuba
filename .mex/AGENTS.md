@@ -42,6 +42,7 @@ telebuba/
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile/proxy operations
 │   ├── warming/            runtime workflow domain package
+│   ├── neurocomment/       campaign comment automation: onboarding.py (pre-join+readiness), engine.py (on-post pipeline handle_new_post), _runtime.py (listener wiring + per-post task ownership), _state.py (transient cooldowns), _seams.py (execute/generate_text/refresh_spam_status/rng)
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
 │   ├── logs.py             log query helpers for the Logs page

@@ -66,6 +66,16 @@ class CampaignChannelList(BaseModel):
     links: list[CampaignChannelLink] = Field(default_factory=list)
 
 
+class ChannelList(BaseModel):
+    """Wrapper for a plain list of channel handles (non-negotiable #2).
+
+    Used by the engine's listener reconcile — the watch set is just the active
+    channels, not full link rows.
+    """
+
+    channels: list[str] = Field(default_factory=list)
+
+
 class CampaignAccountLink(BaseModel):
     """One row of ``neurocomment_campaign_accounts`` — an account serving a campaign."""
 

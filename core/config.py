@@ -273,6 +273,14 @@ class NeurocommentSettings(BaseSettings):
     max_comments_per_channel_per_day: int = Field(default=3, ge=0)
     # Retries for a failed comment attempt before giving up.
     max_retries: int = Field(default=2, ge=0, le=5)
+    # In-memory cooldown applied to an account after a PEER_FLOOD (no duration is
+    # supplied by Telegram, unlike a timed flood-wait) before it is reselected.
+    peer_flood_cooldown_seconds: float = Field(default=3600.0, ge=0.0)
+    # A post whose text, stripped of links, leaves at most this many word chars is
+    # treated as link-only / an ad and skipped.
+    link_only_max_word_chars: int = Field(default=10, ge=0)
+    # Grace period to await in-flight on-post tasks on shutdown before cancelling.
+    stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
 
 
 class Settings(BaseSettings):
