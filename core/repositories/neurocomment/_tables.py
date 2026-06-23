@@ -1,0 +1,87 @@
+"""SQLAlchemy tables for the neurocomment domain (issue #114).
+
+Kept in their own module so ``core.db`` stays within the file-size budget.
+Importing this module registers the tables in ``core.db._metadata``; the
+repository package pulls it in, and ``core.db`` imports the package before
+``_get_engine`` runs ``create_all``. The partial unique index enforcing
+"one active campaign per channel" is created in migration #11.
+"""
+
+from __future__ import annotations
+
+from sqlalchemy import BigInteger, Column, ForeignKey, Integer, String, Table
+
+from core.db import _metadata
+
+_neurocomment_campaigns = Table(
+    "neurocomment_campaigns",
+    _metadata,
+    Column("campaign_id", String, primary_key=True),
+    Column("name", String, nullable=False),
+    Column("prompt", String, nullable=False),
+    Column("status", String, nullable=False),
+    Column("created_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
+)
+_neurocomment_campaign_channels = Table(
+    "neurocomment_campaign_channels",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column(
+        "campaign_id",
+        String,
+        ForeignKey("neurocomment_campaigns.campaign_id"),
+        nullable=False,
+    ),
+    Column("channel", String, nullable=False),
+    Column("active", Integer, nullable=False),
+    Column("created_at", String, nullable=False),
+)
+_neurocomment_campaign_accounts = Table(
+    "neurocomment_campaign_accounts",
+    _metadata,
+    Column(
+        "campaign_id",
+        String,
+        ForeignKey("neurocomment_campaigns.campaign_id"),
+        primary_key=True,
+    ),
+    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
+    Column("created_at", String, nullable=False),
+)
+_neurocomment_linked_groups = Table(
+    "neurocomment_linked_groups",
+    _metadata,
+    Column("channel", String, primary_key=True),
+    Column("linked_chat_id", BigInteger, nullable=True),
+    Column("comments_enabled", Integer, nullable=False),
+    Column("checked_at", String, nullable=False),
+)
+_neurocomment_readiness = Table(
+    "neurocomment_readiness",
+    _metadata,
+    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
+    Column("channel", String, primary_key=True),
+    Column("joined", Integer, nullable=False),
+    Column("captcha_passed", Integer, nullable=False),
+    Column("ready", Integer, nullable=False),
+    Column("checked_at", String, nullable=False),
+)
+_neurocomment_comments = Table(
+    "neurocomment_comments",
+    _metadata,
+    Column("channel", String, primary_key=True),
+    Column("post_id", Integer, primary_key=True),
+    Column(
+        "campaign_id",
+        String,
+        ForeignKey("neurocomment_campaigns.campaign_id"),
+        nullable=False,
+    ),
+    Column("account_id", String, ForeignKey("accounts.account_id"), nullable=False),
+    Column("status", String, nullable=False),
+    Column("comment_text", String, nullable=True),
+    Column("comment_msg_id", Integer, nullable=True),
+    Column("created_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
+)

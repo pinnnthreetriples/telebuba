@@ -12,12 +12,24 @@ edges:
     condition: when a decision relates to system structure
   - target: context/stack.md
     condition: when a decision relates to technology choice
-last_updated: 2026-06-20
+last_updated: 2026-06-22
 ---
 
 # Decisions
 
 ## Decision Log
+
+### Neurocomment — separate event-driven package, dedicated listener, campaign model
+**Date:** 2026-06-22
+**Status:** Accepted (design, via grill; not yet built)
+**Decision:** The neurocomment feature (auto-commenting in channels' linked discussion groups) is a **separate `services/neurocomment/` package**, not an action-type inside the warming runtime. Its runtime is **event-driven**: a dedicated *listener* account subscribes to channel posts via a new gateway-owned `NewMessage` listener that surfaces a typed `NewPostEvent` (no Telethon leaks); warmed-pool accounts do the commenting. Work is organized into **campaigns** (`campaign_id`) binding {channels, accounts, prompt — the product mention is written into the prompt itself}. A **channel belongs to exactly one active campaign**; an **account may serve many campaigns** but its daily action budget is **per-account**. Accounts **pre-join** discussion groups and solve captcha at **campaign onboarding**, so a fresh post is commented immediately. New typed actions (`CommentOnPost` via Telethon `comment_to`, `ClickButton`, `GetLinkedDiscussionGroup`) follow the executor pattern.
+**Reasoning:** Warming is *periodic* (sleep-until-next-run); neurocomment must be *real-time* (be among the first commenters) — a fundamentally different trigger model. `context/warming.md` scopes its runtime to warming and says add a new model when semantics differ. Feature isolation forbids polluting warming's cycle. A dedicated listener gives a single detection source (no duplicate detection across the fleet) and keeps the low-risk listen role off commenting accounts. Pre-join at onboarding is required for "be first" — join+captcha latency on the hot path would lose the race.
+**Alternatives considered:**
+- *Action-type inside warming runtime* (rejected — mixes event-driven with the periodic sleep-loop, pollutes the warming domain).
+- *Every pool account listens* (rejected — duplicate detection, mixes listen/act roles, fleet-synchrony signal).
+- *Lazy join+captcha at first post* (rejected — slow first comment, captcha latency on the hot path).
+**Consequences:** New `services/neurocomment/` mirrors warming's *patterns* (per-account asyncio.Task ownership, pacing/readiness, CAS state, board, seams), not its code; reuses `trust`/`spam_status`/`evaluate_readiness` and warming anti-ban primitives. A new gateway **listener** capability (push) is added alongside the existing pull `execute`. State model is event-driven (`idle → commenting → cooldown` + `flood_wait`/`quarantine`/`error`; listener `listening`/`error`) — no `sleeping`-until-next-run. Daily limit is the account's own (warming → graduate-to-pool → comment are sequential phases, so no shared counter). New tables keyed by `campaign_id`. A deterministic product-mention ratio (%) plus a "K organic comments first" gate were considered and cut (YAGNI, per user): the product instruction and anti-detection wording live in the campaign prompt. Revisit a code-enforced ratio only if a guaranteed promo fraction is needed (a prompt cannot reliably hold a frequency across independent calls). Quality gate is lightweight (prompt-driven) first; split LLM-judge + semantic dedup, image-captcha (Gemini vision), and comment-deletion back-off are deferred to later phases. Supersedes the `services/comments/` placeholder name in `state/active.md`.
+**Ф0 update (2026-06-22):** spike #113 PROVED `comment_to` end-to-end (real outsider account: resolve channel → resolve linked group → real join → comment posted). Gate passed → Ф1 (#114–#119) unblocked. Captcha-SOLVING was NOT proven (test channel had no entry captcha) → Ф1 onboarding (#117) reduced to **detect-and-skip**; actual captcha-solving deferred to spike #120 (Ф2). Reconfirmed: `comment_to` requires group membership → pre-join at onboarding stays mandatory.
 
 ### Warming audit — scheduling, resilience, and UX fixes
 **Date:** 2026-06-20

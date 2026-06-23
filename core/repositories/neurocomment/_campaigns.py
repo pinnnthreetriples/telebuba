@@ -1,0 +1,214 @@
+"""Campaign-side neurocomment queries: campaigns, channel binding, account binding."""
+
+from __future__ import annotations
+
+import asyncio
+from typing import TYPE_CHECKING
+from uuid import uuid4
+
+from sqlalchemy import insert, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
+from sqlalchemy.exc import IntegrityError
+
+from core.db import _get_engine, _now_iso
+from core.repositories.neurocomment._tables import (
+    _neurocomment_campaign_accounts,
+    _neurocomment_campaign_channels,
+    _neurocomment_campaigns,
+)
+from schemas.neurocomment import (
+    CampaignAccountLink,
+    CampaignAccountList,
+    CampaignChannelLink,
+    CampaignChannelList,
+    CampaignCreate,
+    CampaignList,
+    NeurocommentCampaign,
+)
+
+if TYPE_CHECKING:
+    from sqlalchemy import RowMapping
+    from sqlalchemy.engine import Connection
+
+
+def _row_to_campaign(row: RowMapping) -> NeurocommentCampaign:
+    return NeurocommentCampaign.model_validate(dict(row))
+
+
+def _create_campaign(data: CampaignCreate) -> NeurocommentCampaign:
+    now = _now_iso()
+    campaign_id = uuid4().hex
+    with _get_engine().begin() as connection:
+        connection.execute(
+            insert(_neurocomment_campaigns).values(
+                campaign_id=campaign_id,
+                name=data.name,
+                prompt=data.prompt,
+                status=data.status,
+                created_at=now,
+                updated_at=now,
+            ),
+        )
+    campaign = _fetch_campaign(campaign_id)
+    if campaign is None:  # pragma: no cover - insert above guarantees the row
+        msg = f"Campaign was not persisted: {campaign_id}"
+        raise RuntimeError(msg)
+    return campaign
+
+
+async def create_campaign(data: CampaignCreate) -> NeurocommentCampaign:
+    """Open a new campaign with a generated ``campaign_id``."""
+    return await asyncio.to_thread(_create_campaign, data)
+
+
+def _fetch_campaign(campaign_id: str) -> NeurocommentCampaign | None:
+    statement = select(_neurocomment_campaigns).where(
+        _neurocomment_campaigns.c.campaign_id == campaign_id,
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).mappings().first()
+    return None if row is None else _row_to_campaign(row)
+
+
+async def fetch_campaign(campaign_id: str) -> NeurocommentCampaign | None:
+    return await asyncio.to_thread(_fetch_campaign, campaign_id)
+
+
+def _list_campaigns() -> CampaignList:
+    statement = select(_neurocomment_campaigns).order_by(
+        _neurocomment_campaigns.c.created_at.asc(),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return CampaignList(campaigns=[_row_to_campaign(row) for row in rows])
+
+
+async def list_campaigns() -> CampaignList:
+    return await asyncio.to_thread(_list_campaigns)
+
+
+class ChannelAlreadyAssignedError(RuntimeError):
+    """A channel is already active in another campaign (the one-active invariant)."""
+
+
+def _row_to_channel_link(row: RowMapping) -> CampaignChannelLink:
+    return CampaignChannelLink.model_validate(dict(row))
+
+
+def _active_channel_link(connection: Connection, channel: str) -> CampaignChannelLink | None:
+    statement = select(_neurocomment_campaign_channels).where(
+        (_neurocomment_campaign_channels.c.channel == channel)
+        & (_neurocomment_campaign_channels.c.active == 1),
+    )
+    row = connection.execute(statement).mappings().first()
+    return None if row is None else _row_to_channel_link(row)
+
+
+def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannelLink:
+    try:
+        with _get_engine().begin() as connection:
+            connection.execute(
+                insert(_neurocomment_campaign_channels).values(
+                    campaign_id=campaign_id,
+                    channel=channel,
+                    active=1,
+                    created_at=_now_iso(),
+                ),
+            )
+            link = _active_channel_link(connection, channel)
+    except IntegrityError:
+        with _get_engine().connect() as connection:
+            existing = _active_channel_link(connection, channel)
+        if existing is not None:
+            msg = f"Channel {channel!r} is already active in campaign {existing.campaign_id!r}"
+            raise ChannelAlreadyAssignedError(msg) from None
+        raise
+    if link is None:  # pragma: no cover - the insert above guarantees the row
+        msg = f"Channel link was not persisted: {channel!r}"
+        raise RuntimeError(msg)
+    return link
+
+
+async def link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannelLink:
+    """Bind a channel to a campaign as active.
+
+    Raises ``ChannelAlreadyAssignedError`` if the channel is already active in any
+    campaign (the DB partial-unique index is the source of truth).
+    """
+    return await asyncio.to_thread(_link_channel_to_campaign, campaign_id, channel)
+
+
+def _deactivate_channel(campaign_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_campaign_channels)
+            .where(
+                (_neurocomment_campaign_channels.c.campaign_id == campaign_id)
+                & (_neurocomment_campaign_channels.c.channel == channel)
+                & (_neurocomment_campaign_channels.c.active == 1),
+            )
+            .values(active=0),
+        )
+
+
+async def deactivate_channel(campaign_id: str, channel: str) -> None:
+    """Free a channel from a campaign — its active link becomes inactive."""
+    await asyncio.to_thread(_deactivate_channel, campaign_id, channel)
+
+
+def _list_campaign_channels(campaign_id: str) -> CampaignChannelList:
+    statement = (
+        select(_neurocomment_campaign_channels)
+        .where(
+            (_neurocomment_campaign_channels.c.campaign_id == campaign_id)
+            & (_neurocomment_campaign_channels.c.active == 1),
+        )
+        .order_by(_neurocomment_campaign_channels.c.id.asc())
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return CampaignChannelList(links=[_row_to_channel_link(row) for row in rows])
+
+
+async def list_campaign_channels(campaign_id: str) -> CampaignChannelList:
+    """Active channel links for a campaign."""
+    return await asyncio.to_thread(_list_campaign_channels, campaign_id)
+
+
+def _assign_account_to_campaign(campaign_id: str, account_id: str) -> None:
+    # on_conflict_do_nothing makes re-assignment idempotent while still letting a
+    # foreign-key violation (unknown campaign/account) surface as IntegrityError.
+    statement = (
+        sqlite_insert(_neurocomment_campaign_accounts)
+        .values(campaign_id=campaign_id, account_id=account_id, created_at=_now_iso())
+        .on_conflict_do_nothing(
+            index_elements=[
+                _neurocomment_campaign_accounts.c.campaign_id,
+                _neurocomment_campaign_accounts.c.account_id,
+            ],
+        )
+    )
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def assign_account_to_campaign(campaign_id: str, account_id: str) -> None:
+    """Add an account to a campaign (idempotent). An account may serve many campaigns."""
+    await asyncio.to_thread(_assign_account_to_campaign, campaign_id, account_id)
+
+
+def _list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
+    statement = (
+        select(_neurocomment_campaign_accounts)
+        .where(_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
+        .order_by(_neurocomment_campaign_accounts.c.created_at.asc())
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return CampaignAccountList(
+        links=[CampaignAccountLink.model_validate(dict(row)) for row in rows],
+    )
+
+
+async def list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
+    return await asyncio.to_thread(_list_campaign_accounts, campaign_id)

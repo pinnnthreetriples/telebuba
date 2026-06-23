@@ -227,6 +227,78 @@ def _add_warming_phase_columns(connection: Connection) -> None:
         )
 
 
+def _add_neurocomment_tables(connection: Connection) -> None:
+    # Ф1 data layer (#114). Mirrors the SQLAlchemy tables in core.db; created
+    # idempotently here so existing databases gain them on the next engine init.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_campaigns ("
+        "  campaign_id VARCHAR PRIMARY KEY,"
+        "  name VARCHAR NOT NULL,"
+        "  prompt VARCHAR NOT NULL,"
+        "  status VARCHAR NOT NULL,"
+        "  created_at VARCHAR NOT NULL,"
+        "  updated_at VARCHAR NOT NULL"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_campaign_channels ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  campaign_id VARCHAR NOT NULL REFERENCES neurocomment_campaigns(campaign_id),"
+        "  channel VARCHAR NOT NULL,"
+        "  active INTEGER NOT NULL,"
+        "  created_at VARCHAR NOT NULL"
+        ")",
+    )
+    # The invariant, enforced in the DB: a channel sits in at most one ACTIVE
+    # campaign. Partial unique index (SQLite >= 3.35) — inactive links are
+    # exempt, so a channel can move between campaigns over its lifetime.
+    connection.exec_driver_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_neurocomment_channel_one_active_campaign "
+        "ON neurocomment_campaign_channels(channel) WHERE active = 1",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_campaign_accounts ("
+        "  campaign_id VARCHAR NOT NULL REFERENCES neurocomment_campaigns(campaign_id),"
+        "  account_id VARCHAR NOT NULL REFERENCES accounts(account_id),"
+        "  created_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (campaign_id, account_id)"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_linked_groups ("
+        "  channel VARCHAR PRIMARY KEY,"
+        "  linked_chat_id BIGINT,"
+        "  comments_enabled INTEGER NOT NULL,"
+        "  checked_at VARCHAR NOT NULL"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_readiness ("
+        "  account_id VARCHAR NOT NULL REFERENCES accounts(account_id),"
+        "  channel VARCHAR NOT NULL,"
+        "  joined INTEGER NOT NULL,"
+        "  captcha_passed INTEGER NOT NULL,"
+        "  ready INTEGER NOT NULL,"
+        "  checked_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (account_id, channel)"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_comments ("
+        "  channel VARCHAR NOT NULL,"
+        "  post_id INTEGER NOT NULL,"
+        "  campaign_id VARCHAR NOT NULL REFERENCES neurocomment_campaigns(campaign_id),"
+        "  account_id VARCHAR NOT NULL REFERENCES accounts(account_id),"
+        "  status VARCHAR NOT NULL,"
+        "  comment_text VARCHAR,"
+        "  comment_msg_id INTEGER,"
+        "  created_at VARCHAR NOT NULL,"
+        "  updated_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (channel, post_id)"
+        ")",
+    )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -240,6 +312,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (8, "add_warming_state_run_id", _add_warming_state_run_id),
     (9, "rename_proxy_type_http_to_https", _rename_proxy_type_http_to_https),
     (10, "add_warming_phase_columns", _add_warming_phase_columns),
+    (11, "add_neurocomment_tables", _add_neurocomment_tables),
 )
 
 
