@@ -55,6 +55,8 @@ telebuba/
 │   │   ├── _pipeline.py       animated 6-step cycle rail + active-step detail + summary
 │   │   └── _termlog.py        expandable per-account dark "terminal" activity log on each card
 │   ├── neurocomment/        neurocomment page: campaign create + channel pool + account/listener picker + onboard/start/stop + work-view board (_page.py)
+│   ├── shared/              cross-page UI chrome — the one sanctioned cross-feature namespace
+│   │   └── nav.py              single source of truth for the top nav bar (links + active styling)
 │   └── logs.py
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```

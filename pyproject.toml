@@ -161,6 +161,7 @@ ignore = [
 "features/logs.py" = ["RUF001", "RUF002", "RUF003"]
 "features/neurocomment/**" = ["RUF001", "RUF002", "RUF003"]
 "features/warming/**" = ["RUF001", "RUF002", "RUF003"]
+"features/shared/**" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -219,9 +220,26 @@ paths = ["core", "features", "schemas", "services"]
 
 # ============================================================================
 # mutmut — mutation testing. Run nightly; not a PR gate.
-# Only mutates lines that are already covered by tests.
+# Only mutates lines already covered by tests, and only the pure-logic layers
+# (services, schemas) where mutation testing pays off. core/ (I/O gateways) and
+# features/ (UI) are excluded — heavily mocked / low-signal and far too slow: the
+# full four-package run took 40+ min without finishing.
 # ============================================================================
 [tool.mutmut]
-source_paths = ["services", "core", "schemas", "features"]
-pytest_add_cli_args_test_selection = ["tests/services", "tests/core", "tests/features"]
+source_paths = ["services", "schemas"]
+pytest_add_cli_args_test_selection = ["tests"]
 mutate_only_covered_lines = true
+# mutmut copies source into a `mutants/` dir and runs pytest from INSIDE it, so
+# everything the suite needs must be copied in too, or collection fails there:
+#   - core/, features/ — imported by the tests (e.g. services tests use core.db)
+#     but NOT in source_paths, so copied verbatim (present, never mutated);
+#   - tests/, the root conftest.py, pyproject.toml (pytest config), and the
+#     .env.example that tests/test_architecture.py reads.
+# Without this, pytest hits ModuleNotFoundError / collects zero tests inside
+# mutants/ and mutmut aborts before testing a single mutant.
+also_copy = ["core", "features", "tests", "conftest.py", "pyproject.toml", ".env.example"]
+# Drop the project addopts for the per-mutant runs: the strict --cov /
+# --cov-fail-under=90 gates would make every partial run exit non-zero and
+# corrupt mutmut's kill/survive signal. asyncio_mode / filterwarnings live in
+# their own ini keys, so they still apply.
+pytest_add_cli_args = ["-o", "addopts="]

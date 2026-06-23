@@ -27,6 +27,7 @@ from services.warming._cycle import _human_delay, run_one_cycle
 from services.warming._loop import run_loop_iteration
 from services.warming._runner import _initial_delay_seconds, _loop_sleep_seconds
 from services.warming._runtime import (
+    _ACCOUNT_LOCKS,
     _RUNTIME,
     UnknownAccountError,
     WarmingNotReadyError,
@@ -53,6 +54,7 @@ from services.warming.pacing import (
 from services.warming.settings_store import load_settings, save_settings
 
 __all__ = [
+    "_ACCOUNT_LOCKS",
     "_RUNTIME",
     "UnknownAccountError",
     "WarmingNotReadyError",

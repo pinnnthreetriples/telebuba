@@ -29,6 +29,7 @@ from typing import TYPE_CHECKING, cast
 from nicegui import context, ui
 
 from core.config import settings
+from features.shared import TOP_BAR_CLASSES, render_nav
 from features.warming._activity import _render_activity_log, _render_dialogues
 from features.warming._board import (
     _BoardContext,
@@ -117,17 +118,8 @@ def register_warming_page() -> None:  # pragma: no cover
 
 
 def _build_header() -> None:  # pragma: no cover
-    with (
-        ui.row().classes(
-            "w-full items-center justify-between px-4 py-2 bg-white "
-            "text-slate-950 border-b border-slate-200",
-        ),
-        ui.row().classes("items-center gap-4"),
-    ):
-        ui.label("Telebuba").classes("text-lg font-semibold")
-        ui.link("Аккаунты", "/").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
-        ui.link("Прогрев", "/warming").classes("text-sm font-medium text-slate-900 no-underline")
-        ui.link("Логи", "/logs").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
+    with ui.row().classes(TOP_BAR_CLASSES):
+        render_nav("/warming")
 
 
 async def _refresh_card_logs(ctx: _BoardContext, account_id: str) -> bool:  # pragma: no cover
