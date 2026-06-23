@@ -30,6 +30,20 @@ def content_hash(text: str) -> str:
     return hashlib.sha256(normalize_text(text).encode("utf-8")).hexdigest()
 
 
+def similarity(a: str, b: str) -> float:
+    """Token-set Jaccard over normalized text: intersection size / union size, 0.0-1.0.
+
+    A cheap, local near-duplicate signal for cross-account comment dedup — no
+    embeddings, no network on the hot path. Two empty token sets count as identical.
+    """
+    tokens_a = set(normalize_text(a).split())
+    tokens_b = set(normalize_text(b).split())
+    union = tokens_a | tokens_b
+    if not union:
+        return 1.0
+    return len(tokens_a & tokens_b) / len(union)
+
+
 def has_link(text: str) -> bool:
     return _LINK_RE.search(text) is not None
 

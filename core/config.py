@@ -273,6 +273,13 @@ class NeurocommentSettings(BaseSettings):
     max_comments_per_channel_per_day: int = Field(default=3, ge=0)
     # Retries for a failed comment attempt before giving up.
     max_retries: int = Field(default=2, ge=0, le=5)
+    # Cross-account semantic dedup (token-set Jaccard over normalized text): reject a
+    # candidate whose max similarity to a recent posted comment in the same channel
+    # within the window reaches this threshold, then regenerate. 0 disables it; the
+    # exact-hash reservation stays the atomic claim regardless.
+    semantic_dedup_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
+    # Look-back window for the semantic-dedup comparison set (recent posted comments).
+    semantic_dedup_window_hours: float = Field(default=24.0, ge=0.0)
     # In-memory cooldown applied to an account after a PEER_FLOOD (no duration is
     # supplied by Telegram, unlike a timed flood-wait) before it is reselected.
     peer_flood_cooldown_seconds: float = Field(default=3600.0, ge=0.0)
