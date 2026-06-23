@@ -14,7 +14,11 @@ from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import list_active_watch_channels
+from core.db import (
+    get_listener_account_id,
+    list_active_watch_channels,
+    set_listener_account_id,
+)
 from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
 from schemas.telegram_actions import JoinChannel
@@ -85,6 +89,40 @@ async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
             asyncio.gather(*tasks, return_exceptions=True),
             timeout=settings.neurocomment.stop_cancel_timeout_seconds,
         )
+
+
+async def start_neurocomment(listener_account_id: str) -> None:
+    """Persist the listener account and (re)point the runtime at the watch set."""
+    await set_listener_account_id(listener_account_id)
+    await reconcile_neurocomment_runtime(listener_account_id)
+
+
+async def stop_neurocomment() -> None:
+    """Stop the runtime for the persisted listener account and clear it.
+
+    The persisted id is cleared even if shutdown raises, so "stop" reliably
+    stops: a fresh boot must never resume a listener the operator turned off.
+    """
+    listener_account_id = await get_listener_account_id()
+    try:
+        if listener_account_id is not None:
+            await shutdown_neurocomment_runtime(listener_account_id)
+    finally:
+        await set_listener_account_id(None)
+
+
+async def reconcile_neurocomment_on_startup() -> None:
+    """No-arg ``app.on_startup`` hook: resume the listener if one is persisted."""
+    listener_account_id = await get_listener_account_id()
+    if listener_account_id is not None:
+        await reconcile_neurocomment_runtime(listener_account_id)
+
+
+async def shutdown_neurocomment_on_shutdown() -> None:
+    """No-arg ``app.on_shutdown`` hook: tear the listener + tasks down on exit."""
+    listener_account_id = await get_listener_account_id()
+    if listener_account_id is not None:
+        await shutdown_neurocomment_runtime(listener_account_id)
 
 
 def reset_for_tests() -> None:

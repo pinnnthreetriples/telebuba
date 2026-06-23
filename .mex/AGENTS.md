@@ -34,6 +34,7 @@ telebuba/
 │   │   ├── _pool.py           client pool management
 │   │   ├── _read.py           message reading actions
 │   │   ├── _read_stories.py   story reading actions
+│   │   ├── _listener.py       standing post listener (subscribe_posts/stop_post_listener) for neurocomment
 │   │   └── _video.py          video/media actions
 │   ├── config.py           pydantic-settings, nested namespaces
 │   ├── gemini.py           HTTP gateway for Gemini
@@ -42,7 +43,7 @@ telebuba/
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile/proxy operations
 │   ├── warming/            runtime workflow domain package
-│   ├── neurocomment/       campaign comment automation: onboarding.py (pre-join+readiness), engine.py (on-post pipeline handle_new_post), _runtime.py (listener wiring + per-post task ownership), _state.py (transient cooldowns), _seams.py (execute/generate_text/refresh_spam_status/rng)
+│   ├── neurocomment/       campaign comment automation: onboarding.py (pre-join+readiness), engine.py (on-post pipeline handle_new_post), _runtime.py (listener wiring + per-post task ownership + start/stop/reconcile-on-startup entrypoints), board.py (work-view read model, bulk-loaded), _state.py (transient cooldowns), _seams.py (execute/generate_text/refresh_spam_status/rng)
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
 │   ├── logs.py             log query helpers for the Logs page
@@ -53,6 +54,7 @@ telebuba/
 │   ├── warming/
 │   │   ├── _pipeline.py       animated 6-step cycle rail + active-step detail + summary
 │   │   └── _termlog.py        expandable per-account dark "terminal" activity log on each card
+│   ├── neurocomment/        neurocomment page: campaign create + channel pool + account/listener picker + onboard/start/stop + work-view board (_page.py)
 │   └── logs.py
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```

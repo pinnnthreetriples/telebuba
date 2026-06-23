@@ -299,6 +299,19 @@ def _add_neurocomment_tables(connection: Connection) -> None:
     )
 
 
+def _add_neurocomment_runtime(connection: Connection) -> None:
+    # #119: single-row table persisting the active listener account id so the
+    # engine can re-point the listener at boot. id is pinned to 1; NULL
+    # listener_account_id means the listener is stopped.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_runtime ("
+        "  id INTEGER PRIMARY KEY CHECK (id = 1),"
+        "  listener_account_id VARCHAR,"
+        "  updated_at VARCHAR NOT NULL"
+        ")",
+    )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -313,6 +326,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (9, "rename_proxy_type_http_to_https", _rename_proxy_type_http_to_https),
     (10, "add_warming_phase_columns", _add_warming_phase_columns),
     (11, "add_neurocomment_tables", _add_neurocomment_tables),
+    (12, "add_neurocomment_runtime", _add_neurocomment_runtime),
 )
 
 

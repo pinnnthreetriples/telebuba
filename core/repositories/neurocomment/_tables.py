@@ -9,7 +9,7 @@ repository package pulls it in, and ``core.db`` imports the package before
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, Column, ForeignKey, Integer, String, Table
+from sqlalchemy import BigInteger, CheckConstraint, Column, ForeignKey, Integer, String, Table
 
 from core.db import _metadata
 
@@ -84,4 +84,14 @@ _neurocomment_comments = Table(
     Column("comment_msg_id", Integer, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+)
+# Single-row table holding the active listener account id so the engine can
+# re-point the listener at boot. ``id`` is pinned to 1 (migration #12).
+_neurocomment_runtime = Table(
+    "neurocomment_runtime",
+    _metadata,
+    Column("id", Integer, primary_key=True),
+    Column("listener_account_id", String, nullable=True),
+    Column("updated_at", String, nullable=False),
+    CheckConstraint("id = 1", name="ck_neurocomment_runtime_single_row"),
 )

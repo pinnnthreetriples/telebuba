@@ -17,7 +17,9 @@ from core.config import settings
 from core.db import (
     configure_database,
     create_campaign,
+    get_listener_account_id,
     link_channel_to_campaign,
+    set_listener_account_id,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.neurocomment import CampaignCreate
@@ -199,3 +201,111 @@ async def test_shutdown_with_no_tasks_just_stops_listener(
 
     assert spy.stopped == ["listener-1"]
     assert not _runtime._TASKS
+
+
+# --------------------------------------------------------------------------- #
+# Service entrypoints (#119): start/stop/reconcile-on-startup/shutdown-on-shutdown.
+# --------------------------------------------------------------------------- #
+
+
+class _ReconcileSpy:
+    def __init__(self) -> None:
+        self.reconciled: list[str] = []
+        self.shut_down: list[str] = []
+
+    async def reconcile(self, account_id: str) -> None:
+        self.reconciled.append(account_id)
+
+    async def shutdown(self, account_id: str) -> None:
+        self.shut_down.append(account_id)
+
+
+def _patch_engine(monkeypatch: pytest.MonkeyPatch, spy: _ReconcileSpy) -> None:
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", spy.reconcile)
+    monkeypatch.setattr(_runtime, "shutdown_neurocomment_runtime", spy.shutdown)
+
+
+@pytest.mark.asyncio
+async def test_start_persists_listener_then_reconciles(monkeypatch: pytest.MonkeyPatch) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+
+    await _runtime.start_neurocomment("listener-1")
+
+    assert await get_listener_account_id() == "listener-1"
+    assert spy.reconciled == ["listener-1"]
+
+
+@pytest.mark.asyncio
+async def test_stop_shuts_down_persisted_listener_then_clears(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+
+    await _runtime.stop_neurocomment()
+
+    assert spy.shut_down == ["listener-1"]
+    assert await get_listener_account_id() is None
+
+
+@pytest.mark.asyncio
+async def test_stop_with_no_listener_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+
+    await _runtime.stop_neurocomment()
+
+    assert spy.shut_down == []
+    assert await get_listener_account_id() is None
+
+
+@pytest.mark.asyncio
+async def test_reconcile_on_startup_resumes_persisted_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+
+    await _runtime.reconcile_neurocomment_on_startup()
+
+    assert spy.reconciled == ["listener-1"]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_on_startup_does_nothing_when_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+
+    await _runtime.reconcile_neurocomment_on_startup()
+
+    assert spy.reconciled == []
+
+
+@pytest.mark.asyncio
+async def test_shutdown_on_shutdown_tears_down_persisted_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+
+    await _runtime.shutdown_neurocomment_on_shutdown()
+
+    assert spy.shut_down == ["listener-1"]
+
+
+@pytest.mark.asyncio
+async def test_shutdown_on_shutdown_does_nothing_when_stopped(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+
+    await _runtime.shutdown_neurocomment_on_shutdown()
+
+    assert spy.shut_down == []

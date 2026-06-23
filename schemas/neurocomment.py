@@ -101,6 +101,12 @@ class LinkedDiscussionGroup(BaseModel):
     checked_at: str = Field(min_length=1)
 
 
+class LinkedGroupList(BaseModel):
+    """Wrapper for a bulk read of linked-group resolutions (non-negotiable #2)."""
+
+    groups: list[LinkedDiscussionGroup] = Field(default_factory=list)
+
+
 class NeurocommentReadiness(BaseModel):
     """Per-(account, channel) readiness to comment: joined + captcha passed."""
 
@@ -110,6 +116,12 @@ class NeurocommentReadiness(BaseModel):
     captcha_passed: bool
     ready: bool
     checked_at: str = Field(min_length=1)
+
+
+class ReadinessList(BaseModel):
+    """Wrapper for a bulk read of readiness rows (non-negotiable #2)."""
+
+    readiness: list[NeurocommentReadiness] = Field(default_factory=list)
 
 
 class CommentRecord(BaseModel):
@@ -124,6 +136,12 @@ class CommentRecord(BaseModel):
     comment_msg_id: int | None = None
     created_at: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
+
+
+class CommentList(BaseModel):
+    """Wrapper for a bulk read of comment rows (non-negotiable #2)."""
+
+    comments: list[CommentRecord] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #
@@ -158,3 +176,60 @@ class CampaignOnboardingResult(BaseModel):
 
     campaign_id: str = Field(min_length=1)
     outcomes: list[AccountChannelOnboarding] = Field(default_factory=list)
+
+
+# --------------------------------------------------------------------------- #
+# Board read model (issue #119) — bulk-built UI state, no per-card DB queries.
+# --------------------------------------------------------------------------- #
+
+ChannelStatus = Literal[
+    "ready",
+    "comments_off",
+    "join_by_request",
+    "captcha_gated",
+    "throttled",
+]
+
+
+class AccountChannelReadiness(BaseModel):
+    """One channel's readiness summary on an account card."""
+
+    channel: str = Field(min_length=1)
+    ready: bool
+    joined: bool
+    captcha_passed: bool
+
+
+class NeurocommentAccountCard(BaseModel):
+    """Per-account card in the work view: limits, health, last activity."""
+
+    account_id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    health: str = Field(min_length=1)
+    trust_score: int
+    trust_band: str = Field(min_length=1)
+    spam_status: str | None = None
+    comments_last_hour: int
+    max_comments_per_hour: int
+    comments_today: int
+    last_comment_at: str | None = None
+    readiness: list[AccountChannelReadiness] = Field(default_factory=list)
+
+
+class NeurocommentChannelRow(BaseModel):
+    """Per-channel row: aggregate status derived from readiness + linked group."""
+
+    channel: str = Field(min_length=1)
+    status: ChannelStatus
+    ready_accounts: int
+    total_accounts: int
+
+
+class NeurocommentBoard(BaseModel):
+    """Bulk read model for the work view of one campaign."""
+
+    campaign_id: str = Field(min_length=1)
+    campaign_name: str = Field(min_length=1)
+    status: CampaignStatus
+    accounts: list[NeurocommentAccountCard] = Field(default_factory=list)
+    channels: list[NeurocommentChannelRow] = Field(default_factory=list)

@@ -11,17 +11,27 @@ from __future__ import annotations
 
 from services.neurocomment._runtime import (
     on_post,
+    reconcile_neurocomment_on_startup,
     reconcile_neurocomment_runtime,
+    shutdown_neurocomment_on_shutdown,
     shutdown_neurocomment_runtime,
+    start_neurocomment,
+    stop_neurocomment,
 )
+from services.neurocomment.board import load_neurocomment_board
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_account_channel, onboard_campaign
 
 __all__ = [
     "handle_new_post",
+    "load_neurocomment_board",
     "on_post",
     "onboard_account_channel",
     "onboard_campaign",
+    "reconcile_neurocomment_on_startup",
     "reconcile_neurocomment_runtime",
+    "shutdown_neurocomment_on_shutdown",
     "shutdown_neurocomment_runtime",
+    "start_neurocomment",
+    "stop_neurocomment",
 ]
