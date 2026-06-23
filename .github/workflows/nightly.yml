@@ -96,3 +96,9 @@ jobs:
 
       - name: Run mutmut
         run: uv run mutmut run
+
+      # Always surface the kill/survive breakdown — a bare `mutmut run` leaves no
+      # visible signal, so surviving mutants (the whole point) went unseen.
+      - name: Show mutation results
+        if: always()
+        run: uv run mutmut results
