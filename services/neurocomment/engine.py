@@ -254,6 +254,8 @@ async def _generate_acceptable(
             continue
         if not await try_reserve_sent(candidate):
             continue
+        # ponytail: `recent` is [] when semantic dedup is off (see _recent_channel_comments),
+        # so this any() is the off-switch; don't also guard the threshold here.
         if any(similarity(candidate, prev) >= nc.semantic_dedup_threshold for prev in recent):
             await release_sent_text(candidate)
             continue
