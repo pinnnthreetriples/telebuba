@@ -19,17 +19,35 @@ from services.neurocomment._runtime import (
     stop_neurocomment,
 )
 from services.neurocomment.board import load_neurocomment_board
+from services.neurocomment.campaigns import (
+    assign_account_to_campaign,
+    create_campaign,
+    deactivate_channel,
+    link_channel,
+    list_campaign_accounts,
+    list_campaign_channels,
+    list_campaigns,
+    remove_account_from_campaign,
+)
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_account_channel, onboard_campaign
 
 __all__ = [
+    "assign_account_to_campaign",
+    "create_campaign",
+    "deactivate_channel",
     "handle_new_post",
+    "link_channel",
+    "list_campaign_accounts",
+    "list_campaign_channels",
+    "list_campaigns",
     "load_neurocomment_board",
     "on_post",
     "onboard_account_channel",
     "onboard_campaign",
     "reconcile_neurocomment_on_startup",
     "reconcile_neurocomment_runtime",
+    "remove_account_from_campaign",
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neurocomment_runtime",
     "start_neurocomment",

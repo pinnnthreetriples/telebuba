@@ -29,12 +29,10 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
-from schemas.accounts import AccountCreate
+from schemas.accounts import AccountCreate, AccountList
 from schemas.gemini import GeminiResult
 from schemas.neurocomment import CampaignCreate
-from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, NewPostEvent
-from schemas.trust import TrustScore
 from services.content import try_reserve_sent
 from services.neurocomment import _seams, _state, engine
 
@@ -57,20 +55,10 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     _state.reset_for_tests()
     # Generation/post never actually wait.
     monkeypatch.setattr(engine.asyncio, "sleep", _no_sleep)
-    # Default health: account is healthy, trust good, spam clean, readiness ready.
+    # Default health: the readiness gate is forced open. Trust is scored from bulk
+    # signals via the pure account_trust_score_from and ignored here (evaluate_readiness
+    # is stubbed); spam comes from the cached bulk read, never a live probe.
     monkeypatch.setattr(engine, "evaluate_readiness", lambda *_a, **_k: _Readiness(ready=True))
-    monkeypatch.setattr(
-        engine,
-        "account_trust_score",
-        _async_return(TrustScore(account_id="x", score=90, band="good")),
-    )
-    monkeypatch.setattr(
-        _seams,
-        "refresh_spam_status",
-        _async_return(
-            SpamStatusVerdict(account_id="x", status="clean", checked_at="2026-01-01T00:00:00"),
-        ),
-    )
     yield
     _state.reset_for_tests()
 
@@ -287,7 +275,8 @@ async def test_not_ready_account_is_skipped_no_claim(monkeypatch: pytest.MonkeyP
 @pytest.mark.asyncio
 async def test_missing_account_row_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")
-    monkeypatch.setattr(engine, "fetch_account", _async_return(None))
+    # Account is assigned + ready, but absent from the bulk account read → skipped.
+    monkeypatch.setattr(engine, "list_accounts", _async_return(AccountList(accounts=[])))
     comment = _CommentStub()
     _patch_io(monkeypatch, comment=comment)
 
@@ -777,3 +766,27 @@ async def test_unexpected_exception_is_swallowed(monkeypatch: pytest.MonkeyPatch
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
     assert comment.calls == []
+
+
+@pytest.mark.asyncio
+async def test_selection_reads_cached_spam_and_never_probes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Q2: the post path scores health from the cached spam bulk-read and must never
+    # probe @SpamBot — probing per post is itself a ban signal.
+    await _make_campaign("@chan", "acc-1")
+    probed: list[object] = []
+
+    async def _boom(*args: object, **_kwargs: object) -> object:
+        probed.append(args)
+        msg = "refresh_spam_status must not be called on the post path"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", _boom)
+    comment = _CommentStub(status="ok", message_id=5)
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    assert probed == []
+    assert len(comment.calls) == 1

@@ -176,6 +176,10 @@ async def onboard_campaign(campaign_id: str) -> CampaignOnboardingResult:
 
     channels = (await list_campaign_channels(campaign_id)).links
     accounts = [link.account_id for link in (await list_campaign_accounts(campaign_id)).links]
+    # Establish each serving account's spam verdict up front. Selection reads this
+    # from cache and never re-probes @SpamBot per post (anti-ban), so a verdict must
+    # exist before the account goes on the line.
+    await _probe_account_spam(accounts)
 
     outcomes: list[AccountChannelOnboarding] = []
     joined_once = False
@@ -248,3 +252,22 @@ async def _join_pair_safely(account_id: str, channel: str) -> AccountChannelOnbo
             state="failed",
             reason=type(exc).__name__,
         )
+
+
+async def _probe_account_spam(accounts: list[str]) -> None:
+    """Probe each serving account's spam status once at onboarding (off the post path).
+
+    Selection reads the cached verdict and never re-probes @SpamBot per post (anti-ban),
+    so onboarding establishes one up front. ``force=False`` reuses a fresh cache; a probe
+    failure is logged, never fatal — onboarding proceeds.
+    """
+    for account_id in accounts:
+        try:
+            await _seams.refresh_spam_status(account_id, force=False)
+        except Exception as exc:  # noqa: BLE001 - a spam probe must never abort onboarding
+            await log_event(
+                "WARNING",
+                "neurocomment_onboard_spam_probe_failed",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__},
+            )

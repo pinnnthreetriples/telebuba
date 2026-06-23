@@ -66,6 +66,21 @@ class CampaignChannelList(BaseModel):
     links: list[CampaignChannelLink] = Field(default_factory=list)
 
 
+ChannelLinkStatus = Literal["linked", "already_assigned"]
+
+
+class ChannelLinkOutcome(BaseModel):
+    """Result of attaching a channel to a campaign.
+
+    ``already_assigned`` means the channel is the active target of another campaign
+    (the repository's uniqueness guard). The service returns this instead of letting
+    ``ChannelAlreadyAssignedError`` reach the UI, so features never catch internals (#2).
+    """
+
+    status: ChannelLinkStatus
+    channel: str = Field(min_length=1)
+
+
 class ChannelList(BaseModel):
     """Wrapper for a plain list of channel handles (non-negotiable #2).
 
@@ -142,6 +157,23 @@ class CommentList(BaseModel):
     """Wrapper for a bulk read of comment rows (non-negotiable #2)."""
 
     comments: list[CommentRecord] = Field(default_factory=list)
+
+
+class AccountCommentCount(BaseModel):
+    """One account's comment count within a quota window (bulk quota read)."""
+
+    account_id: str = Field(min_length=1)
+    count: int
+
+
+class CommentCountList(BaseModel):
+    """Wrapper for bulk per-account comment counts (non-negotiable #2).
+
+    Lets account selection score N candidates' quota usage from one grouped query
+    instead of one count per candidate.
+    """
+
+    counts: list[AccountCommentCount] = Field(default_factory=list)
 
 
 # --------------------------------------------------------------------------- #

@@ -312,6 +312,26 @@ def _add_neurocomment_runtime(connection: Connection) -> None:
     )
 
 
+def _add_neurocomment_comment_indexes(connection: Connection) -> None:
+    # Secondary indexes for the quota gate + bulk account selection. The PK
+    # (channel, post_id) serves the per-post claim/mark lookups but not the
+    # account-wide hourly count, the per-channel day count, or the campaign+channel
+    # recent-posted dedup read — each would full-scan neurocomment_comments as it
+    # grows. Column order matches those query shapes (verified via EXPLAIN QUERY PLAN).
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_comments_account_status_created "
+        "ON neurocomment_comments(account_id, status, created_at)",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_comments_channel_account_status_created "
+        "ON neurocomment_comments(channel, account_id, status, created_at)",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_comments_campaign_channel_status_created "
+        "ON neurocomment_comments(campaign_id, channel, status, created_at)",
+    )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -327,6 +347,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (10, "add_warming_phase_columns", _add_warming_phase_columns),
     (11, "add_neurocomment_tables", _add_neurocomment_tables),
     (12, "add_neurocomment_runtime", _add_neurocomment_runtime),
+    (13, "add_neurocomment_comment_indexes", _add_neurocomment_comment_indexes),
 )
 
 

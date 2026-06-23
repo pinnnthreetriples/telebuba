@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import mimetypes
 from contextlib import suppress
 from io import BytesIO
@@ -108,7 +109,7 @@ async def _story_media(
         # only enforces the chat-photo 1280 px cap, and we go through the
         # lower-level upload_file path that skips it entirely — so we have
         # to normalise to 1080x1920 ourselves before the upload.
-        content = _normalize_story_image_for_telegram(content)
+        content = await asyncio.to_thread(_normalize_story_image_for_telegram, content)
         uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
         return InputMediaUploadedPhoto(file=uploaded)
     # Video story — re-encode through ffmpeg to H.264/AAC MP4 at 720x1280

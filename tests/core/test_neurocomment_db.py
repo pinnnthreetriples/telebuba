@@ -18,6 +18,8 @@ from core.db import (  # type: ignore[attr-defined]
     configure_database,
     count_account_channel_comments_since,
     count_account_comments_since,
+    count_channel_comments_per_account_since,
+    count_comments_per_account_since,
     create_account,
     create_campaign,
     deactivate_channel,
@@ -31,6 +33,7 @@ from core.db import (  # type: ignore[attr-defined]
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
+    list_posted_comments_for_channel_since,
     mark_comment_failed,
     mark_comment_posted,
     remove_account_from_campaign,
@@ -77,6 +80,21 @@ def test_neurocomment_tables_created_and_migration_stamped() -> None:
             int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
         }
     assert 11 in versions
+
+
+def test_neurocomment_comment_indexes_created() -> None:
+    engine = _get_engine()
+    index_names = {ix["name"] for ix in inspect(engine).get_indexes("neurocomment_comments")}
+    assert {
+        "ix_nc_comments_account_status_created",
+        "ix_nc_comments_channel_account_status_created",
+        "ix_nc_comments_campaign_channel_status_created",
+    } <= index_names
+    with engine.connect() as connection:
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert 13 in versions
 
 
 @pytest.mark.asyncio
@@ -300,6 +318,56 @@ async def test_count_account_channel_comments_since_is_channel_scoped() -> None:
     assert await count_account_channel_comments_since("acc-1", "@one", past) == 2
     assert await count_account_channel_comments_since("acc-1", "@two", past) == 1
     assert await count_account_channel_comments_since("acc-1", "@none", past) == 0
+
+
+@pytest.mark.asyncio
+async def test_bulk_per_account_counts_match_per_account_readers() -> None:
+    # The bulk grouped readers (Tier 2 selection) must agree with the trusted
+    # per-account readers they replace — account-wide and per-channel.
+    for acc in ("acc-1", "acc-2"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+
+    await _post_one("@one", 1, campaign.campaign_id, "acc-1")
+    await _post_one("@one", 2, campaign.campaign_id, "acc-1")
+    await _post_one("@two", 3, campaign.campaign_id, "acc-1")
+    await _post_one("@one", 4, campaign.campaign_id, "acc-2")
+    # An in-flight claim (claimed, not yet posted) consumes quota too.
+    assert await claim_comment("@one", 5, campaign.campaign_id, "acc-2") is True
+
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+
+    grouped = await count_comments_per_account_since(past)
+    per_account = {c.account_id: c.count for c in grouped.counts}
+    assert per_account == {"acc-1": 3, "acc-2": 2}
+    for acc in ("acc-1", "acc-2", "ghost"):
+        assert per_account.get(acc, 0) == await count_account_comments_since(acc, past)
+
+    channel_grouped = await count_channel_comments_per_account_since("@one", past)
+    per_channel = {c.account_id: c.count for c in channel_grouped.counts}
+    assert per_channel == {"acc-1": 2, "acc-2": 2}
+    for acc in ("acc-1", "acc-2", "ghost"):
+        expected = await count_account_channel_comments_since(acc, "@one", past)
+        assert per_channel.get(acc, 0) == expected
+
+
+@pytest.mark.asyncio
+async def test_list_posted_comments_for_channel_is_scoped_to_channel_and_posted() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    await _post_one("@one", 1, campaign.campaign_id, "acc-1")
+    await _post_one("@one", 2, campaign.campaign_id, "acc-1")
+    await _post_one("@two", 3, campaign.campaign_id, "acc-1")
+    # A claimed-but-not-posted comment is excluded (status != posted).
+    assert await claim_comment("@one", 4, campaign.campaign_id, "acc-1") is True
+
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    one = await list_posted_comments_for_channel_since(campaign.campaign_id, "@one", past)
+    assert {c.post_id for c in one.comments} == {1, 2}
+    two = await list_posted_comments_for_channel_since(campaign.campaign_id, "@two", past)
+    assert {c.post_id for c in two.comments} == {3}
+    none = await list_posted_comments_for_channel_since(campaign.campaign_id, "@none", past)
+    assert none.comments == []
 
 
 @pytest.mark.asyncio

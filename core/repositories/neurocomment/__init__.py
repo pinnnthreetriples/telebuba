@@ -27,18 +27,23 @@ from core.repositories.neurocomment._campaigns import (
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
-    count_account_channel_comments_since,
-    count_account_comments_since,
     fetch_comment,
     fetch_linked_group,
     fetch_readiness,
     list_campaign_readiness,
     list_linked_groups,
+    list_posted_comments_for_channel_since,
     list_posted_comments_since,
     mark_comment_failed,
     mark_comment_posted,
     upsert_linked_group,
     upsert_readiness,
+)
+from core.repositories.neurocomment._quota import (
+    count_account_channel_comments_since,
+    count_account_comments_since,
+    count_channel_comments_per_account_since,
+    count_comments_per_account_since,
 )
 from core.repositories.neurocomment._runtime import (
     get_listener_account_id,
@@ -51,6 +56,8 @@ __all__ = [
     "claim_comment",
     "count_account_channel_comments_since",
     "count_account_comments_since",
+    "count_channel_comments_per_account_since",
+    "count_comments_per_account_since",
     "create_campaign",
     "deactivate_channel",
     "fetch_active_campaign_for_channel",
@@ -66,6 +73,7 @@ __all__ = [
     "list_campaign_readiness",
     "list_campaigns",
     "list_linked_groups",
+    "list_posted_comments_for_channel_since",
     "list_posted_comments_since",
     "mark_comment_failed",
     "mark_comment_posted",

@@ -83,6 +83,19 @@ repos:
         types: [python]
         pass_filenames: false
 
+  # --- architecture firewall: the layer + import rules as an executable gate.
+  # Fast (<1s) but push-time so WIP commits aren't blocked; CI runs it too. With no
+  # branch protection on this plan, this local hook is the pre-merge teeth. ---
+  - repo: local
+    hooks:
+      - id: arch-guard
+        name: architecture guard (layer + import firewall)
+        entry: uv run pytest tests/test_architecture.py -q --no-cov
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]
+
   # --- aislop: AI-slop quality gate (needs Node; heavy, so push-time only) ---
   - repo: local
     hooks:

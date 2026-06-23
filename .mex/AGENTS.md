@@ -29,7 +29,7 @@ telebuba/
 │   ├── repositories/       per-aggregate DB query modules
 │   │   ├── _proxies.py        internal proxy query helpers
 │   │   ├── warming_joined.py  tracks channels an account already joined (join-dedup)
-│   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims)
+│   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims, comment quota counts in _quota.py)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
 │   │   ├── _pool.py           client pool management
 │   │   ├── _read.py           message reading actions (incl. CheckMessagesAlive deletion probe)
@@ -43,7 +43,7 @@ telebuba/
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile/proxy operations
 │   ├── warming/            runtime workflow domain package
-│   ├── neurocomment/       campaign comment automation: onboarding.py (pre-join+readiness), engine.py (on-post pipeline handle_new_post), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints), board.py (work-view read model, bulk-loaded), _state.py (transient per-account cooldowns + escalating channel deletion back-off), _seams.py (execute/generate_text/refresh_spam_status/rng)
+│   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints), board.py (work-view read model, bulk-loaded), _state.py (transient per-account cooldowns + escalating channel deletion back-off), _seams.py (execute/generate_text/refresh_spam_status/rng)
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
 │   ├── logs.py             log query helpers for the Logs page
