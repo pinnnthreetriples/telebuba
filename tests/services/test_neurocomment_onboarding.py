@@ -169,7 +169,14 @@ async def test_join_by_request_does_not_get_stuck(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_captcha_gate_detected_and_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_join_gate_error_maps_to_captcha_gated(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A join that itself surfaces a write-forbidden error maps to ``captcha_gated``.
+
+    This pins the error->state MAPPING only. Onboarding does NOT actively probe for
+    an entry captcha — a plain JoinChannelRequest does not raise write-forbidden, so
+    in practice this branch is the rare join-time case. Real entry-captcha detection
+    is lazy, at comment time, in the engine (#118); see decisions.md Ф0 update.
+    """
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     read = _ReadStub(linked_chat_id=88, comments_enabled=True)
     join = _JoinStub()

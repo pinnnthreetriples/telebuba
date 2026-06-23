@@ -143,7 +143,9 @@ async def _classify_join(
             state="join_by_request",
         )
     if result.error_type in _GATE_ERRORS:
-        # detect-and-skip: joined, but writes forbidden → captcha/gate signal.
+        # Rare join-time gate: joined, but writes forbidden → captcha/gate signal.
+        # NOTE: a plain join almost never surfaces these; primary entry-captcha
+        # detection is lazy, at comment time, in the engine (#118). We do NOT probe.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
             account_id=account_id,
