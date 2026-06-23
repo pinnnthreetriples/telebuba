@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING
 
 from nicegui import context, ui
 
+from features.shared import TOP_BAR_CLASSES, render_nav
 from schemas.logs import LogEntry, LogFilter
 from services.logs import load_logs_page
 
@@ -56,23 +57,8 @@ def register_logs_page() -> None:  # pragma: no cover
 async def _render_logs_page() -> None:  # pragma: no cover
     ui.query("body").classes("bg-slate-50 text-slate-950")
 
-    with (
-        ui.row().classes(
-            "w-full items-center justify-between px-4 py-2 bg-white "
-            "text-slate-950 border-b border-slate-200",
-        ),
-        ui.row().classes("items-center gap-4"),
-    ):
-        ui.label("Telebuba").classes("text-lg font-semibold")
-        ui.link("Аккаунты", "/").classes(
-            "text-sm text-slate-600 hover:text-slate-900 no-underline",
-        )
-        ui.link("Прогрев", "/warming").classes(
-            "text-sm text-slate-600 hover:text-slate-900 no-underline",
-        )
-        ui.link("Логи", "/logs").classes(
-            "text-sm font-medium text-slate-900 no-underline",
-        )
+    with ui.row().classes(TOP_BAR_CLASSES):
+        render_nav("/logs")
 
     with ui.column().classes("w-full max-w-[1400px] mx-auto p-4 gap-3"):
         ui.label("Логи").classes("text-lg font-semibold")

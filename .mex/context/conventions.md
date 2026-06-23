@@ -30,7 +30,7 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
 - Every feature is its own module or package under `features/`.
 - Small feature: `features/<name>.py`. Larger feature: `features/<name>/` with a thin `__init__.py` and cohesive render/helper modules.
 - UI-thin only — NiceGUI page/component definitions and click handlers. All business logic delegates to `services/`.
-- No imports between feature domains. `features/accounts/` must not import `features/warming/`.
+- No imports between feature domains. `features/accounts/` must not import `features/warming/`. The **one exception** is `features/shared/` — a sanctioned namespace for cross-page UI chrome (e.g. the top nav bar) that any page may import; it owns no business logic and imports no feature. Enforced by `tests/test_architecture.py::test_no_cross_feature_imports`.
 - **Why:** keeps feature ownership clear, prevents god-modules, lets agents work on different features with fewer merge conflicts, and keeps UI replaceable.
 
 ### 2. Pydantic Boundaries

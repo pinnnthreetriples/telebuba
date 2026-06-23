@@ -24,6 +24,7 @@ from core.db import (
     remove_account_from_campaign,
 )
 from core.repositories.neurocomment import ChannelAlreadyAssignedError
+from features.shared import TOP_BAR_CLASSES, render_nav
 from schemas.neurocomment import CampaignCreate
 from services.neurocomment import (
     load_neurocomment_board,
@@ -76,22 +77,8 @@ def campaign_options(campaigns: CampaignList) -> dict[str, str]:
 
 
 def _build_header() -> None:  # pragma: no cover
-    with (
-        ui.row().classes(
-            "w-full items-center justify-between px-4 py-2 bg-white "
-            "text-slate-950 border-b border-slate-200",
-        ),
-        ui.row().classes("items-center gap-4"),
-    ):
-        ui.label("Telebuba").classes("text-lg font-semibold")
-        ui.link("Аккаунты", "/").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
-        ui.link("Прогрев", "/warming").classes(
-            "text-sm text-slate-600 hover:text-slate-900 no-underline",
-        )
-        ui.link("Нейрокомментинг", "/neurocomment").classes(
-            "text-sm font-medium text-slate-900 no-underline",
-        )
-        ui.link("Логи", "/logs").classes("text-sm text-slate-600 hover:text-slate-900 no-underline")
+    with ui.row().classes(TOP_BAR_CLASSES):
+        render_nav("/neurocomment")
 
 
 async def render_neurocomment_page() -> None:  # pragma: no cover
