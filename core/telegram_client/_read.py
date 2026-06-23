@@ -15,6 +15,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from telethon import errors
+from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
@@ -31,7 +32,9 @@ from core.telegram_client._read_stories import (
     dispatch_list_pinned_stories,
 )
 from schemas.telegram_actions import (
+    GetLinkedDiscussionGroup,
     GetUserProfile,
+    LinkedDiscussionGroupResult,
     ListActiveStories,
     ListPinnedStories,
     ListProfileMusic,
@@ -129,6 +132,8 @@ async def _dispatch_read_action(
     action: TelegramReadAction,
 ) -> BaseModel:
     match action:
+        case GetLinkedDiscussionGroup():
+            return await _dispatch_get_linked_group(client, action)
         case GetUserProfile():
             return await _dispatch_get_user_profile(client)
         case ListPinnedStories():
@@ -142,6 +147,24 @@ async def _dispatch_read_action(
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)
+
+
+async def _dispatch_get_linked_group(
+    client: TelegramClient,
+    action: GetLinkedDiscussionGroup,
+) -> LinkedDiscussionGroupResult:
+    """Resolve a channel's linked discussion group via ``GetFullChannelRequest``.
+
+    ``full_chat.linked_chat_id`` is ``None`` when the channel has comments
+    disabled or has no linked group.
+    """
+    result = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+    linked = getattr(getattr(result, "full_chat", None), "linked_chat_id", None)
+    linked_id = int(linked) if linked is not None else None
+    return LinkedDiscussionGroupResult(
+        linked_chat_id=linked_id,
+        comments_enabled=linked_id is not None,
+    )
 
 
 def _optional_str(value: object) -> str | None:

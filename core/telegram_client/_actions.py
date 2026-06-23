@@ -25,6 +25,8 @@ from core.telegram_client._util import extract_invite_hash
 from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
+    ClickButton,
+    CommentOnPost,
     JoinChannel,
     LeaveChannel,
     PostComment,
@@ -176,7 +178,7 @@ async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage
     return int(getattr(message, "id", 0)) or None
 
 
-async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:  # noqa: C901
+async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:  # noqa: C901, PLR0912
     """Run one action against an already-connected client. Returns message_id if any.
 
     Pattern-matches on the concrete action model so ty narrows ``action`` inside
@@ -198,6 +200,15 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
         case PostComment():
             message = await client.send_message(action.chat_id, action.text)
             message_id = int(getattr(message, "id", 0)) or None
+        case CommentOnPost():
+            message = await client.send_message(
+                action.channel,
+                action.text,
+                comment_to=action.post_id,
+            )
+            message_id = int(getattr(message, "id", 0)) or None
+        case ClickButton():
+            await _dispatch_click_button(client, action)
         case UpdateProfile():
             await _dispatch_update_profile(client, action)
         case SetOnline():
@@ -271,7 +282,23 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     return message_id
 
 
-def _action_log_extra(action: TelegramAction) -> dict[str, object]:
+async def _dispatch_click_button(client: TelegramClient, action: ClickButton) -> None:
+    """Click an inline button on a stored message; no-op if the message is gone.
+
+    Index-first selector: ``button_index`` if set, else ``button_text``, else
+    the first button. We don't surface the callback answer.
+    """
+    message = await client.get_messages(action.chat_id, ids=action.message_id)
+    if not message:
+        return
+    if action.button_text is not None:
+        await message.click(text=action.button_text)  # ty: ignore[unresolved-attribute]
+    else:
+        index = action.button_index if action.button_index is not None else 0
+        await message.click(index)  # ty: ignore[unresolved-attribute]
+
+
+def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901
     """Compact summary of an action for log extras — no payload secrets."""
     extra: dict[str, object]
     match action:
@@ -279,6 +306,10 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:
             extra = {"channel": action.channel}
         case PostComment():
             extra = {"chat_id": action.chat_id}
+        case CommentOnPost():
+            extra = {"channel": action.channel, "post_id": action.post_id}
+        case ClickButton():
+            extra = {"chat_id": action.chat_id, "message_id": action.message_id}
         case SetOnline():
             extra = {"online": action.online}
         case SendDirectMessage():
