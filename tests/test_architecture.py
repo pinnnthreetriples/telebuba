@@ -23,6 +23,11 @@ from core.config import Settings, settings
 
 _ROOT = Path(__file__).resolve().parent.parent
 
+# features/shared/ is the one sanctioned cross-feature namespace: shared UI
+# chrome (the top nav bar) that every page may import. It holds no business
+# logic and imports no feature, so it cannot become a coupling backdoor.
+_SHARED_FEATURE = "shared"
+
 
 def _imported_modules(path: Path) -> set[str]:
     """All absolute imports in ``path`` as fully-qualified module names."""
@@ -82,7 +87,7 @@ def test_features_do_not_import_telethon_or_sqlalchemy() -> None:
 
 
 def test_no_cross_feature_imports() -> None:
-    """Each feature is isolated — submodules may only import their own siblings."""
+    """A feature may import only its own siblings plus shared UI (``features/shared/``)."""
     out: list[str] = []
     for path in _python_modules("features"):
         own = _feature_of(path)
@@ -93,7 +98,7 @@ def test_no_cross_feature_imports() -> None:
                 continue
             parts = module.split(".")
             other = parts[1] if len(parts) >= 2 else None
-            if other is not None and other != own:
+            if other is not None and other not in {own, _SHARED_FEATURE}:
                 out.append(
                     f"{path.relative_to(_ROOT).as_posix()} imports cross-feature {module}",
                 )

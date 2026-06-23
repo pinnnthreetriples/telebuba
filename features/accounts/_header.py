@@ -11,6 +11,8 @@ from typing import TYPE_CHECKING
 
 from nicegui import ui
 
+from features.shared import TOP_BAR_CLASSES, render_nav
+
 if TYPE_CHECKING:
     from nicegui.elements.button import Button
 
@@ -30,21 +32,8 @@ class _ToolbarButtons:  # pragma: no cover
 
 
 def _build_header() -> _ToolbarButtons:  # pragma: no cover
-    with ui.row().classes(
-        "w-full items-center justify-between px-4 py-2 bg-white "
-        "text-slate-950 border-b border-slate-200",
-    ):
-        with ui.row().classes("items-center gap-4"):
-            ui.label("Telebuba").classes("text-lg font-semibold")
-            ui.link("Аккаунты", "/").classes(
-                "text-sm font-medium text-slate-900 no-underline",
-            )
-            ui.link("Прогрев", "/warming").classes(
-                "text-sm text-slate-600 hover:text-slate-900 no-underline",
-            )
-            ui.link("Логи", "/logs").classes(
-                "text-sm text-slate-600 hover:text-slate-900 no-underline",
-            )
+    with ui.row().classes(TOP_BAR_CLASSES):
+        render_nav("/")
         with ui.row().classes("items-center gap-2"):
             refresh_button = ui.button(icon="refresh", color="grey-8")
             refresh_button.tooltip("Обновить")
