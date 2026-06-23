@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -244,3 +244,47 @@ async def mark_comment_posted(
 async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | None:
     """Mark a claimed comment as failed. ``None`` if the post was never claimed."""
     return await asyncio.to_thread(_mark_comment, channel, post_id, status="failed")
+
+
+def _count_account_comments_since(account_id: str, since_iso: str) -> int:
+    statement = select(func.count()).where(
+        (_neurocomment_comments.c.account_id == account_id)
+        & (_neurocomment_comments.c.status.in_(("claimed", "posted")))
+        & (_neurocomment_comments.c.created_at >= since_iso),
+    )
+    with _get_engine().connect() as connection:
+        return int(connection.execute(statement).scalar_one())
+
+
+async def count_account_comments_since(account_id: str, since_iso: str) -> int:
+    """Count an account's in-flight + delivered (claimed/posted) comments since ``since``.
+
+    Counting ``claimed`` (not just ``posted``) makes an in-flight claim consume quota
+    immediately, so a burst can't stack past the hourly cap through the reply delay.
+    """
+    return await asyncio.to_thread(_count_account_comments_since, account_id, since_iso)
+
+
+def _count_account_channel_comments_since(account_id: str, channel: str, since_iso: str) -> int:
+    statement = select(func.count()).where(
+        (_neurocomment_comments.c.account_id == account_id)
+        & (_neurocomment_comments.c.channel == channel)
+        & (_neurocomment_comments.c.status.in_(("claimed", "posted")))
+        & (_neurocomment_comments.c.created_at >= since_iso),
+    )
+    with _get_engine().connect() as connection:
+        return int(connection.execute(statement).scalar_one())
+
+
+async def count_account_channel_comments_since(
+    account_id: str,
+    channel: str,
+    since_iso: str,
+) -> int:
+    """Count claimed+posted comments for one (account, channel) since ``since`` (day cap)."""
+    return await asyncio.to_thread(
+        _count_account_channel_comments_since,
+        account_id,
+        channel,
+        since_iso,
+    )

@@ -23,11 +23,12 @@ from schemas.neurocomment import (
     CampaignChannelList,
     CampaignCreate,
     CampaignList,
+    ChannelList,
     NeurocommentCampaign,
 )
 
 if TYPE_CHECKING:
-    from sqlalchemy import RowMapping
+    from sqlalchemy import Join, RowMapping
     from sqlalchemy.engine import Connection
 
 
@@ -212,3 +213,55 @@ def _list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
 
 async def list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
     return await asyncio.to_thread(_list_campaign_accounts, campaign_id)
+
+
+def _active_channel_join() -> Join:
+    """Join: a channel link to its campaign (filter active/status at the call site)."""
+    return _neurocomment_campaign_channels.join(
+        _neurocomment_campaigns,
+        _neurocomment_campaign_channels.c.campaign_id == _neurocomment_campaigns.c.campaign_id,
+    )
+
+
+def _fetch_active_campaign_for_channel(channel: str) -> NeurocommentCampaign | None:
+    statement = (
+        select(_neurocomment_campaigns)
+        .select_from(_active_channel_join())
+        .where(
+            (_neurocomment_campaign_channels.c.channel == channel)
+            & (_neurocomment_campaign_channels.c.active == 1)
+            & (_neurocomment_campaigns.c.status == "active"),
+        )
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).mappings().first()
+    return None if row is None else _row_to_campaign(row)
+
+
+async def fetch_active_campaign_for_channel(channel: str) -> NeurocommentCampaign | None:
+    """The active campaign whose active link == ``channel``; ``None`` if none.
+
+    Maps a fresh post back to its campaign + prompt on the engine hot path.
+    """
+    return await asyncio.to_thread(_fetch_active_campaign_for_channel, channel)
+
+
+def _list_active_watch_channels() -> ChannelList:
+    statement = (
+        select(_neurocomment_campaign_channels.c.channel)
+        .select_from(_active_channel_join())
+        .where(
+            (_neurocomment_campaign_channels.c.active == 1)
+            & (_neurocomment_campaigns.c.status == "active"),
+        )
+        .distinct()
+        .order_by(_neurocomment_campaign_channels.c.channel.asc())
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).scalars().all()
+    return ChannelList(channels=list(rows))
+
+
+async def list_active_watch_channels() -> ChannelList:
+    """All channels with an active link in an active campaign — the listener watch set."""
+    return await asyncio.to_thread(_list_active_watch_channels)
