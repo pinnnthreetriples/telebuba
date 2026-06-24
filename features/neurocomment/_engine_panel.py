@@ -21,10 +21,12 @@ from typing import TYPE_CHECKING
 
 from nicegui import context, ui
 
+from features.neurocomment._logpanel import LogPanelState, refresh_logs, render_log_panel
 from features.neurocomment._page import (
     PIPELINE_STEPS,
     FleetActivity,
     fleet_activity,
+    live_signature,
     relative_time,
     runtime_status_text,
 )
@@ -78,23 +80,44 @@ async def render_engine_panel(campaign_id: str) -> None:  # pragma: no cover
             _render_ticker(state)
             _render_counters(state)
 
+        log_state = LogPanelState()
+
+        @ui.refreshable
+        def log_section() -> None:
+            render_log_panel(log_state, on_toggle_log)
+
+        async def on_toggle_log() -> None:
+            log_state.expanded = not log_state.expanded
+            if log_state.expanded:
+                await refresh_logs(log_state)
+            log_section.refresh()
+
         rail_section()
         live_section()
 
         async def reload() -> None:
             # Compare the fresh figures against the still-current state, then adopt them
-            # wholesale (the refreshables re-read ``state`` on refresh).
+            # wholesale (the refreshables re-read ``state`` on refresh). Anti-flicker:
+            # refresh the live section only when its digest changed (no 4 s blink).
             nonlocal state
             fresh = await _load_state(campaign_id)
             flipped = fresh.status.running != state.status.running
             fresh.flash_today = fresh.activity.comments_today > state.activity.comments_today
+            live_changed = live_signature(
+                fresh.status, fresh.activity, fresh.last_comment
+            ) != live_signature(state.status, state.activity, state.last_comment)
             state = fresh
-            live_section.refresh()
+            if live_changed:
+                live_section.refresh()
             if flipped:
                 rail_section.refresh()
+            # Refresh the open log panel only when a new neurocomment row landed.
+            if log_state.expanded and await refresh_logs(log_state):
+                log_section.refresh()
 
         ui.separator()
         _render_controls(listener_options, state.status.listener_account_id, reload)
+        log_section()
 
     timer = ui.timer(_PANEL_POLL_SECONDS, reload)
     context.client.on_disconnect(lambda: timer.cancel(with_current_invocation=True))

@@ -316,6 +316,11 @@ class NeurocommentSettings(BaseSettings):
     channel_challenge_backoff_min_failures: int = Field(default=3, ge=1)
     channel_challenge_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
     channel_challenge_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
+    # Minimum warming age (whole days) for an account to count as "warmed" in the
+    # neurocomment page's top overview field.
+    warmed_min_days: int = Field(default=14, ge=1)
+    # Rows shown in the engine panel's collapsible neurocomment-activity log.
+    log_limit: int = Field(default=50, ge=1, le=200)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:

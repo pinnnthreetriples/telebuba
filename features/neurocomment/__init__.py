@@ -74,6 +74,33 @@ _NC_CSS = """
 }
 .tb-nc-dot { animation: tb-nc-blink 1.3s ease-in-out infinite; }
 .tb-nc-flash { animation: tb-nc-flash 1.1s ease-out; }
+.tb-nc-log {
+    background: #09090b;
+    border: 1px solid #1f1f23;
+    border-radius: 8px;
+    padding: 6px 8px;
+    max-height: 16rem;
+    overflow-y: auto;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size: 11px;
+    line-height: 1.4;
+}
+.tb-nc-log-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 2px 0;
+    border-bottom: 1px solid #18181b;
+    white-space: nowrap;
+}
+.tb-nc-log-row:last-child { border-bottom: 0; }
+.tb-nc-log-time { color: #52525b; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.tb-nc-log-msg { color: #e4e4e7; flex: 0 0 auto; }
+.tb-nc-log-kv { color: #71717a; overflow: hidden; text-overflow: ellipsis; }
+.tb-nc-log-empty { color: #52525b; font-style: italic; }
+.tb-nc-log-ok { color: #4ade80; }
+.tb-nc-log-warn { color: #fbbf24; }
+.tb-nc-log-err { color: #f87171; }
 """
 
 ui.add_css(_NC_CSS, shared=True)
