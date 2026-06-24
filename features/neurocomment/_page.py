@@ -217,6 +217,21 @@ def runtime_status_text(status: NeurocommentRuntimeStatus) -> str:
     return f"Слушаю каналов: {status.active_channels}"
 
 
+def start_block_reason(ready_accounts: int, *, has_listener: bool) -> str | None:
+    """Why «Запустить» must stay blocked, or ``None`` when the engine may start.
+
+    Ties the operator-facing warning to the real gate: starting with no listener or
+    with zero ready accounts is a silent no-op that erodes trust, so the button refuses
+    and names what is missing — the «нет прогретых аккаунтов» message and the actual
+    behaviour now agree.
+    """
+    if not has_listener:
+        return "Выберите аккаунт-слушатель"
+    if ready_accounts <= 0:
+        return "Нет готовых аккаунтов — добавьте и онбордните их в «Настройке»."
+    return None
+
+
 def board_content_signature(board: NeurocommentBoard | None) -> tuple[object, ...]:
     """Digest of everything the work view renders; equal digests → skip the re-render.
 

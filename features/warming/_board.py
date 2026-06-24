@@ -308,10 +308,13 @@ def _render_card_footer(ctx: _BoardContext, card: WarmingAccountState) -> None: 
         if card.dm_allowed:
             ui.label("DM разрешён").classes(
                 "text-[10px] px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-medium"
-            )
+            ).tooltip("ЛС открыты движком — возраст и доверие достаточны.")
         else:
             ui.label("DM заблокирован").classes(
                 "text-[10px] px-2 py-0.5 rounded-full bg-slate-100 text-slate-500"
+            ).tooltip(
+                "ЛС закрыты движком — не хватает возраста или доверия, "
+                "либо не пройдена проверка готовности.",
             )
 
         ui.element("div").classes("flex-1")  # push spam button to right
@@ -343,6 +346,9 @@ def _render_phase_block(card: WarmingAccountState) -> None:  # pragma: no cover
     with ui.row().classes("w-full items-center justify-between gap-2"):
         ui.label(_strip_emoji(card.phase_label)).classes(
             f"w-fit text-[10px] px-2 py-0.5 rounded font-medium {chip_classes}",
+        ).tooltip(
+            "Этап взросления аккаунта: Новый → Адаптация → Развитие → Окрепший → Зрелый. "
+            "«до X: N д» — сколько дней до следующего этапа.",
         )
         if card.phase != "warmed" and card.days_to_next_phase is not None:
             next_phase_label = _next_phase_label_short(card.phase)
