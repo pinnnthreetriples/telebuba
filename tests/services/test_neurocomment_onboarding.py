@@ -20,12 +20,19 @@ from core.db import (
     fetch_linked_group,
     fetch_readiness,
     link_channel_to_campaign,
+    list_failed_for_channel,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
+from schemas.challenge import BotChallengeMessage
 from schemas.neurocomment import CampaignCreate
 from schemas.spam_status import SpamStatusVerdict
-from schemas.telegram_actions import ActionResult, LinkedDiscussionGroupResult
+from schemas.telegram_actions import (
+    ActionResult,
+    BotChallengeWaitResult,
+    LinkedDiscussionGroupResult,
+    WaitForBotChallenge,
+)
 from services import neurocomment
 from services.neurocomment import _seams, onboarding
 
@@ -50,17 +57,26 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 class _ReadStub:
-    """Returns a canned ``LinkedDiscussionGroupResult`` for every read."""
+    """Canned reads: a linked-group result for resolve, a wait result for the solver."""
 
-    def __init__(self, *, linked_chat_id: int | None, comments_enabled: bool) -> None:
+    def __init__(
+        self,
+        *,
+        linked_chat_id: int | None,
+        comments_enabled: bool,
+        challenge: BotChallengeMessage | None = None,
+    ) -> None:
         self.result = LinkedDiscussionGroupResult(
             linked_chat_id=linked_chat_id,
             comments_enabled=comments_enabled,
         )
+        self.challenge = challenge
         self.calls: list[tuple[str, TelegramReadAction]] = []
 
     async def execute_read(self, account_id: str, action: TelegramReadAction) -> object:
         self.calls.append((account_id, action))
+        if isinstance(action, WaitForBotChallenge):
+            return BotChallengeWaitResult(message=self.challenge)
         return self.result
 
 
@@ -201,6 +217,54 @@ async def test_join_gate_error_maps_to_chat_restricted(monkeypatch: pytest.Monke
     assert readiness.joined is True
     assert readiness.captcha_passed is False
     assert readiness.ready is False
+
+
+@pytest.mark.asyncio
+async def test_successful_join_without_challenge_is_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ф2 #145: an ok join with no challenge in the wait window → ``ready``."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    read = _ReadStub(linked_chat_id=77, comments_enabled=True)  # no challenge
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert outcome.state == "ready"
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.ready is True
+    assert (await list_failed_for_channel("@chan", limit=10)).rows == []
+
+
+@pytest.mark.asyncio
+async def test_successful_join_with_challenge_is_bot_challenge(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ф2 #145: an ok join where the solver detects a challenge → ``bot_challenge``.
+
+    The pair is joined but not ready; the solver's audit row is what the board
+    later reads to render ``bot_challenge`` (vs the unsolvable ``chat_restricted``).
+    """
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    message = BotChallengeMessage(
+        text="докажи, что не бот", button_labels=["Я человек"], message_id=5, has_photo=False
+    )
+    read = _ReadStub(linked_chat_id=77, comments_enabled=True, challenge=message)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert outcome.state == "bot_challenge"
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.joined is True
+    assert readiness.ready is False
+    failed = await list_failed_for_channel("@chan", limit=10)
+    assert len(failed.rows) == 1
+    assert failed.rows[0].outcome == "give_up"
 
 
 @pytest.mark.asyncio

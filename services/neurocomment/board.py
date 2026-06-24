@@ -22,6 +22,7 @@ from core.db import (
     list_campaign_accounts,
     list_campaign_channels,
     list_campaign_readiness,
+    list_challenged_channels,
     list_device_fingerprints,
     list_linked_groups,
     list_posted_comments_since,
@@ -71,6 +72,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     accounts = {acc.account_id: acc for acc in (await list_accounts()).accounts}
     readiness = (await list_campaign_readiness(campaign_id)).readiness
     linked = {g.channel: g for g in (await list_linked_groups(channels)).groups}
+    challenged = set((await list_challenged_channels(channels)).channels)
 
     now = datetime.now(UTC)
     day_ago = (now - timedelta(days=1)).isoformat()
@@ -97,7 +99,15 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         for account_id in account_ids
         if account_id in accounts
     ]
-    rows = [_build_channel_row(channel, readiness, linked.get(channel)) for channel in channels]
+    rows = [
+        _build_channel_row(
+            channel,
+            readiness,
+            linked.get(channel),
+            challenged=channel in challenged,
+        )
+        for channel in channels
+    ]
     return NeurocommentBoard(
         campaign_id=campaign.campaign_id,
         campaign_name=campaign.name,
@@ -155,12 +165,14 @@ def _build_channel_row(
     channel: str,
     readiness: list[NeurocommentReadiness],
     linked: LinkedDiscussionGroup | None,
+    *,
+    challenged: bool,
 ) -> NeurocommentChannelRow:
     rows = [r for r in readiness if r.channel == channel]
     ready_count = sum(1 for r in rows if r.ready)
     return NeurocommentChannelRow(
         channel=channel,
-        status=_channel_status(rows, linked, ready_count),
+        status=_channel_status(rows, linked, ready_count, challenged=challenged),
         ready_accounts=ready_count,
         total_accounts=len(rows),
     )
@@ -170,24 +182,26 @@ def _channel_status(
     rows: list[NeurocommentReadiness],
     linked: LinkedDiscussionGroup | None,
     ready_count: int,
+    *,
+    challenged: bool,
 ) -> ChannelStatus:
     """Aggregate a channel's status from its readiness rows + linked-group cache.
 
     Precedence: a comments-off channel can never be commented on; otherwise an
-    account that's ready wins; then the failure modes (``chat_restricted`` when
-    joined but write-blocked, approval gate when not joined); ``throttled`` is the
-    fallback when nothing is ready and no specific gate explains why.
+    account that's ready wins; then the joined-but-blocked failure modes —
+    ``bot_challenge`` when a guardian-bot challenge row exists for the channel
+    (Ф2 #145), else ``chat_restricted`` (a Telegram-level write block) — then the
+    approval gate when not joined; ``throttled`` is the catch-all.
 
-    Ф2 #120: the ``bot_challenge`` / ``bot_challenge_backoff`` states are part of
-    the enum but not yet derived here — the solver that produces them lands in a
-    later slice; this slice only renames the joined-but-blocked gate.
+    ``bot_challenge_backoff`` is in the enum but not derived here yet (the channel
+    back-off counter lands in a later slice).
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
     if ready_count > 0:
         return "ready"
     if any(r.joined and not r.captcha_passed for r in rows):
-        return "chat_restricted"
+        return "bot_challenge" if challenged else "chat_restricted"
     if any(not r.joined for r in rows):
         return "join_by_request"
     return "throttled"

@@ -185,6 +185,7 @@ OnboardingState = Literal[
     "comments_off",
     "join_by_request",
     "chat_restricted",
+    "bot_challenge",
     "joining",
     "failed",
 ]

@@ -14,6 +14,10 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, Field
 
+# Runtime import (not TYPE_CHECKING): pydantic resolves the BotChallengeWaitResult
+# field annotation at class-build time, so the type must exist at runtime.
+from schemas.challenge import BotChallengeMessage  # noqa: TC001
+
 
 class JoinChannel(BaseModel):
     action_type: Literal["join_channel"] = "join_channel"
@@ -244,6 +248,19 @@ class ListProfilePhotos(BaseModel):
     limit: int = Field(default=24, ge=1, le=100)
 
 
+class WaitForBotChallenge(BaseModel):
+    """Read-only: wait up to ``timeout_seconds`` for a guardian-bot challenge.
+
+    Opens a short-lived ``NewMessage`` subscription on the just-joined discussion
+    group ``chat_id`` and returns the first message that is a bot's inline-button
+    challenge addressed to our account, or nothing on timeout (Ф2 #120).
+    """
+
+    action_type: Literal["wait_for_bot_challenge"] = "wait_for_bot_challenge"
+    chat_id: int
+    timeout_seconds: float = Field(gt=0)
+
+
 TelegramAction = Annotated[
     JoinChannel
     | JoinDiscussionGroup
@@ -272,7 +289,8 @@ TelegramReadAction = Annotated[
     | ListPinnedStories
     | ListActiveStories
     | ListProfileMusic
-    | ListProfilePhotos,
+    | ListProfilePhotos
+    | WaitForBotChallenge,
     Field(discriminator="action_type"),
 ]
 
@@ -292,6 +310,16 @@ class CheckMessagesAliveResult(BaseModel):
     """Gateway output for ``CheckMessagesAlive`` — the ids that no longer exist."""
 
     missing_ids: list[int]
+
+
+class BotChallengeWaitResult(BaseModel):
+    """Gateway output for ``WaitForBotChallenge`` — the matched challenge or ``None``.
+
+    A wrapper (not a bare ``BotChallengeMessage | None``) so ``execute_read`` keeps
+    returning a ``BaseModel`` like every other read action.
+    """
+
+    message: BotChallengeMessage | None = None
 
 
 ActionStatus = Literal[

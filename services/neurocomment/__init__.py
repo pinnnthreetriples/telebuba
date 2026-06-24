@@ -27,6 +27,7 @@ from services.neurocomment.campaigns import (
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
+    list_channel_challenges,
     remove_account_from_campaign,
 )
 from services.neurocomment.engine import handle_new_post
@@ -41,6 +42,7 @@ __all__ = [
     "list_campaign_accounts",
     "list_campaign_channels",
     "list_campaigns",
+    "list_channel_challenges",
     "load_neurocomment_board",
     "on_post",
     "onboard_account_channel",

@@ -27,6 +27,7 @@ from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._pool import get_client
+from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
 from core.telegram_client._read_stories import (
     dispatch_list_active_stories,
     dispatch_list_pinned_stories,
@@ -41,6 +42,7 @@ from schemas.telegram_actions import (
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
+    WaitForBotChallenge,
 )
 from schemas.telegram_profile_snapshot import (
     TelegramMusicItem,
@@ -138,6 +140,8 @@ async def _dispatch_read_action(  # noqa: PLR0911 - one return per read-action c
             return await _dispatch_get_linked_group(client, action)
         case CheckMessagesAlive():
             return await _dispatch_check_messages_alive(client, action)
+        case WaitForBotChallenge():
+            return await dispatch_wait_for_bot_challenge(client, action)
         case GetUserProfile():
             return await _dispatch_get_user_profile(client)
         case ListPinnedStories():

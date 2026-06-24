@@ -38,7 +38,7 @@ from schemas.telegram_actions import (
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
-from services.neurocomment import _seams
+from services.neurocomment import _seams, challenge
 
 # Join failed because writes are Telegram-blocked → chat_restricted (Ф2 #120):
 # unsolvable by the challenge solver. The set is small and intentional.
@@ -59,7 +59,7 @@ async def onboard_account_channel(account_id: str, channel: str) -> AccountChann
             state="failed",
             reason="resolve_failed",
         )
-    if not linked.comments_enabled:
+    if not linked.comments_enabled or linked.linked_chat_id is None:
         # comments_off is a channel property, not a per-account state, so we
         # record no readiness row — the campaign loop also short-circuits it.
         return AccountChannelOnboarding(
@@ -67,13 +67,17 @@ async def onboard_account_channel(account_id: str, channel: str) -> AccountChann
             channel=channel,
             state="comments_off",
         )
-    return await _join_and_classify(account_id, channel)
+    return await _join_and_classify(account_id, channel, linked.linked_chat_id)
 
 
-async def _join_and_classify(account_id: str, channel: str) -> AccountChannelOnboarding:
+async def _join_and_classify(
+    account_id: str,
+    channel: str,
+    group_id: int,
+) -> AccountChannelOnboarding:
     """Join the (already-resolved, comment-enabled) group and persist readiness."""
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
-    return await _classify_join(account_id, channel, result)
+    return await _classify_join(account_id, channel, result, group_id)
 
 
 async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussionGroupResult:
@@ -113,13 +117,14 @@ async def _classify_join(
     account_id: str,
     channel: str,
     result: ActionResult,
+    group_id: int,
 ) -> AccountChannelOnboarding:
     """Map a join ``ActionResult`` to a state + persisted readiness row."""
     if result.status == "ok":
-        # ponytail (#120): no entry-captcha probe exists yet, so an ok join is
-        # assumed comment-able. #118 lazily flips captcha when a comment fails.
-        await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
-        return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
+        # Joined → run the proactive challenge solver before declaring the pair
+        # comment-able (Ф2 #145). Detection-only in this slice: a detected
+        # challenge lands ``bot_challenge``, otherwise ``ready``.
+        return await _solve_and_record(account_id, channel, group_id)
     if result.status in _RETRY_STATUSES:
         # Non-terminal: do not write ready; surface the wait so the account is
         # retried later instead of getting stuck. Return promptly (no sleep).
@@ -161,6 +166,29 @@ async def _classify_join(
     )
 
 
+async def _solve_and_record(
+    account_id: str,
+    channel: str,
+    group_id: int,
+) -> AccountChannelOnboarding:
+    """Run the challenge solver on a freshly-joined group; persist the readiness.
+
+    ``give_up`` (a detected guardian-bot challenge) leaves the pair not-ready — the
+    audit row the solver wrote is what the board reads to render ``bot_challenge``;
+    ``no_challenge`` means the pair is comment-able → ``ready``.
+    """
+    outcome = await challenge.solve_if_present(account_id, channel, group_id)
+    if outcome == "give_up":
+        await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="bot_challenge",
+        )
+    await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
+    return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
+
+
 async def onboard_campaign(campaign_id: str) -> CampaignOnboardingResult:
     """Onboard every (account, channel) pair of a campaign with paced joins.
 
@@ -186,31 +214,31 @@ async def onboard_campaign(campaign_id: str) -> CampaignOnboardingResult:
     for channel_link in channels:
         channel = channel_link.channel
         # Resolve the linked group ONCE per channel (anti-ban + fewer reads).
-        comments_on = await _channel_comments_enabled(accounts, channel, outcomes)
-        if not comments_on:
+        group_id = await _resolve_group_for_join(accounts, channel, outcomes)
+        if group_id is None:
             continue
         for account_id in accounts:
             if joined_once:
                 await asyncio.sleep(_join_jitter_seconds())
-            outcomes.append(await _join_pair_safely(account_id, channel))
+            outcomes.append(await _join_pair_safely(account_id, channel, group_id))
             joined_once = True
     return CampaignOnboardingResult(campaign_id=campaign_id, outcomes=outcomes)
 
 
-async def _channel_comments_enabled(
+async def _resolve_group_for_join(
     accounts: list[str],
     channel: str,
     outcomes: list[AccountChannelOnboarding],
-) -> bool:
-    """Resolve+cache the channel's group once; record per-account skips, return joinable?.
+) -> int | None:
+    """Resolve+cache the channel's group once; record per-account skips, return its id.
 
     Uses the first account's session for the read (any member-less read works). A
     resolve failure records a ``failed`` outcome per account; comments-off records a
-    ``comments_off`` outcome per account. Either way returns ``False`` so the caller
+    ``comments_off`` outcome per account. Either way returns ``None`` so the caller
     skips the joins — one bad channel never aborts the campaign.
     """
     if not accounts:
-        return False
+        return None
     linked = await _safe_resolve(accounts[0], channel)
     if linked is None:
         outcomes.extend(
@@ -219,14 +247,14 @@ async def _channel_comments_enabled(
             )
             for account_id in accounts
         )
-        return False
-    if linked.comments_enabled:
-        return True
+        return None
+    if linked.comments_enabled and linked.linked_chat_id is not None:
+        return linked.linked_chat_id
     outcomes.extend(
         AccountChannelOnboarding(account_id=account_id, channel=channel, state="comments_off")
         for account_id in accounts
     )
-    return False
+    return None
 
 
 def _join_jitter_seconds() -> float:
@@ -235,10 +263,14 @@ def _join_jitter_seconds() -> float:
     return _seams.rng.uniform(nc.join_delay_min_seconds, nc.join_delay_max_seconds)
 
 
-async def _join_pair_safely(account_id: str, channel: str) -> AccountChannelOnboarding:
+async def _join_pair_safely(
+    account_id: str,
+    channel: str,
+    group_id: int,
+) -> AccountChannelOnboarding:
     """Join one pair, converting an unexpected raise into a ``failed`` outcome."""
     try:
-        return await _join_and_classify(account_id, channel)
+        return await _join_and_classify(account_id, channel, group_id)
     except Exception as exc:  # noqa: BLE001 - one pair must never abort the campaign
         await log_event(
             "ERROR",

@@ -20,6 +20,7 @@ from core.db import (
     configure_database,
     create_account,
     create_campaign,
+    insert_challenge,
     link_channel_to_campaign,
     mark_comment_posted,
     upsert_linked_group,
@@ -27,6 +28,7 @@ from core.db import (
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
+from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate
 from services.neurocomment.board import load_neurocomment_board
 
@@ -147,6 +149,32 @@ async def test_channel_status_chat_restricted() -> None:
 
     assert board is not None
     assert board.channels[0].status == "chat_restricted"
+
+
+@pytest.mark.asyncio
+async def test_channel_status_bot_challenge_when_challenge_row_exists() -> None:
+    # Same joined-but-not-ready shape as chat_restricted, but a guardian-bot
+    # challenge row was recorded → the board distinguishes it as bot_challenge.
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h1",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="prove you are human",
+            button_labels=["Я человек"],
+            outcome="give_up",
+        ),
+    )
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "bot_challenge"
 
 
 @pytest.mark.asyncio

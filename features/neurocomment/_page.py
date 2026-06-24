@@ -23,6 +23,7 @@ from services.neurocomment import (
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
+    list_channel_challenges,
     load_neurocomment_board,
     onboard_campaign,
     remove_account_from_campaign,
@@ -31,9 +32,12 @@ from services.neurocomment import (
 )
 
 if TYPE_CHECKING:
+    from schemas.challenge import ChallengeRow
     from schemas.neurocomment import CampaignList, NeurocommentBoard
 
 _BOARD_POLL_SECONDS = 4.0
+# Failed-challenge rows shown in a channel's drill-down (Ф2 #145).
+_CHALLENGE_DRILLDOWN_LIMIT = 10
 
 # Pure-display maps (the page's only unit-tested logic).
 _CHANNEL_STATUS_RU: dict[str, str] = {
@@ -72,6 +76,13 @@ def channel_status_label(status: str) -> str:
 def channel_status_icon(status: str) -> str:
     """Badge icon for a channel-row status (fallback: a generic help icon)."""
     return _CHANNEL_STATUS_ICON.get(status, "help_outline")
+
+
+def challenge_summary(row: ChallengeRow) -> str:
+    """One-line drill-down summary of a failed challenge: raw text + button labels."""
+    buttons = " · ".join(row.button_labels) if row.button_labels else "—"
+    text = row.raw_text.strip() or "(без текста)"
+    return f"{text} — [{buttons}]"
 
 
 def health_label(health: str) -> str:
@@ -323,14 +334,42 @@ def _render_channels_panel(board: NeurocommentBoard) -> None:  # pragma: no cove
         if not board.channels:
             ui.label("Каналов пока нет").classes("text-xs text-slate-400")
         for row in board.channels:
-            with ui.row().classes("w-full items-center justify-between"):
-                ui.label(row.channel).classes("text-sm")
-                with ui.row().classes("items-center gap-2"):
-                    ui.label(f"{row.ready_accounts}/{row.total_accounts}").classes(
-                        "text-xs text-slate-500",
-                    )
-                    ui.icon(channel_status_icon(row.status)).classes("text-base text-slate-500")
-                    ui.badge(channel_status_label(row.status)).props("color=blue-grey")
+            with ui.column().classes("w-full gap-0"):
+                with ui.row().classes("w-full items-center justify-between"):
+                    ui.label(row.channel).classes("text-sm")
+                    with ui.row().classes("items-center gap-2"):
+                        ui.label(f"{row.ready_accounts}/{row.total_accounts}").classes(
+                            "text-xs text-slate-500",
+                        )
+                        ui.icon(channel_status_icon(row.status)).classes("text-base text-slate-500")
+                        ui.badge(channel_status_label(row.status)).props("color=blue-grey")
+                if row.status == "bot_challenge":
+                    _render_challenge_drilldown(row.channel)
+
+
+def _render_challenge_drilldown(channel: str) -> None:  # pragma: no cover
+    """Lazy expansion: on open, list the channel's recent failed challenges.
+
+    Loads on demand (not on every board poll) so the 4 s refresh stays cheap.
+    """
+    expansion = ui.expansion("Капчи бота").props("dense").classes("w-full text-xs")
+    with expansion:
+        rows_box = ui.column().classes("w-full gap-0")
+
+    async def load() -> None:
+        result = await list_channel_challenges(channel, _CHALLENGE_DRILLDOWN_LIMIT)
+        rows_box.clear()
+        with rows_box:
+            if not result.rows:
+                ui.label("Записей пока нет").classes("text-xs text-slate-400")
+            for r in result.rows:
+                ui.label(challenge_summary(r)).classes("text-xs text-slate-600")
+
+    async def on_toggle(event: object) -> None:
+        if getattr(event, "value", False):
+            await load()
+
+    expansion.on_value_change(on_toggle)
 
 
 def _render_accounts_panel(board: NeurocommentBoard) -> None:  # pragma: no cover
