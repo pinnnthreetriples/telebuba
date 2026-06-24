@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from nicegui import context, ui
 
 from features.neurocomment._page import (
+    board_content_signature,
     challenge_summary,
     channel_status_icon,
     channel_status_label,
@@ -50,14 +51,22 @@ _SOLVER_SWITCH_RU: dict[str, str] = {
 async def render_work_view(campaign_id: str) -> None:  # pragma: no cover
     board = await load_neurocomment_board(campaign_id)
     container = ui.column().classes("w-full gap-4")
+    sig = {"value": board_content_signature(board)}
 
     @ui.refreshable
     def render() -> None:
         _render_board(board)
 
     async def reload() -> None:
+        # Anti-flicker: poll into the store, re-render only when the content digest
+        # changed (an idle board no longer blinks every poll).
         nonlocal board
-        board = await load_neurocomment_board(campaign_id)
+        fresh = await load_neurocomment_board(campaign_id)
+        new_sig = board_content_signature(fresh)
+        if new_sig == sig["value"]:
+            return
+        sig["value"] = new_sig
+        board = fresh
         render.refresh()
 
     with container:
@@ -77,42 +86,35 @@ def _render_board(board: NeurocommentBoard | None) -> None:  # pragma: no cover
 
 
 def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cover
-    """Per-campaign solver switch + the four outcome counters with a window toggle."""
+    """Minimalist «Капчи» strip: solver switch + window toggle + inline outcome counters."""
     channels = [row.channel for row in board.channels]
-    with ui.card().classes("w-full p-3 gap-2"):
-        with ui.row().classes("w-full items-center gap-3"):
-            switch = (
-                ui.select(_SOLVER_SWITCH_RU, value=solver_switch_key(board.solver_enabled))
-                .props("dense outlined")
-                .classes("max-w-[220px]")
-            )
+    with ui.row().classes("w-full items-center gap-3 flex-wrap"):
+        switch = (
+            ui.select(_SOLVER_SWITCH_RU, value=solver_switch_key(board.solver_enabled))
+            .props("dense outlined options-dense")
+            .classes("max-w-[190px]")
+        )
 
-            async def on_switch(event: object) -> None:
-                key = str(getattr(event, "value", "follow"))
-                await set_solver_enabled(board.campaign_id, _SOLVER_SWITCH[key])
-                ui.notify("Настройка солвера сохранена", type="positive")
+        async def on_switch(event: object) -> None:
+            key = str(getattr(event, "value", "follow"))
+            await set_solver_enabled(board.campaign_id, _SOLVER_SWITCH[key])
+            ui.notify("Настройка солвера сохранена", type="positive")
 
-            switch.on_value_change(on_switch)
-            window = (
-                ui.select(_COUNTER_WINDOWS, value="all")
-                .props("dense outlined")
-                .classes("max-w-[160px]")
-            )
-        counts_box = ui.row().classes("gap-2")
+        switch.on_value_change(on_switch)
+        window = (
+            ui.select(_COUNTER_WINDOWS, value="all")
+            .props("dense outlined options-dense")
+            .classes("max-w-[130px]")
+        )
+        counts = ui.label("").classes("text-xs text-slate-500 tabular-nums")
 
         async def reload_counts() -> None:
-            counts = await count_challenge_outcomes(
+            result = await count_challenge_outcomes(
                 channels, counter_window_since(window.value, datetime.now(UTC))
             )
-            counts_box.clear()
-            with counts_box:
-                for label, value in (
-                    ("solved", counts.solved),
-                    ("failed", counts.failed),
-                    ("give_up", counts.give_up),
-                    ("pending", counts.pending),
-                ):
-                    ui.badge(f"{label}: {value}").props("color=blue-grey")
+            counts.set_text(
+                f"✓ {result.solved} · ✗ {result.failed} · ⊘ {result.give_up} · ⏳ {result.pending}",
+            )
 
         window.on_value_change(lambda _e: reload_counts())
         ui.timer(0.1, reload_counts, once=True)

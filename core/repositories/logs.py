@@ -90,6 +90,8 @@ def _list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
         statement = statement.where(_logs.c.status != "success")
     if log_filter.account_id:
         statement = statement.where(_logs.c.account_id == log_filter.account_id)
+    if log_filter.event_prefix:
+        statement = statement.where(_logs.c.event.like(f"{log_filter.event_prefix}%"))
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
     entries: list[LogEntry] = []

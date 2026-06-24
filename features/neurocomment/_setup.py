@@ -25,6 +25,35 @@ from services.neurocomment import (
     onboard_campaign,
     remove_account_from_campaign,
 )
+from services.warming import list_warmed_accounts
+
+
+async def render_warmed_accounts() -> None:  # pragma: no cover
+    """Top fleet-wide overview: which accounts are warmed enough to commentate.
+
+    Read-only — accounts appear here as they cross ``warmed_min_days`` on the warming
+    page. Per-campaign assignment still happens in «Настройка» below.
+    """
+    min_days = settings.neurocomment.warmed_min_days
+    warmed = (await list_warmed_accounts(min_days)).accounts
+    with ui.card().classes("w-full p-3 gap-2"):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("local_fire_department").classes("text-amber-500")
+            ui.label("Прогретые аккаунты").classes("text-sm font-semibold")
+            ui.label(f"от {min_days} дн").classes("text-xs text-slate-400")
+        if not warmed:
+            ui.label("Нет прогретых аккаунтов — прогрейте их на странице «Прогрев».").classes(
+                "text-xs text-slate-400",
+            )
+            return
+        with ui.row().classes("w-full gap-2 flex-wrap items-center"):
+            for acc in warmed:
+                with ui.row().classes(
+                    "items-center gap-1 rounded-full bg-emerald-50 "
+                    "border border-emerald-100 pl-3 pr-2 py-0.5",
+                ):
+                    ui.label(acc.label).classes("text-xs text-emerald-800")
+                    ui.label(f"{acc.warming_days}д").classes("text-[10px] text-emerald-500")
 
 
 async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa: ANN001  # pragma: no cover

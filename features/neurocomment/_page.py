@@ -217,6 +217,48 @@ def runtime_status_text(status: NeurocommentRuntimeStatus) -> str:
     return f"Слушаю каналов: {status.active_channels}"
 
 
+def board_content_signature(board: NeurocommentBoard | None) -> tuple[object, ...]:
+    """Digest of everything the work view renders; equal digests → skip the re-render.
+
+    Anti-flicker: the work view polls every few seconds but only re-renders the board
+    when this signature changes (mirrors warming's ``_card_signature`` gate), so an
+    idle board no longer blinks.
+    """
+    if board is None:
+        return ()
+    return (
+        board.solver_enabled,
+        tuple((r.channel, r.status, r.ready_accounts, r.total_accounts) for r in board.channels),
+        tuple(
+            (
+                c.account_id,
+                c.health,
+                c.comments_last_hour,
+                c.max_comments_per_hour,
+                c.comments_today,
+                c.trust_score,
+                c.trust_band,
+                c.spam_status,
+                c.last_comment_at,
+            )
+            for c in board.accounts
+        ),
+    )
+
+
+def live_signature(
+    status: NeurocommentRuntimeStatus,
+    activity: FleetActivity,
+    last_comment: str | None,
+) -> tuple[object, ...]:
+    """Digest of the engine panel's live section (status pill + ticker + counters).
+
+    ``last_comment`` is the already-bucketed «X назад» string, so the relative clock
+    only flips the digest about once a minute instead of every poll — no 4 s blink.
+    """
+    return (status.running, status.active_channels, *activity, last_comment)
+
+
 def _build_header() -> None:  # pragma: no cover
     with ui.row().classes(TOP_BAR_CLASSES):
         render_nav("/neurocomment")
@@ -225,37 +267,45 @@ def _build_header() -> None:  # pragma: no cover
 async def render_neurocomment_page() -> None:  # pragma: no cover
     # Lazy imports: the sibling render modules import this module's pure helpers at
     # module level, so importing them here (not at top) avoids an import cycle.
+    from features.neurocomment._engine_panel import render_engine_panel  # noqa: PLC0415
     from features.neurocomment._explainer import render_how_it_works  # noqa: PLC0415
-    from features.neurocomment._setup import render_create_campaign  # noqa: PLC0415
+    from features.neurocomment._setup import (  # noqa: PLC0415
+        render_create_campaign,
+        render_setup,
+        render_warmed_accounts,
+    )
+    from features.neurocomment._workview import render_work_view  # noqa: PLC0415
 
     ui.query("body").classes("bg-slate-50 text-slate-950")
     _build_header()
     with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
         ui.label("Нейрокомментинг").classes("text-xl font-semibold")
+        # Fleet-wide overview of warmed accounts, at the very top.
+        await render_warmed_accounts()
+
         campaign_list = await list_campaigns()
-        # No campaign yet → just the create form (open) + the explainer.
-        await render_create_campaign(on_created=_reload_page, expanded=not campaign_list.campaigns)
         if not campaign_list.campaigns:
+            # No campaign yet → just the create form (open) + the explainer.
+            await render_create_campaign(on_created=_reload_page, expanded=True)
             render_how_it_works()
             return
 
-        # Switching a campaign re-renders the whole section (engine panel → setup →
-        # work view). Each panel owns its own poll timer; the refresh clears the old
-        # elements (dropping their timers) before mounting the new campaign's.
+        # Two refreshables re-rendered on a campaign switch: the per-campaign setup
+        # (beside the global create form) and the work area (engine panel + board).
         @ui.refreshable
-        async def section() -> None:
-            from features.neurocomment._engine_panel import render_engine_panel  # noqa: PLC0415
-            from features.neurocomment._setup import render_setup  # noqa: PLC0415
-            from features.neurocomment._workview import render_work_view  # noqa: PLC0415
-
-            await render_engine_panel(switcher.value)
+        async def setup_section() -> None:
             await render_setup(switcher.value)
+
+        @ui.refreshable
+        async def work_section() -> None:
+            await render_engine_panel(switcher.value)
             await render_work_view(switcher.value)
 
         def on_switch() -> None:
-            # Named (not ``on_change=section.refresh``) so the select's change-event
-            # arg isn't forwarded into the zero-arg ``section()``.
-            section.refresh()
+            # Named (not ``on_change=*.refresh``) so the select's change-event arg
+            # isn't forwarded into the zero-arg refreshables.
+            setup_section.refresh()
+            work_section.refresh()
 
         switcher = (
             ui.select(
@@ -267,7 +317,13 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
             .props("dense outlined")
             .classes("w-full max-w-[400px]")
         )
-        await section()
+        # «Новая кампания» (global) + «Настройка» (per-campaign) side by side.
+        with ui.row().classes("w-full gap-4 items-start flex-wrap"):
+            with ui.column().classes("flex-1 min-w-[340px]"):
+                await render_create_campaign(on_created=_reload_page, expanded=False)
+            with ui.column().classes("flex-1 min-w-[340px]"):
+                await setup_section()
+        await work_section()
         render_how_it_works()
 
 

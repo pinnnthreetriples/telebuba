@@ -43,7 +43,7 @@ telebuba/
 ├── schemas/                Pydantic models; shared types, no behavior, no I/O (incl. challenge.py: bot-challenge message + audit-row models)
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile/proxy operations
-│   ├── warming/            runtime workflow domain package
+│   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview)
 │   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng)
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
@@ -55,7 +55,7 @@ telebuba/
 │   ├── warming/
 │   │   ├── _pipeline.py       animated 6-step cycle rail + active-step detail + summary
 │   │   └── _termlog.py        expandable per-account dark "terminal" activity log on each card
-│   ├── neurocomment/        neurocomment page (redesigned): _page.py (composition + pure tested helpers: label maps, PIPELINE_STEPS, fleet_activity, relative_time, runtime_status_text), _engine_panel.py (animated hero card — 6-step pipeline rail + live ticker + fleet counters + start/stop; rail animates while running, launch cascade on start), _setup.py (collapsible campaign create + channel chips + account picker + onboard), _explainer.py («Как работает» card), _workview.py (board + counters + solver switch + drill-down Retry/Skip); tb-nc-* keyframes in __init__.py
+│   ├── neurocomment/        neurocomment page (redesigned): _page.py (composition + pure tested helpers: label maps, PIPELINE_STEPS, fleet_activity, relative_time, runtime_status_text, board_content_signature/live_signature anti-flicker gates), _engine_panel.py (animated hero card — 6-step pipeline rail + live ticker + fleet counters + start/stop + collapsible logs panel; signature-gated refresh), _setup.py (warmed-accounts overview + collapsible campaign create + channel chips + account picker + onboard), _explainer.py («Как работает» card), _workview.py (board + minimalist «Капчи» strip + drill-down Retry/Skip; signature-gated), _logpanel.py (collapsible neurocomment-activity dark terminal, event→RU map); tb-nc-* keyframes + log CSS in __init__.py
 │   ├── shared/              cross-page UI chrome — the one sanctioned cross-feature namespace
 │   │   └── nav.py              single source of truth for the top nav bar (links + active styling)
 │   └── logs.py

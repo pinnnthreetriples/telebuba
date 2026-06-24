@@ -38,7 +38,7 @@ from services.warming._runtime import (
     start_warming,
     stop_warming,
 )
-from services.warming.board import load_board
+from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import add_channels, list_channels, remove_channel
 from services.warming.pacing import (
     _in_quiet_hours,
@@ -75,6 +75,7 @@ __all__ = [
     "compute_intensity",
     "evaluate_readiness",
     "list_channels",
+    "list_warmed_accounts",
     "load_board",
     "load_settings",
     "reconcile_warming_runtime",

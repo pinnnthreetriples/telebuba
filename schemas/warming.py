@@ -336,6 +336,20 @@ class WarmingBoardState(BaseModel):
     summary: WarmingSummary = Field(default_factory=WarmingSummary)
 
 
+class WarmedAccount(BaseModel):
+    """A sufficiently-warmed account, for the neurocomment page's overview field."""
+
+    account_id: str = Field(min_length=1)
+    label: str = Field(min_length=1)
+    warming_days: int = Field(ge=0)
+
+
+class WarmedAccountList(BaseModel):
+    """Wrapper for a bulk read of warmed accounts (non-negotiable #2)."""
+
+    accounts: list[WarmedAccount] = Field(default_factory=list)
+
+
 class StartWarmingRequest(BaseModel):
     account_id: str = Field(min_length=1)
 

@@ -19,6 +19,8 @@ from core.db import (
 )
 from core.phone_geo import country_for_phone
 from schemas.warming import (
+    WarmedAccount,
+    WarmedAccountList,
     WarmingAccountState,
     WarmingBoardState,
     WarmingPhase,
@@ -167,6 +169,23 @@ async def load_board() -> WarmingBoardState:
         active_count=sum(1 for card in warming if card.state == "active"),
         summary=_build_summary([*idle, *warming]),
     )
+
+
+async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
+    """Accounts warmed for at least ``min_days`` whole days, for the neurocomment overview.
+
+    Reuses ``load_board`` (one bulk read) and keeps the cards whose ``warming_days``
+    has reached the threshold — i.e. accounts that have been on the warming page long
+    enough to be trusted for commenting. Newest-warmed first.
+    """
+    board = await load_board()
+    warmed = [
+        WarmedAccount(account_id=card.account_id, label=card.label, warming_days=card.warming_days)
+        for card in (*board.idle, *board.warming)
+        if card.warming_days is not None and card.warming_days >= min_days
+    ]
+    warmed.sort(key=lambda a: a.warming_days, reverse=True)
+    return WarmedAccountList(accounts=warmed)
 
 
 _TRUST_HEALTHY_BANDS: Final = frozenset({"excellent", "good"})

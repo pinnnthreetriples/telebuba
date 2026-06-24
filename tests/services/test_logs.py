@@ -125,3 +125,25 @@ async def test_limit_caps_returned_rows() -> None:
     # newest-first
     assert state.entries[0].account_id == "acc-4"
     assert state.entries[1].account_id == "acc-3"
+
+
+@pytest.mark.asyncio
+async def test_event_prefix_keeps_only_matching_events() -> None:
+    await log_event("INFO", "neurocomment_posted", account_id="acc-1")
+    await log_event("INFO", "warming_cycle_completed", account_id="acc-1")
+    await log_event("WARNING", "neurocomment_post_failed", account_id="acc-2")
+
+    state = await load_logs_page(LogFilter(event_prefix="neurocomment"))
+
+    assert {e.event for e in state.entries} == {"neurocomment_posted", "neurocomment_post_failed"}
+    assert state.summary.total == 2
+
+
+@pytest.mark.asyncio
+async def test_event_prefix_empty_is_no_filter() -> None:
+    await log_event("INFO", "neurocomment_posted")
+    await log_event("INFO", "warming_cycle_completed")
+
+    state = await load_logs_page(LogFilter(event_prefix=""))
+
+    assert state.summary.total == 2

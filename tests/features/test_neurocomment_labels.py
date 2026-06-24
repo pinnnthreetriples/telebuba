@@ -11,8 +11,10 @@ from datetime import UTC, datetime
 import pytest
 
 from features.neurocomment import register_neurocomment_page
+from features.neurocomment._logpanel import nc_event_label, nc_log_detail
 from features.neurocomment._page import (
     PIPELINE_STEPS,
+    board_content_signature,
     campaign_options,
     campaign_status_label,
     challenge_summary,
@@ -21,6 +23,7 @@ from features.neurocomment._page import (
     counter_window_since,
     fleet_activity,
     health_label,
+    live_signature,
     relative_time,
     runtime_status_text,
     solver_switch_key,
@@ -263,6 +266,91 @@ def test_runtime_status_text_running_with_channels() -> None:
 def test_runtime_status_text_running_no_channels() -> None:
     status = NeurocommentRuntimeStatus(running=True, active_channels=0)
     assert runtime_status_text(status) == "Движок запущен"
+
+
+def _board(*, today: int = 5) -> NeurocommentBoard:
+    return NeurocommentBoard(
+        campaign_id="c1",
+        campaign_name="A",
+        status="active",
+        accounts=[_card("a1", health="ready", last_hour=1, today=today)],
+        channels=[_channel("@x", "ready")],
+    )
+
+
+def test_board_content_signature_stable_for_identical_boards() -> None:
+    assert board_content_signature(_board()) == board_content_signature(_board())
+
+
+def test_board_content_signature_changes_when_a_card_field_changes() -> None:
+    assert board_content_signature(_board(today=5)) != board_content_signature(_board(today=6))
+
+
+def test_board_content_signature_none_is_empty() -> None:
+    assert board_content_signature(None) == ()
+
+
+def test_live_signature_changes_on_running_flip() -> None:
+    activity = fleet_activity(_board())
+    stopped = NeurocommentRuntimeStatus(running=False)
+    running = NeurocommentRuntimeStatus(running=True, active_channels=2)
+    assert live_signature(stopped, activity, None) != live_signature(running, activity, None)
+
+
+def test_live_signature_changes_on_last_comment_bucket() -> None:
+    status = NeurocommentRuntimeStatus(running=True, active_channels=1)
+    activity = fleet_activity(_board())
+    assert live_signature(status, activity, "5 мин назад") != live_signature(
+        status, activity, "6 мин назад"
+    )
+
+
+def test_live_signature_stable_when_nothing_changed() -> None:
+    status = NeurocommentRuntimeStatus(running=True, active_channels=1)
+    activity = fleet_activity(_board())
+    assert live_signature(status, activity, "только что") == live_signature(
+        status, activity, "только что"
+    )
+
+
+def test_nc_event_label_known_event() -> None:
+    icon, label = nc_event_label("neurocomment_posted")
+    assert icon == "send"
+    assert label == "Комментарий отправлен"
+
+
+def test_nc_event_label_unknown_humanizes_without_prefix() -> None:
+    assert nc_event_label("neurocomment_some_new_event") == ("circle", "some new event")
+
+
+def test_nc_log_detail_post_skipped_uses_reason_and_channel() -> None:
+    detail = nc_log_detail("neurocomment_post_skipped", {"channel": "@x", "reason": "forward"})
+    assert detail == "@x: forward"
+
+
+def test_nc_log_detail_cooldown_seconds() -> None:
+    extra = {"channel": "@x", "cooldown_seconds": 3600}
+    assert nc_log_detail("neurocomment_channel_backoff", extra) == "@x · пауза 3600 с"
+
+
+def test_nc_log_detail_missing_count() -> None:
+    detail = nc_log_detail("neurocomment_channel_backoff", {"channel": "@x", "missing": 4})
+    assert detail == "@x · удалено 4"
+
+
+def test_nc_log_detail_channel_backoff_shows_both_missing_and_cooldown() -> None:
+    # The real deletion-back-off event carries both — neither must shadow the other.
+    extra = {"channel": "@x", "missing": 5, "cooldown_seconds": 3600}
+    assert nc_log_detail("neurocomment_channel_backoff", extra) == "@x · удалено 5 · пауза 3600 с"
+
+
+def test_nc_log_detail_falls_back_to_joined_fields() -> None:
+    detail = nc_log_detail("neurocomment_posted", {"channel": "@x"})
+    assert detail == "@x"
+
+
+def test_nc_log_detail_empty_extra_is_blank() -> None:
+    assert nc_log_detail("neurocomment_runtime_reconciled", {}) == ""
 
 
 def test_page_registration_is_importable() -> None:
