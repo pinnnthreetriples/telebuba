@@ -308,6 +308,11 @@ class NeurocommentSettings(BaseSettings):
     challenge_click_delay_max_seconds: float = Field(default=6.0, ge=0.0)
     # Reserved for Phase-2 human-queue routing of low-confidence decisions.
     challenge_min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    # Ф2 #147 channel challenge back-off: K consecutive solver failures on a channel
+    # trip an escalating cooldown that stops onboarding new accounts there.
+    channel_challenge_backoff_min_failures: int = Field(default=3, ge=1)
+    channel_challenge_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
+    channel_challenge_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:
@@ -319,6 +324,9 @@ class NeurocommentSettings(BaseSettings):
             raise ValueError(msg)
         if self.challenge_click_delay_min_seconds > self.challenge_click_delay_max_seconds:
             msg = "challenge_click_delay_min_seconds must not exceed _max_seconds"
+            raise ValueError(msg)
+        if self.channel_challenge_backoff_base_seconds > self.channel_challenge_backoff_max_seconds:
+            msg = "channel_challenge_backoff_base_seconds must not exceed _max_seconds"
             raise ValueError(msg)
         return self
 

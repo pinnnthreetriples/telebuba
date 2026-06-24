@@ -36,6 +36,7 @@ from schemas.neurocomment import (
     NeurocommentBoard,
     NeurocommentChannelRow,
 )
+from services.neurocomment import _state
 from services.trust import account_trust_score_from
 from services.warming.pacing import evaluate_readiness
 
@@ -105,6 +106,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
             readiness,
             linked.get(channel),
             challenged=channel in challenged,
+            backed_off=_state.is_channel_in_challenge_backoff(channel, now),
         )
         for channel in channels
     ]
@@ -167,12 +169,15 @@ def _build_channel_row(
     linked: LinkedDiscussionGroup | None,
     *,
     challenged: bool,
+    backed_off: bool,
 ) -> NeurocommentChannelRow:
     rows = [r for r in readiness if r.channel == channel]
     ready_count = sum(1 for r in rows if r.ready)
     return NeurocommentChannelRow(
         channel=channel,
-        status=_channel_status(rows, linked, ready_count, challenged=challenged),
+        status=_channel_status(
+            rows, linked, ready_count, challenged=challenged, backed_off=backed_off
+        ),
         ready_accounts=ready_count,
         total_accounts=len(rows),
     )
@@ -184,20 +189,21 @@ def _channel_status(
     ready_count: int,
     *,
     challenged: bool,
+    backed_off: bool,
 ) -> ChannelStatus:
     """Aggregate a channel's status from its readiness rows + linked-group cache.
 
-    Precedence: a comments-off channel can never be commented on; otherwise an
-    account that's ready wins; then the joined-but-blocked failure modes —
-    ``bot_challenge`` when a guardian-bot challenge row exists for the channel
-    (Ф2 #145), else ``chat_restricted`` (a Telegram-level write block) — then the
-    approval gate when not joined; ``throttled`` is the catch-all.
-
-    ``bot_challenge_backoff`` is in the enum but not derived here yet (the channel
-    back-off counter lands in a later slice).
+    Precedence: a comments-off channel can never be commented on; a channel in
+    challenge back-off (Ф2 #147, K solver failures) is paused regardless of
+    readiness; otherwise an account that's ready wins; then the joined-but-blocked
+    failure modes — ``bot_challenge`` when a guardian-bot challenge row exists for
+    the channel (#145), else ``chat_restricted`` (a Telegram-level write block) —
+    then the approval gate when not joined; ``throttled`` is the catch-all.
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
+    if backed_off:
+        return "bot_challenge_backoff"
     if ready_count > 0:
         return "ready"
     if any(r.joined and not r.captcha_passed for r in rows):

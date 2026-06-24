@@ -15,7 +15,7 @@ from unittest.mock import MagicMock
 import pytest
 
 from core.telegram_client._listener import _make_handler
-from services.neurocomment import engine
+from services.neurocomment import _filters
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import NewPostEvent
@@ -33,7 +33,7 @@ async def test_listener_forward_flag_is_honored_by_engine_filter() -> None:
     await handler(MagicMock(message=message, chat_id=-100))
 
     assert captured[0].is_forward is True
-    assert engine._filter_reason(captured[0]) == "forward"
+    assert _filters.filter_reason(captured[0]) == "forward"
 
 
 @pytest.mark.asyncio
@@ -48,4 +48,4 @@ async def test_listener_non_forward_is_not_filtered_as_forward() -> None:
     await handler(MagicMock(message=message, chat_id=-100))
 
     assert captured[0].is_forward is False
-    assert engine._filter_reason(captured[0]) is None
+    assert _filters.filter_reason(captured[0]) is None

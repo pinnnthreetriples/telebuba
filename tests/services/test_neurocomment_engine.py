@@ -790,6 +790,41 @@ async def test_gate_error_resolves_pending_challenge_to_failed(
 
 
 @pytest.mark.asyncio
+async def test_gate_error_with_pending_trips_challenge_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ф2 #147: a resolved pending→failed registers a solver failure; K=1 → backoff.
+    monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
+    await _make_campaign("@chan", "acc-1")
+    await _seed_pending_challenge("acc-1", "@chan")
+    _patch_io(
+        monkeypatch, comment=_CommentStub(status="failed", error_type="ChatWriteForbiddenError")
+    )
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is True
+
+
+@pytest.mark.asyncio
+async def test_channel_in_challenge_backoff_skips_commenting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ф2 #147: a backed-off channel is left alone — no account selected, no comment.
+    await _make_campaign("@chan", "acc-1")
+    _state.register_challenge_failure(
+        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
+    )
+    comment = _CommentStub(status="ok")
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    assert comment.calls == []
+    assert await fetch_comment("@chan", 10) is None
+
+
+@pytest.mark.asyncio
 async def test_generic_post_failure_marks_failed_and_releases(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

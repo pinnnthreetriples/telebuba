@@ -136,9 +136,9 @@ async def lookup_cached_decision(challenge_hash: str) -> ChallengeDecision | Non
     return await asyncio.to_thread(_lookup_cached_decision, challenge_hash)
 
 
-def _resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> None:
+def _resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> bool:
     # Resolve the latest still-pending row for the pair — the click the engine just
-    # verified by attempting a comment. No pending row → no-op.
+    # verified by attempting a comment. No pending row → no-op, returns False.
     latest_pending = (
         select(_neurocomment_challenges.c.id)
         .where(
@@ -155,14 +155,15 @@ def _resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> Non
     with _get_engine().begin() as connection:
         target_id = connection.execute(latest_pending).scalar()
         if target_id is None:
-            return
+            return False
         connection.execute(
             update(_neurocomment_challenges)
             .where(_neurocomment_challenges.c.id == target_id)
             .values(outcome=outcome, outcome_at=_now_iso()),
         )
+    return True
 
 
-async def resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> None:
-    """Resolve the pair's latest pending challenge to ``solved``/``failed`` (engine verify)."""
-    await asyncio.to_thread(_resolve_pending_outcome, account_id, channel, outcome)
+async def resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> bool:
+    """Resolve the pair's latest pending challenge; ``True`` if one was found + updated."""
+    return await asyncio.to_thread(_resolve_pending_outcome, account_id, channel, outcome)

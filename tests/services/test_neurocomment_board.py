@@ -30,6 +30,7 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate
+from services.neurocomment import _state
 from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
@@ -41,6 +42,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    _state.reset_for_tests()  # challenge back-off is module-global; isolate per test
     reset_logging_for_tests()
     setup_logging()
 
@@ -175,6 +177,24 @@ async def test_channel_status_bot_challenge_when_challenge_row_exists() -> None:
 
     assert board is not None
     assert board.channels[0].status == "bot_challenge"
+
+
+@pytest.mark.asyncio
+async def test_channel_status_bot_challenge_backoff() -> None:
+    # Ф2 #147: a channel in challenge back-off shows bot_challenge_backoff (paused),
+    # taking precedence over readiness.
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    _state.register_challenge_failure(
+        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
+    )
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "bot_challenge_backoff"
 
 
 @pytest.mark.asyncio
