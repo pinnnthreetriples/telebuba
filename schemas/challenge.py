@@ -7,7 +7,9 @@ Pure types, no behaviour. ``BotChallengeMessage`` is what the gateway's
 
 from __future__ import annotations
 
-from pydantic import BaseModel, Field
+from typing import Literal
+
+from pydantic import BaseModel, Field, model_validator
 
 
 class ChallengeInsert(BaseModel):
@@ -43,6 +45,33 @@ class ChallengedChannels(BaseModel):
     """Channels that carry a non-solved challenge row — the board's bot_challenge signal."""
 
     channels: list[str] = Field(default_factory=list)
+
+
+class ChallengeDecision(BaseModel):
+    """Gemini's structured verdict on a challenge (server-side ``responseSchema``).
+
+    Validators mirror the action contract: ``click_button`` needs ``button_index``;
+    ``send_text`` needs ``text``; ``give_up`` carries neither.
+    """
+
+    action: Literal["click_button", "send_text", "give_up"]
+    button_index: int | None = None
+    text: str | None = None
+    confidence: float = Field(ge=0, le=1)
+    reasoning: str = Field(max_length=200)
+
+    @model_validator(mode="after")
+    def _check_action_fields(self) -> ChallengeDecision:
+        if self.action == "click_button" and self.button_index is None:
+            msg = "click_button requires button_index"
+            raise ValueError(msg)
+        if self.action == "send_text" and not self.text:
+            msg = "send_text requires text"
+            raise ValueError(msg)
+        if self.action == "give_up" and (self.button_index is not None or self.text is not None):
+            msg = "give_up must have button_index and text both None"
+            raise ValueError(msg)
+        return self
 
 
 class BotChallengeMessage(BaseModel):

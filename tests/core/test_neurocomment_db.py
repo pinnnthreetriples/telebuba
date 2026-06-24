@@ -36,14 +36,16 @@ from core.db import (  # type: ignore[attr-defined]
     list_campaigns,
     list_failed_for_channel,
     list_posted_comments_for_channel_since,
+    lookup_cached_decision,
     mark_comment_failed,
     mark_comment_posted,
     remove_account_from_campaign,
+    resolve_pending_outcome,
     upsert_linked_group,
     upsert_readiness,
 )
 from schemas.accounts import AccountCreate
-from schemas.challenge import ChallengeInsert
+from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.neurocomment import CampaignCreate
 
 if TYPE_CHECKING:
@@ -219,6 +221,88 @@ async def test_list_failed_for_channel_is_newest_first_and_limited() -> None:
 
     # Newest-first (id desc tiebreaker), capped at the limit.
     assert [r.raw_text for r in result.rows] == ["challenge 2", "challenge 1"]
+
+
+def _solved_insert(
+    challenge_hash: str, account_id: str, decision: ChallengeDecision
+) -> ChallengeInsert:
+    return ChallengeInsert(
+        challenge_hash=challenge_hash,
+        account_id=account_id,
+        channel="@chan",
+        raw_text="prove human",
+        button_labels=["yes"],
+        outcome="solved",
+        decision_json=decision.model_dump_json(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_lookup_cached_decision_returns_solved_decision() -> None:
+    decision = ChallengeDecision(
+        action="click_button", button_index=2, confidence=0.8, reasoning="r"
+    )
+    await insert_challenge(_solved_insert("hash-1", "acc-1", decision))
+
+    cached = await lookup_cached_decision("hash-1")
+
+    assert cached is not None
+    assert cached.action == "click_button"
+    assert cached.button_index == 2
+
+
+@pytest.mark.asyncio
+async def test_lookup_cached_decision_ignores_non_solved() -> None:
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="hash-2",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="x",
+            button_labels=["y"],
+            outcome="give_up",
+        ),
+    )
+
+    assert await lookup_cached_decision("hash-2") is None
+
+
+@pytest.mark.asyncio
+async def test_resolve_pending_outcome_marks_latest_pending() -> None:
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="x",
+            button_labels=["y"],
+            outcome="pending",
+            decision_json=ChallengeDecision(
+                action="click_button", button_index=0, confidence=0.9, reasoning="r"
+            ).model_dump_json(),
+        ),
+    )
+
+    await resolve_pending_outcome("acc-1", "@chan", "solved")
+
+    engine = _get_engine()
+    with engine.connect() as connection:
+        row = (
+            connection.exec_driver_sql(
+                "SELECT outcome, outcome_at FROM neurocomment_challenges WHERE account_id='acc-1'",
+            )
+            .mappings()
+            .first()
+        )
+    assert row is not None
+    assert row["outcome"] == "solved"
+    assert row["outcome_at"] is not None
+
+
+@pytest.mark.asyncio
+async def test_resolve_pending_outcome_is_noop_without_pending() -> None:
+    # No pending row for the pair → must not raise.
+    await resolve_pending_outcome("ghost", "@chan", "failed")
 
 
 @pytest.mark.asyncio

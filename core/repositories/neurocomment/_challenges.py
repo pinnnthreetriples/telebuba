@@ -12,12 +12,13 @@ import asyncio
 import json
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import _neurocomment_challenges
 from schemas.challenge import (
     ChallengedChannels,
+    ChallengeDecision,
     ChallengeInsert,
     ChallengeRow,
     ChallengeRowList,
@@ -108,3 +109,60 @@ def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:
 async def list_challenged_channels(channels: list[str]) -> ChallengedChannels:
     """Which of ``channels`` carry a non-solved challenge (bulk board signal)."""
     return await asyncio.to_thread(_list_challenged_channels, channels)
+
+
+def _lookup_cached_decision(challenge_hash: str) -> ChallengeDecision | None:
+    statement = (
+        select(_neurocomment_challenges.c.decision_json)
+        .where(
+            (_neurocomment_challenges.c.challenge_hash == challenge_hash)
+            & (_neurocomment_challenges.c.outcome == "solved"),
+        )
+        .order_by(
+            _neurocomment_challenges.c.decided_at.desc(),
+            _neurocomment_challenges.c.id.desc(),
+        )
+        .limit(1)
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).first()
+    if row is None or row[0] is None:
+        return None
+    return ChallengeDecision.model_validate_json(str(row[0]))
+
+
+async def lookup_cached_decision(challenge_hash: str) -> ChallengeDecision | None:
+    """Reuse a previously solved decision for the same challenge hash (global cache)."""
+    return await asyncio.to_thread(_lookup_cached_decision, challenge_hash)
+
+
+def _resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> None:
+    # Resolve the latest still-pending row for the pair — the click the engine just
+    # verified by attempting a comment. No pending row → no-op.
+    latest_pending = (
+        select(_neurocomment_challenges.c.id)
+        .where(
+            (_neurocomment_challenges.c.account_id == account_id)
+            & (_neurocomment_challenges.c.channel == channel)
+            & (_neurocomment_challenges.c.outcome == "pending"),
+        )
+        .order_by(
+            _neurocomment_challenges.c.decided_at.desc(),
+            _neurocomment_challenges.c.id.desc(),
+        )
+        .limit(1)
+    )
+    with _get_engine().begin() as connection:
+        target_id = connection.execute(latest_pending).scalar()
+        if target_id is None:
+            return
+        connection.execute(
+            update(_neurocomment_challenges)
+            .where(_neurocomment_challenges.c.id == target_id)
+            .values(outcome=outcome, outcome_at=_now_iso()),
+        )
+
+
+async def resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> None:
+    """Resolve the pair's latest pending challenge to ``solved``/``failed`` (engine verify)."""
+    await asyncio.to_thread(_resolve_pending_outcome, account_id, channel, outcome)

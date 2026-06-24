@@ -38,6 +38,7 @@ from core.db import (
     list_warming_states,
     mark_comment_failed,
     mark_comment_posted,
+    resolve_pending_outcome,
     upsert_readiness,
 )
 from core.logging import log_event
@@ -387,6 +388,8 @@ async def _classify_post(
             comment_text=text,
             comment_msg_id=result.message_id,
         )
+        # First comment confirms a solver click worked (no-op if no pending row).
+        await resolve_pending_outcome(account_id, event.channel, "solved")
         await log_event(
             "INFO",
             "neurocomment_posted",
@@ -408,7 +411,7 @@ async def _classify_post(
         _apply_cooldown(account_id, result.flood_wait_seconds, scope)
         event_name = "neurocomment_post_cooldown"
     elif result.error_type in _GATE_ERRORS:
-        # Lazy captcha/gate: stop selecting this (account, channel) until re-onboarded.
+        # Gate: stop selecting this pair until re-onboarded; the click did not work.
         await upsert_readiness(
             account_id,
             event.channel,
@@ -416,6 +419,7 @@ async def _classify_post(
             captcha_passed=False,
             ready=False,
         )
+        await resolve_pending_outcome(account_id, event.channel, "failed")
         event_name = "neurocomment_post_gated"
     else:
         event_name = "neurocomment_post_failed"

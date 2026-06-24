@@ -301,6 +301,13 @@ class NeurocommentSettings(BaseSettings):
     # Ф2 challenge solver — window the onboarding solver waits for a guardian-bot
     # inline-button challenge after joining a discussion group.
     challenge_wait_timeout_seconds: float = Field(default=20.0, gt=0.0)
+    # Hard cutoff on the Gemini decision call.
+    challenge_gemini_timeout_seconds: float = Field(default=10.0, gt=0.0)
+    # Log-normal humanization pause before clicking, clamped to [min, max].
+    challenge_click_delay_min_seconds: float = Field(default=3.0, ge=0.0)
+    challenge_click_delay_max_seconds: float = Field(default=6.0, ge=0.0)
+    # Reserved for Phase-2 human-queue routing of low-confidence decisions.
+    challenge_min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:
@@ -309,6 +316,9 @@ class NeurocommentSettings(BaseSettings):
             raise ValueError(msg)
         if self.join_delay_min_seconds > self.join_delay_max_seconds:
             msg = "join_delay_min_seconds must not exceed join_delay_max_seconds"
+            raise ValueError(msg)
+        if self.challenge_click_delay_min_seconds > self.challenge_click_delay_max_seconds:
+            msg = "challenge_click_delay_min_seconds must not exceed _max_seconds"
             raise ValueError(msg)
         return self
 
