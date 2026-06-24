@@ -10,6 +10,7 @@ tests patch one place. NiceGUI wiring (#119) delegates here.
 from __future__ import annotations
 
 from services.neurocomment._runtime import (
+    neurocomment_runtime_status,
     on_post,
     reconcile_neurocomment_on_startup,
     reconcile_neurocomment_runtime,
@@ -49,6 +50,7 @@ __all__ = [
     "list_campaigns",
     "list_channel_challenges",
     "load_neurocomment_board",
+    "neurocomment_runtime_status",
     "on_post",
     "onboard_account_channel",
     "onboard_campaign",

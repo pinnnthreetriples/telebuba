@@ -275,3 +275,17 @@ class NeurocommentBoard(BaseModel):
     solver_enabled: bool | None = None  # per-campaign solver override (#148)
     accounts: list[NeurocommentAccountCard] = Field(default_factory=list)
     channels: list[NeurocommentChannelRow] = Field(default_factory=list)
+
+
+class NeurocommentRuntimeStatus(BaseModel):
+    """Fleet-wide runtime state for the page's running indicator + live animation.
+
+    ``running`` is the single source of truth the UI animates on: the engine is
+    one fleet listener (not per-campaign), so the persisted listener account id
+    being set means the engine is live. ``active_channels`` is the size of the
+    watch set across all active campaigns (what the listener actually watches).
+    """
+
+    running: bool
+    active_channels: int = 0
+    listener_account_id: str | None = None

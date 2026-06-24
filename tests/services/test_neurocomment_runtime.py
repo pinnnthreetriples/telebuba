@@ -99,6 +99,40 @@ def _patch_execute(monkeypatch: pytest.MonkeyPatch, spy: _ExecuteSpy) -> None:
 
 
 @pytest.mark.asyncio
+async def test_runtime_status_stopped_when_no_listener_persisted() -> None:
+    status = await _runtime.neurocomment_runtime_status()
+    assert status.running is False
+    assert status.active_channels == 0
+    assert status.listener_account_id is None
+
+
+@pytest.mark.asyncio
+async def test_runtime_status_running_counts_active_watch_channels() -> None:
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    await set_listener_account_id("listener-1")
+
+    status = await _runtime.neurocomment_runtime_status()
+
+    assert status.running is True
+    assert status.active_channels == 2
+    assert status.listener_account_id == "listener-1"
+
+
+@pytest.mark.asyncio
+async def test_runtime_status_running_with_no_channels_reports_zero() -> None:
+    # A persisted listener with an empty watch set still reads as running (the
+    # listener is up); the count is simply 0.
+    await set_listener_account_id("listener-1")
+
+    status = await _runtime.neurocomment_runtime_status()
+
+    assert status.running is True
+    assert status.active_channels == 0
+
+
+@pytest.mark.asyncio
 async def test_reconcile_subscribes_with_active_watch_channels(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

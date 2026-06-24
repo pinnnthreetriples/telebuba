@@ -7,32 +7,22 @@ covered in ``tests/features/test_neurocomment_labels.py``.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta
-from typing import TYPE_CHECKING
+import dataclasses
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING, NamedTuple
 
 from nicegui import ui
 
-from core.config import settings
 from features.shared import TOP_BAR_CLASSES, render_nav
-from schemas.neurocomment import CampaignCreate
-from services.accounts import list_accounts
-from services.neurocomment import (
-    assign_account_to_campaign,
-    create_campaign,
-    deactivate_channel,
-    link_channel,
-    list_campaign_accounts,
-    list_campaign_channels,
-    list_campaigns,
-    onboard_campaign,
-    remove_account_from_campaign,
-    start_neurocomment,
-    stop_neurocomment,
-)
+from services.neurocomment import list_campaigns
 
 if TYPE_CHECKING:
     from schemas.challenge import ChallengeRow
-    from schemas.neurocomment import CampaignList
+    from schemas.neurocomment import (
+        CampaignList,
+        NeurocommentBoard,
+        NeurocommentRuntimeStatus,
+    )
 
 # Pure-display maps (the page's only unit-tested logic).
 _CHANNEL_STATUS_RU: dict[str, str] = {
@@ -116,35 +106,155 @@ def campaign_options(campaigns: CampaignList) -> dict[str, str]:
     }
 
 
+@dataclasses.dataclass(frozen=True, slots=True)
+class PipelineStep:
+    """One step of the on-post pipeline shown on the rail + in «Как работает».
+
+    Mirrors the real engine flow (``services.neurocomment.engine._handle_new_post``):
+    listen → new post → select account → generate → publish → monitor. ``icon`` is
+    a Material glyph; ``label`` the short rail caption; ``detail`` the plain-Russian
+    one-liner for the explainer card.
+    """
+
+    name: str
+    label: str
+    icon: str
+    detail: str
+
+
+# The six educational steps. The rail animates the whole sequence while the engine
+# runs (it is not a per-post state machine — the board carries no per-post stage),
+# so the steps are static and ordered to match the engine pipeline.
+PIPELINE_STEPS: tuple[PipelineStep, ...] = (
+    PipelineStep(
+        "listen",
+        "Слушаю",
+        "hearing",
+        "Аккаунт-слушатель следит за новыми постами в каналах активных кампаний.",
+    ),
+    PipelineStep(
+        "post",
+        "Новый пост",
+        "post_add",
+        "Свежий пост в отслеживаемом канале запускает один проход движка.",
+    ),
+    PipelineStep(
+        "select",
+        "Аккаунт",
+        "person_search",
+        "Выбираем готовый аккаунт: лимиты, trust-score и отсутствие кулдауна.",
+    ),
+    PipelineStep(
+        "generate",
+        "Генерация",
+        "auto_awesome",
+        "Gemini пишет короткий комментарий по промпту кампании, с проверкой на дубли.",
+    ),
+    PipelineStep(
+        "publish",
+        "Публикация",
+        "send",
+        "Комментарий уходит в обсуждение канала после паузы, как у живого человека.",
+    ),
+    PipelineStep(
+        "monitor",
+        "Контроль",
+        "verified_user",
+        "Следим за удалениями и капчей бота — при риске канал ставится на паузу.",
+    ),
+)
+
+
+class FleetActivity(NamedTuple):
+    """Fleet-wide live counters for the engine panel, summed from the board (pure)."""
+
+    comments_last_hour: int
+    comments_today: int
+    ready_accounts: int
+    total_accounts: int
+    ready_channels: int
+    total_channels: int
+
+
+def fleet_activity(board: NeurocommentBoard) -> FleetActivity:
+    """Aggregate the per-account / per-channel board figures into fleet totals."""
+    return FleetActivity(
+        comments_last_hour=sum(c.comments_last_hour for c in board.accounts),
+        comments_today=sum(c.comments_today for c in board.accounts),
+        ready_accounts=sum(1 for c in board.accounts if c.health == "ready"),
+        total_accounts=len(board.accounts),
+        ready_channels=sum(1 for r in board.channels if r.status == "ready"),
+        total_channels=len(board.channels),
+    )
+
+
+def relative_time(iso: str | None, now: datetime) -> str | None:
+    """Human «X назад» for a past ISO timestamp; ``None`` when missing/unparseable."""
+    if not iso:
+        return None
+    try:
+        stamp = datetime.fromisoformat(iso)
+    except ValueError:
+        return None
+    if stamp.tzinfo is None:
+        stamp = stamp.replace(tzinfo=UTC)
+    delta = (now - stamp).total_seconds()
+    if delta < 60:  # noqa: PLR2004 - the minute boundary reads clearer inline than as a constant
+        return "только что"
+    if delta < 3600:  # noqa: PLR2004 - hour in seconds
+        return f"{int(delta // 60)} мин назад"
+    if delta < 86_400:  # noqa: PLR2004 - day in seconds
+        return f"{int(delta // 3600)} ч назад"
+    return f"{int(delta // 86_400)} д назад"
+
+
+def runtime_status_text(status: NeurocommentRuntimeStatus) -> str:
+    """Short pill label for the engine's running state."""
+    if not status.running:
+        return "Движок остановлен"
+    if status.active_channels == 0:
+        return "Движок запущен"
+    return f"Слушаю каналов: {status.active_channels}"
+
+
 def _build_header() -> None:  # pragma: no cover
     with ui.row().classes(TOP_BAR_CLASSES):
         render_nav("/neurocomment")
 
 
 async def render_neurocomment_page() -> None:  # pragma: no cover
+    # Lazy imports: the sibling render modules import this module's pure helpers at
+    # module level, so importing them here (not at top) avoids an import cycle.
+    from features.neurocomment._explainer import render_how_it_works  # noqa: PLC0415
+    from features.neurocomment._setup import render_create_campaign  # noqa: PLC0415
+
     ui.query("body").classes("bg-slate-50 text-slate-950")
     _build_header()
     with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
         ui.label("Нейрокомментинг").classes("text-xl font-semibold")
-        await _render_create_campaign(on_created=_reload_page)
         campaign_list = await list_campaigns()
+        # No campaign yet → just the create form (open) + the explainer.
+        await render_create_campaign(on_created=_reload_page, expanded=not campaign_list.campaigns)
         if not campaign_list.campaigns:
+            render_how_it_works()
             return
 
-        # Campaign switcher: pick which campaign to set up / work. Defaults to the
-        # most recent campaign (the prior single-campaign default); switching
-        # re-renders the section below.
+        # Switching a campaign re-renders the whole section (engine panel → setup →
+        # work view). Each panel owns its own poll timer; the refresh clears the old
+        # elements (dropping their timers) before mounting the new campaign's.
         @ui.refreshable
         async def section() -> None:
-            # Setup + work view for the selected campaign. The work view owns its
-            # own poll timer, recreated (and the old one dropped) on each switch.
-            # Lazy import: _workview imports this module's helpers at module level.
+            from features.neurocomment._engine_panel import render_engine_panel  # noqa: PLC0415
+            from features.neurocomment._setup import render_setup  # noqa: PLC0415
             from features.neurocomment._workview import render_work_view  # noqa: PLC0415
 
-            await _render_setup(switcher.value)
+            await render_engine_panel(switcher.value)
+            await render_setup(switcher.value)
             await render_work_view(switcher.value)
 
         def on_switch() -> None:
+            # Named (not ``on_change=section.refresh``) so the select's change-event
+            # arg isn't forwarded into the zero-arg ``section()``.
             section.refresh()
 
         switcher = (
@@ -157,161 +267,9 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
             .props("dense outlined")
             .classes("w-full max-w-[400px]")
         )
-        await _render_runtime_controls()
         await section()
+        render_how_it_works()
 
 
 def _reload_page() -> None:  # pragma: no cover
     ui.navigate.to("/neurocomment")
-
-
-async def _render_create_campaign(on_created) -> None:  # noqa: ANN001  # pragma: no cover
-    with ui.card().classes("w-full p-4 gap-3"):
-        ui.label("Новая кампания").classes("text-base font-semibold")
-        name = ui.input(label="Название").props("dense outlined").classes("w-full")
-        prompt = (
-            ui.textarea(
-                label="Промпт (упоминание продукта живёт здесь)",
-                placeholder="Например: ненавязчиво упомяни сервис X как читатель…",
-            )
-            .props("dense outlined autogrow")
-            .classes("w-full")
-        )
-        ui.label(
-            f"Комментарий не длиннее {settings.neurocomment.comment_max_words} слов "
-            "(настраивается в конфиге).",
-        ).classes("text-xs text-slate-500")
-
-        async def on_create() -> None:
-            if not (name.value or "").strip() or not (prompt.value or "").strip():
-                ui.notify("Заполните название и промпт", type="warning")
-                return
-            data = CampaignCreate(name=name.value.strip(), prompt=prompt.value.strip())
-            await create_campaign(data)
-            ui.notify("Кампания создана", type="positive")
-            on_created()
-
-        ui.button("Создать кампанию", icon="add", on_click=on_create).props("color=primary")
-
-
-async def _render_setup(campaign_id: str) -> None:  # pragma: no cover
-    with ui.card().classes("w-full p-4 gap-4"):
-        ui.label("Настройка кампании").classes("text-base font-semibold")
-        await _render_channel_pool(campaign_id)
-        await _render_account_picker(campaign_id)
-        await _render_actions(campaign_id)
-
-
-async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
-    ui.label("Каналы").classes("text-sm font-medium")
-    channels_box = ui.column().classes("w-full gap-1")
-    channel_input = (
-        ui.input(label="Добавить канал", placeholder="@channel")
-        .props("dense outlined")
-        .classes("w-full")
-    )
-
-    async def refresh() -> None:
-        channels_box.clear()
-        links = (await list_campaign_channels(campaign_id)).links
-        with channels_box:
-            if not links:
-                ui.label("Каналов пока нет").classes("text-xs text-slate-400")
-            for link in links:
-                with ui.row().classes("w-full items-center justify-between"):
-                    ui.label(link.channel).classes("text-sm")
-                    ui.button(
-                        icon="delete",
-                        on_click=lambda _e=None, ch=link.channel: on_remove(ch),
-                    ).props("flat dense round color=grey-7")
-
-    async def on_add() -> None:
-        channel = (channel_input.value or "").strip()
-        if not channel:
-            ui.notify("Введите канал", type="warning")
-            return
-        outcome = await link_channel(campaign_id, channel)
-        if outcome.status == "already_assigned":
-            ui.notify("Канал уже активен в другой кампании", type="warning")
-            return
-        channel_input.value = ""
-        await refresh()
-
-    async def on_remove(channel: str) -> None:
-        await deactivate_channel(campaign_id, channel)
-        await refresh()
-
-    ui.button("Добавить канал", icon="add", on_click=on_add).props("color=primary")
-    await refresh()
-
-
-async def _render_account_picker(campaign_id: str) -> None:  # pragma: no cover
-    ui.label("Аккаунты").classes("text-sm font-medium")
-    accounts = (await list_accounts()).accounts
-    assigned = {link.account_id for link in (await list_campaign_accounts(campaign_id)).links}
-
-    async def on_toggle(account_id: str, checked: bool) -> None:  # noqa: FBT001
-        if checked:
-            await assign_account_to_campaign(campaign_id, account_id)
-            ui.notify("Аккаунт добавлен в кампанию", type="positive")
-        else:
-            await remove_account_from_campaign(campaign_id, account_id)
-            ui.notify("Аккаунт убран из кампании", type="info")
-
-    with ui.column().classes("w-full gap-1"):
-        if not accounts:
-            ui.label("Сначала добавьте аккаунты на странице «Аккаунты»").classes(
-                "text-xs text-slate-400",
-            )
-        for acc in accounts:
-            ui.checkbox(
-                acc.label or acc.account_id,
-                value=acc.account_id in assigned,
-                on_change=lambda e, aid=acc.account_id: on_toggle(aid, e.value),
-            ).props("dense")
-
-
-async def _render_actions(campaign_id: str) -> None:  # pragma: no cover
-    async def on_onboard() -> None:
-        result = await onboard_campaign(campaign_id)
-        ready = sum(1 for o in result.outcomes if o.state == "ready")
-        ui.notify(f"Онбординг: готово пар — {ready} из {len(result.outcomes)}", type="info")
-
-    ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
-
-
-async def _render_runtime_controls() -> None:  # pragma: no cover
-    # Fleet-wide runtime: ONE listener reads posts across all active campaigns and
-    # the engine routes each post to its own campaign. Rendered once (not per
-    # campaign) so the controls match the single-listener runtime.
-    accounts = (await list_accounts()).accounts
-    with ui.card().classes("w-full p-4 gap-2"):
-        ui.label("Запуск нейрокомментинга (весь флот)").classes("text-base font-semibold")
-        listener_select = (
-            ui.select(
-                {acc.account_id: (acc.label or acc.account_id) for acc in accounts},
-                label="Аккаунт-слушатель",
-            )
-            .props("dense outlined")
-            .classes("w-full max-w-[400px]")
-        )
-
-        async def on_start() -> None:
-            listener = listener_select.value
-            if not listener:
-                ui.notify("Выберите аккаунт-слушатель", type="warning")
-                return
-            await start_neurocomment(listener)
-            ui.notify("Нейрокомментинг запущен", type="positive")
-
-        async def on_stop() -> None:
-            await stop_neurocomment()
-            ui.notify("Нейрокомментинг остановлен", type="info")
-
-        with ui.row().classes("w-full items-center gap-2"):
-            ui.button("Запустить", icon="play_arrow", on_click=on_start).props("color=positive")
-            ui.button("Остановить", icon="stop", on_click=on_stop).props("color=negative outline")
-        ui.label(
-            "Один слушатель на все активные кампании; движок раздаёт посты по их "
-            "кампаниям. «Остановить» останавливает весь флот.",
-        ).classes("text-xs text-slate-500")

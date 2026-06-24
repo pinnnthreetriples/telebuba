@@ -12,17 +12,30 @@ import pytest
 
 from features.neurocomment import register_neurocomment_page
 from features.neurocomment._page import (
+    PIPELINE_STEPS,
     campaign_options,
     campaign_status_label,
     challenge_summary,
     channel_status_icon,
     channel_status_label,
     counter_window_since,
+    fleet_activity,
     health_label,
+    relative_time,
+    runtime_status_text,
     solver_switch_key,
 )
 from schemas.challenge import ChallengeRow
-from schemas.neurocomment import CampaignList, CampaignStatus, NeurocommentCampaign
+from schemas.neurocomment import (
+    CampaignList,
+    CampaignStatus,
+    ChannelStatus,
+    NeurocommentAccountCard,
+    NeurocommentBoard,
+    NeurocommentCampaign,
+    NeurocommentChannelRow,
+    NeurocommentRuntimeStatus,
+)
 
 
 @pytest.mark.parametrize(
@@ -156,6 +169,100 @@ def test_campaign_options_maps_id_to_status_labelled_name() -> None:
 
 def test_campaign_options_empty_is_empty_dict() -> None:
     assert campaign_options(CampaignList()) == {}
+
+
+def test_pipeline_steps_are_six_with_full_fields() -> None:
+    # The rail + «Как работает» card both render these; they must stay aligned
+    # with the six-step engine pipeline and carry no blank captions.
+    assert len(PIPELINE_STEPS) == 6
+    assert len({s.name for s in PIPELINE_STEPS}) == 6
+    for step in PIPELINE_STEPS:
+        assert step.label
+        assert step.icon
+        assert step.detail
+
+
+def _card(account_id: str, *, health: str, last_hour: int, today: int) -> NeurocommentAccountCard:
+    return NeurocommentAccountCard(
+        account_id=account_id,
+        label=account_id,
+        health=health,
+        trust_score=50,
+        trust_band="good",
+        comments_last_hour=last_hour,
+        max_comments_per_hour=10,
+        comments_today=today,
+    )
+
+
+def _channel(channel: str, status: ChannelStatus) -> NeurocommentChannelRow:
+    return NeurocommentChannelRow(
+        channel=channel,
+        status=status,
+        ready_accounts=0,
+        total_accounts=0,
+    )
+
+
+def test_fleet_activity_sums_accounts_and_channels() -> None:
+    board = NeurocommentBoard(
+        campaign_id="c1",
+        campaign_name="A",
+        status="active",
+        accounts=[
+            _card("a1", health="ready", last_hour=2, today=5),
+            _card("a2", health="blocked", last_hour=1, today=3),
+        ],
+        channels=[_channel("@x", "ready"), _channel("@y", "throttled")],
+    )
+
+    activity = fleet_activity(board)
+
+    assert activity.comments_last_hour == 3
+    assert activity.comments_today == 8
+    assert activity.ready_accounts == 1
+    assert activity.total_accounts == 2
+    assert activity.ready_channels == 1
+    assert activity.total_channels == 2
+
+
+def test_fleet_activity_empty_board_is_all_zero() -> None:
+    activity = fleet_activity(
+        NeurocommentBoard(campaign_id="c1", campaign_name="A", status="active"),
+    )
+    assert activity == (0, 0, 0, 0, 0, 0)
+
+
+@pytest.mark.parametrize("iso", [None, "", "not-a-date"])
+def test_relative_time_missing_or_invalid_is_none(iso: str | None) -> None:
+    assert relative_time(iso, datetime(2026, 6, 24, 12, tzinfo=UTC)) is None
+
+
+def test_relative_time_buckets() -> None:
+    now = datetime(2026, 6, 24, 12, 0, 0, tzinfo=UTC)
+    assert relative_time("2026-06-24T11:59:40+00:00", now) == "только что"
+    assert relative_time("2026-06-24T11:30:00+00:00", now) == "30 мин назад"
+    assert relative_time("2026-06-24T09:00:00+00:00", now) == "3 ч назад"
+    assert relative_time("2026-06-22T12:00:00+00:00", now) == "2 д назад"
+
+
+def test_relative_time_naive_timestamp_assumed_utc() -> None:
+    now = datetime(2026, 6, 24, 12, 0, 0, tzinfo=UTC)
+    assert relative_time("2026-06-24T11:30:00", now) == "30 мин назад"
+
+
+def test_runtime_status_text_stopped() -> None:
+    assert runtime_status_text(NeurocommentRuntimeStatus(running=False)) == "Движок остановлен"
+
+
+def test_runtime_status_text_running_with_channels() -> None:
+    status = NeurocommentRuntimeStatus(running=True, active_channels=3)
+    assert runtime_status_text(status) == "Слушаю каналов: 3"
+
+
+def test_runtime_status_text_running_no_channels() -> None:
+    status = NeurocommentRuntimeStatus(running=True, active_channels=0)
+    assert runtime_status_text(status) == "Движок запущен"
 
 
 def test_page_registration_is_importable() -> None:
