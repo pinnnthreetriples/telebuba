@@ -18,11 +18,13 @@ from core.db import (  # type: ignore[attr-defined]
     configure_database,
     count_account_channel_comments_since,
     count_account_comments_since,
+    count_by_outcome,
     count_channel_comments_per_account_since,
     count_comments_per_account_since,
     create_account,
     create_campaign,
     deactivate_channel,
+    delete_readiness,
     fetch_active_campaign_for_channel,
     fetch_campaign,
     fetch_comment,
@@ -39,8 +41,10 @@ from core.db import (  # type: ignore[attr-defined]
     lookup_cached_decision,
     mark_comment_failed,
     mark_comment_posted,
+    mark_human_skipped,
     remove_account_from_campaign,
     resolve_pending_outcome,
+    update_solver_enabled,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -303,6 +307,106 @@ async def test_resolve_pending_outcome_marks_latest_pending() -> None:
 async def test_resolve_pending_outcome_is_noop_without_pending() -> None:
     # No pending row for the pair → must not raise.
     await resolve_pending_outcome("ghost", "@chan", "failed")
+
+
+def test_migration_15_adds_human_skipped_column() -> None:
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = {
+            row["name"]
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_readiness)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "human_skipped" in columns
+    assert 15 in versions
+
+
+@pytest.mark.asyncio
+async def test_update_solver_enabled_roundtrips_through_fetch() -> None:
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    assert campaign.solver_enabled is None  # default: follow the global flag
+
+    async def _solver_enabled() -> bool | None:
+        fetched = await fetch_campaign(campaign.campaign_id)
+        assert fetched is not None
+        return fetched.solver_enabled
+
+    await update_solver_enabled(campaign.campaign_id, value=True)
+    assert await _solver_enabled() is True
+    await update_solver_enabled(campaign.campaign_id, value=False)
+    assert await _solver_enabled() is False
+    await update_solver_enabled(campaign.campaign_id, value=None)
+    assert await _solver_enabled() is None
+
+
+@pytest.mark.asyncio
+async def test_mark_human_skipped_clears_ready_and_sets_flag() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+
+    await mark_human_skipped("acc-1", "@chan")
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.ready is False
+    assert readiness.human_skipped is True
+
+
+@pytest.mark.asyncio
+async def test_delete_readiness_removes_the_row() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+
+    await delete_readiness("acc-1", "@chan")
+
+    assert await fetch_readiness("acc-1", "@chan") is None
+
+
+@pytest.mark.asyncio
+async def test_count_by_outcome_groups_and_windows() -> None:
+    for outcome in ("solved", "solved", "failed", "give_up"):
+        await insert_challenge(
+            ChallengeInsert(
+                challenge_hash="h",
+                account_id="acc-1",
+                channel="@chan",
+                raw_text="x",
+                button_labels=["y"],
+                outcome=outcome,
+            ),
+        )
+
+    counts = await count_by_outcome(["@chan"], since="")
+    assert (counts.solved, counts.failed, counts.give_up, counts.pending) == (2, 1, 1, 0)
+    # A future lower bound excludes everything.
+    future = (datetime.now(UTC) + timedelta(days=1)).isoformat()
+    empty = await count_by_outcome(["@chan"], since=future)
+    assert (empty.solved, empty.failed, empty.give_up) == (0, 0, 0)
+    # A channel outside the set is not counted.
+    assert (await count_by_outcome(["@other"], since="")).solved == 0
+
+
+@pytest.mark.asyncio
+async def test_list_failed_for_channel_surfaces_reasoning() -> None:
+    decision = ChallengeDecision(action="give_up", confidence=0.4, reasoning="image captcha")
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="x",
+            button_labels=["y"],
+            outcome="give_up",
+            decision_json=decision.model_dump_json(),
+        ),
+    )
+
+    rows = (await list_failed_for_channel("@chan", limit=10)).rows
+    assert rows[0].reasoning == "image captcha"
 
 
 @pytest.mark.asyncio

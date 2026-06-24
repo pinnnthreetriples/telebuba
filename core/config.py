@@ -298,8 +298,11 @@ class NeurocommentSettings(BaseSettings):
     # First back-off duration; doubles per consecutive trip, capped at the max.
     channel_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
     channel_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
-    # Ф2 challenge solver — window the onboarding solver waits for a guardian-bot
-    # inline-button challenge after joining a discussion group.
+    # Ф2 challenge solver — global opt-in flag (default off; a per-campaign
+    # solver_enabled overrides it). The solver costs Gemini tokens and clicks in
+    # live chats, so it does not auto-activate on deploy (mirrors #132's pattern).
+    challenge_solver_enabled: bool = False
+    # Window the onboarding solver waits for a guardian-bot challenge after joining.
     challenge_wait_timeout_seconds: float = Field(default=20.0, gt=0.0)
     # Hard cutoff on the Gemini decision call.
     challenge_gemini_timeout_seconds: float = Field(default=10.0, gt=0.0)

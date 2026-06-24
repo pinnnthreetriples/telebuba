@@ -24,8 +24,10 @@ from core.repositories.neurocomment._campaigns import (
     list_campaign_channels,
     list_campaigns,
     remove_account_from_campaign,
+    update_solver_enabled,
 )
 from core.repositories.neurocomment._challenges import (
+    count_by_outcome,
     insert_challenge,
     list_challenged_channels,
     list_failed_for_channel,
@@ -34,6 +36,7 @@ from core.repositories.neurocomment._challenges import (
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
+    delete_readiness,
     fetch_comment,
     fetch_linked_group,
     fetch_readiness,
@@ -43,6 +46,7 @@ from core.repositories.neurocomment._comments import (
     list_posted_comments_since,
     mark_comment_failed,
     mark_comment_posted,
+    mark_human_skipped,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -63,10 +67,12 @@ __all__ = [
     "claim_comment",
     "count_account_channel_comments_since",
     "count_account_comments_since",
+    "count_by_outcome",
     "count_channel_comments_per_account_since",
     "count_comments_per_account_since",
     "create_campaign",
     "deactivate_channel",
+    "delete_readiness",
     "fetch_active_campaign_for_channel",
     "fetch_campaign",
     "fetch_comment",
@@ -88,9 +94,11 @@ __all__ = [
     "lookup_cached_decision",
     "mark_comment_failed",
     "mark_comment_posted",
+    "mark_human_skipped",
     "remove_account_from_campaign",
     "resolve_pending_outcome",
     "set_listener_account_id",
+    "update_solver_enabled",
     "upsert_linked_group",
     "upsert_readiness",
 ]

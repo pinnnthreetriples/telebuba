@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -159,7 +159,10 @@ async def upsert_readiness(
     captcha_passed: bool,
     ready: bool,
 ) -> NeurocommentReadiness:
-    """Record per-(account, channel) join/captcha/ready state at onboarding."""
+    """Record per-(account, channel) join/captcha/ready state at onboarding.
+
+    Leaves ``human_skipped`` untouched (an operator skip survives a re-onboard).
+    """
     return await asyncio.to_thread(
         _upsert_readiness,
         account_id,
@@ -168,6 +171,38 @@ async def upsert_readiness(
         captcha_passed=captcha_passed,
         ready=ready,
     )
+
+
+def _mark_human_skipped(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel),
+            )
+            .values(human_skipped=1, ready=0, checked_at=_now_iso()),
+        )
+
+
+async def mark_human_skipped(account_id: str, channel: str) -> None:
+    """Operator skip: the engine never selects this pair (ready=0, human_skipped=1)."""
+    await asyncio.to_thread(_mark_human_skipped, account_id, channel)
+
+
+def _delete_readiness(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_neurocomment_readiness).where(
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel),
+            ),
+        )
+
+
+async def delete_readiness(account_id: str, channel: str) -> None:
+    """Erase a pair's readiness so a retry re-onboards from scratch (clears the skip)."""
+    await asyncio.to_thread(_delete_readiness, account_id, channel)
 
 
 def _row_to_comment(row: RowMapping) -> CommentRecord:

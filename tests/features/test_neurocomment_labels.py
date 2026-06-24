@@ -6,6 +6,8 @@ translation helpers carry the only branchy logic, so they get a unit test.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from features.neurocomment import register_neurocomment_page
@@ -15,7 +17,9 @@ from features.neurocomment._page import (
     challenge_summary,
     channel_status_icon,
     channel_status_label,
+    counter_window_since,
     health_label,
+    solver_switch_key,
 )
 from schemas.challenge import ChallengeRow
 from schemas.neurocomment import CampaignList, CampaignStatus, NeurocommentCampaign
@@ -77,6 +81,38 @@ def test_challenge_summary_handles_empty_text_and_buttons() -> None:
     summary = challenge_summary(_challenge_row(raw_text="   ", button_labels=[]))
     assert "(без текста)" in summary
     assert "—" in summary
+
+
+def test_challenge_summary_appends_reasoning() -> None:
+    row = ChallengeRow(
+        account_id="a",
+        channel="@c",
+        raw_text="2+2=?",
+        button_labels=["4"],
+        outcome="failed",
+        decided_at="t",
+        reasoning="the math answer is 4",
+    )
+    assert "the math answer is 4" in challenge_summary(row)
+
+
+def test_counter_window_since_today_is_start_of_day() -> None:
+    now = datetime(2026, 6, 24, 15, 30, tzinfo=UTC)
+    assert counter_window_since("today", now) == datetime(2026, 6, 24, tzinfo=UTC).isoformat()
+
+
+def test_counter_window_since_7d_is_a_week_back() -> None:
+    now = datetime(2026, 6, 24, tzinfo=UTC)
+    assert counter_window_since("7d", now) == datetime(2026, 6, 17, tzinfo=UTC).isoformat()
+
+
+def test_counter_window_since_all_is_empty() -> None:
+    assert counter_window_since("all", datetime(2026, 6, 24, tzinfo=UTC)) == ""
+
+
+@pytest.mark.parametrize(("value", "expected"), [(None, "follow"), (True, "on"), (False, "off")])
+def test_solver_switch_key(value: bool | None, expected: str) -> None:  # noqa: FBT001 - parametrized value
+    assert solver_switch_key(value) == expected
 
 
 @pytest.mark.parametrize(("health", "expected"), [("ready", "Готов"), ("blocked", "Заблокирован")])

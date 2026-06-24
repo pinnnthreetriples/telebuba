@@ -22,6 +22,7 @@ from core.db import (
     fetch_readiness,
     link_channel_to_campaign,
     list_failed_for_channel,
+    update_solver_enabled,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
@@ -59,6 +60,9 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The solver calls Gemini on a detected (non-image) challenge — keep it off the
     # network; an error verdict makes the solver give up (→ bot_challenge).
     monkeypatch.setattr(_seams, "generate_text", _gemini_error)
+    # The solver is opt-in (#148, default off); enable it for the tests that assert
+    # solver behaviour — the gating tests override this per case.
+    monkeypatch.setattr(settings.neurocomment, "challenge_solver_enabled", True)
     _state.reset_for_tests()
     yield
     _state.reset_for_tests()
@@ -278,6 +282,69 @@ async def test_successful_join_with_challenge_is_bot_challenge(
     failed = await list_failed_for_channel("@chan", limit=10)
     assert len(failed.rows) == 1
     assert failed.rows[0].outcome == "give_up"
+
+
+async def _campaign_with_channel(channel: str, *, solver_enabled: bool | None) -> None:
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, channel)
+    await update_solver_enabled(campaign.campaign_id, value=solver_enabled)
+
+
+def _challenge_read() -> _ReadStub:
+    message = BotChallengeMessage(
+        text="докажи, что не бот", button_labels=["Я человек"], message_id=5, has_photo=False
+    )
+    return _ReadStub(linked_chat_id=77, comments_enabled=True, challenge=message)
+
+
+@pytest.mark.asyncio
+async def test_solver_runs_when_campaign_overrides_global_off(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ф2 #148: campaign solver_enabled=True beats a global flag of False → solver runs."""
+    monkeypatch.setattr(settings.neurocomment, "challenge_solver_enabled", False)
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    await _campaign_with_channel("@chan", solver_enabled=True)
+    read = _challenge_read()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", _JoinStub().execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert outcome.state == "bot_challenge"  # solver ran, detected, gave up
+
+
+@pytest.mark.asyncio
+async def test_solver_skipped_when_campaign_overrides_global_on(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Ф2 #148: campaign solver_enabled=False beats a global flag of True → solver skipped."""
+    monkeypatch.setattr(settings.neurocomment, "challenge_solver_enabled", True)
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    await _campaign_with_channel("@chan", solver_enabled=False)
+    read = _challenge_read()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", _JoinStub().execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert outcome.state == "ready"  # solver never ran despite a challenge present
+    assert (await list_failed_for_channel("@chan", limit=10)).rows == []
+
+
+@pytest.mark.asyncio
+async def test_solver_off_by_default_when_both_unset(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ф2 #148: campaign None + global False (the defaults) → solver does not run (opt-in)."""
+    monkeypatch.setattr(settings.neurocomment, "challenge_solver_enabled", False)
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    await _campaign_with_channel("@chan", solver_enabled=None)
+    read = _challenge_read()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", _JoinStub().execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert outcome.state == "ready"
 
 
 @pytest.mark.asyncio

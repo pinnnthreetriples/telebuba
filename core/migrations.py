@@ -38,6 +38,7 @@ _ALLOWED_TABLES = frozenset(
         "warming_account_state",
         "warming_settings",
         "neurocomment_campaigns",
+        "neurocomment_readiness",
     },
 )
 
@@ -371,6 +372,16 @@ def _add_neurocomment_challenges(connection: Connection) -> None:
         )
 
 
+def _add_readiness_human_skipped(connection: Connection) -> None:
+    # Ф2 #148: operator "Skip channel for this account" → a per-(account, channel)
+    # human override the engine never selects. Default 0 so existing rows are unskipped.
+    if "human_skipped" not in _sqlite_columns(connection, "neurocomment_readiness"):
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_readiness "
+            "ADD COLUMN human_skipped INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -388,6 +399,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (12, "add_neurocomment_runtime", _add_neurocomment_runtime),
     (13, "add_neurocomment_comment_indexes", _add_neurocomment_comment_indexes),
     (14, "add_neurocomment_challenges", _add_neurocomment_challenges),
+    (15, "add_readiness_human_skipped", _add_readiness_human_skipped),
 )
 
 

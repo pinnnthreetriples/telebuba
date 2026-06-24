@@ -29,6 +29,7 @@ from core.db import (
     link_channel_to_campaign,
     list_failed_for_channel,
     mark_comment_posted,
+    mark_human_skipped,
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
@@ -815,6 +816,20 @@ async def test_channel_in_challenge_backoff_skips_commenting(
     _state.register_challenge_failure(
         "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
     )
+    comment = _CommentStub(status="ok")
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    assert comment.calls == []
+    assert await fetch_comment("@chan", 10) is None
+
+
+@pytest.mark.asyncio
+async def test_human_skipped_pair_is_not_selected(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Ф2 #148: an operator-skipped pair (ready=0) is never selected to comment.
+    await _make_campaign("@chan", "acc-1")
+    await mark_human_skipped("acc-1", "@chan")
     comment = _CommentStub(status="ok")
     _patch_io(monkeypatch, comment=comment)
 

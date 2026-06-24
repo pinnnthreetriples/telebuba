@@ -88,6 +88,20 @@ async def list_campaigns() -> CampaignList:
     return await asyncio.to_thread(_list_campaigns)
 
 
+def _update_solver_enabled(campaign_id: str, value: bool | None) -> None:  # noqa: FBT001 - tri-state value
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_campaigns)
+            .where(_neurocomment_campaigns.c.campaign_id == campaign_id)
+            .values(solver_enabled=value, updated_at=_now_iso()),
+        )
+
+
+async def update_solver_enabled(campaign_id: str, value: bool | None) -> None:  # noqa: FBT001 - tri-state value
+    """Set the per-campaign challenge-solver override (``None`` = follow the global flag)."""
+    await asyncio.to_thread(_update_solver_enabled, campaign_id, value)
+
+
 class ChannelAlreadyAssignedError(RuntimeError):
     """A channel is already active in another campaign (the one-active invariant)."""
 
