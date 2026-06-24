@@ -119,7 +119,7 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
 
 
 def _render_channels_panel(board: NeurocommentBoard) -> None:  # pragma: no cover
-    with ui.card().classes("w-[360px] p-4 gap-2"):
+    with ui.card().classes("w-[360px] p-3 gap-2"):
         ui.label("Каналы").classes("text-base font-semibold")
         if not board.channels:
             ui.label("Каналов пока нет").classes("text-xs text-slate-400")
@@ -191,7 +191,10 @@ def _render_accounts_panel(board: NeurocommentBoard) -> None:  # pragma: no cove
 
 
 def _render_account_card(card) -> None:  # noqa: ANN001  # pragma: no cover
-    with ui.card().classes("w-full p-4 gap-2"):
+    # Thin left accent by health (green ready / red blocked) — visual cohesion with
+    # the engine panel + at-a-glance scanning, mirroring the warming card stripe.
+    accent = "border-emerald-400" if card.health == "ready" else "border-red-300"
+    with ui.card().classes(f"w-full p-3 gap-1 border-l-4 {accent}"):
         with ui.row().classes("w-full items-center justify-between"):
             ui.label(card.label).classes("text-sm font-semibold")
             ui.badge(health_label(card.health)).props(

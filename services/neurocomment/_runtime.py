@@ -25,6 +25,7 @@ from core.db import (
 )
 from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
+from schemas.neurocomment import NeurocommentRuntimeStatus
 from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult, JoinChannel
 from services.neurocomment import _seams, _state
 from services.neurocomment.engine import handle_new_post
@@ -121,6 +122,24 @@ async def stop_neurocomment() -> None:
             await shutdown_neurocomment_runtime(listener_account_id)
     finally:
         await set_listener_account_id(None)
+
+
+async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
+    """Fleet runtime state for the UI: is the engine listening, and over how many channels.
+
+    Running == a listener account id is persisted (the one piece of runtime state
+    that survives a restart). The watch set is only read when running, so a stopped
+    engine costs a single scalar read.
+    """
+    listener_account_id = await get_listener_account_id()
+    if listener_account_id is None:
+        return NeurocommentRuntimeStatus(running=False)
+    channels = (await list_active_watch_channels()).channels
+    return NeurocommentRuntimeStatus(
+        running=True,
+        active_channels=len(channels),
+        listener_account_id=listener_account_id,
+    )
 
 
 async def reconcile_neurocomment_on_startup() -> None:
