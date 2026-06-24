@@ -45,13 +45,12 @@ from core.logging import log_event
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import ActionResult, CommentOnPost, NewPostEvent
 from services.content import (
-    has_link,
     is_acceptable,
     release_sent_text,
     similarity,
     try_reserve_sent,
 )
-from services.neurocomment import _seams, _state
+from services.neurocomment import _filters, _seams, _state
 from services.trust import account_trust_score_from
 from services.warming.pacing import evaluate_readiness
 
@@ -100,7 +99,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         )
         return
 
-    skip = _filter_reason(event)
+    skip = _filters.filter_reason(event)
     if skip is not None:
         await log_event(
             "INFO",
@@ -109,9 +108,12 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         )
         return
 
-    if _state.channel_in_backoff(event.channel, datetime.now(UTC)):
-        # The deletion sweep backed this channel off (mass comment deletions); skip
-        # before account selection so we stop commenting until the cooldown expires.
+    now = datetime.now(UTC)
+    if _state.channel_in_backoff(event.channel, now) or _state.is_channel_in_challenge_backoff(
+        event.channel, now
+    ):
+        # Backed off — by the deletion sweep (mass deletions) or K solver failures
+        # (#147). Skip before selection so we leave the channel alone until it expires.
         await log_event(
             "INFO",
             "neurocomment_channel_cooled",
@@ -134,36 +136,6 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         return
 
     await _generate_and_post(event, campaign, account_id)
-
-
-def _filter_reason(event: NewPostEvent) -> str | None:
-    """Return why we skip this post, or ``None`` to proceed."""
-    # getattr defense: if a NewPostEvent without is_forward ever reaches here
-    # (e.g. a bad merge of the listener schema), degrade to "don't filter forwards"
-    # rather than AttributeError-killing every post through the catch-all.
-    if getattr(event, "is_forward", False):
-        return "forward"
-    text = event.text.strip()
-    if event.has_media and not text:
-        return "media_no_caption"
-    if not text and not event.has_media:
-        return "empty"
-    if _is_link_only(event.text):
-        return "link_only"
-    return None
-
-
-def _is_link_only(text: str) -> bool:
-    """True when the text is essentially just a link / ad (few real word chars).
-
-    Drops the link tokens themselves, then counts the remaining word characters —
-    a post that is only a URL leaves almost nothing behind.
-    """
-    if not has_link(text):
-        return False
-    without_links = " ".join(token for token in text.split() if not has_link(token))
-    stripped = "".join(ch for ch in without_links if ch.isalnum())
-    return len(stripped) <= settings.neurocomment.link_only_max_word_chars
 
 
 class _SelectionPool(NamedTuple):
@@ -419,7 +391,8 @@ async def _classify_post(
             captcha_passed=False,
             ready=False,
         )
-        await resolve_pending_outcome(account_id, event.channel, "failed")
+        if await resolve_pending_outcome(account_id, event.channel, "failed"):
+            await _register_challenge_failure(event.channel)
         event_name = "neurocomment_post_gated"
     else:
         event_name = "neurocomment_post_failed"
@@ -438,3 +411,21 @@ def _apply_cooldown(account_id: str, flood_wait_seconds: int | None, channel: st
         # peer_flood (and any wait without a duration) → config cooldown.
         seconds = int(settings.neurocomment.peer_flood_cooldown_seconds)
     _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds), channel)
+
+
+async def _register_challenge_failure(channel: str) -> None:
+    """Count a solver click-failure on ``channel``; WARN once when it trips the back-off (#147)."""
+    nc = settings.neurocomment
+    cooldown = _state.register_challenge_failure(
+        channel,
+        datetime.now(UTC),
+        min_failures=nc.channel_challenge_backoff_min_failures,
+        base_seconds=nc.channel_challenge_backoff_base_seconds,
+        max_seconds=nc.channel_challenge_backoff_max_seconds,
+    )
+    if cooldown is not None:
+        await log_event(
+            "WARNING",
+            "neurocomment_challenge_backoff",
+            extra={"channel": channel, "cooldown_seconds": cooldown},
+        )

@@ -7,6 +7,7 @@ network, no jitter and no waiting. Mirrors ``tests/services/test_warming.py``.
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 import pytest
@@ -35,7 +36,7 @@ from schemas.telegram_actions import (
     WaitForBotChallenge,
 )
 from services import neurocomment
-from services.neurocomment import _seams, onboarding
+from services.neurocomment import _seams, _state, onboarding
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -58,7 +59,9 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     # The solver calls Gemini on a detected (non-image) challenge — keep it off the
     # network; an error verdict makes the solver give up (→ bot_challenge).
     monkeypatch.setattr(_seams, "generate_text", _gemini_error)
+    _state.reset_for_tests()
     yield
+    _state.reset_for_tests()
     reset_logging_for_tests()
 
 
@@ -275,6 +278,24 @@ async def test_successful_join_with_challenge_is_bot_challenge(
     failed = await list_failed_for_channel("@chan", limit=10)
     assert len(failed.rows) == 1
     assert failed.rows[0].outcome == "give_up"
+
+
+@pytest.mark.asyncio
+async def test_channel_in_challenge_backoff_skips_join(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ф2 #147: a backed-off channel is left alone — no join, no solver → bot_challenge_backoff."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    _state.register_challenge_failure(
+        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
+    )
+    read = _ReadStub(linked_chat_id=77, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
+
+    assert outcome.state == "bot_challenge_backoff"
+    assert join.calls == []  # no join attempted
 
 
 @pytest.mark.asyncio

@@ -21,6 +21,7 @@ place; the inter-join sleep uses ``asyncio.sleep`` (patched in tests).
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 
 from core.config import settings
 from core.db import (
@@ -38,7 +39,7 @@ from schemas.telegram_actions import (
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
-from services.neurocomment import _seams, challenge
+from services.neurocomment import _seams, _state, challenge
 
 # Join failed because writes are Telegram-blocked → chat_restricted (Ф2 #120):
 # unsolvable by the challenge solver. The set is small and intentional.
@@ -75,7 +76,19 @@ async def _join_and_classify(
     channel: str,
     group_id: int,
 ) -> AccountChannelOnboarding:
-    """Join the (already-resolved, comment-enabled) group and persist readiness."""
+    """Join the (already-resolved, comment-enabled) group and persist readiness.
+
+    A channel in challenge back-off (#147, K solver failures) is left alone — no
+    join, no solver — until its cooldown expires; the board renders it
+    ``bot_challenge_backoff`` from the in-memory back-off state.
+    """
+    if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
+        await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="bot_challenge_backoff",
+        )
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
     return await _classify_join(account_id, channel, result, group_id)
 

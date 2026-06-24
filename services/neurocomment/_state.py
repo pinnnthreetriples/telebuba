@@ -21,6 +21,13 @@ _COOLDOWN_UNTIL: dict[tuple[str, str | None], datetime] = {}
 _CHANNEL_TRIPS: dict[str, int] = {}  # consecutive trips this process (escalation memory)
 _CHANNEL_COOLDOWN_UNTIL: dict[str, datetime] = {}  # earliest UTC time to comment again
 
+# Challenge back-off (#147), keyed by channel — K consecutive solver failures
+# (pending → failed) trip an escalating cooldown that stops onboarding new accounts
+# into the channel. Mirrors the deletion back-off above; in-memory, self-healing.
+_CHALLENGE_FAILED: dict[str, int] = {}  # failures since the last trip (the K counter)
+_CHALLENGE_TRIPS: dict[str, int] = {}  # consecutive trips this process (escalation memory)
+_CHALLENGE_BACKOFF_UNTIL: dict[str, datetime] = {}  # earliest UTC time to onboard again
+
 
 def set_cooldown(account_id: str, until: datetime, channel: str | None = None) -> None:
     """Park ``(account, channel)`` until ``until`` (extends an existing, later cooldown)."""
@@ -92,8 +99,53 @@ def channel_in_backoff(channel: str, now: datetime) -> bool:
     return False
 
 
+def register_challenge_failure(
+    channel: str,
+    now: datetime,
+    *,
+    min_failures: int,
+    base_seconds: float,
+    max_seconds: float,
+) -> float | None:
+    """Count a solver failure on ``channel``; trip an escalating back-off after K.
+
+    Returns the cooldown seconds when *this* failure trips the back-off (so the
+    caller logs the WARNING exactly once), else ``None``. The K counter resets on
+    each trip and each consecutive trip doubles the duration (``base * 2^prior``,
+    capped). In-memory only — a restart clears it (self-healing).
+    """
+    count = _CHALLENGE_FAILED.get(channel, 0) + 1
+    if count < min_failures:
+        _CHALLENGE_FAILED[channel] = count
+        return None
+    _CHALLENGE_FAILED[channel] = 0  # reset the window; escalation lives in _CHALLENGE_TRIPS
+    prior = _CHALLENGE_TRIPS.get(channel, 0)
+    seconds = min(base_seconds, max_seconds)  # honour the cap even on the first trip
+    for _ in range(prior):
+        if seconds >= max_seconds:
+            break
+        seconds = min(seconds * 2, max_seconds)
+    _CHALLENGE_TRIPS[channel] = prior + 1
+    _CHALLENGE_BACKOFF_UNTIL[channel] = now + timedelta(seconds=seconds)
+    return seconds
+
+
+def is_channel_in_challenge_backoff(channel: str, now: datetime) -> bool:
+    """True while ``channel`` is parked by the challenge back-off (lazily evicts on expiry)."""
+    until = _CHALLENGE_BACKOFF_UNTIL.get(channel)
+    if until is None:
+        return False
+    if until > now:
+        return True
+    del _CHALLENGE_BACKOFF_UNTIL[channel]
+    return False
+
+
 def reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
     _COOLDOWN_UNTIL.clear()
     _CHANNEL_TRIPS.clear()
     _CHANNEL_COOLDOWN_UNTIL.clear()
+    _CHALLENGE_FAILED.clear()
+    _CHALLENGE_TRIPS.clear()
+    _CHALLENGE_BACKOFF_UNTIL.clear()
