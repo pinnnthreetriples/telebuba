@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 
 from core.db import account_summary_counts, list_accounts
 from schemas.accounts import (
+    AccountList,
     AccountsTableState,
     AccountSummary,
     AccountTableRow,
@@ -36,6 +37,20 @@ async def load_accounts_table(data: AccountFilter) -> AccountsTableState:
     return AccountsTableState(
         rows=[_to_table_row(account) for account in accounts.accounts],
         summary=summary,
+    )
+
+
+async def list_listener_accounts() -> AccountList:
+    """Accounts with a live session — the only valid neurocomment-listener candidates.
+
+    The listener must log in to subscribe to channel posts, so an account without an
+    authorized session (``unauthorized`` / ``session_error`` / never checked) can never
+    act as one. ``health_for_status(...) == "ok"`` is exactly the ``alive`` set; filter
+    on it rather than hard-coding a status string, so the rule stays in one place.
+    """
+    accounts = await list_accounts()
+    return AccountList(
+        accounts=[a for a in accounts.accounts if health_for_status(a.status) == "ok"],
     )
 
 

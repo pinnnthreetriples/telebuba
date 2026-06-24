@@ -40,7 +40,9 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
         with ui.row().classes("w-full items-center gap-2"):
             ui.icon("local_fire_department").classes("text-amber-500")
             ui.label("Прогретые аккаунты").classes("text-sm font-semibold")
-            ui.label(f"от {min_days} дн").classes("text-xs text-slate-400")
+            ui.label(f"от {min_days} дн").classes("text-xs text-slate-400").tooltip(
+                f"Аккаунты с прогревом ≥ {min_days} дней пригодны для комментирования",
+            )
         if not warmed:
             ui.label("Нет прогретых аккаунтов — прогрейте их на странице «Прогрев».").classes(
                 "text-xs text-slate-400",
@@ -168,8 +170,15 @@ async def _render_account_picker(campaign_id: str) -> None:  # pragma: no cover
 
 async def _render_actions(campaign_id: str) -> None:  # pragma: no cover
     async def on_onboard() -> None:
-        result = await onboard_campaign(campaign_id)
+        # Onboarding can take many seconds (pre-join + readiness probe per pair); give
+        # immediate feedback + a button spinner so the operator doesn't think it hung.
+        ui.notify("Онбординг запущен…", type="info")
+        button.props("loading")
+        try:
+            result = await onboard_campaign(campaign_id)
+        finally:
+            button.props(remove="loading")
         ready = sum(1 for o in result.outcomes if o.state == "ready")
         ui.notify(f"Онбординг: готово пар — {ready} из {len(result.outcomes)}", type="info")
 
-    ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
+    button = ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")

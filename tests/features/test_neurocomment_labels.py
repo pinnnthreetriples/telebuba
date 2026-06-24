@@ -27,6 +27,7 @@ from features.neurocomment._page import (
     relative_time,
     runtime_status_text,
     solver_switch_key,
+    start_block_reason,
 )
 from schemas.challenge import ChallengeRow
 from schemas.neurocomment import (
@@ -74,6 +75,20 @@ def test_channel_status_split_states_have_distinct_icons() -> None:
 
 def test_channel_status_icon_unknown_falls_back_to_generic() -> None:
     assert channel_status_icon("weird") == "help_outline"
+
+
+def test_start_block_reason_requires_a_listener() -> None:
+    assert start_block_reason(5, has_listener=False) == "Выберите аккаунт-слушатель"
+
+
+def test_start_block_reason_requires_a_ready_account() -> None:
+    reason = start_block_reason(0, has_listener=True)
+    assert reason is not None
+    assert "готовых аккаунтов" in reason
+
+
+def test_start_block_reason_none_when_ready() -> None:
+    assert start_block_reason(3, has_listener=True) is None
 
 
 def _challenge_row(*, raw_text: str, button_labels: list[str]) -> ChallengeRow:

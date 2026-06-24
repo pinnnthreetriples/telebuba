@@ -58,6 +58,7 @@ from services.accounts import (
     import_account_session,
     import_account_tdata,
     list_accounts,
+    list_listener_accounts,
     load_accounts_table,
     post_account_story,
     remove_account_profile_photo,
@@ -183,6 +184,37 @@ async def test_import_account_session_refuses_to_overwrite_existing() -> None:
         )
     # File must be untouched.
     assert session_path.read_bytes() == b"original-session-bytes"
+
+
+@pytest.mark.asyncio
+async def test_list_listener_accounts_keeps_only_live_sessions() -> None:
+    """Only accounts with an authorized session may act as the neurocomment listener."""
+    await add_account(AccountCreate(account_id="never", label="Never checked"))
+    await add_account(AccountCreate(account_id="live", label="Live"))
+    await add_account(AccountCreate(account_id="dead", label="No session"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="live",
+            session_path="sessions/live",
+            status="alive",
+            is_temporary=False,
+        ),
+    )
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="dead",
+            session_path="sessions/dead",
+            status="session_error",
+            is_temporary=False,
+            error_type="AuthKeyError",
+            error_message="session revoked",
+        ),
+    )
+
+    result = await list_listener_accounts()
+
+    # "never" (status new → warn) and "dead" (session_error → fail) are excluded.
+    assert [a.account_id for a in result.accounts] == ["live"]
 
 
 @pytest.mark.asyncio

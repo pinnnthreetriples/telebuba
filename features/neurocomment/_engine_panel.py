@@ -29,8 +29,9 @@ from features.neurocomment._page import (
     live_signature,
     relative_time,
     runtime_status_text,
+    start_block_reason,
 )
-from services.accounts import list_accounts
+from services.accounts import list_listener_accounts
 from services.neurocomment import (
     load_neurocomment_board,
     neurocomment_runtime_status,
@@ -59,7 +60,7 @@ class _PanelState:
 
 async def render_engine_panel(campaign_id: str) -> None:  # pragma: no cover
     """Render the engine hero card with the live rail, counters, and controls."""
-    accounts = (await list_accounts()).accounts
+    accounts = (await list_listener_accounts()).accounts
     listener_options = {acc.account_id: (acc.label or acc.account_id) for acc in accounts}
     state = await _load_state(campaign_id)
 
@@ -116,7 +117,12 @@ async def render_engine_panel(campaign_id: str) -> None:  # pragma: no cover
                 log_section.refresh()
 
         ui.separator()
-        _render_controls(listener_options, state.status.listener_account_id, reload)
+        _render_controls(
+            listener_options,
+            state.status.listener_account_id,
+            reload,
+            lambda: state.activity.ready_accounts,
+        )
         log_section()
 
     timer = ui.timer(_PANEL_POLL_SECONDS, reload)
@@ -127,27 +133,53 @@ def _render_controls(
     listener_options: dict[str, str],
     initial_listener: str | None,
     reload: Callable[[], Awaitable[None]],
+    ready_accounts: Callable[[], int],
 ) -> None:  # pragma: no cover
-    """Listener select + Start/Stop; both buttons refresh the panel via ``reload``."""
+    """Listener select + Start/Stop; both buttons refresh the panel via ``reload``.
+
+    Start is gated by ``start_block_reason`` so it can't silently no-op on an empty
+    fleet; Stop is fleet-wide, so it asks for confirmation first.
+    """
     listener_select = (
         ui.select(listener_options, label="Аккаунт-слушатель")
         .props("dense outlined")
         .classes("w-full max-w-[400px]")
     )
-    listener_select.value = initial_listener
+    # Only preselect the persisted listener if it still has a live session; a stale id
+    # (account signed out since it was set) would otherwise pass the has-listener gate
+    # and start the engine on a dead listener.
+    listener_select.value = initial_listener if initial_listener in listener_options else None
+    if not listener_options:
+        ui.label(
+            "Нет аккаунтов с активной сессией — добавьте и проверьте их на «Аккаунтах».",
+        ).classes("text-xs text-amber-600")
 
     async def on_start() -> None:
-        if not listener_select.value:
-            ui.notify("Выберите аккаунт-слушатель", type="warning")
+        reason = start_block_reason(ready_accounts(), has_listener=bool(listener_select.value))
+        if reason:
+            ui.notify(reason, type="warning")
             return
         await start_neurocomment(listener_select.value)
         ui.notify("Нейрокомментинг запущен", type="positive")
         await reload()
 
     async def on_stop() -> None:
-        await stop_neurocomment()
-        ui.notify("Нейрокомментинг остановлен", type="info")
-        await reload()
+        with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[420px] max-w-full"):
+            ui.label("Остановить весь флот?").classes("text-base font-semibold")
+            ui.label(
+                "Слушатель остановится для всех активных кампаний.",
+            ).classes("text-sm text-slate-700")
+
+            async def confirm() -> None:
+                dialog.close()
+                await stop_neurocomment()
+                ui.notify("Нейрокомментинг остановлен", type="info")
+                await reload()
+
+            with ui.row().classes("w-full justify-end gap-2"):
+                ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
+                ui.button("Остановить", color="negative", on_click=confirm)
+        dialog.open()
 
     with ui.row().classes("w-full items-center gap-2"):
         ui.button("Запустить", icon="play_arrow", on_click=on_start).props("color=positive")
@@ -232,9 +264,12 @@ def _render_ticker(state: _PanelState) -> None:  # pragma: no cover
             )
         else:
             ui.element("div").classes("w-2 h-2 rounded-full bg-slate-300")
-            ui.label("Движок остановлен — выберите слушателя и нажмите «Запустить».").classes(
-                "text-xs text-slate-500",
+            idle_msg = (
+                "Нет готовых аккаунтов — добавьте и онбордните их в «Настройке»."
+                if state.activity.ready_accounts == 0
+                else "Движок остановлен — выберите слушателя и нажмите «Запустить»."
             )
+            ui.label(idle_msg).classes("text-xs text-slate-500")
 
 
 def _render_counters(state: _PanelState) -> None:  # pragma: no cover

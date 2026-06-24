@@ -107,6 +107,7 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
             .classes("max-w-[130px]")
         )
         counts = ui.label("").classes("text-xs text-slate-500 tabular-nums")
+        counts.tooltip("✓ решено · ✗ не решено · ⊘ отказ · ⏳ в ожидании")
 
         async def reload_counts() -> None:
             result = await count_challenge_outcomes(
