@@ -44,6 +44,8 @@ class NeurocommentCampaign(BaseModel):
     status: CampaignStatus
     created_at: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
+    # Per-campaign challenge-solver override (#148): None defers to the global flag.
+    solver_enabled: bool | None = None
 
 
 class CampaignList(BaseModel):
@@ -131,6 +133,8 @@ class NeurocommentReadiness(BaseModel):
     captcha_passed: bool
     ready: bool
     checked_at: str = Field(min_length=1)
+    # Operator skip (#148): the engine never selects a human-skipped pair.
+    human_skipped: bool = False
 
 
 class ReadinessList(BaseModel):
@@ -234,6 +238,7 @@ class AccountChannelReadiness(BaseModel):
     ready: bool
     joined: bool
     captcha_passed: bool
+    human_skipped: bool = False
 
 
 class NeurocommentAccountCard(BaseModel):
@@ -267,5 +272,6 @@ class NeurocommentBoard(BaseModel):
     campaign_id: str = Field(min_length=1)
     campaign_name: str = Field(min_length=1)
     status: CampaignStatus
+    solver_enabled: bool | None = None  # per-campaign solver override (#148)
     accounts: list[NeurocommentAccountCard] = Field(default_factory=list)
     channels: list[NeurocommentChannelRow] = Field(default_factory=list)

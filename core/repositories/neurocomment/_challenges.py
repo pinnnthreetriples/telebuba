@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import func, select, update
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import _neurocomment_challenges
@@ -20,6 +20,7 @@ from schemas.challenge import (
     ChallengedChannels,
     ChallengeDecision,
     ChallengeInsert,
+    ChallengeOutcomeCounts,
     ChallengeRow,
     ChallengeRowList,
 )
@@ -54,6 +55,16 @@ async def insert_challenge(row: ChallengeInsert) -> None:
     await asyncio.to_thread(_insert_challenge, row)
 
 
+def _decision_reasoning(decision_json: object) -> str | None:
+    if not decision_json:
+        return None
+    try:
+        reasoning = json.loads(str(decision_json)).get("reasoning")
+    except (ValueError, AttributeError):
+        return None
+    return str(reasoning) if reasoning is not None else None
+
+
 def _row_to_challenge(row: RowMapping) -> ChallengeRow:
     return ChallengeRow(
         account_id=str(row["account_id"]),
@@ -62,6 +73,7 @@ def _row_to_challenge(row: RowMapping) -> ChallengeRow:
         button_labels=list(json.loads(row["button_labels_json"])),
         outcome=str(row["outcome"]),
         decided_at=str(row["decided_at"]),
+        reasoning=_decision_reasoning(row["decision_json"]),
     )
 
 
@@ -167,3 +179,30 @@ def _resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> boo
 async def resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> bool:
     """Resolve the pair's latest pending challenge; ``True`` if one was found + updated."""
     return await asyncio.to_thread(_resolve_pending_outcome, account_id, channel, outcome)
+
+
+def _count_by_outcome(channels: list[str], since: str) -> ChallengeOutcomeCounts:
+    if not channels:
+        return ChallengeOutcomeCounts()
+    statement = (
+        select(_neurocomment_challenges.c.outcome, func.count())
+        .where(
+            _neurocomment_challenges.c.channel.in_(channels)
+            & (_neurocomment_challenges.c.decided_at >= since),
+        )
+        .group_by(_neurocomment_challenges.c.outcome)
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).all()
+    counts = {str(outcome): int(total) for outcome, total in rows}
+    return ChallengeOutcomeCounts(
+        solved=counts.get("solved", 0),
+        failed=counts.get("failed", 0),
+        give_up=counts.get("give_up", 0),
+        pending=counts.get("pending", 0),
+    )
+
+
+async def count_by_outcome(channels: list[str], since: str) -> ChallengeOutcomeCounts:
+    """Header counters: challenge outcomes for ``channels`` with ``decided_at >= since``."""
+    return await asyncio.to_thread(_count_by_outcome, channels, since)

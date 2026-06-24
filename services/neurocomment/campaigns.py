@@ -15,7 +15,7 @@ from core import db
 from schemas.neurocomment import ChannelLinkOutcome
 
 if TYPE_CHECKING:
-    from schemas.challenge import ChallengeRowList
+    from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
     from schemas.neurocomment import (
         CampaignAccountList,
         CampaignChannelList,
@@ -77,3 +77,18 @@ async def remove_account_from_campaign(campaign_id: str, account_id: str) -> Non
 async def list_channel_challenges(channel: str, limit: int) -> ChallengeRowList:
     """Recent non-solved challenges for a channel — the work-view drill-down (Ф2 #145)."""
     return await db.list_failed_for_channel(channel, limit)
+
+
+async def count_challenge_outcomes(channels: list[str], since: str) -> ChallengeOutcomeCounts:
+    """Header counters: challenge outcomes across a campaign's channels in a window (#148)."""
+    return await db.count_by_outcome(channels, since)
+
+
+async def set_solver_enabled(campaign_id: str, value: bool | None) -> None:  # noqa: FBT001 - tri-state value
+    """Per-campaign solver switch: ``None`` follows the global flag, else force on/off (#148)."""
+    await db.update_solver_enabled(campaign_id, value)
+
+
+async def skip_pair(account_id: str, channel: str) -> None:
+    """Operator "Skip channel for this account": the engine never selects the pair (#148)."""
+    await db.mark_human_skipped(account_id, channel)

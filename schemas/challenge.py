@@ -33,12 +33,23 @@ class ChallengeRow(BaseModel):
     button_labels: list[str] = Field(default_factory=list)
     outcome: str = Field(min_length=1)
     decided_at: str = Field(min_length=1)
+    # Gemini's "why this action" (#148 drill-down); None for pre-Gemini give_ups.
+    reasoning: str | None = None
 
 
 class ChallengeRowList(BaseModel):
     """Wrapper so the repo returns a model, never a raw list (non-negotiable #2)."""
 
     rows: list[ChallengeRow] = Field(default_factory=list)
+
+
+class ChallengeOutcomeCounts(BaseModel):
+    """The four header counters over the challenge audit table for a time window (#148)."""
+
+    solved: int = 0
+    failed: int = 0
+    give_up: int = 0
+    pending: int = 0
 
 
 class ChallengedChannels(BaseModel):

@@ -9,7 +9,16 @@ repository package pulls it in, and ``core.db`` imports the package before
 
 from __future__ import annotations
 
-from sqlalchemy import BigInteger, CheckConstraint, Column, ForeignKey, Integer, String, Table
+from sqlalchemy import (
+    BigInteger,
+    Boolean,
+    CheckConstraint,
+    Column,
+    ForeignKey,
+    Integer,
+    String,
+    Table,
+)
 
 from core.db import _metadata
 
@@ -22,6 +31,8 @@ _neurocomment_campaigns = Table(
     Column("status", String, nullable=False),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+    # Per-campaign solver override (#14): NULL defers to the global flag (#148).
+    Column("solver_enabled", Boolean, nullable=True),
 )
 _neurocomment_campaign_channels = Table(
     "neurocomment_campaign_channels",
@@ -66,6 +77,8 @@ _neurocomment_readiness = Table(
     Column("captcha_passed", Integer, nullable=False),
     Column("ready", Integer, nullable=False),
     Column("checked_at", String, nullable=False),
+    # Operator "Skip channel for this account" (#148); migration #15 backfills 0.
+    Column("human_skipped", Integer, nullable=False, server_default="0"),
 )
 _neurocomment_comments = Table(
     "neurocomment_comments",

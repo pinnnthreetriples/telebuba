@@ -114,6 +114,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         campaign_id=campaign.campaign_id,
         campaign_name=campaign.name,
         status=campaign.status,
+        solver_enabled=campaign.solver_enabled,
         accounts=cards,
         channels=rows,
     )

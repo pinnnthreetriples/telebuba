@@ -25,6 +25,7 @@ from datetime import UTC, datetime
 
 from core.config import settings
 from core.db import (
+    fetch_active_campaign_for_channel,
     fetch_campaign,
     list_campaign_accounts,
     list_campaign_channels,
@@ -50,6 +51,13 @@ _GATE_ERRORS = frozenset(
 _RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
 
 
+def _effective_solver_enabled(campaign_override: bool | None) -> bool:  # noqa: FBT001 - tri-state value
+    """Per-campaign solver override beats the global flag; both default off (#148)."""
+    if campaign_override is not None:
+        return campaign_override
+    return settings.neurocomment.challenge_solver_enabled
+
+
 async def onboard_account_channel(account_id: str, channel: str) -> AccountChannelOnboarding:
     """Prepare one account to comment on one channel; persist its readiness."""
     linked = await _safe_resolve(account_id, channel)
@@ -68,13 +76,19 @@ async def onboard_account_channel(account_id: str, channel: str) -> AccountChann
             channel=channel,
             state="comments_off",
         )
-    return await _join_and_classify(account_id, channel, linked.linked_chat_id)
+    campaign = await fetch_active_campaign_for_channel(channel)
+    solver_enabled = _effective_solver_enabled(campaign.solver_enabled if campaign else None)
+    return await _join_and_classify(
+        account_id, channel, linked.linked_chat_id, solver_enabled=solver_enabled
+    )
 
 
 async def _join_and_classify(
     account_id: str,
     channel: str,
     group_id: int,
+    *,
+    solver_enabled: bool,
 ) -> AccountChannelOnboarding:
     """Join the (already-resolved, comment-enabled) group and persist readiness.
 
@@ -90,7 +104,9 @@ async def _join_and_classify(
             state="bot_challenge_backoff",
         )
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
-    return await _classify_join(account_id, channel, result, group_id)
+    return await _classify_join(
+        account_id, channel, result, group_id, solver_enabled=solver_enabled
+    )
 
 
 async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussionGroupResult:
@@ -131,13 +147,14 @@ async def _classify_join(
     channel: str,
     result: ActionResult,
     group_id: int,
+    *,
+    solver_enabled: bool,
 ) -> AccountChannelOnboarding:
     """Map a join ``ActionResult`` to a state + persisted readiness row."""
     if result.status == "ok":
         # Joined → run the proactive challenge solver before declaring the pair
-        # comment-able (Ф2 #145). Detection-only in this slice: a detected
-        # challenge lands ``bot_challenge``, otherwise ``ready``.
-        return await _solve_and_record(account_id, channel, group_id)
+        # comment-able (Ф2 #145), unless the solver is disabled for this campaign.
+        return await _solve_and_record(account_id, channel, group_id, solver_enabled=solver_enabled)
     if result.status in _RETRY_STATUSES:
         # Non-terminal: do not write ready; surface the wait so the account is
         # retried later instead of getting stuck. Return promptly (no sleep).
@@ -183,13 +200,19 @@ async def _solve_and_record(
     account_id: str,
     channel: str,
     group_id: int,
+    *,
+    solver_enabled: bool,
 ) -> AccountChannelOnboarding:
     """Run the challenge solver on a freshly-joined group; persist the readiness.
 
-    ``give_up`` (a detected guardian-bot challenge) leaves the pair not-ready — the
-    audit row the solver wrote is what the board reads to render ``bot_challenge``;
-    ``no_challenge`` means the pair is comment-able → ``ready``.
+    With the solver disabled (opt-in, #148) an ok join is assumed comment-able →
+    ``ready``. Otherwise ``give_up`` / ``failed`` (a detected/unsolved challenge)
+    leaves the pair not-ready — the audit row drives the board's ``bot_challenge``;
+    ``no_challenge`` / ``solved`` means comment-able → ``ready``.
     """
+    if not solver_enabled:
+        await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
+        return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
     outcome = await challenge.solve_if_present(account_id, channel, group_id)
     if outcome in ("give_up", "failed"):
         # Detected but unsolved (or the click errored) → not comment-able; the
@@ -221,6 +244,7 @@ async def onboard_campaign(campaign_id: str) -> CampaignOnboardingResult:
 
     channels = (await list_campaign_channels(campaign_id)).links
     accounts = [link.account_id for link in (await list_campaign_accounts(campaign_id)).links]
+    solver_enabled = _effective_solver_enabled(campaign.solver_enabled)
     # Establish each serving account's spam verdict up front. Selection reads this
     # from cache and never re-probes @SpamBot per post (anti-ban), so a verdict must
     # exist before the account goes on the line.
@@ -237,7 +261,11 @@ async def onboard_campaign(campaign_id: str) -> CampaignOnboardingResult:
         for account_id in accounts:
             if joined_once:
                 await asyncio.sleep(_join_jitter_seconds())
-            outcomes.append(await _join_pair_safely(account_id, channel, group_id))
+            outcomes.append(
+                await _join_pair_safely(
+                    account_id, channel, group_id, solver_enabled=solver_enabled
+                )
+            )
             joined_once = True
     return CampaignOnboardingResult(campaign_id=campaign_id, outcomes=outcomes)
 
@@ -284,10 +312,14 @@ async def _join_pair_safely(
     account_id: str,
     channel: str,
     group_id: int,
+    *,
+    solver_enabled: bool,
 ) -> AccountChannelOnboarding:
     """Join one pair, converting an unexpected raise into a ``failed`` outcome."""
     try:
-        return await _join_and_classify(account_id, channel, group_id)
+        return await _join_and_classify(
+            account_id, channel, group_id, solver_enabled=solver_enabled
+        )
     except Exception as exc:  # noqa: BLE001 - one pair must never abort the campaign
         await log_event(
             "ERROR",
