@@ -15,6 +15,7 @@ from core import db
 from schemas.neurocomment import ChannelLinkOutcome
 
 if TYPE_CHECKING:
+    from schemas.challenge import ChallengeRowList
     from schemas.neurocomment import (
         CampaignAccountList,
         CampaignChannelList,
@@ -71,3 +72,8 @@ async def assign_account_to_campaign(campaign_id: str, account_id: str) -> None:
 async def remove_account_from_campaign(campaign_id: str, account_id: str) -> None:
     """Remove an account from a campaign's serving fleet (idempotent)."""
     await db.remove_account_from_campaign(campaign_id, account_id)
+
+
+async def list_channel_challenges(channel: str, limit: int) -> ChallengeRowList:
+    """Recent non-solved challenges for a channel — the work-view drill-down (Ф2 #145)."""
+    return await db.list_failed_for_channel(channel, limit)

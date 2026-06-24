@@ -12,10 +12,12 @@ from features.neurocomment import register_neurocomment_page
 from features.neurocomment._page import (
     campaign_options,
     campaign_status_label,
+    challenge_summary,
     channel_status_icon,
     channel_status_label,
     health_label,
 )
+from schemas.challenge import ChallengeRow
 from schemas.neurocomment import CampaignList, CampaignStatus, NeurocommentCampaign
 
 
@@ -52,6 +54,29 @@ def test_channel_status_split_states_have_distinct_icons() -> None:
 
 def test_channel_status_icon_unknown_falls_back_to_generic() -> None:
     assert channel_status_icon("weird") == "help_outline"
+
+
+def _challenge_row(*, raw_text: str, button_labels: list[str]) -> ChallengeRow:
+    return ChallengeRow(
+        account_id="acc-1",
+        channel="@chan",
+        raw_text=raw_text,
+        button_labels=button_labels,
+        outcome="give_up",
+        decided_at="2026-06-24T00:00:00Z",
+    )
+
+
+def test_challenge_summary_includes_text_and_buttons() -> None:
+    summary = challenge_summary(_challenge_row(raw_text="2+2=?", button_labels=["4", "5"]))
+    assert "2+2=?" in summary
+    assert "4 · 5" in summary
+
+
+def test_challenge_summary_handles_empty_text_and_buttons() -> None:
+    summary = challenge_summary(_challenge_row(raw_text="   ", button_labels=[]))
+    assert "(без текста)" in summary
+    assert "—" in summary
 
 
 @pytest.mark.parametrize(("health", "expected"), [("ready", "Готов"), ("blocked", "Заблокирован")])

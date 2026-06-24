@@ -28,11 +28,13 @@ from core.db import (  # type: ignore[attr-defined]
     fetch_comment,
     fetch_linked_group,
     fetch_readiness,
+    insert_challenge,
     link_channel_to_campaign,
     list_active_watch_channels,
     list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
+    list_failed_for_channel,
     list_posted_comments_for_channel_since,
     mark_comment_failed,
     mark_comment_posted,
@@ -41,6 +43,7 @@ from core.db import (  # type: ignore[attr-defined]
     upsert_readiness,
 )
 from schemas.accounts import AccountCreate
+from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate
 
 if TYPE_CHECKING:
@@ -154,6 +157,68 @@ async def test_migration_14_idempotent_on_database_with_neurocomment_data() -> N
     assert "solver_enabled" in campaign_columns
     assert int(campaign_count) == 1
     assert 14 in versions
+
+
+@pytest.mark.asyncio
+async def test_insert_challenge_and_list_failed_for_channel() -> None:
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h1",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="нажми, чтобы остаться",
+            button_labels=["Я не бот", "Я бот"],
+            outcome="give_up",
+        ),
+    )
+
+    result = await list_failed_for_channel("@chan", limit=10)
+
+    assert len(result.rows) == 1
+    row = result.rows[0]
+    assert row.account_id == "acc-1"
+    assert row.channel == "@chan"
+    assert row.raw_text == "нажми, чтобы остаться"
+    assert row.button_labels == ["Я не бот", "Я бот"]
+    assert row.outcome == "give_up"
+
+
+@pytest.mark.asyncio
+async def test_list_failed_for_channel_excludes_solved() -> None:
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h1",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="solved one",
+            button_labels=["ok"],
+            outcome="solved",
+        ),
+    )
+
+    result = await list_failed_for_channel("@chan", limit=10)
+
+    assert result.rows == []
+
+
+@pytest.mark.asyncio
+async def test_list_failed_for_channel_is_newest_first_and_limited() -> None:
+    for i in range(3):
+        await insert_challenge(
+            ChallengeInsert(
+                challenge_hash=f"h{i}",
+                account_id="acc-1",
+                channel="@chan",
+                raw_text=f"challenge {i}",
+                button_labels=["x"],
+                outcome="give_up",
+            ),
+        )
+
+    result = await list_failed_for_channel("@chan", limit=2)
+
+    # Newest-first (id desc tiebreaker), capped at the limit.
+    assert [r.raw_text for r in result.rows] == ["challenge 2", "challenge 1"]
 
 
 @pytest.mark.asyncio

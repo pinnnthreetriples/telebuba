@@ -25,6 +25,11 @@ from core.repositories.neurocomment._campaigns import (
     list_campaigns,
     remove_account_from_campaign,
 )
+from core.repositories.neurocomment._challenges import (
+    insert_challenge,
+    list_challenged_channels,
+    list_failed_for_channel,
+)
 from core.repositories.neurocomment._comments import (
     claim_comment,
     fetch_comment,
@@ -66,12 +71,15 @@ __all__ = [
     "fetch_linked_group",
     "fetch_readiness",
     "get_listener_account_id",
+    "insert_challenge",
     "link_channel_to_campaign",
     "list_active_watch_channels",
     "list_campaign_accounts",
     "list_campaign_channels",
     "list_campaign_readiness",
     "list_campaigns",
+    "list_challenged_channels",
+    "list_failed_for_channel",
     "list_linked_groups",
     "list_posted_comments_for_channel_since",
     "list_posted_comments_since",

@@ -85,6 +85,23 @@ _neurocomment_comments = Table(
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
 )
+# Challenge audit-and-cache table (migration #14): one row per guardian-bot
+# challenge encountered at onboarding. Doubles as the global solved-decision
+# cache (a ``WHERE outcome='solved'`` projection). Indexes live in migration #14.
+_neurocomment_challenges = Table(
+    "neurocomment_challenges",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("challenge_hash", String, nullable=False),
+    Column("account_id", String, nullable=False),
+    Column("channel", String, nullable=False),
+    Column("raw_text", String, nullable=False),
+    Column("button_labels_json", String, nullable=False),
+    Column("decision_json", String, nullable=True),
+    Column("outcome", String, nullable=False),
+    Column("decided_at", String, nullable=False),
+    Column("outcome_at", String, nullable=True),
+)
 # Single-row table holding the active listener account id so the engine can
 # re-point the listener at boot. ``id`` is pinned to 1 (migration #12).
 _neurocomment_runtime = Table(

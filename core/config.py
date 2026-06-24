@@ -298,6 +298,9 @@ class NeurocommentSettings(BaseSettings):
     # First back-off duration; doubles per consecutive trip, capped at the max.
     channel_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
     channel_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
+    # Ф2 challenge solver — window the onboarding solver waits for a guardian-bot
+    # inline-button challenge after joining a discussion group.
+    challenge_wait_timeout_seconds: float = Field(default=20.0, gt=0.0)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:
