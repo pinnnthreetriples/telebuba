@@ -67,20 +67,23 @@ def _build_prompt(message: BotChallengeMessage) -> str:
 
 
 async def _gemini_decision(message: BotChallengeMessage) -> ChallengeDecision | None:
-    request = GeminiRequest(
-        api_key=settings.gemini.api_key,
-        prompt=_build_prompt(message),
-        model=settings.gemini.model,
-        temperature=settings.gemini.temperature,
-        max_output_tokens=settings.gemini.max_output_tokens,
-        response_schema_json=_DECISION_SCHEMA,
-    )
     try:
+        # GeminiRequest build can raise ValidationError when no API key is
+        # configured — treat a misconfigured / timed-out Gemini as give_up rather
+        # than crash onboarding (the solver runs before any opt-in flag gate).
+        request = GeminiRequest(
+            api_key=settings.gemini.api_key,
+            prompt=_build_prompt(message),
+            model=settings.gemini.model,
+            temperature=settings.gemini.temperature,
+            max_output_tokens=settings.gemini.max_output_tokens,
+            response_schema_json=_DECISION_SCHEMA,
+        )
         result = await asyncio.wait_for(
             _seams.generate_text(request),
             timeout=settings.neurocomment.challenge_gemini_timeout_seconds,
         )
-    except TimeoutError:
+    except (TimeoutError, ValidationError):
         return None
     if result.status != "ok" or result.text is None:
         return None

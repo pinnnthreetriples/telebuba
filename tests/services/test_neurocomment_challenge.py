@@ -38,6 +38,8 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    # GeminiRequest requires a non-empty key; CI has none, so set one explicitly.
+    monkeypatch.setattr(settings.gemini, "api_key", "test-key")
     reset_logging_for_tests()
     setup_logging()
     # Neutralise the humanize pause.
@@ -193,6 +195,16 @@ async def test_gemini_timeout_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
     monkeypatch.setattr(_seams, "generate_text", _timeout)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "give_up"
+    assert [r["outcome"] for r in _challenge_rows()] == ["give_up"]
+
+
+@pytest.mark.asyncio
+async def test_missing_gemini_key_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    # No API key → GeminiRequest build raises; the solver gives up, not crashes.
+    monkeypatch.setattr(settings.gemini, "api_key", "")
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
 
     assert await challenge.solve_if_present("acc-1", "@chan", 99) == "give_up"
     assert [r["outcome"] for r in _challenge_rows()] == ["give_up"]

@@ -49,6 +49,8 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    # GeminiRequest requires a non-empty key (the solver builds one); CI has none.
+    monkeypatch.setattr(settings.gemini, "api_key", "test-key")
     reset_logging_for_tests()
     setup_logging()
     # onboard_campaign probes each account's spam once; keep it off the network.
