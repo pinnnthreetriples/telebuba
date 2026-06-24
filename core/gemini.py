@@ -25,12 +25,18 @@ def _endpoint(model: str) -> str:
 
 
 def _payload(request: GeminiRequest) -> dict[str, object]:
+    generation_config: dict[str, object] = {
+        "temperature": request.temperature,
+        "maxOutputTokens": request.max_output_tokens,
+    }
+    if request.response_schema_json is not None:
+        # Server-side structured output: Gemini validates against the schema and
+        # returns JSON, so parse-fails are effectively impossible on our side.
+        generation_config["responseSchema"] = request.response_schema_json
+        generation_config["responseMimeType"] = "application/json"
     return {
         "contents": [{"role": "user", "parts": [{"text": request.prompt}]}],
-        "generationConfig": {
-            "temperature": request.temperature,
-            "maxOutputTokens": request.max_output_tokens,
-        },
+        "generationConfig": generation_config,
     }
 
 

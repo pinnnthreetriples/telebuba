@@ -25,6 +25,7 @@ from core.db import (
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage
+from schemas.gemini import GeminiResult
 from schemas.neurocomment import CampaignCreate
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import (
@@ -48,12 +49,21 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
+    # GeminiRequest requires a non-empty key (the solver builds one); CI has none.
+    monkeypatch.setattr(settings.gemini, "api_key", "test-key")
     reset_logging_for_tests()
     setup_logging()
     # onboard_campaign probes each account's spam once; keep it off the network.
     monkeypatch.setattr(_seams, "refresh_spam_status", _clean_spam)
+    # The solver calls Gemini on a detected (non-image) challenge — keep it off the
+    # network; an error verdict makes the solver give up (→ bot_challenge).
+    monkeypatch.setattr(_seams, "generate_text", _gemini_error)
     yield
     reset_logging_for_tests()
+
+
+async def _gemini_error(_request: object) -> GeminiResult:
+    return GeminiResult(status="error", error="offline in tests")
 
 
 class _ReadStub:

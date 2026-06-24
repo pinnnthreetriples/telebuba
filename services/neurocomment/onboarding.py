@@ -178,13 +178,17 @@ async def _solve_and_record(
     ``no_challenge`` means the pair is comment-able → ``ready``.
     """
     outcome = await challenge.solve_if_present(account_id, channel, group_id)
-    if outcome == "give_up":
+    if outcome in ("give_up", "failed"):
+        # Detected but unsolved (or the click errored) → not comment-able; the
+        # solver's audit row is what the board reads to render bot_challenge.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,
             state="bot_challenge",
         )
+    # no_challenge, or solved (click dispatched, audit pending) → optimistically
+    # comment-able; the engine confirms a solved click on the first comment.
     await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
     return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
 

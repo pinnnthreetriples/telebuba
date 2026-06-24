@@ -29,6 +29,8 @@ from core.repositories.neurocomment._challenges import (
     insert_challenge,
     list_challenged_channels,
     list_failed_for_channel,
+    lookup_cached_decision,
+    resolve_pending_outcome,
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
@@ -83,9 +85,11 @@ __all__ = [
     "list_linked_groups",
     "list_posted_comments_for_channel_since",
     "list_posted_comments_since",
+    "lookup_cached_decision",
     "mark_comment_failed",
     "mark_comment_posted",
     "remove_account_from_campaign",
+    "resolve_pending_outcome",
     "set_listener_account_id",
     "upsert_linked_group",
     "upsert_readiness",

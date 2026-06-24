@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -52,6 +54,48 @@ async def test_generate_text_sends_api_key_header() -> None:
         await generate_text(_request())
 
     assert route.calls.last.request.headers["x-goog-api-key"] == "test-key"
+
+
+@pytest.mark.asyncio
+async def test_response_schema_json_added_to_generation_config() -> None:
+    schema: dict[str, object] = {"type": "object", "properties": {"action": {"type": "string"}}}
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "{}"}]}}]},
+            ),
+        )
+        request = GeminiRequest(
+            api_key="k",
+            prompt="solve",
+            model="gemini-2.5-flash",
+            temperature=0.0,
+            max_output_tokens=200,
+            response_schema_json=schema,
+        )
+        await generate_text(request)
+
+    body = json.loads(route.calls.last.request.content)
+    generation = body["generationConfig"]
+    assert generation["responseSchema"] == schema
+    assert generation["responseMimeType"] == "application/json"
+
+
+@pytest.mark.asyncio
+async def test_no_response_schema_when_unset() -> None:
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+            ),
+        )
+        await generate_text(_request())
+
+    generation = json.loads(route.calls.last.request.content)["generationConfig"]
+    assert "responseSchema" not in generation
+    assert "responseMimeType" not in generation
 
 
 @pytest.mark.asyncio

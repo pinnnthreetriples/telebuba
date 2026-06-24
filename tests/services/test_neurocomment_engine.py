@@ -17,6 +17,7 @@ import pytest
 
 from core.config import settings
 from core.db import (
+    _get_engine,
     assign_account_to_campaign,
     claim_comment,
     configure_database,
@@ -24,12 +25,15 @@ from core.db import (
     create_campaign,
     fetch_comment,
     fetch_readiness,
+    insert_challenge,
     link_channel_to_campaign,
+    list_failed_for_channel,
     mark_comment_posted,
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate, AccountList
+from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.gemini import GeminiResult
 from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import ActionResult, NewPostEvent
@@ -726,6 +730,63 @@ async def test_write_forbidden_flips_readiness_lazy_captcha(
     record = await fetch_comment("@chan", 10)
     assert record is not None
     assert record.status == "failed"
+
+
+async def _seed_pending_challenge(account_id: str, channel: str) -> None:
+    decision = ChallengeDecision(
+        action="click_button", button_index=0, confidence=0.9, reasoning="r"
+    )
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h",
+            account_id=account_id,
+            channel=channel,
+            raw_text="prove human",
+            button_labels=["yes"],
+            outcome="pending",
+            decision_json=decision.model_dump_json(),
+        ),
+    )
+
+
+def _challenge_outcome(account_id: str) -> str | None:
+    with _get_engine().connect() as connection:
+        return connection.exec_driver_sql(
+            "SELECT outcome FROM neurocomment_challenges WHERE account_id = ?",
+            (account_id,),
+        ).scalar()
+
+
+@pytest.mark.asyncio
+async def test_successful_comment_resolves_pending_challenge_to_solved(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ф2 #146: the first successful comment confirms the solver's click worked.
+    await _make_campaign("@chan", "acc-1")
+    await _seed_pending_challenge("acc-1", "@chan")
+    _patch_io(monkeypatch, comment=_CommentStub(status="ok"))
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    assert _challenge_outcome("acc-1") == "solved"
+
+
+@pytest.mark.asyncio
+async def test_gate_error_resolves_pending_challenge_to_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ф2 #146: a gate error on the first comment means the click did not work.
+    await _make_campaign("@chan", "acc-1")
+    await _seed_pending_challenge("acc-1", "@chan")
+    _patch_io(
+        monkeypatch, comment=_CommentStub(status="failed", error_type="ChatWriteForbiddenError")
+    )
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert _challenge_outcome("acc-1") == "failed"
+    failed = await list_failed_for_channel("@chan", limit=10)
+    assert [r.outcome for r in failed.rows] == ["failed"]
 
 
 @pytest.mark.asyncio
