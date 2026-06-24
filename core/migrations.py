@@ -37,6 +37,7 @@ _ALLOWED_TABLES = frozenset(
         "account_proxies",
         "warming_account_state",
         "warming_settings",
+        "neurocomment_campaigns",
     },
 )
 
@@ -332,6 +333,44 @@ def _add_neurocomment_comment_indexes(connection: Connection) -> None:
     )
 
 
+def _add_neurocomment_challenges(connection: Connection) -> None:
+    # Ф2 #120: one audit-and-cache table (the cache is a ``WHERE outcome='solved'``
+    # projection — no dual-write) plus a per-campaign solver override column.
+    # No data remap for the captcha_gated -> chat_restricted state split: the
+    # channel status is *derived* from neurocomment_readiness booleans, never
+    # stored, so the same (joined, captcha_passed) row now reads as chat_restricted
+    # once board._channel_status changes.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_challenges ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  challenge_hash VARCHAR NOT NULL,"
+        "  account_id VARCHAR NOT NULL,"
+        "  channel VARCHAR NOT NULL,"
+        "  raw_text VARCHAR NOT NULL,"
+        "  button_labels_json VARCHAR NOT NULL,"
+        "  decision_json VARCHAR,"
+        "  outcome VARCHAR NOT NULL DEFAULT 'pending',"
+        "  decided_at VARCHAR NOT NULL,"
+        "  outcome_at VARCHAR"
+        ")",
+    )
+    # Cache fast-path: lookup a solved decision by hash.
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_challenges_hash_outcome "
+        "ON neurocomment_challenges(challenge_hash, outcome)",
+    )
+    # Engine outcome resolution: latest pending row for an (account, channel).
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_challenges_account_channel_decided "
+        "ON neurocomment_challenges(account_id, channel, decided_at DESC)",
+    )
+    if "solver_enabled" not in _sqlite_columns(connection, "neurocomment_campaigns"):
+        # NULL = defer to the global challenge_solver_enabled flag (per-campaign override).
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_campaigns ADD COLUMN solver_enabled BOOLEAN DEFAULT NULL",
+        )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -348,6 +387,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (11, "add_neurocomment_tables", _add_neurocomment_tables),
     (12, "add_neurocomment_runtime", _add_neurocomment_runtime),
     (13, "add_neurocomment_comment_indexes", _add_neurocomment_comment_indexes),
+    (14, "add_neurocomment_challenges", _add_neurocomment_challenges),
 )
 
 

@@ -12,6 +12,7 @@ from features.neurocomment import register_neurocomment_page
 from features.neurocomment._page import (
     campaign_options,
     campaign_status_label,
+    channel_status_icon,
     channel_status_label,
     health_label,
 )
@@ -24,7 +25,9 @@ from schemas.neurocomment import CampaignList, CampaignStatus, NeurocommentCampa
         ("ready", "Готов"),
         ("comments_off", "Комментарии выключены"),
         ("join_by_request", "Вступление по заявке"),
-        ("captcha_gated", "Капча / блок записи"),
+        ("chat_restricted", "Блок записи (Telegram)"),
+        ("bot_challenge", "Капча бота"),
+        ("bot_challenge_backoff", "Капча бота · пауза"),
         ("throttled", "Лимит исчерпан"),
     ],
 )
@@ -34,6 +37,21 @@ def test_channel_status_label_known(status: str, expected: str) -> None:
 
 def test_channel_status_label_unknown_falls_back() -> None:
     assert channel_status_label("weird") == "weird"
+
+
+def test_channel_status_split_states_have_distinct_icons() -> None:
+    # Ф2 #120: the three split states must render as three visually-distinct badges.
+    icons = [
+        channel_status_icon("chat_restricted"),
+        channel_status_icon("bot_challenge"),
+        channel_status_icon("bot_challenge_backoff"),
+    ]
+    assert all(icons)
+    assert len(set(icons)) == len(icons)
+
+
+def test_channel_status_icon_unknown_falls_back_to_generic() -> None:
+    assert channel_status_icon("weird") == "help_outline"
 
 
 @pytest.mark.parametrize(("health", "expected"), [("ready", "Готов"), ("blocked", "Заблокирован")])

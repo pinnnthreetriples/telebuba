@@ -134,7 +134,9 @@ async def test_channel_status_comments_off() -> None:
 
 
 @pytest.mark.asyncio
-async def test_channel_status_captcha_gated() -> None:
+async def test_channel_status_chat_restricted() -> None:
+    # Ф2 #120 state split + conservative remap: a joined-but-write-blocked row
+    # (the pre-Ф2 captcha_gated boolean shape) now derives as ``chat_restricted``.
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
     await create_account(AccountCreate(account_id="acc-1"))
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
@@ -144,7 +146,7 @@ async def test_channel_status_captcha_gated() -> None:
     board = await load_neurocomment_board(campaign.campaign_id)
 
     assert board is not None
-    assert board.channels[0].status == "captcha_gated"
+    assert board.channels[0].status == "chat_restricted"
 
 
 @pytest.mark.asyncio
