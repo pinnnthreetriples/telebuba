@@ -10,7 +10,7 @@ Outcome states (``OnboardingState``):
 - ``ready``          — joined and (MVP) assumed comment-able.
 - ``comments_off``   — channel has comments disabled; nothing to join.
 - ``join_by_request``— group is approval-gated; request sent, not a member.
-- ``captcha_gated``  — joined but writes are forbidden → treated as a gate.
+- ``chat_restricted``— joined but writes are Telegram-blocked (mute/restrict/ban).
 - ``joining``        — rate-limited; retry later, account not stuck.
 - ``failed``         — any other error.
 
@@ -40,8 +40,8 @@ from schemas.telegram_actions import (
 )
 from services.neurocomment import _seams
 
-# Join failed because writes are blocked → treat as a captcha/gate signal we
-# detect and skip (not solve). The set is small and intentional.
+# Join failed because writes are Telegram-blocked → chat_restricted (Ф2 #120):
+# unsolvable by the challenge solver. The set is small and intentional.
 _GATE_ERRORS = frozenset(
     {"ChatGuestSendForbiddenError", "ChatWriteForbiddenError", "UserBannedInChannelError"},
 )
@@ -143,14 +143,14 @@ async def _classify_join(
             state="join_by_request",
         )
     if result.error_type in _GATE_ERRORS:
-        # Rare join-time gate: joined, but writes forbidden → captcha/gate signal.
-        # NOTE: a plain join almost never surfaces these; primary entry-captcha
-        # detection is lazy, at comment time, in the engine (#118). We do NOT probe.
+        # Telegram-level write block (mute / restrict / ban) → chat_restricted (Ф2
+        # #120). Unsolvable by the challenge solver, so it is never invoked here;
+        # joined stays True (we are a member) but ready is False.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,
-            state="captcha_gated",
+            state="chat_restricted",
         )
     await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
     return AccountChannelOnboarding(

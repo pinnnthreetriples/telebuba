@@ -178,13 +178,13 @@ async def test_join_by_request_does_not_get_stuck(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
-async def test_join_gate_error_maps_to_captcha_gated(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A join that itself surfaces a write-forbidden error maps to ``captcha_gated``.
+async def test_join_gate_error_maps_to_chat_restricted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A join that surfaces a Telegram write-forbidden error maps to ``chat_restricted``.
 
-    This pins the error->state MAPPING only. Onboarding does NOT actively probe for
-    an entry captcha — a plain JoinChannelRequest does not raise write-forbidden, so
-    in practice this branch is the rare join-time case. Real entry-captcha detection
-    is lazy, at comment time, in the engine (#118); see decisions.md Ф0 update.
+    Ф2 (#120) state split: a write-block error is a Telegram-level restriction
+    (mute / ban), not a solvable guardian-bot challenge, so it lands in
+    ``chat_restricted`` (the solver is never invoked on these). This pins the
+    error->state MAPPING only; onboarding does not actively probe.
     """
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     read = _ReadStub(linked_chat_id=88, comments_enabled=True)
@@ -195,7 +195,7 @@ async def test_join_gate_error_maps_to_captcha_gated(monkeypatch: pytest.MonkeyP
 
     outcome = await onboarding.onboard_account_channel("acc-1", "@captcha")
 
-    assert outcome.state == "captcha_gated"
+    assert outcome.state == "chat_restricted"
     readiness = await fetch_readiness("acc-1", "@captcha")
     assert readiness is not None
     assert readiness.joined is True

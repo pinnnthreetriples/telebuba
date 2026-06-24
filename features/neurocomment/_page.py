@@ -40,8 +40,21 @@ _CHANNEL_STATUS_RU: dict[str, str] = {
     "ready": "Готов",
     "comments_off": "Комментарии выключены",
     "join_by_request": "Вступление по заявке",
-    "captcha_gated": "Капча / блок записи",
+    "chat_restricted": "Блок записи (Telegram)",
+    "bot_challenge": "Капча бота",
+    "bot_challenge_backoff": "Капча бота · пауза",
     "throttled": "Лимит исчерпан",
+}
+# Each status renders a distinct badge icon (Ф2 #120). ``help_outline`` is the
+# fallback for an unmapped status.
+_CHANNEL_STATUS_ICON: dict[str, str] = {
+    "ready": "check_circle",
+    "comments_off": "comments_disabled",
+    "join_by_request": "pending",
+    "chat_restricted": "block",
+    "bot_challenge": "smart_toy",
+    "bot_challenge_backoff": "hourglass_empty",
+    "throttled": "speed",
 }
 _HEALTH_RU: dict[str, str] = {"ready": "Готов", "blocked": "Заблокирован"}
 _CAMPAIGN_STATUS_RU: dict[str, str] = {
@@ -54,6 +67,11 @@ _CAMPAIGN_STATUS_RU: dict[str, str] = {
 def channel_status_label(status: str) -> str:
     """Russian label for a channel-row status (fallback: raw status)."""
     return _CHANNEL_STATUS_RU.get(status, status)
+
+
+def channel_status_icon(status: str) -> str:
+    """Badge icon for a channel-row status (fallback: a generic help icon)."""
+    return _CHANNEL_STATUS_ICON.get(status, "help_outline")
 
 
 def health_label(health: str) -> str:
@@ -311,6 +329,7 @@ def _render_channels_panel(board: NeurocommentBoard) -> None:  # pragma: no cove
                     ui.label(f"{row.ready_accounts}/{row.total_accounts}").classes(
                         "text-xs text-slate-500",
                     )
+                    ui.icon(channel_status_icon(row.status)).classes("text-base text-slate-500")
                     ui.badge(channel_status_label(row.status)).props("color=blue-grey")
 
 

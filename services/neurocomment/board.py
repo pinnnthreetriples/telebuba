@@ -174,16 +174,20 @@ def _channel_status(
     """Aggregate a channel's status from its readiness rows + linked-group cache.
 
     Precedence: a comments-off channel can never be commented on; otherwise an
-    account that's ready wins; then the failure modes (captcha gate when joined
-    but not captcha-passed, approval gate when not joined); ``throttled`` is the
+    account that's ready wins; then the failure modes (``chat_restricted`` when
+    joined but write-blocked, approval gate when not joined); ``throttled`` is the
     fallback when nothing is ready and no specific gate explains why.
+
+    Ф2 #120: the ``bot_challenge`` / ``bot_challenge_backoff`` states are part of
+    the enum but not yet derived here — the solver that produces them lands in a
+    later slice; this slice only renames the joined-but-blocked gate.
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
     if ready_count > 0:
         return "ready"
     if any(r.joined and not r.captcha_passed for r in rows):
-        return "captcha_gated"
+        return "chat_restricted"
     if any(not r.joined for r in rows):
         return "join_by_request"
     return "throttled"

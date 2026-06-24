@@ -53,6 +53,7 @@ _NEUROCOMMENT_TABLES = {
     "neurocomment_linked_groups",
     "neurocomment_readiness",
     "neurocomment_comments",
+    "neurocomment_challenges",
 }
 
 
@@ -95,6 +96,64 @@ def test_neurocomment_comment_indexes_created() -> None:
             int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
         }
     assert 13 in versions
+
+
+def test_challenges_table_indexes_and_column_created() -> None:
+    """Migration #14 lands the audit table, both indexes, and solver_enabled (v14)."""
+    engine = _get_engine()
+    inspector = inspect(engine)
+    assert "neurocomment_challenges" in inspector.get_table_names()
+    index_names = {ix["name"] for ix in inspector.get_indexes("neurocomment_challenges")}
+    assert {
+        "ix_nc_challenges_hash_outcome",
+        "ix_nc_challenges_account_channel_decided",
+    } <= index_names
+    with engine.connect() as connection:
+        campaign_columns = {
+            row["name"]
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_campaigns)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "solver_enabled" in campaign_columns
+    assert 14 in versions
+
+
+@pytest.mark.asyncio
+async def test_migration_14_idempotent_on_database_with_neurocomment_data() -> None:
+    """Migration #14's body re-runs cleanly over a populated DB (guards no-op)."""
+    from core.migrations import apply_migrations  # noqa: PLC0415
+
+    await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)
+
+    engine = _get_engine()
+    # Drop the v14 stamp so the body actually re-executes against the populated DB
+    # (a plain re-run would skip it as already-applied — see test_migrations.py).
+    with engine.begin() as connection:
+        connection.exec_driver_sql("DELETE FROM schema_version WHERE version = 14")
+    apply_migrations(engine)  # body re-runs; guards must make it a no-op, not raise
+
+    with engine.connect() as connection:
+        campaign_columns = {
+            row["name"]
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_campaigns)",
+            ).mappings()
+        }
+        campaign_count = connection.exec_driver_sql(
+            "SELECT COUNT(*) FROM neurocomment_campaigns",
+        ).scalar_one()
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "solver_enabled" in campaign_columns
+    assert int(campaign_count) == 1
+    assert 14 in versions
 
 
 @pytest.mark.asyncio

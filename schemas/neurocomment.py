@@ -184,7 +184,7 @@ OnboardingState = Literal[
     "ready",
     "comments_off",
     "join_by_request",
-    "captcha_gated",
+    "chat_restricted",
     "joining",
     "failed",
 ]
@@ -218,7 +218,9 @@ ChannelStatus = Literal[
     "ready",
     "comments_off",
     "join_by_request",
-    "captcha_gated",
+    "chat_restricted",
+    "bot_challenge",
+    "bot_challenge_backoff",
     "throttled",
 ]
 
