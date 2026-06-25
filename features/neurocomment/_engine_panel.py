@@ -19,22 +19,23 @@ import dataclasses
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from nicegui import context, ui
+from nicegui import ui
 
 from features.neurocomment._logpanel import LogPanelState, refresh_logs, render_log_panel
 from features.neurocomment._page import (
     PIPELINE_STEPS,
     FleetActivity,
+    PageContext,
+    count_ready_accounts_across_active_campaigns,
     fleet_activity,
     live_signature,
     relative_time,
     runtime_status_text,
     start_block_reason,
 )
+from schemas.neurocomment import NeurocommentRuntimeStatus
 from services.accounts import list_listener_accounts
 from services.neurocomment import (
-    load_neurocomment_board,
-    neurocomment_runtime_status,
     start_neurocomment,
     stop_neurocomment,
 )
@@ -42,9 +43,6 @@ from services.neurocomment import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from schemas.neurocomment import NeurocommentRuntimeStatus
-
-_PANEL_POLL_SECONDS = 4.0
 _ZERO_ACTIVITY = FleetActivity(0, 0, 0, 0, 0, 0)
 
 
@@ -58,11 +56,11 @@ class _PanelState:
     flash_today: bool = False
 
 
-async def render_engine_panel(campaign_id: str) -> None:  # pragma: no cover
+async def render_engine_panel(ctx: PageContext) -> None:  # pragma: no cover
     """Render the engine hero card with the live rail, counters, and controls."""
     accounts = (await list_listener_accounts()).accounts
     listener_options = {acc.account_id: (acc.label or acc.account_id) for acc in accounts}
-    state = await _load_state(campaign_id)
+    state = _load_state_from_ctx(ctx)
 
     with ui.card().classes("w-full p-5 gap-4"):
         with ui.row().classes("w-full items-center justify-between"):
@@ -101,7 +99,7 @@ async def render_engine_panel(campaign_id: str) -> None:  # pragma: no cover
             # wholesale (the refreshables re-read ``state`` on refresh). Anti-flicker:
             # refresh the live section only when its digest changed (no 4 s blink).
             nonlocal state
-            fresh = await _load_state(campaign_id)
+            fresh = _load_state_from_ctx(ctx)
             flipped = fresh.status.running != state.status.running
             fresh.flash_today = fresh.activity.comments_today > state.activity.comments_today
             live_changed = live_signature(
@@ -116,24 +114,23 @@ async def render_engine_panel(campaign_id: str) -> None:  # pragma: no cover
             if log_state.expanded and await refresh_logs(log_state):
                 log_section.refresh()
 
+        ctx.on_reload_callbacks.append(reload)
+
         ui.separator()
         _render_controls(
             listener_options,
             state.status.listener_account_id,
             reload,
-            lambda: state.activity.ready_accounts,
+            count_ready_accounts_across_active_campaigns,
         )
         log_section()
-
-    timer = ui.timer(_PANEL_POLL_SECONDS, reload)
-    context.client.on_disconnect(lambda: timer.cancel(with_current_invocation=True))
 
 
 def _render_controls(
     listener_options: dict[str, str],
     initial_listener: str | None,
     reload: Callable[[], Awaitable[None]],
-    ready_accounts: Callable[[], int],
+    ready_accounts: Callable[[], Awaitable[int]],
 ) -> None:  # pragma: no cover
     """Listener select + Start/Stop; both buttons refresh the panel via ``reload``.
 
@@ -155,7 +152,8 @@ def _render_controls(
         ).classes("text-xs text-amber-600")
 
     async def on_start() -> None:
-        reason = start_block_reason(ready_accounts(), has_listener=bool(listener_select.value))
+        ready_cnt = await ready_accounts()
+        reason = start_block_reason(ready_cnt, has_listener=bool(listener_select.value))
         if reason:
             ui.notify(reason, type="warning")
             return
@@ -190,15 +188,10 @@ def _render_controls(
     ).classes("text-xs text-slate-500")
 
 
-async def _load_state(campaign_id: str) -> _PanelState:  # pragma: no cover
-    """Fetch runtime status + the board and reduce them to the panel's render inputs.
-
-    ponytail: this re-loads the same board the work view polls (≈11 bulk reads each,
-    4 s apart) — a deliberate doubling on a single-operator local SQLite page. Share
-    one timer/board between the two panels only if it ever shows up as a real cost.
-    """
-    status = await neurocomment_runtime_status()
-    board = await load_neurocomment_board(campaign_id)
+def _load_state_from_ctx(ctx: PageContext) -> _PanelState:  # pragma: no cover
+    """Reduce pre-loaded status + board from PageContext to the panel's render inputs."""
+    status = ctx.status if ctx.status is not None else NeurocommentRuntimeStatus(running=False)
+    board = ctx.board
     activity = fleet_activity(board) if board is not None else _ZERO_ACTIVITY
     last_iso = (
         max((c.last_comment_at for c in board.accounts if c.last_comment_at), default=None)
@@ -214,11 +207,14 @@ async def _load_state(campaign_id: str) -> _PanelState:  # pragma: no cover
 
 def _render_rail(*, running: bool) -> None:  # pragma: no cover
     """The six-step pipeline rail; ``tb-nc-on`` switches it from calm to animated."""
-    rail_cls = "tb-nc-rail w-full items-start gap-0" + (" tb-nc-on" if running else "")
-    with ui.row().classes(rail_cls):
+    rail_cls = (
+        "tb-nc-rail w-full flex flex-col md:flex-row items-center md:items-start "
+        "gap-1 md:gap-0" + (" tb-nc-on" if running else "")
+    )
+    with ui.element("div").classes(rail_cls):
         for idx, step in enumerate(PIPELINE_STEPS):
             if idx > 0:
-                ui.element("div").classes("tb-nc-conn flex-1").style("margin-top: 20px")
+                ui.element("div").classes("tb-nc-conn")
             with ui.column().classes("items-center gap-1 shrink-0"):
                 circle_cls = (
                     "bg-indigo-600 text-white shadow" if running else "bg-slate-100 text-slate-400"

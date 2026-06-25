@@ -638,3 +638,32 @@ async def test_campaign_spam_probe_failure_does_not_abort(monkeypatch: pytest.Mo
 
     # A spam-probe failure is logged, never fatal — onboarding still joins.
     assert [o.state for o in result.outcomes] == ["ready"]
+
+
+@pytest.mark.asyncio
+async def test_campaign_onboarding_progress_callback(monkeypatch: pytest.MonkeyPatch) -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    progress_messages: list[str] = []
+
+    def on_progress(msg: str) -> None:
+        progress_messages.append(msg)
+
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id, on_progress=on_progress)
+
+    assert len(progress_messages) > 0
+    assert any("Запуск онбординга" in msg for msg in progress_messages)
+    assert any("Проверка спам-статуса" in msg for msg in progress_messages)
+    assert any("Разрешение группы обсуждения" in msg for msg in progress_messages)
+    assert any("вступление в группу" in msg for msg in progress_messages)
+    assert any("Результат для acc-1" in msg for msg in progress_messages)
+    assert any("Онбординг завершен" in msg for msg in progress_messages)

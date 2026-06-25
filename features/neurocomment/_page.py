@@ -7,16 +7,24 @@ covered in ``tests/features/test_neurocomment_labels.py``.
 
 from __future__ import annotations
 
+import asyncio
 import dataclasses
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
-from nicegui import ui
+from nicegui import context, ui
 
+from core.logging import log_event
 from features.shared import TOP_BAR_CLASSES, render_nav
-from services.neurocomment import list_campaigns
+from services.neurocomment import (
+    list_campaigns,
+    load_neurocomment_board,
+    neurocomment_runtime_status,
+)
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from schemas.challenge import ChallengeRow
     from schemas.neurocomment import (
         CampaignList,
@@ -274,6 +282,49 @@ def live_signature(
     return (status.running, status.active_channels, *activity, last_comment)
 
 
+class PageContext:
+    """Client session context holding pre-loaded board and status for shared polling."""
+
+    def __init__(self, campaign_id: str) -> None:
+        self.campaign_id = campaign_id
+        self.status: NeurocommentRuntimeStatus | None = None
+        self.board: NeurocommentBoard | None = None
+        self.on_reload_callbacks: list[Callable[[], Awaitable[None]]] = []
+
+    async def update(self) -> None:
+        """Fetch fresh runtime status and campaign board in a single batch."""
+        self.status = await neurocomment_runtime_status()
+        self.board = await load_neurocomment_board(self.campaign_id)
+        for cb in list(self.on_reload_callbacks):
+            try:
+                if asyncio.iscoroutinefunction(cb):
+                    await cb()
+                else:
+                    cb()
+            except Exception as exc:  # noqa: BLE001
+                await log_event(
+                    "ERROR",
+                    "neurocomment_ui_reload_callback_failed",
+                    extra={"error_type": type(exc).__name__, "error_message": str(exc)},
+                )
+
+
+async def count_ready_accounts_across_active_campaigns() -> int:
+    """Count ready accounts across all active campaigns to avoid start block issues."""
+    campaign_list = await list_campaigns()
+    active_campaigns = [c for c in campaign_list.campaigns if c.status == "active"]
+    ready_count = 0
+    seen_accounts = set()
+    for campaign in active_campaigns:
+        board = await load_neurocomment_board(campaign.campaign_id)
+        if board:
+            for acc in board.accounts:
+                if acc.health == "ready" and acc.account_id not in seen_accounts:
+                    seen_accounts.add(acc.account_id)
+                    ready_count += 1
+    return ready_count
+
+
 def _build_header() -> None:  # pragma: no cover
     with ui.row().classes(TOP_BAR_CLASSES):
         render_nav("/neurocomment")
@@ -291,7 +342,7 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
     )
     from features.neurocomment._workview import render_work_view  # noqa: PLC0415
 
-    ui.query("body").classes("bg-slate-50 text-slate-950")
+    ui.query("body").classes("bg-slate-50 dark:bg-slate-900 text-slate-950 dark:text-slate-50")
     _build_header()
     with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
         ui.label("Нейрокомментинг").classes("text-xl font-semibold")
@@ -305,20 +356,24 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
             render_how_it_works()
             return
 
-        # Two refreshables re-rendered on a campaign switch: the per-campaign setup
-        # (beside the global create form) and the work area (engine panel + board).
+        # Shared Page Context for polling data
+        ctx = PageContext(campaign_list.campaigns[-1].campaign_id)
+        await ctx.update()
+
+        # Engine panel is now global and rendered at the top level
+        await render_engine_panel(ctx)
+
         @ui.refreshable
         async def setup_section() -> None:
-            await render_setup(switcher.value)
+            await render_setup(ctx.campaign_id)
 
         @ui.refreshable
         async def work_section() -> None:
-            await render_engine_panel(switcher.value)
-            await render_work_view(switcher.value)
+            await render_work_view(ctx)
 
         def on_switch() -> None:
-            # Named (not ``on_change=*.refresh``) so the select's change-event arg
-            # isn't forwarded into the zero-arg refreshables.
+            ctx.campaign_id = switcher.value
+            ctx.on_reload_callbacks.clear()  # prevent stale callback accumulation
             setup_section.refresh()
             work_section.refresh()
 
@@ -340,6 +395,10 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
                 await setup_section()
         await work_section()
         render_how_it_works()
+
+        # Page-level timer coordinates all polling
+        timer = ui.timer(4.0, ctx.update)
+        context.client.on_disconnect(lambda: timer.cancel(with_current_invocation=True))
 
 
 def _reload_page() -> None:  # pragma: no cover
