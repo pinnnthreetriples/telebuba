@@ -80,22 +80,28 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
     global_enabled = settings.neurocomment.challenge_solver_enabled
     default_text = "ВКЛ" if global_enabled else "ВЫКЛ"
     solver_options = {
-        "follow": f"Капчи: по настройке ({default_text})",
-        "on": "Капчи: ВКЛ",
-        "off": "Капчи: ВЫКЛ",
+        "follow": f"По настройке ({default_text})",
+        "on": "Включено",
+        "off": "Выключено",
     }
     with ui.card().classes(  # noqa: SIM117
-        "w-full p-3 gap-3 border border-slate-200 dark:border-zinc-800 "
+        "w-full p-2 px-3 gap-2 border border-slate-200 dark:border-zinc-800 "
         "bg-slate-50 dark:bg-zinc-900 rounded-xl shadow-sm",
     ):
-        with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
-            with ui.row().classes("items-center gap-3 flex-wrap"):
-                ui.icon("vpn_key").classes("text-lg text-indigo-500")
-                ui.label("Решение капч").classes("text-sm font-semibold")
+        with ui.row().classes("w-full items-center justify-between gap-2 flex-wrap"):
+            with ui.row().classes("items-center gap-2 flex-wrap"):
+                ui.icon("vpn_key").classes("text-base text-indigo-500")
+                ui.label("Решение капч").classes("text-xs font-semibold")
+                help_icon = ui.icon("help_outline").classes("text-slate-400 text-sm cursor-help")
+                help_icon.tooltip(
+                    "Настройка автоматического решения приветственных капч ботов "
+                    "в группах обсуждения каналов при онбординге или отправке комментариев."
+                )
                 switch = (
                     ui.select(solver_options, value=solver_switch_key(board.solver_enabled))
                     .props("dense outlined options-dense")
-                    .classes("max-w-[240px]")
+                    .classes("w-[170px]")
+                    .style("font-size: 0.75rem;")
                 )
 
                 async def on_switch(event: object) -> None:
@@ -109,9 +115,10 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
                 window = (
                     ui.select(_COUNTER_WINDOWS, value="all")
                     .props("dense outlined options-dense")
-                    .classes("max-w-[130px]")
+                    .classes("w-[100px]")
+                    .style("font-size: 0.75rem;")
                 )
-                counts = ui.label("").classes("text-xs text-slate-500 tabular-nums")
+                counts = ui.label("").classes("text-[11px] text-slate-500 tabular-nums")
                 counts.tooltip("✓ решено · ✗ не решено · ⊘ отказ · ⏳ в ожидании")
 
                 async def reload_counts() -> None:
@@ -129,20 +136,25 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
 
 
 def _render_channels_panel(board: NeurocommentBoard) -> None:  # pragma: no cover
-    with ui.card().classes("w-[360px] p-3 gap-2"):
-        ui.label("Каналы").classes("text-base font-semibold")
+    with ui.card().classes(
+        "w-[300px] p-2 px-3 gap-1.5 border border-slate-200 dark:border-zinc-800 "
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm",
+    ):
+        ui.label("Каналы").classes("text-xs font-semibold")
         if not board.channels:
             ui.label("Каналов пока нет").classes("text-xs text-slate-400")
         for row in board.channels:
             with ui.column().classes("w-full gap-0"):
                 with ui.row().classes("w-full items-center justify-between"):
-                    ui.label(row.channel).classes("text-sm")
-                    with ui.row().classes("items-center gap-2"):
+                    ui.label(row.channel).classes("text-xs")
+                    with ui.row().classes("items-center gap-1.5"):
                         ui.label(f"{row.ready_accounts}/{row.total_accounts}").classes(
-                            "text-xs text-slate-500",
+                            "text-[10px] text-slate-500",
                         )
-                        ui.icon(channel_status_icon(row.status)).classes("text-base text-slate-500")
-                        ui.badge(channel_status_label(row.status)).props("color=blue-grey")
+                        ui.icon(channel_status_icon(row.status)).classes("text-sm text-slate-500")
+                        ui.badge(channel_status_label(row.status)).props("color=blue-grey").classes(
+                            "text-[9px] py-0.5 px-1",
+                        )
                 if row.status == "bot_challenge":
                     _render_challenge_drilldown(row.channel)
 
@@ -152,7 +164,7 @@ def _render_challenge_drilldown(channel: str) -> None:  # pragma: no cover
 
     Loads on demand (not on every board poll) so the 4 s refresh stays cheap.
     """
-    expansion = ui.expansion("Капчи бота").props("dense").classes("w-full text-xs")
+    expansion = ui.expansion("Капчи бота").props("dense").classes("w-full text-[11px]")
     with expansion:
         rows_box = ui.column().classes("w-full gap-0")
 
@@ -161,10 +173,10 @@ def _render_challenge_drilldown(channel: str) -> None:  # pragma: no cover
         rows_box.clear()
         with rows_box:
             if not result.rows:
-                ui.label("Записей пока нет").classes("text-xs text-slate-400")
+                ui.label("Записей пока нет").classes("text-[10px] text-slate-400")
             for r in result.rows:
                 with ui.row().classes("w-full items-center justify-between gap-2"):
-                    ui.label(challenge_summary(r)).classes("text-xs text-slate-600")
+                    ui.label(challenge_summary(r)).classes("text-[10px] text-slate-600")
                     with ui.row().classes("gap-1"):
                         ui.button(
                             icon="refresh",
@@ -193,7 +205,7 @@ async def _on_skip(account_id: str, channel: str) -> None:  # pragma: no cover
 
 
 def _render_accounts_panel(board: NeurocommentBoard) -> None:  # pragma: no cover
-    with ui.column().classes("flex-1 min-w-[360px] gap-3"):
+    with ui.column().classes("flex-1 min-w-[360px] gap-2"):
         if not board.accounts:
             ui.label("Аккаунтов в кампании пока нет").classes("text-xs text-slate-400")
         for card in board.accounts:
@@ -204,20 +216,23 @@ def _render_account_card(card) -> None:  # noqa: ANN001  # pragma: no cover
     # Thin left accent by health (green ready / red blocked) — visual cohesion with
     # the engine panel + at-a-glance scanning, mirroring the warming card stripe.
     accent = "border-emerald-400" if card.health == "ready" else "border-red-300"
-    with ui.card().classes(f"w-full p-3 gap-1 border-l-4 {accent}"):
+    with ui.card().classes(
+        f"w-full p-2 px-3 gap-0.5 border border-slate-200 dark:border-zinc-800 "
+        f"bg-white dark:bg-zinc-900 rounded-xl shadow-sm border-l-4 {accent}",
+    ):
         with ui.row().classes("w-full items-center justify-between"):
-            ui.label(card.label).classes("text-sm font-semibold")
+            ui.label(card.label).classes("text-xs font-semibold")
             ui.badge(health_label(card.health)).props(
                 f"color={'green' if card.health == 'ready' else 'red'}",
-            )
+            ).classes("text-[9px] py-0.5 px-1")
         ui.label(
             f"Комментариев за час: {card.comments_last_hour}/{card.max_comments_per_hour} · "
             f"за сутки: {card.comments_today}",
-        ).classes("text-xs text-slate-600")
+        ).classes("text-[10px] text-slate-600")
         ui.label(
             f"Доверие: {card.trust_score} ({card.trust_band})"
-            + (f" · спам: {card.spam_status}" if card.spam_status else ""),
-        ).classes("text-xs text-slate-500")
+            + (f" · spam: {card.spam_status}" if card.spam_status else ""),
+        ).classes("text-[10px] text-slate-500")
         if card.last_comment_at:
             stamp = card.last_comment_at[:16].replace("T", " ")
-            ui.label(f"Последний комментарий: {stamp}").classes("text-xs text-slate-400")
+            ui.label(f"Последний комментарий: {stamp}").classes("text-[9px] text-slate-400")
