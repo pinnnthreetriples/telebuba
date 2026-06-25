@@ -360,8 +360,9 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
         ctx = PageContext(campaign_list.campaigns[-1].campaign_id)
         await ctx.update()
 
-        # Engine panel is now global and rendered at the top level
-        await render_engine_panel(ctx)
+        @ui.refreshable
+        async def engine_section() -> None:
+            await render_engine_panel(ctx)
 
         @ui.refreshable
         async def setup_section() -> None:
@@ -374,6 +375,7 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
         def on_switch() -> None:
             ctx.campaign_id = switcher.value
             ctx.on_reload_callbacks.clear()  # prevent stale callback accumulation
+            engine_section.refresh()
             setup_section.refresh()
             work_section.refresh()
 
@@ -393,6 +395,10 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
                 await render_create_campaign(on_created=_reload_page, expanded=False)
             with ui.column().classes("flex-1 min-w-[340px]"):
                 await setup_section()
+
+        # Engine panel is now global and rendered below the switcher and setup blocks
+        await engine_section()
+
         await work_section()
         render_how_it_works()
 

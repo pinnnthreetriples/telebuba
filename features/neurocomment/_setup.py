@@ -60,43 +60,51 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
 
 async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa: ANN001  # pragma: no cover
     """Collapsible «Новая кампания» form; open by default only when none exist yet."""
-    expansion = ui.expansion("Новая кампания", icon="add_circle", value=expanded)
-    expansion.classes("w-full").props("dense")
-    with expansion, ui.column().classes("w-full p-2 gap-3"):
-        name = ui.input(label="Название").props("dense outlined").classes("w-full")
-        prompt = (
-            ui.textarea(
-                label="Промпт (упоминание продукта живёт здесь)",
-                placeholder="Например: ненавязчиво упомяни сервис X как читатель…",
+    with ui.card().classes(
+        "w-full p-0 border border-slate-200 dark:border-zinc-800 "
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm overflow-hidden",
+    ):
+        expansion = ui.expansion("Новая кампания", icon="add_circle", value=expanded)
+        expansion.classes("w-full").props("dense")
+        with expansion, ui.column().classes("w-full p-3 pt-0 gap-2"):
+            name = ui.input(label="Название").props("dense outlined").classes("w-full")
+            prompt = (
+                ui.textarea(
+                    label="Промпт (упоминание продукта живёт здесь)",
+                    placeholder="Например: ненавязчиво упомяни сервис X как читатель…",
+                )
+                .props("dense outlined autogrow")
+                .classes("w-full")
             )
-            .props("dense outlined autogrow")
-            .classes("w-full")
-        )
-        ui.label(
-            f"Комментарий не длиннее {settings.neurocomment.comment_max_words} слов "
-            "(настраивается в конфиге).",
-        ).classes("text-xs text-slate-500")
+            ui.label(
+                f"Комментарий не длиннее {settings.neurocomment.comment_max_words} слов "
+                "(настраивается в конфиге).",
+            ).classes("text-xs text-slate-500")
 
-        async def on_create() -> None:
-            if not (name.value or "").strip() or not (prompt.value or "").strip():
-                ui.notify("Заполните название и промпт", type="warning")
-                return
-            data = CampaignCreate(name=name.value.strip(), prompt=prompt.value.strip())
-            await create_campaign(data)
-            ui.notify("Кампания создана", type="positive")
-            on_created()
+            async def on_create() -> None:
+                if not (name.value or "").strip() or not (prompt.value or "").strip():
+                    ui.notify("Заполните название и промпт", type="warning")
+                    return
+                data = CampaignCreate(name=name.value.strip(), prompt=prompt.value.strip())
+                await create_campaign(data)
+                ui.notify("Кампания создана", type="positive")
+                on_created()
 
-        ui.button("Создать кампанию", icon="add", on_click=on_create).props("color=primary")
+            ui.button("Создать кампанию", icon="add", on_click=on_create).props("color=primary")
 
 
 async def render_setup(campaign_id: str) -> None:  # pragma: no cover
     """Collapsible «Настройка» block: channel pool + account picker + onboard."""
-    expansion = ui.expansion("Настройка: каналы и аккаунты", icon="tune", value=True)
-    expansion.classes("w-full").props("dense")
-    with expansion, ui.column().classes("w-full p-2 gap-4"):
-        await _render_channel_pool(campaign_id)
-        await _render_account_picker(campaign_id)
-        await _render_actions(campaign_id)
+    with ui.card().classes(
+        "w-full p-0 border border-slate-200 dark:border-zinc-800 "
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm overflow-hidden",
+    ):
+        expansion = ui.expansion("Настройка: каналы и аккаунты", icon="tune", value=True)
+        expansion.classes("w-full").props("dense")
+        with expansion, ui.column().classes("w-full p-3 pt-0 gap-3"):
+            await _render_channel_pool(campaign_id)
+            await _render_account_picker(campaign_id)
+            await _render_actions(campaign_id)
 
 
 async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
