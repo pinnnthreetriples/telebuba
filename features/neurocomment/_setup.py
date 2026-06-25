@@ -145,6 +145,9 @@ async def _render_account_picker(campaign_id: str) -> None:  # pragma: no cover
     ui.label("Аккаунты").classes("text-sm font-medium")
     accounts = (await list_accounts()).accounts
     assigned = {link.account_id for link in (await list_campaign_accounts(campaign_id)).links}
+    min_days = settings.neurocomment.warmed_min_days
+    warmed = (await list_warmed_accounts(min_days)).accounts
+    warmed_ids = {acc.account_id for acc in warmed}
 
     async def on_toggle(account_id: str, checked: bool) -> None:  # noqa: FBT001
         if checked:
@@ -161,24 +164,53 @@ async def _render_account_picker(campaign_id: str) -> None:  # pragma: no cover
         return
     with ui.row().classes("w-full gap-x-4 gap-y-1 flex-wrap"):
         for acc in accounts:
-            ui.checkbox(
-                acc.label or acc.account_id,
+            is_warmed = acc.account_id in warmed_ids
+            label = acc.label or acc.account_id
+            if is_warmed:
+                label += " 🔥"
+            checkbox = ui.checkbox(
+                label,
                 value=acc.account_id in assigned,
                 on_change=lambda e, aid=acc.account_id: on_toggle(aid, e.value),
             ).props("dense")
+            if is_warmed:
+                checkbox.classes("text-emerald-600 dark:text-emerald-400 font-medium")
+                checkbox.tooltip(f"Прогрет ({min_days}+ дней)")
 
 
 async def _render_actions(campaign_id: str) -> None:  # pragma: no cover
-    async def on_onboard() -> None:
-        # Onboarding can take many seconds (pre-join + readiness probe per pair); give
-        # immediate feedback + a button spinner so the operator doesn't think it hung.
-        ui.notify("Онбординг запущен…", type="info")
-        button.props("loading")
-        try:
-            result = await onboard_campaign(campaign_id)
-        finally:
-            button.props(remove="loading")
-        ready = sum(1 for o in result.outcomes if o.state == "ready")
-        ui.notify(f"Онбординг: готово пар — {ready} из {len(result.outcomes)}", type="info")
+    with ui.column().classes("w-full gap-2"):
 
-    button = ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
+        async def on_onboard() -> None:
+            log_panel.set_visibility(True)
+            log_widget.clear()
+            log_widget.push("Инициализация онбординга...")
+            ui.notify("Онбординг запущен…", type="info")
+            button.props("loading")
+            try:
+                result = await onboard_campaign(campaign_id, on_progress=log_widget.push)
+            finally:
+                button.props(remove="loading")
+            ready = sum(1 for o in result.outcomes if o.state == "ready")
+            ui.notify(f"Онбординг: готово пар — {ready} из {len(result.outcomes)}", type="info")
+
+        with ui.row().classes("w-full items-center gap-2"):
+            button = ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
+            log_toggle = (
+                ui.button(
+                    icon="terminal",
+                    on_click=lambda: log_panel.set_visibility(not log_panel.visible),
+                )
+                .props("flat round dense")
+                .classes("text-slate-400")
+            )
+            log_toggle.tooltip("Показать/скрыть лог онбординга")
+
+        with ui.column().classes(
+            "w-full border border-slate-200 dark:border-zinc-800 rounded bg-slate-950 p-2 gap-1",
+        ) as log_panel:
+            log_panel.set_visibility(False)
+            ui.label("Лог онбординга").classes("text-xs text-slate-400 font-mono")
+            log_widget = ui.log().classes(
+                "w-full h-32 font-mono text-xs text-slate-100 bg-transparent border-0",
+            )

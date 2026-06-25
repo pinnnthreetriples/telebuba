@@ -11,9 +11,11 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from nicegui import context, ui
+from nicegui import ui
 
+from core.config import settings
 from features.neurocomment._page import (
+    PageContext,
     board_content_signature,
     challenge_summary,
     channel_status_icon,
@@ -25,7 +27,6 @@ from features.neurocomment._page import (
 from services.neurocomment import (
     count_challenge_outcomes,
     list_channel_challenges,
-    load_neurocomment_board,
     retry_pair,
     set_solver_enabled,
     skip_pair,
@@ -34,45 +35,33 @@ from services.neurocomment import (
 if TYPE_CHECKING:
     from schemas.neurocomment import NeurocommentBoard
 
-_BOARD_POLL_SECONDS = 4.0
-# Failed-challenge rows shown in a channel's drill-down (Ф2 #145).
 _CHALLENGE_DRILLDOWN_LIMIT = 10
 # Header-counter time windows → RU label.
 _COUNTER_WINDOWS: dict[str, str] = {"today": "Сегодня", "7d": "7 дней", "all": "Всё время"}
 # Per-campaign solver switch key ↔ solver_enabled value.
 _SOLVER_SWITCH: dict[str, bool | None] = {"follow": None, "on": True, "off": False}
-_SOLVER_SWITCH_RU: dict[str, str] = {
-    "follow": "Капчи: по настройке",
-    "on": "Капчи: ВКЛ",
-    "off": "Капчи: ВЫКЛ",
-}
 
 
-async def render_work_view(campaign_id: str) -> None:  # pragma: no cover
-    board = await load_neurocomment_board(campaign_id)
+async def render_work_view(ctx: PageContext) -> None:  # pragma: no cover
     container = ui.column().classes("w-full gap-4")
-    sig = {"value": board_content_signature(board)}
+    sig = {"value": board_content_signature(ctx.board)}
 
     @ui.refreshable
     def render() -> None:
-        _render_board(board)
+        _render_board(ctx.board)
 
     async def reload() -> None:
-        # Anti-flicker: poll into the store, re-render only when the content digest
-        # changed (an idle board no longer blinks every poll).
-        nonlocal board
-        fresh = await load_neurocomment_board(campaign_id)
-        new_sig = board_content_signature(fresh)
+        # Anti-flicker: reload from ctx, re-render only when the content digest changed
+        new_sig = board_content_signature(ctx.board)
         if new_sig == sig["value"]:
             return
         sig["value"] = new_sig
-        board = fresh
         render.refresh()
+
+    ctx.on_reload_callbacks.append(reload)
 
     with container:
         render()
-    board_timer = ui.timer(_BOARD_POLL_SECONDS, reload)
-    context.client.on_disconnect(lambda: board_timer.cancel(with_current_invocation=True))
 
 
 def _render_board(board: NeurocommentBoard | None) -> None:  # pragma: no cover
@@ -88,37 +77,55 @@ def _render_board(board: NeurocommentBoard | None) -> None:  # pragma: no cover
 def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cover
     """Minimalist «Капчи» strip: solver switch + window toggle + inline outcome counters."""
     channels = [row.channel for row in board.channels]
-    with ui.row().classes("w-full items-center gap-3 flex-wrap"):
-        switch = (
-            ui.select(_SOLVER_SWITCH_RU, value=solver_switch_key(board.solver_enabled))
-            .props("dense outlined options-dense")
-            .classes("max-w-[190px]")
-        )
+    global_enabled = settings.neurocomment.challenge_solver_enabled
+    default_text = "ВКЛ" if global_enabled else "ВЫКЛ"
+    solver_options = {
+        "follow": f"Капчи: по настройке ({default_text})",
+        "on": "Капчи: ВКЛ",
+        "off": "Капчи: ВЫКЛ",
+    }
+    with ui.card().classes(  # noqa: SIM117
+        "w-full p-3 gap-3 border border-slate-200 dark:border-zinc-800 "
+        "bg-slate-50 dark:bg-zinc-900 rounded-xl shadow-sm",
+    ):
+        with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
+            with ui.row().classes("items-center gap-3 flex-wrap"):
+                ui.icon("vpn_key").classes("text-lg text-indigo-500")
+                ui.label("Решение капч").classes("text-sm font-semibold")
+                switch = (
+                    ui.select(solver_options, value=solver_switch_key(board.solver_enabled))
+                    .props("dense outlined options-dense")
+                    .classes("max-w-[240px]")
+                )
 
-        async def on_switch(event: object) -> None:
-            key = str(getattr(event, "value", "follow"))
-            await set_solver_enabled(board.campaign_id, _SOLVER_SWITCH[key])
-            ui.notify("Настройка солвера сохранена", type="positive")
+                async def on_switch(event: object) -> None:
+                    key = str(getattr(event, "value", "follow"))
+                    await set_solver_enabled(board.campaign_id, _SOLVER_SWITCH[key])
+                    ui.notify("Настройка солвера сохранена", type="positive")
 
-        switch.on_value_change(on_switch)
-        window = (
-            ui.select(_COUNTER_WINDOWS, value="all")
-            .props("dense outlined options-dense")
-            .classes("max-w-[130px]")
-        )
-        counts = ui.label("").classes("text-xs text-slate-500 tabular-nums")
-        counts.tooltip("✓ решено · ✗ не решено · ⊘ отказ · ⏳ в ожидании")
+                switch.on_value_change(on_switch)
 
-        async def reload_counts() -> None:
-            result = await count_challenge_outcomes(
-                channels, counter_window_since(window.value, datetime.now(UTC))
-            )
-            counts.set_text(
-                f"✓ {result.solved} · ✗ {result.failed} · ⊘ {result.give_up} · ⏳ {result.pending}",
-            )
+            with ui.row().classes("items-center gap-2 flex-wrap"):
+                window = (
+                    ui.select(_COUNTER_WINDOWS, value="all")
+                    .props("dense outlined options-dense")
+                    .classes("max-w-[130px]")
+                )
+                counts = ui.label("").classes("text-xs text-slate-500 tabular-nums")
+                counts.tooltip("✓ решено · ✗ не решено · ⊘ отказ · ⏳ в ожидании")
 
-        window.on_value_change(lambda _e: reload_counts())
-        ui.timer(0.1, reload_counts, once=True)
+                async def reload_counts() -> None:
+                    result = await count_challenge_outcomes(
+                        channels, counter_window_since(window.value, datetime.now(UTC))
+                    )
+                    msg = (
+                        f"✓ {result.solved} · ✗ {result.failed} · "
+                        f"⊘ {result.give_up} · ⏳ {result.pending}"
+                    )
+                    counts.set_text(msg)
+
+                window.on_value_change(lambda _e: reload_counts())
+                ui.timer(0.1, reload_counts, once=True)
 
 
 def _render_channels_panel(board: NeurocommentBoard) -> None:  # pragma: no cover

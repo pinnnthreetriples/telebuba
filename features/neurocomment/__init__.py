@@ -36,6 +36,11 @@ _NC_CSS = """
     50% { background-position: 100% 50%; opacity: 1; }
     100% { background-position: 0% 50%; opacity: 0.5; }
 }
+@keyframes tb-nc-flow-v {
+    0% { background-position: 50% 0%; opacity: 0.5; }
+    50% { background-position: 50% 100%; opacity: 1; }
+    100% { background-position: 50% 0%; opacity: 0.5; }
+}
 @keyframes tb-nc-wave {
     0%, 100% { box-shadow: 0 0 0 0 rgba(99, 102, 241, 0); }
     50% { box-shadow: 0 0 0 7px rgba(99, 102, 241, 0.16); }
@@ -54,19 +59,43 @@ _NC_CSS = """
     100% { background-color: transparent; }
 }
 .tb-nc-conn {
-    height: 3px;
+    height: 16px;
+    width: 3px;
+    margin-top: 2px;
+    margin-bottom: 2px;
     border-radius: 9999px;
     background: #e2e8f0;
 }
+@media (min-width: 768px) {
+    .tb-nc-conn {
+        height: 3px;
+        width: auto;
+        flex: 1 1 0%;
+        margin-top: 20px;
+        margin-bottom: 0px;
+    }
+}
 .tb-nc-rail.tb-nc-on .tb-nc-conn {
     background: linear-gradient(
-        90deg,
+        180deg,
         rgba(99, 102, 241, 0) 0%,
         rgba(99, 102, 241, 0.9) 50%,
         rgba(99, 102, 241, 0) 100%
     );
-    background-size: 200% 100%;
-    animation: tb-nc-flow 1.6s linear infinite;
+    background-size: 100% 200%;
+    animation: tb-nc-flow-v 1.6s linear infinite;
+}
+@media (min-width: 768px) {
+    .tb-nc-rail.tb-nc-on .tb-nc-conn {
+        background: linear-gradient(
+            90deg,
+            rgba(99, 102, 241, 0) 0%,
+            rgba(99, 102, 241, 0.9) 50%,
+            rgba(99, 102, 241, 0) 100%
+        );
+        background-size: 200% 100%;
+        animation: tb-nc-flow 1.6s linear infinite;
+    }
 }
 .tb-nc-rail.tb-nc-on .tb-nc-node {
     animation: tb-nc-pop 0.5s ease both, tb-nc-wave 2.2s ease-in-out infinite;
@@ -75,8 +104,8 @@ _NC_CSS = """
 .tb-nc-dot { animation: tb-nc-blink 1.3s ease-in-out infinite; }
 .tb-nc-flash { animation: tb-nc-flash 1.1s ease-out; }
 .tb-nc-log {
-    background: #09090b;
-    border: 1px solid #1f1f23;
+    background: #0f172a;
+    border: 1px solid #1e293b;
     border-radius: 8px;
     padding: 6px 8px;
     max-height: 16rem;
@@ -84,13 +113,19 @@ _NC_CSS = """
     font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
     font-size: 11px;
     line-height: 1.4;
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+.tb-nc-log:focus-within,
+.tb-nc-log:hover {
+    border-color: #6366f1;
+    box-shadow: 0 0 10px rgba(99, 102, 241, 0.2);
 }
 .tb-nc-log-row {
     display: flex;
     align-items: center;
     gap: 8px;
     padding: 2px 0;
-    border-bottom: 1px solid #18181b;
+    border-bottom: 1px solid #1e293b;
     white-space: nowrap;
 }
 .tb-nc-log-row:last-child { border-bottom: 0; }

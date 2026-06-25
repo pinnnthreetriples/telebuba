@@ -22,6 +22,10 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Callable
 
 from core.config import settings
 from core.db import (
@@ -229,7 +233,11 @@ async def _solve_and_record(
     return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
 
 
-async def onboard_campaign(campaign_id: str) -> CampaignOnboardingResult:
+async def onboard_campaign(
+    campaign_id: str,
+    *,
+    on_progress: Callable[[str], None] | None = None,
+) -> CampaignOnboardingResult:
     """Onboard every (account, channel) pair of a campaign with paced joins.
 
     Resolves each channel's linked group once: a comments-off channel records
@@ -245,28 +253,52 @@ async def onboard_campaign(campaign_id: str) -> CampaignOnboardingResult:
     channels = (await list_campaign_channels(campaign_id)).links
     accounts = [link.account_id for link in (await list_campaign_accounts(campaign_id)).links]
     solver_enabled = _effective_solver_enabled(campaign.solver_enabled)
+
+    def report(msg: str) -> None:
+        if on_progress:
+            on_progress(msg)
+
+    report(f"Запуск онбординга для {len(accounts)} аккаунтов и {len(channels)} каналов...")
+
     # Establish each serving account's spam verdict up front. Selection reads this
     # from cache and never re-probes @SpamBot per post (anti-ban), so a verdict must
     # exist before the account goes on the line.
-    await _probe_account_spam(accounts)
+    await _probe_account_spam(accounts, report=on_progress)
 
     outcomes: list[AccountChannelOnboarding] = []
     joined_once = False
     for channel_link in channels:
         channel = channel_link.channel
+        report(f"Разрешение группы обсуждения для {channel}...")
         # Resolve the linked group ONCE per channel (anti-ban + fewer reads).
-        group_id = await _resolve_group_for_join(accounts, channel, outcomes)
+        group_id = await _resolve_group_for_join(accounts, channel, outcomes, report=on_progress)
         if group_id is None:
             continue
         for account_id in accounts:
             if joined_once:
-                await asyncio.sleep(_join_jitter_seconds())
-            outcomes.append(
-                await _join_pair_safely(
-                    account_id, channel, group_id, solver_enabled=solver_enabled
-                )
+                jitter = _join_jitter_seconds()
+                report(f"Пауза {jitter:.1f} сек для обхода спам-фильтров...")
+                await asyncio.sleep(jitter)
+            report(f"Аккаунт {account_id}: вступление в группу для {channel}...")
+            outcome = await _join_pair_safely(
+                account_id, channel, group_id, solver_enabled=solver_enabled
             )
+            status_ru = {
+                "ready": "готов",
+                "comments_off": "комментарии отключены",
+                "join_by_request": "отправлена заявка",
+                "chat_restricted": "ограничен в записи",
+                "joining": "ожидание лимитов",
+                "bot_challenge_backoff": "пауза капчи",
+                "bot_challenge": "требуется капча",
+                "failed": "ошибка",
+            }.get(outcome.state, outcome.state)
+            reason_str = f" ({outcome.reason})" if outcome.reason else ""
+            report(f"Результат для {account_id} на {channel}: {status_ru}{reason_str}")
+            outcomes.append(outcome)
             joined_once = True
+    ready_count = sum(1 for o in outcomes if o.state == "ready")
+    report(f"Онбординг завершен. Готово пар: {ready_count} из {len(outcomes)}.")
     return CampaignOnboardingResult(campaign_id=campaign_id, outcomes=outcomes)
 
 
@@ -274,6 +306,7 @@ async def _resolve_group_for_join(
     accounts: list[str],
     channel: str,
     outcomes: list[AccountChannelOnboarding],
+    report: Callable[[str], None] | None = None,
 ) -> int | None:
     """Resolve+cache the channel's group once; record per-account skips, return its id.
 
@@ -286,6 +319,8 @@ async def _resolve_group_for_join(
         return None
     linked = await _safe_resolve(accounts[0], channel)
     if linked is None:
+        if report:
+            report(f"Ошибка: не удалось разрешить группу для {channel}")
         outcomes.extend(
             AccountChannelOnboarding(
                 account_id=account_id, channel=channel, state="failed", reason="resolve_failed"
@@ -294,7 +329,11 @@ async def _resolve_group_for_join(
         )
         return None
     if linked.comments_enabled and linked.linked_chat_id is not None:
+        if report:
+            report(f"Группа обсуждения для {channel} успешно разрешена")
         return linked.linked_chat_id
+    if report:
+        report(f"Канал {channel} отключил комментарии или не имеет группы обсуждения")
     outcomes.extend(
         AccountChannelOnboarding(account_id=account_id, channel=channel, state="comments_off")
         for account_id in accounts
@@ -335,7 +374,10 @@ async def _join_pair_safely(
         )
 
 
-async def _probe_account_spam(accounts: list[str]) -> None:
+async def _probe_account_spam(
+    accounts: list[str],
+    report: Callable[[str], None] | None = None,
+) -> None:
     """Probe each serving account's spam status once at onboarding (off the post path).
 
     Selection reads the cached verdict and never re-probes @SpamBot per post (anti-ban),
@@ -343,6 +385,8 @@ async def _probe_account_spam(accounts: list[str]) -> None:
     failure is logged, never fatal — onboarding proceeds.
     """
     for account_id in accounts:
+        if report:
+            report(f"Проверка спам-статуса аккаунта {account_id}...")
         try:
             await _seams.refresh_spam_status(account_id, force=False)
         except Exception as exc:  # noqa: BLE001 - a spam probe must never abort onboarding
@@ -352,3 +396,5 @@ async def _probe_account_spam(accounts: list[str]) -> None:
                 account_id=account_id,
                 extra={"error_type": type(exc).__name__},
             )
+            if report:
+                report(f"Предупреждение: не удалось проверить спам-статус для {account_id}")
