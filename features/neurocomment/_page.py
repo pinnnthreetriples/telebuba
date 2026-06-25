@@ -17,6 +17,7 @@ from nicegui import context, ui
 from core.logging import log_event
 from features.shared import TOP_BAR_CLASSES, render_nav
 from services.neurocomment import (
+    delete_campaign,
     list_campaigns,
     load_neurocomment_board,
     neurocomment_runtime_status,
@@ -330,6 +331,35 @@ def _build_header() -> None:  # pragma: no cover
         render_nav("/neurocomment")
 
 
+def confirm_delete_campaign(campaign_id: str) -> None:
+    """Show a confirmation dialog before deleting a campaign."""
+
+    async def confirm() -> None:
+        dialog.close()
+        await delete_campaign(campaign_id)
+        ui.notify("Кампания удалена", type="info")
+        _reload_page()
+
+    with (
+        ui.dialog() as dialog,
+        ui.column().classes(
+            "bg-white dark:bg-zinc-900 p-4 gap-3 w-[420px] max-w-full",
+        ),
+    ):
+        ui.label("Удалить кампанию?").classes(
+            "text-base font-semibold text-slate-900 dark:text-slate-100",
+        )
+        ui.label(
+            "Это действие безвозвратно удалит кампанию, её связи с каналами, "
+            "аккаунтами и историю комментариев.",
+        ).classes("text-sm text-slate-700 dark:text-slate-300")
+
+        with ui.row().classes("w-full justify-end gap-2"):
+            ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
+            ui.button("Удалить", color="negative", on_click=confirm)
+    dialog.open()
+
+
 async def render_neurocomment_page() -> None:  # pragma: no cover
     # Lazy imports: the sibling render modules import this module's pure helpers at
     # module level, so importing them here (not at top) avoids an import cycle.
@@ -379,16 +409,21 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
             setup_section.refresh()
             work_section.refresh()
 
-        switcher = (
-            ui.select(
-                campaign_options(campaign_list),
-                label="Кампания",
-                value=campaign_list.campaigns[-1].campaign_id,
-                on_change=on_switch,
+        with ui.row().classes("w-full items-center gap-2"):
+            switcher = (
+                ui.select(
+                    campaign_options(campaign_list),
+                    label="Кампания",
+                    value=campaign_list.campaigns[-1].campaign_id,
+                    on_change=on_switch,
+                )
+                .props("dense outlined")
+                .classes("w-full max-w-[400px]")
             )
-            .props("dense outlined")
-            .classes("w-full max-w-[400px]")
-        )
+            ui.button(
+                icon="delete",
+                on_click=lambda: confirm_delete_campaign(switcher.value),
+            ).props("flat round dense color=negative").tooltip("Удалить кампанию")
         # «Новая кампания» (global) + «Настройка» (per-campaign) side by side.
         with ui.row().classes("w-full gap-4 items-start flex-wrap"):
             with ui.column().classes("flex-1 min-w-[340px]"):

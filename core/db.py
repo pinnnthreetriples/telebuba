@@ -338,6 +338,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     count_comments_per_account_since,
     create_campaign,
     deactivate_channel,
+    delete_campaign,
     delete_readiness,
     fetch_active_campaign_for_channel,
     fetch_campaign,
