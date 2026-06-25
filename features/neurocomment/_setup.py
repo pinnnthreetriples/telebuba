@@ -58,15 +58,16 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
                     ui.label(f"{acc.warming_days}д").classes("text-[10px] text-emerald-500")
 
 
-async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa: ANN001  # pragma: no cover
-    """Collapsible «Новая кампания» form; open by default only when none exist yet."""
+async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa: ANN001, ARG001  # pragma: no cover
+    """«Новая кампания» card; styled like other dashboard panels."""
     with ui.card().classes(
-        "w-full p-0 border border-slate-200 dark:border-zinc-800 "
-        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm overflow-hidden",
+        "w-full p-4 gap-3 border border-slate-200 dark:border-zinc-800 "
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm",
     ):
-        expansion = ui.expansion("Новая кампания", icon="add_circle", value=expanded)
-        expansion.classes("w-full").props("dense")
-        with expansion, ui.column().classes("w-full p-3 pt-0 gap-2"):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("add_circle").classes("text-lg text-indigo-500")
+            ui.label("Новая кампания").classes("text-sm font-semibold")
+        with ui.column().classes("w-full gap-2"):
             name = ui.input(label="Название").props("dense outlined").classes("w-full")
             prompt = (
                 ui.textarea(
@@ -94,14 +95,15 @@ async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa
 
 
 async def render_setup(campaign_id: str) -> None:  # pragma: no cover
-    """Collapsible «Настройка» block: channel pool + account picker + onboard."""
+    """«Настройка» card: channel pool + account picker + onboard."""
     with ui.card().classes(
-        "w-full p-0 border border-slate-200 dark:border-zinc-800 "
-        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm overflow-hidden",
+        "w-full p-4 gap-3 border border-slate-200 dark:border-zinc-800 "
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm",
     ):
-        expansion = ui.expansion("Настройка: каналы и аккаунты", icon="tune", value=True)
-        expansion.classes("w-full").props("dense")
-        with expansion, ui.column().classes("w-full p-3 pt-0 gap-3"):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("tune").classes("text-lg text-indigo-500")
+            ui.label("Настройка: каналы и аккаунты").classes("text-sm font-semibold")
+        with ui.column().classes("w-full gap-3"):
             await _render_channel_pool(campaign_id)
             await _render_account_picker(campaign_id)
             await _render_actions(campaign_id)
