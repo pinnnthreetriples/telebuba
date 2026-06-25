@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from nicegui import context, ui
 
+from core.logging import log_event
 from features.shared import TOP_BAR_CLASSES, render_nav
 from services.neurocomment import (
     list_campaigns,
@@ -300,8 +301,12 @@ class PageContext:
                     await cb()
                 else:
                     cb()
-            except Exception:  # noqa: BLE001, S110 # nosec B110
-                pass
+            except Exception as exc:  # noqa: BLE001
+                await log_event(
+                    "ERROR",
+                    "neurocomment_ui_reload_callback_failed",
+                    extra={"error_type": type(exc).__name__, "error_message": str(exc)},
+                )
 
 
 async def count_ready_accounts_across_active_campaigns() -> int:
@@ -358,7 +363,6 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
         # Engine panel is now global and rendered at the top level
         await render_engine_panel(ctx)
 
-        # Setup and Work View are campaign-scoped
         @ui.refreshable
         async def setup_section() -> None:
             await render_setup(ctx.campaign_id)
