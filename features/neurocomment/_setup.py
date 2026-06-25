@@ -205,6 +205,12 @@ async def _render_actions(campaign_id: str) -> None:  # pragma: no cover
                 .classes("text-slate-400")
             )
             log_toggle.tooltip("Показать/скрыть лог онбординга")
+            help_icon = ui.icon("help_outline").classes("text-slate-400 text-lg cursor-help")
+            help_icon.tooltip(
+                "Онбординг готовит аккаунты к работе: автоматически вступает в группы "
+                "обсуждения выбранных каналов, решает приветственную капчу и проверяет "
+                "готовность к публикации комментариев."
+            )
 
         with ui.column().classes(
             "w-full border border-slate-200 dark:border-zinc-800 rounded bg-slate-950 p-2 gap-1",
