@@ -29,10 +29,12 @@ from services.warming import list_warmed_accounts
 
 
 async def render_warmed_accounts() -> None:  # pragma: no cover
-    """Top fleet-wide overview: which accounts are warmed enough to commentate.
+    """Top fleet-wide overview: which accounts are promoted to neurocomment.
 
-    Read-only — accounts appear here as they cross ``warmed_min_days`` on the warming
-    page. Per-campaign assignment still happens in «Настройка» below.
+    Read-only — accounts only appear here after the operator presses
+    «Переместить в нейрокомментинг» on the warming card (which also requires at least
+    ``warmed_min_days`` of warming). Per-campaign assignment still happens in
+    «Настройка» below.
     """
     min_days = settings.neurocomment.warmed_min_days
     warmed = (await list_warmed_accounts(min_days)).accounts
@@ -41,12 +43,14 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
             ui.icon("local_fire_department").classes("text-amber-500")
             ui.label("Прогретые аккаунты").classes("text-sm font-semibold")
             ui.label(f"от {min_days} дн").classes("text-xs text-slate-400").tooltip(
-                f"Аккаунты с прогревом ≥ {min_days} дней пригодны для комментирования",
+                f"Появляются после нажатия «Переместить в нейрокомментинг» на "
+                f"карточке прогрева (минимум {min_days} дней прогрева).",
             )
         if not warmed:
-            ui.label("Нет прогретых аккаунтов — прогрейте их на странице «Прогрев».").classes(
-                "text-xs text-slate-400",
-            )
+            ui.label(
+                "Нет аккаунтов в нейрокомментинге — прогрейте аккаунт, затем нажмите "
+                "«Переместить в нейрокомментинг» на карточке.",
+            ).classes("text-xs text-slate-400")
             return
         with ui.row().classes("w-full gap-2 flex-wrap items-center"):
             for acc in warmed:
@@ -58,45 +62,55 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
                     ui.label(f"{acc.warming_days}д").classes("text-[10px] text-emerald-500")
 
 
-async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa: ANN001  # pragma: no cover
-    """Collapsible «Новая кампания» form; open by default only when none exist yet."""
-    expansion = ui.expansion("Новая кампания", icon="add_circle", value=expanded)
-    expansion.classes("w-full").props("dense")
-    with expansion, ui.column().classes("w-full p-2 gap-3"):
-        name = ui.input(label="Название").props("dense outlined").classes("w-full")
-        prompt = (
-            ui.textarea(
-                label="Промпт (упоминание продукта живёт здесь)",
-                placeholder="Например: ненавязчиво упомяни сервис X как читатель…",
+async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa: ANN001, ARG001  # pragma: no cover
+    """«Новая кампания» card; styled like other dashboard panels."""
+    with ui.card().classes(
+        "w-full p-4 gap-3 border border-slate-200 dark:border-zinc-800 "
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm",
+    ):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("add_circle").classes("text-lg text-indigo-500")
+            ui.label("Новая кампания").classes("text-sm font-semibold")
+        with ui.column().classes("w-full gap-2"):
+            name = ui.input(label="Название").props("dense outlined").classes("w-full")
+            prompt = (
+                ui.textarea(
+                    label="Промпт (упоминание продукта живёт здесь)",
+                    placeholder="Например: ненавязчиво упомяни сервис X как читатель…",
+                )
+                .props("dense outlined autogrow")
+                .classes("w-full")
             )
-            .props("dense outlined autogrow")
-            .classes("w-full")
-        )
-        ui.label(
-            f"Комментарий не длиннее {settings.neurocomment.comment_max_words} слов "
-            "(настраивается в конфиге).",
-        ).classes("text-xs text-slate-500")
+            ui.label(
+                f"Комментарий не длиннее {settings.neurocomment.comment_max_words} слов "
+                "(настраивается в конфиге).",
+            ).classes("text-xs text-slate-500")
 
-        async def on_create() -> None:
-            if not (name.value or "").strip() or not (prompt.value or "").strip():
-                ui.notify("Заполните название и промпт", type="warning")
-                return
-            data = CampaignCreate(name=name.value.strip(), prompt=prompt.value.strip())
-            await create_campaign(data)
-            ui.notify("Кампания создана", type="positive")
-            on_created()
+            async def on_create() -> None:
+                if not (name.value or "").strip() or not (prompt.value or "").strip():
+                    ui.notify("Заполните название и промпт", type="warning")
+                    return
+                data = CampaignCreate(name=name.value.strip(), prompt=prompt.value.strip())
+                await create_campaign(data)
+                ui.notify("Кампания создана", type="positive")
+                on_created()
 
-        ui.button("Создать кампанию", icon="add", on_click=on_create).props("color=primary")
+            ui.button("Создать кампанию", icon="add", on_click=on_create).props("color=primary")
 
 
 async def render_setup(campaign_id: str) -> None:  # pragma: no cover
-    """Collapsible «Настройка» block: channel pool + account picker + onboard."""
-    expansion = ui.expansion("Настройка: каналы и аккаунты", icon="tune", value=True)
-    expansion.classes("w-full").props("dense")
-    with expansion, ui.column().classes("w-full p-2 gap-4"):
-        await _render_channel_pool(campaign_id)
-        await _render_account_picker(campaign_id)
-        await _render_actions(campaign_id)
+    """«Настройка» card: channel pool + account picker + onboard."""
+    with ui.card().classes(
+        "w-full p-4 gap-3 border border-slate-200 dark:border-zinc-800 "
+        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm",
+    ):
+        with ui.row().classes("w-full items-center gap-2"):
+            ui.icon("tune").classes("text-lg text-indigo-500")
+            ui.label("Настройка: каналы и аккаунты").classes("text-sm font-semibold")
+        with ui.column().classes("w-full gap-3"):
+            await _render_channel_pool(campaign_id)
+            await _render_account_picker(campaign_id)
+            await _render_actions(campaign_id)
 
 
 async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover

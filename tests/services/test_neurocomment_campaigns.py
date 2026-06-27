@@ -5,8 +5,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import insert, select
 
-from core.db import configure_database, create_account
+from core.db import _get_engine, configure_database, create_account
+from core.repositories.neurocomment._tables import (
+    _neurocomment_campaign_accounts,
+    _neurocomment_campaign_channels,
+    _neurocomment_comments,
+)
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 from services.neurocomment import campaigns
@@ -60,3 +66,73 @@ async def test_assign_and_remove_account() -> None:
 
     await campaigns.remove_account_from_campaign(campaign.campaign_id, "acc-1")
     assert (await campaigns.list_campaign_accounts(campaign.campaign_id)).links == []
+
+
+@pytest.mark.asyncio
+async def test_delete_campaign() -> None:
+    campaign = await campaigns.create_campaign(CampaignCreate(name="DeleteMe", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@chan")
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    # Insert a dummy comment linked to this campaign and account
+    with _get_engine().begin() as conn:
+        conn.execute(
+            insert(_neurocomment_comments).values(
+                channel="@chan",
+                post_id=123,
+                campaign_id=campaign.campaign_id,
+                account_id="acc-1",
+                status="posted",
+                created_at="2026-06-25T10:00:00Z",
+                updated_at="2026-06-25T10:00:00Z",
+            ),
+        )
+
+    # Verify everything exists before deletion
+    assert len((await campaigns.list_campaigns()).campaigns) == 1
+    assert len((await campaigns.list_campaign_channels(campaign.campaign_id)).links) == 1
+    assert len((await campaigns.list_campaign_accounts(campaign.campaign_id)).links) == 1
+    with _get_engine().connect() as conn:
+        assert (
+            conn.execute(
+                select(_neurocomment_comments).where(
+                    _neurocomment_comments.c.campaign_id == campaign.campaign_id,
+                ),
+            ).first()
+            is not None
+        )
+
+    # Perform the deletion
+    await campaigns.delete_campaign(campaign.campaign_id)
+
+    # Verify all records for the campaign are removed from all related tables
+    assert len((await campaigns.list_campaigns()).campaigns) == 0
+    with _get_engine().connect() as conn:
+        # Channels link check
+        assert (
+            conn.execute(
+                select(_neurocomment_campaign_channels).where(
+                    _neurocomment_campaign_channels.c.campaign_id == campaign.campaign_id,
+                ),
+            ).first()
+            is None
+        )
+        # Accounts link check
+        assert (
+            conn.execute(
+                select(_neurocomment_campaign_accounts).where(
+                    _neurocomment_campaign_accounts.c.campaign_id == campaign.campaign_id,
+                ),
+            ).first()
+            is None
+        )
+        # Comments check
+        assert (
+            conn.execute(
+                select(_neurocomment_comments).where(
+                    _neurocomment_comments.c.campaign_id == campaign.campaign_id,
+                ),
+            ).first()
+            is None
+        )

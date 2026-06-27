@@ -92,6 +92,11 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
             with ui.row().classes("items-center gap-3 flex-wrap"):
                 ui.icon("vpn_key").classes("text-lg text-indigo-500")
                 ui.label("Решение капч").classes("text-sm font-semibold")
+                help_icon = ui.icon("help_outline").classes("text-slate-400 text-sm cursor-help")
+                help_icon.tooltip(
+                    "Настройка автоматического решения приветственных капч ботов "
+                    "в группах обсуждения каналов при онбординге или отправке комментариев."
+                )
                 switch = (
                     ui.select(solver_options, value=solver_switch_key(board.solver_enabled))
                     .props("dense outlined options-dense")

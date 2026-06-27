@@ -139,18 +139,6 @@ _TRUST_LABEL_RU: dict[str, str] = {
     "critical": "Trust — риск",
 }
 
-# ── Health-check rectangular chips ────────────────────────────────────────────
-_CHECK_CHIP: dict[str, str] = {
-    "ok": "bg-green-50 border-green-200 text-green-800",
-    "warn": "bg-amber-50 border-amber-200 text-amber-800",
-    "fail": "bg-red-50   border-red-200   text-red-800",
-}
-_CHECK_CHIP_DOT: dict[str, str] = {
-    "ok": "bg-green-500",
-    "warn": "bg-amber-500",
-    "fail": "bg-red-500",
-}
-
 # ── Phase chip (solid fill, rounded) ─────────────────────────────────────────
 _PHASE_CHIP_SOLID: dict[str, str] = {
     "intro": "bg-green-100  text-green-800",

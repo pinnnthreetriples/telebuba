@@ -83,29 +83,25 @@ def _to_card(
     readiness: WarmingReadiness | None = None,
 ) -> WarmingAccountState:
     state: WarmingState = record.state if record else "idle"
+    # Collapse the per-field `record.x if record else default` ternaries (one per
+    # column, ~20 branches) into a single dict-merge: an empty record produces an
+    # empty dict, the schema defaults fill in. Keeps cyclomatic complexity at 2.
+    # Drop record-only fields that have no card counterpart (run_id / current_phase /
+    # phase_entered_at are warming-loop internals, not card affordances).
+    record_fields = (
+        record.model_dump(
+            exclude={"account_id", "state", "run_id", "current_phase", "phase_entered_at"}
+        )
+        if record
+        else {}
+    )
     return WarmingAccountState(
         account_id=account.account_id,
         label=account.label or account.account_id,
         state=state,
         health=warming_health(state),
-        cycles_completed=record.cycles_completed if record else 0,
-        last_event=record.last_event if record else None,
-        last_cycle_at=record.last_cycle_at if record else None,
-        next_run_at=record.next_run_at if record else None,
-        updated_at=record.updated_at if record else None,
-        last_error=record.last_error if record else None,
-        last_action=record.last_action if record else None,
-        last_channel=record.last_channel if record else None,
-        heartbeat_at=record.heartbeat_at if record else None,
-        started_at=record.started_at if record else None,
-        stopped_at=record.stopped_at if record else None,
-        flood_wait_seconds=record.flood_wait_seconds if record else None,
-        flood_wait_until=record.flood_wait_until if record else None,
-        proxy_snapshot=record.proxy_snapshot if record else None,
-        daily_actions=record.daily_actions if record else 0,
-        daily_count_date=record.daily_count_date if record else None,
-        quarantine_count=record.quarantine_count if record else 0,
         readiness=readiness,
+        **record_fields,
     )
 
 
@@ -172,17 +168,20 @@ async def load_board() -> WarmingBoardState:
 
 
 async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
-    """Accounts warmed for at least ``min_days`` whole days, for the neurocomment overview.
+    """Accounts the operator has graduated into the neurocomment pool.
 
-    Reuses ``load_board`` (one bulk read) and keeps the cards whose ``warming_days``
-    has reached the threshold — i.e. accounts that have been on the warming page long
-    enough to be trusted for commenting. Newest-warmed first.
+    Promotion is explicit: the warming card carries a «переместить в нейрокомментинг»
+    button that flips ``promoted_to_nc``. An account that has merely crossed
+    ``min_days`` of warming does NOT auto-appear here — the hand-off is a deliberate
+    operator action so partially-warmed accounts can't slip into commenting. The
+    ``min_days`` argument is kept as a sanity floor (so an accidental click on a
+    fresh account doesn't promote it), but the primary filter is the flag.
     """
     board = await load_board()
     warmed = [
         WarmedAccount(account_id=card.account_id, label=card.label, warming_days=card.warming_days)
         for card in (*board.idle, *board.warming)
-        if card.warming_days is not None and card.warming_days >= min_days
+        if card.promoted_to_nc and card.warming_days is not None and card.warming_days >= min_days
     ]
     warmed.sort(key=lambda a: a.warming_days, reverse=True)
     return WarmedAccountList(accounts=warmed)

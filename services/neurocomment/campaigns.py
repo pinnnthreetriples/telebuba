@@ -92,3 +92,8 @@ async def set_solver_enabled(campaign_id: str, value: bool | None) -> None:  # n
 async def skip_pair(account_id: str, channel: str) -> None:
     """Operator "Skip channel for this account": the engine never selects the pair (#148)."""
     await db.mark_human_skipped(account_id, channel)
+
+
+async def delete_campaign(campaign_id: str) -> None:
+    """Delete a campaign and clear all its account serving links, channels, and comments."""
+    await db.delete_campaign(campaign_id)

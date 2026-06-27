@@ -157,9 +157,26 @@ def _render_controls(
         if reason:
             ui.notify(reason, type="warning")
             return
-        await start_neurocomment(listener_select.value)
-        ui.notify("Нейрокомментинг запущен", type="positive")
-        await reload()
+        # Start runs onboarding for active campaigns inside the call (multi-minute
+        # work). Disable both buttons + show a loading spinner so the operator can't
+        # double-click; surface progress as transient toasts via on_progress.
+        ui.notify("Подготовка и запуск нейрокомментинга…", type="info")
+        start_btn.props("loading")
+        start_btn.props(add="disable")
+        stop_btn.props(add="disable")
+        try:
+            await start_neurocomment(
+                listener_select.value,
+                on_progress=lambda msg: ui.notify(msg[:80], type="info", position="bottom"),
+            )
+            ui.notify("Нейрокомментинг запущен", type="positive")
+        except Exception as exc:
+            ui.notify(f"Старт прерван: {type(exc).__name__}", type="negative")
+            raise
+        finally:
+            start_btn.props(remove="loading disable")
+            stop_btn.props(remove="disable")
+            await reload()
 
     async def on_stop() -> None:
         with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[420px] max-w-full"):
@@ -180,8 +197,12 @@ def _render_controls(
         dialog.open()
 
     with ui.row().classes("w-full items-center gap-2"):
-        ui.button("Запустить", icon="play_arrow", on_click=on_start).props("color=positive")
-        ui.button("Остановить", icon="stop", on_click=on_stop).props("color=negative outline")
+        start_btn = ui.button("Запустить", icon="play_arrow", on_click=on_start).props(
+            "color=positive",
+        )
+        stop_btn = ui.button("Остановить", icon="stop", on_click=on_stop).props(
+            "color=negative outline",
+        )
     ui.label(
         "Один слушатель на все активные кампании; движок раздаёт посты по их "
         "кампаниям. «Остановить» останавливает весь флот.",

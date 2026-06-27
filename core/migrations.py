@@ -1,21 +1,9 @@
 """Tiny versioned SQLite migration registry.
 
-Replaces the open-ended ``_ensure_sqlite_schema`` block: every schema change is
-a numbered, named migration that runs at most once per database. State lives in
-a ``schema_version`` table (one row per applied migration) so we can audit what
-ran and when, and so new migrations can be appended without re-doing the older
-ones.
-
-Constraints — deliberately small:
-
-- No Alembic, no autogen. We are still a single-file SQLite app and the cost
-  of a real migration tool outweighs the value. The moment we add Postgres or
-  branch-merging migrations, swap this for Alembic.
-- Each migration MUST be idempotent (``ADD COLUMN`` guarded by a column-name
-  check). Older databases predating the registry already have some columns;
-  the guards let us stamp those migrations as applied without failing on
-  "duplicate column".
-- Append-only. Never edit or delete a migration in place — write a new one.
+Every schema change is a numbered, named migration that runs at most once per DB.
+State lives in ``schema_version`` (one row per applied migration). Constraints:
+no Alembic; each migration MUST be idempotent (``ADD COLUMN`` guarded by a
+column-name check); append-only — never edit a migration in place.
 """
 
 from __future__ import annotations
@@ -382,6 +370,16 @@ def _add_readiness_human_skipped(connection: Connection) -> None:
         )
 
 
+def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
+    # Operator graduation flag set from the warming card; default 0 keeps existing
+    # rows opt-in (NC overview shows them only after explicit promotion).
+    if "promoted_to_nc" not in _sqlite_columns(connection, "warming_account_state"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state "
+            "ADD COLUMN promoted_to_nc INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -400,6 +398,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (13, "add_neurocomment_comment_indexes", _add_neurocomment_comment_indexes),
     (14, "add_neurocomment_challenges", _add_neurocomment_challenges),
     (15, "add_readiness_human_skipped", _add_readiness_human_skipped),
+    (16, "add_warming_state_promoted_to_nc", _add_warming_state_promoted_to_nc),
 )
 
 

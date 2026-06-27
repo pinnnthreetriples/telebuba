@@ -15,19 +15,15 @@ from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
-from features.warming._board_checks import (
-    _check_states,
-    _ru_reason,
-)
+from features.warming._board_checks import _ru_reason
 from features.warming._board_dnd import (
     drop_into_idle,
     drop_into_warming,
     seed_card_refreshable,
 )
+from features.warming._board_promote import render_promotion_block, render_trust_breakdown
 from features.warming._board_spam import render_spam_badge
 from features.warming._board_styling import (
-    _CHECK_CHIP,
-    _CHECK_CHIP_DOT,
     _PHASE_BAR_FILL,
     _PHASE_CHIP_SOLID,
     _STATE_BADGE,
@@ -133,6 +129,7 @@ def _card_signature(card: WarmingAccountState) -> tuple[object, ...]:  # pragma:
         card.days_to_next_phase,
         card.warming_days,
         None if card.readiness is None else (card.readiness.ready, tuple(card.readiness.reasons)),
+        card.promoted_to_nc,
     )
 
 
@@ -211,7 +208,12 @@ def _render_column(
 
 
 def _render_card_header(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Name + state pill on left; bare trust score + label on right."""
+    """Name + state pill on left; bare trust score + label on right.
+
+    The trust block reveals the full breakdown via a Quasar QMenu (click or
+    hover; works on touch devices unlike a plain ``ui.tooltip``). A small info
+    icon next to the band label makes the affordance discoverable.
+    """
     with ui.row().classes("w-full items-start gap-2"):
         # left: name + state pill
         with ui.row().classes("flex-1 min-w-0 items-center gap-2 flex-wrap"):
@@ -221,31 +223,27 @@ def _render_card_header(card: WarmingAccountState) -> None:  # pragma: no cover
                 f"{_STATE_BADGE.get(card.state, 'bg-slate-100 text-slate-600')}"
             )
 
-        # right: bare trust number + coloured label (no coloured badge background)
+        # right: bare trust number + coloured label + click/hover breakdown
         if card.trust_score is not None:
             band = card.trust_band or ""
-            with ui.column().classes("items-end gap-0 shrink-0"):
+            trust_block = ui.column().classes("items-end gap-0 shrink-0 cursor-pointer")
+            with trust_block:
                 ui.label(str(card.trust_score)).classes(
                     "text-[28px] font-bold text-slate-900 tabular-nums leading-none"
                 )
-                ui.label(_TRUST_LABEL_RU.get(band, f"Trust {card.trust_score}")).classes(
-                    f"text-[10px] font-medium leading-tight "
-                    f"{_TRUST_COLOR.get(band, 'text-slate-500')}"
-                )
-
-
-def _render_checks(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Rectangular health-check chips: coloured dot + Russian label + tooltip."""
-    with ui.row().classes("w-full gap-1 flex-wrap"):
-        for label, status, tooltip in _check_states(card):
-            chip_cls = _CHECK_CHIP.get(status, _CHECK_CHIP["ok"])
-            dot_cls = _CHECK_CHIP_DOT.get(status, "bg-slate-400")
-            with ui.row().classes(
-                f"items-center gap-1.5 px-2 py-1 rounded border text-[10px] {chip_cls}"
-            ) as chip:
-                ui.element("div").classes(f"w-1.5 h-1.5 rounded-full shrink-0 {dot_cls}")
-                ui.label(label.capitalize())
-            chip.tooltip(tooltip)
+                with ui.row().classes("items-center gap-1"):
+                    ui.label(_TRUST_LABEL_RU.get(band, f"Trust {card.trust_score}")).classes(
+                        f"text-[10px] font-medium leading-tight "
+                        f"{_TRUST_COLOR.get(band, 'text-slate-500')}"
+                    )
+                    ui.icon("info").classes("text-xs text-slate-400")
+            with (
+                trust_block,
+                ui.menu()
+                .props("anchor='bottom right' self='top right'")
+                .classes("bg-slate-900 text-white text-xs"),
+            ):
+                render_trust_breakdown(card)
 
 
 def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
@@ -405,9 +403,6 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
         with ui.element("div").classes("flex-1 min-w-0 p-4 flex flex-col gap-3"):
             _render_card_header(card)
 
-            if card.trust_score is not None:
-                _render_checks(card)
-
             _render_phase_block(card)
 
             # Pipeline + status line for non-idle accounts
@@ -425,5 +420,6 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
                 reasons = ", ".join(_ru_reason(r) for r in card.readiness.reasons)
                 ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
 
+            render_promotion_block(ctx.refresh, card)
             render_card_log_panel(ctx, card)
             _render_card_footer(ctx, card)

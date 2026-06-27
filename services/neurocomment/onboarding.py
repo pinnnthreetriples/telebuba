@@ -20,7 +20,7 @@ place; the inter-join sleep uses ``asyncio.sleep`` (patched in tests).
 
 from __future__ import annotations
 
-import asyncio
+import asyncio  # noqa: F401 - re-exported so tests can patch onboarding.asyncio.sleep
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -33,6 +33,7 @@ from core.db import (
     fetch_campaign,
     list_campaign_accounts,
     list_campaign_channels,
+    list_campaign_readiness,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -45,6 +46,7 @@ from schemas.telegram_actions import (
     LinkedDiscussionGroupResult,
 )
 from services.neurocomment import _seams, _state, challenge
+from services.neurocomment._onboard_channel import OnboardContext, onboard_channel
 
 # Join failed because writes are Telegram-blocked → chat_restricted (Ф2 #120):
 # unsolvable by the challenge solver. The set is small and intentional.
@@ -254,6 +256,19 @@ async def onboard_campaign(
     accounts = [link.account_id for link in (await list_campaign_accounts(campaign_id)).links]
     solver_enabled = _effective_solver_enabled(campaign.solver_enabled)
 
+    # Pairs already onboarded (joined + ready + captcha-passed, not operator-skipped)
+    # get a fast "already ready" outcome and skip the join + jitter sleep. Lets Start
+    # re-run onboarding cheaply: a fully-prepared campaign costs one read, not minutes.
+    # ponytail: a campaign solver_enabled toggle does NOT re-onboard already-ready
+    # pairs — captcha_passed was recorded when the previous setting was applied.
+    # Operators must use services.neurocomment.retry_pair to invalidate per-pair
+    # readiness after flipping the toggle.
+    already_ready = {
+        (r.account_id, r.channel)
+        for r in (await list_campaign_readiness(campaign_id)).readiness
+        if r.ready and r.joined and r.captcha_passed and not r.human_skipped
+    }
+
     def report(msg: str) -> None:
         if on_progress:
             on_progress(msg)
@@ -265,41 +280,20 @@ async def onboard_campaign(
     # exist before the account goes on the line.
     await _probe_account_spam(accounts, report=on_progress)
 
-    outcomes: list[AccountChannelOnboarding] = []
+    ctx = OnboardContext(
+        accounts=accounts,
+        already_ready=already_ready,
+        outcomes=[],
+        solver_enabled=solver_enabled,
+        on_progress=on_progress,
+        report=report,
+    )
     joined_once = False
     for channel_link in channels:
-        channel = channel_link.channel
-        report(f"Разрешение группы обсуждения для {channel}...")
-        # Resolve the linked group ONCE per channel (anti-ban + fewer reads).
-        group_id = await _resolve_group_for_join(accounts, channel, outcomes, report=on_progress)
-        if group_id is None:
-            continue
-        for account_id in accounts:
-            if joined_once:
-                jitter = _join_jitter_seconds()
-                report(f"Пауза {jitter:.1f} сек для обхода спам-фильтров...")
-                await asyncio.sleep(jitter)
-            report(f"Аккаунт {account_id}: вступление в группу для {channel}...")
-            outcome = await _join_pair_safely(
-                account_id, channel, group_id, solver_enabled=solver_enabled
-            )
-            status_ru = {
-                "ready": "готов",
-                "comments_off": "комментарии отключены",
-                "join_by_request": "отправлена заявка",
-                "chat_restricted": "ограничен в записи",
-                "joining": "ожидание лимитов",
-                "bot_challenge_backoff": "пауза капчи",
-                "bot_challenge": "требуется капча",
-                "failed": "ошибка",
-            }.get(outcome.state, outcome.state)
-            reason_str = f" ({outcome.reason})" if outcome.reason else ""
-            report(f"Результат для {account_id} на {channel}: {status_ru}{reason_str}")
-            outcomes.append(outcome)
-            joined_once = True
-    ready_count = sum(1 for o in outcomes if o.state == "ready")
-    report(f"Онбординг завершен. Готово пар: {ready_count} из {len(outcomes)}.")
-    return CampaignOnboardingResult(campaign_id=campaign_id, outcomes=outcomes)
+        joined_once = await onboard_channel(channel_link.channel, ctx, joined_once=joined_once)
+    ready_count = sum(1 for o in ctx.outcomes if o.state == "ready")
+    report(f"Онбординг завершен. Готово пар: {ready_count} из {len(ctx.outcomes)}.")
+    return CampaignOnboardingResult(campaign_id=campaign_id, outcomes=ctx.outcomes)
 
 
 async def _resolve_group_for_join(

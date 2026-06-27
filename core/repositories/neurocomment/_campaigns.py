@@ -15,6 +15,7 @@ from core.repositories.neurocomment._tables import (
     _neurocomment_campaign_accounts,
     _neurocomment_campaign_channels,
     _neurocomment_campaigns,
+    _neurocomment_comments,
 )
 from schemas.neurocomment import (
     CampaignAccountLink,
@@ -299,3 +300,32 @@ def _list_active_watch_channels() -> ChannelList:
 async def list_active_watch_channels() -> ChannelList:
     """All channels with an active link in an active campaign — the listener watch set."""
     return await asyncio.to_thread(_list_active_watch_channels)
+
+
+def _delete_campaign(campaign_id: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_neurocomment_campaign_accounts).where(
+                _neurocomment_campaign_accounts.c.campaign_id == campaign_id,
+            ),
+        )
+        connection.execute(
+            delete(_neurocomment_campaign_channels).where(
+                _neurocomment_campaign_channels.c.campaign_id == campaign_id,
+            ),
+        )
+        connection.execute(
+            delete(_neurocomment_comments).where(
+                _neurocomment_comments.c.campaign_id == campaign_id,
+            ),
+        )
+        connection.execute(
+            delete(_neurocomment_campaigns).where(
+                _neurocomment_campaigns.c.campaign_id == campaign_id,
+            ),
+        )
+
+
+async def delete_campaign(campaign_id: str) -> None:
+    """Delete a campaign and clear all its account serving links, channels, and comments."""
+    await asyncio.to_thread(_delete_campaign, campaign_id)

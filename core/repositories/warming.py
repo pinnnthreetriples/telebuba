@@ -19,6 +19,7 @@ from sqlalchemy.exc import IntegrityError
 
 from core.config import settings
 from core.db import (
+    _accounts,
     _get_engine,
     _now_iso,
     _optional_int,
@@ -261,6 +262,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         run_id=_optional_str(mapping.get("run_id")),
         current_phase=cast("WarmingPhase | None", phase_raw),
         phase_entered_at=_optional_str(mapping.get("phase_entered_at")),
+        promoted_to_nc=bool(mapping.get("promoted_to_nc") or 0),
     )
 
 
@@ -288,6 +290,66 @@ def _fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
 
 async def fetch_warming_state(account_id: str) -> WarmingStateRecord | None:
     return await asyncio.to_thread(_fetch_warming_state, account_id)
+
+
+def _mark_promoted_to_nc(account_id: str) -> None:
+    """Set the operator graduation flag on the account's warming-state row.
+
+    Insert-or-update: a brand-new account (no warming row yet) gets a stub row
+    in ``idle`` so the flag survives the first card render. Existing rows are
+    flipped to True without touching any other column.
+
+    Bug 14: SQLite FKs are off in some test paths and the upsert would happily
+    create a ghost row for any string. Validate the account exists up front so
+    callers get a typed error instead of silent corruption.
+    """
+    now = _now_iso()
+    exists_stmt = select(_accounts.c.account_id).where(_accounts.c.account_id == account_id)
+    with _get_engine().begin() as connection:
+        if connection.execute(exists_stmt).first() is None:
+            msg = f"unknown account_id: {account_id!r}"
+            raise ValueError(msg)
+        statement = (
+            sqlite_insert(_warming_account_state)
+            .values(
+                account_id=account_id,
+                state="idle",
+                cycles_completed=0,
+                updated_at=now,
+                promoted_to_nc=1,
+            )
+            .on_conflict_do_update(
+                index_elements=[_warming_account_state.c.account_id],
+                set_={"promoted_to_nc": 1, "updated_at": now},
+            )
+        )
+        connection.execute(statement)
+
+
+async def mark_promoted_to_nc(account_id: str) -> None:
+    """Promote an account out of warming into the neurocomment pool (operator action)."""
+    await asyncio.to_thread(_mark_promoted_to_nc, account_id)
+
+
+def _mark_unpromoted(account_id: str) -> None:
+    """Clear the operator graduation flag (Bug 2: stops the dual-pool leak).
+
+    Update-only — un-promoting an account that was never promoted is a no-op,
+    not a chance to create a stub row.
+    """
+    now = _now_iso()
+    statement = (
+        update(_warming_account_state)
+        .where(_warming_account_state.c.account_id == account_id)
+        .values(promoted_to_nc=0, updated_at=now)
+    )
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def unmark_promoted_to_nc(account_id: str) -> None:
+    """Reverse a graduation: clear ``promoted_to_nc`` on the warming-state row."""
+    await asyncio.to_thread(_mark_unpromoted, account_id)
 
 
 def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:

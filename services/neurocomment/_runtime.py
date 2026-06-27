@@ -20,6 +20,7 @@ from core.db import (
     fetch_active_campaign_for_channel,
     get_listener_account_id,
     list_active_watch_channels,
+    list_campaigns,
     list_posted_comments_since,
     set_listener_account_id,
 )
@@ -29,8 +30,11 @@ from schemas.neurocomment import NeurocommentRuntimeStatus
 from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult, JoinChannel
 from services.neurocomment import _seams, _state
 from services.neurocomment.engine import handle_new_post
+from services.neurocomment.onboarding import onboard_campaign
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
+
     from schemas.neurocomment import CommentRecord
     from schemas.telegram_actions import NewPostEvent
 
@@ -104,8 +108,36 @@ async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
         )
 
 
-async def start_neurocomment(listener_account_id: str) -> None:
-    """Persist the listener account and (re)point the runtime at the watch set."""
+async def start_neurocomment(
+    listener_account_id: str,
+    *,
+    on_progress: Callable[[str], None] | None = None,
+) -> None:
+    """Onboard every active campaign, persist the listener, then point the runtime.
+
+    Running onboarding inside Start makes one button do the full setup — workers
+    joined to discussion groups, readiness persisted, spam probed — so the operator
+    no longer has to re-press Onboarding after Start to make comments flow.
+    Already-ready pairs are skipped in onboarding, so a second Start is fast.
+
+    One campaign's onboarding failure (a transient SQLite/Telethon error) must
+    not blackhole Start — the listener still gets persisted and reconcile still
+    fires, so the runtime is up even if one campaign needs operator follow-up.
+    """
+    for campaign in (await list_campaigns()).campaigns:
+        if campaign.status != "active":
+            continue
+        try:
+            await onboard_campaign(campaign.campaign_id, on_progress=on_progress)
+        except Exception as exc:  # noqa: BLE001 - one campaign must never abort Start
+            await log_event(
+                "ERROR",
+                "neurocomment_start_onboard_failed",
+                extra={
+                    "campaign_id": campaign.campaign_id,
+                    "error_type": type(exc).__name__,
+                },
+            )
     await set_listener_account_id(listener_account_id)
     await reconcile_neurocomment_runtime(listener_account_id)
 

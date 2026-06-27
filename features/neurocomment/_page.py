@@ -17,6 +17,7 @@ from nicegui import context, ui
 from core.logging import log_event
 from features.shared import TOP_BAR_CLASSES, render_nav
 from services.neurocomment import (
+    delete_campaign,
     list_campaigns,
     load_neurocomment_board,
     neurocomment_runtime_status,
@@ -116,13 +117,7 @@ def campaign_options(campaigns: CampaignList) -> dict[str, str]:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class PipelineStep:
-    """One step of the on-post pipeline shown on the rail + in «Как работает».
-
-    Mirrors the real engine flow (``services.neurocomment.engine._handle_new_post``):
-    listen → new post → select account → generate → publish → monitor. ``icon`` is
-    a Material glyph; ``label`` the short rail caption; ``detail`` the plain-Russian
-    one-liner for the explainer card.
-    """
+    """One step of the on-post pipeline (rail + explainer): name, label, icon, detail."""
 
     name: str
     label: str
@@ -130,9 +125,7 @@ class PipelineStep:
     detail: str
 
 
-# The six educational steps. The rail animates the whole sequence while the engine
-# runs (it is not a per-post state machine — the board carries no per-post stage),
-# so the steps are static and ordered to match the engine pipeline.
+# Six educational steps, static + ordered to match services.neurocomment.engine.
 PIPELINE_STEPS: tuple[PipelineStep, ...] = (
     PipelineStep(
         "listen",
@@ -330,6 +323,35 @@ def _build_header() -> None:  # pragma: no cover
         render_nav("/neurocomment")
 
 
+def confirm_delete_campaign(campaign_id: str) -> None:
+    """Show a confirmation dialog before deleting a campaign."""
+
+    async def confirm() -> None:
+        dialog.close()
+        await delete_campaign(campaign_id)
+        ui.notify("Кампания удалена", type="info")
+        _reload_page()
+
+    with (
+        ui.dialog() as dialog,
+        ui.column().classes(
+            "bg-white dark:bg-zinc-900 p-4 gap-3 w-[420px] max-w-full",
+        ),
+    ):
+        ui.label("Удалить кампанию?").classes(
+            "text-base font-semibold text-slate-900 dark:text-slate-100",
+        )
+        ui.label(
+            "Это действие безвозвратно удалит кампанию, её связи с каналами, "
+            "аккаунтами и историю комментариев.",
+        ).classes("text-sm text-slate-700 dark:text-slate-300")
+
+        with ui.row().classes("w-full justify-end gap-2"):
+            ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
+            ui.button("Удалить", color="negative", on_click=confirm)
+    dialog.open()
+
+
 async def render_neurocomment_page() -> None:  # pragma: no cover
     # Lazy imports: the sibling render modules import this module's pure helpers at
     # module level, so importing them here (not at top) avoids an import cycle.
@@ -360,8 +382,9 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
         ctx = PageContext(campaign_list.campaigns[-1].campaign_id)
         await ctx.update()
 
-        # Engine panel is now global and rendered at the top level
-        await render_engine_panel(ctx)
+        @ui.refreshable
+        async def engine_section() -> None:
+            await render_engine_panel(ctx)
 
         @ui.refreshable
         async def setup_section() -> None:
@@ -374,25 +397,35 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
         def on_switch() -> None:
             ctx.campaign_id = switcher.value
             ctx.on_reload_callbacks.clear()  # prevent stale callback accumulation
+            engine_section.refresh()
             setup_section.refresh()
             work_section.refresh()
 
-        switcher = (
-            ui.select(
-                campaign_options(campaign_list),
-                label="Кампания",
-                value=campaign_list.campaigns[-1].campaign_id,
-                on_change=on_switch,
+        with ui.row().classes("w-full items-center gap-2"):
+            switcher = (
+                ui.select(
+                    campaign_options(campaign_list),
+                    label="Кампания",
+                    value=campaign_list.campaigns[-1].campaign_id,
+                    on_change=on_switch,
+                )
+                .props("dense outlined")
+                .classes("w-full max-w-[400px]")
             )
-            .props("dense outlined")
-            .classes("w-full max-w-[400px]")
-        )
+            ui.button(
+                icon="delete",
+                on_click=lambda: confirm_delete_campaign(switcher.value),
+            ).props("flat round dense color=negative").tooltip("Удалить кампанию")
         # «Новая кампания» (global) + «Настройка» (per-campaign) side by side.
         with ui.row().classes("w-full gap-4 items-start flex-wrap"):
             with ui.column().classes("flex-1 min-w-[340px]"):
                 await render_create_campaign(on_created=_reload_page, expanded=False)
             with ui.column().classes("flex-1 min-w-[340px]"):
                 await setup_section()
+
+        # Engine panel is now global and rendered below the switcher and setup blocks
+        await engine_section()
+
         await work_section()
         render_how_it_works()
 

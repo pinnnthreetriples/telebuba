@@ -24,6 +24,8 @@ from core.db import (
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
+    mark_promoted_to_nc,
+    unmark_promoted_to_nc,
 )
 from core.logging import log_event
 from schemas.warming import (
@@ -118,6 +120,16 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             if existing and existing.started_at and is_warming(existing.state)
             else _now_iso()
         )
+        # Bug 2: a previously-promoted account dragged back into warming would
+        # otherwise live in both pools — clear the flag so neurocomment's
+        # warmed-account overview drops it on the next poll.
+        if existing is not None and existing.promoted_to_nc:
+            await unmark_promoted_to_nc(data.account_id)
+            await log_event(
+                "INFO",
+                "warming_unpromoted_on_restart",
+                account_id=data.account_id,
+            )
         await _set_state(
             data.account_id,
             "active",
@@ -211,6 +223,34 @@ async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
     await log_event("INFO", "warming_stopped", account_id=data.account_id)
     await _refresh_dialogue_pairs()
     return await _current_card(data.account_id)
+
+
+async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
+    """Graduate an account: stop its warming loop and flag it for the neurocomment pool.
+
+    Two-step operation under one lock so we don't race a freshly-restarted loop:
+    cancel any running task, then persist ``promoted_to_nc=True``. The card the
+    caller re-renders shows the account in idle with the flag set, and the
+    neurocomment warmed-account overview will pick it up on the next poll.
+    """
+    async with _account_lock(account_id):
+        await _stop_warming_locked(account_id)
+        await mark_promoted_to_nc(account_id)
+    await log_event("INFO", "warming_promoted_to_neurocomment", account_id=account_id)
+    await _refresh_dialogue_pairs()
+    return await _current_card(account_id)
+
+
+async def unmark_neurocomment(account_id: str) -> WarmingAccountState:
+    """Reverse a graduation: clear ``promoted_to_nc`` (Group C un-promote button).
+
+    Held under the per-account lock for symmetry with ``promote_to_neurocomment``
+    so a concurrent re-promote / restart does not race the flip.
+    """
+    async with _account_lock(account_id):
+        await unmark_promoted_to_nc(account_id)
+    await log_event("INFO", "warming_unpromoted_from_neurocomment", account_id=account_id)
+    return await _current_card(account_id)
 
 
 def account_lock(account_id: str) -> asyncio.Lock:
