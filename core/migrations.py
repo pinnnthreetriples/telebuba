@@ -382,6 +382,17 @@ def _add_readiness_human_skipped(connection: Connection) -> None:
         )
 
 
+def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
+    # Operator graduation flag: the neurocomment warmed-account overview only lists
+    # accounts that were explicitly promoted from the warming card (button), not
+    # everyone who crossed ``warmed_min_days``. Default 0 so existing rows are opt-in.
+    if "promoted_to_nc" not in _sqlite_columns(connection, "warming_account_state"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state "
+            "ADD COLUMN promoted_to_nc INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 # Append-only registry. ``version`` is the canonical identifier and must never
 # be reused; ``name`` is informational and surfaces in the audit table.
 MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
@@ -400,6 +411,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (13, "add_neurocomment_comment_indexes", _add_neurocomment_comment_indexes),
     (14, "add_neurocomment_challenges", _add_neurocomment_challenges),
     (15, "add_readiness_human_skipped", _add_readiness_human_skipped),
+    (16, "add_warming_state_promoted_to_nc", _add_warming_state_promoted_to_nc),
 )
 
 

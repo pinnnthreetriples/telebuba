@@ -15,6 +15,7 @@ from core.db import (
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
+    mark_promoted_to_nc,
     remove_warming_channel,
     save_warming_settings,
     upsert_warming_state,
@@ -194,3 +195,13 @@ async def test_warming_state_persists_proxy_snapshot_and_daily_fields() -> None:
     again = await fetch_warming_state("acc-1")
     assert again is not None
     assert again.daily_actions == 7
+
+
+@pytest.mark.asyncio
+async def test_mark_promoted_to_nc_rejects_unknown_account() -> None:
+    """Bug 14: upserting promoted_to_nc for a non-existent account would create a ghost row."""
+    with pytest.raises(ValueError, match="unknown account_id"):
+        await mark_promoted_to_nc("does-not-exist")
+
+    # And no warming-state ghost row was left behind.
+    assert await fetch_warming_state("does-not-exist") is None

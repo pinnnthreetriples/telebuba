@@ -33,10 +33,12 @@ from services.warming._runtime import (
     WarmingNotReadyError,
     _stop_warming_locked,
     account_lock,
+    promote_to_neurocomment,
     reconcile_warming_runtime,
     shutdown_warming_runtime,
     start_warming,
     stop_warming,
+    unmark_neurocomment,
 )
 from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import add_channels, list_channels, remove_channel
@@ -78,6 +80,7 @@ __all__ = [
     "list_warmed_accounts",
     "load_board",
     "load_settings",
+    "promote_to_neurocomment",
     "reconcile_warming_runtime",
     "remove_channel",
     "run_loop_iteration",
@@ -86,4 +89,5 @@ __all__ = [
     "shutdown_warming_runtime",
     "start_warming",
     "stop_warming",
+    "unmark_neurocomment",
 ]

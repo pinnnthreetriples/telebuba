@@ -201,6 +201,11 @@ class WarmingStateRecord(BaseModel):
     # ISO timestamp of when the account entered ``current_phase``. Drives the
     # "in phase: N days" hint on the card.
     phase_entered_at: str | None = None
+    # Operator graduation flag: True after the warming card's "переместить в
+    # нейрокомментинг" button is pressed. The neurocomment warmed-list filters by
+    # this so accounts only appear there after an explicit hand-off, not when they
+    # silently cross ``warmed_min_days``.
+    promoted_to_nc: bool = False
 
 
 class WarmingStateWrite(BaseModel):
@@ -309,6 +314,9 @@ class WarmingAccountState(BaseModel):
     # ``WarmingStateRecord.started_at``). ``None`` when warming never ran.
     warming_days: int | None = Field(default=None, ge=0)
     readiness: WarmingReadiness | None = None
+    # Operator-set: account has been graduated to the neurocomment pool. Drives
+    # the "переместить в нейрокомментинг" button on the card (hidden once True).
+    promoted_to_nc: bool = False
 
 
 class WarmingSummary(BaseModel):

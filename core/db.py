@@ -164,6 +164,11 @@ _warming_account_state = Table(
     # the loop diffs against to detect transitions and fire ``phase_advanced``.
     Column("current_phase", String, nullable=True),
     Column("phase_entered_at", String, nullable=True),
+    # Operator-set: account has been manually promoted out of warming into the
+    # neurocomment pool. The neurocomment page's warmed-account overview reads
+    # this so accounts only appear there after an explicit graduation, not on
+    # crossing ``warmed_min_days`` alone. Default 0 keeps existing rows opt-in.
+    Column("promoted_to_nc", Integer, nullable=False, server_default="0"),
 )
 _account_spam_status = Table(
     "account_spam_status",
@@ -380,8 +385,10 @@ from core.repositories.warming import (  # noqa: E402, F401
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
+    mark_promoted_to_nc,
     remove_warming_channel,
     save_warming_settings,
+    unmark_promoted_to_nc,
     upsert_warming_state,
 )
 from core.repositories.warming_joined import (  # noqa: E402, F401

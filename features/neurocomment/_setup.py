@@ -29,10 +29,12 @@ from services.warming import list_warmed_accounts
 
 
 async def render_warmed_accounts() -> None:  # pragma: no cover
-    """Top fleet-wide overview: which accounts are warmed enough to commentate.
+    """Top fleet-wide overview: which accounts are promoted to neurocomment.
 
-    Read-only — accounts appear here as they cross ``warmed_min_days`` on the warming
-    page. Per-campaign assignment still happens in «Настройка» below.
+    Read-only — accounts only appear here after the operator presses
+    «Переместить в нейрокомментинг» on the warming card (which also requires at least
+    ``warmed_min_days`` of warming). Per-campaign assignment still happens in
+    «Настройка» below.
     """
     min_days = settings.neurocomment.warmed_min_days
     warmed = (await list_warmed_accounts(min_days)).accounts
@@ -41,12 +43,14 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
             ui.icon("local_fire_department").classes("text-amber-500")
             ui.label("Прогретые аккаунты").classes("text-sm font-semibold")
             ui.label(f"от {min_days} дн").classes("text-xs text-slate-400").tooltip(
-                f"Аккаунты с прогревом ≥ {min_days} дней пригодны для комментирования",
+                f"Появляются после нажатия «Переместить в нейрокомментинг» на "
+                f"карточке прогрева (минимум {min_days} дней прогрева).",
             )
         if not warmed:
-            ui.label("Нет прогретых аккаунтов — прогрейте их на странице «Прогрев».").classes(
-                "text-xs text-slate-400",
-            )
+            ui.label(
+                "Нет аккаунтов в нейрокомментинге — прогрейте аккаунт, затем нажмите "
+                "«Переместить в нейрокомментинг» на карточке.",
+            ).classes("text-xs text-slate-400")
             return
         with ui.row().classes("w-full gap-2 flex-wrap items-center"):
             for acc in warmed:

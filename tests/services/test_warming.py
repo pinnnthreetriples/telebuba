@@ -2565,7 +2565,7 @@ async def _exercise_migration_seven(engine) -> None:  # type: ignore[no-untyped-
         # Stamp every non-#7 migration as already applied so the test DB only
         # exercises the new index migration. Append the new version here when
         # adding a migration that touches a table this test does NOT create.
-        already_applied = (1, 2, 3, 4, 5, 6, 8, 10)
+        already_applied = (1, 2, 3, 4, 5, 6, 8, 10, 16)
         for version in already_applied:
             connection.exec_driver_sql(
                 "INSERT INTO schema_version VALUES (?, 'stub', '2026-01-01')",
@@ -3176,7 +3176,7 @@ async def test_migration_duplicate_session_name_marks_nulled_accounts_not_alive(
                 "CREATE TABLE schema_version (version INTEGER PRIMARY KEY, name VARCHAR NOT NULL, "
                 "applied_at VARCHAR NOT NULL)",
             )
-            for version in (1, 2, 3, 4, 5, 6, 8, 10):
+            for version in (1, 2, 3, 4, 5, 6, 8, 10, 16):
                 connection.exec_driver_sql(
                     "INSERT INTO schema_version VALUES (?, 'stub', '2026-01-01')",
                     (version,),
