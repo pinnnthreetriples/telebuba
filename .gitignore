@@ -50,4 +50,8 @@ htmlcov/
 .friday/
 .specify/
 
+# Per-machine Claude Code skill bundles (installed by the skills manager)
+.claude/skills/
+skills-lock.json
+
 .tmp_backups/
