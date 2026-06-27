@@ -15,16 +15,13 @@ from typing import TYPE_CHECKING, Any
 
 from nicegui import ui
 
-from core.config import settings
-from features.warming._board_checks import (
-    _check_states,
-    _ru_reason,
-)
+from features.warming._board_checks import _ru_reason
 from features.warming._board_dnd import (
     drop_into_idle,
     drop_into_warming,
     seed_card_refreshable,
 )
+from features.warming._board_promote import render_promotion_block, render_trust_breakdown
 from features.warming._board_spam import render_spam_badge
 from features.warming._board_styling import (
     _PHASE_BAR_FILL,
@@ -246,39 +243,7 @@ def _render_card_header(card: WarmingAccountState) -> None:  # pragma: no cover
                 .props("anchor='bottom right' self='top right'")
                 .classes("bg-slate-900 text-white text-xs"),
             ):
-                _render_trust_breakdown(card)
-
-
-_CHECK_DOT_TOOLTIP = {"ok": "bg-emerald-400", "warn": "bg-amber-400", "fail": "bg-red-400"}
-
-
-_SPAM_BREAKDOWN_ROW: dict[str | None, tuple[str, str]] = {
-    "clean": ("ok", "@SpamBot: чисто"),
-    "limited": ("fail", "@SpamBot: ограничен"),
-}
-
-
-def _render_trust_breakdown(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Hover panel listing each component that feeds into the trust score."""
-    band = card.trust_band or ""
-    band_label = _TRUST_LABEL_RU.get(band, f"Trust {card.trust_score}")
-    spam_status, spam_tooltip = _SPAM_BREAKDOWN_ROW.get(
-        card.spam_status, ("warn", "@SpamBot ещё не запрашивался")
-    )
-    if card.spam_status == "limited" and card.spam_detail:
-        spam_tooltip = card.spam_detail
-    rows = [*_check_states(card), ("спам", spam_status, spam_tooltip)]
-    with ui.column().classes("gap-1 px-3 py-2 min-w-[220px]"):
-        with ui.row().classes("items-baseline gap-2"):
-            ui.label(f"Trust {card.trust_score}/100").classes("text-sm font-semibold")
-            ui.label(band_label).classes("text-[10px] opacity-70")
-        for label, status, tooltip in rows:
-            with ui.row().classes("items-center gap-2 w-full"):
-                dot_cls = _CHECK_DOT_TOOLTIP.get(status, "bg-slate-400")
-                ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 {dot_cls}")
-                ui.label(label.capitalize()).classes("text-[11px]")
-                ui.element("div").classes("flex-1")
-                ui.label(tooltip).classes("text-[10px] opacity-70 text-right")
+                render_trust_breakdown(card)
 
 
 def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
@@ -455,103 +420,6 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
                 reasons = ", ".join(_ru_reason(r) for r in card.readiness.reasons)
                 ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
 
-            _render_promotion_block(ctx, card)
+            render_promotion_block(ctx.refresh, card)
             render_card_log_panel(ctx, card)
             _render_card_footer(ctx, card)
-
-
-def _render_promotion_block(  # pragma: no cover
-    ctx: _BoardContext,
-    card: WarmingAccountState,
-) -> None:
-    """Single "переместить в нейрокомментинг / завершить прогрев" button per card.
-
-    Promoting an account stops its warming loop and flips ``promoted_to_nc`` so it
-    appears in the neurocomment warmed-list — accounts no longer auto-graduate on
-    crossing ``warmed_min_days`` alone. The neurocomment-side gate
-    (``settings.neurocomment.warmed_min_days``) is also enforced as a sanity floor,
-    so the button stays disabled until the account is mature enough. Both promote
-    and undo go through a confirmation dialog so a misclick can't move an account.
-    """
-    from services.warming import promote_to_neurocomment, unmark_neurocomment  # noqa: PLC0415
-
-    nc_min_days = settings.neurocomment.warmed_min_days
-    if card.promoted_to_nc:
-        with ui.row().classes("w-full items-center gap-2"):
-            with ui.row().classes("items-center gap-1 text-[11px] text-emerald-700"):
-                ui.icon("verified").classes("text-sm")
-                ui.label("В нейрокомментинге")
-            ui.element("div").classes("flex-1")
-
-            async def on_undo() -> None:
-                with (
-                    ui.dialog() as dialog,
-                    ui.column().classes("bg-white p-4 gap-3 w-[420px] max-w-full"),
-                ):
-                    ui.label("Вернуть аккаунт в прогрев?").classes("text-base font-semibold")
-                    ui.label(
-                        "Аккаунт исчезнет из списка готовых к комментированию и снова "
-                        "появится в простое.",
-                    ).classes("text-sm text-slate-700")
-
-                    async def confirm() -> None:
-                        dialog.close()
-                        await unmark_neurocomment(card.account_id)
-                        ui.notify("Аккаунт возвращён в прогрев", type="info")
-                        ctx.refresh()
-
-                    with ui.row().classes("w-full justify-end gap-2"):
-                        ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
-                        ui.button("Подтвердить", color="primary", on_click=confirm)
-                dialog.open()
-
-            ui.button("Вернуть в прогрев", icon="undo", on_click=on_undo).props(
-                "flat dense color=grey-7",
-            ).classes("text-[10px]")
-        return
-
-    # Strict enable gate (audit bug 11):
-    # `warming_days is None` means the account has never warmed → never eligible,
-    # regardless of nc_min_days. A floor of max(1, nc_min_days) also rules out the
-    # nc_min_days=0 footgun letting a 0-day account through.
-    enabled = card.warming_days is not None and card.warming_days >= max(1, nc_min_days)
-    label = "Переместить в нейрокомментинг" if card.state == "idle" else "Завершить прогрев"
-
-    async def on_click() -> None:
-        with (
-            ui.dialog() as dialog,
-            ui.column().classes("bg-white p-4 gap-3 w-[420px] max-w-full"),
-        ):
-            ui.label("Переместить аккаунт в нейрокомментинг?").classes(
-                "text-base font-semibold",
-            )
-            ui.label(
-                "Прогрев остановится; аккаунт появится в списке готовых к комментированию.",
-            ).classes("text-sm text-slate-700")
-
-            async def confirm() -> None:
-                dialog.close()
-                await promote_to_neurocomment(card.account_id)
-                ui.notify("Аккаунт перемещён в нейрокомментинг", type="positive")
-                ctx.refresh()
-
-            with ui.row().classes("w-full justify-end gap-2"):
-                ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
-                ui.button("Подтвердить", color="primary", on_click=confirm)
-        dialog.open()
-
-    btn = (
-        ui.button(label, icon="forward", on_click=on_click)
-        .props("flat dense color=primary" if enabled else "flat dense color=grey-7 disable")
-        .classes("text-[11px] w-full")
-    )
-    if not enabled:
-        if card.warming_days is None:
-            btn.tooltip("Аккаунт ещё не прогревался")
-        else:
-            btn.tooltip(
-                f"Доступно после {max(1, nc_min_days)} дней прогрева "
-                f"(сейчас: {card.warming_days} д)",
-            )
-    else:
-        btn.tooltip("Останавливает прогрев и добавляет аккаунт в нейрокомментинг")

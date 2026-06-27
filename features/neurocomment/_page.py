@@ -117,13 +117,7 @@ def campaign_options(campaigns: CampaignList) -> dict[str, str]:
 
 @dataclasses.dataclass(frozen=True, slots=True)
 class PipelineStep:
-    """One step of the on-post pipeline shown on the rail + in «Как работает».
-
-    Mirrors the real engine flow (``services.neurocomment.engine._handle_new_post``):
-    listen → new post → select account → generate → publish → monitor. ``icon`` is
-    a Material glyph; ``label`` the short rail caption; ``detail`` the plain-Russian
-    one-liner for the explainer card.
-    """
+    """One step of the on-post pipeline (rail + explainer): name, label, icon, detail."""
 
     name: str
     label: str
@@ -131,9 +125,7 @@ class PipelineStep:
     detail: str
 
 
-# The six educational steps. The rail animates the whole sequence while the engine
-# runs (it is not a per-post state machine — the board carries no per-post stage),
-# so the steps are static and ordered to match the engine pipeline.
+# Six educational steps, static + ordered to match services.neurocomment.engine.
 PIPELINE_STEPS: tuple[PipelineStep, ...] = (
     PipelineStep(
         "listen",

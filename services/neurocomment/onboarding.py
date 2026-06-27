@@ -20,8 +20,7 @@ place; the inter-join sleep uses ``asyncio.sleep`` (patched in tests).
 
 from __future__ import annotations
 
-import asyncio
-import dataclasses
+import asyncio  # noqa: F401 - re-exported so tests can patch onboarding.asyncio.sleep
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -47,6 +46,7 @@ from schemas.telegram_actions import (
     LinkedDiscussionGroupResult,
 )
 from services.neurocomment import _seams, _state, challenge
+from services.neurocomment._onboard_channel import OnboardContext, onboard_channel
 
 # Join failed because writes are Telegram-blocked → chat_restricted (Ф2 #120):
 # unsolvable by the challenge solver. The set is small and intentional.
@@ -280,7 +280,7 @@ async def onboard_campaign(
     # exist before the account goes on the line.
     await _probe_account_spam(accounts, report=on_progress)
 
-    ctx = _OnboardContext(
+    ctx = OnboardContext(
         accounts=accounts,
         already_ready=already_ready,
         outcomes=[],
@@ -290,103 +290,10 @@ async def onboard_campaign(
     )
     joined_once = False
     for channel_link in channels:
-        joined_once = await _onboard_channel(channel_link.channel, ctx, joined_once=joined_once)
+        joined_once = await onboard_channel(channel_link.channel, ctx, joined_once=joined_once)
     ready_count = sum(1 for o in ctx.outcomes if o.state == "ready")
     report(f"Онбординг завершен. Готово пар: {ready_count} из {len(ctx.outcomes)}.")
     return CampaignOnboardingResult(campaign_id=campaign_id, outcomes=ctx.outcomes)
-
-
-_JOIN_STATUS_RU: dict[str, str] = {
-    "ready": "готов",
-    "comments_off": "комментарии отключены",
-    "join_by_request": "отправлена заявка",
-    "chat_restricted": "ограничен в записи",
-    "joining": "ожидание лимитов",
-    "bot_challenge_backoff": "пауза капчи",
-    "bot_challenge": "требуется капча",
-    "failed": "ошибка",
-}
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class _OnboardContext:
-    """Per-campaign onboarding state threaded through the channel + pair helpers.
-
-    Packs the otherwise-many parameters (accounts, already_ready set, outcomes
-    accumulator, solver flag, progress callbacks) into one value so the helpers
-    stay under the PLR0913 argument-count limit.
-    """
-
-    accounts: list[str]
-    already_ready: set[tuple[str, str]]
-    outcomes: list[AccountChannelOnboarding]
-    solver_enabled: bool
-    on_progress: Callable[[str], None] | None
-    report: Callable[[str], None]
-
-
-async def _onboard_channel(channel: str, ctx: _OnboardContext, *, joined_once: bool) -> bool:
-    """Onboard every account on one channel; return the updated ``joined_once`` flag.
-
-    Compute the "remaining" account list = accounts NOT already ready for THIS
-    channel. If every pair is ready, skip the Telegram resolve entirely (anti-ban
-    + a fully-prepared channel costs zero reads). A transient resolve failure here
-    would otherwise clobber the already-ready pairs with "failed" outcomes (Bug 3).
-    """
-    remaining = [acc for acc in ctx.accounts if (acc, channel) not in ctx.already_ready]
-    if not remaining:
-        ctx.report(f"Канал {channel}: все пары уже готовы — пропуск.")
-        ctx.outcomes.extend(
-            AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
-            for account_id in ctx.accounts
-        )
-        return joined_once
-    ctx.report(f"Разрешение группы обсуждения для {channel}...")
-    group_id = await _resolve_group_for_join(
-        remaining, channel, ctx.outcomes, report=ctx.on_progress
-    )
-    if group_id is None:
-        ctx.outcomes.extend(
-            AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
-            for account_id in ctx.accounts
-            if (account_id, channel) in ctx.already_ready
-        )
-        return joined_once
-    for account_id in ctx.accounts:
-        joined_once = await _onboard_pair(
-            account_id, channel, group_id, ctx, joined_once=joined_once
-        )
-    return joined_once
-
-
-async def _onboard_pair(
-    account_id: str,
-    channel: str,
-    group_id: int,
-    ctx: _OnboardContext,
-    *,
-    joined_once: bool,
-) -> bool:
-    """Onboard one (account, channel) pair; return the updated ``joined_once`` flag."""
-    if (account_id, channel) in ctx.already_ready:
-        ctx.report(f"Аккаунт {account_id} уже готов для {channel} — пропуск.")
-        ctx.outcomes.append(
-            AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
-        )
-        return joined_once
-    if joined_once:
-        jitter = _join_jitter_seconds()
-        ctx.report(f"Пауза {jitter:.1f} сек для обхода спам-фильтров...")
-        await asyncio.sleep(jitter)
-    ctx.report(f"Аккаунт {account_id}: вступление в группу для {channel}...")
-    outcome = await _join_pair_safely(
-        account_id, channel, group_id, solver_enabled=ctx.solver_enabled
-    )
-    status_ru = _JOIN_STATUS_RU.get(outcome.state, outcome.state)
-    reason_str = f" ({outcome.reason})" if outcome.reason else ""
-    ctx.report(f"Результат для {account_id} на {channel}: {status_ru}{reason_str}")
-    ctx.outcomes.append(outcome)
-    return True
 
 
 async def _resolve_group_for_join(
