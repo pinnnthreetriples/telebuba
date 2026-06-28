@@ -35,14 +35,25 @@ class TelegramSettings(BaseSettings):
     flood_sleep_threshold: int = Field(default=0, ge=0)
 
 
-class UiSettings(BaseSettings):
-    model_config = SettingsConfigDict(env_prefix="UI__", extra="ignore")
+class ApiSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="API__", extra="ignore")
 
+    # 127.0.0.1 is the safe default (loopback only); set 0.0.0.0 via env for a
+    # container/prod deploy. Binding loopback by default also avoids bandit B104.
+    host: str = "127.0.0.1"
     port: int = Field(default=8080, ge=1, le=65535)
-    # NiceGUI WS reconnect grace. Default 3 s is too tight when Telethon
-    # uploads 5+ MB media — pyaes block on the loop trips the "Connection
-    # lost" popup. 30 s rides over typical upload bursts.
-    reconnect_timeout: float = Field(default=30.0, gt=0)
+    # Allowed CORS origins for the SPA (dev usually uses the Vite proxy, so this
+    # stays empty; set the deployed frontend origin when serving cross-origin).
+    cors_origins: list[str] = Field(default_factory=list)
+    # API path version segment (``/api/{version}``).
+    version: str = Field(default="v1", min_length=1)
+
+
+class AuthSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="AUTH__", extra="ignore")
+
+    # Placeholder for the auth slice (#168): JWT signing secret. Empty until set.
+    secret: str = ""
 
 
 class DbSettings(BaseSettings):
@@ -343,7 +354,8 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(extra="ignore")
 
     telegram: TelegramSettings = Field(default_factory=TelegramSettings)
-    ui: UiSettings = Field(default_factory=UiSettings)
+    api: ApiSettings = Field(default_factory=ApiSettings)
+    auth: AuthSettings = Field(default_factory=AuthSettings)
     db: DbSettings = Field(default_factory=DbSettings)
     proxy: ProxySettings = Field(default_factory=ProxySettings)
     profile_media: ProfileMediaSettings = Field(default_factory=ProfileMediaSettings)

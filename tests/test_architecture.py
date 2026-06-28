@@ -15,6 +15,7 @@ package splits landed.
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 
 import pytest
@@ -62,19 +63,42 @@ def _violations(layer: str, forbidden_roots: set[str]) -> list[str]:
 
 
 def test_services_do_not_import_ui_or_sdks() -> None:
-    # Services are pure logic: no NiceGUI, no SQLAlchemy/Telethon, no features.
-    assert _violations("services", {"nicegui", "sqlalchemy", "telethon", "features"}) == []
+    # Services are pure logic: no SQLAlchemy/Telethon (gateways), and transport-
+    # agnostic — never the API layer or FastAPI. (NiceGUI is gone but stays
+    # banned so it can't creep back.)
+    forbidden = {"nicegui", "sqlalchemy", "telethon", "fastapi", "api"}
+    assert _violations("services", forbidden) == []
 
 
 def test_schemas_depend_only_on_pydantic_and_stdlib() -> None:
     # Schemas are leaf contracts: no project layers, no third-party SDKs.
-    forbidden = {"core", "services", "features", "sqlalchemy", "telethon", "nicegui"}
+    forbidden = {"core", "services", "api", "sqlalchemy", "telethon", "nicegui", "fastapi"}
     assert _violations("schemas", forbidden) == []
 
 
 def test_core_does_not_import_upper_layers() -> None:
     # Infrastructure must not depend on the layers above it.
-    assert _violations("core", {"features", "services"}) == []
+    assert _violations("core", {"api", "services"}) == []
+
+
+# api/ is the UI-thin top layer: it may import only services, schemas, fastapi,
+# the stdlib, and from core ONLY config + logging — the executable firewall that
+# replaced the old features→{config,logging} allowlist when api/ landed.
+_API_ALLOWED_ROOTS = {"services", "schemas", "fastapi", "api"} | set(sys.stdlib_module_names)
+_API_ALLOWED_CORE = {"core.config", "core.logging"}
+
+
+def test_api_imports_only_allowlisted() -> None:
+    violations: list[str] = []
+    for path in _python_modules("api"):
+        rel = path.relative_to(_ROOT).as_posix()
+        for module in _imported_modules(path):
+            if _root_package(module) == "core":
+                if module not in _API_ALLOWED_CORE:
+                    violations.append(f"{rel} imports {module}")
+            elif _root_package(module) not in _API_ALLOWED_ROOTS:
+                violations.append(f"{rel} imports {module}")
+    assert violations == []
 
 
 def test_env_example_covers_every_config_field() -> None:
@@ -91,7 +115,7 @@ def test_env_example_covers_every_config_field() -> None:
     assert missing == [], f".env.example is missing keys: {missing}"
 
 
-@pytest.mark.parametrize("layer", ["core", "services", "schemas"])
+@pytest.mark.parametrize("layer", ["api", "core", "services", "schemas"])
 def test_layer_directory_exists(layer: str) -> None:
     # Guard against a rename silently turning the import checks into no-ops.
     assert (_ROOT / layer).is_dir()
@@ -101,6 +125,7 @@ def test_layer_directory_exists(layer: str) -> None:
 @pytest.mark.parametrize(
     ("layer", "subpath"),
     [
+        ("api", "v1"),
         ("services", "accounts"),
         ("services", "warming"),
         ("core", "telegram_client"),

@@ -22,7 +22,12 @@ fake an external collaborator monkeypatch it on its owning submodule, e.g.
 from __future__ import annotations
 
 from core.db import list_accounts
-from services.accounts._table import list_listener_accounts, load_accounts_table
+from services.accounts._table import (
+    InvalidCursorError,
+    list_accounts_page,
+    list_listener_accounts,
+    load_accounts_table,
+)
 from services.accounts.lifecycle import add_account, evaluate_account_geo, remove_account
 from services.accounts.media import (
     add_account_profile_music,
@@ -51,6 +56,7 @@ from services.accounts.sessions import (
 )
 
 __all__ = [
+    "InvalidCursorError",
     "SessionAlreadyExistsError",
     "add_account",
     "add_account_profile_music",
@@ -64,6 +70,7 @@ __all__ = [
     "import_account_tdata",
     "invalidate_account_profile_cache",
     "list_accounts",
+    "list_accounts_page",
     "list_listener_accounts",
     "load_accounts_table",
     "post_account_story",
