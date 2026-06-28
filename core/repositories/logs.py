@@ -82,8 +82,8 @@ async def list_recent_logs(limit: int = 100) -> list[LogEntry]:
     return await asyncio.to_thread(_list_recent_logs, limit)
 
 
-def _list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
-    statement = select(_logs).order_by(_logs.c.id.desc()).limit(log_filter.limit)
+def _list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[LogEntry]:
+    statement = select(_logs).order_by(_logs.c.id.desc()).limit(log_filter.limit).offset(offset)
     if log_filter.status != "all":
         statement = statement.where(_logs.c.status == log_filter.status)
     if log_filter.problems_only:
@@ -112,9 +112,9 @@ def _list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
     return entries
 
 
-async def list_filtered_logs(log_filter: LogFilter) -> list[LogEntry]:
+async def list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[LogEntry]:
     """Return the latest log entries that match the filter (newest first)."""
-    return await asyncio.to_thread(_list_filtered_logs, log_filter)
+    return await asyncio.to_thread(_list_filtered_logs, log_filter, offset)
 
 
 def _purge_logs_older_than(cutoff_iso: str) -> int:
