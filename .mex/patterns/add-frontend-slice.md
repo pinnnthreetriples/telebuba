@@ -65,6 +65,15 @@ Read `context/frontend.md` first. Key constraints:
 - [ ] `npm run gates` passes (boundary-lint + tsc-strict + eslint + vitest ≥ 80%)
 - [ ] Playwright smoke added/updated for a critical flow
 
+## Reference implementation
+
+The **Accounts screen (#167)** is the canonical example of this pattern end-to-end:
+`api/v1/accounts.py` (thin routes incl. multipart uploads) → generated client →
+`entities/account` (status model + `StatusBadge` + query/mutation re-exports) →
+`widgets/accounts-table` (TanStack Table: sorting/selection) →
+`pages/accounts` (toolbar + cursor pagination + wired mutations) → i18n labels for
+every string. Copy its shape for the remaining screens (#169–#172).
+
 ## After
 
 Run the GROW step from `ROUTER.md` (update `state/active.md`, bump `last_updated`).

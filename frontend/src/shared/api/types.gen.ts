@@ -5,6 +5,42 @@ export type ClientOptions = {
 };
 
 /**
+ * AccountCheckRequest
+ */
+export type AccountCheckRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
+ * AccountProfileUpdateRequest
+ */
+export type AccountProfileUpdateRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * First Name
+   */
+  first_name: string;
+  /**
+   * Last Name
+   */
+  last_name?: string | null;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Bio
+   */
+  bio?: string | null;
+};
+
+/**
  * AccountRead
  */
 export type AccountRead = {
@@ -124,6 +160,70 @@ export type AccountRead = {
 };
 
 /**
+ * ActionResult
+ *
+ * Outcome of one ``execute`` call.
+ */
+export type ActionResult = {
+  /**
+   * Status
+   */
+  status: 'ok' | 'flood_wait' | 'slow_mode_wait' | 'premium_wait' | 'peer_flood' | 'failed';
+  /**
+   * Action Type
+   */
+  action_type: string;
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Message Id
+   */
+  message_id?: number | null;
+  /**
+   * Flood Wait Seconds
+   */
+  flood_wait_seconds?: number | null;
+  /**
+   * Error Type
+   */
+  error_type?: string | null;
+  /**
+   * Error Message
+   */
+  error_message?: string | null;
+};
+
+/**
+ * Body_importAccountTdata
+ */
+export type BodyImportAccountTdata = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Label
+   */
+  label?: string | null;
+};
+
+/**
+ * Body_setAccountPhoto
+ */
+export type BodySetAccountPhoto = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * File
+   */
+  file: Blob | File;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -155,6 +255,24 @@ export type PageAccountRead = {
    * Next Cursor
    */
   next_cursor?: string | null;
+};
+
+/**
+ * TdataImportResult
+ *
+ * Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.
+ *
+ * Wrapping the imported accounts in a model (instead of returning a raw
+ * ``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room
+ * to add per-import metadata (counts, partial-failure summaries) without
+ * breaking every call site, and matches the convention used by ``list_accounts``
+ * and other multi-row reads.
+ */
+export type TdataImportResult = {
+  /**
+   * Accounts
+   */
+  accounts?: Array<AccountRead>;
 };
 
 /**
@@ -242,3 +360,136 @@ export type ListAccountsResponses = {
 };
 
 export type ListAccountsResponse = ListAccountsResponses[keyof ListAccountsResponses];
+
+export type CheckAccountData = {
+  body: AccountCheckRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/check';
+};
+
+export type CheckAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CheckAccountError = CheckAccountErrors[keyof CheckAccountErrors];
+
+export type CheckAccountResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type CheckAccountResponse = CheckAccountResponses[keyof CheckAccountResponses];
+
+export type UpdateAccountProfileData = {
+  body: AccountProfileUpdateRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/profile';
+};
+
+export type UpdateAccountProfileErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateAccountProfileError =
+  UpdateAccountProfileErrors[keyof UpdateAccountProfileErrors];
+
+export type UpdateAccountProfileResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type UpdateAccountProfileResponse =
+  UpdateAccountProfileResponses[keyof UpdateAccountProfileResponses];
+
+export type DeleteAccountData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}';
+};
+
+export type DeleteAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteAccountError = DeleteAccountErrors[keyof DeleteAccountErrors];
+
+export type DeleteAccountResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteAccountResponse = DeleteAccountResponses[keyof DeleteAccountResponses];
+
+export type ImportAccountTdataData = {
+  body: BodyImportAccountTdata;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/import-tdata';
+};
+
+export type ImportAccountTdataErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ImportAccountTdataError = ImportAccountTdataErrors[keyof ImportAccountTdataErrors];
+
+export type ImportAccountTdataResponses = {
+  /**
+   * Successful Response
+   */
+  200: TdataImportResult;
+};
+
+export type ImportAccountTdataResponse =
+  ImportAccountTdataResponses[keyof ImportAccountTdataResponses];
+
+export type SetAccountPhotoData = {
+  body: BodySetAccountPhoto;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/photo';
+};
+
+export type SetAccountPhotoErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetAccountPhotoError = SetAccountPhotoErrors[keyof SetAccountPhotoErrors];
+
+export type SetAccountPhotoResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
