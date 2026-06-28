@@ -15,10 +15,12 @@ import subprocess
 import sys
 
 _NPM_PACKAGE = os.environ.get("AISLOP_NPM_PACKAGE", "aislop@0.10.2")
-# ``web/`` holds the vendored design SPA (Telebuba.dc.html + the dc-runtime
-# support.js) — third-party generated assets served verbatim, not project code,
-# so they are outside the AI-slop quality gate.
-_EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena,web,web/**"
+# ``web/`` holds the vendored design SPA (served verbatim) and ``frontend/`` is
+# the React SPA, governed by its own gate set (eslint/tsc/vitest); neither is
+# Python project code, so both are outside the AI-slop quality gate.
+_EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena,web,web/**,frontend,frontend/**"
+# Path prefixes (POSIX) whose diagnostics are dropped from the recomputed gate.
+_EXCLUDED_PREFIXES = ("web/", "frontend/")
 
 
 def main() -> int:
@@ -51,13 +53,13 @@ def main() -> int:
         sys.stderr.write(completed.stderr)
         return completed.returncode or 2
     summary = report.get("summary", {})
-    # aislop's ``--exclude`` is unreliable across platforms, so filter vendored
-    # ``web/`` diagnostics here and recompute the gate from what remains — the
-    # design SPA + its dc-runtime are served verbatim, not project code.
+    # aislop's ``--exclude`` is unreliable across platforms, so filter the
+    # excluded prefixes here and recompute the gate from what remains — the
+    # vendored ``web/`` SPA and the ``frontend/`` React app are not Python code.
     diagnostics = [
         item
         for item in report.get("diagnostics", [])
-        if not str(item.get("filePath", "")).replace("\\", "/").startswith("web/")
+        if not str(item.get("filePath", "")).replace("\\", "/").startswith(_EXCLUDED_PREFIXES)
     ]
     for item in diagnostics:
         sys.stdout.write(

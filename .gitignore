@@ -35,6 +35,11 @@ debug.log
 .DS_Store
 Thumbs.db
 
+# Frontend (React SPA) — deps + build output; the generated client is committed.
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+
 # Tool caches
 .pytest_cache/
 .ruff_cache/
