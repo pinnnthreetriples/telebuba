@@ -6,6 +6,7 @@ const LINKS = [
   { to: '/warming', key: 'warming' },
   { to: '/neurocomment', key: 'neurocomment' },
   { to: '/logs', key: 'logs' },
+  { to: '/settings', key: 'settings' },
 ] as const;
 
 export function AppNav() {

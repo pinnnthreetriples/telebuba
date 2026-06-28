@@ -7,27 +7,9 @@ import {
   removeWarmingChannelMutation,
   startWarmingMutation,
   stopWarmingMutation,
-  updateWarmingSettingsMutation,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
-import type { WarmingSettings } from '@/shared/api';
 import { WarmingBoard } from '@/widgets/warming-board';
-
-const TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
-type Toggle = (typeof TOGGLES)[number];
-
-function settingsUpdate(settings: WarmingSettings, change: Partial<Record<Toggle, boolean>>) {
-  return {
-    inter_account_chat: settings.inter_account_chat,
-    reactions_enabled: settings.reactions_enabled,
-    join_enabled: settings.join_enabled,
-    enforce_readiness: settings.enforce_readiness,
-    quiet_hours_enabled: settings.quiet_hours_enabled,
-    quiet_hours_start: settings.quiet_hours_start,
-    quiet_hours_end: settings.quiet_hours_end,
-    ...change,
-  };
-}
 
 const POLL_MS = 4000;
 
@@ -49,7 +31,6 @@ export function WarmingPage() {
   const stop = useMutation(stopWarmingMutation());
   const addChannels = useMutation(addWarmingChannelsMutation());
   const removeChannel = useMutation(removeWarmingChannelMutation());
-  const saveSettings = useMutation(updateWarmingSettingsMutation());
 
   const runOnAccount = (mutation: typeof start | typeof stop, accountId: string) => {
     setBusyId(accountId);
@@ -150,27 +131,6 @@ export function WarmingPage() {
             </li>
           ))}
         </ul>
-      </section>
-
-      <section className="rounded-md border border-line bg-surface p-4">
-        <h2 className="mb-3 text-sm font-medium text-ink-muted">{t('warming.settings.title')}</h2>
-        <div className="space-y-2">
-          {TOGGLES.map((toggle) => (
-            <label key={toggle} className="flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={data.settings[toggle]}
-                onChange={(event) => {
-                  saveSettings.mutate(
-                    { body: settingsUpdate(data.settings, { [toggle]: event.target.checked }) },
-                    { onSettled: invalidate },
-                  );
-                }}
-              />
-              {t(`warming.settings.${toggle}`)}
-            </label>
-          ))}
-        </div>
       </section>
     </main>
   );
