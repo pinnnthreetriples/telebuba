@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -66,6 +66,12 @@ function routeApi() {
   });
 }
 
+function lastEventSource(): { emit(data: unknown): void } | undefined {
+  return (
+    globalThis.EventSource as unknown as { last(): { emit(d: unknown): void } | undefined }
+  ).last();
+}
+
 test('renders the board, channels and settings from live data', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);
@@ -74,6 +80,25 @@ test('renders the board, channels and settings from live data', async () => {
   });
   expect(screen.getByText('warm-1')).toBeInTheDocument();
   expect(screen.getByText('@news')).toBeInTheDocument();
+});
+
+test('refetches the board on a live SSE event', async () => {
+  routeApi();
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-1')).toBeInTheDocument();
+  });
+  const boardCalls = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => (input as Request).url.includes('/warming/board')).length;
+  const before = boardCalls();
+  act(() => {
+    lastEventSource()?.emit({ id: 1, event: 'cycle_started' });
+  });
+  await waitFor(() => {
+    expect(boardCalls()).toBeGreaterThan(before);
+  });
 });
 
 test('starts an idle account', async () => {

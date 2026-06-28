@@ -51,6 +51,11 @@ class ApiSettings(BaseSettings):
     cors_origins: list[str] = Field(default_factory=list)
     # API path version segment (``/api/{version}``).
     version: str = Field(default="v1", min_length=1)
+    # SSE live-event stream (``GET /api/v1/events``): keepalive comment cadence
+    # (keeps idle proxies from closing the stream) + per-subscriber queue bound
+    # (a slow client's queue fills → its live frames drop; the FE poll backstops).
+    sse_keepalive_seconds: float = Field(default=15.0, gt=0)
+    sse_max_queue: int = Field(default=1000, ge=1)
 
 
 class AuthSettings(BaseSettings):

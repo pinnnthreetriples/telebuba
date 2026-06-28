@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -32,6 +32,13 @@ function routeLogs(page1: unknown, page2?: unknown) {
   });
 }
 
+interface MockSource {
+  emit(data: unknown): void;
+}
+function lastEventSource(): MockSource | undefined {
+  return (globalThis.EventSource as unknown as { last(): MockSource | undefined }).last();
+}
+
 test('renders log rows from the API', async () => {
   routeLogs({ items: [logRow(1, 'thing_happened')], next_cursor: null });
   renderWithClient(<LogsPage />);
@@ -39,6 +46,20 @@ test('renders log rows from the API', async () => {
     expect(screen.getByText('thing_happened')).toBeInTheDocument();
   });
   expect(screen.getByText('acc-1')).toBeInTheDocument();
+});
+
+test('prepends a live SSE event to the newest page', async () => {
+  routeLogs({ items: [logRow(1, 'first')], next_cursor: null });
+  renderWithClient(<LogsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('first')).toBeInTheDocument();
+  });
+  act(() => {
+    lastEventSource()?.emit(logRow(2, 'live_event'));
+  });
+  await waitFor(() => {
+    expect(screen.getByText('live_event')).toBeInTheDocument();
+  });
 });
 
 test('shows the empty state', async () => {

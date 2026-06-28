@@ -1,35 +1,54 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
+import type { PageLogEntry } from '@/shared/api';
+import { useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
-const POLL_MS = 5000;
 const STATUS_FILTERS = ['all', 'success', 'warning', 'error'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 export function LogsPage() {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
   const [status, setStatus] = useState<StatusFilter>('all');
   const [account, setAccount] = useState('');
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
-  const { data, isPending, isError } = useQuery({
-    ...logsQueryOptions({
+  // Live via SSE (setQueryData below) — no refetch poll; pagination still uses
+  // the query for the older pages.
+  const { data, isPending, isError } = useQuery(
+    logsQueryOptions({
       query: { status, account_id: account, cursor, limit: PAGE_SIZE },
     }),
-    refetchInterval: POLL_MS,
+  );
+
+  const items = data?.items ?? [];
+  const hasPrev = cursorStack.length > 1;
+  const hasNext = Boolean(data?.next_cursor);
+
+  // Live tail: prepend each incoming row to the newest page's cache, in place,
+  // when it matches the active filter (no refetch).
+  useLogEventStream((entry) => {
+    if (hasPrev) return;
+    if (status !== 'all' && entry.status !== status) return;
+    if (account && entry.account_id !== account) return;
+    const { queryKey } = logsQueryOptions({
+      query: { status, account_id: account, cursor: undefined, limit: PAGE_SIZE },
+    });
+    queryClient.setQueryData<PageLogEntry>(queryKey, (old) => {
+      if (!old) return old;
+      if (old.items.some((row) => row.id === entry.id)) return old;
+      return { ...old, items: [entry, ...old.items].slice(0, PAGE_SIZE) };
+    });
   });
 
   const resetPaging = () => {
     setCursorStack([null]);
   };
-
-  const items = data?.items ?? [];
-  const hasPrev = cursorStack.length > 1;
-  const hasNext = Boolean(data?.next_cursor);
 
   return (
     <main className="mx-auto max-w-5xl space-y-4 p-8">

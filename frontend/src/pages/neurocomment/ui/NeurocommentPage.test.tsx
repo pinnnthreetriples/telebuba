@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -62,6 +62,12 @@ function routeApi() {
   });
 }
 
+function lastEventSource(): { emit(data: unknown): void } | undefined {
+  return (
+    globalThis.EventSource as unknown as { last(): { emit(d: unknown): void } | undefined }
+  ).last();
+}
+
 test('renders campaigns and the board for the selected campaign', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
@@ -69,6 +75,24 @@ test('renders campaigns and the board for the selected campaign', async () => {
     expect(screen.getByText('@news')).toBeInTheDocument();
   });
   expect(screen.getByText('Готов')).toBeInTheDocument();
+});
+
+test('refetches runtime/board on a live SSE event', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('@news')).toBeInTheDocument();
+  });
+  const boardCalls = () =>
+    vi.mocked(fetch).mock.calls.filter(([input]) => (input as Request).url.endsWith('/board'))
+      .length;
+  const before = boardCalls();
+  act(() => {
+    lastEventSource()?.emit({ id: 1, event: 'neurocomment_comment_posted' });
+  });
+  await waitFor(() => {
+    expect(boardCalls()).toBeGreaterThan(before);
+  });
 });
 
 test('creates a campaign', async () => {

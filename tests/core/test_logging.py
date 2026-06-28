@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
 import pytest
 
+from core import events
 from core import logging as logging_module
 from core.config import settings
 from core.db import configure_database, list_recent_logs
@@ -134,6 +136,32 @@ def test_setup_logging_is_idempotent() -> None:
     setup_logging()
     assert logging_module._state.initialized is True
     assert initial_initialized is True
+
+
+@pytest.mark.asyncio
+async def test_log_event_publishes_persisted_row_to_bus() -> None:
+    async with events.subscribe() as queue:
+        await log_event("WARNING", "live_event", account_id="acc-live", extra={"k": "v"})
+        published = await asyncio.wait_for(queue.get(), timeout=1)
+    assert published.event == "live_event"
+    assert published.status == "warning"
+    assert published.account_id == "acc-live"
+    assert published.extra == {"k": "v"}
+    # The published row is the persisted DB row (real id), not a synthetic one.
+    assert published.id > 0
+
+
+@pytest.mark.asyncio
+async def test_publish_failure_does_not_break_logging(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _boom(_entry: object) -> None:
+        msg = "bus down"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(logging_module, "publish_event", _boom)
+    await log_event("INFO", "still_logs")  # must not raise
+
+    rows = await list_recent_logs(limit=5)
+    assert rows[0].event == "still_logs"
 
 
 @pytest.mark.asyncio

@@ -9,9 +9,11 @@ import {
   stopWarmingMutation,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
+import { useLogEventStream } from '@/shared/lib';
 import { WarmingBoard } from '@/widgets/warming-board';
 
-const POLL_MS = 4000;
+// SSE drives live board updates; this poll is just the fallback safety net.
+const FALLBACK_POLL_MS = 30000;
 
 export function WarmingPage() {
   const { t } = useTranslation();
@@ -21,12 +23,14 @@ export function WarmingPage() {
 
   const { data, isPending, isError } = useQuery({
     ...warmingBoardQueryOptions(),
-    refetchInterval: POLL_MS,
+    refetchInterval: FALLBACK_POLL_MS,
   });
 
   const invalidate = () => {
     void queryClient.invalidateQueries();
   };
+  // Live status: any runtime event refreshes the board (event-driven, not timed).
+  useLogEventStream(invalidate);
   const start = useMutation(startWarmingMutation());
   const stop = useMutation(stopWarmingMutation());
   const addChannels = useMutation(addWarmingChannelsMutation());

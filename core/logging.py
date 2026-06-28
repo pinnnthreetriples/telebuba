@@ -27,6 +27,7 @@ from loguru import logger
 
 from core.config import settings
 from core.db import insert_log_row
+from core.events import publish as publish_event
 from schemas.logs import LogEventInput
 
 if TYPE_CHECKING:
@@ -133,9 +134,20 @@ async def log_event(
     )
 
     try:
-        await insert_log_row(payload)
+        row = await insert_log_row(payload)
     except Exception as exc:  # noqa: BLE001 — logging must never break callers.
         logger.warning("log_persist_failed event={event} error={error}", event=event, error=exc)
+    else:
+        # Fourth, best-effort tier: fan the persisted row out to live SSE
+        # subscribers. Never let a bus fault break the caller (same contract).
+        try:
+            publish_event(row)
+        except Exception as exc:  # noqa: BLE001 — live bus must never break logging.
+            logger.warning(
+                "event_publish_failed event={event} error={error}",
+                event=event,
+                error=exc,
+            )
 
     try:
         _send_to_sentry(payload)
