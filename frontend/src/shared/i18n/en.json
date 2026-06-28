@@ -30,10 +30,22 @@
       "telegram": "Telegram",
       "country": "Country",
       "lastChecked": "Checked",
+      "phone": "Phone",
+      "proxy": "Proxy",
+      "device": "Device",
+      "trust": "Trust",
+      "actions": "Actions",
       "selectAll": "Select all",
       "selectRow": "Select row"
     },
+    "stats": {
+      "total": "Total",
+      "alive": "Alive",
+      "attention": "Attention",
+      "errors": "Errors"
+    },
     "actions": {
+      "add": "Account",
       "check": "Check",
       "delete": "Delete",
       "importTdata": "Import tdata"

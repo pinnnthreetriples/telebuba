@@ -1,6 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { RowSelectionState, SortingState } from '@tanstack/react-table';
-import { useState } from 'react';
+import { useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -12,22 +11,19 @@ import {
 import { AccountsTable } from '@/widgets/accounts-table';
 
 const PAGE_SIZE = 20;
-const STATUS_FILTERS = ['all', 'alive', 'new', 'unauthorized', 'flood_wait'] as const;
 
 export function AccountsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const fileInput = useRef<HTMLInputElement>(null);
 
   const [search, setSearch] = useState('');
-  const [status, setStatus] = useState<string>('all');
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
-  const [sorting, setSorting] = useState<SortingState>([]);
-  const [rowSelection, setRowSelection] = useState<RowSelectionState>({});
   const [busyId, setBusyId] = useState<string | null>(null);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
   const { data, isPending, isError } = useQuery(
-    accountsQueryOptions({ query: { query: search, status, cursor, limit: PAGE_SIZE } }),
+    accountsQueryOptions({ query: { query: search, status: 'all', cursor, limit: PAGE_SIZE } }),
   );
 
   const invalidate = () => {
@@ -36,10 +32,6 @@ export function AccountsPage() {
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
   const importTdata = useMutation(importAccountTdataMutation());
-
-  const resetToFirstPage = () => {
-    setCursorStack([null]);
-  };
 
   const onCheck = (accountId: string) => {
     setBusyId(accountId);
@@ -53,7 +45,6 @@ export function AccountsPage() {
       },
     );
   };
-
   const onDelete = (accountId: string) => {
     setBusyId(accountId);
     remove.mutate(
@@ -66,52 +57,85 @@ export function AccountsPage() {
       },
     );
   };
-
-  const onImport = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const onImport = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     importTdata.mutate({ body: { file } }, { onSettled: invalidate });
     event.target.value = '';
   };
 
+  const items = data?.items ?? [];
+  const stats: { label: string; value: number; cls: string }[] = [
+    { label: t('accounts.stats.total'), value: items.length, cls: 'text-ink' },
+    {
+      label: t('accounts.stats.alive'),
+      value: items.filter((a) => a.status === 'alive').length,
+      cls: 'text-success',
+    },
+    {
+      label: t('accounts.stats.attention'),
+      value: items.filter((a) => a.status === 'unauthorized' || a.status === 'flood_wait').length,
+      cls: 'text-warning',
+    },
+    {
+      label: t('accounts.stats.errors'),
+      value: items.filter((a) => a.status.includes('error')).length,
+      cls: 'text-danger',
+    },
+  ];
+
   const hasPrev = cursorStack.length > 1;
   const hasNext = Boolean(data?.next_cursor);
 
   return (
-    <main className="mx-auto max-w-5xl p-8">
-      <header className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">{t('accounts.title')}</h1>
-        <label className="cursor-pointer rounded-md bg-primary px-3 py-2 text-sm font-medium text-white hover:opacity-90">
-          {t('accounts.actions.importTdata')}
-          <input type="file" accept=".zip" className="hidden" onChange={onImport} />
-        </label>
-      </header>
+    <div className="tb-fadeup">
+      <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
+        <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
+        <div className="flex items-center gap-2">
+          <div className="relative flex items-center">
+            <svg
+              className="pointer-events-none absolute left-3 text-ink-subtle"
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <circle cx="11" cy="11" r="7" />
+              <path d="m21 21-4.3-4.3" />
+            </svg>
+            <input
+              value={search}
+              onChange={(event) => {
+                setSearch(event.target.value);
+                setCursorStack([null]);
+              }}
+              placeholder={t('accounts.searchPlaceholder')}
+              className="tb-time h-[38px] w-[220px] rounded-full border border-line bg-white pl-9 pr-3 text-[13px] outline-none"
+            />
+          </div>
+          <button
+            type="button"
+            onClick={() => fileInput.current?.click()}
+            className="rounded-full bg-primary px-4 py-2 text-[13px] font-medium text-white"
+          >
+            + {t('accounts.actions.add')}
+          </button>
+          <input ref={fileInput} type="file" accept=".zip" className="hidden" onChange={onImport} />
+        </div>
+      </div>
 
-      <div className="mb-4 flex gap-3">
-        <input
-          type="search"
-          value={search}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            resetToFirstPage();
-          }}
-          placeholder={t('accounts.searchPlaceholder')}
-          className="flex-1 rounded-md border border-line bg-surface px-3 py-2 text-sm"
-        />
-        <select
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value);
-            resetToFirstPage();
-          }}
-          className="rounded-md border border-line bg-surface px-3 py-2 text-sm"
-        >
-          {STATUS_FILTERS.map((value) => (
-            <option key={value} value={value}>
-              {t(`accounts.filter.${value}`)}
-            </option>
-          ))}
-        </select>
+      <div className="mb-4 flex flex-wrap gap-[10px]">
+        {stats.map((stat) => (
+          <div
+            key={stat.label}
+            className="min-w-[120px] rounded-xl border border-line bg-white px-4 py-[11px]"
+          >
+            <div className={`text-[20px] font-bold ${stat.cls}`}>{stat.value}</div>
+            <div className="mt-px text-[11px] text-ink-muted">{stat.label}</div>
+          </div>
+        ))}
       </div>
 
       {isPending ? (
@@ -120,44 +144,37 @@ export function AccountsPage() {
         <p role="alert" className="text-danger">
           {t('accounts.error')}
         </p>
-      ) : data.items.length === 0 ? (
-        <p className="text-ink-subtle">{t('accounts.empty')}</p>
+      ) : items.length === 0 ? (
+        <div className="rounded-2xl border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+          {t('accounts.empty')}
+        </div>
       ) : (
         <>
-          <AccountsTable
-            data={data.items}
-            sorting={sorting}
-            onSortingChange={setSorting}
-            rowSelection={rowSelection}
-            onRowSelectionChange={setRowSelection}
-            onCheck={onCheck}
-            onDelete={onDelete}
-            busyId={busyId}
-          />
+          <AccountsTable data={items} onCheck={onCheck} onDelete={onDelete} busyId={busyId} />
           <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
-              className="rounded border border-line px-3 py-1 text-sm disabled:opacity-50"
               disabled={!hasPrev}
               onClick={() => {
                 setCursorStack((stack) => stack.slice(0, -1));
               }}
+              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
             >
               {t('accounts.pagination.prev')}
             </button>
             <button
               type="button"
-              className="rounded border border-line px-3 py-1 text-sm disabled:opacity-50"
               disabled={!hasNext}
               onClick={() => {
-                setCursorStack((stack) => [...stack, data.next_cursor ?? null]);
+                setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
               }}
+              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
             >
               {t('accounts.pagination.next')}
             </button>
           </div>
         </>
       )}
-    </main>
+    </div>
   );
 }

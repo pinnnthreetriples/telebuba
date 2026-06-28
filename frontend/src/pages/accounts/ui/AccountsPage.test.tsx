@@ -90,7 +90,7 @@ test('runs the check action on a row', async () => {
   await waitFor(() => {
     expect(screen.getByText('acc-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Проверить'));
+  await userEvent.click(screen.getByTitle('Проверить'));
   await waitFor(() => {
     const checked = vi
       .mocked(fetch)

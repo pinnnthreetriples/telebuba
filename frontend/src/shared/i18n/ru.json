@@ -30,10 +30,22 @@
       "telegram": "Telegram",
       "country": "Страна",
       "lastChecked": "Проверен",
+      "phone": "Телефон",
+      "proxy": "Прокси",
+      "device": "Устройство",
+      "trust": "Trust",
+      "actions": "Действия",
       "selectAll": "Выбрать все",
       "selectRow": "Выбрать строку"
     },
+    "stats": {
+      "total": "Всего",
+      "alive": "Активные",
+      "attention": "Внимание",
+      "errors": "Ошибки"
+    },
     "actions": {
+      "add": "Аккаунт",
       "check": "Проверить",
       "delete": "Удалить",
       "importTdata": "Импорт tdata"
