@@ -79,7 +79,6 @@ addopts = [
     "--tb=short",
     "--showlocals",
     "--cov=core",
-    "--cov=features",
     "--cov=schemas",
     "--cov=services",
     "--cov-branch",
@@ -103,7 +102,7 @@ log_cli_level = "INFO"
 # ============================================================================
 [tool.coverage.run]
 branch = true
-source = ["core", "features", "schemas", "services"]
+source = ["core", "schemas", "services"]
 parallel = true
 
 [tool.coverage.report]
@@ -156,12 +155,6 @@ ignore = [
 # CI gate helpers: subprocess to dev tools is intentional; they are standalone
 # scripts (no package) run by CI / pre-commit, not imported by the app.
 "tools/**" = ["S603", "S607", "INP001"]
-# Russian-language UI strings — Cyrillic letters are intentional, not confusables.
-"features/accounts/**" = ["RUF001", "RUF002", "RUF003"]
-"features/logs.py" = ["RUF001", "RUF002", "RUF003"]
-"features/neurocomment/**" = ["RUF001", "RUF002", "RUF003"]
-"features/warming/**" = ["RUF001", "RUF002", "RUF003"]
-"features/shared/**" = ["RUF001", "RUF002", "RUF003"]
 
 [tool.ruff.lint.pydocstyle]
 convention = "google"
@@ -178,7 +171,7 @@ indent-style = "space"
 # ty — Astral type checker (pre-1.0). Strict defaults; revisit when ty stabilizes.
 # ============================================================================
 [tool.ty.src]
-include = ["core", "features", "schemas", "services", "tests", "main.py"]
+include = ["core", "schemas", "services", "tests", "main.py"]
 
 [tool.ty.rules]
 # treat every unresolved or possibly-unbound name as an error
@@ -197,7 +190,7 @@ skips = []
 # deptry — flag unused / missing / transitive dependencies.
 # ============================================================================
 [tool.deptry]
-known_first_party = ["core", "features", "schemas", "services"]
+known_first_party = ["core", "schemas", "services"]
 # CI gate helpers under tools/ import dev-only tooling (radon); they are not
 # part of the shipped app, so exclude them from the dependency scan.
 extend_exclude = ["tools"]
@@ -216,7 +209,7 @@ DEP004 = ["hypothesis"]
 # ============================================================================
 [tool.vulture]
 min_confidence = 80
-paths = ["core", "features", "schemas", "services"]
+paths = ["core", "schemas", "services"]
 
 # ============================================================================
 # mutmut — mutation testing. Run nightly; not a PR gate.
@@ -237,7 +230,7 @@ mutate_only_covered_lines = true
 #     .env.example that tests/test_architecture.py reads.
 # Without this, pytest hits ModuleNotFoundError / collects zero tests inside
 # mutants/ and mutmut aborts before testing a single mutant.
-also_copy = ["core", "features", "tests", "conftest.py", "pyproject.toml", ".env.example"]
+also_copy = ["core", "tests", "conftest.py", "pyproject.toml", ".env.example"]
 # Drop the project addopts for the per-mutant runs: the strict --cov /
 # --cov-fail-under=90 gates would make every partial run exit non-zero and
 # corrupt mutmut's kill/survive signal. asyncio_mode / filterwarnings live in

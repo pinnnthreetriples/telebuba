@@ -1,2 +1,5 @@
 # CI gate helpers (trusted tooling that shells out to dev tools); not app code.
 tools/
+# Vendored design SPA (Telebuba.dc.html + the dc-runtime support.js) — served
+# verbatim; its new Function/eval is the design-canvas runtime, not our code.
+web/

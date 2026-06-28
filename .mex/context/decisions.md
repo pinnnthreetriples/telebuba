@@ -12,12 +12,47 @@ edges:
     condition: when a decision relates to system structure
   - target: context/stack.md
     condition: when a decision relates to technology choice
-last_updated: 2026-06-23
+last_updated: 2026-06-28
 ---
 
 # Decisions
 
 ## Decision Log
+
+### Frontend/backend split — React SPA over a FastAPI JSON API (supersedes "Use NiceGUI")
+**Date:** 2026-06-28
+**Status:** Accepted (design, via grill; not yet built)
+**Decision:** NiceGUI is removed. The UI becomes a standalone **React + TypeScript (strict) + Vite** SPA; the Python app exposes a thin **FastAPI + uvicorn** JSON API under `/api/v1` over the existing `services/`. A new top layer **`api/`** replaces `features/` as the UI-thin layer — it validates input, calls a service, serializes the result. `api/` may import **only** `services/`, `schemas/`, `core.config`, `core.logging`, `fastapi` — never `core.db`/`core.repositories`/`core.telegram_client`/`sqlalchemy`/`telethon` (the `features→{config,logging}` firewall moves to `api→{config,logging}+services+schemas+fastapi`). **Repo layout:** Python stays at repo root; the SPA lives in a sibling `frontend/`. **Runtimes** (warming, neurocomment) move from NiceGUI `on_startup`/`on_shutdown` to FastAPI **`lifespan`**; **uvicorn runs single-worker** (the runtimes are in-process asyncio tasks — multi-worker would duplicate Telegram work and race the DB). **Prod serving:** `frontend/dist` via FastAPI `StaticFiles` + a catch-all returning `index.html`; **dev** = uvicorn + vite with a `/api` proxy. **Auth (near-term):** `users` table + migration + password hashing + JWT encode/decode in `core/`; auth policy in `services/auth/`; routes + `Depends(get_current_user)` + **HttpOnly+Secure+SameSite session cookie (sliding TTL, no refresh rotation)** in `api/`; `role` column from day one (no RBAC until a second role); no public signup (admin-seeded). **Cross-cutting contract:** error envelope `{error:{code,message,fields?}}` (422 remapped into it) + generic `Page[T]={items,next_cursor}` cursor pagination. **Frontend stack:** TanStack Router/Query/Table/Form, Tailwind + shadcn/ui (Radix), `@hey-api/openapi-ts` client generated from OpenAPI (CI drift-check), Sentry React, Vitest+RTL + Playwright smoke, self-hosted Inter + flag-icons (zero CDN).
+**Reasoning:** The hand-built NiceGUI re-implementation could not match the design, and NiceGUI no longer renders any UI — it had decayed to a thin wrapper over the FastAPI/Starlette/uvicorn it bundles while dragging an unused Vue/Quasar/websocket runtime. A real React SPA over a typed JSON API gives pixel-fidelity to the design (which is React+CSS underneath), end-to-end type safety (pydantic → OpenAPI → TS), and a maintainable/hireable frontend. Holding `api/` to the same gateway discipline `features/` had (data only via services) preserves the executable arch firewall and keeps services UI-agnostic/reusable (tests, scripts, SSE). Python-at-root avoids a pointless mass move of every import/config. Single-worker is mandatory because the runtimes assume one process.
+**Alternatives considered:**
+- *Keep / re-implement UI in NiceGUI* — rejected: cannot reach design fidelity (drift already burned us); pays for an unused UI framework.
+- *`api/` reads `core/repositories` directly for simple GETs* — rejected: exactly the drift the firewall caught when `features/neurocomment/_page.py` imported `core.db`; thin pass-through services are the accepted cost.
+- *Move Python under `backend/` for symmetry* — rejected: churns every import/tool-config/File-Map for cosmetics.
+- *uvicorn multi-worker for throughput* — rejected: duplicates the single-process runtimes; extract runtimes to a separate process first if ever needed.
+- *Access+refresh token rotation* — rejected: YAGNI for an internal single-tenant tool; sliding HttpOnly cookie is simpler and XSS-safe.
+**Consequences:** Supersedes *Use NiceGUI instead of a split frontend/backend*. New `api/` package + `frontend/` tree; `main.py` becomes the FastAPI/uvicorn composition root (lifespan + static mount). **`tests/test_architecture.py` must re-point the firewall (`features`→`api`) in lockstep with introducing `api/`**, or it encodes stale law. Coverage source becomes `core/schemas/services/`**`api`** (drop `features`). New config namespaces `settings.api` + `settings.auth`; `settings.ui` (incl. `reconnect_timeout`) retired; `uvicorn.run(app)` imported in `main.py` so deptry sees it. The whole frontend is governed by a new `context/frontend.md` (see the FSD ADR), not the Python non-negotiables. Docs to rewrite: `architecture.md`, `conventions.md` (#1/#5/#11; scope #3/#10 to backend), `AGENTS.md` (Stack/File-Map/non-negotiables), `ci.md` (frontend jobs + gen-api drift), `logging.md` (Logs page → React), `stack.md`, `patterns/add-feature.md` (→ `add-api-endpoint` + `add-frontend-slice` + `add-auth`). Glossary: "feature"/"page" now mean the FSD frontend concepts; the backend speaks of "api endpoints" + "services".
+
+### Localization lives in the frontend — the API is locale-neutral
+**Date:** 2026-06-28
+**Status:** Accepted (design, via grill; not yet built)
+**Decision:** The API returns locale-neutral data only — stable status **codes/enums** and **ISO-8601 timestamps** — never pre-translated display text. All user-facing strings and all relative-time/number/date formatting live in the frontend via **react-i18next** (ru default, en next) + `Intl`. The service-side "single-source RU localization" approach (services emitting RU labels like `_account_status_label`, `_CHANNEL_STATUS_RU`, RU relative-time) is **reversed**: those maps move into frontend locale resources (`ru.json`/`en.json`). Log events should carry a stable event **code + structured params** (FE localizes) — staged refinement, not day-one. i18n is frontend-only; no server-side `Accept-Language`.
+**Reasoning:** English-next is impossible if the server bakes RU into responses. A locale-neutral API (codes + ISO) is the only design that supports N languages without re-touching every endpoint — the explicit "avoid future refactors" goal. It also sharpens the contract: status fields become enums on the wire (already true for `AccountStatus`), and the FE owns presentation.
+**Alternatives considered:**
+- *Server-side i18n via `Accept-Language`* — rejected: pushes presentation into the API, duplicates locale data across layers, and the SPA still needs its own i18n for static chrome (two sources of truth).
+- *Keep RU-in-services, add EN in services later* — rejected: every label/relative-time becomes a per-language server branch — the refactor we are avoiding.
+**Consequences:** `schemas/` expose enums/literals (codes), not RU strings; services stop computing display labels and relative time. The ruff `RUF001-003` "Cyrillic intentional" ignores largely leave the Python side (UI strings move to FE locale JSON). `/api/v1/logs` and status read-models return codes; the React Logs/board localize them. Gemini-generated comment text is unaffected (its language is a prompt concern, not UI i18n).
+
+### Frontend architecture = Feature-Sliced Design, enforced in CI
+**Date:** 2026-06-28
+**Status:** Accepted (design, via grill; not yet built)
+**Decision:** The frontend uses full **FSD layers** — `app / routes / pages / widgets / features / entities / shared` — with strictly **one-directional imports** (a layer imports only lower layers; no sideways imports within a layer) and **each slice exposing a public API via `index.ts`** (internals private). Data access is **only through `shared/api`** (the generated hey-api client + TanStack Query); components never fetch directly. Design **tokens live in `tailwind.config`** (extracted from the design file *before* `web/` is deleted) as the single source of truth. Enforced by **Steiger** (or `eslint-plugin-boundaries`) + ESLint + Prettier + `tsc --strict` + Vitest in CI; **Vitest coverage floor 80%** (generated/shadcn/pure-presentational excluded), with **Playwright smoke** on critical flows as the integration net. Mirrors the backend's feature/layer isolation — one mental model for the whole repo.
+**Reasoning:** Structure-now over refactor-later (explicit user choice). FSD is the documented methodology that scales and maps 1:1 onto the existing backend isolation rules. The **boundary linter is the load-bearing part** — without an executable check, layered conventions erode (the backend learned this: rule #1 didn't hold until `test_architecture.py` made it executable). 80% UI coverage + E2E is the honest floor: 90% branch on presentational components is high-cost/low-signal; logic (hooks/features/api) is tested strictly and flows are covered by Playwright.
+**Alternatives considered:**
+- *Type-based folders (components/hooks/utils)* — rejected: doesn't scale, becomes a dumping ground.
+- *Minimal `pages`+`shared` only* — rejected: user wants the full structure to avoid later re-homing; FSD layers exist as a skeleton from day one, files added as screens land.
+- *Atomic Design* — rejected: a component taxonomy, not an app architecture; dated for app structure.
+- *90% FE coverage parity* — rejected: low signal on UI; 80% + exclusions + Playwright is the professional floor.
+**Consequences:** New `context/frontend.md` documents the FSD layers + import matrix + slice public-API rule + the FE gate set; `ROUTER.md` routes to it. CI gains frontend jobs (eslint/prettier/tsc/vitest/boundary-lint/playwright) + the gen-api drift check. "feature"/"page" become FSD terms in the glossary.
 
 ### Neurocomment captcha — proactive challenge solver on onboarding (Ф2, #120)
 **Date:** 2026-06-24
@@ -184,7 +219,7 @@ last_updated: 2026-06-23
 
 ### Use NiceGUI instead of a split frontend/backend
 **Date:** 2026-06-10
-**Status:** Active
+**Status:** Superseded 2026-06-28 — see *Frontend/backend split — React SPA over a FastAPI JSON API*.
 **Decision:** UI and server run as a single async Python process via NiceGUI.
 **Reasoning:** No separate JS frontend, no API contract to maintain, one event loop shares app runtime state.
 **Alternatives considered:** FastAPI + React (rejected — two deployables), Streamlit (rejected — weaker for long-running interactive workflows).

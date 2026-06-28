@@ -3,12 +3,10 @@
 from __future__ import annotations
 
 import core
-import features
 import schemas
 
 
 def test_baseline_passes() -> None:
     assert 1 + 1 == 2
     assert core is not None
-    assert features is not None
     assert schemas is not None

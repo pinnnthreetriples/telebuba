@@ -6,7 +6,6 @@ import pytest
 from python_socks import ProxyConnectionError
 from telethon import errors
 
-import features
 from core.db import (
     configure_database,
     create_account,
@@ -219,7 +218,6 @@ async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) 
         assert isinstance(client, FakeTelegramClient)
 
     assert disconnected is True
-    assert features is not None
 
 
 @pytest.mark.asyncio

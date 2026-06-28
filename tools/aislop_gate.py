@@ -15,7 +15,10 @@ import subprocess
 import sys
 
 _NPM_PACKAGE = os.environ.get("AISLOP_NPM_PACKAGE", "aislop@0.10.2")
-_EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena"
+# ``web/`` holds the vendored design SPA (Telebuba.dc.html + the dc-runtime
+# support.js) — third-party generated assets served verbatim, not project code,
+# so they are outside the AI-slop quality gate.
+_EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena,web,web/**"
 
 
 def main() -> int:
@@ -48,13 +51,21 @@ def main() -> int:
         sys.stderr.write(completed.stderr)
         return completed.returncode or 2
     summary = report.get("summary", {})
-    errors = int(summary.get("errors", 0))
-    warnings = int(summary.get("warnings", 0))
-    for item in report.get("diagnostics", []):
+    # aislop's ``--exclude`` is unreliable across platforms, so filter vendored
+    # ``web/`` diagnostics here and recompute the gate from what remains — the
+    # design SPA + its dc-runtime are served verbatim, not project code.
+    diagnostics = [
+        item
+        for item in report.get("diagnostics", [])
+        if not str(item.get("filePath", "")).replace("\\", "/").startswith("web/")
+    ]
+    for item in diagnostics:
         sys.stdout.write(
             f"  {item.get('filePath')}:{item.get('line')} "
             f"[{item.get('severity')}] {item.get('rule')}: {item.get('message')}\n",
         )
+    errors = sum(1 for item in diagnostics if item.get("severity") == "error")
+    warnings = sum(1 for item in diagnostics if item.get("severity") == "warning")
     if errors or warnings:
         sys.stdout.write(f"aislop: gate failed — {errors} error(s), {warnings} warning(s)\n")
         return 1
