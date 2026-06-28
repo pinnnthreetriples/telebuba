@@ -21,6 +21,7 @@ from features.warming._board_dnd import (
     drop_into_warming,
     seed_card_refreshable,
 )
+from features.warming._board_header import _render_page_header
 from features.warming._board_promote import render_promotion_block, render_trust_breakdown
 from features.warming._board_spam import render_spam_badge
 from features.warming._board_styling import (
@@ -28,10 +29,6 @@ from features.warming._board_styling import (
     _PHASE_CHIP_SOLID,
     _STATE_BADGE,
     _STATE_LABEL,
-    _STATUS_ACTION_LABEL,
-    _STATUS_DOT,
-    _STRIPE_CLS,
-    _SUMMARY_CHIPS,
     _TRUST_COLOR,
     _TRUST_LABEL_RU,
     _relative_eta,
@@ -39,12 +36,22 @@ from features.warming._board_styling import (
 from features.warming._termlog import render_card_log_panel
 from schemas.warming import is_warming
 
+# Public surface of this module (and the ``_relative_eta`` re-export that
+# ``tests/features/test_warming_board_helpers.py`` imports from here).
+__all__ = [
+    "_BoardContext",
+    "_card_signature",
+    "_relative_eta",
+    "_render_board",
+    "_structural_signature",
+]
+
 if TYPE_CHECKING:
     import asyncio
     from collections.abc import Callable, Coroutine
 
     from schemas.logs import LogEntry
-    from schemas.warming import WarmingAccountState, WarmingBoardState, WarmingSummary
+    from schemas.warming import WarmingAccountState, WarmingBoardState
 
 
 @dataclass
@@ -133,48 +140,30 @@ def _card_signature(card: WarmingAccountState) -> tuple[object, ...]:  # pragma:
     )
 
 
-def _render_summary(summary: WarmingSummary) -> None:  # pragma: no cover
-    with ui.row().classes("w-full gap-2 flex-wrap"):
-        for label, field, cls in _SUMMARY_CHIPS:
-            ui.label(f"{label}: {getattr(summary, field)}").classes(
-                f"px-3 py-1.5 rounded-md text-xs font-medium {cls}",
-            )
-
-
 def _render_board(
     board: WarmingBoardState,
     ctx: _BoardContext,
 ) -> None:  # pragma: no cover
-    """Build the whole board: summary chips and two drag columns.
+    """Build the board region: spec header + the two-column account layout.
 
     The per-card refresh dispatch table ``ctx.card_refresh`` is cleared and
     repopulated here — the caller (the page-level poll loop) re-runs this
-    function only on structural changes (column move, card add/remove).
+    function only on structural changes (column move, card add/remove). LEFT
+    column «Готовы к прогреву» = the idle drop target; RIGHT «В прогреве» =
+    the warming drop target. Both keep the existing drag-drop wiring.
     """
     ctx.card_refresh.clear()
-    _render_summary(board.summary)
-    with ui.row().classes("w-full gap-4 items-stretch flex-wrap"):
-        _render_column(ctx, "Простой", "idle", board.idle, "border-slate-300")
-        _render_column(
-            ctx,
-            f"Прогрев · активно: {board.active_count}",
-            "warming",
-            board.warming,
-            "border-green-400",
-        )
+    _render_page_header(board, ctx)
+    with ui.element("div").classes("tbw-grid w-full"):
+        _render_ready_panel(ctx, board.idle)
+        _render_warming_panel(ctx, board)
 
 
-def _render_column(
+def _column_drop_handler(
     ctx: _BoardContext,
-    title: str,
     key: str,
-    cards: list[WarmingAccountState],
-    border: str,
-) -> None:  # pragma: no cover
-    column = ui.column().classes(
-        f"tb-dropzone flex-1 min-w-[320px] p-3 gap-3 rounded-lg border-2 border-dashed "
-        f"{border} bg-white min-h-[240px]",
-    )
+) -> Callable[[], Coroutine[object, object, None]]:  # pragma: no cover
+    """Build the shared drop handler for a column (idle / warming)."""
 
     async def on_drop() -> None:
         account_id = ctx.drag["account_id"]
@@ -193,18 +182,55 @@ def _render_column(
             await drop_into_idle(ctx, account_id)
         ctx.refresh()
 
+    return on_drop
+
+
+def _render_ready_panel(
+    ctx: _BoardContext,
+    cards: list[WarmingAccountState],
+) -> None:  # pragma: no cover
+    """LEFT column — «Готовы к прогреву» card; the idle-column drop target."""
+    column = ui.element("div").classes("tb-card tbw-ready-col tb-dropzone")
     column.on("dragover.prevent", lambda: None)
-    column.on("drop", on_drop)
+    column.on("drop", _column_drop_handler(ctx, "idle"))
     with column:
         with ui.row().classes("w-full items-center justify-between"):
-            ui.label(title).classes("text-sm font-semibold text-slate-700")
-            ui.label(str(len(cards))).classes(
-                "text-xs px-2 py-0.5 rounded bg-slate-100 text-slate-600",
-            )
+            ui.label("Готовы к прогреву").classes("tb-title")
+            ui.label(str(len(cards))).classes("tbw-count-pill")
         if not cards:
-            ui.label("Перетащите аккаунты сюда").classes("text-xs text-slate-400 italic")
+            ui.label("Все доступные аккаунты в прогреве").classes(
+                "text-[12px] text-[#9A9893] text-center py-6 w-full",
+            )
         for card in cards:
             seed_card_refreshable(ctx, card, _render_card)
+
+
+def _render_warming_panel(
+    ctx: _BoardContext,
+    board: WarmingBoardState,
+) -> None:  # pragma: no cover
+    """RIGHT column — «В прогреве» panel; the warming-column drop target."""
+    cards = board.warming
+    column = ui.element("div").classes("tb-card tbw-warming-col tb-dropzone")
+    column.on("dragover.prevent", lambda: None)
+    column.on("drop", _column_drop_handler(ctx, "warming"))
+    with column:
+        with ui.row().classes("w-full items-center justify-between"):
+            with ui.row().classes("items-center gap-2"):
+                with ui.element("div").classes("tbw-hero-tile"):
+                    ui.icon("monitoring").classes("text-white text-base")
+                ui.label("В прогреве").classes("tb-title-lg")
+            running = board.active_count > 0
+            ui.label("идёт прогрев" if running else "на паузе").classes(
+                f"tb-badge tb-pulse {'tbw-pill-green' if running else 'tbw-pill-idle'}",
+            )
+        if not cards:
+            ui.label("Перенесите аккаунты сюда, чтобы запустить прогрев").classes(
+                "tbw-empty-zone w-full",
+            )
+        with ui.element("div").classes("tbw-cards-grid w-full"):
+            for card in cards:
+                seed_card_refreshable(ctx, card, _render_card)
 
 
 def _render_card_header(card: WarmingAccountState) -> None:  # pragma: no cover
@@ -249,39 +275,6 @@ def _render_card_header(card: WarmingAccountState) -> None:  # pragma: no cover
 def _render_spam_badge(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
     """Thin delegate to ``_board_spam.render_spam_badge``."""
     render_spam_badge(ctx, card)
-
-
-def _render_status_line(card: WarmingAccountState) -> None:  # pragma: no cover
-    """Coloured dot + action text + secondary between pipeline and footer.
-
-    Per-state text is a dict lookup, not an if/elif dispatch on card.state.
-    "sleeping" leaves the secondary empty — that detail lives in the info box
-    below (avoid the duplicate).
-    """
-    eta = _relative_eta(card.flood_wait_until)
-    flood_secondary = f"ещё {eta}" if eta and eta != "сейчас" else "истекает"
-    text = {
-        "active": (
-            _STATUS_ACTION_LABEL.get(card.last_action or "", "выполняет цикл"),
-            "этап цикла",
-        ),
-        "error": (f"ошибка: {card.last_action or 'цикл'}", "ожидает повторной попытки"),
-        "flood_wait": ("flood-wait активен", flood_secondary),
-        "sleeping": ("спит по расписанию", ""),
-        "quarantine": ("карантин", "цикл приостановлен"),
-    }.get(card.state)
-    if text is None:
-        return
-    primary, secondary = text
-    dot_cls = _STATUS_DOT.get(card.state, "bg-slate-400")
-
-    with ui.row().classes("w-full items-center gap-2"):
-        ui.element("div").classes(f"w-2 h-2 rounded-full shrink-0 tb-live-dot {dot_cls}")
-        with ui.row().classes("items-baseline gap-0 flex-1 min-w-0"):
-            ui.label(primary).classes("text-[11px] text-slate-700 truncate tb-live")
-            ui.label("...").classes("text-[11px] text-slate-700 shrink-0 tb-live-dots")
-        if secondary:
-            ui.label(secondary).classes("text-[10px] text-slate-400 shrink-0")
 
 
 def _render_card_footer(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
@@ -375,18 +368,16 @@ def _next_phase_label_short(phase: str) -> str:  # pragma: no cover
 
 
 def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # pragma: no cover
-    stripe_cls = _STRIPE_CLS.get(card.state, "bg-slate-200")
-    pulse = " tb-active" if card.state == "active" else ""
+    """One account card — spec C.3 «В прогреве» card (blue) or a ready row.
 
-    # Use a raw div — NOT ui.card() — for full stripe + border-radius control.
-    element = (
-        ui.element("div")
-        .props("draggable")
-        .classes(
-            f"w-full flex rounded-xl overflow-hidden bg-white cursor-grab shadow-sm"
-            f" hover:shadow-md transition-shadow{pulse}"
-        )
-    )
+    Warming-state cards use the pale-blue ``.tb-card-blue`` surface with the
+    pipeline block; idle accounts render the slimmer ready-row variant (avatar
+    + phone + trust + «Прогреть»). Both stay ``draggable`` so the kanban
+    start/stop wiring is unchanged.
+    """
+    warming = card.state != "idle"
+    surface = "tbw-card tb-card-blue" if warming else "tbw-card tbw-card-ready"
+    element = ui.element("div").props("draggable").classes(f"{surface} w-full")
     # Record the source column so a drop back into the same column is a no-op
     # (audit П4): "warming" mirrors load_board's is_warming column split.
     source = "warming" if is_warming(card.state) else "idle"
@@ -395,31 +386,22 @@ def _render_card(ctx: _BoardContext, card: WarmingAccountState) -> None:  # prag
         lambda aid=card.account_id, src=source: ctx.drag.update(account_id=aid, source=src),
     )
 
-    with element:
-        # Coloured left stripe (6px)
-        ui.element("div").classes(f"w-1.5 shrink-0 {stripe_cls}")
+    with element, ui.column().classes("w-full gap-3"):
+        _render_card_header(card)
+        _render_phase_block(card)
 
-        # Card body
-        with ui.element("div").classes("flex-1 min-w-0 p-4 flex flex-col gap-3"):
-            _render_card_header(card)
+        if warming:
+            from features.warming._pipeline import render_cycle_pipeline  # noqa: PLC0415
 
-            _render_phase_block(card)
+            render_cycle_pipeline(card)
 
-            # Pipeline + status line for non-idle accounts
-            if card.state != "idle":
-                from features.warming._pipeline import (  # noqa: PLC0415
-                    render_cycle_pipeline,
-                )
+        # Readiness blocker — shown whenever readiness fails, not only idle:
+        # a running account can degrade (proxy down, session dead, channels
+        # removed), and the operator needs the blocking reasons either way.
+        if card.readiness and not card.readiness.ready:
+            reasons = ", ".join(_ru_reason(r) for r in card.readiness.reasons)
+            ui.label(f"не готов: {reasons}").classes("text-[11px] tbw-text-red truncate")
 
-                render_cycle_pipeline(card, status_line=lambda: _render_status_line(card))
-
-            # Readiness blocker — shown whenever readiness fails, not only idle:
-            # a running account can degrade (proxy down, session dead, channels
-            # removed), and the operator needs the blocking reasons either way.
-            if card.readiness and not card.readiness.ready:
-                reasons = ", ".join(_ru_reason(r) for r in card.readiness.reasons)
-                ui.label(f"не готов: {reasons}").classes("text-[11px] text-red-600 truncate")
-
-            render_promotion_block(ctx.refresh, card)
-            render_card_log_panel(ctx, card)
-            _render_card_footer(ctx, card)
+        render_promotion_block(ctx.refresh, card)
+        render_card_log_panel(ctx, card)
+        _render_card_footer(ctx, card)

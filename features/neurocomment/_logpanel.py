@@ -127,19 +127,32 @@ def render_log_panel(
     state: LogPanelState,
     on_toggle: Callable[[], Awaitable[None]],
 ) -> None:  # pragma: no cover
-    """Collapsible «Логи нейрокомментинга» header + dark terminal body (when open)."""
+    """Collapsible «Лог событий» header + dark terminal body (when open)."""
     chevron = "expand_more" if state.expanded else "chevron_right"
-    header = ui.row().classes(
-        "w-full items-center gap-1 cursor-pointer select-none text-slate-500 hover:text-slate-700",
+    count = len(state.entries) if state.entries else 0
+    header = (
+        ui.row()
+        .classes(
+            "w-full items-center gap-2 cursor-pointer select-none flex-nowrap",
+        )
+        .style("margin-top:12px;padding-top:12px;border-top:1px solid #E4ECFA")
     )
     with header:
-        ui.icon(chevron).classes("text-base")
-        ui.icon("terminal").classes("text-sm")
-        ui.label("Логи нейрокомментинга").classes("text-[11px] font-medium")
+        ui.html(
+            '<span class="pl-pulse" style="width:8px;height:8px;border-radius:50%;'
+            'background:#0066FF;flex-shrink:0"></span>',
+        )
+        ui.label("Лог событий").classes("tb-title")
+        ui.html(
+            f'<span style="font-size:11px;font-weight:600;background:#F2F1EE;color:#74726E;'
+            f'border-radius:9999px;padding:2px 9px">{count}</span>',
+        )
+        ui.element("div").style("flex:1")
+        ui.icon(chevron).style("color:#9A9893")
     header.on("click", on_toggle)
     if not state.expanded:
         return
-    with ui.element("div").classes("tb-nc-log w-full"):
+    with ui.element("div").classes("tb-nc-log w-full").style("margin-top:10px"):
         if state.entries is None:
             ui.label("Загрузка…").classes("tb-nc-log-empty")
         elif not state.entries:

@@ -1,9 +1,13 @@
-"""Neurocomment work-view rendering — board, counters, drill-down, per-pair actions.
+"""Neurocomment work-view rendering — «Доска работ» board + «Капчи» strip + drill-down.
 
 Split out of ``_page`` to stay within the file-size budget. UI-thin, fully
 ``pragma: no cover``; the pure display helpers it uses live in ``_page`` (and are
 unit-tested there). ``_page`` imports ``render_work_view`` lazily, so this module
 can import the helpers from ``_page`` at module level without a cycle.
+
+Re-skinned to the design palette (spec C.4): a collapsible white «Доска работ» card
+holding a channels table with boardMap status pills, the per-account cards, and a
+minimalist «Капчи» control strip (solver mode + outcome counters + retry/skip drill-down).
 """
 
 from __future__ import annotations
@@ -18,7 +22,7 @@ from features.neurocomment._page import (
     PageContext,
     board_content_signature,
     challenge_summary,
-    channel_status_icon,
+    channel_status_colors,
     channel_status_label,
     counter_window_since,
     health_label,
@@ -66,12 +70,174 @@ async def render_work_view(ctx: PageContext) -> None:  # pragma: no cover
 
 def _render_board(board: NeurocommentBoard | None) -> None:  # pragma: no cover
     if board is None:
-        ui.label("Кампания не найдена").classes("text-sm text-slate-400")
+        ui.label("Кампания не найдена").classes("tb-muted")
         return
+    _render_board_card(board)
     _render_solver_controls(board)
-    with ui.row().classes("w-full gap-4 items-start flex-wrap"):
-        _render_channels_panel(board)
-        _render_accounts_panel(board)
+
+
+def _card_header(  # pragma: no cover
+    title: str,
+    count_text: str,
+    count_bg: str,
+    count_color: str,
+) -> None:
+    """A card header row: title + a count pill, with a hairline bottom border."""
+    with (
+        ui.row()
+        .classes("w-full items-center justify-between flex-nowrap")
+        .style(
+            "padding-bottom:12px;border-bottom:1px solid #F0EEEB;margin-bottom:12px",
+        ),
+        ui.row().classes("items-center gap-2 flex-nowrap"),
+    ):
+        ui.label(title).classes("tb-title")
+        ui.html(
+            f'<span style="font-size:11px;font-weight:600;background:{count_bg};'
+            f'color:{count_color};border-radius:9999px;padding:2px 9px">{count_text}</span>',
+        )
+
+
+def _render_board_card(board: NeurocommentBoard) -> None:  # pragma: no cover
+    """«Доска работ» — channels table (boardMap pills) + per-account cards."""
+    with ui.element("div").classes("tb-card w-full").style("padding:16px 18px"):
+        _card_header(
+            "Доска работ",
+            f"{len(board.accounts)} аккаунтов",
+            "#EEF4FF",
+            "#0066FF",
+        )
+        _render_channels_table(board)
+        _render_accounts(board)
+
+
+def _render_channels_table(board: NeurocommentBoard) -> None:  # pragma: no cover
+    if not board.channels:
+        ui.label("Каналов пока нет").classes("tb-muted")
+        return
+    with ui.element("div").classes("tb-scroll w-full").style("overflow-x:auto"):
+        table = ui.element("table").classes("tb-table").style("min-width:520px")
+        with table:
+            with ui.element("thead"), ui.element("tr"):
+                for col in ("Канал", "Готовность", "Статус"):
+                    ui.html(f"<th>{col}</th>")
+            with ui.element("tbody"):
+                for row in board.channels:
+                    _render_channel_row(row)
+
+
+def _render_channel_row(row) -> None:  # noqa: ANN001  # pragma: no cover
+    bg, color = channel_status_colors(row.status)
+    with ui.element("tr"):
+        ui.html(
+            f'<td style="color:#0066FF;font-weight:500">{row.channel}</td>'
+            f'<td style="color:#74726E">{row.ready_accounts}/{row.total_accounts}</td>'
+            f'<td><span class="tb-badge" style="background:{bg};color:{color};'
+            f'font-size:11.5px;font-weight:600"><span class="tb-badge-dot"></span>'
+            f"{channel_status_label(row.status)}</span></td>",
+        )
+    # Failed-challenge drill-down spans the full width on its own row.
+    if row.status == "bot_challenge":
+        with ui.element("tr"), ui.element("td").props('colspan="3"'):
+            _render_challenge_drilldown(row.channel)
+
+
+def _render_challenge_drilldown(channel: str) -> None:  # pragma: no cover
+    """Lazy expansion: on open, list the channel's recent failed challenges + actions.
+
+    Loads on demand (not on every board poll) so the 4 s refresh stays cheap.
+    """
+    expansion = (
+        ui.expansion("Капчи бота")
+        .props("dense")
+        .classes("w-full")
+        .style(
+            "font-size:12px",
+        )
+    )
+    with expansion:
+        rows_box = ui.column().classes("w-full gap-1")
+
+    async def load() -> None:
+        result = await list_channel_challenges(channel, _CHALLENGE_DRILLDOWN_LIMIT)
+        rows_box.clear()
+        with rows_box:
+            if not result.rows:
+                ui.label("Записей пока нет").classes("tb-muted")
+            for r in result.rows:
+                with ui.row().classes("w-full items-center justify-between gap-2 flex-nowrap"):
+                    ui.label(challenge_summary(r)).style("font-size:12px;color:#5C5C5C")
+                    with ui.row().classes("gap-1 flex-nowrap"):
+                        retry = ui.button(
+                            icon="refresh",
+                            on_click=lambda _e=None, a=r.account_id, c=r.channel: _on_retry(a, c),
+                        )
+                        retry.props("flat dense round").classes("tb-icon-btn").style(
+                            "width:28px;height:28px",
+                        )
+                        retry.tooltip("Переонбордить")
+                        # Dark «Пройти» pill — the spec's captcha action button.
+                        passb = ui.button(
+                            "Пройти",
+                            on_click=lambda _e=None, a=r.account_id, c=r.channel: _on_skip(a, c),
+                        )
+                        passb.props("flat no-caps dense").classes("tb-btn tb-btn-dark").style(
+                            "padding:5px 13px;font-size:11.5px",
+                        )
+
+    async def on_toggle(event: object) -> None:
+        if getattr(event, "value", False):
+            await load()
+
+    expansion.on_value_change(on_toggle)
+
+
+async def _on_retry(account_id: str, channel: str) -> None:  # pragma: no cover
+    await retry_pair(account_id, channel)
+    ui.notify("Пара переонбоардится", type="info")
+
+
+async def _on_skip(account_id: str, channel: str) -> None:  # pragma: no cover
+    await skip_pair(account_id, channel)
+    ui.notify("Пара пропущена оператором", type="info")
+
+
+def _render_accounts(board: NeurocommentBoard) -> None:  # pragma: no cover
+    if not board.accounts:
+        return
+    with ui.column().classes("w-full gap-2").style("margin-top:14px"):
+        for card in board.accounts:
+            _render_account_card(card)
+
+
+def _render_account_card(card) -> None:  # noqa: ANN001  # pragma: no cover
+    # Thin left accent by health (green ready / red blocked) — at-a-glance scanning,
+    # mirroring the warming card stripe.
+    ready = card.health == "ready"
+    accent = "#12A150" if ready else "#E5372A"
+    badge_bg, badge_color = ("#DDF7E9", "#12A150") if ready else ("#FDE6E2", "#E5372A")
+    with ui.element("div").style(
+        f"width:100%;background:#fff;border:1px solid #E6E5E3;border-left:4px solid {accent};"
+        "border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:4px",
+    ):
+        with ui.row().classes("w-full items-center justify-between flex-nowrap"):
+            ui.label(card.label).classes("tb-title tb-mono")
+            ui.html(
+                f'<span class="tb-badge" style="background:{badge_bg};color:{badge_color};'
+                f'font-size:11px;font-weight:600"><span class="tb-badge-dot"></span>'
+                f"{health_label(card.health)}</span>",
+            )
+        ui.label(
+            f"Комментариев за час: {card.comments_last_hour}/{card.max_comments_per_hour} · "
+            f"за сутки: {card.comments_today}",
+        ).style("font-size:12px;color:#74726E")
+        ui.label(
+            f"Доверие: {card.trust_score} ({card.trust_band})"
+            + (f" · спам: {card.spam_status}" if card.spam_status else ""),
+        ).style("font-size:12px;color:#9A9893")
+        if card.last_comment_at:
+            stamp = card.last_comment_at[:16].replace("T", " ")
+            ui.label(f"Последний комментарий: {stamp}").style("font-size:11.5px;color:#9A9893")
 
 
 def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cover
@@ -84,15 +250,26 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
         "on": "Капчи: ВКЛ",
         "off": "Капчи: ВЫКЛ",
     }
-    with ui.card().classes(  # noqa: SIM117
-        "w-full p-3 gap-3 border border-slate-200 dark:border-zinc-800 "
-        "bg-slate-50 dark:bg-zinc-900 rounded-xl shadow-sm",
-    ):
+    with ui.element("div").classes("tb-card-soft w-full").style("padding:13px 14px"):  # noqa: SIM117
         with ui.row().classes("w-full items-center justify-between gap-3 flex-wrap"):
-            with ui.row().classes("items-center gap-3 flex-wrap"):
-                ui.icon("vpn_key").classes("text-lg text-indigo-500")
-                ui.label("Решение капч").classes("text-sm font-semibold")
-                help_icon = ui.icon("help_outline").classes("text-slate-400 text-sm cursor-help")
+            with ui.row().classes("items-center gap-2 flex-wrap"):
+                ui.html(
+                    '<div style="width:28px;height:28px;border-radius:8px;background:#EEF4FF;'
+                    'color:#0066FF;display:flex;align-items:center;justify-content:center">'
+                    '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" '
+                    'stroke="currentColor" stroke-width="1.9" stroke-linecap="round" '
+                    'stroke-linejoin="round">'
+                    '<path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>'
+                    '<path d="m9 12 2 2 4-4"/></svg></div>',
+                )
+                ui.label("Решение капч").classes("tb-title")
+                help_icon = (
+                    ui.icon("help_outline")
+                    .style("color:#9A9893;font-size:15px")
+                    .classes(
+                        "cursor-help",
+                    )
+                )
                 help_icon.tooltip(
                     "Настройка автоматического решения приветственных капч ботов "
                     "в группах обсуждения каналов при онбординге или отправке комментариев."
@@ -116,7 +293,9 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
                     .props("dense outlined options-dense")
                     .classes("max-w-[130px]")
                 )
-                counts = ui.label("").classes("text-xs text-slate-500 tabular-nums")
+                counts = ui.label("").style(
+                    "font-size:12px;color:#74726E;font-variant-numeric:tabular-nums",
+                )
                 counts.tooltip("✓ решено · ✗ не решено · ⊘ отказ · ⏳ в ожидании")
 
                 async def reload_counts() -> None:
@@ -131,98 +310,3 @@ def _render_solver_controls(board: NeurocommentBoard) -> None:  # pragma: no cov
 
                 window.on_value_change(lambda _e: reload_counts())
                 ui.timer(0.1, reload_counts, once=True)
-
-
-def _render_channels_panel(board: NeurocommentBoard) -> None:  # pragma: no cover
-    with ui.card().classes("w-[360px] p-3 gap-2"):
-        ui.label("Каналы").classes("text-base font-semibold")
-        if not board.channels:
-            ui.label("Каналов пока нет").classes("text-xs text-slate-400")
-        for row in board.channels:
-            with ui.column().classes("w-full gap-0"):
-                with ui.row().classes("w-full items-center justify-between"):
-                    ui.label(row.channel).classes("text-sm")
-                    with ui.row().classes("items-center gap-2"):
-                        ui.label(f"{row.ready_accounts}/{row.total_accounts}").classes(
-                            "text-xs text-slate-500",
-                        )
-                        ui.icon(channel_status_icon(row.status)).classes("text-base text-slate-500")
-                        ui.badge(channel_status_label(row.status)).props("color=blue-grey")
-                if row.status == "bot_challenge":
-                    _render_challenge_drilldown(row.channel)
-
-
-def _render_challenge_drilldown(channel: str) -> None:  # pragma: no cover
-    """Lazy expansion: on open, list the channel's recent failed challenges + actions.
-
-    Loads on demand (not on every board poll) so the 4 s refresh stays cheap.
-    """
-    expansion = ui.expansion("Капчи бота").props("dense").classes("w-full text-xs")
-    with expansion:
-        rows_box = ui.column().classes("w-full gap-0")
-
-    async def load() -> None:
-        result = await list_channel_challenges(channel, _CHALLENGE_DRILLDOWN_LIMIT)
-        rows_box.clear()
-        with rows_box:
-            if not result.rows:
-                ui.label("Записей пока нет").classes("text-xs text-slate-400")
-            for r in result.rows:
-                with ui.row().classes("w-full items-center justify-between gap-2"):
-                    ui.label(challenge_summary(r)).classes("text-xs text-slate-600")
-                    with ui.row().classes("gap-1"):
-                        ui.button(
-                            icon="refresh",
-                            on_click=lambda _e=None, a=r.account_id, c=r.channel: _on_retry(a, c),
-                        ).props("flat dense round color=primary")
-                        ui.button(
-                            icon="block",
-                            on_click=lambda _e=None, a=r.account_id, c=r.channel: _on_skip(a, c),
-                        ).props("flat dense round color=grey-7")
-
-    async def on_toggle(event: object) -> None:
-        if getattr(event, "value", False):
-            await load()
-
-    expansion.on_value_change(on_toggle)
-
-
-async def _on_retry(account_id: str, channel: str) -> None:  # pragma: no cover
-    await retry_pair(account_id, channel)
-    ui.notify("Пара переонбоардится", type="info")
-
-
-async def _on_skip(account_id: str, channel: str) -> None:  # pragma: no cover
-    await skip_pair(account_id, channel)
-    ui.notify("Пара пропущена оператором", type="info")
-
-
-def _render_accounts_panel(board: NeurocommentBoard) -> None:  # pragma: no cover
-    with ui.column().classes("flex-1 min-w-[360px] gap-3"):
-        if not board.accounts:
-            ui.label("Аккаунтов в кампании пока нет").classes("text-xs text-slate-400")
-        for card in board.accounts:
-            _render_account_card(card)
-
-
-def _render_account_card(card) -> None:  # noqa: ANN001  # pragma: no cover
-    # Thin left accent by health (green ready / red blocked) — visual cohesion with
-    # the engine panel + at-a-glance scanning, mirroring the warming card stripe.
-    accent = "border-emerald-400" if card.health == "ready" else "border-red-300"
-    with ui.card().classes(f"w-full p-3 gap-1 border-l-4 {accent}"):
-        with ui.row().classes("w-full items-center justify-between"):
-            ui.label(card.label).classes("text-sm font-semibold")
-            ui.badge(health_label(card.health)).props(
-                f"color={'green' if card.health == 'ready' else 'red'}",
-            )
-        ui.label(
-            f"Комментариев за час: {card.comments_last_hour}/{card.max_comments_per_hour} · "
-            f"за сутки: {card.comments_today}",
-        ).classes("text-xs text-slate-600")
-        ui.label(
-            f"Доверие: {card.trust_score} ({card.trust_band})"
-            + (f" · спам: {card.spam_status}" if card.spam_status else ""),
-        ).classes("text-xs text-slate-500")
-        if card.last_comment_at:
-            stamp = card.last_comment_at[:16].replace("T", " ")
-            ui.label(f"Последний комментарий: {stamp}").classes("text-xs text-slate-400")

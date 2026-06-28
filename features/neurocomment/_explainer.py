@@ -15,37 +15,37 @@ from features.neurocomment._page import PIPELINE_STEPS
 
 
 def _section_caption(text: str) -> None:  # pragma: no cover
-    ui.label(text).classes(
-        "text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1",
-    )
+    ui.label(text).classes("tb-uplabel").style("margin-top:4px")
 
 
 def _info_item(icon: str, title: str, description: str) -> None:  # pragma: no cover
     with ui.row().classes("w-full items-start gap-3 py-1 flex-nowrap"):
-        ui.icon(icon).classes("text-slate-400 text-xl shrink-0 mt-0.5")
+        ui.icon(icon).style("color:#9A9893;font-size:20px;flex-shrink:0;margin-top:2px")
         with ui.column().classes("flex-1 gap-0 min-w-0"):
-            ui.label(title).classes("text-sm font-medium text-slate-800 leading-tight")
-            ui.label(description).classes("text-xs text-slate-500 leading-snug")
+            ui.label(title).style("font-size:13px;font-weight:500;color:#3A3A3A;line-height:1.25")
+            ui.label(description).style("font-size:12px;color:#5C5C5C;line-height:1.4")
 
 
 def render_how_it_works() -> None:  # pragma: no cover
     """Two-column explainer: the on-post pipeline (left) + protection & limits (right)."""
     nc = settings.neurocomment
-    with ui.card().classes("w-full p-4 gap-2"):
-        with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("auto_mode").classes("text-slate-500")
-            ui.label("Как работает нейрокомментинг").classes("text-base font-semibold")
+    with ui.element("div").classes("tb-card-soft w-full").style("padding:16px 18px"):
+        with ui.row().classes("w-full items-center gap-2 flex-nowrap").style("margin-bottom:4px"):
+            ui.icon("auto_mode").style("color:#74726E")
+            ui.label("Как работает нейрокомментинг").classes("tb-title-lg")
         ui.label(
             "Движок слушает новые посты в каналах кампании и оставляет короткий "
             "ИИ-комментарий от готового аккаунта. Вот что происходит на каждом посте:",
-        ).classes("text-xs text-slate-500")
-        ui.separator()
+        ).classes("tb-muted").style("font-size:12px")
+        ui.html(
+            '<div style="height:1px;background:#F0EEEB;width:100%;margin:8px 0"></div>',
+        )
         with ui.row().classes("w-full gap-6 items-start flex-wrap"):
-            with ui.column().classes("flex-1 min-w-[300px] gap-1"):
+            with ui.column().classes("flex-1 min-w-[260px] gap-1"):
                 _section_caption("Что происходит при запуске")
                 for step in PIPELINE_STEPS:
                     _info_item(step.icon, step.label, step.detail)
-            with ui.column().classes("flex-1 min-w-[300px] gap-1"):
+            with ui.column().classes("flex-1 min-w-[260px] gap-1"):
                 _section_caption("Защита и лимиты")
                 _info_item(
                     "schedule",

@@ -63,13 +63,26 @@ class _Step:  # pragma: no cover
     icon: str
 
 
+# ``name`` is the canonical internal id (mapped from ``last_action`` — load-
+# bearing, do not rename). ``label_ru`` matches the spec C.3 rail captions
+# (Подписка · Чтение · Сторис · Реакции · Пауза · Отчёт).
 _CYCLE_STEPS: tuple[_Step, ...] = (
-    _Step("online", "Онлайн", "wifi"),
-    _Step("join", "Каналы", "add_circle"),
-    _Step("read", "Чтение", "chrome_reader_mode"),
+    _Step("online", "Подписка", "add_circle"),
+    _Step("join", "Чтение", "chrome_reader_mode"),
+    _Step("read", "Сторис", "auto_stories"),
     _Step("react", "Реакции", "thumb_up"),
-    _Step("chat", "Чат", "forum"),
-    _Step("sleep", "Сон", "bedtime"),
+    _Step("chat", "Пауза", "bedtime"),
+    _Step("sleep", "Отчёт", "receipt_long"),
+)
+
+# Spec WMSG — the active-step strip description per rail index.
+_STEP_DESC: tuple[str, ...] = (
+    "Подписка на каналы (+3)",
+    "Чтение ленты постов",
+    "Просмотр сторис",
+    "Поставлены реакции",
+    "Пауза для естественности",
+    "Отчёт по циклу сформирован",
 )
 
 # Maps ``last_action`` values emitted by ``services.warming`` to the 0-based
@@ -99,13 +112,14 @@ _STEP_GLYPH: dict[str, str] = {
     "flood": "timer",
     "quar": "block",
 }
-# Rail label colour by visual state; unknown (e.g. "pending") → muted.
+# Rail label colour by visual state; unknown (e.g. "pending") → muted (#A8A6A1).
+# Spec: active #0066FF/600, done #12A150/500, inactive #A8A6A1/400.
 _STEP_LABEL_CLS: dict[str, str] = {
-    "active": "text-indigo-700 font-medium",
-    "done": "text-green-700",
-    "error": "text-red-700",
-    "flood": "text-amber-700",
-    "quar": "text-orange-700",
+    "active": "tbw-text-blue font-semibold",
+    "done": "tbw-text-green font-medium",
+    "error": "tbw-text-red",
+    "flood": "tbw-text-amber",
+    "quar": "tbw-text-orange",
 }
 
 
@@ -243,21 +257,57 @@ def render_cycle_pipeline(
     card: WarmingAccountState,
     status_line: Callable[[], None] | None = None,
 ) -> None:  # pragma: no cover
-    """Top-level entry point — full pipeline (rail + status line + detail).
+    """Top-level entry point — the spec C.3 «В прогреве» pipeline block.
 
-    Caller is responsible for not calling this for idle cards (see
-    ``_board._render_card``). The rendered block lives inside a single
-    card element and uses vertical stacking so each section is its own line.
-    ``status_line`` (the "what's happening now" row) is rendered between the
-    rail and the detail panel when supplied. The cycle-summary bar is
-    rendered by ``_board._render_card_footer`` (Bug 2 fix: remove duplicate).
+    Caller gates idle cards (see ``_board._render_card``). The block is the
+    pale-blue inset that stacks: a "Дней прогрева" header + the 42-segment
+    zone bar, the 6-step rail, and the live active-step strip. ``status_line``
+    (the legacy "what's happening now" row) is no longer rendered separately —
+    the active-step strip subsumes it — but the parameter is kept so the
+    caller-side wiring in ``_board`` does not change.
     """
+    del status_line  # superseded by the active-step strip
     active_idx, kind = _active_step(card)
-    with ui.column().classes("w-full gap-1.5"):
+    with ui.element("div").classes("tbw-pipe w-full"):
+        _render_zone_bar(card)
         _render_step_rail(card, active_idx, kind)
-        if status_line is not None:
-            status_line()
-        _render_active_detail(card, active_idx, kind)
+        _render_active_strip(card, active_idx, kind)
+
+
+_ZONE_SEGMENTS = 42
+
+
+def _render_zone_bar(card: WarmingAccountState) -> None:  # pragma: no cover
+    """Render the "Дней прогрева" header + 42-segment gradient zone bar (spec C.3).
+
+    Filled-segment count tracks ``progress_to_next`` (the card's already-
+    quantised phase progress, so the bar does not flicker on the 4 s poll);
+    the leading filled segment glows (``.tb-loadlead``) unless complete. The
+    gradient endpoints rgb(5,117,230)→rgb(0,242,96) are applied per segment
+    via an inline ``--i`` custom property so the row reads as one ramp.
+    """
+    days = card.warming_days
+    target = None
+    if days is not None and card.days_to_next_phase is not None:
+        target = days + card.days_to_next_phase
+    complete = card.phase == "warmed"
+    progress = 1.0 if complete else (card.progress_to_next or 0.0)
+    filled = max(0, min(_ZONE_SEGMENTS, round(progress * _ZONE_SEGMENTS)))
+
+    with ui.row().classes("w-full items-baseline justify-between"):
+        ui.label("Дней прогрева").classes("tbw-mini-label")
+        days_txt = "—" if days is None else str(days)
+        target_txt = f" / {target} дней" if target is not None else " дней"
+        ui.label(f"{days_txt}{target_txt}").classes("tbw-mini-value")
+
+    with ui.row().classes("tbw-zone w-full"):
+        for i in range(_ZONE_SEGMENTS):
+            on = i < filled
+            lead = on and i == filled - 1 and not complete
+            cls = "tbw-seg tbw-seg-on" if on else "tbw-seg"
+            if lead:
+                cls += " tb-loadlead"
+            ui.element("div").classes(cls).style(f"--i:{i / (_ZONE_SEGMENTS - 1)}")
 
 
 def _render_step_rail(  # pragma: no cover
@@ -265,7 +315,12 @@ def _render_step_rail(  # pragma: no cover
     active_idx: int | None,
     kind: str,
 ) -> None:
-    """The 6-step horizontal rail with connectors between them."""
+    """The 6-step horizontal rail with connectors between them (spec C.3).
+
+    Compact spec nodes: done = green check, active = blue live dot, inactive =
+    small white dot with a grey hairline border. Connectors are a 2px track
+    (#DCE2EC) with green-done / blue-active fills.
+    """
     connector_cls = {
         "done": _PIPELINE_CONNECTOR_DONE,
         "active": _PIPELINE_CONNECTOR_ACTIVE,
@@ -279,109 +334,95 @@ def _render_step_rail(  # pragma: no cover
         "flood": _PIPELINE_STEP_FLOOD,
         "quar": _PIPELINE_STEP_QUAR,
     }
-    with ui.row().classes("w-full items-start gap-0 pt-1"):
+    with ui.row().classes("w-full items-start gap-0 pt-2"):
         for idx, step in enumerate(_CYCLE_STEPS):
             if idx > 0:
                 left_kind = _connector_kind(idx - 1, active_idx, kind)
                 ui.element("div").classes(
-                    f"tb-connector flex-1 h-1 rounded-full {connector_cls[left_kind]}",
-                ).style("margin-top: 13px")
+                    f"tbw-conn flex-1 {connector_cls[left_kind]}",
+                ).style("margin-top: 6px")
             sk = _step_kind(idx, active_idx, kind)
             cls = step_cls[sk]
             # A resting "sleep" node maps to the active slot but gets a calm
-            # blue treatment (no pulse) instead of the energetic indigo.
+            # blue treatment (no pulse) instead of the energetic blue glow.
             if sk == "active" and kind == "sleep":
                 cls = _PIPELINE_STEP_SLEEP
             tooltip = _step_tooltip(step, card, sk)
-            # Spin only while a cycle is actually running — a resting "sleep"
-            # node maps to the same visual slot but must not spin (a spinning
-            # moon reads wrong for a sleeping account).
-            icon_extra = " tb-step-active-icon" if sk == "active" and kind == "active" else ""
-            # Glyph by visual state; "active"/unknown keep the step's topic icon.
-            glyph = _STEP_GLYPH.get(sk, step.icon)
-            with ui.column().classes("items-center gap-0.5 shrink-0"):
-                circle = ui.element("div").classes(
-                    f"w-9 h-9 rounded-full flex items-center justify-center shrink-0 {cls}",
-                )
-                with circle:
-                    ui.icon(glyph).classes(f"text-sm{icon_extra}")
+            # Done nodes show a white check; error/flood/quar show their glyph.
+            # Active / pending dots carry no glyph (spec dot, not an icon).
+            glyph = _STEP_GLYPH.get(sk) if sk in _STEP_GLYPH else None
+            with ui.column().classes("items-center gap-1 shrink-0"):
+                circle = ui.element("div").classes(f"tbw-node {cls}")
+                if glyph is not None:
+                    with circle:
+                        ui.icon(glyph).classes("text-[11px]")
                 circle.tooltip(tooltip)
-                # Label below circle — colour by visual state.
-                label_cls = _STEP_LABEL_CLS.get(sk, "text-slate-400")
-                ui.label(step.label_ru).classes(f"text-[10px] {label_cls} leading-none")
+                label_cls = _STEP_LABEL_CLS.get(sk, "tbw-text-faint")
+                ui.label(step.label_ru).classes(f"tbw-step-label {label_cls}")
 
 
-def _render_active_detail(  # noqa: C901, PLR0912
+def _render_active_strip(
     card: WarmingAccountState,
     active_idx: int | None,
     kind: str,
 ) -> None:  # pragma: no cover
-    rows: list[tuple[str, str]] = []  # (icon, text)
+    """The live active-step strip below the rail (spec C.3).
 
-    if active_idx is None:
-        if kind == "quar":
-            rows = [("block", f"Карантин · {card.quarantine_count} случаев — цикл приостановлен")]
-        else:
-            return
-    elif active_idx == _SLEEP_STEP_INDEX and kind == "sleep":
-        eta = _relative_eta(card.next_run_at)
-        rows = [
-            ("hotel", "Аккаунт в паузе сна"),
-            ("schedule", f"Пробуждение через {eta}" if eta else "Пробуждение по расписанию"),
-            ("bar_chart", "Низкая активность — норма"),
-        ]
-    elif active_idx == _SLEEP_STEP_INDEX and kind == "flood":
-        rows = [
-            ("timer", _flood_tooltip(card)),
-            (
-                "info",
-                (
-                    f"Flood-wait: {card.flood_wait_seconds} с"
-                    if card.flood_wait_seconds is not None
-                    else "Telegram ограничил аккаунт"
-                ),
-            ),
-        ]
-    else:
-        step = _CYCLE_STEPS[active_idx]
-        if card.last_channel:
-            rows.append(("tag", f"Канал: {card.last_channel}"))
-        if card.proxy_snapshot:
-            proxy = card.proxy_snapshot
-            if card.proxy_country:
-                proxy = f"{proxy} ({card.proxy_country})"
-            rows.append(("router", f"Прокси: {proxy}"))
-        if card.last_event:
-            rows.append(("bolt", f"Событие: {_ru_event(card.last_event)}"))
-        if not rows:
-            rows = [("info", f"{step.label_ru} · данные появятся после следующего опроса")]
+    For a running cycle this is the pale-blue (#EEF4FF) strip with a pulsing
+    live dot + the per-step WMSG description. For the off-nominal kinds
+    (sleep / flood / quarantine / error) it keeps the one informative line an
+    operator needs, tinted to the matching state colour.
+    """
+    if kind == "active" and active_idx is not None:
+        text = (
+            _STEP_DESC[active_idx]
+            if active_idx < len(_STEP_DESC)
+            else _CYCLE_STEPS[active_idx].label_ru
+        )
+        with ui.row().classes("tbw-active-strip w-full items-center gap-2"):
+            ui.element("div").classes("tbw-dot-blue tb-livedot shrink-0")
+            ui.label(text).classes("tbw-active-text tb-pulse")
+        return
 
+    detail = _off_nominal_detail(card, active_idx, kind)
+    if detail is None:
+        return
+    icon_name, text = detail
+    icon_bg, icon_color = _DETAIL_ICON_THEME.get(kind, ("tbw-tile-gray", "tbw-text-muted"))
+    text_cls = {
+        "flood": "tbw-text-amber",
+        "quar": "tbw-text-orange",
+        "error": "tbw-text-red",
+        "sleep": "tbw-text-muted",
+    }.get(kind, "tbw-text-blue")
+    with ui.row().classes(f"tbw-detail-strip {kind} w-full items-center gap-2"):
+        with ui.element("div").classes(f"tbw-detail-tile {icon_bg}"):
+            ui.icon(icon_name).classes(f"text-sm {icon_color}")
+        ui.label(text).classes(f"tbw-detail-text {text_cls}")
+
+
+def _off_nominal_detail(  # noqa: PLR0911 - flat state→line dispatch reads clearer as early returns
+    card: WarmingAccountState,
+    active_idx: int | None,
+    kind: str,
+) -> tuple[str, str] | None:  # pragma: no cover
+    """One (icon, text) line summarising a non-running cycle state, or None."""
     if kind == "error" and card.last_error:
         err = card.last_error
         if len(err) > _ERROR_DETAIL_MAX_LEN:
             err = err[: _ERROR_DETAIL_MAX_LEN - 1] + "…"
-        rows = [("error", err), ("history", f"Последнее действие: {card.last_action or '—'}")]
-
-    bg = {
-        "flood": "bg-amber-50 border-amber-100",
-        "quar": "bg-orange-50 border-orange-100",
-        "error": "bg-red-50 border-red-100",
-        "sleep": "bg-slate-50 border-slate-100",
-    }.get(kind, "bg-blue-50 border-blue-100")
-
-    text_cls = {
-        "flood": "text-amber-800",
-        "quar": "text-orange-800",
-        "error": "text-red-700",
-        "sleep": "text-slate-700",
-    }.get(kind, "text-indigo-800")
-
-    icon_bg, icon_color = _DETAIL_ICON_THEME.get(kind, ("bg-slate-100", "text-slate-500"))
-    with ui.element("div").classes(f"w-full rounded-lg border px-2 py-1.5 {bg}"):
-        for icon_name, text in rows:
-            with ui.row().classes("w-full items-center gap-2.5"):
-                with ui.element("div").classes(
-                    f"w-7 h-7 rounded-lg flex items-center justify-center shrink-0 {icon_bg}"
-                ):
-                    ui.icon(icon_name).classes(f"text-base {icon_color}")
-                ui.label(text).classes(f"text-[11px] {text_cls} leading-snug")
+        return ("error", err)
+    if active_idx is None:
+        if kind == "quar":
+            return ("block", f"Карантин · случаев: {card.quarantine_count}")
+        return None
+    if active_idx == _SLEEP_STEP_INDEX and kind == "sleep":
+        eta = _relative_eta(card.next_run_at)
+        return ("bedtime", f"Сон · пробуждение через {eta}" if eta else "Сон до следующего цикла")
+    if active_idx == _SLEEP_STEP_INDEX and kind == "flood":
+        return ("timer", _flood_tooltip(card))
+    if card.last_event:
+        return ("bolt", _ru_event(card.last_event))
+    if card.last_channel:
+        return ("tag", f"Канал: {card.last_channel}")
+    return None

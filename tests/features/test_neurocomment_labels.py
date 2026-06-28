@@ -14,10 +14,13 @@ from features.neurocomment import register_neurocomment_page
 from features.neurocomment._logpanel import nc_event_label, nc_log_detail
 from features.neurocomment._page import (
     PIPELINE_STEPS,
+    board_captcha_count,
     board_content_signature,
+    board_error_count,
     campaign_options,
     campaign_status_label,
     challenge_summary,
+    channel_status_colors,
     channel_status_icon,
     channel_status_label,
     counter_window_since,
@@ -75,6 +78,30 @@ def test_channel_status_split_states_have_distinct_icons() -> None:
 
 def test_channel_status_icon_unknown_falls_back_to_generic() -> None:
     assert channel_status_icon("weird") == "help_outline"
+
+
+def test_channel_status_colors_ready_is_green() -> None:
+    bg, color = channel_status_colors("ready")
+    assert (bg, color) == ("#DDF7E9", "#12A150")
+
+
+def test_channel_status_colors_unknown_falls_back_to_neutral() -> None:
+    assert channel_status_colors("weird") == ("#ECEAE6", "#6B6864")
+
+
+def test_channel_status_colors_known_statuses_all_mapped() -> None:
+    # Every label-mapped status must also carry an explicit pill colour (no greys
+    # leaking through for a status we have a Russian word for).
+    for status in (
+        "ready",
+        "comments_off",
+        "join_by_request",
+        "chat_restricted",
+        "bot_challenge",
+        "bot_challenge_backoff",
+        "throttled",
+    ):
+        assert channel_status_colors(status) != ("#ECEAE6", "#6B6864")
 
 
 def test_start_block_reason_requires_a_listener() -> None:
@@ -249,6 +276,55 @@ def test_fleet_activity_empty_board_is_all_zero() -> None:
         NeurocommentBoard(campaign_id="c1", campaign_name="A", status="active"),
     )
     assert activity == (0, 0, 0, 0, 0, 0)
+
+
+def test_board_captcha_count_sums_challenge_channels() -> None:
+    board = NeurocommentBoard(
+        campaign_id="c1",
+        campaign_name="A",
+        status="active",
+        channels=[
+            _channel("@a", "ready"),
+            _channel("@b", "bot_challenge"),
+            _channel("@c", "bot_challenge_backoff"),
+            _channel("@d", "throttled"),
+        ],
+    )
+    assert board_captcha_count(board) == 2
+
+
+def test_board_captcha_count_none_is_zero() -> None:
+    assert board_captcha_count(None) == 0
+
+
+def test_board_error_count_counts_non_ready_accounts() -> None:
+    board = NeurocommentBoard(
+        campaign_id="c1",
+        campaign_name="A",
+        status="active",
+        accounts=[
+            _card("a1", health="ready", last_hour=0, today=0),
+            _card("a2", health="blocked", last_hour=0, today=0),
+            _card("a3", health="blocked", last_hour=0, today=0),
+        ],
+    )
+    assert board_error_count(board) == 2
+
+
+def test_board_error_count_none_is_zero() -> None:
+    assert board_error_count(None) == 0
+
+
+def test_pipeline_step_labels_match_design_spec() -> None:
+    # The rail nodes follow the design's NSTEPS ordering/wording (spec C.4).
+    assert [s.label for s in PIPELINE_STEPS] == [
+        "Новый пост",
+        "Выбор аккаунта",
+        "Генерация",
+        "Публикация",
+        "Проверка",
+        "Готово",
+    ]
 
 
 @pytest.mark.parametrize("iso", [None, "", "not-a-date"])

@@ -14,6 +14,7 @@ from features.accounts import register_accounts_page
 from features.accounts._profile_dialog_render import register_disconnect_tracker
 from features.logs import register_logs_page
 from features.neurocomment import register_neurocomment_page
+from features.settings import register_settings_page
 from features.warming import register_warming_page
 from services.neurocomment import (
     reconcile_neurocomment_on_startup,
@@ -66,6 +67,7 @@ def main() -> None:
     register_warming_page()
     register_neurocomment_page()
     register_logs_page()
+    register_settings_page()
     # Populate _DEAD_CLIENTS on websocket drop so the profile dialog's apply
     # paths short-circuit on detached clients instead of warning to stderr.
     register_disconnect_tracker()

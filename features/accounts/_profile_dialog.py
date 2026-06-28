@@ -248,32 +248,41 @@ async def _open_profile_dialog(
     refs.closed = False
     with (
         ui.dialog() as dialog,
-        ui.column().classes("tb-profile-dialog bg-white p-4 gap-3 w-[640px] max-w-full"),
+        ui.column()
+        .classes("tb-profile-dialog bg-white gap-3 w-[580px] max-w-full")
+        .style("border-radius:18px;padding:20px"),
     ):
-        ui.label("Редактировать профиль").classes("text-base font-semibold")
-        with ui.row().classes(
-            "items-center gap-3 w-full no-wrap border rounded-md p-3 bg-grey-1",
+        ui.html(
+            '<div style="font-size:16px;font-weight:700;color:#0B0B0C">Редактировать профиль</div>',
+        )
+        with (
+            ui.row()
+            .classes("items-center gap-3 w-full no-wrap")
+            .style(
+                "border:1px solid #F0EEEB;border-radius:14px;padding:14px 16px",
+            )
         ):
             refs.avatar_slot = ui.element("div").classes("shrink-0")
             refs.identity_slot = ui.column().classes("gap-0 flex-1 min-w-0")
             with ui.column().classes("items-end gap-1 shrink-0"):
                 refs.refresh_button = (
                     ui.button(
+                        "Обновить",
                         icon="refresh",
-                        color="grey-7",
                         on_click=lambda: _load_and_apply(
                             account_id,
                             refs,
                             force_refresh=True,
                         ),
                     )
-                    .props("flat dense round")
+                    .classes("tb-btn tb-btn-white")
+                    .props("flat no-caps text-color=dark")
                     .tooltip("Обновить с Telegram")
                 )
                 refs.refresh_button.disable()
-                refs.sync_label = ui.label("—").classes("text-[10px] text-grey-6")
-        refs.error_banner = ui.label("").classes(
-            "text-xs text-negative bg-red-1 rounded px-2 py-1",
+                refs.sync_label = ui.label("—").style("font-size:11px;color:#9A9893")
+        refs.error_banner = ui.label("").style(
+            "font-size:12px;color:#C0473F;background:#FDE6E2;border-radius:8px;padding:6px 10px",
         )
         refs.error_banner.set_visibility(False)
 

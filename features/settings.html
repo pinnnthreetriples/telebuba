@@ -1,0 +1,115 @@
+<div style="max-width:760px;margin:0 auto;width:100%;display:flex;flex-direction:column;gap:14px">
+  <h1 class="tb-h1">Настройки</h1>
+
+  <!-- API-ключи -->
+  <div class="tb-card">
+    <div class="tb-title">API-ключи</div>
+    <div class="tb-muted" style="margin-top:3px">Доступ к модели генерации комментариев</div>
+    <div style="margin-top:14px">
+      <label class="tb-label" style="display:block;margin-bottom:6px">Gemini API key</label>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input class="tb-input tb-mono" type="password" value="AIzaSyB-xR7k29Qd&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;&#8226;">
+        <button type="button" class="tb-icon-btn" style="width:42px;height:38px;border-radius:10px" title="Показать ключ" onclick="var i=this.parentElement.querySelector('input');i.type=i.type==='password'?'text':'password'">
+          <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M2 12s3.5-7 10-7 10 7 10 7-3.5 7-10 7-10-7-10-7z"/><circle cx="12" cy="12" r="3"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Лимиты прогрева -->
+  <div class="tb-card">
+    <div class="tb-title">Лимиты прогрева</div>
+    <div class="tb-muted" style="margin-top:3px">Действия в сутки на один аккаунт</div>
+    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Подписок в день</label>
+        <input class="tb-input" type="text" inputmode="numeric" value="15">
+      </div>
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Чтений постов в день</label>
+        <input class="tb-input" type="text" inputmode="numeric" value="80">
+      </div>
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Реакций в день</label>
+        <input class="tb-input" type="text" inputmode="numeric" value="25">
+      </div>
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Пауза между шагами (мин)</label>
+        <div style="display:flex;gap:8px">
+          <div class="tb-time" style="flex:1;display:flex;align-items:center;gap:6px;border:1px solid #DEDCD8;border-radius:10px;padding:9px 12px;background:#fff">
+            <span style="font-size:11px;color:#9A9893">от</span>
+            <input type="text" inputmode="numeric" value="3" style="border:none;outline:none;width:100%;text-align:right;font-size:13px;font-family:inherit;background:transparent">
+          </div>
+          <div class="tb-time" style="flex:1;display:flex;align-items:center;gap:6px;border:1px solid #DEDCD8;border-radius:10px;padding:9px 12px;background:#fff">
+            <span style="font-size:11px;color:#9A9893">до</span>
+            <input type="text" inputmode="numeric" value="12" style="border:none;outline:none;width:100%;text-align:right;font-size:13px;font-family:inherit;background:transparent">
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Лимиты нейрокомментинга -->
+  <div class="tb-card">
+    <div class="tb-title">Лимиты нейрокомментинга</div>
+    <div class="tb-muted" style="margin-top:3px">Темп публикации комментариев</div>
+    <div style="margin-top:14px;display:grid;grid-template-columns:1fr 1fr;gap:14px">
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Комментариев в день на аккаунт</label>
+        <input class="tb-input" type="text" inputmode="numeric" value="20">
+      </div>
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Задержка между комментариями (мин)</label>
+        <div style="display:flex;gap:8px">
+          <div class="tb-time" style="flex:1;display:flex;align-items:center;gap:6px;border:1px solid #DEDCD8;border-radius:10px;padding:9px 12px;background:#fff">
+            <span style="font-size:11px;color:#9A9893">от</span>
+            <input type="text" inputmode="numeric" value="8" style="border:none;outline:none;width:100%;text-align:right;font-size:13px;font-family:inherit;background:transparent">
+          </div>
+          <div class="tb-time" style="flex:1;display:flex;align-items:center;gap:6px;border:1px solid #DEDCD8;border-radius:10px;padding:9px 12px;background:#fff">
+            <span style="font-size:11px;color:#9A9893">до</span>
+            <input type="text" inputmode="numeric" value="25" style="border:none;outline:none;width:100%;text-align:right;font-size:13px;font-family:inherit;background:transparent">
+          </div>
+        </div>
+      </div>
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Параллельных аккаунтов</label>
+        <input class="tb-input" type="text" inputmode="numeric" value="6">
+      </div>
+      <div>
+        <label class="tb-label" style="display:block;margin-bottom:6px">Мин. trust-score для работы</label>
+        <input class="tb-input" type="text" inputmode="numeric" value="45">
+      </div>
+    </div>
+  </div>
+
+  <!-- Переключатели -->
+  <div class="tb-card" style="padding:6px 20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #F0EEEB">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#0B0B0C">Автозапуск процессов</div>
+        <div style="font-size:11.5px;color:#9A9893;margin-top:2px">Возобновлять прогрев и комментинг при старте</div>
+      </div>
+      <button type="button" class="tb-sw tb-on" onclick="this.classList.toggle('tb-on')"><span class="tb-sw-thumb"></span></button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0;border-bottom:1px solid #F0EEEB">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#0B0B0C">Уведомления об ошибках</div>
+        <div style="font-size:11.5px;color:#9A9893;margin-top:2px">Оповещать оператора при банах и капчах</div>
+      </div>
+      <button type="button" class="tb-sw tb-on" onclick="this.classList.toggle('tb-on')"><span class="tb-sw-thumb"></span></button>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:13px 0">
+      <div>
+        <div style="font-size:13px;font-weight:500;color:#0B0B0C">Анти-детект профили</div>
+        <div style="font-size:11.5px;color:#9A9893;margin-top:2px">Фиксировать device fingerprint за аккаунтом</div>
+      </div>
+      <button type="button" class="tb-sw tb-on" onclick="this.classList.toggle('tb-on')"><span class="tb-sw-thumb"></span></button>
+    </div>
+  </div>
+
+  <!-- Footer -->
+  <div style="display:flex;justify-content:flex-end;gap:8px">
+    <button type="button" class="tb-btn tb-btn-white">Отмена</button>
+    <button type="button" class="tb-btn tb-btn-primary" onclick="var b=this;b.dataset.saved||(b.dataset.saved='1',b.style.background='#2E9E64',b.textContent='✓ Сохранено',setTimeout(function(){b.style.background='';b.textContent='Сохранить';b.removeAttribute('data-saved')},1400))">Сохранить</button>
+  </div>
+</div>

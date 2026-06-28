@@ -1,179 +1,52 @@
-"""Accounts table — column defs, Quasar cell templates, row mapping, event glue.
+"""Accounts table — error-label translation, username diffing, and event glue.
 
-The row-mapping / label / event-extraction helpers are pure and unit-tested
-(``tests/features/test_accounts_helpers.py``); the table column defs and cell
-templates are static presentation data.
+The column defs / cell templates and the pure row-derivation helpers live in
+``_table_cells`` (split out to keep each module under the size gate); the
+public names are re-exported below so existing call sites keep importing them
+from ``features.accounts._table``. The error-label / event helpers here are
+pure and unit-tested (``tests/features/test_accounts_helpers.py``).
 """
 
 from __future__ import annotations
 
 from typing import Literal, cast
 
+# Re-exported for ``_table_section`` (column defs + cell templates) and
+# ``_controller`` (``_to_table_row`` / ``_account_status_label``) — see
+# ``_table_cells`` for the implementations.
+from features.accounts._table_cells import (
+    _ACTIONS_TEMPLATE,
+    _DEVICE_TEMPLATE,
+    _PROXY_TEMPLATE,
+    _STATUS_BADGE_TEMPLATE,
+    _TABLE_COLUMNS,
+    _TELEGRAM_TEMPLATE,
+    _account_status_label,
+    _to_table_row,
+)
 
-def _col(
-    name: str,
-    label: str,
-    field: str,
-    *,
-    sortable: bool = True,
-    align: str = "left",
-) -> dict[str, object]:
-    return {"name": name, "label": label, "field": field, "sortable": sortable, "align": align}
-
-
-_TABLE_COLUMNS = [
-    _col("label", "Аккаунт", "label"),
-    _col("status", "Статус", "status"),
-    _col("telegram", "Telegram", "telegram"),
-    _col("device", "Устройство", "device"),
-    _col("proxy", "Прокси", "proxy"),
-    _col("last_checked", "Проверен", "last_checked"),
-    _col("actions", "", "account_id", sortable=False, align="right"),
+__all__ = [
+    "_ACTIONS_TEMPLATE",
+    "_DEVICE_TEMPLATE",
+    "_NOTIFY_TYPE_BY_HEALTH",
+    "_PROXY_TEMPLATE",
+    "_STATUS_BADGE_TEMPLATE",
+    "_TABLE_COLUMNS",
+    "_TELEGRAM_TEMPLATE",
+    "_account_id_from_event",
+    "_account_status_label",
+    "_remember_selection",
+    "_row_from_event",
+    "_service_error_label",
+    "_to_table_row",
+    "_username_update_value",
 ]
-# Сессия column dropped — it usually duplicates ``Аккаунт`` (same identifier)
-# and the extra width pushed the row past the dialog edge, forcing a
-# horizontal scrollbar. Per-row session info is still exposed in the edit
-# dialog and the row payload, just not as its own table column.
-
-# Raw ``AccountStatus`` → RU. Single source of truth: the table (via
-# ``_to_table_row``) and the check-result toast both translate the raw enum
-# through this map, so a status reads identically wherever it appears.
-_STATUS_LABEL_RU = {
-    "new": "Новый",
-    "alive": "Живой",
-    "unauthorized": "Не авторизован",
-    "session_error": "Ошибка сессии",
-    "account_error": "Ошибка аккаунта",
-    "flood_wait": "FloodWait",
-    "network_error": "Ошибка сети",
-    "proxy_error": "Ошибка прокси",
-    "unknown_error": "Неизвестная ошибка",
-}
-
-_STATUS_BADGE_TEMPLATE = """
-<q-td :props="props">
-  <q-chip
-    :color="{ok: 'positive', warn: 'warning', fail: 'negative'}[props.row.health] || 'grey-5'"
-    text-color="white"
-    dense
-    :label="props.row.status"
-  />
-</q-td>
-"""
-
-_PROXY_TEMPLATE = """
-<q-td :props="props">
-  <div v-if="props.row.proxy_host">
-    <q-chip
-      dense
-      square
-      :color="props.row.proxy_status === 'tcp_working' ? 'positive'
-              : props.row.proxy_status === 'failed' ? 'negative' : 'grey-6'"
-      text-color="white"
-      :icon="props.row.proxy_status === 'tcp_working' ? 'check_circle'
-             : props.row.proxy_status === 'failed' ? 'error' : 'help_outline'"
-      :label="props.row.proxy_country_code
-              || (props.row.proxy_status === 'tcp_working' ? 'OK'
-                  : props.row.proxy_status === 'failed' ? 'FAIL' : '—')"
-    />
-    <q-tooltip class="bg-grey-9 text-body2">
-      <div class="text-weight-bold q-mb-xs">{{ props.row.proxy }}</div>
-      <div v-if="props.row.proxy_country_name">{{ props.row.proxy_country_name }}</div>
-      <div v-if="props.row.proxy_exit_ip">IP: {{ props.row.proxy_exit_ip }}</div>
-      <div v-if="props.row.proxy_last_error" class="text-negative q-mt-xs">
-        {{ props.row.proxy_last_error }}
-      </div>
-    </q-tooltip>
-  </div>
-  <q-chip v-else dense outline square color="grey-6" label="—" />
-</q-td>
-"""
-
-# Telegram identity stacks vertically — Display Name → @username → phone —
-# instead of the previous space-pipe-joined single line. Each subsequent
-# line drops to a caption-grey style so the visual hierarchy reads at a
-# glance and the column hugs ~150 px instead of 280 px.
-_TELEGRAM_TEMPLATE = """
-<q-td :props="props">
-  <div class="column" style="line-height:1.25; white-space: normal">
-    <template v-for="(part, idx) in (props.row.telegram || '').split(' | ')" :key="idx">
-      <span :class="idx === 0 ? 'text-weight-medium' : 'text-caption text-grey-7'">
-        {{ part }}
-      </span>
-    </template>
-  </div>
-</q-td>
-"""
-
-_DEVICE_TEMPLATE = """
-<q-td :props="props">
-  <div class="column" style="line-height:1.25; white-space: normal">
-    <template v-for="(part, idx) in (props.row.device || '—').split(' | ')" :key="idx">
-      <span :class="idx === 0 ? 'text-weight-medium' : 'text-caption text-grey-7'">
-        {{ part }}
-      </span>
-    </template>
-  </div>
-</q-td>
-"""
-
-_ACTIONS_TEMPLATE = """
-<q-td :props="props" class="q-pa-none">
-  <div class="row items-center justify-end no-wrap">
-    <q-btn
-      dense round flat size="sm"
-      icon="manage_accounts"
-      color="primary"
-      @click="() => $parent.$emit('edit_profile', props.row)"
-    >
-      <q-tooltip>Редактировать профиль</q-tooltip>
-    </q-btn>
-    <q-btn
-      dense round flat size="sm"
-      icon="vpn_key"
-      color="primary"
-      @click="() => $parent.$emit('edit_proxy', props.row)"
-    >
-      <q-tooltip>Настройки прокси</q-tooltip>
-    </q-btn>
-    <q-btn
-      dense round flat size="sm"
-      icon="refresh"
-      color="primary"
-      @click="() => $parent.$emit('check_one', props.row.account_id)"
-    >
-      <q-tooltip>Проверить аккаунт</q-tooltip>
-    </q-btn>
-    <q-btn
-      dense round flat size="sm"
-      icon="delete"
-      color="negative"
-      @click="() => $parent.$emit('delete_account', props.row)"
-    >
-      <q-tooltip>Удалить аккаунт</q-tooltip>
-    </q-btn>
-  </div>
-</q-td>
-"""
 
 _NOTIFY_TYPE_BY_HEALTH: dict[str, Literal["positive", "warning", "negative"]] = {
     "ok": "positive",
     "warn": "warning",
     "fail": "negative",
 }
-
-
-def _to_table_row(row: dict[str, object]) -> dict[str, object]:
-    translated = dict(row)
-    status = str(translated.get("status") or "")
-    translated["status"] = _account_status_label(status)
-    if translated.get("last_checked") == "never":
-        translated["last_checked"] = "никогда"
-    return translated
-
-
-def _account_status_label(status: str) -> str:
-    return _STATUS_LABEL_RU.get(status, status.replace("_", " "))
 
 
 def _username_update_value(raw: str, snapshot_username: str | None) -> str | None:

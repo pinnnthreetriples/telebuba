@@ -75,9 +75,9 @@ def render_promotion_block(refresh: object, card: WarmingAccountState) -> None: 
         await _open_promote_dialog(refresh, card, promote_to_neurocomment)
 
     btn = (
-        ui.button(label, icon="forward", on_click=on_click)
-        .props("flat dense color=primary" if enabled else "flat dense color=grey-7 disable")
-        .classes("text-[11px] w-full")
+        ui.button(label, icon="arrow_forward", on_click=on_click)
+        .props("unelevated no-caps" if enabled else "unelevated no-caps disable")
+        .classes(f"tb-btn w-full {'tb-btn-dark' if enabled else 'tb-btn-disabled'}")
     )
     if enabled:
         btn.tooltip("Останавливает прогрев и добавляет аккаунт в нейрокомментинг")
@@ -96,16 +96,16 @@ def _render_promoted_row(  # pragma: no cover
 ) -> None:
     """The post-promotion row: green badge on the left, "Вернуть в прогрев" on the right."""
     with ui.row().classes("w-full items-center gap-2"):
-        with ui.row().classes("items-center gap-1 text-[11px] text-emerald-700"):
-            ui.icon("verified").classes("text-sm")
-            ui.label("В нейрокомментинге")
+        ui.label("В нейрокомментинге").classes(
+            "tb-badge tbw-pill-green text-[10.5px] font-semibold",
+        )
         ui.element("div").classes("flex-1")
 
         async def on_undo() -> None:
             await _open_undo_dialog(refresh, card, unmark)
 
         ui.button("Вернуть в прогрев", icon="undo", on_click=on_undo).props(
-            "flat dense color=grey-7",
+            "flat dense no-caps color=grey-7",
         ).classes("text-[10px]")
 
 
@@ -117,12 +117,12 @@ async def _open_promote_dialog(  # pragma: no cover
     """Confirmation dialog for promote → calls the service + refreshes the board."""
     with (
         ui.dialog() as dialog,
-        ui.column().classes("bg-white p-4 gap-3 w-[420px] max-w-full"),
+        ui.element("div").classes("tb-card w-[420px] max-w-full flex flex-col gap-3"),
     ):
-        ui.label("Переместить аккаунт в нейрокомментинг?").classes("text-base font-semibold")
+        ui.label("Переместить аккаунт в нейрокомментинг?").classes("tb-title-lg")
         ui.label(
             "Прогрев остановится; аккаунт появится в списке готовых к комментированию.",
-        ).classes("text-sm text-slate-700")
+        ).classes("tb-label")
 
         async def confirm() -> None:
             dialog.close()
@@ -131,8 +131,12 @@ async def _open_promote_dialog(  # pragma: no cover
             refresh()  # ty: ignore[call-non-callable]
 
         with ui.row().classes("w-full justify-end gap-2"):
-            ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
-            ui.button("Подтвердить", color="primary", on_click=confirm)
+            ui.button("Отмена", on_click=dialog.close).props("unelevated no-caps").classes(
+                "tb-btn tb-btn-white",
+            )
+            ui.button("Подтвердить", on_click=confirm).props("unelevated no-caps").classes(
+                "tb-btn tb-btn-primary",
+            )
     dialog.open()
 
 
@@ -144,12 +148,12 @@ async def _open_undo_dialog(  # pragma: no cover
     """Confirmation dialog for un-promote → calls the service + refreshes the board."""
     with (
         ui.dialog() as dialog,
-        ui.column().classes("bg-white p-4 gap-3 w-[420px] max-w-full"),
+        ui.element("div").classes("tb-card w-[420px] max-w-full flex flex-col gap-3"),
     ):
-        ui.label("Вернуть аккаунт в прогрев?").classes("text-base font-semibold")
+        ui.label("Вернуть аккаунт в прогрев?").classes("tb-title-lg")
         ui.label(
             "Аккаунт исчезнет из списка готовых к комментированию и снова появится в простое.",
-        ).classes("text-sm text-slate-700")
+        ).classes("tb-label")
 
         async def confirm() -> None:
             dialog.close()
@@ -158,6 +162,10 @@ async def _open_undo_dialog(  # pragma: no cover
             refresh()  # ty: ignore[call-non-callable]
 
         with ui.row().classes("w-full justify-end gap-2"):
-            ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
-            ui.button("Подтвердить", color="primary", on_click=confirm)
+            ui.button("Отмена", on_click=dialog.close).props("unelevated no-caps").classes(
+                "tb-btn tb-btn-white",
+            )
+            ui.button("Подтвердить", on_click=confirm).props("unelevated no-caps").classes(
+                "tb-btn tb-btn-primary",
+            )
     dialog.open()

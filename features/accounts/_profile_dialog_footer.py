@@ -36,18 +36,16 @@ class _TabFooter:
     ) -> None:
         self._apply_handler = apply
         self._cancel_handler = cancel
-        with ui.row().classes("w-full justify-end gap-2") as self.row:
-            self.cancel_btn = ui.button(
-                "Отмена",
-                icon="close",
-                color="grey-7",
-                on_click=self._on_cancel,
-            ).props("flat")
-            self.apply_btn = ui.button(
-                "Применить",
-                icon="check",
-                color="primary",
-                on_click=self._on_apply,
+        with ui.row().classes("w-full justify-end").style("gap:8px") as self.row:
+            self.cancel_btn = (
+                ui.button("Отмена", on_click=self._on_cancel)
+                .classes("tb-btn tb-btn-white")
+                .props("flat no-caps text-color=dark")
+            )
+            self.apply_btn = (
+                ui.button("Сохранить", icon="check", on_click=self._on_apply)
+                .classes("tb-btn tb-btn-dark")
+                .props("flat no-caps text-color=white")
             )
         self.row.set_visibility(False)
 

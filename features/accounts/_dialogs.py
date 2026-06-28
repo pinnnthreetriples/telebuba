@@ -72,12 +72,20 @@ async def _open_delete_dialog(  # pragma: no cover
 ) -> None:
     account_id = str(row["account_id"])
     label = str(row.get("label") or account_id)
-    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[420px] max-w-full"):
-        ui.label("Удалить аккаунт?").classes("text-base font-semibold")
-        ui.label(
-            f"Аккаунт «{label}» ({account_id}) будет удалён вместе с прогревом, "
-            "прокси и историей. Действие необратимо.",
-        ).classes("text-sm text-slate-700")
+    with (
+        ui.dialog() as dialog,
+        ui.column()
+        .classes("bg-white gap-3 w-[420px] max-w-full")
+        .style("border-radius:18px;padding:20px"),
+    ):
+        ui.html(
+            '<div style="font-size:16px;font-weight:700;color:#0B0B0C">'
+            f"Удалить аккаунт {label}?</div>",
+        )
+        ui.html(
+            '<div style="font-size:12.5px;color:#3A3A3A;line-height:1.55">Будут удалены сессия, '
+            "прокси и история активности. Это действие необратимо.</div>",
+        )
 
         async def confirm() -> None:
             spinner = ui.notification(
@@ -103,7 +111,11 @@ async def _open_delete_dialog(  # pragma: no cover
             ui.notify(f"Аккаунт {account_id} удалён", type="positive")
             await refresh()
 
-        with ui.row().classes("w-full justify-end gap-2"):
-            ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
-            ui.button("Удалить", color="negative", on_click=confirm)
+        with ui.row().classes("w-full justify-end").style("gap:8px"):
+            ui.button("Отмена", on_click=dialog.close).classes("tb-btn tb-btn-white").props(
+                "flat no-caps text-color=dark",
+            )
+            ui.button("Удалить", on_click=confirm).classes("tb-btn tb-btn-danger").props(
+                "flat no-caps text-color=negative",
+            )
     dialog.open()

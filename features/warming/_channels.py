@@ -38,13 +38,14 @@ def _count_submitted_lines(raw: str) -> int:
     return sum(1 for token in re.split(r"[\s,]+", raw.strip()) if token)
 
 
-async def _render_channels_card() -> None:  # pragma: no cover
-    with ui.card().classes("w-[420px] p-4 gap-3"):
+async def _render_channels_card() -> None:  # noqa: PLR0915  # pragma: no cover
+    with ui.element("div").classes("tb-card w-full flex flex-col gap-3"):
         with ui.row().classes("w-full items-center justify-between"):
-            ui.label("Каналы").classes("text-base font-semibold")
-            count_badge = ui.label("0").classes(
-                "text-xs px-2 py-1 rounded bg-slate-100 text-slate-700",
-            )
+            ui.label("Каналы прогрева").classes("tb-title")
+            count_badge = ui.label("0").classes("tbw-count-pill")
+        ui.label("Аккаунты читают и ставят реакции в этих каналах").classes(
+            "text-[11px] text-[#9A9893] -mt-1",
+        )
         channels_input = (
             ui.textarea(
                 label="Добавить каналы",
@@ -82,15 +83,19 @@ async def _render_channels_card() -> None:  # pragma: no cover
             # One misclick deletes the row forever; a tiny modal turns
             # the trash-can into a two-step action without making the
             # common case (bulk pruning) much slower.
-            with ui.dialog() as dialog, ui.card().classes("p-4 gap-3"):
-                ui.label(f"Удалить «{channel}» из списка?").classes("text-sm")
+            with (
+                ui.dialog() as dialog,
+                ui.element("div").classes("tb-card w-[380px] max-w-full flex flex-col gap-3"),
+            ):
+                ui.label(f"Удалить «{channel}» из списка?").classes("tb-label")
                 with ui.row().classes("w-full justify-end gap-2"):
-                    ui.button("Отмена", on_click=lambda: dialog.submit(False))  # noqa: FBT003
+                    ui.button("Отмена", on_click=lambda: dialog.submit(False)).props(  # noqa: FBT003
+                        "unelevated no-caps",
+                    ).classes("tb-btn tb-btn-white")
                     ui.button(
                         "Удалить",
-                        color="red",
                         on_click=lambda: dialog.submit(True),  # noqa: FBT003
-                    )
+                    ).props("unelevated no-caps").classes("tb-btn tb-btn-danger")
             confirmed = await dialog
             if not confirmed:
                 return
@@ -124,7 +129,7 @@ async def _render_channels_card() -> None:  # pragma: no cover
             else:
                 ui.notify(f"Добавлено {added}", type="positive")
 
-        ui.button("Добавить каналы", icon="add", on_click=on_add).props("color=primary").classes(
-            "w-full",
-        )
+        ui.button("Добавить каналы", icon="add", on_click=on_add).props(
+            "unelevated no-caps",
+        ).classes("tb-btn tb-btn-primary w-full")
         await refresh_list()

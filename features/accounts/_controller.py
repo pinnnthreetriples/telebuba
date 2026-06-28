@@ -32,13 +32,20 @@ from schemas.accounts import AccountCheckRequest, AccountFilter, health_for_stat
 from services.accounts import check_account_session, load_accounts_table
 
 if TYPE_CHECKING:
+    from features.accounts._header import _HeaderWidgets
     from features.accounts._table_section import _TableSection
 
 
 class _AccountsController:  # pragma: no cover
     """Holds page state and event handlers, keeping the page builder flat."""
 
-    def __init__(self, section: _TableSection, selected_ids: set[str]) -> None:
+    def __init__(
+        self,
+        header: _HeaderWidgets,
+        section: _TableSection,
+        selected_ids: set[str],
+    ) -> None:
+        self._header = header
         self._section = section
         self._selected_ids = selected_ids
 
@@ -46,8 +53,8 @@ class _AccountsController:  # pragma: no cover
         section = self._section
         state = await load_accounts_table(
             AccountFilter(
-                query=section.query_input.value or "",
-                status=section.status_select.value,
+                query=self._header.query_input.value or "",
+                status=self._header.status_select.value,
             ),
         )
         section.table.rows = [_to_table_row(row.model_dump()) for row in state.rows]

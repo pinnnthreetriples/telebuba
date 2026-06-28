@@ -52,13 +52,17 @@ _STATE_LABEL = {
     "quarantine": "Карантин",
     "error": "Ошибка",
 }
+# Status mini-pills — spec C.3 token map (statusMap + warming-card states).
+# Each value is a feature class defined in ``__init__.py`` carrying the exact
+# spec bg/text hex pair (e.g. complete #12A150 on #DDF7E9, sleeping #E08700 on
+# #FFF0D2). The renderer keeps applying these via ``.classes(...)``.
 _STATE_BADGE = {
-    "idle": "text-slate-600 bg-slate-100",
-    "active": "text-green-700 bg-green-100",
-    "sleeping": "text-amber-700 bg-amber-100",
-    "flood_wait": "text-amber-800 bg-amber-100",
-    "quarantine": "text-orange-700 bg-orange-100",
-    "error": "text-red-700 bg-red-100",
+    "idle": "tbw-pill-idle",
+    "active": "tbw-pill-green",
+    "sleeping": "tbw-pill-amber",
+    "flood_wait": "tbw-pill-amber",
+    "quarantine": "tbw-pill-orange",
+    "error": "tbw-pill-red",
 }
 # classify_spam_probe writes this exact phrase to ``account_spam_status.detail``
 # when @SpamBot replies "being checked" — we recognise it to distinguish a
@@ -77,21 +81,22 @@ _READINESS_REASON_RU = {
 }
 
 _SUMMARY_CHIPS = (
-    ("Всего", "total", "bg-slate-100 text-slate-700"),
-    ("Прогрев", "warming", "bg-green-100 text-green-700"),
-    ("Готовы", "ready", "bg-emerald-100 text-emerald-700"),
-    ("Внимание", "attention", "bg-orange-100 text-orange-700"),
-    ("⛨ здоровы", "trust_healthy", "bg-green-100 text-green-700"),
-    ("⛨ наблюдение", "trust_watch", "bg-amber-100 text-amber-700"),
-    ("⛨ риск", "trust_risk", "bg-red-100 text-red-700"),
+    ("Всего", "total", "tbw-chip-ink"),
+    ("Прогрев", "warming", "tbw-chip-green"),
+    ("Готовы", "ready", "tbw-chip-green"),
+    ("Внимание", "attention", "tbw-chip-orange"),
+    ("⛨ здоровы", "trust_healthy", "tbw-chip-green"),
+    ("⛨ наблюдение", "trust_watch", "tbw-chip-amber"),
+    ("⛨ риск", "trust_risk", "tbw-chip-red"),
 )
 
+# Phase progress-bar fill — spec blue→green ramp expressed as feature classes.
 _PHASE_BAR_FILL = {
-    "intro": "bg-green-500",
-    "settling": "bg-sky-500",
-    "warming": "bg-amber-500",
-    "active": "bg-indigo-500",
-    "warmed": "bg-emerald-500",
+    "intro": "tbw-fill-green",
+    "settling": "tbw-fill-blue",
+    "warming": "tbw-fill-amber",
+    "active": "tbw-fill-blue",
+    "warmed": "tbw-fill-green",
 }
 
 # Pipeline rail — per-step circle + per-connector bar classes. The actual
@@ -100,36 +105,35 @@ _PHASE_BAR_FILL = {
 # ``tb-step-spin``) and the active-state ring stay in one place. The semantic
 # names here let ``_pipeline.py`` pick a class by current step state without
 # hardcoding colours at the call site.
-_PIPELINE_STEP_DONE = "bg-green-500 text-white"
-_PIPELINE_STEP_ACTIVE = (
-    "bg-indigo-600 text-white ring-4 ring-indigo-200 animate-pulse shadow-md shadow-indigo-200"
-)
-_PIPELINE_STEP_PENDING = "bg-slate-200 text-slate-400"
-_PIPELINE_STEP_ERROR = "bg-red-500 text-white"
-_PIPELINE_STEP_FLOOD = "bg-amber-500 text-white"
-_PIPELINE_STEP_QUAR = "bg-orange-500 text-white"
-_PIPELINE_STEP_SLEEP = "bg-blue-400 text-white ring-4 ring-blue-100"
-_PIPELINE_CONNECTOR_DONE = "bg-green-400"
-_PIPELINE_CONNECTOR_ACTIVE = "tb-flow-line"  # defined in __init__.py _PIPELINE_CSS
-_PIPELINE_CONNECTOR_PENDING = "bg-slate-200"
+_PIPELINE_STEP_DONE = "tbw-step-done"
+_PIPELINE_STEP_ACTIVE = "tbw-step-active tb-livedot"
+_PIPELINE_STEP_PENDING = "tbw-step-pending"
+_PIPELINE_STEP_ERROR = "tbw-step-error"
+_PIPELINE_STEP_FLOOD = "tbw-step-flood"
+_PIPELINE_STEP_QUAR = "tbw-step-quar"
+_PIPELINE_STEP_SLEEP = "tbw-step-sleep"
+_PIPELINE_CONNECTOR_DONE = "tbw-conn-done"
+_PIPELINE_CONNECTOR_ACTIVE = "tbw-conn-active"  # defined in __init__.py _PIPELINE_CSS
+_PIPELINE_CONNECTOR_PENDING = "tbw-conn-pending"
 
-# ── Card stripe colour by state ───────────────────────────────────────────────
+# ── Card stripe colour by state (spec status hues) ────────────────────────────
 _STRIPE_CLS: dict[str, str] = {
-    "active": "bg-green-500",
-    "sleeping": "bg-amber-400",
-    "flood_wait": "bg-amber-400",
-    "quarantine": "bg-orange-500",
-    "error": "bg-red-500",
-    "idle": "bg-slate-200",
+    "active": "tbw-stripe-green",
+    "sleeping": "tbw-stripe-amber",
+    "flood_wait": "tbw-stripe-amber",
+    "quarantine": "tbw-stripe-orange",
+    "error": "tbw-stripe-red",
+    "idle": "tbw-stripe-idle",
 }
 
 # ── Trust score display (bare number + coloured label, no badge bg) ────────────
+# trustColor(t): t≥70 #12A150, 45≤t<70 #E08700, t<45 #E5372A (spec §C token ref).
 _TRUST_COLOR: dict[str, str] = {
-    "excellent": "text-green-600",
-    "good": "text-green-600",
-    "watch": "text-amber-600",
-    "at_risk": "text-red-600",
-    "critical": "text-red-600",
+    "excellent": "tbw-text-green",
+    "good": "tbw-text-green",
+    "watch": "tbw-text-amber",
+    "at_risk": "tbw-text-red",
+    "critical": "tbw-text-red",
 }
 _TRUST_LABEL_RU: dict[str, str] = {
     "excellent": "Trust — норма",
@@ -141,20 +145,20 @@ _TRUST_LABEL_RU: dict[str, str] = {
 
 # ── Phase chip (solid fill, rounded) ─────────────────────────────────────────
 _PHASE_CHIP_SOLID: dict[str, str] = {
-    "intro": "bg-green-100  text-green-800",
-    "settling": "bg-amber-100  text-amber-800",
-    "warming": "bg-blue-100   text-blue-800",
-    "active": "bg-indigo-100 text-indigo-800",
-    "warmed": "bg-emerald-100 text-emerald-800",
+    "intro": "tbw-pill-green",
+    "settling": "tbw-pill-amber",
+    "warming": "tbw-pill-blue",
+    "active": "tbw-pill-blue",
+    "warmed": "tbw-pill-green",
 }
 
 # ── Status line (dot colour + dynamic text lookup) ────────────────────────────
 _STATUS_DOT: dict[str, str] = {
-    "active": "bg-green-500",
-    "sleeping": "bg-amber-400",
-    "flood_wait": "bg-amber-500",
-    "quarantine": "bg-orange-500",
-    "error": "bg-red-500",
+    "active": "tbw-dot-green",
+    "sleeping": "tbw-dot-amber",
+    "flood_wait": "tbw-dot-amber",
+    "quarantine": "tbw-dot-orange",
+    "error": "tbw-dot-red",
 }
 _STATUS_ACTION_LABEL: dict[str, str] = {
     "set_online": "устанавливает онлайн",
@@ -166,11 +170,11 @@ _STATUS_ACTION_LABEL: dict[str, str] = {
 }
 
 # ── Detail panel icon containers (28px squares) ───────────────────────────────
-# Maps `kind` string → (icon_bg_classes, icon_color_classes)
+# Maps `kind` string → (icon_bg_class, icon_color_class) — spec light-tint tiles.
 _DETAIL_ICON_THEME: dict[str, tuple[str, str]] = {
-    "active": ("bg-blue-100", "text-blue-600"),
-    "sleep": ("bg-slate-100", "text-slate-500"),
-    "flood": ("bg-amber-100", "text-amber-600"),
-    "quar": ("bg-orange-100", "text-orange-600"),
-    "error": ("bg-red-100", "text-red-600"),
+    "active": ("tbw-tile-blue", "tbw-text-blue"),
+    "sleep": ("tbw-tile-gray", "tbw-text-muted"),
+    "flood": ("tbw-tile-amber", "tbw-text-amber"),
+    "quar": ("tbw-tile-orange", "tbw-text-orange"),
+    "error": ("tbw-tile-red", "tbw-text-red"),
 }

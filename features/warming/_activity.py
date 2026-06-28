@@ -55,7 +55,7 @@ def _render_dialogue_body(overview: DialogueOverview) -> None:  # pragma: no cov
         with ui.row().classes("w-full gap-1 flex-wrap"):
             for pair in overview.pairs:
                 ui.label(f"{pair.account_a} ↔ {pair.account_b}").classes(
-                    "text-[11px] px-2 py-0.5 rounded bg-indigo-50 text-indigo-700",
+                    "text-[11px] px-2 py-0.5 rounded tbw-pill-blue",
                 )
     if overview.recent:
         ui.separator()
@@ -71,14 +71,14 @@ def _render_dialogue_body(overview: DialogueOverview) -> None:  # pragma: no cov
 
 
 async def _render_dialogues() -> None:  # pragma: no cover
-    with ui.card().classes("w-full p-4 gap-2"):
+    with ui.element("div").classes("tb-card w-full flex flex-col gap-2"):
         with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("forum").classes("text-indigo-500")
-            ui.label("Диалоги между аккаунтами").classes("text-base font-semibold")
+            ui.icon("forum").classes("tbw-text-blue")
+            ui.label("Диалоги между аккаунтами").classes("tb-title")
         ui.label(
             "Аккаунты переписываются друг с другом по парам — ход за ходом, с паузами; "
             "беседа естественно затухает и может возобновиться позже.",
-        ).classes("text-xs text-slate-500")
+        ).classes("text-[11px] text-[#9A9893] -mt-1")
         body = ui.column().classes("w-full gap-2")
         seen: dict[str, object] = {"sig": None}
 
@@ -106,14 +106,14 @@ async def _render_activity_log() -> None:  # pragma: no cover
     # in one collapsible place, so a failure anywhere is visible without expanding
     # cards. Scoped to warming events (we are on the warming page) and to
     # warning/error level — the success per-step stream lives per-card.
-    with ui.card().classes("w-full p-4 gap-2"):
+    with ui.element("div").classes("tb-card w-full flex flex-col gap-2"):
         open_state = {"value": True}
         header = ui.row().classes("w-full items-center gap-2 cursor-pointer select-none")
         with header:
-            chevron = ui.icon("expand_more").classes("text-slate-400")
-            ui.icon("report").classes("text-red-500")
-            ui.label("Ошибки и предупреждения").classes("text-base font-semibold")
-            ui.label("по всем аккаунтам прогрева").classes("text-xs text-slate-400")
+            chevron = ui.icon("expand_more").classes("text-[#9A9893]")
+            ui.icon("report").classes("tbw-text-red")
+            ui.label("Ошибки и предупреждения").classes("tb-title")
+            ui.label("по всем аккаунтам прогрева").classes("text-[11px] text-[#9A9893]")
         log_box = ui.column().classes("w-full gap-1 max-h-80 overflow-auto")
         seen: dict[str, object] = {"sig": None}
 

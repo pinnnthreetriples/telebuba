@@ -153,8 +153,17 @@ async def _open_proxy_dialog(  # pragma: no cover
 ) -> None:
     account_id = str(row["account_id"])
     existing = await fetch_account_proxy_settings(account_id)
-    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-[460px] max-w-full"):
-        ui.label("Настройки прокси").classes("text-base font-semibold")
+    with (
+        ui.dialog() as dialog,
+        ui.column()
+        .classes("bg-white gap-3 w-[440px] max-w-full")
+        .style("border-radius:18px;padding:20px"),
+    ):
+        ui.html('<div style="font-size:16px;font-weight:700;color:#0B0B0C">Настройки прокси</div>')
+        ui.html(
+            '<div style="font-size:12.5px;color:#9A9893">Один прокси обслуживает '
+            "до 3 аккаунтов</div>",
+        )
         form = _ProxyForm(
             proxy_type=ui.select(
                 ["socks5", "https"],
@@ -174,12 +183,22 @@ async def _open_proxy_dialog(  # pragma: no cover
                 value=(existing.password if existing else None) or "",
             ).props("dense outlined clearable type=password"),
         )
-        with ui.column().classes(
-            "w-full gap-1 rounded border border-slate-200 bg-slate-50 px-3 py-2",
+        with (
+            ui.column()
+            .classes("w-full gap-1")
+            .style(
+                "border-radius:10px;background:#F6F5F2;padding:10px 12px",
+            )
         ):
-            status_label = ui.label(_proxy_dialog_status(row)).classes("text-sm font-medium")
-            geo_label = ui.label(_proxy_dialog_geo(row)).classes("text-xs text-slate-600")
-            error_label = ui.label(_proxy_dialog_error(row)).classes("text-xs text-red-600")
+            status_label = (
+                ui.label(_proxy_dialog_status(row))
+                .classes("text-sm font-medium")
+                .style(
+                    "color:#0B0B0C",
+                )
+            )
+            geo_label = ui.label(_proxy_dialog_geo(row)).style("font-size:12px;color:#74726E")
+            error_label = ui.label(_proxy_dialog_error(row)).style("font-size:12px;color:#C0473F")
         save = lambda: _save_proxy(  # noqa: E731 - inline thunk binds form refs for on_click.
             account_id=account_id,
             dialog=dialog,
@@ -198,12 +217,18 @@ async def _open_proxy_dialog(  # pragma: no cover
             dialog=dialog,
             refresh=refresh,
         )
-        with ui.row().classes("w-full justify-between gap-2"):
-            ui.button(icon="delete", color="negative", on_click=remove).tooltip("Удалить прокси")
-            with ui.row().classes("gap-2"):
-                ui.button(icon="travel_explore", color="primary", on_click=check).tooltip(
-                    "Проверить прокси",
+        with ui.row().classes("w-full justify-between items-center").style("gap:8px"):
+            ui.button("Удалить", icon="delete", on_click=remove).classes(
+                "tb-btn tb-btn-ghost",
+            ).props("flat no-caps text-color=negative").tooltip("Удалить прокси")
+            with ui.row().style("gap:8px"):
+                ui.button("Проверить", on_click=check).classes("tb-btn tb-btn-white").props(
+                    "flat no-caps text-color=dark",
+                ).tooltip("Проверить прокси")
+                ui.button("Отмена", on_click=dialog.close).classes("tb-btn tb-btn-white").props(
+                    "flat no-caps text-color=dark",
                 )
-                ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip("Отмена")
-                ui.button(icon="save", color="primary", on_click=save).tooltip("Сохранить прокси")
+                ui.button("Сохранить", on_click=save).classes("tb-btn tb-btn-primary").props(
+                    "flat no-caps text-color=white",
+                ).tooltip("Сохранить прокси")
     dialog.open()

@@ -66,82 +66,42 @@ def _detect_quiet_preset(*, enabled: bool, start: int, end: int) -> str:
 
 
 def _section_caption(text: str) -> None:  # pragma: no cover
-    ui.label(text).classes(
-        "text-[11px] font-semibold uppercase tracking-wide text-slate-400 mt-1",
-    )
+    ui.label(text).classes("tb-uplabel mt-1")
 
 
-def _info_item(icon: str, title: str, description: str) -> None:  # pragma: no cover
-    """A read-only "how it works" row: icon · (title + description)."""
-    with ui.row().classes("w-full items-start gap-3 py-1 flex-nowrap"):
-        ui.icon(icon).classes("text-slate-400 text-xl shrink-0 mt-0.5")
-        with ui.column().classes("flex-1 gap-0 min-w-0"):
-            ui.label(title).classes("text-sm font-medium text-slate-800 leading-tight")
-            ui.label(description).classes("text-xs text-slate-500 leading-snug")
+# Spec C.3 — the eight always-on warming mechanics, verbatim.
+_HOW_IT_WORKS_STEPS: tuple[str, ...] = (
+    "Аккаунт заходит в каналы из списка и читает свежие посты",
+    "Появляется в сети и выходит, как живой человек",
+    "Делает случайные паузы между действиями — не спешит",
+    "После цикла «спит» 12–30 часов и повторяет позже",
+    "У каждого аккаунта свой лимит действий на сутки",
+    "При лимите Telegram ждёт безопасное время, а не продолжает",
+    "После перезапуска продолжает по расписанию, а не с нуля",
+    "Все действия пишутся в лог: старт, цикл, ошибка",
+)
+
+
+def _how_step(number: int, text: str) -> None:  # pragma: no cover
+    """One numbered «как работает» row: blue circle number + grey text."""
+    with ui.row().classes("items-start gap-2.5 flex-nowrap"):
+        with ui.element("div").classes("tbw-num shrink-0"):
+            ui.label(str(number))
+        ui.label(text).classes("text-[12px] text-[#5C5C5C] leading-snug")
 
 
 def _render_how_it_works() -> None:  # pragma: no cover
-    """Explain the always-on engine mechanics so buyers see the full value."""
-    with ui.card().classes("w-full p-4 gap-2"):
+    """«Как работает прогрев» — soft card with the eight always-on mechanics (spec C.3)."""
+    with ui.element("div").classes("tb-card-soft w-full flex flex-col gap-3"):
         with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("auto_mode").classes("text-slate-500")
-            ui.label("Как работает прогрев").classes("text-base font-semibold")
+            ui.icon("auto_mode").classes("text-[#9A9893]")
+            ui.label("Как работает прогрев").classes("tb-title")
         ui.label(
-            "Эти механики включены всегда и работают для каждого аккаунта "
-            "автоматически — настраивать их не нужно.",
-        ).classes("text-xs text-slate-500")
-        ui.separator()
-        with ui.row().classes("w-full gap-6 items-start flex-wrap"):
-            with ui.column().classes("flex-1 min-w-[300px] gap-1"):
-                _section_caption("В каждом цикле")
-                _info_item(
-                    "visibility",
-                    "Читает каналы",
-                    "Заходит в каналы из списка и просматривает свежие посты — основа прогрева.",
-                )
-                _info_item(
-                    "wifi",
-                    "Онлайн и офлайн",
-                    "Появляется в сети на время активности и выходит после, как живой человек.",
-                )
-                _info_item(
-                    "schedule",
-                    "Паузы как у человека",
-                    "Случайные задержки между действиями: «печатает», «читает», не спешит.",
-                )
-                _info_item(
-                    "hourglass_empty",
-                    "Сон 12–30 часов",
-                    "После цикла аккаунт отдыхает случайное время и повторяет активность позже.",
-                )
-                _info_item(
-                    "auto_awesome",
-                    "Авто-лимит действий",
-                    "Каждому аккаунту свой лимит на сутки — по фазе прогрева и trust score. "
-                    "См. карточку аккаунта.",
-                )
-            with ui.column().classes("flex-1 min-w-[300px] gap-1"):
-                _section_caption("Защита и надёжность")
-                _info_item(
-                    "shield",
-                    "Пауза при лимите Telegram",
-                    "При flood-wait аккаунт ждёт безопасное время, а не продолжает действия.",
-                )
-                _info_item(
-                    "restart_alt",
-                    "Переживает перезапуск",
-                    "После перезапуска приложения прогрев продолжается по расписанию, а не с нуля.",
-                )
-                _info_item(
-                    "vpn_lock",
-                    "Запоминает прокси старта",
-                    "Фиксирует, с каким прокси аккаунт начал прогрев — удобно для разбора проблем.",
-                )
-                _info_item(
-                    "receipt_long",
-                    "Счётчики и журнал",
-                    "Считает действия за день и пишет события (старт, цикл, ошибка) в живой лог.",
-                )
+            "Эти механики включены всегда и работают автоматически — настраивать не нужно",
+        ).classes("text-[11px] text-[#9A9893] -mt-1")
+        with ui.element("div").classes("tbw-how-grid w-full"):
+            for index, text in enumerate(_HOW_IT_WORKS_STEPS, start=1):
+                _how_step(index, text)
 
 
 def _feature_row(
@@ -155,10 +115,10 @@ def _feature_row(
     Returns the control element so the caller can read its value later.
     """
     with ui.row().classes("w-full items-center gap-3 py-1 flex-nowrap"):
-        ui.icon(icon).classes("text-slate-400 text-2xl shrink-0")
+        ui.icon(icon).classes("text-[#9A9893] text-2xl shrink-0")
         with ui.column().classes("flex-1 gap-0 min-w-0"):
-            ui.label(label).classes("text-sm font-medium text-slate-800 leading-tight")
-            ui.label(description).classes("text-xs text-slate-500 leading-snug")
+            ui.label(label).classes("text-[13px] font-medium text-[#0B0B0C] leading-tight")
+            ui.label(description).classes("text-[11.5px] text-[#9A9893] leading-snug")
         return build_control()
 
 
@@ -253,12 +213,12 @@ def _render_features_card(
     switch: Callable[..., ui.element],
     trigger: Callable[..., Awaitable[None]],
 ) -> None:  # pragma: no cover
-    with ui.card().classes("w-[460px] p-4 gap-2"):
+    with ui.element("div").classes("tb-card w-full flex flex-col gap-2"):
         with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("tune").classes("text-slate-500")
-            ui.label("Функции прогрева").classes("text-base font-semibold")
+            ui.icon("tune").classes("text-[#9A9893]")
+            ui.label("Функции прогрева").classes("tb-title")
         ui.label("Что делают аккаунты и какие лимиты соблюдают. Сохраняется сразу.").classes(
-            "text-xs text-slate-500",
+            "text-[11px] text-[#9A9893] -mt-1",
         )
 
         ui.separator()
@@ -391,11 +351,11 @@ def _render_gemini_card(
     # does not change.
     del persist
     status_label = "Ключ задан в .env" if current.has_gemini_key else "Ключ Gemini не задан в .env"
-    with ui.card().classes("w-[420px] p-4 gap-3"):
-        ui.label("Gemini (управляется через .env)").classes("text-base font-semibold")
-        ui.label(status_label).classes("text-sm")
-        ui.label(f"Модель: {current.gemini_model}").classes("text-xs text-slate-500")
+    with ui.element("div").classes("tb-card w-full flex flex-col gap-2"):
+        ui.label("Gemini (управляется через .env)").classes("tb-title")
+        ui.label(status_label).classes("tb-label")
+        ui.label(f"Модель: {current.gemini_model}").classes("text-[11px] text-[#9A9893]")
         ui.label(
             "Чтобы заменить или ротировать ключ, отредактируйте `.env` "
             "(GEMINI__API_KEY) и перезапустите приложение.",
-        ).classes("text-xs text-slate-500")
+        ).classes("text-[11px] text-[#9A9893]")

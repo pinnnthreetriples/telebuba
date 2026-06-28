@@ -8,14 +8,34 @@ covered in ``tests/features/test_neurocomment_labels.py``.
 from __future__ import annotations
 
 import asyncio
-import dataclasses
-from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING, NamedTuple
+from typing import TYPE_CHECKING
 
 from nicegui import context, ui
 
 from core.logging import log_event
-from features.shared import TOP_BAR_CLASSES, render_nav
+from features.neurocomment._labels import (
+    PIPELINE_STEPS,
+    FleetActivity,
+    PipelineStep,
+    board_captcha_count,
+    board_content_signature,
+    board_error_count,
+    campaign_options,
+    campaign_status_label,
+    challenge_summary,
+    channel_status_colors,
+    channel_status_icon,
+    channel_status_label,
+    counter_window_since,
+    fleet_activity,
+    health_label,
+    live_signature,
+    relative_time,
+    runtime_status_text,
+    solver_switch_key,
+    start_block_reason,
+)
+from features.shared import page_shell
 from services.neurocomment import (
     delete_campaign,
     list_campaigns,
@@ -26,253 +46,40 @@ from services.neurocomment import (
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
-    from schemas.challenge import ChallengeRow
     from schemas.neurocomment import (
         CampaignList,
         NeurocommentBoard,
         NeurocommentRuntimeStatus,
     )
 
-# Pure-display maps (the page's only unit-tested logic).
-_CHANNEL_STATUS_RU: dict[str, str] = {
-    "ready": "Готов",
-    "comments_off": "Комментарии выключены",
-    "join_by_request": "Вступление по заявке",
-    "chat_restricted": "Блок записи (Telegram)",
-    "bot_challenge": "Капча бота",
-    "bot_challenge_backoff": "Капча бота · пауза",
-    "throttled": "Лимит исчерпан",
-}
-# Each status renders a distinct badge icon (Ф2 #120). ``help_outline`` is the
-# fallback for an unmapped status.
-_CHANNEL_STATUS_ICON: dict[str, str] = {
-    "ready": "check_circle",
-    "comments_off": "comments_disabled",
-    "join_by_request": "pending",
-    "chat_restricted": "block",
-    "bot_challenge": "smart_toy",
-    "bot_challenge_backoff": "hourglass_empty",
-    "throttled": "speed",
-}
-_HEALTH_RU: dict[str, str] = {"ready": "Готов", "blocked": "Заблокирован"}
-_CAMPAIGN_STATUS_RU: dict[str, str] = {
-    "active": "Активна",
-    "paused": "На паузе",
-    "archived": "В архиве",
-}
-
-
-def channel_status_label(status: str) -> str:
-    """Russian label for a channel-row status (fallback: raw status)."""
-    return _CHANNEL_STATUS_RU.get(status, status)
-
-
-def channel_status_icon(status: str) -> str:
-    """Badge icon for a channel-row status (fallback: a generic help icon)."""
-    return _CHANNEL_STATUS_ICON.get(status, "help_outline")
-
-
-def challenge_summary(row: ChallengeRow) -> str:
-    """Drill-down summary of a failed challenge: raw text + buttons + Gemini reasoning."""
-    buttons = " · ".join(row.button_labels) if row.button_labels else "—"
-    text = row.raw_text.strip() or "(без текста)"
-    base = f"{text} — [{buttons}]"
-    if row.reasoning:
-        base += f" · {row.reasoning}"
-    return base
-
-
-def counter_window_since(window: str, now: datetime) -> str:
-    """ISO lower bound for the header-counter window; ``""`` (all rows) for 'all'."""
-    if window == "today":
-        return now.replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
-    if window == "7d":
-        return (now - timedelta(days=7)).isoformat()
-    return ""
-
-
-def solver_switch_key(value: bool | None) -> str:  # noqa: FBT001 - tri-state value, not a flag
-    """Map a campaign's ``solver_enabled`` to the per-campaign switch key."""
-    if value is None:
-        return "follow"
-    return "on" if value else "off"
-
-
-def health_label(health: str) -> str:
-    """Russian label for an account-card health (fallback: raw value)."""
-    return _HEALTH_RU.get(health, health)
-
-
-def campaign_status_label(status: str) -> str:
-    """Russian label for a campaign status (fallback: raw status)."""
-    return _CAMPAIGN_STATUS_RU.get(status, status)
-
-
-def campaign_options(campaigns: CampaignList) -> dict[str, str]:
-    """Switcher options: campaign id → ``name · <status>`` label."""
-    return {
-        c.campaign_id: f"{c.name} · {campaign_status_label(c.status)}" for c in campaigns.campaigns
-    }
-
-
-@dataclasses.dataclass(frozen=True, slots=True)
-class PipelineStep:
-    """One step of the on-post pipeline (rail + explainer): name, label, icon, detail."""
-
-    name: str
-    label: str
-    icon: str
-    detail: str
-
-
-# Six educational steps, static + ordered to match services.neurocomment.engine.
-PIPELINE_STEPS: tuple[PipelineStep, ...] = (
-    PipelineStep(
-        "listen",
-        "Слушаю",
-        "hearing",
-        "Аккаунт-слушатель следит за новыми постами в каналах активных кампаний.",
-    ),
-    PipelineStep(
-        "post",
-        "Новый пост",
-        "post_add",
-        "Свежий пост в отслеживаемом канале запускает один проход движка.",
-    ),
-    PipelineStep(
-        "select",
-        "Аккаунт",
-        "person_search",
-        "Выбираем готовый аккаунт: лимиты, trust-score и отсутствие кулдауна.",
-    ),
-    PipelineStep(
-        "generate",
-        "Генерация",
-        "auto_awesome",
-        "Gemini пишет короткий комментарий по промпту кампании, с проверкой на дубли.",
-    ),
-    PipelineStep(
-        "publish",
-        "Публикация",
-        "send",
-        "Комментарий уходит в обсуждение канала после паузы, как у живого человека.",
-    ),
-    PipelineStep(
-        "monitor",
-        "Контроль",
-        "verified_user",
-        "Следим за удалениями и капчей бота — при риске канал ставится на паузу.",
-    ),
-)
-
-
-class FleetActivity(NamedTuple):
-    """Fleet-wide live counters for the engine panel, summed from the board (pure)."""
-
-    comments_last_hour: int
-    comments_today: int
-    ready_accounts: int
-    total_accounts: int
-    ready_channels: int
-    total_channels: int
-
-
-def fleet_activity(board: NeurocommentBoard) -> FleetActivity:
-    """Aggregate the per-account / per-channel board figures into fleet totals."""
-    return FleetActivity(
-        comments_last_hour=sum(c.comments_last_hour for c in board.accounts),
-        comments_today=sum(c.comments_today for c in board.accounts),
-        ready_accounts=sum(1 for c in board.accounts if c.health == "ready"),
-        total_accounts=len(board.accounts),
-        ready_channels=sum(1 for r in board.channels if r.status == "ready"),
-        total_channels=len(board.channels),
-    )
-
-
-def relative_time(iso: str | None, now: datetime) -> str | None:
-    """Human «X назад» for a past ISO timestamp; ``None`` when missing/unparseable."""
-    if not iso:
-        return None
-    try:
-        stamp = datetime.fromisoformat(iso)
-    except ValueError:
-        return None
-    if stamp.tzinfo is None:
-        stamp = stamp.replace(tzinfo=UTC)
-    delta = (now - stamp).total_seconds()
-    if delta < 60:  # noqa: PLR2004 - the minute boundary reads clearer inline than as a constant
-        return "только что"
-    if delta < 3600:  # noqa: PLR2004 - hour in seconds
-        return f"{int(delta // 60)} мин назад"
-    if delta < 86_400:  # noqa: PLR2004 - day in seconds
-        return f"{int(delta // 3600)} ч назад"
-    return f"{int(delta // 86_400)} д назад"
-
-
-def runtime_status_text(status: NeurocommentRuntimeStatus) -> str:
-    """Short pill label for the engine's running state."""
-    if not status.running:
-        return "Движок остановлен"
-    if status.active_channels == 0:
-        return "Движок запущен"
-    return f"Слушаю каналов: {status.active_channels}"
-
-
-def start_block_reason(ready_accounts: int, *, has_listener: bool) -> str | None:
-    """Why «Запустить» must stay blocked, or ``None`` when the engine may start.
-
-    Ties the operator-facing warning to the real gate: starting with no listener or
-    with zero ready accounts is a silent no-op that erodes trust, so the button refuses
-    and names what is missing — the «нет прогретых аккаунтов» message and the actual
-    behaviour now agree.
-    """
-    if not has_listener:
-        return "Выберите аккаунт-слушатель"
-    if ready_accounts <= 0:
-        return "Нет готовых аккаунтов — добавьте и онбордните их в «Настройке»."
-    return None
-
-
-def board_content_signature(board: NeurocommentBoard | None) -> tuple[object, ...]:
-    """Digest of everything the work view renders; equal digests → skip the re-render.
-
-    Anti-flicker: the work view polls every few seconds but only re-renders the board
-    when this signature changes (mirrors warming's ``_card_signature`` gate), so an
-    idle board no longer blinks.
-    """
-    if board is None:
-        return ()
-    return (
-        board.solver_enabled,
-        tuple((r.channel, r.status, r.ready_accounts, r.total_accounts) for r in board.channels),
-        tuple(
-            (
-                c.account_id,
-                c.health,
-                c.comments_last_hour,
-                c.max_comments_per_hour,
-                c.comments_today,
-                c.trust_score,
-                c.trust_band,
-                c.spam_status,
-                c.last_comment_at,
-            )
-            for c in board.accounts
-        ),
-    )
-
-
-def live_signature(
-    status: NeurocommentRuntimeStatus,
-    activity: FleetActivity,
-    last_comment: str | None,
-) -> tuple[object, ...]:
-    """Digest of the engine panel's live section (status pill + ticker + counters).
-
-    ``last_comment`` is the already-bucketed «X назад» string, so the relative clock
-    only flips the digest about once a minute instead of every poll — no 4 s blink.
-    """
-    return (status.running, status.active_channels, *activity, last_comment)
+# Re-export the pure display helpers (moved to ``_labels`` to keep this module within
+# the file-size budget) so existing importers keep importing them from ``_page``.
+__all__ = [
+    "PIPELINE_STEPS",
+    "FleetActivity",
+    "PageContext",
+    "PipelineStep",
+    "board_captcha_count",
+    "board_content_signature",
+    "board_error_count",
+    "campaign_options",
+    "campaign_status_label",
+    "challenge_summary",
+    "channel_status_colors",
+    "channel_status_icon",
+    "channel_status_label",
+    "confirm_delete_campaign",
+    "count_ready_accounts_across_active_campaigns",
+    "counter_window_since",
+    "fleet_activity",
+    "health_label",
+    "live_signature",
+    "relative_time",
+    "render_neurocomment_page",
+    "runtime_status_text",
+    "solver_switch_key",
+    "start_block_reason",
+]
 
 
 class PageContext:
@@ -318,13 +125,8 @@ async def count_ready_accounts_across_active_campaigns() -> int:
     return ready_count
 
 
-def _build_header() -> None:  # pragma: no cover
-    with ui.row().classes(TOP_BAR_CLASSES):
-        render_nav("/neurocomment")
-
-
-def confirm_delete_campaign(campaign_id: str) -> None:
-    """Show a confirmation dialog before deleting a campaign."""
+def confirm_delete_campaign(campaign_id: str, name: str = "") -> None:
+    """Show a confirmation dialog before deleting a campaign (spec modal 7)."""
 
     async def confirm() -> None:
         dialog.close()
@@ -332,24 +134,29 @@ def confirm_delete_campaign(campaign_id: str) -> None:
         ui.notify("Кампания удалена", type="info")
         _reload_page()
 
+    title = f"Удалить кампанию «{name}»?" if name else "Удалить кампанию?"
     with (
         ui.dialog() as dialog,
-        ui.column().classes(
-            "bg-white dark:bg-zinc-900 p-4 gap-3 w-[420px] max-w-full",
-        ),
+        ui.card().classes("p-0 w-[420px] max-w-full").style("border-radius:18px"),
+        ui.column().classes("w-full gap-3").style("padding:20px"),
     ):
-        ui.label("Удалить кампанию?").classes(
-            "text-base font-semibold text-slate-900 dark:text-slate-100",
-        )
+        ui.label(title).classes("tb-title-lg")
         ui.label(
-            "Это действие безвозвратно удалит кампанию, её связи с каналами, "
-            "аккаунтами и историю комментариев.",
-        ).classes("text-sm text-slate-700 dark:text-slate-300")
-
-        with ui.row().classes("w-full justify-end gap-2"):
-            ui.button("Отмена", color="grey-7", on_click=dialog.close).props("flat")
-            ui.button("Удалить", color="negative", on_click=confirm)
+            "Кампания, её каналы и привязка аккаунтов будут удалены. Это действие необратимо.",
+        ).classes("tb-muted").style("line-height:1.5")
+        with ui.row().classes("w-full justify-end gap-2").style("margin-top:4px"):
+            _html_btn("Отмена", "tb-btn tb-btn-white", dialog.close)
+            _html_btn("Удалить", "tb-btn tb-btn-danger", confirm)
     dialog.open()
+
+
+def _html_btn(label: str, cls: str, on_click) -> ui.element:  # noqa: ANN001  # pragma: no cover
+    """A design-system pill ``<button>`` (raw element so ``tb-btn*`` styles apply cleanly)."""
+    btn = ui.element("button").classes(cls)
+    btn.on("click", on_click)
+    with btn:
+        ui.html(label)
+    return btn
 
 
 async def render_neurocomment_page() -> None:  # pragma: no cover
@@ -364,16 +171,13 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
     )
     from features.neurocomment._workview import render_work_view  # noqa: PLC0415
 
-    ui.query("body").classes("bg-slate-50 dark:bg-slate-900 text-slate-950 dark:text-slate-50")
-    _build_header()
-    with ui.column().classes("w-full max-w-[1200px] mx-auto p-4 gap-4"):
-        ui.label("Нейрокомментинг").classes("text-xl font-semibold")
-        # Fleet-wide overview of warmed accounts, at the very top.
-        await render_warmed_accounts()
+    with page_shell("/neurocomment"):
+        ui.html('<h1 class="tb-h1">Нейрокомментинг</h1>')
 
         campaign_list = await list_campaigns()
         if not campaign_list.campaigns:
-            # No campaign yet → just the create form (open) + the explainer.
+            # No campaign yet → warmed overview + create form (open) + explainer.
+            await render_warmed_accounts()
             await render_create_campaign(on_created=_reload_page, expanded=True)
             render_how_it_works()
             return
@@ -394,44 +198,78 @@ async def render_neurocomment_page() -> None:  # pragma: no cover
         async def work_section() -> None:
             await render_work_view(ctx)
 
-        def on_switch() -> None:
-            ctx.campaign_id = switcher.value
+        def on_switch(value: str) -> None:
+            ctx.campaign_id = value
             ctx.on_reload_callbacks.clear()  # prevent stale callback accumulation
             engine_section.refresh()
             setup_section.refresh()
             work_section.refresh()
 
-        with ui.row().classes("w-full items-center gap-2"):
-            switcher = (
-                ui.select(
-                    campaign_options(campaign_list),
-                    label="Кампания",
-                    value=campaign_list.campaigns[-1].campaign_id,
-                    on_change=on_switch,
+        # Two-column shell — RIGHT (col 2): pipeline hero + board; LEFT (col 1):
+        # warmed overview + setup + campaigns + explainer (design spec C.4).
+        with ui.element("div").classes("tb-nc-grid"):
+            with (
+                ui.element("div")
+                .classes("tb-nc-right")
+                .style(
+                    "display:flex;flex-direction:column;gap:16px",
                 )
-                .props("dense outlined")
-                .classes("w-full max-w-[400px]")
-            )
-            ui.button(
-                icon="delete",
-                on_click=lambda: confirm_delete_campaign(switcher.value),
-            ).props("flat round dense color=negative").tooltip("Удалить кампанию")
-        # «Новая кампания» (global) + «Настройка» (per-campaign) side by side.
-        with ui.row().classes("w-full gap-4 items-start flex-wrap"):
-            with ui.column().classes("flex-1 min-w-[340px]"):
-                await render_create_campaign(on_created=_reload_page, expanded=False)
-            with ui.column().classes("flex-1 min-w-[340px]"):
+            ):
+                await engine_section()
+                await work_section()
+            with (
+                ui.element("div")
+                .classes("tb-nc-left")
+                .style(
+                    "display:flex;flex-direction:column;gap:16px",
+                )
+            ):
+                await render_warmed_accounts()
+                _render_campaign_switcher(campaign_list, ctx.campaign_id, on_switch)
                 await setup_section()
-
-        # Engine panel is now global and rendered below the switcher and setup blocks
-        await engine_section()
-
-        await work_section()
-        render_how_it_works()
+                await render_create_campaign(on_created=_reload_page, expanded=False)
+                render_how_it_works()
 
         # Page-level timer coordinates all polling
         timer = ui.timer(4.0, ctx.update)
         context.client.on_disconnect(lambda: timer.cancel(with_current_invocation=True))
+
+
+def _render_campaign_switcher(
+    campaign_list: CampaignList,
+    current: str,
+    on_switch,  # noqa: ANN001
+) -> None:  # pragma: no cover
+    """Campaign picker + delete, framed as a compact «Кампании» card (design spec C.4)."""
+    with ui.element("div").classes("tb-card").style("padding:13px 14px"):
+        with ui.row().classes("w-full items-center gap-2").style("margin-bottom:8px"):
+            ui.html(
+                '<div style="width:28px;height:28px;border-radius:8px;background:#EEF4FF;'
+                'color:#0066FF;display:flex;align-items:center;justify-content:center">'
+                '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+                ' stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'
+                '<path d="M3 5h18M3 12h18M3 19h18"/></svg></div>',
+            )
+            ui.label("Кампании").classes("tb-title")
+        with ui.row().classes("w-full items-center gap-2 flex-nowrap"):
+            switcher = (
+                ui.select(
+                    campaign_options(campaign_list),
+                    value=current,
+                    on_change=lambda e: on_switch(e.value),
+                )
+                .props("dense outlined options-dense")
+                .classes("flex-1")
+            )
+            names = {c.campaign_id: c.name for c in campaign_list.campaigns}
+            del_btn = ui.button(
+                icon="delete_outline",
+                on_click=lambda: confirm_delete_campaign(
+                    switcher.value, names.get(switcher.value, "")
+                ),
+            )
+            del_btn.props("flat round dense").classes("tb-icon-btn")
+            del_btn.tooltip("Удалить кампанию")
 
 
 def _reload_page() -> None:  # pragma: no cover

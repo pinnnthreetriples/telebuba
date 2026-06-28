@@ -38,11 +38,19 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
     """
     min_days = settings.neurocomment.warmed_min_days
     warmed = (await list_warmed_accounts(min_days)).accounts
-    with ui.card().classes("w-full p-3 gap-2"):
-        with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("local_fire_department").classes("text-amber-500")
-            ui.label("Прогретые аккаунты").classes("text-sm font-semibold")
-            ui.label(f"от {min_days} дн").classes("text-xs text-slate-400").tooltip(
+    with ui.element("div").classes("tb-card w-full").style("padding:13px 14px"):
+        with ui.row().classes("w-full items-center gap-2 flex-nowrap").style("margin-bottom:8px"):
+            ui.html(
+                '<div style="width:28px;height:28px;border-radius:8px;background:#FFFBEF;'
+                'color:#9A7B22;display:flex;align-items:center;justify-content:center">'
+                '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+                ' stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">'
+                '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2'
+                "-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5"
+                ' 2.5 0 0 0 2.5 2.5z"/></svg></div>',
+            )
+            ui.label("Прогретые аккаунты").classes("tb-title")
+            ui.label(f"от {min_days} дн").classes("tb-muted").style("font-size:11px").tooltip(
                 f"Появляются после нажатия «Переместить в нейрокомментинг» на "
                 f"карточке прогрева (минимум {min_days} дней прогрева).",
             )
@@ -50,27 +58,30 @@ async def render_warmed_accounts() -> None:  # pragma: no cover
             ui.label(
                 "Нет аккаунтов в нейрокомментинге — прогрейте аккаунт, затем нажмите "
                 "«Переместить в нейрокомментинг» на карточке.",
-            ).classes("text-xs text-slate-400")
+            ).classes("tb-muted").style("font-size:11.5px")
             return
         with ui.row().classes("w-full gap-2 flex-wrap items-center"):
             for acc in warmed:
-                with ui.row().classes(
-                    "items-center gap-1 rounded-full bg-emerald-50 "
-                    "border border-emerald-100 pl-3 pr-2 py-0.5",
-                ):
-                    ui.label(acc.label).classes("text-xs text-emerald-800")
-                    ui.label(f"{acc.warming_days}д").classes("text-[10px] text-emerald-500")
+                ui.html(
+                    '<span style="display:inline-flex;align-items:center;gap:6px;'
+                    "background:#DDF7E9;border:1px solid #CFEBD8;border-radius:9999px;"
+                    'padding:4px 11px">'
+                    f'<span style="font-size:12px;color:#0B6B37">{acc.label}</span>'
+                    f'<span style="font-size:10px;color:#3F8A5E">{acc.warming_days}д</span></span>',
+                )
 
 
 async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa: ANN001, ARG001  # pragma: no cover
-    """«Новая кампания» card; styled like other dashboard panels."""
-    with ui.card().classes(
-        "w-full p-4 gap-3 border border-slate-200 dark:border-zinc-800 "
-        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm",
-    ):
-        with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("add_circle").classes("text-lg text-indigo-500")
-            ui.label("Новая кампания").classes("text-sm font-semibold")
+    """«Новая кампания» card; styled to the design palette."""
+    with ui.element("div").classes("tb-card w-full").style("padding:16px 18px"):
+        with ui.row().classes("w-full items-center gap-2 flex-nowrap").style("margin-bottom:10px"):
+            ui.html(
+                '<div style="width:28px;height:28px;border-radius:8px;background:#E8F0FF;'
+                'color:#0066FF;display:flex;align-items:center;justify-content:center">'
+                '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+                ' stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></div>',
+            )
+            ui.label("Новая кампания").classes("tb-title")
         with ui.column().classes("w-full gap-2"):
             name = ui.input(label="Название").props("dense outlined").classes("w-full")
             prompt = (
@@ -84,7 +95,7 @@ async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa
             ui.label(
                 f"Комментарий не длиннее {settings.neurocomment.comment_max_words} слов "
                 "(настраивается в конфиге).",
-            ).classes("text-xs text-slate-500")
+            ).classes("tb-muted").style("font-size:11.5px")
 
             async def on_create() -> None:
                 if not (name.value or "").strip() or not (prompt.value or "").strip():
@@ -95,18 +106,27 @@ async def render_create_campaign(on_created, *, expanded: bool) -> None:  # noqa
                 ui.notify("Кампания создана", type="positive")
                 on_created()
 
-            ui.button("Создать кампанию", icon="add", on_click=on_create).props("color=primary")
+            create = ui.button("Создать кампанию", on_click=on_create)
+            create.props("flat no-caps").classes("tb-btn tb-btn-primary w-full").style(
+                "margin-top:2px",
+            )
+            with create:
+                ui.icon("add").classes("text-base").style("order:-1;margin-right:-2px")
 
 
 async def render_setup(campaign_id: str) -> None:  # pragma: no cover
     """«Настройка» card: channel pool + account picker + onboard."""
-    with ui.card().classes(
-        "w-full p-4 gap-3 border border-slate-200 dark:border-zinc-800 "
-        "bg-white dark:bg-zinc-900 rounded-xl shadow-sm",
-    ):
-        with ui.row().classes("w-full items-center gap-2"):
-            ui.icon("tune").classes("text-lg text-indigo-500")
-            ui.label("Настройка: каналы и аккаунты").classes("text-sm font-semibold")
+    with ui.element("div").classes("tb-card w-full").style("padding:16px 18px"):
+        with ui.row().classes("w-full items-center gap-2 flex-nowrap").style("margin-bottom:10px"):
+            ui.html(
+                '<div style="width:28px;height:28px;border-radius:8px;background:#EEF4FF;'
+                'color:#0066FF;display:flex;align-items:center;justify-content:center">'
+                '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+                ' stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">'
+                '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>'
+                "</svg></div>",
+            )
+            ui.label("Настройка: каналы и аккаунты").classes("tb-title")
         with ui.column().classes("w-full gap-3"):
             await _render_channel_pool(campaign_id)
             await _render_account_picker(campaign_id)
@@ -114,7 +134,7 @@ async def render_setup(campaign_id: str) -> None:  # pragma: no cover
 
 
 async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
-    ui.label("Каналы").classes("text-sm font-medium")
+    ui.label("Каналы").classes("tb-uplabel")
     chips_box = ui.row().classes("w-full gap-2 flex-wrap items-center")
 
     async def on_remove(channel: str) -> None:
@@ -126,16 +146,17 @@ async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
         links = (await list_campaign_channels(campaign_id)).links
         with chips_box:
             if not links:
-                ui.label("Каналов пока нет").classes("text-xs text-slate-400")
+                ui.label("Каналов пока нет").classes("tb-muted").style("font-size:11.5px")
             for link in links:
-                with ui.row().classes(
-                    "items-center gap-1 rounded-full bg-slate-100 pl-3 pr-1 py-0.5",
+                with ui.element("span").style(
+                    "display:inline-flex;align-items:center;gap:4px;background:#F4F3F0;"
+                    "border:1px solid #E6E5E3;border-radius:9999px;padding:3px 4px 3px 11px",
                 ):
-                    ui.label(link.channel).classes("text-xs text-slate-700")
+                    ui.html(f'<span style="font-size:12px;color:#3A3A3A">{link.channel}</span>')
                     ui.button(
                         icon="close",
                         on_click=lambda _e=None, ch=link.channel: on_remove(ch),
-                    ).props("flat dense round size=sm color=grey-7")
+                    ).props("flat dense round size=sm").style("color:#B5B3AE")
 
     async def on_add() -> None:
         channel = (channel_input.value or "").strip()
@@ -149,14 +170,19 @@ async def _render_channel_pool(campaign_id: str) -> None:  # pragma: no cover
         channel_input.value = ""
         await refresh()
 
-    with ui.row().classes("w-full items-center gap-2"):
-        channel_input = ui.input(placeholder="@channel").props("dense outlined").classes("flex-1")
-        ui.button(icon="add", on_click=on_add).props("color=primary dense")
+    with ui.row().classes("w-full items-center gap-2 flex-nowrap"):
+        channel_input = (
+            ui.input(placeholder="t.me/канал или @канал").props("dense outlined").classes("flex-1")
+        )
+        add = ui.button(icon="add", on_click=on_add)
+        add.props("flat dense round").classes("tb-icon-btn").style(
+            "background:#0066FF;color:#fff;border-color:#0066FF",
+        )
     await refresh()
 
 
 async def _render_account_picker(campaign_id: str) -> None:  # pragma: no cover
-    ui.label("Аккаунты").classes("text-sm font-medium")
+    ui.label("Аккаунты").classes("tb-uplabel")
     accounts = (await list_accounts()).accounts
     assigned = {link.account_id for link in (await list_campaign_accounts(campaign_id)).links}
     min_days = settings.neurocomment.warmed_min_days
@@ -172,8 +198,8 @@ async def _render_account_picker(campaign_id: str) -> None:  # pragma: no cover
             ui.notify("Аккаунт убран из кампании", type="info")
 
     if not accounts:
-        ui.label("Сначала добавьте аккаунты на странице «Аккаунты»").classes(
-            "text-xs text-slate-400",
+        ui.label("Сначала добавьте аккаунты на странице «Аккаунты»").classes("tb-muted").style(
+            "font-size:11.5px",
         )
         return
     with ui.row().classes("w-full gap-x-4 gap-y-1 flex-wrap"):
@@ -208,29 +234,48 @@ async def _render_actions(campaign_id: str) -> None:  # pragma: no cover
             ready = sum(1 for o in result.outcomes if o.state == "ready")
             ui.notify(f"Онбординг: готово пар — {ready} из {len(result.outcomes)}", type="info")
 
-        with ui.row().classes("w-full items-center gap-2"):
-            button = ui.button("Онбординг", icon="how_to_reg", on_click=on_onboard).props("outline")
+        with ui.row().classes("w-full items-center gap-2 flex-nowrap"):
+            button = ui.button("Онбординг", on_click=on_onboard)
+            button.props("flat no-caps").classes("tb-btn tb-btn-white")
+            with button:
+                ui.icon("how_to_reg").classes("text-base").style("order:-1;margin-right:-2px")
             log_toggle = (
                 ui.button(
                     icon="terminal",
                     on_click=lambda: log_panel.set_visibility(not log_panel.visible),
                 )
                 .props("flat round dense")
-                .classes("text-slate-400")
+                .classes("tb-icon-btn")
             )
             log_toggle.tooltip("Показать/скрыть лог онбординга")
-            help_icon = ui.icon("help_outline").classes("text-slate-400 text-lg cursor-help")
+            help_icon = (
+                ui.icon("help_outline")
+                .style("color:#9A9893;font-size:18px")
+                .classes(
+                    "cursor-help",
+                )
+            )
             help_icon.tooltip(
                 "Онбординг готовит аккаунты к работе: автоматически вступает в группы "
                 "обсуждения выбранных каналов, решает приветственную капчу и проверяет "
                 "готовность к публикации комментариев."
             )
 
-        with ui.column().classes(
-            "w-full border border-slate-200 dark:border-zinc-800 rounded bg-slate-950 p-2 gap-1",
-        ) as log_panel:
+        with (
+            ui.column()
+            .classes("w-full gap-1")
+            .style(
+                "border:1px solid #2b2b2e;border-radius:10px;background:#16161A;padding:10px 12px",
+            ) as log_panel
+        ):
             log_panel.set_visibility(False)
-            ui.label("Лог онбординга").classes("text-xs text-slate-400 font-mono")
-            log_widget = ui.log().classes(
-                "w-full h-32 font-mono text-xs text-slate-100 bg-transparent border-0",
+            ui.label("Лог онбординга").style(
+                "font-size:11px;color:#9A9893;font-family:'JetBrains Mono',monospace",
+            )
+            log_widget = (
+                ui.log()
+                .classes("w-full h-32 bg-transparent border-0")
+                .style(
+                    "font-family:'JetBrains Mono',monospace;font-size:11px;color:#C9C9CE",
+                )
             )

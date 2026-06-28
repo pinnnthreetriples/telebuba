@@ -250,9 +250,18 @@ async def _handle_tdata_upload(
 async def _open_add_dialog(  # pragma: no cover
     refresh: Callable[[], Awaitable[None]],
 ) -> None:
-    with ui.dialog() as dialog, ui.column().classes("bg-white p-4 gap-3 w-96 max-w-full"):
-        ui.label("Добавить аккаунт").classes("text-base font-semibold")
-        label = ui.input("Отображаемое имя").props("dense outlined")
+    with (
+        ui.dialog() as dialog,
+        ui.column()
+        .classes("bg-white gap-3 w-[480px] max-w-full")
+        .style("border-radius:18px;padding:20px"),
+    ):
+        ui.html('<div style="font-size:16px;font-weight:700;color:#0B0B0C">Добавить аккаунт</div>')
+        ui.html(
+            '<div style="font-size:12.5px;color:#9A9893">Загрузите готовую сессию Telethon/'
+            "Pyrogram или архив tdata из Telegram Desktop</div>",
+        )
+        label = ui.input("Отображаемое имя").props("dense outlined").classes("w-full")
         show_error, show_progress, hide_status = _build_dialog_status_controls()
         ctx = _UploadCtx(
             get_label_value=lambda: label.value or None,
@@ -273,7 +282,7 @@ async def _open_add_dialog(  # pragma: no cover
             ),
         ).props('accept=".session"').classes("w-full")
 
-        ui.label("или").classes("self-center text-xs text-slate-500")
+        ui.html('<div style="align-self:center;font-size:12px;color:#9A9893">или</div>')
 
         ui.upload(
             label="Загрузить tdata.zip",
@@ -286,6 +295,8 @@ async def _open_add_dialog(  # pragma: no cover
             ),
         ).props('accept=".zip"').classes("w-full")
 
-        with ui.row().classes("w-full justify-end gap-2"):
-            ui.button(icon="close", color="grey-7", on_click=dialog.close).tooltip("Отмена")
+        with ui.row().classes("w-full justify-end").style("gap:8px"):
+            ui.button("Отмена", on_click=dialog.close).classes("tb-btn tb-btn-white").props(
+                "flat no-caps text-color=dark",
+            )
     dialog.open()

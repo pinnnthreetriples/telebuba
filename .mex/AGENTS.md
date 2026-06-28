@@ -56,9 +56,13 @@ telebuba/
 │   │   ├── _pipeline.py       animated 6-step cycle rail + active-step detail + summary
 │   │   └── _termlog.py        expandable per-account dark "terminal" activity log on each card
 │   ├── neurocomment/        neurocomment page (redesigned): _page.py (composition + pure tested helpers: label maps, PIPELINE_STEPS, fleet_activity, relative_time, runtime_status_text, board_content_signature/live_signature anti-flicker gates), _engine_panel.py (animated hero card — 6-step pipeline rail + live ticker + fleet counters + start/stop + collapsible logs panel; signature-gated refresh), _setup.py (warmed-accounts overview + collapsible campaign create + channel chips + account picker + onboard), _explainer.py («Как работает» card), _workview.py (board + minimalist «Капчи» strip + drill-down Retry/Skip; signature-gated), _logpanel.py (collapsible neurocomment-activity dark terminal, event→RU map); tb-nc-* keyframes + log CSS in __init__.py
-│   ├── shared/              cross-page UI chrome — the one sanctioned cross-feature namespace
-│   │   └── nav.py              single source of truth for the top nav bar (links + active styling)
-│   └── logs.py
+│   ├── shared/              cross-page UI chrome + design system — the one sanctioned cross-feature namespace
+│   │   ├── nav.py              global sticky top bar (logo, 5 nav links, status/bell/avatar) + page_shell() wrapper; nav_link_html = pure tested active-emphasis helper
+│   │   ├── theme.py            global theme: Inter+JetBrains Mono fonts, #0066FF Quasar primary (apply_theme); loads theme.css + components.css once per app
+│   │   ├── theme.css           design's verbatim global CSS — warm #F1EFED canvas + tb-* animation/utility classes
+│   │   └── components.css      reusable component vocabulary (buttons, cards, badges, segmented, inputs, stat cards, terminal, toggles)
+│   ├── logs.py             Логи page (redesigned): segmented status filter + tb-table; pure _level_badge/_table_body_html helpers
+│   └── settings.py         Настройки page (redesign): static design mock loaded from settings.html; client-side eye/toggles/save, persistence deferred
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```
 

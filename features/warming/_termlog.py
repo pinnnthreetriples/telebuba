@@ -29,36 +29,36 @@ if TYPE_CHECKING:
 # can't blow out a log row. Mirrors ``_ERROR_DETAIL_MAX_LEN`` in ``_pipeline``.
 _EXTRA_MAX_LEN = 80
 
-# Dark terminal theme. zinc-950 panel, monospace stack (no Tailwind font-mono
-# exists in this app), dimmed timestamp/extra, status-accented icon + label.
+# Dark terminal theme — spec C.3 terminal palette (#16161A panel, JetBrains
+# Mono, #5C5C66 timestamp, blue/green/amber/red message accents). Mirrors the
+# shared ``.tb-term`` vocabulary while keeping this panel's icon + key=value row.
 _TERMLOG_CSS = """
 .tb-termlog {
-    background: #09090b;
-    border: 1px solid #1f1f23;
-    border-radius: 8px;
-    padding: 6px 8px;
-    max-height: 16rem;
+    background: #16161A;
+    border-radius: 9px;
+    padding: 10px 11px;
+    max-height: 120px;
     overflow-y: auto;
-    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
-    font-size: 11px;
-    line-height: 1.4;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 10.5px;
+    line-height: 1.7;
 }
+.tb-termlog::-webkit-scrollbar { width: 6px; }
+.tb-termlog::-webkit-scrollbar-thumb { background: #2b2b2e; border-radius: 6px; }
 .tb-termlog-row {
     display: flex;
     align-items: center;
     gap: 8px;
-    padding: 2px 0;
-    border-bottom: 1px solid #18181b;
+    padding: 1px 0;
     white-space: nowrap;
 }
-.tb-termlog-row:last-child { border-bottom: 0; }
-.tb-termlog-time { color: #52525b; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
-.tb-termlog-msg { color: #e4e4e7; flex: 0 0 auto; }
-.tb-termlog-kv { color: #71717a; overflow: hidden; text-overflow: ellipsis; }
-.tb-termlog-empty { color: #52525b; font-style: italic; }
-.tb-tl-ok { color: #4ade80; }
-.tb-tl-warn { color: #fbbf24; }
-.tb-tl-err { color: #f87171; }
+.tb-termlog-time { color: #5C5C66; font-variant-numeric: tabular-nums; flex: 0 0 auto; }
+.tb-termlog-msg { color: #7FB2FF; flex: 0 0 auto; }
+.tb-termlog-kv { color: #C9C9CE; overflow: hidden; text-overflow: ellipsis; }
+.tb-termlog-empty { color: #5C5C66; font-style: italic; }
+.tb-tl-ok { color: #9FE6B8; }
+.tb-tl-warn { color: #FFD27F; }
+.tb-tl-err { color: #F08C84; }
 """
 
 ui.add_css(_TERMLOG_CSS, shared=True)
@@ -215,14 +215,14 @@ def render_card_log_panel(
     """
     account_id = card.account_id
     expanded = ctx.card_expanded.get(account_id, False)
-    chevron = "expand_more" if expanded else "chevron_right"
+    chevron = "expand_less" if expanded else "expand_more"
     header = ui.row().classes(
-        "w-full items-center gap-1 cursor-pointer select-none text-slate-500 hover:text-slate-700",
+        "w-full items-center gap-1 cursor-pointer select-none pt-1 "
+        "border-t border-[#F0EEEB] text-[#74726E]",
     )
     with header:
+        ui.label("Скрыть лог" if expanded else "Лог активности").classes("text-[11px]")
         ui.icon(chevron).classes("text-base")
-        ui.icon("terminal").classes("text-sm")
-        ui.label("Логи аккаунта").classes("text-[11px] font-medium")
     # Wrap the async toggle in create_task — a click handler that merely returns
     # a coroutine is not reliably awaited (matches the _activity.py pattern).
     header.on(
