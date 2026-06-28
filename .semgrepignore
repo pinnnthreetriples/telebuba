@@ -1,3 +1,6 @@
+# Tests — fixture data (e.g. literal passwords) trips SAST rules; not shipped
+# code. Mirrors bandit's exclude_dirs, which already excludes tests.
+tests/
 # CI gate helpers (trusted tooling that shells out to dev tools); not app code.
 tools/
 # Vendored design SPA (Telebuba.dc.html + the dc-runtime support.js) — served
