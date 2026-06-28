@@ -60,9 +60,8 @@ telebuba/
 │   └── trust.py            trust-score calculation from stored signals
 ├── frontend/               React + TS (strict) + Vite SPA — Feature-Sliced Design (app/routes/pages/widgets/features/entities/shared); the only UI; full law in context/frontend.md
 │   ├── src/                FSD layers; shared/api holds the generated hey-api client + TanStack Query
-│   ├── tailwind.config.*   design tokens (single source of truth, extracted from web/ before its removal)
+│   ├── tailwind.config.*   design tokens (single source of truth)
 │   └── package.json        FE deps + gate scripts (eslint/prettier/boundaries/tsc/vitest/playwright/gen-api)
-├── web/                    TRANSITIONAL vendored design SPA served verbatim until the React SPA reaches parity; deleted in #173 (with its aislop/semgrep/pre-commit gate-exclusions). Design tokens are extracted from here into frontend/ first.
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```
 

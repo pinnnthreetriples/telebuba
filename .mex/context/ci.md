@@ -66,8 +66,8 @@ All four were installed but unwired; they now gate:
   warning fails**. Dedicated CI job (`setup-node`) + a `pre-push` pre-commit hook
   (heavy, so not every commit). Its size rules (`file-too-large` 400,
   `function-too-long` 80, `too-many-params` 6) and `repetitive-dispatch` drove
-  the package splits across `core`/`services`/`api`. The vendored `web/` SPA is
-  excluded from aislop while it exists (removed at React parity, issue #173).
+  the package splits across `core`/`services`/`api`. The `frontend/` React SPA
+  is excluded from aislop (it has its own gate set: eslint/tsc/vitest).
 
 `tools/` helpers are excluded from deptry/bandit (`exclude_dirs`/hook `exclude`)
 and semgrep (`.semgrepignore`), with a narrow ruff ignore for the intentional

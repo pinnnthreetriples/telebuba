@@ -10,7 +10,6 @@ default_language_version:
 exclude: |
   (?x)^(
     \.claude/skills/.*
-    |web/.*
     |frontend/.*
   )$
 
