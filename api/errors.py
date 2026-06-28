@@ -28,6 +28,8 @@ _HTTP_ERROR_CODES: dict[int, str] = {
     403: "forbidden",
     404: "not_found",
     409: "conflict",
+    429: "rate_limited",
+    503: "unavailable",
 }
 
 

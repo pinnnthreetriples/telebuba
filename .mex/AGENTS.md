@@ -26,7 +26,8 @@ telebuba/
 │   └── errors.py           error-envelope mapping ({error:{code,message,fields?}}, 422 remapped)
 ├── core/                   infrastructure gateways; only layer touching third-party SDKs
 │   ├── db.py               shared SQLite plumbing + compatibility re-exports
-│   ├── migrations.py       versioned append-only migration registry; apply_migrations() runs on engine init
+│   ├── migrations.py       versioned append-only migration registry + runner; apply_migrations() runs on engine init
+│   ├── migration_steps.py  migration step bodies (split from migrations.py for the file-size budget)
 │   ├── device_fingerprint.py  generates/reads immutable per-account device profile
 │   ├── phone_geo.py        phone number → geo lookup helper
 │   ├── proxy_check.py      connectivity check for proxy configs

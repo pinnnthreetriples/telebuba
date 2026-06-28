@@ -16,12 +16,20 @@ import type {
   DeleteAccountResponses,
   GetHealthData,
   GetHealthResponses,
+  GetMeData,
+  GetMeErrors,
+  GetMeResponses,
   ImportAccountTdataData,
   ImportAccountTdataErrors,
   ImportAccountTdataResponses,
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
+  LoginData,
+  LoginErrors,
+  LoginResponses,
+  LogoutData,
+  LogoutResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
@@ -47,6 +55,43 @@ export type Options<
    */
   meta?: Record<string, unknown>;
 };
+
+/**
+ * Login
+ */
+export const login = <ThrowOnError extends boolean = false>(
+  options: Options<LoginData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<LoginResponses, LoginErrors, ThrowOnError>({
+    url: '/api/v1/auth/login',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Logout
+ */
+export const logout = <ThrowOnError extends boolean = false>(
+  options?: Options<LogoutData, ThrowOnError>,
+) =>
+  (options?.client ?? client).post<LogoutResponses, unknown, ThrowOnError>({
+    url: '/api/v1/auth/logout',
+    ...options,
+  });
+
+/**
+ * Me
+ */
+export const getMe = <ThrowOnError extends boolean = false>(
+  options?: Options<GetMeData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<GetMeResponses, GetMeErrors, ThrowOnError>({
+    url: '/api/v1/auth/me',
+    ...options,
+  });
 
 /**
  * Health

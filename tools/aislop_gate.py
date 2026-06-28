@@ -21,6 +21,17 @@ _NPM_PACKAGE = os.environ.get("AISLOP_NPM_PACKAGE", "aislop@0.10.2")
 _EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena,web,web/**,frontend,frontend/**"
 # Path prefixes (POSIX) whose diagnostics are dropped from the recomputed gate.
 _EXCLUDED_PREFIXES = ("web/", "frontend/")
+# Distribution names that differ from their import module, which aislop's
+# hallucinated-import check can't map: argon2-cffi -> argon2, PyJWT -> jwt.
+# Both are declared in pyproject.toml; only the names differ.
+_KNOWN_IMPORT_ALIASES = ("argon2", "jwt")
+
+
+def _is_known_import_alias(item: dict[str, object]) -> bool:
+    if item.get("rule") != "ai-slop/hallucinated-import":
+        return False
+    message = str(item.get("message", ""))
+    return any(f'"{name}"' in message for name in _KNOWN_IMPORT_ALIASES)
 
 
 def main() -> int:
@@ -60,6 +71,7 @@ def main() -> int:
         item
         for item in report.get("diagnostics", [])
         if not str(item.get("filePath", "")).replace("\\", "/").startswith(_EXCLUDED_PREFIXES)
+        and not _is_known_import_alias(item)
     ]
     for item in diagnostics:
         sys.stdout.write(

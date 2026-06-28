@@ -465,7 +465,7 @@ async def test_save_and_delete_account_proxy_updates_table_row() -> None:
             host="127.0.0.1",
             port=9050,
             username="alice",
-            password="secret",  # noqa: S106 - test fixture value, not a real credential.
+            password="secret",
         ),
     )
     with_proxy = await load_accounts_table(AccountFilter())

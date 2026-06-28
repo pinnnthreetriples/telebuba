@@ -13,8 +13,11 @@ import {
   checkAccount,
   deleteAccount,
   getHealth,
+  getMe,
   importAccountTdata,
   listAccounts,
+  login,
+  logout,
   type Options,
   setAccountPhoto,
   updateAccountProfile,
@@ -28,12 +31,20 @@ import type {
   DeleteAccountResponse,
   GetHealthData,
   GetHealthResponse,
+  GetMeData,
+  GetMeError,
+  GetMeResponse,
   ImportAccountTdataData,
   ImportAccountTdataError,
   ImportAccountTdataResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
+  LoginData,
+  LoginError,
+  LoginResponse,
+  LogoutData,
+  LogoutResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
@@ -41,6 +52,44 @@ import type {
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
 } from '../types.gen';
+
+/**
+ * Login
+ */
+export const loginMutation = (
+  options?: Partial<Options<LoginData>>,
+): UseMutationOptions<LoginResponse, LoginError, Options<LoginData>> => {
+  const mutationOptions: UseMutationOptions<LoginResponse, LoginError, Options<LoginData>> = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await login({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Logout
+ */
+export const logoutMutation = (
+  options?: Partial<Options<LogoutData>>,
+): UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> => {
+  const mutationOptions: UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await logout({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 export type QueryKey<TOptions extends Options> = [
   Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
@@ -80,6 +129,25 @@ const createQueryKey = <TOptions extends Options>(
   }
   return [params];
 };
+
+export const getMeQueryKey = (options?: Options<GetMeData>) => createQueryKey('getMe', options);
+
+/**
+ * Me
+ */
+export const getMeOptions = (options?: Options<GetMeData>) =>
+  queryOptions<GetMeResponse, GetMeError, GetMeResponse, ReturnType<typeof getMeQueryKey>>({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getMe({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getMeQueryKey(options),
+  });
 
 export const getHealthQueryKey = (options?: Options<GetHealthData>) =>
   createQueryKey('getHealth', options);
