@@ -15,7 +15,7 @@ edges:
     condition: when the runtime body performs Telegram I/O
   - target: context/conventions.md
     condition: when shaping schemas and logging
-last_updated: 2026-06-19
+last_updated: 2026-06-28
 ---
 
 # Add Warming Runtime Work
@@ -25,7 +25,7 @@ last_updated: 2026-06-19
 Read `context/warming.md`. Hard rules:
 - Warming does **not** use APScheduler.
 - Runtime ownership lives in `services/warming/_runtime.py` as per-account `asyncio.Task`s.
-- Cycle logic lives in `services/warming/_cycle.py` / `_loop.py`; UI lives in `features/warming/` and must stay thin.
+- Cycle logic lives in `services/warming/_cycle.py` / `_loop.py`; the UI is the React Warming screen over `/api/v1/warming` and stays thin.
 - Runtime state is persisted in `warming_account_state` through repository helpers.
 
 ## Steps
@@ -47,7 +47,7 @@ Read `context/warming.md`. Hard rules:
 ## Gotchas
 
 - Do not create a new scheduler for warming. The current model is service-owned async tasks.
-- Do not put runtime logic in `features/warming/`; UI should only call services and render.
+- Do not put runtime logic in the `api/v1/warming` routes or the React screen; the UI should only call services (via the API) and render.
 - Do not reintroduce per-card DB queries in the board. `load_board()` bulk-loads signals once.
 - Do not sleep directly inside a unit-level cycle test path; keep sleep/timing injectable or configurable.
 - Do not let a task cancellation hang forever; stop paths should cancel and await with a timeout.
@@ -58,7 +58,7 @@ Read `context/warming.md`. Hard rules:
 - [ ] No APScheduler dependency or assumptions
 - [ ] Runtime state is persisted where needed
 - [ ] Failure path logs and updates state
-- [ ] No `features/` import from another feature domain
+- [ ] No business logic in the `api/v1/warming` routes — they delegate to `services/warming/`
 - [ ] Tests cover happy path, persisted-state behavior, and failure path
 - [ ] `uv run pytest` passes
 

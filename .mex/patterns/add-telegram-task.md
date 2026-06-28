@@ -11,11 +11,11 @@ triggers:
 edges:
   - target: context/telegram.md
     condition: always — defines the rules for Telethon usage
-  - target: patterns/add-feature.md
-    condition: when the Telegram action is part of a new feature
+  - target: patterns/add-api-endpoint.md
+    condition: when the Telegram action is exposed through an /api/v1 endpoint
   - target: patterns/add-warming-job.md
     condition: when the action runs inside the warming runtime
-last_updated: 2026-06-19
+last_updated: 2026-06-28
 ---
 
 # Add a Telegram Action

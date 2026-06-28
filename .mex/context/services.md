@@ -18,7 +18,7 @@ edges:
     condition: when the service drives Telegram actions through the executor
   - target: patterns/add-service.md
     condition: when adding a new service module/package
-last_updated: 2026-06-20
+last_updated: 2026-06-28
 ---
 
 # Services Layer
@@ -27,7 +27,7 @@ last_updated: 2026-06-20
 
 `services/<domain>.py` or `services/<domain>/` holds **pure business logic**: state transitions, runtime workflow orchestration, account operations, content generation orchestration, readiness checks, and policy decisions — anything that defines *what the system does*, not *how it talks to the world*.
 
-`features/` calls into `services/`. Runtime tasks also call into services. Same code path, no duplication.
+`api/` routes call into `services/`. Runtime tasks also call into services. Same code path, no duplication.
 
 ## Current service domains
 
@@ -36,22 +36,22 @@ last_updated: 2026-06-20
 - `services/trust.py` — trust-score calculation from stored account signals.
 - `services/content.py` — content generation orchestration; calls `core/gemini.py`.
 - `services/dialogues.py` — dialogue partner matching and pair assignment for warming. Returns `DialoguePartnersResult` and `DialoguePairsResult` Pydantic wrappers.
-- `services/logs.py` — log entry query helpers; feeds the NiceGUI Logs page via `features/logs.py`.
+- `services/logs.py` — log entry query helpers; feeds the React Logs page via `GET /api/v1/logs`.
 - `services/spam_status.py` — reads and persists account spam/ban signals from Telegram checks.
 - `comments` domain — not yet started.
 
 ## Why it exists
 
 Without `services/`:
-- UI handlers become the home of business logic.
-- Runtime tasks need the same logic and either duplicate it or import a feature.
-- A second feature needing the same behavior creates a cross-feature import.
+- API routes become the home of business logic.
+- Runtime tasks need the same logic and either duplicate it or reach into a route.
+- A second caller needing the same behavior duplicates it.
 
 With `services/`:
-- All callers import the service.
-- No cross-feature imports.
+- All callers (API routes, runtime tasks, scripts, tests) import the service.
+- No transport coupling.
 - Tests target service functions directly with mocked `core/` adapters.
-- Domain logic remains independent from NiceGUI.
+- Domain logic remains independent from the API/UI transport.
 
 ## Rules
 
@@ -62,7 +62,7 @@ With `services/`:
   - Telegram → `core.telegram_client.execute(account_id, action)` with typed actions from `schemas/telegram_actions.py`.
   - HTTP providers → `core/<provider>.py` wrapper, not raw `httpx`.
   - Logging → `core/logging.py`.
-- **No UI imports.** Never `from nicegui import ...`. Services must be runnable from tests/scripts/runtime without UI present.
+- **No transport/UI imports.** Never `from fastapi import ...` (or any UI/transport lib). Services must be runnable from tests/scripts/runtime without the API present.
 - **Composition allowed.** A service may import other services. This is the one layer where intra-layer imports are fine.
 - **One domain per module/package.** Small domain: `services/<domain>.py`. Large domain: `services/<domain>/` with a thin `__init__.py` and focused submodules.
 
@@ -77,7 +77,7 @@ If the root starts collecting unrelated logic, split into focused submodules (e.
 
 ## What does NOT belong here
 
-- NiceGUI page/component definitions — those are in `features/`.
+- HTTP routing / request binding — those are in `api/`; UI rendering is the React SPA (`frontend/`).
 - SQLAlchemy / Telethon / loguru imports — those live in `core/`.
 - Raw HTTP calls — wrap them in `core/<provider>.py`.
 - Long-running blocking work — `await` cooperatively; if CPU-heavy, offload via `asyncio.to_thread`.

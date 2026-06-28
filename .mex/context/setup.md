@@ -15,7 +15,7 @@ edges:
     condition: when understanding how components connect during setup
   - target: context/logging.md
     condition: when configuring Sentry DSN or log file location
-last_updated: 2026-06-19
+last_updated: 2026-06-28
 ---
 
 # Setup
@@ -34,7 +34,8 @@ last_updated: 2026-06-19
 2. Copy `.env.example` → `.env` and fill in keys (see below).
 3. `uv run pre-commit install` — installs the git hooks (already wired on this machine; new clones need to run it once).
 4. SQLite tables are created lazily by `core/db.py` on first DB access.
-5. `uv run python` `main.py` — starts NiceGUI (warming runtime tasks reconcile on startup).
+5. `uv run uvicorn main:app --reload` — starts the FastAPI/uvicorn API (single-worker; runtimes reconcile via lifespan).
+6. Frontend (from `frontend/`): `npm install` then `npm run dev` — Vite dev server with a `/api` proxy to uvicorn.
 
 ## Environment Variables
 
@@ -46,15 +47,16 @@ Uses double-underscore namespace convention (`NAMESPACE__FIELD`) via `pydantic-s
 - `DB__PATH` (optional) — SQLite file path, default `telebuba.db`.
 - `GEMINI__API_KEY` (required) — key for httpx → Gemini text generation.
 - `LOGGING__SENTRY_DSN` (optional) — if set, errors are sent to Sentry; otherwise local-only.
-- `UI__PORT` (optional) — NiceGUI port, default 8080.
+- `API__PORT` (optional) — uvicorn port, default 8080.
+- `AUTH__SECRET` (required) — JWT signing secret (see `settings.auth`).
 
-All namespaces: `TELEGRAM__`, `UI__`, `DB__`, `PROXY__`, `PROFILE_MEDIA__`, `LOGGING__`, `WARMING__`, `GEMINI__`, `TRUST__`. See `core/config.py` for the full nested settings model.
+All namespaces: `TELEGRAM__`, `API__`, `AUTH__`, `DB__`, `PROXY__`, `PROFILE_MEDIA__`, `LOGGING__`, `WARMING__`, `GEMINI__`, `TRUST__`. See `core/config.py` for the full nested settings model. (`UI__*` was retired with NiceGUI in the split-stack pivot; frontend config is `VITE_*`.)
 
 ## Common Commands
 
 - `uv sync` — install / refresh dependencies from `pyproject.toml` + `uv.lock`.
 - `uv add <pkg>` / `uv add --dev <pkg>` — add a runtime / dev dependency.
-- `uv run python` `main.py` — run NiceGUI (warming tasks reconcile on startup).
+- `uv run uvicorn main:app --reload` — run the API (single-worker; runtimes reconcile via lifespan).
 - `uv run pytest` — full test suite. Strict mode is baked into `pyproject.toml`: warnings → errors, branch coverage ≥ 90%, `asyncio_mode = strict`, Hypothesis `strict` profile (200 examples).
 - `uv run pytest -p no:cacheprovider --hypothesis-profile=dev` — fast inner-loop run (50 Hypothesis examples, fresh cache).
 - `uv run ruff check .` — lint.
@@ -75,4 +77,4 @@ All namespaces: `TELEGRAM__`, `UI__`, `DB__`, `PROXY__`, `PROFILE_MEDIA__`, `LOG
 
 **`uv sync` after changing Python version** — if you changed `.python-version`, delete `.venv` and re-run `uv sync`.
 
-[More issues — TO BE DETERMINED after first real runs. Expected: Telethon session file locking, "database is locked" under concurrent async tasks, NiceGUI port conflicts.]
+[More issues — TO BE DETERMINED after first real runs. Expected: Telethon session file locking, "database is locked" under concurrent async tasks, uvicorn port conflicts, Vite/uvicorn dev-proxy CORS.]

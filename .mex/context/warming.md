@@ -18,7 +18,7 @@ edges:
     condition: when changing the warming service package
   - target: patterns/add-warming-job.md
     condition: when adding a new warming runtime task
-last_updated: 2026-06-20
+last_updated: 2026-06-28
 ---
 
 # Warming Runtime
@@ -56,7 +56,7 @@ services/warming/
 └── _runtime.py        task ownership, start/stop/reconcile/shutdown
 ```
 
-`features/warming/` is UI-only: settings cards, channels UI, board rendering, activity log. It must delegate all domain logic to `services/warming/`.
+The warming UI is the React **Warming** screen (`frontend/`, built in #169) over `/api/v1/warming` — settings, channels, board, activity log. It carries no domain logic; everything lives in `services/warming/`, reached through the `api/` layer. (The old NiceGUI `features/warming/` page was removed in the split-stack pivot.)
 
 ## Cycle design rules
 
@@ -89,6 +89,6 @@ Important invariant: `load_board()` bulk-loads accounts, runtime states, channel
 ## What does NOT belong here
 
 - No direct Telegram SDK calls inline — go through `core.telegram_client`.
-- No business logic in `features/warming/` — it is UI-thin and delegates to `services/warming/`.
+- No business logic in the `api/v1/warming` routes or the React Warming screen — they delegate to `services/warming/`.
 - No APScheduler assumptions for this domain.
 - No `telegram_outbox` assumptions; the current model is direct executor + persisted runtime state.

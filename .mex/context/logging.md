@@ -1,6 +1,6 @@
 ---
 name: logging
-description: Three-tier logging architecture — loguru file, SQLite logs table, NiceGUI Logs page. Load when emitting, querying, or displaying log entries.
+description: Three-tier logging architecture — loguru file, SQLite logs table, React Logs page over /api/v1/logs. Load when emitting, querying, or displaying log entries.
 triggers:
   - "logging"
   - "loguru"
@@ -17,7 +17,7 @@ edges:
     condition: when the question is the rule (no print, gateway via core/logging.py)
   - target: context/telegram.md
     condition: when classifying a Telegram-side event
-last_updated: 2026-06-19
+last_updated: 2026-06-28
 ---
 
 # Logging
@@ -26,7 +26,8 @@ last_updated: 2026-06-19
 
 1. **`debug.log` (loguru)** — rotating file. Diagnostic data: stacktraces, retries, timings.
 2. **SQLite `logs` table** — structured business events persisted through `core.db.insert_log_row`.
-3. **NiceGUI `Logs` page** — table fed from SQLite, refreshed by polling, filterable by account/status.
+3. **React `Logs` page** — table fed by the SPA from `GET /api/v1/logs`, refreshed by polling
+   (SSE live tail lands in issue #174), filterable by account/status.
 
 Optional **Sentry** reporting is also configured inside `core/logging.py` for ERROR events when `LOGGING__SENTRY_DSN` is set.
 
@@ -72,15 +73,19 @@ async def log_event(
 - Nothing outside `core/logging.py` imports `loguru` or `sentry_sdk`.
 - No `structlog` in the current architecture.
 - No `print()` anywhere. For debugging tests, use pytest facilities.
-- In a feature/service: `await log_event("INFO", "event_name", account_id=account_id, extra={...})`.
+- In an api route/service: `await log_event("INFO", "event_name", account_id=account_id, extra={...})`.
 - Bulk operations should aggregate where possible before logging, or the table becomes noisy.
 
-## NiceGUI Logs page
+## React Logs page
 
-- Source: repository query over SQLite `logs`, newest first.
-- Polling is used instead of push; simple polling is enough for the current local UI.
-- Filters: account/status/activity filters live in the UI layer.
-- The page lives in `features/logs.py`.
+- Source: `GET /api/v1/logs` (an `api/v1/logs.py` route → `services/logs.py` → repository query
+  over SQLite `logs`), newest first, cursor-paginated via `Page[T]`.
+- Polling first (TanStack Query `refetchInterval`); SSE live tail is issue #174.
+- Responses are **locale-neutral**: rows carry a stable event **code + structured params**, not
+  pre-translated text — the SPA localizes via i18n (`context/frontend.md`). Carrying codes is a
+  **staged refinement**, not day-one; existing free-text events keep working until migrated.
+- Filters (account/status/activity) are query params on the route; the table UI lives in the
+  frontend `pages/logs` slice.
 
 ## What does NOT belong here
 
