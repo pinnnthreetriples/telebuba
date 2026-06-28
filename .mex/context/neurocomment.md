@@ -15,7 +15,7 @@ edges:
     condition: when the listener or a comment performs Telegram I/O
   - target: context/architecture.md
     condition: when deciding where runtime code lives vs UI code
-last_updated: 2026-06-23
+last_updated: 2026-06-28
 ---
 
 # Neurocomment Runtime
@@ -96,7 +96,7 @@ One new audit-and-cache table, one new column, in a single migration:
 
 `settings.neurocomment.challenge_solver_enabled` (bool, default **`False`** — opt-in roll-out, mirrors #132's opt-in semantic-dedup pattern); `challenge_wait_timeout_seconds` (20.0); `challenge_gemini_timeout_seconds` (10.0); `challenge_min_confidence` (0.7, reserved for Phase-2 human-queue routing); `challenge_click_delay_min_seconds` / `_max_seconds` (3.0 / 6.0, `@model_validator` `min ≤ max`); `channel_challenge_backoff_min_failures` (3); `channel_challenge_backoff_base_seconds` / `_max_seconds` (3600 / 86400).
 
-### Operator UX (`features/neurocomment/_page.py`)
+### Operator UX (React Neurocomment screen over `/api/v1/neurocomment`, built in #170)
 
 The board surfaces the full solver-feedback loop:
 
@@ -134,7 +134,7 @@ DB tables (created in migration #11; the runtime scalar in #12), queried via `co
 
 `services/neurocomment/board.py` → `load_neurocomment_board(campaign_id)` builds the work-view read model for the UI. Same invariant as warming: it **bulk-loads** accounts, campaign readiness, linked groups, today's posted comments, warming states, spam statuses, and fingerprints once — no per-card DB queries. Account health reuses the warming `evaluate_readiness` gate + `account_trust_score_from`; the only neurocomment-specific logic is the per-channel status derivation (`ready` / `comments_off` / `join_by_request` / `chat_restricted` / `bot_challenge` / `bot_challenge_backoff` / `throttled` — see the captcha section for the split).
 
-`features/neurocomment/` is UI-only (campaign create, channel pool, account picker, listener selection, Onboard/Start/Stop, board rendering). It delegates all domain logic to `services/neurocomment/` and must not import from `features/warming/`.
+The neurocomment UI is the React **Neurocomment** screen (`frontend/`, built in #170) over `/api/v1/neurocomment` (campaign create, channel pool, account picker, listener selection, Onboard/Start/Stop, board rendering). It carries no domain logic — everything is in `services/neurocomment/`, reached through the `api/` layer. (The old NiceGUI `features/neurocomment/` page was removed in the split-stack pivot.)
 
 ## Anti-ban knobs
 
@@ -156,7 +156,7 @@ Three anti-detect guards, resolved via grill (see `context/decisions.md` → Ф2
 
 ## What does NOT belong here
 
-- No direct Telethon/SQLAlchemy in `services/` or `features/` — go through `core.telegram_client` / `core/repositories`.
-- No business logic in `features/neurocomment/` — it is UI-thin.
-- No cross-feature imports (`features/neurocomment/` must not import `features/warming/`).
+- No direct Telethon/SQLAlchemy in `services/` or `api/` — go through `core.telegram_client` / `core/repositories`.
+- No business logic in the `api/v1/neurocomment` routes or the React Neurocomment screen — they delegate to `services/neurocomment/`.
+- No DB/Telegram access from `api/` — only through `services/neurocomment/`.
 - No captcha solving inside `core/` — the gateway exposes `WaitForBotChallenge` + `ClickButton` only; all challenge orchestration / Gemini wiring / cache lookup lives in `services/neurocomment/challenge.py`.

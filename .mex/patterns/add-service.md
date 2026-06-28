@@ -10,12 +10,12 @@ edges:
   - target: context/services.md
     condition: always — defines what belongs in this layer and what doesn't
   - target: context/conventions.md
-    condition: when in doubt about a rule (UI-thin features, gateways, async + types)
+    condition: when in doubt about a rule (UI-thin api/, gateways, async + types)
   - target: patterns/add-telegram-task.md
     condition: when the service drives Telegram via typed actions
-  - target: patterns/add-feature.md
-    condition: when a feature is going to call this service
-last_updated: 2026-06-19
+  - target: patterns/add-api-endpoint.md
+    condition: when an /api/v1 endpoint is going to call this service
+last_updated: 2026-06-28
 ---
 
 # Add a Service

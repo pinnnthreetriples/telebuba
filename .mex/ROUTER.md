@@ -9,7 +9,9 @@ edges:
   - target: context/stack.md
     condition: when working with specific technologies or making tech decisions
   - target: context/conventions.md
-    condition: when writing or reviewing code
+    condition: when writing or reviewing backend code
+  - target: context/frontend.md
+    condition: when writing or reviewing frontend code — frontend/ has its own FSD law
   - target: context/services.md
     condition: when writing or reviewing any business logic — services/ is where it lives
   - target: context/decisions.md
@@ -32,7 +34,7 @@ edges:
     condition: when modifying workflows, debugging red CI, or planning a heavy check
   - target: patterns/INDEX.md
     condition: when starting a task — check the pattern index for a matching pattern
-last_updated: 2026-06-20
+last_updated: 2026-06-28
 ---
 
 # Session Bootstrap
@@ -47,7 +49,8 @@ last_updated: 2026-06-20
 | Picking work / moving board items | `context/kanban.md` |
 | Understanding how the system works | `context/architecture.md` |
 | Working with a specific technology | `context/stack.md` |
-| Writing or reviewing code | `context/conventions.md` |
+| Writing or reviewing backend code | `context/conventions.md` |
+| Writing or reviewing frontend code | `context/frontend.md` |
 | Writing or reviewing business logic | `context/services.md` |
 | Making a design decision | `context/decisions.md` |
 | Setting up or running the project | `context/setup.md` |
@@ -59,23 +62,25 @@ last_updated: 2026-06-20
 | Shell command policy | `context/rtk.md` |
 | Any specific task | check `patterns/INDEX.md` |
 
-## Methodology — Vertical Slice + Hexagonal-lite (4 layers)
+## Methodology — Vertical Slice + Hexagonal-lite (split stack)
 
 Every code change MUST land in the right layer. Before writing code, the agent declares which layer is changing and why.
 
 ```text
-features/    UI-thin pages/components/handlers. Validate → call service → render.
-services/    Business logic. Async, Pydantic at edges, no SDK imports, no UI.
-core/        Infrastructure gateways: db/repositories, client gateways, config, logging.
+frontend/    React SPA (Feature-Sliced Design). Talks to the backend only over /api/v1. See context/frontend.md.
+api/         UI-thin /api/v1 routes. Validate → call service → serialize. No business logic.
+services/    Business logic. Async, Pydantic at edges, no SDK imports, transport-agnostic.
+core/        Infrastructure gateways: db/repositories, client gateways, auth, config, logging.
 schemas/     Pure Pydantic types. No project imports. The data contract.
 ```
 
-**Hard layer check before writing code:**
+**Hard layer check before writing backend code:**
 1. Where does this code belong? Name the layer and file path.
-2. What does it import? Cross-check `context/architecture.md`.
+2. What does it import? Cross-check `context/architecture.md` (and the api-layer allowlist).
 3. Is cross-layer input/output a Pydantic model from `schemas/`?
-4. Would the same logic be called from a runtime task, CLI, or test? If yes, it belongs in `services/`, not `features/`.
+4. Would the same logic be called from a runtime task, CLI, or test? If yes, it belongs in `services/`, not the api layer.
 
+For frontend code, run the FSD check in `context/frontend.md` (layer + slice public API).
 If any check fails, stop and re-plan.
 
 ## Behavioural Contract

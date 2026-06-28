@@ -16,7 +16,7 @@ edges:
     condition: when the same command runs locally
   - target: state/active.md
     condition: when CI state changes (red main, new known failure)
-last_updated: 2026-06-19
+last_updated: 2026-06-28
 ---
 
 # CI Policy
@@ -39,6 +39,13 @@ Dependabot (`.github/dependabot.yml`) opens weekly PRs for GitHub Actions update
 | `aislop` (quality gate) | ✓ | ✓ | — | zero-tolerance: any error OR warning fails; needs Node (npx) |
 | `semgrep-full` (3 rulesets) | — | — | ✓ | security-audit + OWASP top 10 + python |
 | `extended-hypothesis` | — | — | ✓ | 2000 examples per property |
+| `frontend` (lint/boundaries/tsc/vitest) | ✓ | ✓ | — | ESLint + Prettier + Steiger boundary-lint + `tsc --strict` + Vitest (≥ 80%) over `frontend/` |
+| `frontend-e2e` (Playwright smoke) | ✓ | ✓ | — | critical flows (login, each screen loads, one happy-path action) |
+| `gen-api-drift` | ✓ | ✓ | — | regenerate the hey-api client from the backend OpenAPI; fail if it differs from the committed client |
+
+Frontend jobs run on changes under `frontend/` (and `gen-api-drift` whenever the API surface
+or the generated client changes). The Python and frontend job sets are independent — a backend
+change need not run Playwright, and vice versa.
 
 ## Quality gates (deptry / vulture / radon / aislop)
 
@@ -48,7 +55,7 @@ All four were installed but unwired; they now gate:
   documented `per_rule_ignores` in `pyproject.toml`: `opentele2` (DEP002, lazy
   `importlib` import) and `hypothesis` (DEP004, dev dep used in `conftest.py`).
   `tools/` is excluded (it imports the dev-only `radon`).
-- **vulture** — dead code. Pre-commit + lint job. Scans `core/`, `features/`, `schemas/`, `services/` (config in `pyproject.toml`). Re-exports stay live via each package's
+- **vulture** — dead code. Pre-commit + lint job. Scans `api/`, `core/`, `schemas/`, `services/` (config in `pyproject.toml`). Re-exports stay live via each package's
   `__all__`.
 - **radon** — cyclomatic complexity. radon never exits non-zero on its own, so
   `tools/radon_gate.py` wraps its API and **fails on rank D+ (cc > 20)**. Chosen
@@ -59,7 +66,8 @@ All four were installed but unwired; they now gate:
   warning fails**. Dedicated CI job (`setup-node`) + a `pre-push` pre-commit hook
   (heavy, so not every commit). Its size rules (`file-too-large` 400,
   `function-too-long` 80, `too-many-params` 6) and `repetitive-dispatch` drove
-  the package splits across `core`/`services`/`features`.
+  the package splits across `core`/`services`/`api`. The vendored `web/` SPA is
+  excluded from aislop while it exists (removed at React parity, issue #173).
 
 `tools/` helpers are excluded from deptry/bandit (`exclude_dirs`/hook `exclude`)
 and semgrep (`.semgrepignore`), with a narrow ruff ignore for the intentional
@@ -97,6 +105,16 @@ Selection lives in `conftest.py`.
 - `mutmut` — gated to nightly + `workflow_dispatch` once it has real code to mutate. See `state/active.md` (Open Decisions section).
 - Branch protection / required-status-check setup — that lives in repo settings, not workflows.
 
-## Known gotcha
+## Coverage source
 
-The pytest job is **red until the first real feature ships** because `--cov-fail-under=90` over zero source files yields 0 % coverage. Accepted by policy: green CI on no code would be a lie. Re-greens automatically with the first feature + tests.
+Backend branch coverage (`--cov-fail-under=90`) measures `api`, `core`, `schemas`, `services`
+(the deleted `features/` layer is gone; `api/` replaces it as the UI-thin coverage target).
+Frontend coverage is a separate Vitest floor (≥ 80%) reported by the `frontend` job — see
+`context/frontend.md`.
+
+## gen-api drift check
+
+The TS client under `frontend/src/shared/api` is generated from the backend OpenAPI by
+`@hey-api/openapi-ts` (script in slice #165). CI regenerates it and fails if the result differs
+from what is committed, so the wire contract and the client never silently diverge. Regenerate
+locally and commit the result whenever the API surface changes.

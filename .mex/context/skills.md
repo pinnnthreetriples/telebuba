@@ -17,7 +17,7 @@ edges:
     condition: for board-related skills (to-prd, to-issues)
   - target: context/conventions.md
     condition: when /tdd is invoked — rule 7 sets the strict test policy
-last_updated: 2026-06-21
+last_updated: 2026-06-28
 ---
 
 # Skills
@@ -35,10 +35,10 @@ Installed in `.claude/skills/`. The agent does NOT auto-run them — invoke via 
 
 ### Engineering loops
 
-- **`/tdd`** — red-green-refactor. **Trigger:** any new feature in `features/` (rule 7 already mandates a test); any bug fix where reproducing in a test is feasible; user says "let's TDD this" / "test-first". Aligns with our strict pytest config and 90 % branch-coverage floor.
+- **`/tdd`** — red-green-refactor. **Trigger:** any new endpoint in `api/` or service in `services/` (rule 7 already mandates a test); any bug fix where reproducing in a test is feasible; user says "let's TDD this" / "test-first". Aligns with our strict pytest config and 90 % branch-coverage floor. (Frontend: Vitest, see `context/frontend.md`.)
 - **`/diagnose`** — disciplined bug loop: reproduce → minimise → hypothesise → instrument → fix → regression-test. **Trigger:** user reports something broken / throwing / failing; an integration regresses; a Sentry alert lands. Always prefer this over freelancing a fix.
-- **`/prototype`** — throwaway exploration. **Trigger:** before committing to a non-obvious data model, state machine, or UI option. Forbidden in `features/` / `core/` / `schemas/` — prototypes live outside the production tree.
-- **`/improve-codebase-architecture`** — find deepening opportunities. **Trigger:** when `core/` or `features/` start showing duplication, shallow modules, or the non-negotiables in `context/conventions.md` are getting bent. Run it before a refactor, not after.
+- **`/prototype`** — throwaway exploration. **Trigger:** before committing to a non-obvious data model, state machine, or UI option. Forbidden in `api/` / `core/` / `schemas/` (and the production `frontend/` tree) — prototypes live outside the production tree.
+- **`/improve-codebase-architecture`** — find deepening opportunities. **Trigger:** when `core/` or `api/` start showing duplication, shallow modules, or the non-negotiables in `context/conventions.md` are getting bent. Run it before a refactor, not after.
 
 ### Planning and scoping
 
