@@ -15,7 +15,7 @@ Python 3.13 · NiceGUI · SQLAlchemy/SQLite · Telethon · httpx · loguru+Sentr
 ## File Map
 ```text
 telebuba/
-├── main.py                 NiceGUI composition root; registers pages; reconciles/shuts down runtime tasks
+├── main.py                 app entrypoint; serves the web/ design SPA (/, /support.js) via NiceGUI's FastAPI app; reconciles/shuts down warming+neurocomment runtimes
 ├── pyproject.toml          uv project + strict test/lint/security gates
 ├── .env                    local secrets — gitignored
 ├── .env.example            committed template; must mirror core/config.py
@@ -50,19 +50,9 @@ telebuba/
 │   ├── logs.py             log query helpers for the Logs page
 │   ├── spam_status.py      account spam/ban signal helpers
 │   └── trust.py            trust-score calculation from stored signals
-├── features/               UI-thin NiceGUI pages/components; delegates to services
-│   ├── accounts/
-│   ├── warming/
-│   │   ├── _pipeline.py       animated 6-step cycle rail + active-step detail + summary
-│   │   └── _termlog.py        expandable per-account dark "terminal" activity log on each card
-│   ├── neurocomment/        neurocomment page (redesigned): _page.py (composition + pure tested helpers: label maps, PIPELINE_STEPS, fleet_activity, relative_time, runtime_status_text, board_content_signature/live_signature anti-flicker gates), _engine_panel.py (animated hero card — 6-step pipeline rail + live ticker + fleet counters + start/stop + collapsible logs panel; signature-gated refresh), _setup.py (warmed-accounts overview + collapsible campaign create + channel chips + account picker + onboard), _explainer.py («Как работает» card), _workview.py (board + minimalist «Капчи» strip + drill-down Retry/Skip; signature-gated), _logpanel.py (collapsible neurocomment-activity dark terminal, event→RU map); tb-nc-* keyframes + log CSS in __init__.py
-│   ├── shared/              cross-page UI chrome + design system — the one sanctioned cross-feature namespace
-│   │   ├── nav.py              global sticky top bar (logo, 5 nav links, status/bell/avatar) + page_shell() wrapper; nav_link_html = pure tested active-emphasis helper
-│   │   ├── theme.py            global theme: Inter+JetBrains Mono fonts, #0066FF Quasar primary (apply_theme); loads theme.css + components.css once per app
-│   │   ├── theme.css           design's verbatim global CSS — warm #F1EFED canvas + tb-* animation/utility classes
-│   │   └── components.css      reusable component vocabulary (buttons, cards, badges, segmented, inputs, stat cards, terminal, toggles)
-│   ├── logs.py             Логи page (redesigned): segmented status filter + tb-table; pure _level_badge/_table_body_html helpers
-│   └── settings.py         Настройки page (redesign): static design mock loaded from settings.html; client-side eye/toggles/save, persistence deferred
+├── web/                    vendored design SPA, served verbatim as the frontend — the redesign replaced the whole NiceGUI `features/` UI layer with the design file itself (the design is the source of truth)
+│   ├── index.html             Telebuba.dc.html (omelette-stripped) — all 5 screens + modals; renders client-side via support.js, with GSAP/Babel/fonts from CDN
+│   └── support.js             the design-canvas (`dc`) runtime that renders index.html standalone (third-party generated bundle; excluded from aislop/semgrep/pre-commit as vendored)
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```
 

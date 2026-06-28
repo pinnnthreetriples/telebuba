@@ -1,4 +1,17 @@
-"""NiceGUI entrypoint."""
+"""App entrypoint — serves the Telebuba design SPA as the frontend.
+
+The UI is the design's own static single-page app, served verbatim from
+``web/`` (``index.html`` + ``support.js``, the design-canvas runtime). The
+previous NiceGUI page layer (``features/``) was removed in the redesign: the
+design file is the source of truth, so it is shipped as-is rather than
+re-implemented. The Python backend (``services`` / ``core``) still runs the
+warming and neurocomment runtimes on startup; wiring the static UI to live
+data is a deliberate follow-up.
+
+We keep NiceGUI's ``ui.run`` only for its FastAPI ``app`` and startup/shutdown
+lifecycle — no NiceGUI pages are registered; the two routes below serve the
+static design.
+"""
 
 from __future__ import annotations
 
@@ -10,12 +23,6 @@ from nicegui import app, ui
 from core.config import settings
 from core.logging import log_event, setup_logging
 from core.telegram_client import shutdown_telegram_pool
-from features.accounts import register_accounts_page
-from features.accounts._profile_dialog_render import register_disconnect_tracker
-from features.logs import register_logs_page
-from features.neurocomment import register_neurocomment_page
-from features.settings import register_settings_page
-from features.warming import register_warming_page
 from services.neurocomment import (
     reconcile_neurocomment_on_startup,
     shutdown_neurocomment_on_shutdown,
@@ -23,14 +30,15 @@ from services.neurocomment import (
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
 
 _GIT_SHA_TIMEOUT_SECONDS = 2
+_WEB_DIR = Path(__file__).resolve().parent / "web"
 
 
 def _git_sha() -> str:
     """Resolve the current commit SHA, falling back to "unknown" off-tree.
 
     Read once at startup so the operator can verify which code is actually
-    running just by checking the top of the Logs page — saves a "did my
-    git pull take effect?" round of guessing.
+    running just by checking the boot log — saves a "did my git pull take
+    effect?" round of guessing.
     """
     try:
         # Fixed argv, no shell, no user input — invoking git on PATH is the
@@ -51,26 +59,24 @@ def _git_sha() -> str:
 
 
 async def _log_app_started() -> None:
-    """Stamp the boot in the Logs page with the live commit SHA.
-
-    Sole purpose: the operator sees ``app_started`` at the top of the logs
-    after a restart with the actual SHA the process is running, and can
-    compare against ``git rev-parse HEAD`` in two seconds. Solves the
-    "is my pull actually live?" diagnostic that ate the previous session.
-    """
+    """Stamp the boot with the live commit SHA, for restart verification."""
     await log_event("INFO", "app_started", extra={"git_sha": _git_sha()})
+
+
+def _register_frontend() -> None:  # pragma: no cover
+    """Serve the design SPA via NiceGUI's static-file API (no direct FastAPI dep).
+
+    ``index.html`` is served at ``/`` and its runtime at ``/support.js`` (the
+    HTML loads ``./support.js`` relative to ``/``). GSAP, Babel and the web
+    fonts load from their CDNs exactly as the design declares them.
+    """
+    app.add_static_file(local_file=_WEB_DIR / "support.js", url_path="/support.js")
+    app.add_static_file(local_file=_WEB_DIR / "index.html", url_path="/")
 
 
 def main() -> None:
     setup_logging()
-    register_accounts_page()
-    register_warming_page()
-    register_neurocomment_page()
-    register_logs_page()
-    register_settings_page()
-    # Populate _DEAD_CLIENTS on websocket drop so the profile dialog's apply
-    # paths short-circuit on detached clients instead of warning to stderr.
-    register_disconnect_tracker()
+    _register_frontend()
 
     # _RUNTIME (per-account warming loops) lives in process memory; after a
     # restart the DB may still show ``active``/``sleeping`` rows whose task is

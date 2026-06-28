@@ -23,16 +23,6 @@ from core.config import Settings, settings
 
 _ROOT = Path(__file__).resolve().parent.parent
 
-# Features are UI-thin: from `core` they may import only these cross-cutting modules
-# (settings + logging). Every other core module — db, repositories, telegram_client,
-# gemini — is a gateway / business concern reached through `services/`.
-_FEATURES_CORE_ALLOWED = frozenset({"core.config", "core.logging"})
-
-# features/shared/ is the one sanctioned cross-feature namespace: shared UI
-# chrome (the top nav bar) that every page may import. It holds no business
-# logic and imports no feature, so it cannot become a coupling backdoor.
-_SHARED_FEATURE = "shared"
-
 
 def _imported_modules(path: Path) -> set[str]:
     """All absolute imports in ``path`` as fully-qualified module names."""
@@ -71,62 +61,6 @@ def _violations(layer: str, forbidden_roots: set[str]) -> list[str]:
     return out
 
 
-def _feature_of(path: Path) -> str | None:
-    """Return the feature this file belongs to.
-
-    Package name for ``features/<pkg>/...``, file stem for top-level
-    ``features/foo.py``. ``None`` outside ``features/``.
-    """
-    try:
-        rel = path.relative_to(_ROOT / "features")
-    except ValueError:
-        return None
-    if len(rel.parts) >= 2:
-        return rel.parts[0]
-    return rel.stem
-
-
-def test_features_do_not_import_telethon_or_sqlalchemy() -> None:
-    # Features are UI-thin: no DB or Telegram SDK at all.
-    assert _violations("features", {"sqlalchemy", "telethon"}) == []
-
-
-def test_features_import_from_core_only_config_and_logging() -> None:
-    """Features may touch ``core`` only via config + logging — the executable form of #1/#6.
-
-    A feature that reaches ``core.db``, a repository, or ``core.telegram_client`` directly
-    fails the build, not just review: business logic and gateways live behind ``services/``.
-    """
-    out: list[str] = []
-    for path in _python_modules("features"):
-        for module in _imported_modules(path):
-            if module != "core" and not module.startswith("core."):
-                continue
-            top_two = ".".join(module.split(".")[:2])
-            if top_two not in _FEATURES_CORE_ALLOWED:
-                out.append(f"{path.relative_to(_ROOT).as_posix()} imports {module}")
-    assert out == [], f"features may import only core.config / core.logging, found: {out}"
-
-
-def test_no_cross_feature_imports() -> None:
-    """A feature may import only its own siblings plus shared UI (``features/shared/``)."""
-    out: list[str] = []
-    for path in _python_modules("features"):
-        own = _feature_of(path)
-        if own is None:
-            continue
-        for module in _imported_modules(path):
-            if not (module == "features" or module.startswith("features.")):
-                continue
-            parts = module.split(".")
-            other = parts[1] if len(parts) >= 2 else None
-            if other is not None and other not in {own, _SHARED_FEATURE}:
-                out.append(
-                    f"{path.relative_to(_ROOT).as_posix()} imports cross-feature {module}",
-                )
-    assert out == []
-
-
 def test_services_do_not_import_ui_or_sdks() -> None:
     # Services are pure logic: no NiceGUI, no SQLAlchemy/Telethon, no features.
     assert _violations("services", {"nicegui", "sqlalchemy", "telethon", "features"}) == []
@@ -157,7 +91,7 @@ def test_env_example_covers_every_config_field() -> None:
     assert missing == [], f".env.example is missing keys: {missing}"
 
 
-@pytest.mark.parametrize("layer", ["core", "services", "features", "schemas"])
+@pytest.mark.parametrize("layer", ["core", "services", "schemas"])
 def test_layer_directory_exists(layer: str) -> None:
     # Guard against a rename silently turning the import checks into no-ops.
     assert (_ROOT / layer).is_dir()
@@ -169,8 +103,6 @@ def test_layer_directory_exists(layer: str) -> None:
     [
         ("services", "accounts"),
         ("services", "warming"),
-        ("features", "accounts"),
-        ("features", "warming"),
         ("core", "telegram_client"),
         ("core", "repositories"),
     ],
