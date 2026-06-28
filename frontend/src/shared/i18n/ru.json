@@ -216,6 +216,13 @@
       ]
     },
     "inProgress": { "title": "В прогреве", "live": "идёт прогрев", "days": "Дней прогрева" },
+    "warmed": {
+      "title": "Прогреты",
+      "badge": "прогрет",
+      "days": "Прогрев",
+      "trust": "Trust-score",
+      "toNeuro": "В нейрокомментинг"
+    },
     "stage": {
       "subscribe": "Подписка",
       "read": "Чтение",

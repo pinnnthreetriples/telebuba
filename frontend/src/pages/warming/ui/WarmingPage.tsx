@@ -15,6 +15,19 @@ import { WarmingBoard } from '@/widgets/warming-board';
 // SSE drives live board updates; this poll is just the fallback safety net.
 const FALLBACK_POLL_MS = 30000;
 
+// ponytail: mock graduated accounts until the board exposes a "warmed" list.
+const WARMED_MOCK = [
+  { id: 'wm-1', phone: '+79261112233', cc: 'ru', proxy: 'SOCKS5', days: '14 / 14 дней', trust: 88 },
+  {
+    id: 'wm-2',
+    phone: '+447700900123',
+    cc: 'gb',
+    proxy: 'SOCKS5',
+    days: '14 / 14 дней',
+    trust: 91,
+  },
+] as const;
+
 function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
 }
@@ -228,6 +241,91 @@ export function WarmingPage() {
               >
                 {t('warming.channels.add')}
               </button>
+            </div>
+          </div>
+
+          <div className="rounded-2xl border border-line bg-white p-4">
+            <div className="mb-3 flex items-center gap-[9px]">
+              <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-success-tint">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="#12a150"
+                  strokeWidth="2.6"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </span>
+              <span className="text-[13.5px] font-bold">{t('warming.warmed.title')}</span>
+              <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
+                {WARMED_MOCK.length}
+              </span>
+            </div>
+            <div className="flex flex-col gap-3">
+              {WARMED_MOCK.map((acc) => (
+                <div key={acc.id} className="rounded-[14px] border border-line p-[14px]">
+                  <div className="flex items-start gap-[11px]">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-tint text-[11.5px] font-bold text-primary ring-2 ring-success">
+                      {acc.phone.slice(-2)}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="text-[14px] font-bold leading-tight">{acc.phone}</div>
+                      <div className="mt-[5px] flex items-center gap-[6px]">
+                        <span className={`fi fi-${acc.cc} h-[10px] w-[14px] rounded-[2px]`} />
+                        <span className="text-[11.5px] text-ink-subtle">{acc.proxy}</span>
+                      </div>
+                    </div>
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[9.5px] font-bold uppercase tracking-[0.03em] text-success">
+                      <svg
+                        width="9"
+                        height="9"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="#12a150"
+                        strokeWidth="3.4"
+                      >
+                        <path d="M20 6 9 17l-5-5" />
+                      </svg>
+                      {t('warming.warmed.badge')}
+                    </span>
+                  </div>
+                  <div className="mt-[13px] flex items-center rounded-[10px] bg-[#f7f6f4] px-[14px] py-[10px]">
+                    <div className="flex-1">
+                      <div className="text-[10.5px] text-ink-subtle">
+                        {t('warming.warmed.days')}
+                      </div>
+                      <div className="text-[13px] font-bold">{acc.days}</div>
+                    </div>
+                    <span className="h-[26px] w-px bg-line" />
+                    <div className="flex-1 pl-[14px]">
+                      <div className="text-[10.5px] text-ink-subtle">
+                        {t('warming.warmed.trust')}
+                      </div>
+                      <div className="text-[13px] font-bold text-success">{acc.trust}</div>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className="mt-[13px] flex w-full items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white"
+                  >
+                    {t('warming.warmed.toNeuro')}
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                    >
+                      <path d="M5 12h14M13 6l6 6-6 6" />
+                    </svg>
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
 

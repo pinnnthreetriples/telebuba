@@ -215,6 +215,13 @@
       ]
     },
     "inProgress": { "title": "Warming", "live": "warming in progress", "days": "Warming days" },
+    "warmed": {
+      "title": "Warmed up",
+      "badge": "warmed",
+      "days": "Warming",
+      "trust": "Trust-score",
+      "toNeuro": "To neurocomment"
+    },
     "stage": {
       "subscribe": "Subscribe",
       "read": "Read",
