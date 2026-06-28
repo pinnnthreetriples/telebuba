@@ -76,6 +76,7 @@
     "hourRange": "Hour must be 0–23",
     "keySet": "Key is set — leave blank to keep it",
     "keyUnset": "No key set",
+    "section": { "warming": "Warming settings", "api": "API keys" },
     "field": {
       "reactions_enabled": "Reactions",
       "join_enabled": "Join channels",

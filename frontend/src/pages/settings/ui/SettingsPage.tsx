@@ -1,5 +1,6 @@
 import { useForm } from '@tanstack/react-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { type ReactNode, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 
@@ -29,9 +30,53 @@ const schema = z.object({
 
 type FormValues = z.infer<typeof schema>;
 
+const INPUT =
+  'tb-time w-full rounded-[10px] border border-line bg-white px-3 py-[9px] text-[13px] outline-none';
+
+// The design's pill toggle: a track + a sliding thumb (replaces the checkbox).
+function Toggle({
+  checked,
+  onChange,
+  label,
+}: {
+  checked: boolean;
+  onChange: (value: boolean) => void;
+  label: string;
+}) {
+  return (
+    <div className="flex items-center justify-between gap-3 py-[9px]">
+      <span className="text-[13px] text-ink">{label}</span>
+      <button
+        type="button"
+        role="switch"
+        aria-checked={checked}
+        aria-label={label}
+        onClick={() => {
+          onChange(!checked);
+        }}
+        className={`tb-sw relative h-[26px] w-[44px] shrink-0 rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-line-strong'}`}
+      >
+        <span
+          className={`tb-sw-thumb absolute top-[3px] block h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-transform ${checked ? 'translate-x-[21px]' : 'translate-x-[3px]'}`}
+        />
+      </button>
+    </div>
+  );
+}
+
+function Card({ title, children }: { title: string; children: ReactNode }) {
+  return (
+    <div className="rounded-2xl border border-line bg-white p-5">
+      <div className="mb-3 text-[14px] font-bold">{title}</div>
+      {children}
+    </div>
+  );
+}
+
 function SettingsForm({ settings }: { settings: WarmingSettings }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const [showKey, setShowKey] = useState(false);
   const save = useMutation(updateWarmingSettingsMutation());
 
   const form = useForm({
@@ -73,115 +118,140 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
         event.preventDefault();
         void form.handleSubmit();
       }}
-      className="space-y-5 rounded-md border border-line bg-surface p-5"
+      className="space-y-4"
     >
-      <div className="space-y-2">
-        {TOGGLES.map((field) => (
-          <form.Field key={field} name={field}>
-            {(f) => (
-              <label className="flex items-center gap-2 text-sm">
-                <input
-                  type="checkbox"
+      <Card title={t('settings.section.warming')}>
+        <div className="divide-y divide-line">
+          {TOGGLES.map((field) => (
+            <form.Field key={field} name={field}>
+              {(f) => (
+                <Toggle
                   checked={f.state.value}
-                  onChange={(event) => {
-                    f.handleChange(event.target.checked);
-                  }}
+                  onChange={f.handleChange}
+                  label={t(`settings.field.${field}`)}
                 />
-                {t(`settings.field.${field}`)}
-              </label>
-            )}
-          </form.Field>
-        ))}
-      </div>
+              )}
+            </form.Field>
+          ))}
+        </div>
 
-      <div className="flex gap-4">
-        <form.Field name="quiet_hours_start">
+        <div className="mt-4 flex gap-4">
+          {(['quiet_hours_start', 'quiet_hours_end'] as const).map((field) => (
+            <form.Field key={field} name={field}>
+              {(f) => (
+                <label className="block">
+                  <span className="mb-[6px] block text-[12px] font-medium text-[#3a3a3a]">
+                    {t(`settings.field.${field}`)}
+                  </span>
+                  <input
+                    type="number"
+                    min={0}
+                    max={HOUR_MAX}
+                    value={f.state.value}
+                    onChange={(event) => {
+                      f.handleChange(event.target.valueAsNumber);
+                    }}
+                    className={`${INPUT} w-24`}
+                  />
+                  {f.state.meta.errors.length > 0 ? (
+                    <span className="mt-1 block text-[11px] text-danger">
+                      {t('settings.hourRange')}
+                    </span>
+                  ) : null}
+                </label>
+              )}
+            </form.Field>
+          ))}
+        </div>
+      </Card>
+
+      <Card title={t('settings.section.api')}>
+        <form.Field name="gemini_model">
           {(f) => (
-            <label className="text-sm">
-              <span className="mb-1 block text-ink-muted">
-                {t('settings.field.quiet_hours_start')}
+            <label className="mb-4 block">
+              <span className="mb-[6px] block text-[12px] font-medium text-[#3a3a3a]">
+                {t('settings.field.gemini_model')}
               </span>
               <input
-                type="number"
-                min={0}
-                max={HOUR_MAX}
                 value={f.state.value}
                 onChange={(event) => {
-                  f.handleChange(event.target.valueAsNumber);
+                  f.handleChange(event.target.value);
                 }}
-                className="w-20 rounded-md border border-line px-2 py-1"
+                className={INPUT}
               />
               {f.state.meta.errors.length > 0 ? (
-                <span className="mt-1 block text-xs text-danger">{t('settings.hourRange')}</span>
+                <span className="mt-1 block text-[11px] text-danger">{t('settings.required')}</span>
               ) : null}
             </label>
           )}
         </form.Field>
-        <form.Field name="quiet_hours_end">
+
+        <form.Field name="gemini_api_key">
           {(f) => (
-            <label className="text-sm">
-              <span className="mb-1 block text-ink-muted">
-                {t('settings.field.quiet_hours_end')}
+            <label className="block">
+              <span className="mb-[6px] block text-[12px] font-medium text-[#3a3a3a]">
+                {t('settings.field.gemini_api_key')}
               </span>
-              <input
-                type="number"
-                min={0}
-                max={HOUR_MAX}
-                value={f.state.value}
-                onChange={(event) => {
-                  f.handleChange(event.target.valueAsNumber);
-                }}
-                className="w-20 rounded-md border border-line px-2 py-1"
-              />
-              {f.state.meta.errors.length > 0 ? (
-                <span className="mt-1 block text-xs text-danger">{t('settings.hourRange')}</span>
-              ) : null}
+              <div className="flex gap-2">
+                <input
+                  type={showKey ? 'text' : 'password'}
+                  value={f.state.value}
+                  onChange={(event) => {
+                    f.handleChange(event.target.value);
+                  }}
+                  placeholder={
+                    settings.has_gemini_key ? t('settings.keySet') : t('settings.keyUnset')
+                  }
+                  className={`${INPUT} flex-1 font-mono`}
+                />
+                <button
+                  type="button"
+                  aria-label={t('settings.field.gemini_api_key')}
+                  onClick={() => {
+                    setShowKey((value) => !value);
+                  }}
+                  className="flex w-[42px] items-center justify-center rounded-[10px] border border-line bg-white text-ink-muted"
+                >
+                  {showKey ? (
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
+                      <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
+                      <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
+                      <path d="m2 2 20 20" />
+                    </svg>
+                  ) : (
+                    <svg
+                      width="16"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.8"
+                    >
+                      <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                      <circle cx="12" cy="12" r="3" />
+                    </svg>
+                  )}
+                </button>
+              </div>
             </label>
           )}
         </form.Field>
-      </div>
-
-      <form.Field name="gemini_model">
-        {(f) => (
-          <label className="block text-sm">
-            <span className="mb-1 block text-ink-muted">{t('settings.field.gemini_model')}</span>
-            <input
-              value={f.state.value}
-              onChange={(event) => {
-                f.handleChange(event.target.value);
-              }}
-              className="w-full rounded-md border border-line px-3 py-2"
-            />
-            {f.state.meta.errors.length > 0 ? (
-              <span className="mt-1 block text-xs text-danger">{t('settings.required')}</span>
-            ) : null}
-          </label>
-        )}
-      </form.Field>
-
-      <form.Field name="gemini_api_key">
-        {(f) => (
-          <label className="block text-sm">
-            <span className="mb-1 block text-ink-muted">{t('settings.field.gemini_api_key')}</span>
-            <input
-              type="password"
-              value={f.state.value}
-              onChange={(event) => {
-                f.handleChange(event.target.value);
-              }}
-              placeholder={settings.has_gemini_key ? t('settings.keySet') : t('settings.keyUnset')}
-              className="w-full rounded-md border border-line px-3 py-2"
-            />
-          </label>
-        )}
-      </form.Field>
+      </Card>
 
       <form.Subscribe selector={(state) => [state.canSubmit, state.isDirty, state.isSubmitting]}>
         {([canSubmit, isDirty, isSubmitting]) => (
           <button
             type="submit"
             disabled={!canSubmit || !isDirty || isSubmitting}
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
+            className="rounded-full bg-primary px-5 py-[10px] text-[13px] font-medium text-white disabled:opacity-50"
           >
             {save.isSuccess && !isDirty ? t('settings.saved') : t('settings.save')}
           </button>
@@ -196,8 +266,10 @@ export function SettingsPage() {
   const { data, isPending, isError } = useQuery(warmingSettingsQueryOptions());
 
   return (
-    <main className="mx-auto max-w-2xl space-y-4 p-8">
-      <h1 className="text-2xl font-semibold">{t('settings.title')}</h1>
+    <div className="tb-fadeup mx-auto max-w-[640px]">
+      <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">
+        {t('settings.title')}
+      </h1>
       {isPending ? (
         <p className="text-ink-muted">{t('settings.loading')}</p>
       ) : isError || !data ? (
@@ -207,6 +279,6 @@ export function SettingsPage() {
       ) : (
         <SettingsForm settings={data} />
       )}
-    </main>
+    </div>
   );
 }
