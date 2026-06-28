@@ -7,6 +7,7 @@ interface AccountsTableProps {
   data: AccountRead[];
   onCheck: (accountId: string) => void;
   onDelete: (accountId: string) => void;
+  onOpen?: (account: AccountRead) => void;
   busyId: string | null;
 }
 
@@ -22,7 +23,7 @@ function mono(account: AccountRead): string {
 
 // The design's accounts table: white card, uppercase header on #FAF9F7, rows
 // with a mono avatar, status pill, proxy flag, trust bar, and round actions.
-export function AccountsTable({ data, onCheck, onDelete, busyId }: AccountsTableProps) {
+export function AccountsTable({ data, onCheck, onDelete, onOpen, busyId }: AccountsTableProps) {
   const { t } = useTranslation();
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white">
@@ -44,7 +45,8 @@ export function AccountsTable({ data, onCheck, onDelete, busyId }: AccountsTable
               return (
                 <tr
                   key={account.account_id}
-                  className="tb-row border-t border-[#f0eeeb] transition-colors"
+                  onClick={() => onOpen?.(account)}
+                  className="tb-row cursor-pointer border-t border-[#f0eeeb] transition-colors"
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-[11px]">
@@ -95,7 +97,8 @@ export function AccountsTable({ data, onCheck, onDelete, busyId }: AccountsTable
                         type="button"
                         title={t('accounts.actions.check')}
                         disabled={busy}
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           onCheck(account.account_id);
                         }}
                         className={`${ACTION_BTN} text-ink-muted hover:border-[#bfd6ff] hover:text-primary`}
@@ -122,7 +125,8 @@ export function AccountsTable({ data, onCheck, onDelete, busyId }: AccountsTable
                         type="button"
                         title={t('accounts.actions.delete')}
                         disabled={busy}
-                        onClick={() => {
+                        onClick={(event) => {
+                          event.stopPropagation();
                           onDelete(account.account_id);
                         }}
                         className={`${ACTION_BTN} text-ink-subtle hover:border-[#f0c9c5] hover:text-danger`}

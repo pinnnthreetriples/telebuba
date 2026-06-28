@@ -8,6 +8,8 @@ import {
   deleteAccountMutation,
   importAccountTdataMutation,
 } from '@/entities/account';
+import type { AccountRead } from '@/shared/api';
+import { AccountEdit } from '@/widgets/account-edit';
 import { AccountsTable } from '@/widgets/accounts-table';
 
 const PAGE_SIZE = 20;
@@ -124,6 +126,7 @@ export function AccountsPage() {
   const [search, setSearch] = useState('');
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [editing, setEditing] = useState<AccountRead | null>(null);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
   const { data, isPending, isError } = useQuery(
@@ -191,6 +194,17 @@ export function AccountsPage() {
   const hasPrev = cursorStack.length > 1;
   const hasNext = Boolean(data?.next_cursor);
 
+  if (editing) {
+    return (
+      <AccountEdit
+        account={editing}
+        onBack={() => {
+          setEditing(null);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="tb-fadeup">
       <ProxyPool />
@@ -256,7 +270,13 @@ export function AccountsPage() {
         </div>
       ) : (
         <>
-          <AccountsTable data={items} onCheck={onCheck} onDelete={onDelete} busyId={busyId} />
+          <AccountsTable
+            data={items}
+            onCheck={onCheck}
+            onDelete={onDelete}
+            onOpen={setEditing}
+            busyId={busyId}
+          />
           <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
