@@ -18,6 +18,9 @@ from typing import Literal
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+# RFC 7518 §3.2: an HS256 HMAC key should be at least 32 bytes.
+_MIN_AUTH_SECRET_BYTES = 32
+
 
 class TelegramSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="TELEGRAM__", extra="ignore")
@@ -70,6 +73,16 @@ class AuthSettings(BaseSettings):
     # Login brute-force guard (in-memory, per-process).
     login_rate_limit_max_attempts: int = Field(default=5, ge=1)
     login_rate_limit_window_seconds: float = Field(default=60.0, gt=0)
+
+    @model_validator(mode="after")
+    def _check_secret_strength(self) -> AuthSettings:
+        # Empty secret = auth disabled (login refuses 503). When set, require a
+        # 32-byte HMAC key (RFC 7518 §3.2 for HS256) — a hard guarantee instead
+        # of PyJWT's runtime warning.
+        if self.secret and len(self.secret.encode("utf-8")) < _MIN_AUTH_SECRET_BYTES:
+            msg = "AUTH__SECRET must be at least 32 bytes when set"
+            raise ValueError(msg)
+        return self
 
 
 class DbSettings(BaseSettings):
