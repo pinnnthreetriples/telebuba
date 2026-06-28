@@ -21,7 +21,7 @@ telebuba/
 ├── .env                    local secrets — gitignored
 ├── .env.example            committed template; must mirror core/config.py
 ├── api/                    UI-thin top layer (replaces features/): /api/v1 routes — validate → call service → serialize; imports only services/schemas/core.config/core.logging/fastapi
-│   ├── v1/                 versioned routers, one per domain (accounts/warming/neurocomment/logs/settings/auth)
+│   ├── v1/                 versioned routers, one per domain (accounts/warming/neurocomment/logs/settings/auth) + events.py (SSE live-event stream, text/event-stream; hidden from OpenAPI)
 │   ├── deps.py             shared dependencies (Depends(get_current_user), pagination params)
 │   └── errors.py           error-envelope mapping ({error:{code,message,fields?}}, 422 remapped)
 ├── core/                   infrastructure gateways; only layer touching third-party SDKs
@@ -45,6 +45,7 @@ telebuba/
 │   │   └── _video.py          video/media actions
 │   ├── config.py           pydantic-settings, nested namespaces (incl. settings.api, settings.auth)
 │   ├── gemini.py           HTTP gateway for Gemini
+│   ├── events.py           in-process pub/sub for live log events (SSE backbone); core/logging publishes each persisted row here
 │   ├── auth.py             password hashing + JWT encode/decode (only place tokens are minted/verified)
 │   └── logging.py          loguru + SQLite logs + optional Sentry
 ├── schemas/                Pydantic models; shared types, no behavior, no I/O (incl. api.py: error envelope + generic Page[T]; challenge.py: bot-challenge message + audit-row models)
@@ -55,6 +56,7 @@ telebuba/
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
 │   ├── logs.py             log query helpers for the Logs page
+│   ├── events.py           live-event seam: re-exports core.events.subscribe for the api/ SSE endpoint (api → services → core)
 │   ├── spam_status.py      account spam/ban signal helpers
 │   ├── auth/               auth policy (verify credentials, issue/slide session) over core/auth.py + users repo
 │   └── trust.py            trust-score calculation from stored signals

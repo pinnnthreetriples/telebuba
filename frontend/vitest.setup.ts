@@ -10,6 +10,28 @@ import { client } from '@/shared/api/client.gen';
 vi.stubGlobal('fetch', vi.fn());
 client.setConfig({ baseUrl: 'http://localhost', fetch: globalThis.fetch });
 
+// happy-dom has no EventSource; provide a controllable mock so SSE hooks render
+// in tests and specs can drive messages via MockEventSource.last()?.emit(...).
+class MockEventSource {
+  static instances: MockEventSource[] = [];
+  static last(): MockEventSource | undefined {
+    return MockEventSource.instances.at(-1);
+  }
+  onmessage: ((event: MessageEvent) => void) | null = null;
+  readyState = 0;
+  constructor(public url: string) {
+    MockEventSource.instances.push(this);
+  }
+  close(): void {
+    this.readyState = 2;
+  }
+  emit(data: unknown): void {
+    this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(data) }));
+  }
+}
+vi.stubGlobal('EventSource', MockEventSource);
+
 afterEach(() => {
   vi.mocked(fetch).mockReset();
+  MockEventSource.instances = [];
 });

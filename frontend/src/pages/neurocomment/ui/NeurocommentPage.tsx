@@ -13,9 +13,11 @@ import {
   startNeurocommentMutation,
   stopNeurocommentMutation,
 } from '@/entities/campaign';
+import { useLogEventStream } from '@/shared/lib';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
-const POLL_MS = 4000;
+// SSE drives live runtime/board updates; this poll is just the fallback net.
+const FALLBACK_POLL_MS = 30000;
 
 export function NeurocommentPage() {
   const { t } = useTranslation();
@@ -23,6 +25,8 @@ export function NeurocommentPage() {
   const invalidate = () => {
     void queryClient.invalidateQueries();
   };
+  // Live status: any runtime event refreshes runtime + board (event-driven).
+  useLogEventStream(invalidate);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -33,14 +37,17 @@ export function NeurocommentPage() {
 
   const campaigns = useQuery(campaignsQueryOptions());
   const accounts = useQuery(accountsQueryOptions());
-  const runtime = useQuery({ ...neurocommentRuntimeQueryOptions(), refetchInterval: POLL_MS });
+  const runtime = useQuery({
+    ...neurocommentRuntimeQueryOptions(),
+    refetchInterval: FALLBACK_POLL_MS,
+  });
 
   const campaignList = campaigns.data?.campaigns ?? [];
   const campaignId = selected ?? campaignList[0]?.campaign_id ?? null;
 
   const board = useQuery({
     ...neurocommentBoardQueryOptions({ path: { campaign_id: campaignId ?? '' } }),
-    refetchInterval: POLL_MS,
+    refetchInterval: FALLBACK_POLL_MS,
     enabled: campaignId !== null,
   });
 
