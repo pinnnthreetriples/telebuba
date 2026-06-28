@@ -5,20 +5,20 @@ import {
   type InfiniteData,
   infiniteQueryOptions,
   queryOptions,
-} from "@tanstack/react-query";
+} from '@tanstack/react-query';
 
-import { client } from "../client.gen";
-import { getHealth, listAccounts, type Options } from "../sdk.gen";
+import { client } from '../client.gen';
+import { getHealth, listAccounts, type Options } from '../sdk.gen';
 import type {
   GetHealthData,
   GetHealthResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
-} from "../types.gen";
+} from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
-  Pick<TOptions, "baseUrl" | "body" | "headers" | "path" | "query"> & {
+  Pick<TOptions, 'baseUrl' | 'body' | 'headers' | 'path' | 'query'> & {
     _id: string;
     _infinite?: boolean;
     tags?: ReadonlyArray<string>;
@@ -33,8 +33,7 @@ const createQueryKey = <TOptions extends Options>(
 ): [QueryKey<TOptions>[0]] => {
   const params: QueryKey<TOptions>[0] = {
     _id: id,
-    baseUrl:
-      options?.baseUrl || (options?.client ?? client).getConfig().baseUrl,
+    baseUrl: options?.baseUrl || (options?.client ?? client).getConfig().baseUrl,
   } as QueryKey<TOptions>[0];
   if (infinite) {
     params._infinite = infinite;
@@ -58,7 +57,7 @@ const createQueryKey = <TOptions extends Options>(
 };
 
 export const getHealthQueryKey = (options?: Options<GetHealthData>) =>
-  createQueryKey("getHealth", options);
+  createQueryKey('getHealth', options);
 
 /**
  * Health
@@ -83,7 +82,7 @@ export const getHealthOptions = (options?: Options<GetHealthData>) =>
   });
 
 export const listAccountsQueryKey = (options?: Options<ListAccountsData>) =>
-  createQueryKey("listAccounts", options);
+  createQueryKey('listAccounts', options);
 
 /**
  * List Accounts
@@ -108,7 +107,7 @@ export const listAccountsOptions = (options?: Options<ListAccountsData>) =>
   });
 
 const createInfiniteParams = <
-  K extends Pick<QueryKey<Options>[0], "body" | "headers" | "path" | "query">,
+  K extends Pick<QueryKey<Options>[0], 'body' | 'headers' | 'path' | 'query'>,
 >(
   queryKey: QueryKey<Options>,
   page: K,
@@ -143,15 +142,12 @@ const createInfiniteParams = <
 
 export const listAccountsInfiniteQueryKey = (
   options?: Options<ListAccountsData>,
-): QueryKey<Options<ListAccountsData>> =>
-  createQueryKey("listAccounts", options, true);
+): QueryKey<Options<ListAccountsData>> => createQueryKey('listAccounts', options, true);
 
 /**
  * List Accounts
  */
-export const listAccountsInfiniteOptions = (
-  options?: Options<ListAccountsData>,
-) =>
+export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) =>
   infiniteQueryOptions<
     ListAccountsResponse,
     ListAccountsError,
@@ -159,10 +155,7 @@ export const listAccountsInfiniteOptions = (
     QueryKey<Options<ListAccountsData>>,
     | string
     | null
-    | Pick<
-        QueryKey<Options<ListAccountsData>>[0],
-        "body" | "headers" | "path" | "query"
-      >
+    | Pick<QueryKey<Options<ListAccountsData>>[0], 'body' | 'headers' | 'path' | 'query'>
   >(
     // @ts-ignore
     {
@@ -170,9 +163,9 @@ export const listAccountsInfiniteOptions = (
         // @ts-ignore
         const page: Pick<
           QueryKey<Options<ListAccountsData>>[0],
-          "body" | "headers" | "path" | "query"
+          'body' | 'headers' | 'path' | 'query'
         > =
-          typeof pageParam === "object"
+          typeof pageParam === 'object'
             ? pageParam
             : {
                 query: {

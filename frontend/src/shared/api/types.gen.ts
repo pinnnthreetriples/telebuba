@@ -24,15 +24,15 @@ export type AccountRead = {
    * Status
    */
   status:
-    | "new"
-    | "alive"
-    | "unauthorized"
-    | "session_error"
-    | "account_error"
-    | "flood_wait"
-    | "network_error"
-    | "proxy_error"
-    | "unknown_error";
+    | 'new'
+    | 'alive'
+    | 'unauthorized'
+    | 'session_error'
+    | 'account_error'
+    | 'flood_wait'
+    | 'network_error'
+    | 'proxy_error'
+    | 'unknown_error';
   /**
    * User Id
    */
@@ -140,7 +140,7 @@ export type HealthStatus = {
   /**
    * Status
    */
-  status?: "ok";
+  status?: 'ok';
 };
 
 /**
@@ -189,7 +189,7 @@ export type GetHealthData = {
   body?: never;
   path?: never;
   query?: never;
-  url: "/api/v1/health";
+  url: '/api/v1/health';
 };
 
 export type GetHealthResponses = {
@@ -222,7 +222,7 @@ export type ListAccountsData = {
      */
     limit?: number;
   };
-  url: "/api/v1/accounts";
+  url: '/api/v1/accounts';
 };
 
 export type ListAccountsErrors = {
@@ -241,5 +241,4 @@ export type ListAccountsResponses = {
   200: PageAccountRead;
 };
 
-export type ListAccountsResponse =
-  ListAccountsResponses[keyof ListAccountsResponses];
+export type ListAccountsResponse = ListAccountsResponses[keyof ListAccountsResponses];
