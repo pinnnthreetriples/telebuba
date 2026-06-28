@@ -2,13 +2,10 @@
 
 The backend is a thin FastAPI JSON API (``api/``) over the existing ``services/``;
 ``main.py`` builds the app, runs the warming + neurocomment runtimes via the
-FastAPI ``lifespan``, and serves the frontend SPA as static files. uvicorn runs
-**single-worker**: the runtimes are in-process asyncio tasks, so a second worker
-would duplicate Telegram work and race the SQLite DB.
-
-Frontend serving is transitional: the React build (``frontend/dist``) is served
-once it exists; until then the current verbatim design SPA in ``web/`` is served
-so the UI never goes dark. Issue #173 removes ``web/`` at React parity.
+FastAPI ``lifespan``, and serves the built React SPA (``frontend/dist``) as
+static files. uvicorn runs **single-worker**: the runtimes are in-process
+asyncio tasks, so a second worker would duplicate Telegram work and race the
+SQLite DB.
 """
 
 from __future__ import annotations
@@ -40,7 +37,6 @@ from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
 _GIT_SHA_TIMEOUT_SECONDS = 2
 _ROOT = Path(__file__).resolve().parent
 _FRONTEND_DIST = _ROOT / "frontend" / "dist"
-_WEB_DIR = _ROOT / "web"
 
 
 def _git_sha() -> str:
@@ -94,27 +90,16 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await shutdown_telegram_pool()
 
 
-def _static_root() -> Path | None:
-    # ponytail: serve the React build once it exists; until then keep the current
-    # verbatim web/ SPA alive. #173 removes web/, leaving frontend/dist.
-    if _FRONTEND_DIST.is_dir():
-        return _FRONTEND_DIST
-    if _WEB_DIR.is_dir():
-        return _WEB_DIR
-    return None
-
-
 def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
-    """Serve the SPA: StaticFiles for built assets + a catch-all for index.html.
+    """Serve the React build: StaticFiles for assets + a catch-all for index.html.
 
     Mounted AFTER the API routers, so ``/api/*`` always wins. The catch-all
-    returns ``index.html`` for client-side routes; real files (``support.js``,
-    ``assets/*``) are served directly.
+    returns ``index.html`` for client-side routes; real files (hashed
+    ``assets/*``) are served directly. No-ops until ``frontend/dist`` exists.
     """
-    root = _static_root()
-    if root is None:
+    if not _FRONTEND_DIST.is_dir():
         return
-    assets = root / "assets"
+    assets = _FRONTEND_DIST / "assets"
     if assets.is_dir():
         app.mount("/assets", StaticFiles(directory=assets), name="assets")
 
@@ -122,10 +107,10 @@ def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
     async def _spa(path: str) -> FileResponse:
         if path.startswith("api/"):
             raise HTTPException(status_code=404, detail="not found")
-        candidate = root / path
+        candidate = _FRONTEND_DIST / path
         if path and candidate.is_file():
             return FileResponse(candidate)
-        return FileResponse(root / "index.html")
+        return FileResponse(_FRONTEND_DIST / "index.html")
 
 
 app = create_app(lifespan=lifespan)

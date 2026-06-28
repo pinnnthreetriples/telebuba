@@ -15,12 +15,12 @@ import subprocess
 import sys
 
 _NPM_PACKAGE = os.environ.get("AISLOP_NPM_PACKAGE", "aislop@0.10.2")
-# ``web/`` holds the vendored design SPA (served verbatim) and ``frontend/`` is
-# the React SPA, governed by its own gate set (eslint/tsc/vitest); neither is
-# Python project code, so both are outside the AI-slop quality gate.
-_EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena,web,web/**,frontend,frontend/**"
+# ``frontend/`` is the React SPA, governed by its own gate set
+# (eslint/tsc/vitest); it is not Python project code, so it is outside the
+# AI-slop quality gate.
+_EXCLUDE = ".venv,node_modules,.git,htmlcov,.serena,frontend,frontend/**"
 # Path prefixes (POSIX) whose diagnostics are dropped from the recomputed gate.
-_EXCLUDED_PREFIXES = ("web/", "frontend/")
+_EXCLUDED_PREFIXES = ("frontend/",)
 # Distribution names that differ from their import module, which aislop's
 # hallucinated-import check can't map: argon2-cffi -> argon2, PyJWT -> jwt.
 # Both are declared in pyproject.toml; only the names differ.
@@ -66,7 +66,7 @@ def main() -> int:
     summary = report.get("summary", {})
     # aislop's ``--exclude`` is unreliable across platforms, so filter the
     # excluded prefixes here and recompute the gate from what remains — the
-    # vendored ``web/`` SPA and the ``frontend/`` React app are not Python code.
+    # ``frontend/`` React app is not Python code.
     diagnostics = [
         item
         for item in report.get("diagnostics", [])

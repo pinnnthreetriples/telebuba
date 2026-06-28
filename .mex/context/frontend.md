@@ -102,9 +102,9 @@ localize a stable event **code + structured params** (staged refinement, not day
 
 ### 4. Design tokens live in `tailwind.config`
 Colors, spacing, fonts, radii, shadows — the single source of truth, **extracted from the
-design file before `web/` is deleted** (issue #173). Components consume tokens via Tailwind
-classes; no ad-hoc hex/px that duplicates a token. shadcn/ui (Radix) primitives live in
-`shared/ui`.
+original design file** (the verbatim `web/` SPA, since removed in #173). Components consume
+tokens via Tailwind classes; no ad-hoc hex/px that duplicates a token. shadcn/ui (Radix)
+primitives live in `shared/ui`.
 
 ### 5. Frontend config via `VITE_*`
 Build/runtime config comes from Vite env vars (`import.meta.env.VITE_*`), not hardcoded.
