@@ -204,7 +204,15 @@
     },
     "howto": {
       "title": "How warming works",
-      "hint": "These mechanics are always on and run automatically — nothing to configure"
+      "hint": "These mechanics are always on and run automatically — nothing to configure",
+      "steps": [
+        "Subscribing to the topical channels from the list",
+        "Reading posts with realistic delays",
+        "Reactions and viewing stories",
+        "Dialogues between farm accounts",
+        "Gradually ramping up daily activity",
+        "Anti-ban pauses and rate-limit quotas"
+      ]
     },
     "inProgress": { "title": "Warming", "live": "warming in progress", "days": "Warming days" },
     "stage": {

@@ -233,8 +233,20 @@ export function WarmingPage() {
 
           <div className="rounded-2xl border border-line bg-[#f6f5f2] p-4">
             <div className="text-[13px] font-semibold">{t('warming.howto.title')}</div>
-            <div className="mt-2 text-[11px] leading-[1.5] text-ink-subtle">
+            <div className="mb-3 mt-2 text-[11px] leading-[1.5] text-ink-subtle">
               {t('warming.howto.hint')}
+            </div>
+            <div className="grid grid-cols-2 gap-x-[22px] gap-y-[11px]">
+              {[0, 1, 2, 3, 4, 5].map((index) => (
+                <div key={index} className="flex items-start gap-[9px]">
+                  <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white">
+                    {index + 1}
+                  </span>
+                  <span className="text-[12px] leading-[1.45] text-[#5c5c5c]">
+                    {t(`warming.howto.steps.${String(index)}`)}
+                  </span>
+                </div>
+              ))}
             </div>
           </div>
         </div>
