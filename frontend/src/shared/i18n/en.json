@@ -1,0 +1,8 @@
+{
+  "accounts": {
+    "title": "Accounts",
+    "loading": "Loading…",
+    "error": "Failed to load accounts",
+    "empty": "No accounts"
+  }
+}
