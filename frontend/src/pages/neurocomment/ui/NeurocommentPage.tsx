@@ -20,6 +20,15 @@ import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 const FALLBACK_POLL_MS = 30000;
 const STAGES = ['listen', 'detect', 'filter', 'generate', 'solve', 'comment'] as const;
 
+// ponytail: mock activity feed until the runtime streams real log events here.
+const NEURO_LOG = [
+  { time: '12:00:09', msg: 'Комментарий отправлен ✓', color: '#7be0a6' },
+  { time: '12:00:05', msg: 'Gemini: генерация комментария…', color: '#ffd27f' },
+  { time: '12:00:03', msg: 'Новый пост в @crypto_daily', color: '#5ba3ff' },
+  { time: '11:59:40', msg: 'Капча решена', color: '#7be0a6' },
+  { time: '11:58:12', msg: 'Слушатель подключён', color: '#9aa0aa' },
+] as const;
+
 const INPUT =
   'tb-time w-full rounded-[10px] border border-line bg-white px-3 py-[9px] text-[13px] outline-none';
 const CARD = 'rounded-2xl border border-line bg-white p-[14px]';
@@ -347,6 +356,18 @@ export function NeurocommentPage() {
           </div>
 
           {board.data ? <NeurocommentBoard board={board.data} /> : null}
+
+          <div className="rounded-2xl border border-line bg-white p-4">
+            <div className="mb-[10px] text-[13px] font-semibold">{t('neurocomment.log.title')}</div>
+            <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-[10px] bg-[#16161a] px-[14px] py-3 font-mono text-[11px] leading-[1.85]">
+              {NEURO_LOG.map((line) => (
+                <div key={line.time} className="flex gap-2">
+                  <span className="shrink-0 text-[#5c5c66]">{line.time}</span>
+                  <span style={{ color: line.color }}>{line.msg}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </div>
     </div>

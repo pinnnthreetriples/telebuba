@@ -10,6 +10,9 @@ interface WarmingBoardProps {
 }
 
 const STAGES = ['subscribe', 'read', 'stories', 'reactions', 'pause', 'report'] as const;
+const DAY_SEGMENTS = [...Array(42).keys()];
+const DAY_TICKS = [0, 4, 7, 11, 14];
+const WARMING_DAYS = 14;
 
 function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
@@ -57,6 +60,8 @@ export function WarmingBoard({ warming, onStop, busyId }: WarmingBoardProps) {
       <div className="grid grid-cols-[repeat(auto-fill,minmax(320px,1fr))] items-start gap-3">
         {warming.map((account) => {
           const active = activeStage(account);
+          const days = Math.min(account.cycles_completed ?? 0, WARMING_DAYS);
+          const filledSegments = Math.round((DAY_SEGMENTS.length * days) / WARMING_DAYS);
           return (
             <div
               key={account.account_id}
@@ -94,6 +99,29 @@ export function WarmingBoard({ warming, onStop, busyId }: WarmingBoardProps) {
                   <span className="text-[10px] font-bold text-ink">
                     {t('warming.card.cycles', { count: account.cycles_completed })}
                   </span>
+                </div>
+
+                {/* day bar */}
+                <div className="mb-[7px] flex items-end gap-[2px]">
+                  {DAY_SEGMENTS.map((index) => (
+                    <span
+                      key={index}
+                      className="h-[22px] flex-1 rounded-[1.5px]"
+                      style={{
+                        background:
+                          index < filledSegments
+                            ? '#12a150'
+                            : index === filledSegments
+                              ? '#0066ff'
+                              : '#e4e2de',
+                      }}
+                    />
+                  ))}
+                </div>
+                <div className="mb-3 flex justify-between px-[2px] text-[9.5px] text-[#7a7a7e]">
+                  {DAY_TICKS.map((tick) => (
+                    <span key={tick}>{tick}</span>
+                  ))}
                 </div>
 
                 {/* stepper */}

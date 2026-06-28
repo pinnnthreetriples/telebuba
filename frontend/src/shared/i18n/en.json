@@ -158,6 +158,7 @@
       "accounts": "Accounts",
       "comments": "Comments"
     },
+    "log": { "title": "Event log" },
     "campaigns": {
       "title": "Campaigns",
       "select": "Select campaign",
