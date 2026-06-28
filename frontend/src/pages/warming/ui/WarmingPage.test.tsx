@@ -107,7 +107,7 @@ test('starts an idle account', async () => {
   await waitFor(() => {
     expect(screen.getByText('idle-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Запустить'));
+  await userEvent.click(screen.getByText('Прогреть'));
   await waitFor(() => {
     const started = vi
       .mocked(fetch)

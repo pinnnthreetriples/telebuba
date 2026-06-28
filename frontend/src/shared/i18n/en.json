@@ -159,9 +159,30 @@
   },
   "warming": {
     "title": "Warming",
+    "titleFull": "Account warming",
     "loading": "Loading…",
     "error": "Failed to load the warming board",
     "summary": "Active: {{active}} of {{total}}",
+    "counter": { "warming": "warming", "ready": "ready", "errors": "errors" },
+    "pool": { "start": "Start pool", "stop": "Stop pool" },
+    "ready": {
+      "title": "Ready to warm",
+      "empty": "All available accounts are warming",
+      "start": "Warm"
+    },
+    "howto": {
+      "title": "How warming works",
+      "hint": "These mechanics are always on and run automatically — nothing to configure"
+    },
+    "inProgress": { "title": "Warming", "live": "warming in progress", "days": "Warming days" },
+    "stage": {
+      "subscribe": "Subscribe",
+      "read": "Read",
+      "stories": "Stories",
+      "reactions": "Reactions",
+      "pause": "Pause",
+      "report": "Report"
+    },
     "state": {
       "idle": "Idle",
       "active": "Active",
