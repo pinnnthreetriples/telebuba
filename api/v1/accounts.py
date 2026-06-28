@@ -14,7 +14,7 @@ from services import accounts
 router = APIRouter(tags=["accounts"])
 
 
-@router.get("/accounts", response_model=Page[AccountRead])
+@router.get("/accounts", response_model=Page[AccountRead], operation_id="listAccounts")
 async def list_accounts(
     query: str = "",
     status: str = "all",

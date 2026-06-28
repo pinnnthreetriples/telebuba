@@ -1,0 +1,12 @@
+{
+  "name": "telebuba-frontend",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
+  },
+  "devDependencies": {
+    "@hey-api/openapi-ts": "^0.95.0",
+    "prettier": "^3.6.2"
+  }
+}

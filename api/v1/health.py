@@ -9,6 +9,6 @@ from schemas.api import HealthStatus
 router = APIRouter(tags=["health"])
 
 
-@router.get("/health", response_model=HealthStatus)
+@router.get("/health", response_model=HealthStatus, operation_id="getHealth")
 async def health() -> HealthStatus:
     return HealthStatus()

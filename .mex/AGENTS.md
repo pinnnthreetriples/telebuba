@@ -93,7 +93,8 @@ Before adding files, follow `.mex/context/conventions.md` → **File Placement G
 - Types: `uv run ty check .`
 - Pre-commit: `uv run pre-commit run --all-files`
 - Aislop on Windows: `uv run python -m aislop` if direct CLI invocation fails
-- Frontend (from `frontend/`): `npm install`; `npm run dev` (vite + `/api` proxy); `npm run gates` (eslint/prettier/boundaries/tsc/vitest); `npm run gen-api`; `npm run e2e` (Playwright)
+- Regenerate the API client: `uv run python -m tools.gen_api` (dumps OpenAPI → hey-api → prettier; CI drift-checks it)
+- Frontend (from `frontend/`): `npm install`; `npm run dev` (vite + `/api` proxy); `npm run gates` (eslint/prettier/boundaries/tsc/vitest); `npm run e2e` (Playwright)
 - Full toolchain — `context/setup.md`.
 
 ## Scaffold Growth
