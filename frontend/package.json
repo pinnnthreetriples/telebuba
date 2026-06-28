@@ -16,6 +16,7 @@
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
   },
   "dependencies": {
+    "@tanstack/react-form": "^0.41.3",
     "@tanstack/react-query": "^5.62.7",
     "@tanstack/react-router": "^1.87.0",
     "@tanstack/react-table": "^8.20.6",
@@ -28,7 +29,8 @@
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-i18next": "^15.2.0",
-    "tailwind-merge": "^2.5.5"
+    "tailwind-merge": "^2.5.5",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
     "@hey-api/openapi-ts": "^0.95.0",

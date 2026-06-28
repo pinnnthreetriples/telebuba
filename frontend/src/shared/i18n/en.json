@@ -47,7 +47,30 @@
     "accounts": "Accounts",
     "warming": "Warming",
     "neurocomment": "Neurocomment",
-    "logs": "Logs"
+    "logs": "Logs",
+    "settings": "Settings"
+  },
+  "settings": {
+    "title": "Settings",
+    "loading": "Loading…",
+    "error": "Failed to load settings",
+    "save": "Save",
+    "saved": "Saved",
+    "required": "This field is required",
+    "hourRange": "Hour must be 0–23",
+    "keySet": "Key is set — leave blank to keep it",
+    "keyUnset": "No key set",
+    "field": {
+      "reactions_enabled": "Reactions",
+      "join_enabled": "Join channels",
+      "inter_account_chat": "Inter-account dialogues",
+      "enforce_readiness": "Require readiness before start",
+      "quiet_hours_enabled": "Quiet hours",
+      "quiet_hours_start": "Quiet hours from",
+      "quiet_hours_end": "Quiet hours to",
+      "gemini_model": "Gemini model",
+      "gemini_api_key": "Gemini API key"
+    }
   },
   "logs": {
     "title": "Logs",

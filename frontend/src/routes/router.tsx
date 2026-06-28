@@ -10,6 +10,7 @@ import { AccountsPage } from '@/pages/accounts';
 import { LoginPage } from '@/pages/login';
 import { LogsPage } from '@/pages/logs';
 import { NeurocommentPage } from '@/pages/neurocomment';
+import { SettingsPage } from '@/pages/settings';
 import { WarmingPage } from '@/pages/warming';
 import { meQueryOptions } from '@/shared/auth';
 import { queryClient } from '@/shared/lib';
@@ -62,9 +63,21 @@ const logsRoute = createRoute({
   component: LogsPage,
 });
 
+const settingsRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: '/settings',
+  component: SettingsPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  protectedRoute.addChildren([indexRoute, warmingRoute, neurocommentRoute, logsRoute]),
+  protectedRoute.addChildren([
+    indexRoute,
+    warmingRoute,
+    neurocommentRoute,
+    logsRoute,
+    settingsRoute,
+  ]),
 ]);
 
 export const router = createRouter({ routeTree });
