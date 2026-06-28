@@ -951,10 +951,495 @@
           }
         }
       }
+    },
+    "/api/v1/neurocomment/campaigns": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "List Campaigns",
+        "operationId": "listCampaigns",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CampaignList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Create Campaign",
+        "operationId": "createCampaign",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CampaignCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentCampaign"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/board": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Get Board",
+        "operationId": "getNeurocommentBoard",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentBoard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/channels": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Link Channel",
+        "operationId": "linkCampaignChannel",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkChannelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelLinkOutcome"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/accounts": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Assign Account",
+        "operationId": "assignCampaignAccount",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/runtime": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Get Runtime",
+        "operationId": "getNeurocommentRuntime",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentRuntimeStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/start": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Start",
+        "operationId": "startNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartNeurocommentRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentRuntimeStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/stop": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Stop",
+        "operationId": "stopNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentRuntimeStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "schemas": {
+      "AccountChannelReadiness": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "joined": {
+            "type": "boolean",
+            "title": "Joined"
+          },
+          "captcha_passed": {
+            "type": "boolean",
+            "title": "Captcha Passed"
+          },
+          "human_skipped": {
+            "type": "boolean",
+            "title": "Human Skipped",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "ready",
+          "joined",
+          "captcha_passed"
+        ],
+        "title": "AccountChannelReadiness",
+        "description": "One channel's readiness summary on an account card."
+      },
       "AccountCheckRequest": {
         "properties": {
           "account_id": {
@@ -1400,6 +1885,22 @@
         "title": "AddChannelsRequest",
         "description": "Raw user input \u2014 one or many links/usernames, newline- or comma-separated."
       },
+      "AssignAccountRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "AssignAccountRequest",
+        "description": "Assign an account to a campaign (the campaign id is the route path param)."
+      },
       "Body_importAccountTdata": {
         "properties": {
           "file": {
@@ -1444,6 +1945,76 @@
         ],
         "title": "Body_setAccountPhoto"
       },
+      "CampaignCreate": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status",
+            "default": "active"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "name",
+          "prompt"
+        ],
+        "title": "CampaignCreate",
+        "description": "User input to open a campaign \u2014 the product mention lives in the prompt."
+      },
+      "CampaignList": {
+        "properties": {
+          "campaigns": {
+            "items": {
+              "$ref": "#/components/schemas/NeurocommentCampaign"
+            },
+            "type": "array",
+            "title": "Campaigns"
+          }
+        },
+        "type": "object",
+        "title": "CampaignList",
+        "description": "Wrapper so callers never receive a raw list (non-negotiable #2)."
+      },
+      "ChannelLinkOutcome": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "linked",
+              "already_assigned"
+            ],
+            "title": "Status"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "channel"
+        ],
+        "title": "ChannelLinkOutcome",
+        "description": "Result of attaching a channel to a campaign.\n\n``already_assigned`` means the channel is the active target of another campaign\n(the repository's uniqueness guard). The service returns this instead of letting\n``ChannelAlreadyAssignedError`` reach the UI, so features never catch internals (#2)."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -1469,6 +2040,22 @@
         "type": "object",
         "title": "HealthStatus"
       },
+      "LinkChannelRequest": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "channel"
+        ],
+        "title": "LinkChannelRequest",
+        "description": "Attach a channel to a campaign (the campaign id is the route path param)."
+      },
       "LoginRequest": {
         "properties": {
           "username": {
@@ -1488,6 +2075,273 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "NeurocommentAccountCard": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label"
+          },
+          "health": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Health"
+          },
+          "trust_score": {
+            "type": "integer",
+            "title": "Trust Score"
+          },
+          "trust_band": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Trust Band"
+          },
+          "spam_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Status"
+          },
+          "comments_last_hour": {
+            "type": "integer",
+            "title": "Comments Last Hour"
+          },
+          "max_comments_per_hour": {
+            "type": "integer",
+            "title": "Max Comments Per Hour"
+          },
+          "comments_today": {
+            "type": "integer",
+            "title": "Comments Today"
+          },
+          "last_comment_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Comment At"
+          },
+          "readiness": {
+            "items": {
+              "$ref": "#/components/schemas/AccountChannelReadiness"
+            },
+            "type": "array",
+            "title": "Readiness"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "label",
+          "health",
+          "trust_score",
+          "trust_band",
+          "comments_last_hour",
+          "max_comments_per_hour",
+          "comments_today"
+        ],
+        "title": "NeurocommentAccountCard",
+        "description": "Per-account card in the work view: limits, health, last activity."
+      },
+      "NeurocommentBoard": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Campaign Id"
+          },
+          "campaign_name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Campaign Name"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status"
+          },
+          "solver_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solver Enabled"
+          },
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/NeurocommentAccountCard"
+            },
+            "type": "array",
+            "title": "Accounts"
+          },
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/NeurocommentChannelRow"
+            },
+            "type": "array",
+            "title": "Channels"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "campaign_name",
+          "status"
+        ],
+        "title": "NeurocommentBoard",
+        "description": "Bulk read model for the work view of one campaign."
+      },
+      "NeurocommentCampaign": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Campaign Id"
+          },
+          "name": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Name"
+          },
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused",
+              "archived"
+            ],
+            "title": "Status"
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Updated At"
+          },
+          "solver_enabled": {
+            "anyOf": [
+              {
+                "type": "boolean"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Solver Enabled"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "name",
+          "prompt",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "NeurocommentCampaign",
+        "description": "One row of ``neurocomment_campaigns``."
+      },
+      "NeurocommentChannelRow": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "comments_off",
+              "join_by_request",
+              "chat_restricted",
+              "bot_challenge",
+              "bot_challenge_backoff",
+              "throttled"
+            ],
+            "title": "Status"
+          },
+          "ready_accounts": {
+            "type": "integer",
+            "title": "Ready Accounts"
+          },
+          "total_accounts": {
+            "type": "integer",
+            "title": "Total Accounts"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "status",
+          "ready_accounts",
+          "total_accounts"
+        ],
+        "title": "NeurocommentChannelRow",
+        "description": "Per-channel row: aggregate status derived from readiness + linked group."
+      },
+      "NeurocommentRuntimeStatus": {
+        "properties": {
+          "running": {
+            "type": "boolean",
+            "title": "Running"
+          },
+          "active_channels": {
+            "type": "integer",
+            "title": "Active Channels",
+            "default": 0
+          },
+          "listener_account_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Listener Account Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "running"
+        ],
+        "title": "NeurocommentRuntimeStatus",
+        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: the engine is\none fleet listener (not per-campaign), so the persisted listener account id\nbeing set means the engine is live. ``active_channels`` is the size of the\nwatch set across all active campaigns (what the listener actually watches)."
       },
       "Page_AccountRead_": {
         "properties": {
@@ -1529,6 +2383,22 @@
           "channel"
         ],
         "title": "RemoveChannelRequest"
+      },
+      "StartNeurocommentRequest": {
+        "properties": {
+          "listener_account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Listener Account Id"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "listener_account_id"
+        ],
+        "title": "StartNeurocommentRequest",
+        "description": "Start the fleet listener on the given account."
       },
       "StartWarmingRequest": {
         "properties": {

@@ -45,7 +45,48 @@
   },
   "nav": {
     "accounts": "Аккаунты",
-    "warming": "Прогрев"
+    "warming": "Прогрев",
+    "neurocomment": "Нейрокомментинг"
+  },
+  "neurocomment": {
+    "title": "Нейрокомментинг",
+    "runtime": {
+      "running": "Слушаю каналов: {{count}}",
+      "stopped": "Остановлен",
+      "listener": "Аккаунт-слушатель",
+      "start": "Запустить",
+      "stop": "Остановить"
+    },
+    "campaigns": {
+      "title": "Кампании",
+      "select": "Выбрать кампанию",
+      "none": "Нет кампаний",
+      "name": "Название",
+      "prompt": "Промпт (с упоминанием продукта)",
+      "create": "Создать"
+    },
+    "setup": {
+      "channel": "Канал (ссылка или @юзернейм)",
+      "linkChannel": "Привязать канал",
+      "assign": "Аккаунт",
+      "assignAccount": "Назначить аккаунт"
+    },
+    "channels": {
+      "title": "Каналы"
+    },
+    "accounts": {
+      "title": "Аккаунты",
+      "today": "Сегодня: {{count}}"
+    },
+    "channelStatus": {
+      "ready": "Готов",
+      "comments_off": "Комментарии выкл.",
+      "join_by_request": "Вступление по заявке",
+      "chat_restricted": "Чат ограничен",
+      "bot_challenge": "Капча бота",
+      "bot_challenge_backoff": "Пауза после капчи",
+      "throttled": "Throttle"
+    }
   },
   "warming": {
     "title": "Прогрев",

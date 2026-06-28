@@ -5,6 +5,34 @@ export type ClientOptions = {
 };
 
 /**
+ * AccountChannelReadiness
+ *
+ * One channel's readiness summary on an account card.
+ */
+export type AccountChannelReadiness = {
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Ready
+   */
+  ready: boolean;
+  /**
+   * Joined
+   */
+  joined: boolean;
+  /**
+   * Captcha Passed
+   */
+  captcha_passed: boolean;
+  /**
+   * Human Skipped
+   */
+  human_skipped?: boolean;
+};
+
+/**
  * AccountCheckRequest
  */
 export type AccountCheckRequest = {
@@ -208,6 +236,18 @@ export type AddChannelsRequest = {
 };
 
 /**
+ * AssignAccountRequest
+ *
+ * Assign an account to a campaign (the campaign id is the route path param).
+ */
+export type AssignAccountRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
  * Body_importAccountTdata
  */
 export type BodyImportAccountTdata = {
@@ -236,6 +276,58 @@ export type BodySetAccountPhoto = {
 };
 
 /**
+ * CampaignCreate
+ *
+ * User input to open a campaign — the product mention lives in the prompt.
+ */
+export type CampaignCreate = {
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Prompt
+   */
+  prompt: string;
+  /**
+   * Status
+   */
+  status?: 'active' | 'paused' | 'archived';
+};
+
+/**
+ * CampaignList
+ *
+ * Wrapper so callers never receive a raw list (non-negotiable #2).
+ */
+export type CampaignList = {
+  /**
+   * Campaigns
+   */
+  campaigns?: Array<NeurocommentCampaign>;
+};
+
+/**
+ * ChannelLinkOutcome
+ *
+ * Result of attaching a channel to a campaign.
+ *
+ * ``already_assigned`` means the channel is the active target of another campaign
+ * (the repository's uniqueness guard). The service returns this instead of letting
+ * ``ChannelAlreadyAssignedError`` reach the UI, so features never catch internals (#2).
+ */
+export type ChannelLinkOutcome = {
+  /**
+   * Status
+   */
+  status: 'linked' | 'already_assigned';
+  /**
+   * Channel
+   */
+  channel: string;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -256,6 +348,18 @@ export type HealthStatus = {
 };
 
 /**
+ * LinkChannelRequest
+ *
+ * Attach a channel to a campaign (the campaign id is the route path param).
+ */
+export type LinkChannelRequest = {
+  /**
+   * Channel
+   */
+  channel: string;
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -267,6 +371,182 @@ export type LoginRequest = {
    * Password
    */
   password: string;
+};
+
+/**
+ * NeurocommentAccountCard
+ *
+ * Per-account card in the work view: limits, health, last activity.
+ */
+export type NeurocommentAccountCard = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Label
+   */
+  label: string;
+  /**
+   * Health
+   */
+  health: string;
+  /**
+   * Trust Score
+   */
+  trust_score: number;
+  /**
+   * Trust Band
+   */
+  trust_band: string;
+  /**
+   * Spam Status
+   */
+  spam_status?: string | null;
+  /**
+   * Comments Last Hour
+   */
+  comments_last_hour: number;
+  /**
+   * Max Comments Per Hour
+   */
+  max_comments_per_hour: number;
+  /**
+   * Comments Today
+   */
+  comments_today: number;
+  /**
+   * Last Comment At
+   */
+  last_comment_at?: string | null;
+  /**
+   * Readiness
+   */
+  readiness?: Array<AccountChannelReadiness>;
+};
+
+/**
+ * NeurocommentBoard
+ *
+ * Bulk read model for the work view of one campaign.
+ */
+export type NeurocommentBoard = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Campaign Name
+   */
+  campaign_name: string;
+  /**
+   * Status
+   */
+  status: 'active' | 'paused' | 'archived';
+  /**
+   * Solver Enabled
+   */
+  solver_enabled?: boolean | null;
+  /**
+   * Accounts
+   */
+  accounts?: Array<NeurocommentAccountCard>;
+  /**
+   * Channels
+   */
+  channels?: Array<NeurocommentChannelRow>;
+};
+
+/**
+ * NeurocommentCampaign
+ *
+ * One row of ``neurocomment_campaigns``.
+ */
+export type NeurocommentCampaign = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Name
+   */
+  name: string;
+  /**
+   * Prompt
+   */
+  prompt: string;
+  /**
+   * Status
+   */
+  status: 'active' | 'paused' | 'archived';
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+  /**
+   * Solver Enabled
+   */
+  solver_enabled?: boolean | null;
+};
+
+/**
+ * NeurocommentChannelRow
+ *
+ * Per-channel row: aggregate status derived from readiness + linked group.
+ */
+export type NeurocommentChannelRow = {
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Status
+   */
+  status:
+    | 'ready'
+    | 'comments_off'
+    | 'join_by_request'
+    | 'chat_restricted'
+    | 'bot_challenge'
+    | 'bot_challenge_backoff'
+    | 'throttled';
+  /**
+   * Ready Accounts
+   */
+  ready_accounts: number;
+  /**
+   * Total Accounts
+   */
+  total_accounts: number;
+};
+
+/**
+ * NeurocommentRuntimeStatus
+ *
+ * Fleet-wide runtime state for the page's running indicator + live animation.
+ *
+ * ``running`` is the single source of truth the UI animates on: the engine is
+ * one fleet listener (not per-campaign), so the persisted listener account id
+ * being set means the engine is live. ``active_channels`` is the size of the
+ * watch set across all active campaigns (what the listener actually watches).
+ */
+export type NeurocommentRuntimeStatus = {
+  /**
+   * Running
+   */
+  running: boolean;
+  /**
+   * Active Channels
+   */
+  active_channels?: number;
+  /**
+   * Listener Account Id
+   */
+  listener_account_id?: string | null;
 };
 
 /**
@@ -291,6 +571,18 @@ export type RemoveChannelRequest = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * StartNeurocommentRequest
+ *
+ * Start the fleet listener on the given account.
+ */
+export type StartNeurocommentRequest = {
+  /**
+   * Listener Account Id
+   */
+  listener_account_id: string;
 };
 
 /**
@@ -1223,3 +1515,226 @@ export type UpdateWarmingSettingsResponses = {
 
 export type UpdateWarmingSettingsResponse =
   UpdateWarmingSettingsResponses[keyof UpdateWarmingSettingsResponses];
+
+export type ListCampaignsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns';
+};
+
+export type ListCampaignsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListCampaignsError = ListCampaignsErrors[keyof ListCampaignsErrors];
+
+export type ListCampaignsResponses = {
+  /**
+   * Successful Response
+   */
+  200: CampaignList;
+};
+
+export type ListCampaignsResponse = ListCampaignsResponses[keyof ListCampaignsResponses];
+
+export type CreateCampaignData = {
+  body: CampaignCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns';
+};
+
+export type CreateCampaignErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateCampaignError = CreateCampaignErrors[keyof CreateCampaignErrors];
+
+export type CreateCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentCampaign;
+};
+
+export type CreateCampaignResponse = CreateCampaignResponses[keyof CreateCampaignResponses];
+
+export type GetNeurocommentBoardData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/board';
+};
+
+export type GetNeurocommentBoardErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetNeurocommentBoardError =
+  GetNeurocommentBoardErrors[keyof GetNeurocommentBoardErrors];
+
+export type GetNeurocommentBoardResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentBoard;
+};
+
+export type GetNeurocommentBoardResponse =
+  GetNeurocommentBoardResponses[keyof GetNeurocommentBoardResponses];
+
+export type LinkCampaignChannelData = {
+  body: LinkChannelRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/channels';
+};
+
+export type LinkCampaignChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type LinkCampaignChannelError = LinkCampaignChannelErrors[keyof LinkCampaignChannelErrors];
+
+export type LinkCampaignChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChannelLinkOutcome;
+};
+
+export type LinkCampaignChannelResponse =
+  LinkCampaignChannelResponses[keyof LinkCampaignChannelResponses];
+
+export type AssignCampaignAccountData = {
+  body: AssignAccountRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts';
+};
+
+export type AssignCampaignAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AssignCampaignAccountError =
+  AssignCampaignAccountErrors[keyof AssignCampaignAccountErrors];
+
+export type AssignCampaignAccountResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type AssignCampaignAccountResponse =
+  AssignCampaignAccountResponses[keyof AssignCampaignAccountResponses];
+
+export type GetNeurocommentRuntimeData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/runtime';
+};
+
+export type GetNeurocommentRuntimeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetNeurocommentRuntimeError =
+  GetNeurocommentRuntimeErrors[keyof GetNeurocommentRuntimeErrors];
+
+export type GetNeurocommentRuntimeResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentRuntimeStatus;
+};
+
+export type GetNeurocommentRuntimeResponse =
+  GetNeurocommentRuntimeResponses[keyof GetNeurocommentRuntimeResponses];
+
+export type StartNeurocommentData = {
+  body: StartNeurocommentRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/start';
+};
+
+export type StartNeurocommentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartNeurocommentError = StartNeurocommentErrors[keyof StartNeurocommentErrors];
+
+export type StartNeurocommentResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentRuntimeStatus;
+};
+
+export type StartNeurocommentResponse =
+  StartNeurocommentResponses[keyof StartNeurocommentResponses];
+
+export type StopNeurocommentData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/stop';
+};
+
+export type StopNeurocommentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StopNeurocommentError = StopNeurocommentErrors[keyof StopNeurocommentErrors];
+
+export type StopNeurocommentResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentRuntimeStatus;
+};
+
+export type StopNeurocommentResponse = StopNeurocommentResponses[keyof StopNeurocommentResponses];
