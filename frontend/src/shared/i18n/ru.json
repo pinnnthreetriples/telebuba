@@ -50,6 +50,10 @@
     "logs": "Логи",
     "settings": "Настройки"
   },
+  "shell": {
+    "systemActive": "Система активна",
+    "notifications": "Уведомления"
+  },
   "settings": {
     "title": "Настройки",
     "loading": "Загрузка…",

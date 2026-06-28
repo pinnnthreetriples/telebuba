@@ -50,6 +50,10 @@
     "logs": "Logs",
     "settings": "Settings"
   },
+  "shell": {
+    "systemActive": "System active",
+    "notifications": "Notifications"
+  },
   "settings": {
     "title": "Settings",
     "loading": "Loading…",
