@@ -128,6 +128,27 @@
       "start": "Start",
       "stop": "Stop"
     },
+    "pipeline": {
+      "title": "Post-processing pipeline",
+      "running": "active",
+      "stopped": "stopped",
+      "descRunning": "Listening for new posts and commenting",
+      "descStopped": "Engine stopped — start it by picking a listener account"
+    },
+    "stage": {
+      "listen": "Listener",
+      "detect": "New post",
+      "filter": "Filter",
+      "generate": "Generate",
+      "solve": "Captcha",
+      "comment": "Comment"
+    },
+    "stat": {
+      "campaigns": "Campaigns",
+      "channels": "Channels",
+      "accounts": "Accounts",
+      "comments": "Comments"
+    },
     "campaigns": {
       "title": "Campaigns",
       "select": "Select campaign",
