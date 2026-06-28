@@ -12,6 +12,110 @@ import { AccountsTable } from '@/widgets/accounts-table';
 
 const PAGE_SIZE = 20;
 
+// ponytail: mock pool until a proxy-pool endpoint exists — design-first, data later.
+const PROXY_POOL = [
+  { host: 'nl-1.proxyhub.net', port: 1080, type: 'SOCKS5', cc: 'nl', used: 3, cap: 3 },
+  { host: 'de-2.proxyhub.net', port: 1080, type: 'SOCKS5', cc: 'de', used: 2, cap: 3 },
+  { host: 'us-3.proxyhub.net', port: 8080, type: 'HTTPS', cc: 'us', used: 1, cap: 3 },
+] as const;
+
+// The design's proxy-pool card: one card per proxy with a usage bar (N/3).
+function ProxyPool() {
+  const { t } = useTranslation();
+  return (
+    <div className="mb-4 rounded-2xl border border-line bg-white px-[18px] py-4">
+      <div className="mb-[13px] flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <span className="text-[14px] font-semibold">{t('accounts.proxyPool.title')}</span>
+          <span className="ml-2 text-[12px] text-ink-subtle">
+            {t('accounts.proxyPool.subtitle')}
+          </span>
+        </div>
+        <button
+          type="button"
+          className="inline-flex items-center gap-[6px] rounded-full bg-primary px-[15px] py-[7px] text-[12.5px] font-medium text-white"
+        >
+          <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+          >
+            <path d="M12 5v14M5 12h14" />
+          </svg>
+          {t('accounts.proxyPool.add')}
+        </button>
+      </div>
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(232px,1fr))] gap-[10px]">
+        {PROXY_POOL.map((proxy) => {
+          const full = proxy.used >= proxy.cap;
+          const free = proxy.cap - proxy.used;
+          const pct = Math.round((proxy.used / proxy.cap) * 100);
+          return (
+            <div
+              key={`${proxy.host}:${String(proxy.port)}`}
+              className={`rounded-xl border p-3 ${full ? 'border-danger/30 bg-danger-tint' : 'border-line bg-white'}`}
+            >
+              <div className="flex items-center gap-[9px]">
+                <span className={`fi fi-${proxy.cc} h-4 w-[22px] shrink-0 rounded-[3px]`} />
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-[12.5px] font-semibold">
+                    {proxy.host}:{proxy.port}
+                  </div>
+                  <div className="mt-px text-[11px] text-ink-subtle">{proxy.type}</div>
+                </div>
+                <button
+                  type="button"
+                  aria-label={t('accounts.actions.delete')}
+                  className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#b6b4af]"
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M18 6 6 18M6 6l12 12" />
+                  </svg>
+                </button>
+              </div>
+              <div className="mt-3">
+                <div className="mb-[5px] flex items-center justify-between">
+                  <span className="text-[11px] text-ink-muted">
+                    {t('accounts.proxyPool.accounts')}
+                  </span>
+                  <span
+                    className={`text-[11.5px] font-semibold ${full ? 'text-danger' : 'text-primary'}`}
+                  >
+                    {proxy.used} / {proxy.cap}
+                  </span>
+                </div>
+                <div className="h-[5px] overflow-hidden rounded-full bg-track">
+                  <div
+                    className={`h-full rounded-full ${full ? 'bg-danger' : 'bg-primary'}`}
+                    style={{ width: `${String(pct)}%` }}
+                  />
+                </div>
+                <div
+                  className={`mt-[5px] text-[10.5px] ${full ? 'text-danger' : 'text-ink-subtle'}`}
+                >
+                  {full
+                    ? t('accounts.proxyPool.full')
+                    : t('accounts.proxyPool.free', { count: free })}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 export function AccountsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -89,6 +193,8 @@ export function AccountsPage() {
 
   return (
     <div className="tb-fadeup">
+      <ProxyPool />
+
       <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
         <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
         <div className="flex items-center gap-2">

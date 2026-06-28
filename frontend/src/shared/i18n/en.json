@@ -44,6 +44,15 @@
       "attention": "Attention",
       "errors": "Errors"
     },
+    "proxyPool": {
+      "title": "Proxy pool",
+      "subtitle": "up to 3 accounts per proxy",
+      "add": "Add",
+      "accounts": "Accounts",
+      "full": "Full",
+      "free_one": "{{count}} slot free",
+      "free_other": "{{count}} slots free"
+    },
     "actions": {
       "add": "Account",
       "check": "Check",
