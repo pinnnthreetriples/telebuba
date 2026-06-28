@@ -513,6 +513,444 @@
           }
         }
       }
+    },
+    "/api/v1/warming/board": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Get Warming Board",
+        "operationId": "getWarmingBoard",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingBoardState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/start": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Start Warming",
+        "operationId": "startWarming",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartWarmingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/stop": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Stop Warming",
+        "operationId": "stopWarming",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StopWarmingRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/channels": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "List Warming Channels",
+        "operationId": "listWarmingChannels",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingChannelList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Add Warming Channels",
+        "operationId": "addWarmingChannels",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddChannelsRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingChannelList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/channels/remove": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Remove Warming Channel",
+        "operationId": "removeWarmingChannel",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveChannelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingChannelList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/settings": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Get Warming Settings",
+        "operationId": "getWarmingSettings",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Update Warming Settings",
+        "operationId": "updateWarmingSettings",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WarmingSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -946,6 +1384,22 @@
         "title": "ActionResult",
         "description": "Outcome of one ``execute`` call."
       },
+      "AddChannelsRequest": {
+        "properties": {
+          "raw": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Raw"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "raw"
+        ],
+        "title": "AddChannelsRequest",
+        "description": "Raw user input \u2014 one or many links/usernames, newline- or comma-separated."
+      },
       "Body_importAccountTdata": {
         "properties": {
           "file": {
@@ -1062,6 +1516,48 @@
         ],
         "title": "Page[AccountRead]"
       },
+      "RemoveChannelRequest": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel"
+        ],
+        "title": "RemoveChannelRequest"
+      },
+      "StartWarmingRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "StartWarmingRequest"
+      },
+      "StopWarmingRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "StopWarmingRequest"
+      },
       "TdataImportResult": {
         "properties": {
           "accounts": {
@@ -1139,6 +1635,721 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WarmingAccountState": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "active",
+              "sleeping",
+              "flood_wait",
+              "quarantine",
+              "error"
+            ],
+            "title": "State"
+          },
+          "health": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "ok",
+              "warn",
+              "fail"
+            ],
+            "title": "Health"
+          },
+          "cycles_completed": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Cycles Completed",
+            "default": 0
+          },
+          "last_event": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Event"
+          },
+          "last_cycle_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Cycle At"
+          },
+          "next_run_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Run At"
+          },
+          "updated_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Updated At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "last_action": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Action"
+          },
+          "last_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Channel"
+          },
+          "heartbeat_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Heartbeat At"
+          },
+          "started_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Started At"
+          },
+          "stopped_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Stopped At"
+          },
+          "flood_wait_seconds": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flood Wait Seconds"
+          },
+          "flood_wait_until": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flood Wait Until"
+          },
+          "proxy_snapshot": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Snapshot"
+          },
+          "daily_actions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Daily Actions",
+            "default": 0
+          },
+          "daily_count_date": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Daily Count Date"
+          },
+          "quarantine_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Quarantine Count",
+            "default": 0
+          },
+          "trust_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Score"
+          },
+          "trust_band": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Band"
+          },
+          "trust_reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Trust Reasons"
+          },
+          "spam_status": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Status"
+          },
+          "spam_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Detail"
+          },
+          "age_hours": {
+            "anyOf": [
+              {
+                "type": "number",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Age Hours"
+          },
+          "dm_allowed": {
+            "type": "boolean",
+            "title": "Dm Allowed",
+            "default": false
+          },
+          "phone_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Country"
+          },
+          "proxy_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Country"
+          },
+          "phase": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "intro",
+                  "settling",
+                  "warming",
+                  "active",
+                  "warmed"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase"
+          },
+          "phase_label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phase Label"
+          },
+          "daily_cap": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Daily Cap",
+            "default": 0
+          },
+          "progress_to_next": {
+            "anyOf": [
+              {
+                "type": "number",
+                "maximum": 1.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Progress To Next"
+          },
+          "days_to_next_phase": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Days To Next Phase"
+          },
+          "warming_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Warming Days"
+          },
+          "readiness": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/WarmingReadiness"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "promoted_to_nc": {
+            "type": "boolean",
+            "title": "Promoted To Nc",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "label",
+          "state",
+          "health"
+        ],
+        "title": "WarmingAccountState",
+        "description": "One account's warming status, rendered as a kanban card."
+      },
+      "WarmingBoardState": {
+        "properties": {
+          "idle": {
+            "items": {
+              "$ref": "#/components/schemas/WarmingAccountState"
+            },
+            "type": "array",
+            "title": "Idle"
+          },
+          "warming": {
+            "items": {
+              "$ref": "#/components/schemas/WarmingAccountState"
+            },
+            "type": "array",
+            "title": "Warming"
+          },
+          "channels": {
+            "$ref": "#/components/schemas/WarmingChannelList"
+          },
+          "settings": {
+            "$ref": "#/components/schemas/WarmingSettings"
+          },
+          "channel_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Channel Count"
+          },
+          "active_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Active Count"
+          },
+          "summary": {
+            "$ref": "#/components/schemas/WarmingSummary"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channels",
+          "settings",
+          "channel_count",
+          "active_count"
+        ],
+        "title": "WarmingBoardState",
+        "description": "Everything the warming page renders in one poll tick."
+      },
+      "WarmingChannel": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Created At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "created_at"
+        ],
+        "title": "WarmingChannel",
+        "description": "One channel the warming engine can join / read / react in."
+      },
+      "WarmingChannelList": {
+        "properties": {
+          "channels": {
+            "items": {
+              "$ref": "#/components/schemas/WarmingChannel"
+            },
+            "type": "array",
+            "title": "Channels"
+          }
+        },
+        "type": "object",
+        "title": "WarmingChannelList"
+      },
+      "WarmingReadiness": {
+        "properties": {
+          "ready": {
+            "type": "boolean",
+            "title": "Ready"
+          },
+          "reasons": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Reasons"
+          }
+        },
+        "type": "object",
+        "required": [
+          "ready"
+        ],
+        "title": "WarmingReadiness",
+        "description": "Pre-start verdict for an account: can it safely begin warming?\n\n``reasons`` is empty iff ``ready`` is True \u2014 each entry is a short,\nhuman-readable blocker (``\"session new\"``, ``\"no proxy\"``, ``\"no channels\"``)."
+      },
+      "WarmingSettings": {
+        "properties": {
+          "inter_account_chat": {
+            "type": "boolean",
+            "title": "Inter Account Chat",
+            "default": false
+          },
+          "reactions_enabled": {
+            "type": "boolean",
+            "title": "Reactions Enabled",
+            "default": true
+          },
+          "join_enabled": {
+            "type": "boolean",
+            "title": "Join Enabled",
+            "default": true
+          },
+          "enforce_readiness": {
+            "type": "boolean",
+            "title": "Enforce Readiness",
+            "default": true
+          },
+          "quiet_hours_enabled": {
+            "type": "boolean",
+            "title": "Quiet Hours Enabled",
+            "default": false
+          },
+          "quiet_hours_start": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Quiet Hours Start",
+            "default": 0
+          },
+          "quiet_hours_end": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Quiet Hours End",
+            "default": 0
+          },
+          "max_daily_actions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Max Daily Actions",
+            "default": 0
+          },
+          "has_gemini_key": {
+            "type": "boolean",
+            "title": "Has Gemini Key",
+            "default": false
+          },
+          "gemini_model": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Gemini Model"
+          },
+          "updated_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "gemini_model",
+          "updated_at"
+        ],
+        "title": "WarmingSettings",
+        "description": "Masked, UI-facing warming settings \u2014 never carries the raw Gemini key."
+      },
+      "WarmingSettingsUpdate": {
+        "properties": {
+          "inter_account_chat": {
+            "type": "boolean",
+            "title": "Inter Account Chat",
+            "default": false
+          },
+          "reactions_enabled": {
+            "type": "boolean",
+            "title": "Reactions Enabled",
+            "default": true
+          },
+          "join_enabled": {
+            "type": "boolean",
+            "title": "Join Enabled",
+            "default": true
+          },
+          "enforce_readiness": {
+            "type": "boolean",
+            "title": "Enforce Readiness",
+            "default": true
+          },
+          "quiet_hours_enabled": {
+            "type": "boolean",
+            "title": "Quiet Hours Enabled",
+            "default": false
+          },
+          "quiet_hours_start": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Quiet Hours Start",
+            "default": 0
+          },
+          "quiet_hours_end": {
+            "type": "integer",
+            "maximum": 23.0,
+            "minimum": 0.0,
+            "title": "Quiet Hours End",
+            "default": 0
+          },
+          "max_daily_actions": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Max Daily Actions",
+            "default": 0
+          },
+          "gemini_api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gemini Api Key"
+          },
+          "gemini_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Gemini Model"
+          },
+          "clear_gemini_key": {
+            "type": "boolean",
+            "title": "Clear Gemini Key",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "WarmingSettingsUpdate",
+        "description": "Caller-supplied settings change from the UI.\n\n``gemini_api_key`` semantics: ``None`` leaves the stored key untouched, an\nempty string clears it, any other value replaces it. Same applies to\n``gemini_model`` \u2014 ``None`` keeps current value, non-empty overrides.\nAn explicit ``clear_gemini_key`` flag is provided so the UI can clear the\nstored key without ambiguity."
+      },
+      "WarmingSummary": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "default": 0
+          },
+          "warming": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Warming",
+            "default": 0
+          },
+          "active": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Active",
+            "default": 0
+          },
+          "ready": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Ready",
+            "default": 0
+          },
+          "attention": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Attention",
+            "default": 0
+          },
+          "trust_healthy": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Trust Healthy",
+            "default": 0
+          },
+          "trust_watch": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Trust Watch",
+            "default": 0
+          },
+          "trust_risk": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Trust Risk",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "WarmingSummary",
+        "description": "Fleet-level roll-up shown at the top of the warming page."
       }
     }
   }

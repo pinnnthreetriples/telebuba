@@ -43,6 +43,48 @@
       "next": "Вперёд"
     }
   },
+  "nav": {
+    "accounts": "Аккаунты",
+    "warming": "Прогрев"
+  },
+  "warming": {
+    "title": "Прогрев",
+    "loading": "Загрузка…",
+    "error": "Не удалось загрузить доску прогрева",
+    "summary": "Активных: {{active}} из {{total}}",
+    "state": {
+      "idle": "Простаивает",
+      "active": "Активен",
+      "sleeping": "Сон",
+      "flood_wait": "Flood-wait",
+      "quarantine": "Карантин",
+      "error": "Ошибка"
+    },
+    "column": {
+      "idle": "Не в прогреве",
+      "warming": "В прогреве"
+    },
+    "card": {
+      "cycles": "Циклов: {{count}}",
+      "trust": "доверие"
+    },
+    "actions": {
+      "start": "Запустить",
+      "stop": "Остановить"
+    },
+    "channels": {
+      "title": "Каналы",
+      "placeholder": "Ссылки или @юзернеймы, через запятую…",
+      "add": "Добавить",
+      "remove": "Удалить"
+    },
+    "settings": {
+      "title": "Настройки прогрева",
+      "reactions_enabled": "Реакции",
+      "join_enabled": "Вступать в каналы",
+      "inter_account_chat": "Диалоги между аккаунтами"
+    }
+  },
   "auth": {
     "login": {
       "title": "Вход",

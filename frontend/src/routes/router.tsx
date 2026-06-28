@@ -8,8 +8,10 @@ import {
 
 import { AccountsPage } from '@/pages/accounts';
 import { LoginPage } from '@/pages/login';
+import { WarmingPage } from '@/pages/warming';
 import { meQueryOptions } from '@/shared/auth';
 import { queryClient } from '@/shared/lib';
+import { AppShell } from '@/widgets/nav';
 
 const rootRoute = createRootRoute({ component: Outlet });
 
@@ -20,7 +22,7 @@ const loginRoute = createRoute({
   component: LoginPage,
 });
 
-// Pathless layout that gates every child on a valid session.
+// Pathless layout that gates every child on a valid session + renders the nav shell.
 const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'protected',
@@ -31,7 +33,7 @@ const protectedRoute = createRoute({
       throw redirect({ to: '/login' });
     }
   },
-  component: Outlet,
+  component: AppShell,
 });
 
 const indexRoute = createRoute({
@@ -40,7 +42,16 @@ const indexRoute = createRoute({
   component: AccountsPage,
 });
 
-const routeTree = rootRoute.addChildren([loginRoute, protectedRoute.addChildren([indexRoute])]);
+const warmingRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: '/warming',
+  component: WarmingPage,
+});
+
+const routeTree = rootRoute.addChildren([
+  loginRoute,
+  protectedRoute.addChildren([indexRoute, warmingRoute]),
+]);
 
 export const router = createRouter({ routeTree });
 
