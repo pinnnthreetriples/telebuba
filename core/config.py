@@ -13,6 +13,7 @@ See ``.env.example`` for the full list of supported keys.
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Literal
 
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -52,8 +53,23 @@ class ApiSettings(BaseSettings):
 class AuthSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="AUTH__", extra="ignore")
 
-    # Placeholder for the auth slice (#168): JWT signing secret. Empty until set.
+    # JWT signing secret — MUST be set to a long random value before enabling
+    # login. Empty disables auth issuance (login returns 503-class refusal).
     secret: str = ""
+    algorithm: str = Field(default="HS256", min_length=1)
+    # Session cookie: HttpOnly is always on; Secure/SameSite are configurable so
+    # local http dev can relax Secure. Sliding TTL re-issued on each request.
+    cookie_name: str = Field(default="tb_session", min_length=1)
+    cookie_secure: bool = True
+    cookie_samesite: Literal["lax", "strict", "none"] = "lax"
+    session_ttl_minutes: int = Field(default=720, ge=1)
+    # First-admin seeding (no public signup): when no users exist and both are
+    # set, an admin is created at startup.
+    admin_username: str = ""
+    admin_password: str = ""
+    # Login brute-force guard (in-memory, per-process).
+    login_rate_limit_max_attempts: int = Field(default=5, ge=1)
+    login_rate_limit_window_seconds: float = Field(default=60.0, gt=0)
 
 
 class DbSettings(BaseSettings):

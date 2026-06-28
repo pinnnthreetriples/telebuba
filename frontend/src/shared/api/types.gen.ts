@@ -244,6 +244,20 @@ export type HealthStatus = {
 };
 
 /**
+ * LoginRequest
+ */
+export type LoginRequest = {
+  /**
+   * Username
+   */
+  username: string;
+  /**
+   * Password
+   */
+  password: string;
+};
+
+/**
  * Page[AccountRead]
  */
 export type PageAccountRead = {
@@ -276,6 +290,24 @@ export type TdataImportResult = {
 };
 
 /**
+ * UserRead
+ */
+export type UserRead = {
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Username
+   */
+  username: string;
+  /**
+   * Role
+   */
+  role: 'admin';
+};
+
+/**
  * ValidationError
  */
 export type ValidationError = {
@@ -302,6 +334,72 @@ export type ValidationError = {
     [key: string]: unknown;
   };
 };
+
+export type LoginData = {
+  body: LoginRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/login';
+};
+
+export type LoginErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type LoginError = LoginErrors[keyof LoginErrors];
+
+export type LoginResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserRead;
+};
+
+export type LoginResponse = LoginResponses[keyof LoginResponses];
+
+export type LogoutData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/logout';
+};
+
+export type LogoutResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type LogoutResponse = LogoutResponses[keyof LogoutResponses];
+
+export type GetMeData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/auth/me';
+};
+
+export type GetMeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetMeError = GetMeErrors[keyof GetMeErrors];
+
+export type GetMeResponses = {
+  /**
+   * Successful Response
+   */
+  200: UserRead;
+};
+
+export type GetMeResponse = GetMeResponses[keyof GetMeResponses];
 
 export type GetHealthData = {
   body?: never;

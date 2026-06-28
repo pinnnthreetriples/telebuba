@@ -27,6 +27,7 @@ export default defineConfig({
         'src/shared/api/**',
         'src/shared/ui/**',
         'src/shared/i18n/**',
+        'src/shared/lib/query-client.ts',
         'src/app/**',
         'src/routes/**',
         'src/main.tsx',

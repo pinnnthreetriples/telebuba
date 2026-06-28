@@ -5,6 +5,7 @@ description = "Telegram account farm manager: creates accounts, warms them up, g
 requires-python = ">=3.13"
 dependencies = [
     "anyio>=4.13.0",
+    "argon2-cffi>=23.1.0",
     "fastapi>=0.136.3",
     "httpx>=0.28.1",
     "imageio-ffmpeg>=0.5.1",
@@ -14,6 +15,7 @@ dependencies = [
     "pillow>=11.0.0",
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
+    "pyjwt>=2.13.0",
     "python-dotenv>=1.2.2",
     "python-multipart>=0.0.20",
     "python-socks>=2.8.1",
@@ -146,6 +148,9 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = [
     "S101",      # asserts are the whole point of tests
+    "S105",      # literal "passwords" in tests are fixture data, not secrets
+    "S106",
+    "S107",
     "PLR2004",   # magic values are normal in test data
     "ANN",       # type annotations not required on fixtures / test functions
     "SLF001",    # accessing private members is fair game in tests

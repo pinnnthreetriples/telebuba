@@ -89,7 +89,7 @@ async def test_telegram_client_profile_includes_saved_proxy(
             account_id="account-proxy",
             port=9050,
             username="alice",
-            password="secret",  # noqa: S106 - test fixture value, not a real credential.
+            password="secret",
         ),
     )
 
@@ -101,7 +101,7 @@ async def test_telegram_client_profile_includes_saved_proxy(
     assert profile.proxy_host == "127.0.0.1"
     assert profile.proxy_port == 9050
     assert profile.proxy_username == "alice"
-    assert profile.proxy_password == "secret"  # noqa: S105 - test fixture value.
+    assert profile.proxy_password == "secret"
 
 
 def test_generate_random_device_fingerprint_supports_desktop_platforms(monkeypatch) -> None:
@@ -184,7 +184,7 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
             proxy_host="proxy.local",
             proxy_port=8080,
             proxy_username="bob",
-            proxy_password="pw",  # noqa: S106 - test fixture value, not a real credential.
+            proxy_password="pw",
         ),
     )
 

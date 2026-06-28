@@ -28,7 +28,7 @@ async def test_upsert_account_proxy_returns_masked_read_model(tmp_path) -> None:
             account_id="acc-1",
             port=9050,
             username="alice",
-            password="secret",  # noqa: S106 - test fixture value, not a real credential.
+            password="secret",
         ),
     )
 
@@ -39,7 +39,7 @@ async def test_upsert_account_proxy_returns_masked_read_model(tmp_path) -> None:
 
     settings = await fetch_account_proxy_settings("acc-1")
     assert settings is not None
-    assert settings.password == "secret"  # noqa: S105 - test fixture value.
+    assert settings.password == "secret"
 
     accounts = await list_accounts()
     assert accounts.accounts[0].proxy_type == "socks5"
@@ -181,7 +181,7 @@ async def test_upsert_account_proxy_preserves_check_state_when_password_unchange
             host="1.2.3.4",
             port=9050,
             username="alice",
-            password="pwd",  # noqa: S106 - test fixture.
+            password="pwd",
         ),
     )
     await update_account_proxy_check(
@@ -194,7 +194,7 @@ async def test_upsert_account_proxy_preserves_check_state_when_password_unchange
             host="1.2.3.4",
             port=9050,
             username="alice",
-            password="pwd",  # noqa: S106 - test fixture.
+            password="pwd",
         ),
     )
 
@@ -217,7 +217,7 @@ async def test_upsert_account_proxy_clears_stored_password_when_field_emptied(
     await upsert_account_proxy(
         AccountProxyUpsertFactory.build(
             account_id="acc-clear",
-            password="pwd",  # noqa: S106 - test fixture.
+            password="pwd",
         ),
     )
 

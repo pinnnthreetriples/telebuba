@@ -30,6 +30,7 @@ from api import create_app
 from core.config import settings
 from core.logging import log_event, setup_logging
 from core.telegram_client import shutdown_telegram_pool
+from services.auth import seed_admin_if_empty
 from services.neurocomment import (
     reconcile_neurocomment_on_startup,
     shutdown_neurocomment_on_shutdown,
@@ -82,6 +83,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """
     setup_logging()
     await _log_app_started()
+    await seed_admin_if_empty()
     await reconcile_warming_runtime()
     await reconcile_neurocomment_on_startup()
     try:

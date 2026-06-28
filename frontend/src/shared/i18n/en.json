@@ -42,5 +42,14 @@
       "prev": "Prev",
       "next": "Next"
     }
+  },
+  "auth": {
+    "login": {
+      "title": "Sign in",
+      "username": "Username",
+      "password": "Password",
+      "submit": "Sign in",
+      "error": "Invalid credentials"
+    }
   }
 }

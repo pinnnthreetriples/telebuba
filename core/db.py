@@ -178,6 +178,18 @@ _account_spam_status = Table(
     Column("detail", String, nullable=True),
     Column("checked_at", String, nullable=False),
 )
+_users = Table(
+    "users",
+    _metadata,
+    Column("id", String, primary_key=True),
+    Column("username", String, nullable=False, unique=True),
+    Column("password_hash", String, nullable=False),
+    # ``role`` exists from day one so RBAC can land without a migration; a single
+    # role ("admin") is used until a second one is needed.
+    Column("role", String, nullable=False),
+    Column("created_at", String, nullable=False),
+    Column("updated_at", String, nullable=False),
+)
 
 
 class _DatabaseState:

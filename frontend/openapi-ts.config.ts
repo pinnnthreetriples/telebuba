@@ -6,5 +6,8 @@ import { defineConfig } from '@hey-api/openapi-ts';
 export default defineConfig({
   input: './openapi.json',
   output: './src/shared/api',
+  // The SPA is same-origin with the API (prod StaticFiles mount, dev Vite /api
+  // proxy), so the browser sends the session cookie with the default credentials
+  // mode — no runtime client config needed.
   plugins: ['@hey-api/client-fetch', '@tanstack/react-query'],
 });

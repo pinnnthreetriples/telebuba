@@ -5,6 +5,110 @@
     "version": "0.1.0"
   },
   "paths": {
+    "/api/v1/auth/login": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Login",
+        "operationId": "login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/auth/logout": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Logout",
+        "operationId": "logout",
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Me",
+        "operationId": "getMe",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/health": {
       "get": {
         "tags": [
@@ -81,6 +185,22 @@
               "default": 50,
               "title": "Limit"
             }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
           }
         ],
         "responses": {
@@ -114,15 +234,33 @@
         ],
         "summary": "Check Account",
         "operationId": "checkAccount",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AccountCheckRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -155,15 +293,33 @@
         ],
         "summary": "Update Account Profile",
         "operationId": "updateAccountProfile",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "application/json": {
               "schema": {
                 "$ref": "#/components/schemas/AccountProfileUpdateRequest"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -205,6 +361,22 @@
               "type": "string",
               "title": "Account Id"
             }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
           }
         ],
         "responses": {
@@ -231,15 +403,33 @@
         ],
         "summary": "Import Account Tdata",
         "operationId": "importAccountTdata",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_importAccountTdata"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -272,15 +462,33 @@
         ],
         "summary": "Set Account Photo",
         "operationId": "setAccountPhoto",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
         "requestBody": {
+          "required": true,
           "content": {
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_setAccountPhoto"
               }
             }
-          },
-          "required": true
+          }
         },
         "responses": {
           "200": {
@@ -807,6 +1015,26 @@
         "type": "object",
         "title": "HealthStatus"
       },
+      "LoginRequest": {
+        "properties": {
+          "username": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Username"
+          },
+          "password": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "username",
+          "password"
+        ],
+        "title": "LoginRequest"
+      },
       "Page_AccountRead_": {
         "properties": {
           "items": {
@@ -847,6 +1075,30 @@
         "type": "object",
         "title": "TdataImportResult",
         "description": "Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.\n\nWrapping the imported accounts in a model (instead of returning a raw\n``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room\nto add per-import metadata (counts, partial-failure summaries) without\nbreaking every call site, and matches the convention used by ``list_accounts``\nand other multi-row reads."
+      },
+      "UserRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "title": "Id"
+          },
+          "username": {
+            "type": "string",
+            "title": "Username"
+          },
+          "role": {
+            "type": "string",
+            "const": "admin",
+            "title": "Role"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "username",
+          "role"
+        ],
+        "title": "UserRead"
       },
       "ValidationError": {
         "properties": {

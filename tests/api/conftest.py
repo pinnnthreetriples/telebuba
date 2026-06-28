@@ -7,9 +7,11 @@ from typing import TYPE_CHECKING
 import pytest
 
 from api import create_app
+from api.deps import get_current_user
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from schemas.auth import UserRead
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -33,4 +35,12 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 @pytest.fixture
 def app() -> FastAPI:
     # No lifespan in tests: the warming/neurocomment runtimes must not start.
-    return create_app()
+    # Feature tests run authenticated — the auth gate itself is exercised with a
+    # raw create_app() in tests/api/test_auth.py.
+    application = create_app()
+    application.dependency_overrides[get_current_user] = lambda: UserRead(
+        id="test-admin",
+        username="admin",
+        role="admin",
+    )
+    return application
