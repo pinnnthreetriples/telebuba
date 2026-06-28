@@ -20,7 +20,6 @@ call performs side effects). ``main.py`` calls it once at startup.
 
 from __future__ import annotations
 
-import logging
 from typing import TYPE_CHECKING
 
 import sentry_sdk
@@ -32,29 +31,6 @@ from schemas.logs import LogEventInput
 
 if TYPE_CHECKING:
     from schemas.logs import LogLevel
-
-
-class _NiceGuiSlotDeletedFilter(logging.Filter):
-    """Drop NiceGUI's ``parent slot has been deleted`` traceback spam.
-
-    NiceGUI 3.x has a race where a ``ui.timer``'s deferred background task
-    can start running after its parent slot has been torn down (page reload,
-    quick disconnect, ...), trying to enter ``self.parent_slot`` in
-    ``_run_in_loop`` and raising ``RuntimeError`` which the default
-    ``nicegui`` ``Logger.exception`` handler then prints as a noisy
-    traceback on every disconnect. The exception is internal cleanup
-    noise — the timer's iteration is doomed regardless — so filter it
-    out at the logging edge.
-    """
-
-    _MESSAGE = "parent slot of the element has been deleted"
-
-    def filter(self, record: logging.LogRecord) -> bool:
-        if record.exc_info:
-            exc = record.exc_info[1]
-            if isinstance(exc, RuntimeError) and self._MESSAGE in str(exc):
-                return False
-        return self._MESSAGE not in record.getMessage()
 
 
 class _State:
@@ -80,8 +56,6 @@ def setup_logging() -> None:
         backtrace=True,
         diagnose=False,  # avoid leaking variable values into the file
     )
-
-    logging.getLogger("nicegui").addFilter(_NiceGuiSlotDeletedFilter())
 
     if settings.logging.sentry_dsn:
         sentry_sdk.init(

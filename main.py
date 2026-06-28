@@ -1,25 +1,32 @@
-"""App entrypoint — serves the Telebuba design SPA as the frontend.
+"""App entrypoint — FastAPI/uvicorn composition root.
 
-The UI is the design's own static single-page app, served verbatim from
-``web/`` (``index.html`` + ``support.js``, the design-canvas runtime). The
-previous NiceGUI page layer (``features/``) was removed in the redesign: the
-design file is the source of truth, so it is shipped as-is rather than
-re-implemented. The Python backend (``services`` / ``core``) still runs the
-warming and neurocomment runtimes on startup; wiring the static UI to live
-data is a deliberate follow-up.
+The backend is a thin FastAPI JSON API (``api/``) over the existing ``services/``;
+``main.py`` builds the app, runs the warming + neurocomment runtimes via the
+FastAPI ``lifespan``, and serves the frontend SPA as static files. uvicorn runs
+**single-worker**: the runtimes are in-process asyncio tasks, so a second worker
+would duplicate Telegram work and race the SQLite DB.
 
-We keep NiceGUI's ``ui.run`` only for its FastAPI ``app`` and startup/shutdown
-lifecycle — no NiceGUI pages are registered; the two routes below serve the
-static design.
+Frontend serving is transitional: the React build (``frontend/dist``) is served
+once it exists; until then the current verbatim design SPA in ``web/`` is served
+so the UI never goes dark. Issue #173 removes ``web/`` at React parity.
 """
 
 from __future__ import annotations
 
 import subprocess  # nosec B404 — read-only git rev-parse, no user input.
+from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from nicegui import app, ui
+import uvicorn
+from fastapi import FastAPI, HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
+from api import create_app
 from core.config import settings
 from core.logging import log_event, setup_logging
 from core.telegram_client import shutdown_telegram_pool
@@ -30,15 +37,16 @@ from services.neurocomment import (
 from services.warming import reconcile_warming_runtime, shutdown_warming_runtime
 
 _GIT_SHA_TIMEOUT_SECONDS = 2
-_WEB_DIR = Path(__file__).resolve().parent / "web"
+_ROOT = Path(__file__).resolve().parent
+_FRONTEND_DIST = _ROOT / "frontend" / "dist"
+_WEB_DIR = _ROOT / "web"
 
 
 def _git_sha() -> str:
     """Resolve the current commit SHA, falling back to "unknown" off-tree.
 
     Read once at startup so the operator can verify which code is actually
-    running just by checking the boot log — saves a "did my git pull take
-    effect?" round of guessing.
+    running just by checking the boot log.
     """
     try:
         # Fixed argv, no shell, no user input — invoking git on PATH is the
@@ -50,7 +58,7 @@ def _git_sha() -> str:
             capture_output=True,
             text=True,
             timeout=_GIT_SHA_TIMEOUT_SECONDS,
-            cwd=Path(__file__).resolve().parent,
+            cwd=_ROOT,
             check=False,
         )
     except (OSError, subprocess.TimeoutExpired):
@@ -63,45 +71,74 @@ async def _log_app_started() -> None:
     await log_event("INFO", "app_started", extra={"git_sha": _git_sha()})
 
 
-def _register_frontend() -> None:  # pragma: no cover
-    """Serve the design SPA via NiceGUI's static-file API (no direct FastAPI dep).
+@asynccontextmanager
+async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
+    """Start/stop the in-process runtimes around the server's lifetime.
 
-    ``index.html`` is served at ``/`` and its runtime at ``/support.js`` (the
-    HTML loads ``./support.js`` relative to ``/``). GSAP, Babel and the web
-    fonts load from their CDNs exactly as the design declares them.
+    Shutdown order matters: drain warming's in-flight Telegram calls FIRST so
+    they finish on the pooled client, THEN tear the pool down — the other way
+    blows up live ``execute(...)`` calls mid-handshake and may corrupt the
+    ``.session`` SQLite file.
     """
-    app.add_static_file(local_file=_WEB_DIR / "support.js", url_path="/support.js")
-    app.add_static_file(local_file=_WEB_DIR / "index.html", url_path="/")
-
-
-def main() -> None:
     setup_logging()
-    _register_frontend()
+    await _log_app_started()
+    await reconcile_warming_runtime()
+    await reconcile_neurocomment_on_startup()
+    try:
+        yield
+    finally:
+        await shutdown_warming_runtime()
+        await shutdown_neurocomment_on_shutdown()
+        await shutdown_telegram_pool()
 
-    # _RUNTIME (per-account warming loops) lives in process memory; after a
-    # restart the DB may still show ``active``/``sleeping`` rows whose task is
-    # gone. Reconcile on startup, cancel on shutdown.
-    app.on_startup(_log_app_started)
-    app.on_startup(reconcile_warming_runtime)
-    # Neurocomment runtime is event-driven (a listener + per-post tasks); like
-    # warming it lives in process memory, so resume the persisted listener on
-    # boot and tear it down on exit.
-    app.on_startup(reconcile_neurocomment_on_startup)
-    # Shutdown order matters: drain warming's in-flight Telegram calls FIRST
-    # so they can finish on the pooled client, THEN tear the pool down. The
-    # other way around blows up live ``execute(...)`` calls mid-handshake and
-    # may corrupt the ``.session`` SQLite file.
-    app.on_shutdown(shutdown_warming_runtime)
-    app.on_shutdown(shutdown_neurocomment_on_shutdown)
-    app.on_shutdown(shutdown_telegram_pool)
 
-    ui.run(
-        title="Telebuba",
-        port=settings.ui.port,
+def _static_root() -> Path | None:
+    # ponytail: serve the React build once it exists; until then keep the current
+    # verbatim web/ SPA alive. #173 removes web/, leaving frontend/dist.
+    if _FRONTEND_DIST.is_dir():
+        return _FRONTEND_DIST
+    if _WEB_DIR.is_dir():
+        return _WEB_DIR
+    return None
+
+
+def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
+    """Serve the SPA: StaticFiles for built assets + a catch-all for index.html.
+
+    Mounted AFTER the API routers, so ``/api/*`` always wins. The catch-all
+    returns ``index.html`` for client-side routes; real files (``support.js``,
+    ``assets/*``) are served directly.
+    """
+    root = _static_root()
+    if root is None:
+        return
+    assets = root / "assets"
+    if assets.is_dir():
+        app.mount("/assets", StaticFiles(directory=assets), name="assets")
+
+    @app.get("/{path:path}")
+    async def _spa(path: str) -> FileResponse:
+        if path.startswith("api/"):
+            raise HTTPException(status_code=404, detail="not found")
+        candidate = root / path
+        if path and candidate.is_file():
+            return FileResponse(candidate)
+        return FileResponse(root / "index.html")
+
+
+app = create_app(lifespan=lifespan)
+_mount_frontend(app)
+
+
+def main() -> None:  # pragma: no cover
+    uvicorn.run(
+        "main:app",
+        host=settings.api.host,
+        port=settings.api.port,
+        workers=1,
         reload=False,
-        reconnect_timeout=settings.ui.reconnect_timeout,
     )
 
 
-if __name__ in {"__main__", "__mp_main__"}:
+if __name__ == "__main__":
     main()

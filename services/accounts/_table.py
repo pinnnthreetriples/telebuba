@@ -13,6 +13,7 @@ from schemas.accounts import (
     AccountTableRow,
     health_for_status,
 )
+from schemas.api import Page
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountFilter, AccountRead
@@ -38,6 +39,46 @@ async def load_accounts_table(data: AccountFilter) -> AccountsTableState:
         rows=[_to_table_row(account) for account in accounts.accounts],
         summary=summary,
     )
+
+
+class InvalidCursorError(ValueError):
+    """A pagination cursor that cannot be decoded into an offset."""
+
+
+# Cursor is an opaque offset token: the next page's start offset, as a string.
+# The accounts source is offset-paginated, so the offset *is* the cursor; the
+# client never parses it. ponytail: a real keyset cursor only if a list grows
+# large enough that deep offsets hurt — accounts are small.
+def _decode_cursor(cursor: str | None) -> int:
+    if cursor is None:
+        return 0
+    try:
+        offset = int(cursor)
+    except ValueError as exc:
+        raise InvalidCursorError(cursor) from exc
+    if offset < 0:
+        raise InvalidCursorError(cursor)
+    return offset
+
+
+async def list_accounts_page(
+    *,
+    query: str = "",
+    status: str = "all",
+    cursor: str | None = None,
+    limit: int = 50,
+) -> Page[AccountRead]:
+    """One cursor-paginated page of accounts as the API ``Page[AccountRead]`` envelope.
+
+    Fetches ``limit + 1`` rows to detect whether a further page exists without a
+    second count query; the extra row is dropped and only signals ``next_cursor``.
+    """
+    offset = _decode_cursor(cursor)
+    result = await list_accounts(query=query, status=status, limit=limit + 1, offset=offset)
+    has_more = len(result.accounts) > limit
+    items = result.accounts[:limit]
+    next_cursor = str(offset + limit) if has_more else None
+    return Page(items=items, next_cursor=next_cursor)
 
 
 async def list_listener_accounts() -> AccountList:
