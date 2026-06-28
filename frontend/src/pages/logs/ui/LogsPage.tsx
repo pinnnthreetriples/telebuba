@@ -10,6 +10,9 @@ const PAGE_SIZE = 50;
 const STATUS_FILTERS = ['all', 'success', 'warning', 'error'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
+const TH =
+  'px-4 py-[11px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
+
 export function LogsPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -18,8 +21,6 @@ export function LogsPage() {
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
-  // Live via SSE (setQueryData below) — no refetch poll; pagination still uses
-  // the query for the older pages.
   const { data, isPending, isError } = useQuery(
     logsQueryOptions({
       query: { status, account_id: account, cursor, limit: PAGE_SIZE },
@@ -51,25 +52,26 @@ export function LogsPage() {
   };
 
   return (
-    <main className="mx-auto max-w-5xl space-y-4 p-8">
-      <h1 className="text-2xl font-semibold">{t('logs.title')}</h1>
+    <div className="tb-fadeup">
+      <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">{t('logs.title')}</h1>
 
-      <div className="flex gap-3">
-        <select
-          value={status}
-          onChange={(event) => {
-            setStatus(event.target.value as StatusFilter);
-            resetPaging();
-          }}
-          aria-label={t('logs.filter.status')}
-          className="rounded-md border border-line bg-surface px-3 py-2 text-sm"
-        >
+      <div className="mb-[14px] flex flex-wrap items-center gap-2">
+        <div className="inline-flex rounded-full bg-white p-[3px]">
           {STATUS_FILTERS.map((value) => (
-            <option key={value} value={value}>
+            <button
+              key={value}
+              type="button"
+              onClick={() => {
+                setStatus(value);
+                resetPaging();
+              }}
+              className={`rounded-full px-[14px] py-[6px] text-[12px] font-medium transition-colors ${status === value ? 'bg-primary text-white' : 'text-ink-muted'}`}
+            >
               {t(`logs.filter.${value}`)}
-            </option>
+            </button>
           ))}
-        </select>
+        </div>
+        <div className="flex-1" />
         <input
           type="search"
           value={account}
@@ -79,7 +81,7 @@ export function LogsPage() {
           }}
           placeholder={t('logs.filter.account')}
           aria-label={t('logs.filter.account')}
-          className="flex-1 rounded-md border border-line bg-surface px-3 py-2 text-sm"
+          className="tb-time w-[200px] rounded-full border border-line bg-white px-4 py-[7px] text-[13px] outline-none"
         />
       </div>
 
@@ -90,57 +92,65 @@ export function LogsPage() {
           {t('logs.error')}
         </p>
       ) : items.length === 0 ? (
-        <p className="text-ink-subtle">{t('logs.empty')}</p>
+        <div className="rounded-2xl border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+          {t('logs.empty')}
+        </div>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-md border border-line bg-surface">
-            <table className="w-full border-collapse text-left text-sm">
-              <thead>
-                <tr className="border-b border-line text-xs text-ink-muted">
-                  <th className="px-4 py-2">{t('logs.col.time')}</th>
-                  <th className="px-4 py-2">{t('logs.col.status')}</th>
-                  <th className="px-4 py-2">{t('logs.col.account')}</th>
-                  <th className="px-4 py-2">{t('logs.col.event')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((row) => (
-                  <tr key={row.id} className="border-b border-line last:border-0">
-                    <td className="px-4 py-2 font-mono text-xs text-ink-muted">{row.created_at}</td>
-                    <td className="px-4 py-2">
-                      <LogStatusBadge status={row.status} />
-                    </td>
-                    <td className="px-4 py-2 font-mono text-xs">{row.account_id ?? '—'}</td>
-                    <td className="px-4 py-2 font-mono text-xs">{row.event}</td>
+          <div className="overflow-hidden rounded-2xl border border-line bg-white">
+            <div className="tb-scroll overflow-x-auto">
+              <table className="w-full min-w-[760px] border-collapse">
+                <thead>
+                  <tr className="bg-surface">
+                    <th className={`${TH} w-[120px]`}>{t('logs.col.time')}</th>
+                    <th className={`${TH} w-[110px]`}>{t('logs.col.level')}</th>
+                    <th className={`${TH} w-[150px]`}>{t('logs.col.account')}</th>
+                    <th className={TH}>{t('logs.col.event')}</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {items.map((row) => (
+                    <tr key={row.id} className="border-t border-[#f0eeeb]">
+                      <td className="px-4 py-[10px] font-mono text-[12px] text-ink-subtle">
+                        {row.created_at}
+                      </td>
+                      <td className="px-4 py-[10px]">
+                        <LogStatusBadge status={row.status} />
+                      </td>
+                      <td className="px-4 py-[10px] text-[12.5px] text-[#3a3a3a]">
+                        {row.account_id ?? '—'}
+                      </td>
+                      <td className="px-4 py-[10px] text-[12.5px] text-[#3a3a3a]">{row.event}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           </div>
-          <div className="flex items-center justify-end gap-2">
+          <div className="mt-4 flex items-center justify-end gap-2">
             <button
               type="button"
-              className="rounded border border-line px-3 py-1 text-sm disabled:opacity-50"
               disabled={!hasPrev}
               onClick={() => {
                 setCursorStack((stack) => stack.slice(0, -1));
               }}
+              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
             >
               {t('logs.pagination.prev')}
             </button>
             <button
               type="button"
-              className="rounded border border-line px-3 py-1 text-sm disabled:opacity-50"
               disabled={!hasNext}
               onClick={() => {
                 setCursorStack((stack) => [...stack, data.next_cursor ?? null]);
               }}
+              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
             >
               {t('logs.pagination.next')}
             </button>
           </div>
         </>
       )}
-    </main>
+    </div>
   );
 }

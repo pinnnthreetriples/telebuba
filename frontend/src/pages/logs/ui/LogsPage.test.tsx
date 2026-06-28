@@ -95,7 +95,7 @@ test('applies the status and account filters', async () => {
   await waitFor(() => {
     expect(screen.getByText('bad')).toBeInTheDocument();
   });
-  await userEvent.selectOptions(screen.getByLabelText('Статус'), 'error');
+  await userEvent.click(screen.getAllByText('Ошибка')[0]!);
   await userEvent.type(screen.getByLabelText('Аккаунт'), 'acc-1');
   await waitFor(() => {
     const filtered = vi.mocked(fetch).mock.calls.some(([input]) => {

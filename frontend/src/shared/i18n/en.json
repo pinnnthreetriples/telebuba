@@ -109,6 +109,7 @@
     },
     "col": {
       "time": "Time",
+      "level": "Level",
       "status": "Status",
       "account": "Account",
       "event": "Event"
