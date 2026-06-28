@@ -3,6 +3,44 @@
     "title": "Accounts",
     "loading": "Loading…",
     "error": "Failed to load accounts",
-    "empty": "No accounts"
+    "empty": "No accounts",
+    "never": "never",
+    "searchPlaceholder": "Search accounts…",
+    "status": {
+      "new": "New",
+      "alive": "Alive",
+      "unauthorized": "Unauthorized",
+      "session_error": "Session error",
+      "account_error": "Account error",
+      "flood_wait": "Flood-wait",
+      "network_error": "Network error",
+      "proxy_error": "Proxy error",
+      "unknown_error": "Unknown error"
+    },
+    "filter": {
+      "all": "All",
+      "alive": "Alive",
+      "new": "New",
+      "unauthorized": "Unauthorized",
+      "flood_wait": "Flood-wait"
+    },
+    "table": {
+      "account": "Account",
+      "status": "Status",
+      "telegram": "Telegram",
+      "country": "Country",
+      "lastChecked": "Checked",
+      "selectAll": "Select all",
+      "selectRow": "Select row"
+    },
+    "actions": {
+      "check": "Check",
+      "delete": "Delete",
+      "importTdata": "Import tdata"
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next"
+    }
   }
 }

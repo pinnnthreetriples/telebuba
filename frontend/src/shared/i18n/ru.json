@@ -3,6 +3,44 @@
     "title": "Аккаунты",
     "loading": "Загрузка…",
     "error": "Не удалось загрузить аккаунты",
-    "empty": "Аккаунтов нет"
+    "empty": "Аккаунтов нет",
+    "never": "никогда",
+    "searchPlaceholder": "Поиск по аккаунтам…",
+    "status": {
+      "new": "Новый",
+      "alive": "Активен",
+      "unauthorized": "Не авторизован",
+      "session_error": "Ошибка сессии",
+      "account_error": "Ошибка аккаунта",
+      "flood_wait": "Flood-wait",
+      "network_error": "Ошибка сети",
+      "proxy_error": "Ошибка прокси",
+      "unknown_error": "Неизвестная ошибка"
+    },
+    "filter": {
+      "all": "Все",
+      "alive": "Активные",
+      "new": "Новые",
+      "unauthorized": "Не авторизованы",
+      "flood_wait": "Flood-wait"
+    },
+    "table": {
+      "account": "Аккаунт",
+      "status": "Статус",
+      "telegram": "Telegram",
+      "country": "Страна",
+      "lastChecked": "Проверен",
+      "selectAll": "Выбрать все",
+      "selectRow": "Выбрать строку"
+    },
+    "actions": {
+      "check": "Проверить",
+      "delete": "Удалить",
+      "importTdata": "Импорт tdata"
+    },
+    "pagination": {
+      "prev": "Назад",
+      "next": "Вперёд"
+    }
   }
 }

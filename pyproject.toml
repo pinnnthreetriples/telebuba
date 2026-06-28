@@ -15,6 +15,7 @@ dependencies = [
     "pydantic>=2.13.4",
     "pydantic-settings>=2.14.2",
     "python-dotenv>=1.2.2",
+    "python-multipart>=0.0.20",
     "python-socks>=2.8.1",
     "sentry-sdk>=2.62.0",
     "sqlalchemy>=2.0.50",
@@ -200,7 +201,9 @@ extend_exclude = ["tools"]
 [tool.deptry.per_rule_ignores]
 # opentele2 is imported lazily via importlib.import_module in core/tdata_import.py
 # (so the tdata path stays optional), which deptry's static scan can't see.
-DEP002 = ["opentele2"]
+# python-multipart is the runtime backing for FastAPI's multipart/form-data
+# parsing (UploadFile/Form) — imported lazily by fastapi, not by our code.
+DEP002 = ["opentele2", "python-multipart"]
 # hypothesis is used in conftest.py (test infrastructure). deptry treats the
 # root conftest as production code and flags the dev-only import; it is correct
 # that hypothesis is a dev dependency.

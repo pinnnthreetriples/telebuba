@@ -1,0 +1,16 @@
+import { render, screen } from '@testing-library/react';
+import { expect, test } from 'vitest';
+
+import '@/shared/i18n';
+
+import { StatusBadge } from './StatusBadge';
+
+test('renders the localized status label', () => {
+  render(<StatusBadge status="alive" />);
+  expect(screen.getByText('Активен')).toBeInTheDocument();
+});
+
+test('uses the danger colour for a permanent-failure status', () => {
+  render(<StatusBadge status="unauthorized" />);
+  expect(screen.getByText('Не авторизован').className).toContain('text-danger');
+});

@@ -5,16 +5,41 @@ import {
   type InfiniteData,
   infiniteQueryOptions,
   queryOptions,
+  type UseMutationOptions,
 } from '@tanstack/react-query';
 
 import { client } from '../client.gen';
-import { getHealth, listAccounts, type Options } from '../sdk.gen';
+import {
+  checkAccount,
+  deleteAccount,
+  getHealth,
+  importAccountTdata,
+  listAccounts,
+  type Options,
+  setAccountPhoto,
+  updateAccountProfile,
+} from '../sdk.gen';
 import type {
+  CheckAccountData,
+  CheckAccountError,
+  CheckAccountResponse,
+  DeleteAccountData,
+  DeleteAccountError,
+  DeleteAccountResponse,
   GetHealthData,
   GetHealthResponse,
+  ImportAccountTdataData,
+  ImportAccountTdataError,
+  ImportAccountTdataResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
+  SetAccountPhotoData,
+  SetAccountPhotoError,
+  SetAccountPhotoResponse,
+  UpdateAccountProfileData,
+  UpdateAccountProfileError,
+  UpdateAccountProfileResponse,
 } from '../types.gen';
 
 export type QueryKey<TOptions extends Options> = [
@@ -184,3 +209,130 @@ export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>)
       queryKey: listAccountsInfiniteQueryKey(options),
     },
   );
+
+/**
+ * Check Account
+ */
+export const checkAccountMutation = (
+  options?: Partial<Options<CheckAccountData>>,
+): UseMutationOptions<CheckAccountResponse, CheckAccountError, Options<CheckAccountData>> => {
+  const mutationOptions: UseMutationOptions<
+    CheckAccountResponse,
+    CheckAccountError,
+    Options<CheckAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await checkAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Update Account Profile
+ */
+export const updateAccountProfileMutation = (
+  options?: Partial<Options<UpdateAccountProfileData>>,
+): UseMutationOptions<
+  UpdateAccountProfileResponse,
+  UpdateAccountProfileError,
+  Options<UpdateAccountProfileData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateAccountProfileResponse,
+    UpdateAccountProfileError,
+    Options<UpdateAccountProfileData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateAccountProfile({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Account
+ */
+export const deleteAccountMutation = (
+  options?: Partial<Options<DeleteAccountData>>,
+): UseMutationOptions<DeleteAccountResponse, DeleteAccountError, Options<DeleteAccountData>> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteAccountResponse,
+    DeleteAccountError,
+    Options<DeleteAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Import Account Tdata
+ */
+export const importAccountTdataMutation = (
+  options?: Partial<Options<ImportAccountTdataData>>,
+): UseMutationOptions<
+  ImportAccountTdataResponse,
+  ImportAccountTdataError,
+  Options<ImportAccountTdataData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ImportAccountTdataResponse,
+    ImportAccountTdataError,
+    Options<ImportAccountTdataData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await importAccountTdata({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Photo
+ */
+export const setAccountPhotoMutation = (
+  options?: Partial<Options<SetAccountPhotoData>>,
+): UseMutationOptions<
+  SetAccountPhotoResponse,
+  SetAccountPhotoError,
+  Options<SetAccountPhotoData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountPhotoResponse,
+    SetAccountPhotoError,
+    Options<SetAccountPhotoData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
