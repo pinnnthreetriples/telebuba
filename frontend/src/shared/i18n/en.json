@@ -124,21 +124,44 @@
     "error": "Failed to load settings",
     "save": "Save",
     "saved": "Saved",
-    "required": "This field is required",
-    "hourRange": "Hour must be 0–23",
-    "keySet": "Key is set — leave blank to keep it",
-    "keyUnset": "No key set",
-    "section": { "warming": "Warming settings", "api": "API keys" },
-    "field": {
-      "reactions_enabled": "Reactions",
-      "join_enabled": "Join channels",
-      "inter_account_chat": "Inter-account dialogues",
-      "enforce_readiness": "Require readiness before start",
-      "quiet_hours_enabled": "Quiet hours",
-      "quiet_hours_start": "Quiet hours from",
-      "quiet_hours_end": "Quiet hours to",
-      "gemini_model": "Gemini model",
-      "gemini_api_key": "Gemini API key"
+    "cancel": "Cancel",
+    "range": { "from": "from", "to": "to" },
+    "api": {
+      "title": "API keys",
+      "subtitle": "Access to the comment-generation model",
+      "geminiKey": "Gemini API key",
+      "keySet": "Key is set — leave blank to keep it",
+      "keyUnset": "No key set"
+    },
+    "warmLimits": {
+      "title": "Warming limits",
+      "subtitle": "Actions per day per account",
+      "sub": "Subscriptions per day",
+      "read": "Post reads per day",
+      "react": "Reactions per day",
+      "pause": "Pause between steps (min)"
+    },
+    "neuroLimits": {
+      "title": "Neurocomment limits",
+      "subtitle": "Comment publishing pace",
+      "cpd": "Comments per day per account",
+      "delay": "Delay between comments (min)",
+      "parallel": "Parallel accounts",
+      "trust": "Min. trust-score to run"
+    },
+    "flag": {
+      "autostart": {
+        "label": "Autostart processes",
+        "desc": "Resume warming and commenting on startup"
+      },
+      "notifyErr": {
+        "label": "Error notifications",
+        "desc": "Alert the operator on bans and captchas"
+      },
+      "antidetect": {
+        "label": "Anti-detect profiles",
+        "desc": "Pin the device fingerprint to the account"
+      }
     }
   },
   "logs": {

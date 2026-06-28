@@ -1,4 +1,5 @@
-import { Link } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
+import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 const LINKS = [
@@ -9,11 +10,37 @@ const LINKS = [
   { to: '/settings', key: 'settings' },
 ] as const;
 
-// The design's sticky top bar (Telebuba.dc.html header): logo, nav with an
-// active underline indicator, "system active" pill, bell, avatar. Reproduced
-// with Tailwind utilities (design tokens + arbitrary values) to match 1:1.
+// The design's sticky top bar (Telebuba.dc.html header): logo, nav with a
+// sliding active indicator (the GSAP layoutId slide, done here by measuring the
+// active link and CSS-transitioning a single underline), "system active" pill,
+// bell, avatar. Reproduced with Tailwind utilities to match 1:1.
 export function AppNav() {
   const { t } = useTranslation();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
+  const navRef = useRef<HTMLElement>(null);
+  const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+
+  const activeIdx = LINKS.findIndex((link) =>
+    link.to === '/' ? pathname === '/' : pathname.startsWith(link.to),
+  );
+
+  useLayoutEffect(() => {
+    const nav = navRef.current;
+    if (!nav) return;
+    const move = () => {
+      const active = nav.querySelectorAll('a')[activeIdx];
+      if (active instanceof HTMLElement) {
+        setIndicator({ left: active.offsetLeft, width: active.offsetWidth });
+      }
+    };
+    move();
+    window.addEventListener('resize', move);
+    void document.fonts?.ready.then(move); // reposition once webfonts settle widths
+    return () => {
+      window.removeEventListener('resize', move);
+    };
+  }, [activeIdx]);
+
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur-[10px]">
       <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-7 px-6">
@@ -24,16 +51,21 @@ export function AppNav() {
           <span className="text-[15px] font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
 
-        <nav className="relative flex flex-1 items-center gap-[22px] self-stretch">
-          {LINKS.map((link) => (
+        <nav ref={navRef} className="relative flex flex-1 items-center gap-[22px] self-stretch">
+          {LINKS.map((link, index) => (
             <Link
               key={link.to}
               to={link.to}
-              className="tb-nav relative flex items-center self-stretch text-[13px] font-medium text-ink-muted transition-colors [&.active]:text-ink [&.active]:after:absolute [&.active]:after:inset-x-0 [&.active]:after:bottom-0 [&.active]:after:h-[2px] [&.active]:after:rounded-t [&.active]:after:bg-primary"
+              className={`relative flex items-center self-stretch text-[13px] font-medium transition-colors ${activeIdx === index ? 'text-ink' : 'text-ink-muted hover:text-ink'}`}
             >
               {t(`nav.${link.key}`)}
             </Link>
           ))}
+          <span
+            aria-hidden
+            className="pointer-events-none absolute bottom-0 h-[2px] rounded-t bg-primary transition-[left,width] duration-[450ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
+            style={{ left: indicator.left, width: indicator.width }}
+          />
         </nav>
 
         <div className="flex shrink-0 items-center gap-[10px]">
