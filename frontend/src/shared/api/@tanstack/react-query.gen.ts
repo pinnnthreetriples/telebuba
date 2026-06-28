@@ -25,6 +25,7 @@ import {
   linkCampaignChannel,
   listAccounts,
   listCampaigns,
+  listLogs,
   listWarmingChannels,
   login,
   logout,
@@ -83,6 +84,9 @@ import type {
   ListCampaignsData,
   ListCampaignsError,
   ListCampaignsResponse,
+  ListLogsData,
+  ListLogsError,
+  ListLogsResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
@@ -876,3 +880,71 @@ export const stopNeurocommentMutation = (
   };
   return mutationOptions;
 };
+
+export const listLogsQueryKey = (options?: Options<ListLogsData>) =>
+  createQueryKey('listLogs', options);
+
+/**
+ * List Logs
+ */
+export const listLogsOptions = (options?: Options<ListLogsData>) =>
+  queryOptions<
+    ListLogsResponse,
+    ListLogsError,
+    ListLogsResponse,
+    ReturnType<typeof listLogsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listLogs({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listLogsQueryKey(options),
+  });
+
+export const listLogsInfiniteQueryKey = (
+  options?: Options<ListLogsData>,
+): QueryKey<Options<ListLogsData>> => createQueryKey('listLogs', options, true);
+
+/**
+ * List Logs
+ */
+export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) =>
+  infiniteQueryOptions<
+    ListLogsResponse,
+    ListLogsError,
+    InfiniteData<ListLogsResponse>,
+    QueryKey<Options<ListLogsData>>,
+    string | null | Pick<QueryKey<Options<ListLogsData>>[0], 'body' | 'headers' | 'path' | 'query'>
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListLogsData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  cursor: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listLogs({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listLogsInfiniteQueryKey(options),
+    },
+  );

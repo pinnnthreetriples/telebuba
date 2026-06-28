@@ -52,6 +52,9 @@ import type {
   ListCampaignsData,
   ListCampaignsErrors,
   ListCampaignsResponses,
+  ListLogsData,
+  ListLogsErrors,
+  ListLogsResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
@@ -482,3 +485,14 @@ export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
     { url: '/api/v1/neurocomment/stop', ...options },
   );
+
+/**
+ * List Logs
+ */
+export const listLogs = <ThrowOnError extends boolean = false>(
+  options?: Options<ListLogsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<ListLogsResponses, ListLogsErrors, ThrowOnError>({
+    url: '/api/v1/logs',
+    ...options,
+  });

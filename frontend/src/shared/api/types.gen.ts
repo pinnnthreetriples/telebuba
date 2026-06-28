@@ -360,6 +360,44 @@ export type LinkChannelRequest = {
 };
 
 /**
+ * LogEntry
+ *
+ * One row of the ``logs`` SQLite table.
+ */
+export type LogEntry = {
+  /**
+   * Id
+   */
+  id: number;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Level
+   */
+  level: 'INFO' | 'WARNING' | 'ERROR';
+  /**
+   * Status
+   */
+  status: 'success' | 'warning' | 'error';
+  /**
+   * Account Id
+   */
+  account_id: string | null;
+  /**
+   * Event
+   */
+  event: string;
+  /**
+   * Extra
+   */
+  extra?: {
+    [key: string]: unknown;
+  };
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -557,6 +595,20 @@ export type PageAccountRead = {
    * Items
    */
   items: Array<AccountRead>;
+  /**
+   * Next Cursor
+   */
+  next_cursor?: string | null;
+};
+
+/**
+ * Page[LogEntry]
+ */
+export type PageLogEntry = {
+  /**
+   * Items
+   */
+  items: Array<LogEntry>;
   /**
    * Next Cursor
    */
@@ -1738,3 +1790,45 @@ export type StopNeurocommentResponses = {
 };
 
 export type StopNeurocommentResponse = StopNeurocommentResponses[keyof StopNeurocommentResponses];
+
+export type ListLogsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Status
+     */
+    status?: 'all' | 'success' | 'warning' | 'error';
+    /**
+     * Account Id
+     */
+    account_id?: string;
+    /**
+     * Cursor
+     */
+    cursor?: string | null;
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/logs';
+};
+
+export type ListLogsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListLogsError = ListLogsErrors[keyof ListLogsErrors];
+
+export type ListLogsResponses = {
+  /**
+   * Successful Response
+   */
+  200: PageLogEntry;
+};
+
+export type ListLogsResponse = ListLogsResponses[keyof ListLogsResponses];

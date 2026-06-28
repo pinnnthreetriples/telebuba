@@ -46,7 +46,37 @@
   "nav": {
     "accounts": "Аккаунты",
     "warming": "Прогрев",
-    "neurocomment": "Нейрокомментинг"
+    "neurocomment": "Нейрокомментинг",
+    "logs": "Логи"
+  },
+  "logs": {
+    "title": "Логи",
+    "loading": "Загрузка…",
+    "error": "Не удалось загрузить логи",
+    "empty": "Записей нет",
+    "filter": {
+      "status": "Статус",
+      "account": "Аккаунт",
+      "all": "Все",
+      "success": "Успех",
+      "warning": "Предупреждение",
+      "error": "Ошибка"
+    },
+    "status": {
+      "success": "Успех",
+      "warning": "Предупреждение",
+      "error": "Ошибка"
+    },
+    "col": {
+      "time": "Время",
+      "status": "Статус",
+      "account": "Аккаунт",
+      "event": "Событие"
+    },
+    "pagination": {
+      "prev": "Назад",
+      "next": "Вперёд"
+    }
   },
   "neurocomment": {
     "title": "Нейрокомментинг",

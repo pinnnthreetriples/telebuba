@@ -46,7 +46,37 @@
   "nav": {
     "accounts": "Accounts",
     "warming": "Warming",
-    "neurocomment": "Neurocomment"
+    "neurocomment": "Neurocomment",
+    "logs": "Logs"
+  },
+  "logs": {
+    "title": "Logs",
+    "loading": "Loading…",
+    "error": "Failed to load logs",
+    "empty": "No entries",
+    "filter": {
+      "status": "Status",
+      "account": "Account",
+      "all": "All",
+      "success": "Success",
+      "warning": "Warning",
+      "error": "Error"
+    },
+    "status": {
+      "success": "Success",
+      "warning": "Warning",
+      "error": "Error"
+    },
+    "col": {
+      "time": "Time",
+      "status": "Status",
+      "account": "Account",
+      "event": "Event"
+    },
+    "pagination": {
+      "prev": "Prev",
+      "next": "Next"
+    }
   },
   "neurocomment": {
     "title": "Neurocomment",
