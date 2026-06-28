@@ -43,6 +43,48 @@
       "next": "Next"
     }
   },
+  "nav": {
+    "accounts": "Accounts",
+    "warming": "Warming"
+  },
+  "warming": {
+    "title": "Warming",
+    "loading": "Loading…",
+    "error": "Failed to load the warming board",
+    "summary": "Active: {{active}} of {{total}}",
+    "state": {
+      "idle": "Idle",
+      "active": "Active",
+      "sleeping": "Sleeping",
+      "flood_wait": "Flood-wait",
+      "quarantine": "Quarantine",
+      "error": "Error"
+    },
+    "column": {
+      "idle": "Not warming",
+      "warming": "Warming"
+    },
+    "card": {
+      "cycles": "Cycles: {{count}}",
+      "trust": "trust"
+    },
+    "actions": {
+      "start": "Start",
+      "stop": "Stop"
+    },
+    "channels": {
+      "title": "Channels",
+      "placeholder": "Links or @usernames, comma-separated…",
+      "add": "Add",
+      "remove": "Remove"
+    },
+    "settings": {
+      "title": "Warming settings",
+      "reactions_enabled": "Reactions",
+      "join_enabled": "Join channels",
+      "inter_account_chat": "Inter-account dialogues"
+    }
+  },
   "auth": {
     "login": {
       "title": "Sign in",

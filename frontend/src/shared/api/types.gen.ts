@@ -196,6 +196,18 @@ export type ActionResult = {
 };
 
 /**
+ * AddChannelsRequest
+ *
+ * Raw user input — one or many links/usernames, newline- or comma-separated.
+ */
+export type AddChannelsRequest = {
+  /**
+   * Raw
+   */
+  raw: string;
+};
+
+/**
  * Body_importAccountTdata
  */
 export type BodyImportAccountTdata = {
@@ -272,6 +284,36 @@ export type PageAccountRead = {
 };
 
 /**
+ * RemoveChannelRequest
+ */
+export type RemoveChannelRequest = {
+  /**
+   * Channel
+   */
+  channel: string;
+};
+
+/**
+ * StartWarmingRequest
+ */
+export type StartWarmingRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
+ * StopWarmingRequest
+ */
+export type StopWarmingRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
  * TdataImportResult
  *
  * Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.
@@ -333,6 +375,389 @@ export type ValidationError = {
   ctx?: {
     [key: string]: unknown;
   };
+};
+
+/**
+ * WarmingAccountState
+ *
+ * One account's warming status, rendered as a kanban card.
+ */
+export type WarmingAccountState = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Label
+   */
+  label: string;
+  /**
+   * State
+   */
+  state: 'idle' | 'active' | 'sleeping' | 'flood_wait' | 'quarantine' | 'error';
+  /**
+   * Health
+   */
+  health: 'idle' | 'ok' | 'warn' | 'fail';
+  /**
+   * Cycles Completed
+   */
+  cycles_completed?: number;
+  /**
+   * Last Event
+   */
+  last_event?: string | null;
+  /**
+   * Last Cycle At
+   */
+  last_cycle_at?: string | null;
+  /**
+   * Next Run At
+   */
+  next_run_at?: string | null;
+  /**
+   * Updated At
+   */
+  updated_at?: string | null;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Last Action
+   */
+  last_action?: string | null;
+  /**
+   * Last Channel
+   */
+  last_channel?: string | null;
+  /**
+   * Heartbeat At
+   */
+  heartbeat_at?: string | null;
+  /**
+   * Started At
+   */
+  started_at?: string | null;
+  /**
+   * Stopped At
+   */
+  stopped_at?: string | null;
+  /**
+   * Flood Wait Seconds
+   */
+  flood_wait_seconds?: number | null;
+  /**
+   * Flood Wait Until
+   */
+  flood_wait_until?: string | null;
+  /**
+   * Proxy Snapshot
+   */
+  proxy_snapshot?: string | null;
+  /**
+   * Daily Actions
+   */
+  daily_actions?: number;
+  /**
+   * Daily Count Date
+   */
+  daily_count_date?: string | null;
+  /**
+   * Quarantine Count
+   */
+  quarantine_count?: number;
+  /**
+   * Trust Score
+   */
+  trust_score?: number | null;
+  /**
+   * Trust Band
+   */
+  trust_band?: string | null;
+  /**
+   * Trust Reasons
+   */
+  trust_reasons?: Array<string>;
+  /**
+   * Spam Status
+   */
+  spam_status?: string | null;
+  /**
+   * Spam Detail
+   */
+  spam_detail?: string | null;
+  /**
+   * Age Hours
+   */
+  age_hours?: number | null;
+  /**
+   * Dm Allowed
+   */
+  dm_allowed?: boolean;
+  /**
+   * Phone Country
+   */
+  phone_country?: string | null;
+  /**
+   * Proxy Country
+   */
+  proxy_country?: string | null;
+  /**
+   * Phase
+   */
+  phase?: 'intro' | 'settling' | 'warming' | 'active' | 'warmed' | null;
+  /**
+   * Phase Label
+   */
+  phase_label?: string | null;
+  /**
+   * Daily Cap
+   */
+  daily_cap?: number;
+  /**
+   * Progress To Next
+   */
+  progress_to_next?: number | null;
+  /**
+   * Days To Next Phase
+   */
+  days_to_next_phase?: number | null;
+  /**
+   * Warming Days
+   */
+  warming_days?: number | null;
+  readiness?: WarmingReadiness | null;
+  /**
+   * Promoted To Nc
+   */
+  promoted_to_nc?: boolean;
+};
+
+/**
+ * WarmingBoardState
+ *
+ * Everything the warming page renders in one poll tick.
+ */
+export type WarmingBoardState = {
+  /**
+   * Idle
+   */
+  idle?: Array<WarmingAccountState>;
+  /**
+   * Warming
+   */
+  warming?: Array<WarmingAccountState>;
+  channels: WarmingChannelList;
+  settings: WarmingSettings;
+  /**
+   * Channel Count
+   */
+  channel_count: number;
+  /**
+   * Active Count
+   */
+  active_count: number;
+  summary?: WarmingSummary;
+};
+
+/**
+ * WarmingChannel
+ *
+ * One channel the warming engine can join / read / react in.
+ */
+export type WarmingChannel = {
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Label
+   */
+  label?: string | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+};
+
+/**
+ * WarmingChannelList
+ */
+export type WarmingChannelList = {
+  /**
+   * Channels
+   */
+  channels?: Array<WarmingChannel>;
+};
+
+/**
+ * WarmingReadiness
+ *
+ * Pre-start verdict for an account: can it safely begin warming?
+ *
+ * ``reasons`` is empty iff ``ready`` is True — each entry is a short,
+ * human-readable blocker (``"session new"``, ``"no proxy"``, ``"no channels"``).
+ */
+export type WarmingReadiness = {
+  /**
+   * Ready
+   */
+  ready: boolean;
+  /**
+   * Reasons
+   */
+  reasons?: Array<string>;
+};
+
+/**
+ * WarmingSettings
+ *
+ * Masked, UI-facing warming settings — never carries the raw Gemini key.
+ */
+export type WarmingSettings = {
+  /**
+   * Inter Account Chat
+   */
+  inter_account_chat?: boolean;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean;
+  /**
+   * Join Enabled
+   */
+  join_enabled?: boolean;
+  /**
+   * Enforce Readiness
+   */
+  enforce_readiness?: boolean;
+  /**
+   * Quiet Hours Enabled
+   */
+  quiet_hours_enabled?: boolean;
+  /**
+   * Quiet Hours Start
+   */
+  quiet_hours_start?: number;
+  /**
+   * Quiet Hours End
+   */
+  quiet_hours_end?: number;
+  /**
+   * Max Daily Actions
+   */
+  max_daily_actions?: number;
+  /**
+   * Has Gemini Key
+   */
+  has_gemini_key?: boolean;
+  /**
+   * Gemini Model
+   */
+  gemini_model: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * WarmingSettingsUpdate
+ *
+ * Caller-supplied settings change from the UI.
+ *
+ * ``gemini_api_key`` semantics: ``None`` leaves the stored key untouched, an
+ * empty string clears it, any other value replaces it. Same applies to
+ * ``gemini_model`` — ``None`` keeps current value, non-empty overrides.
+ * An explicit ``clear_gemini_key`` flag is provided so the UI can clear the
+ * stored key without ambiguity.
+ */
+export type WarmingSettingsUpdate = {
+  /**
+   * Inter Account Chat
+   */
+  inter_account_chat?: boolean;
+  /**
+   * Reactions Enabled
+   */
+  reactions_enabled?: boolean;
+  /**
+   * Join Enabled
+   */
+  join_enabled?: boolean;
+  /**
+   * Enforce Readiness
+   */
+  enforce_readiness?: boolean;
+  /**
+   * Quiet Hours Enabled
+   */
+  quiet_hours_enabled?: boolean;
+  /**
+   * Quiet Hours Start
+   */
+  quiet_hours_start?: number;
+  /**
+   * Quiet Hours End
+   */
+  quiet_hours_end?: number;
+  /**
+   * Max Daily Actions
+   */
+  max_daily_actions?: number;
+  /**
+   * Gemini Api Key
+   */
+  gemini_api_key?: string | null;
+  /**
+   * Gemini Model
+   */
+  gemini_model?: string | null;
+  /**
+   * Clear Gemini Key
+   */
+  clear_gemini_key?: boolean;
+};
+
+/**
+ * WarmingSummary
+ *
+ * Fleet-level roll-up shown at the top of the warming page.
+ */
+export type WarmingSummary = {
+  /**
+   * Total
+   */
+  total?: number;
+  /**
+   * Warming
+   */
+  warming?: number;
+  /**
+   * Active
+   */
+  active?: number;
+  /**
+   * Ready
+   */
+  ready?: number;
+  /**
+   * Attention
+   */
+  attention?: number;
+  /**
+   * Trust Healthy
+   */
+  trust_healthy?: number;
+  /**
+   * Trust Watch
+   */
+  trust_watch?: number;
+  /**
+   * Trust Risk
+   */
+  trust_risk?: number;
 };
 
 export type LoginData = {
@@ -591,3 +1016,210 @@ export type SetAccountPhotoResponses = {
 };
 
 export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
+
+export type GetWarmingBoardData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/board';
+};
+
+export type GetWarmingBoardErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetWarmingBoardError = GetWarmingBoardErrors[keyof GetWarmingBoardErrors];
+
+export type GetWarmingBoardResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingBoardState;
+};
+
+export type GetWarmingBoardResponse = GetWarmingBoardResponses[keyof GetWarmingBoardResponses];
+
+export type StartWarmingData = {
+  body: StartWarmingRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/start';
+};
+
+export type StartWarmingErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartWarmingError = StartWarmingErrors[keyof StartWarmingErrors];
+
+export type StartWarmingResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type StartWarmingResponse = StartWarmingResponses[keyof StartWarmingResponses];
+
+export type StopWarmingData = {
+  body: StopWarmingRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/stop';
+};
+
+export type StopWarmingErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StopWarmingError = StopWarmingErrors[keyof StopWarmingErrors];
+
+export type StopWarmingResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type StopWarmingResponse = StopWarmingResponses[keyof StopWarmingResponses];
+
+export type ListWarmingChannelsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels';
+};
+
+export type ListWarmingChannelsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListWarmingChannelsError = ListWarmingChannelsErrors[keyof ListWarmingChannelsErrors];
+
+export type ListWarmingChannelsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingChannelList;
+};
+
+export type ListWarmingChannelsResponse =
+  ListWarmingChannelsResponses[keyof ListWarmingChannelsResponses];
+
+export type AddWarmingChannelsData = {
+  body: AddChannelsRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels';
+};
+
+export type AddWarmingChannelsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AddWarmingChannelsError = AddWarmingChannelsErrors[keyof AddWarmingChannelsErrors];
+
+export type AddWarmingChannelsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingChannelList;
+};
+
+export type AddWarmingChannelsResponse =
+  AddWarmingChannelsResponses[keyof AddWarmingChannelsResponses];
+
+export type RemoveWarmingChannelData = {
+  body: RemoveChannelRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/channels/remove';
+};
+
+export type RemoveWarmingChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveWarmingChannelError =
+  RemoveWarmingChannelErrors[keyof RemoveWarmingChannelErrors];
+
+export type RemoveWarmingChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingChannelList;
+};
+
+export type RemoveWarmingChannelResponse =
+  RemoveWarmingChannelResponses[keyof RemoveWarmingChannelResponses];
+
+export type GetWarmingSettingsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/settings';
+};
+
+export type GetWarmingSettingsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetWarmingSettingsError = GetWarmingSettingsErrors[keyof GetWarmingSettingsErrors];
+
+export type GetWarmingSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingSettings;
+};
+
+export type GetWarmingSettingsResponse =
+  GetWarmingSettingsResponses[keyof GetWarmingSettingsResponses];
+
+export type UpdateWarmingSettingsData = {
+  body: WarmingSettingsUpdate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/settings';
+};
+
+export type UpdateWarmingSettingsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateWarmingSettingsError =
+  UpdateWarmingSettingsErrors[keyof UpdateWarmingSettingsErrors];
+
+export type UpdateWarmingSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingSettings;
+};
+
+export type UpdateWarmingSettingsResponse =
+  UpdateWarmingSettingsResponses[keyof UpdateWarmingSettingsResponses];

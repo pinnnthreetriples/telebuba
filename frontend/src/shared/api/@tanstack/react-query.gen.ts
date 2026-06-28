@@ -10,19 +10,30 @@ import {
 
 import { client } from '../client.gen';
 import {
+  addWarmingChannels,
   checkAccount,
   deleteAccount,
   getHealth,
   getMe,
+  getWarmingBoard,
+  getWarmingSettings,
   importAccountTdata,
   listAccounts,
+  listWarmingChannels,
   login,
   logout,
   type Options,
+  removeWarmingChannel,
   setAccountPhoto,
+  startWarming,
+  stopWarming,
   updateAccountProfile,
+  updateWarmingSettings,
 } from '../sdk.gen';
 import type {
+  AddWarmingChannelsData,
+  AddWarmingChannelsError,
+  AddWarmingChannelsResponse,
   CheckAccountData,
   CheckAccountError,
   CheckAccountResponse,
@@ -34,23 +45,44 @@ import type {
   GetMeData,
   GetMeError,
   GetMeResponse,
+  GetWarmingBoardData,
+  GetWarmingBoardError,
+  GetWarmingBoardResponse,
+  GetWarmingSettingsData,
+  GetWarmingSettingsError,
+  GetWarmingSettingsResponse,
   ImportAccountTdataData,
   ImportAccountTdataError,
   ImportAccountTdataResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
+  ListWarmingChannelsData,
+  ListWarmingChannelsError,
+  ListWarmingChannelsResponse,
   LoginData,
   LoginError,
   LoginResponse,
   LogoutData,
   LogoutResponse,
+  RemoveWarmingChannelData,
+  RemoveWarmingChannelError,
+  RemoveWarmingChannelResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  StartWarmingData,
+  StartWarmingError,
+  StartWarmingResponse,
+  StopWarmingData,
+  StopWarmingError,
+  StopWarmingResponse,
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
+  UpdateWarmingSettingsData,
+  UpdateWarmingSettingsError,
+  UpdateWarmingSettingsResponse,
 } from '../types.gen';
 
 /**
@@ -395,6 +427,208 @@ export const setAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getWarmingBoardQueryKey = (options?: Options<GetWarmingBoardData>) =>
+  createQueryKey('getWarmingBoard', options);
+
+/**
+ * Get Warming Board
+ */
+export const getWarmingBoardOptions = (options?: Options<GetWarmingBoardData>) =>
+  queryOptions<
+    GetWarmingBoardResponse,
+    GetWarmingBoardError,
+    GetWarmingBoardResponse,
+    ReturnType<typeof getWarmingBoardQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getWarmingBoard({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getWarmingBoardQueryKey(options),
+  });
+
+/**
+ * Start Warming
+ */
+export const startWarmingMutation = (
+  options?: Partial<Options<StartWarmingData>>,
+): UseMutationOptions<StartWarmingResponse, StartWarmingError, Options<StartWarmingData>> => {
+  const mutationOptions: UseMutationOptions<
+    StartWarmingResponse,
+    StartWarmingError,
+    Options<StartWarmingData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startWarming({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Stop Warming
+ */
+export const stopWarmingMutation = (
+  options?: Partial<Options<StopWarmingData>>,
+): UseMutationOptions<StopWarmingResponse, StopWarmingError, Options<StopWarmingData>> => {
+  const mutationOptions: UseMutationOptions<
+    StopWarmingResponse,
+    StopWarmingError,
+    Options<StopWarmingData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopWarming({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listWarmingChannelsQueryKey = (options?: Options<ListWarmingChannelsData>) =>
+  createQueryKey('listWarmingChannels', options);
+
+/**
+ * List Warming Channels
+ */
+export const listWarmingChannelsOptions = (options?: Options<ListWarmingChannelsData>) =>
+  queryOptions<
+    ListWarmingChannelsResponse,
+    ListWarmingChannelsError,
+    ListWarmingChannelsResponse,
+    ReturnType<typeof listWarmingChannelsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmingChannels({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmingChannelsQueryKey(options),
+  });
+
+/**
+ * Add Warming Channels
+ */
+export const addWarmingChannelsMutation = (
+  options?: Partial<Options<AddWarmingChannelsData>>,
+): UseMutationOptions<
+  AddWarmingChannelsResponse,
+  AddWarmingChannelsError,
+  Options<AddWarmingChannelsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddWarmingChannelsResponse,
+    AddWarmingChannelsError,
+    Options<AddWarmingChannelsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addWarmingChannels({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Warming Channel
+ */
+export const removeWarmingChannelMutation = (
+  options?: Partial<Options<RemoveWarmingChannelData>>,
+): UseMutationOptions<
+  RemoveWarmingChannelResponse,
+  RemoveWarmingChannelError,
+  Options<RemoveWarmingChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveWarmingChannelResponse,
+    RemoveWarmingChannelError,
+    Options<RemoveWarmingChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeWarmingChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getWarmingSettingsQueryKey = (options?: Options<GetWarmingSettingsData>) =>
+  createQueryKey('getWarmingSettings', options);
+
+/**
+ * Get Warming Settings
+ */
+export const getWarmingSettingsOptions = (options?: Options<GetWarmingSettingsData>) =>
+  queryOptions<
+    GetWarmingSettingsResponse,
+    GetWarmingSettingsError,
+    GetWarmingSettingsResponse,
+    ReturnType<typeof getWarmingSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getWarmingSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getWarmingSettingsQueryKey(options),
+  });
+
+/**
+ * Update Warming Settings
+ */
+export const updateWarmingSettingsMutation = (
+  options?: Partial<Options<UpdateWarmingSettingsData>>,
+): UseMutationOptions<
+  UpdateWarmingSettingsResponse,
+  UpdateWarmingSettingsError,
+  Options<UpdateWarmingSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateWarmingSettingsResponse,
+    UpdateWarmingSettingsError,
+    Options<UpdateWarmingSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateWarmingSettings({
         ...options,
         ...fnOptions,
         throwOnError: true,

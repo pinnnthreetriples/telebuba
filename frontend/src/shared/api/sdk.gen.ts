@@ -8,6 +8,9 @@ import {
 } from './client';
 import { client } from './client.gen';
 import type {
+  AddWarmingChannelsData,
+  AddWarmingChannelsErrors,
+  AddWarmingChannelsResponses,
   CheckAccountData,
   CheckAccountErrors,
   CheckAccountResponses,
@@ -19,23 +22,44 @@ import type {
   GetMeData,
   GetMeErrors,
   GetMeResponses,
+  GetWarmingBoardData,
+  GetWarmingBoardErrors,
+  GetWarmingBoardResponses,
+  GetWarmingSettingsData,
+  GetWarmingSettingsErrors,
+  GetWarmingSettingsResponses,
   ImportAccountTdataData,
   ImportAccountTdataErrors,
   ImportAccountTdataResponses,
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
+  ListWarmingChannelsData,
+  ListWarmingChannelsErrors,
+  ListWarmingChannelsResponses,
   LoginData,
   LoginErrors,
   LoginResponses,
   LogoutData,
   LogoutResponses,
+  RemoveWarmingChannelData,
+  RemoveWarmingChannelErrors,
+  RemoveWarmingChannelResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  StartWarmingData,
+  StartWarmingErrors,
+  StartWarmingResponses,
+  StopWarmingData,
+  StopWarmingErrors,
+  StopWarmingResponses,
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
+  UpdateWarmingSettingsData,
+  UpdateWarmingSettingsErrors,
+  UpdateWarmingSettingsResponses,
 } from './types.gen';
 
 export type Options<
@@ -192,6 +216,128 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Warming Board
+ */
+export const getWarmingBoard = <ThrowOnError extends boolean = false>(
+  options?: Options<GetWarmingBoardData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<GetWarmingBoardResponses, GetWarmingBoardErrors, ThrowOnError>({
+    url: '/api/v1/warming/board',
+    ...options,
+  });
+
+/**
+ * Start Warming
+ */
+export const startWarming = <ThrowOnError extends boolean = false>(
+  options: Options<StartWarmingData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<StartWarmingResponses, StartWarmingErrors, ThrowOnError>({
+    url: '/api/v1/warming/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Stop Warming
+ */
+export const stopWarming = <ThrowOnError extends boolean = false>(
+  options: Options<StopWarmingData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<StopWarmingResponses, StopWarmingErrors, ThrowOnError>({
+    url: '/api/v1/warming/stop',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * List Warming Channels
+ */
+export const listWarmingChannels = <ThrowOnError extends boolean = false>(
+  options?: Options<ListWarmingChannelsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    ListWarmingChannelsResponses,
+    ListWarmingChannelsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/channels', ...options });
+
+/**
+ * Add Warming Channels
+ */
+export const addWarmingChannels = <ThrowOnError extends boolean = false>(
+  options: Options<AddWarmingChannelsData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    AddWarmingChannelsResponses,
+    AddWarmingChannelsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/channels',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Warming Channel
+ */
+export const removeWarmingChannel = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveWarmingChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveWarmingChannelResponses,
+    RemoveWarmingChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/channels/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Warming Settings
+ */
+export const getWarmingSettings = <ThrowOnError extends boolean = false>(
+  options?: Options<GetWarmingSettingsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    GetWarmingSettingsResponses,
+    GetWarmingSettingsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/settings', ...options });
+
+/**
+ * Update Warming Settings
+ */
+export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateWarmingSettingsData, ThrowOnError>,
+) =>
+  (options.client ?? client).put<
+    UpdateWarmingSettingsResponses,
+    UpdateWarmingSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
       ...options.headers,
     },
   });
