@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { StatusBadge } from '@/entities/account';
@@ -6,14 +6,111 @@ import type { AccountRead } from '@/shared/api';
 
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line bg-white px-3 py-[9px] text-[13px] outline-none';
+const FIELD_LOCKED =
+  'w-full cursor-not-allowed rounded-[10px] border border-line bg-[#f6f5f2] px-3 py-[9px] text-[13px] text-ink-subtle outline-none';
 const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
+const SEG_WRAP = 'mb-[10px] flex gap-1 rounded-[10px] bg-[#f1efed] p-1';
+const seg = (on: boolean): string =>
+  `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
+
+// ponytail: device profile + spam signals are mock until AccountRead carries
+// them — design-first, backend wiring is a later step.
+const DEVICE = { model: 'iPhone 13', os: 'iOS 17.2', lang: 'Русский (ru-RU)' };
+const SIGNALS = [
+  { dot: 'bg-[#2e9e64]', label: 'Текущий статус', value: 'Без ограничений' },
+  { dot: 'bg-line-strong', label: 'Последний spam-block', value: 'не зафиксирован' },
+  { dot: 'bg-line-strong', label: 'Последняя проверка', value: 'сегодня' },
+];
 
 function mono(account: AccountRead): string {
   return (account.phone ?? account.account_id).replace(/\D/g, '').slice(-2) || '#';
 }
 
-// The design's account-edit view (reached by clicking a row): header + session
-// (state / code login / import) + proxy. ponytail: forms are mock until wired.
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <span
+      className={`flex text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${open ? 'rotate-180' : ''}`}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="2"
+      >
+        <path d="m6 9 6 6 6-6" />
+      </svg>
+    </span>
+  );
+}
+
+// A design accordion card: header (title + chevron) + max-height-collapsing body.
+// `right` renders an action between the title and chevron (the signals @SpamBot check).
+function Section({
+  title,
+  icon,
+  right,
+  bodyClassName = 'px-5 pb-[18px]',
+  children,
+}: {
+  title: string;
+  icon?: ReactNode;
+  right?: ReactNode;
+  bodyClassName?: string;
+  children: ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const toggle = () => {
+    setOpen((value) => !value);
+  };
+  const heading = (
+    <span className="flex items-center gap-[7px] text-[13px] font-semibold text-ink">
+      {title}
+      {icon}
+    </span>
+  );
+  return (
+    <div className="self-start overflow-hidden rounded-2xl border border-line bg-white">
+      {right ? (
+        <div className="flex items-center gap-[10px] px-5 py-4">
+          <button
+            type="button"
+            onClick={toggle}
+            className="flex flex-1 items-center gap-[10px] text-left"
+          >
+            {heading}
+          </button>
+          {right}
+          <button
+            type="button"
+            onClick={toggle}
+            aria-label={title}
+            className="flex shrink-0 items-center"
+          >
+            <Chevron open={open} />
+          </button>
+        </div>
+      ) : (
+        <button
+          type="button"
+          onClick={toggle}
+          className="flex w-full items-center justify-between gap-[10px] px-5 py-4 text-left"
+        >
+          {heading}
+          <Chevron open={open} />
+        </button>
+      )}
+      <div className={`tb-collapse ${open ? 'tb-open' : ''}`}>
+        <div className={bodyClassName}>{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// The design's account-edit view (reached by clicking a row): an always-visible
+// hero header above five collapsible cards — session, proxy, device, signals,
+// actions. ponytail: every form here is mock until the backend is wired.
 export function AccountEdit({ account, onBack }: { account: AccountRead; onBack: () => void }) {
   const { t } = useTranslation();
   const [importTab, setImportTab] = useState<'session' | 'tdata'>('session');
@@ -66,12 +163,11 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         </div>
       </div>
 
-      <div className="grid grid-cols-2 gap-[14px]">
-        <div className="self-start rounded-2xl border border-line bg-white p-5">
-          <div className="mb-4 text-[13px] font-semibold">{t('accounts.edit.session')}</div>
+      <div className="mb-[14px] grid grid-cols-2 gap-[14px]">
+        <Section title={t('accounts.edit.session')}>
           <div className="mb-[10px] flex items-center justify-between gap-[10px] rounded-[10px] bg-[#f6f5f2] px-3 py-[10px]">
             <span className="flex items-center gap-2">
-              <span className="h-2 w-2 rounded-full bg-success" />
+              <span className="h-2 w-2 rounded-full bg-success-dot" />
               <span className="text-[12.5px] text-[#3a3a3a]">{t('accounts.edit.sessionOk')}</span>
             </span>
             <button
@@ -103,7 +199,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           <div className="mb-[9px] mt-[18px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
             {t('accounts.edit.import')}
           </div>
-          <div className="mb-[10px] flex gap-1 rounded-[10px] bg-canvas p-1">
+          <div className={SEG_WRAP}>
             {(['session', 'tdata'] as const).map((tab) => (
               <button
                 key={tab}
@@ -111,7 +207,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                 onClick={() => {
                   setImportTab(tab);
                 }}
-                className={`flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium ${importTab === tab ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+                className={seg(importTab === tab)}
               >
                 {tab === 'session' ? '.session' : 'tdata.zip'}
               </button>
@@ -136,18 +232,17 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.dropHint')}</div>
             </div>
           </div>
-        </div>
+        </Section>
 
-        <div className="self-start rounded-2xl border border-line bg-white p-5">
-          <div className="mb-1 text-[13px] font-semibold">{t('accounts.edit.proxy')}</div>
+        <Section title={t('accounts.edit.proxy')}>
           <div className="mb-3 text-[12px] text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
           <div className="mb-3 flex items-center gap-2 rounded-[10px] bg-[#f6f5f2] px-3 py-[10px]">
-            <span className="h-2 w-2 rounded-full bg-success" />
+            <span className="h-2 w-2 rounded-full bg-success-dot" />
             <span className="text-[12.5px] text-[#3a3a3a]">
               {t('accounts.edit.proxyOk')} · {account.proxy_country_code?.toUpperCase() ?? '—'}
             </span>
           </div>
-          <div className="mb-3 flex gap-1 rounded-[10px] bg-canvas p-1">
+          <div className={SEG_WRAP}>
             {(['pool', 'manual'] as const).map((mode) => (
               <button
                 key={mode}
@@ -155,7 +250,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                 onClick={() => {
                   setProxyMode(mode);
                 }}
-                className={`flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium ${proxyMode === mode ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`}
+                className={seg(proxyMode === mode)}
               >
                 {mode === 'pool' ? t('accounts.edit.fromPool') : t('accounts.edit.manual')}
               </button>
@@ -180,7 +275,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                   </select>
                 </label>
               </div>
-              <div className="grid grid-cols-2 gap-[10px]">
+              <div className="mb-[14px] grid grid-cols-2 gap-[10px]">
                 <label>
                   <span className={LABEL}>{t('accounts.edit.login')}</span>
                   <input className={FIELD} />
@@ -214,7 +309,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               </div>
             </>
           ) : (
-            <label className="block">
+            <label className="mb-[14px] block">
               <span className={LABEL}>{t('accounts.proxyPool.title')}</span>
               <select className={FIELD}>
                 <option>nl-1.proxyhub.net:1080</option>
@@ -222,8 +317,157 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               </select>
             </label>
           )}
-        </div>
+          <button
+            type="button"
+            className="inline-flex items-center gap-[7px] rounded-full border border-line bg-white px-4 py-2 text-[13px] font-medium"
+          >
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+            >
+              <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+              <path d="M21 3v6h-6" />
+            </svg>
+            {t('accounts.edit.proxyCheck')}
+          </button>
+        </Section>
       </div>
+
+      <div className="mb-[14px] grid grid-cols-2 gap-[14px]">
+        <Section
+          title={t('accounts.edit.device')}
+          icon={
+            <svg
+              width="13"
+              height="13"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              className="text-ink-subtle"
+            >
+              <rect x="3" y="11" width="18" height="11" rx="2" />
+              <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+            </svg>
+          }
+        >
+          <div className="mb-[14px] text-[12px] text-ink-subtle">
+            {t('accounts.edit.deviceLocked')}
+          </div>
+          <div className="flex flex-col gap-[11px]">
+            <label>
+              <span className={LABEL}>{t('accounts.edit.deviceModel')}</span>
+              <input value={DEVICE.model} disabled className={FIELD_LOCKED} />
+            </label>
+            <label>
+              <span className={LABEL}>{t('accounts.edit.deviceOs')}</span>
+              <input value={DEVICE.os} disabled className={FIELD_LOCKED} />
+            </label>
+            <label>
+              <span className={LABEL}>{t('accounts.edit.deviceLang')}</span>
+              <input value={DEVICE.lang} disabled className={FIELD_LOCKED} />
+            </label>
+          </div>
+        </Section>
+
+        <Section
+          title={t('accounts.edit.signals')}
+          right={
+            <span className="tb-tip">
+              <button
+                type="button"
+                className="inline-flex items-center gap-[6px] rounded-full border border-line bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted"
+              >
+                {t('accounts.edit.signalsCheck')}
+              </button>
+              <span className="tb-tip-pop">{t('accounts.edit.signalsTip')}</span>
+            </span>
+          }
+        >
+          <div className="mb-2 text-[12px] text-ink-subtle">
+            {t('accounts.edit.signalsReadonly')}
+          </div>
+          <div className="flex flex-col">
+            {SIGNALS.map((signal) => (
+              <div
+                key={signal.label}
+                className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[11px]"
+              >
+                <span className="flex items-center gap-2 text-[12.5px] text-ink-muted">
+                  <span className={`h-[7px] w-[7px] shrink-0 rounded-full ${signal.dot}`} />
+                  {signal.label}
+                </span>
+                <span className="text-right text-[12.5px] font-medium text-ink">
+                  {signal.value}
+                </span>
+              </div>
+            ))}
+          </div>
+        </Section>
+      </div>
+
+      <Section title={t('accounts.edit.actions')} bodyClassName="px-5 pb-[6px]">
+        <div className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[14px]">
+          <div>
+            <div className="text-[13px] font-medium">{t('accounts.edit.aliveTitle')}</div>
+            <div className="mt-px text-[11.5px] text-ink-subtle">
+              {t('accounts.edit.aliveHint')}
+            </div>
+          </div>
+          <button
+            type="button"
+            title={t('accounts.edit.aliveBtnTitle')}
+            aria-label={t('accounts.edit.aliveBtnTitle')}
+            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted"
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+              <path d="M21 3v6h-6" />
+            </svg>
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[14px]">
+          <div>
+            <div className="text-[13px] font-medium">{t('accounts.edit.resetSession')}</div>
+            <div className="mt-px text-[11.5px] text-ink-subtle">
+              {t('accounts.edit.resetSessionHint')}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="shrink-0 rounded-full border border-line bg-white px-4 py-2 text-[13px] font-medium"
+          >
+            {t('accounts.edit.reset')}
+          </button>
+        </div>
+        <div className="flex items-center justify-between gap-3 py-[14px]">
+          <div>
+            <div className="text-[13px] font-medium">{t('accounts.edit.deleteAccount')}</div>
+            <div className="mt-px text-[11.5px] text-ink-subtle">
+              {t('accounts.edit.deleteHint')}
+            </div>
+          </div>
+          <button
+            type="button"
+            className="shrink-0 px-1 py-2 text-[13px] font-medium text-[#c0473f]"
+          >
+            {t('accounts.edit.deleteAccount')}
+          </button>
+        </div>
+      </Section>
     </div>
   );
 }
