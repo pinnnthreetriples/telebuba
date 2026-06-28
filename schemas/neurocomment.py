@@ -35,6 +35,30 @@ class CampaignCreate(BaseModel):
     status: CampaignStatus = "active"
 
 
+class LinkChannelRequest(BaseModel):
+    """Attach a channel to a campaign (the campaign id is the route path param)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel: str = Field(min_length=1)
+
+
+class AssignAccountRequest(BaseModel):
+    """Assign an account to a campaign (the campaign id is the route path param)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str = Field(min_length=1)
+
+
+class StartNeurocommentRequest(BaseModel):
+    """Start the fleet listener on the given account."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    listener_account_id: str = Field(min_length=1)
+
+
 class NeurocommentCampaign(BaseModel):
     """One row of ``neurocomment_campaigns``."""
 

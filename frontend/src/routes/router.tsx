@@ -8,6 +8,7 @@ import {
 
 import { AccountsPage } from '@/pages/accounts';
 import { LoginPage } from '@/pages/login';
+import { NeurocommentPage } from '@/pages/neurocomment';
 import { WarmingPage } from '@/pages/warming';
 import { meQueryOptions } from '@/shared/auth';
 import { queryClient } from '@/shared/lib';
@@ -48,9 +49,15 @@ const warmingRoute = createRoute({
   component: WarmingPage,
 });
 
+const neurocommentRoute = createRoute({
+  getParentRoute: () => protectedRoute,
+  path: '/neurocomment',
+  component: NeurocommentPage,
+});
+
 const routeTree = rootRoute.addChildren([
   loginRoute,
-  protectedRoute.addChildren([indexRoute, warmingRoute]),
+  protectedRoute.addChildren([indexRoute, warmingRoute, neurocommentRoute]),
 ]);
 
 export const router = createRouter({ routeTree });

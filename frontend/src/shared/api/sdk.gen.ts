@@ -11,9 +11,15 @@ import type {
   AddWarmingChannelsData,
   AddWarmingChannelsErrors,
   AddWarmingChannelsResponses,
+  AssignCampaignAccountData,
+  AssignCampaignAccountErrors,
+  AssignCampaignAccountResponses,
   CheckAccountData,
   CheckAccountErrors,
   CheckAccountResponses,
+  CreateCampaignData,
+  CreateCampaignErrors,
+  CreateCampaignResponses,
   DeleteAccountData,
   DeleteAccountErrors,
   DeleteAccountResponses,
@@ -22,6 +28,12 @@ import type {
   GetMeData,
   GetMeErrors,
   GetMeResponses,
+  GetNeurocommentBoardData,
+  GetNeurocommentBoardErrors,
+  GetNeurocommentBoardResponses,
+  GetNeurocommentRuntimeData,
+  GetNeurocommentRuntimeErrors,
+  GetNeurocommentRuntimeResponses,
   GetWarmingBoardData,
   GetWarmingBoardErrors,
   GetWarmingBoardResponses,
@@ -31,9 +43,15 @@ import type {
   ImportAccountTdataData,
   ImportAccountTdataErrors,
   ImportAccountTdataResponses,
+  LinkCampaignChannelData,
+  LinkCampaignChannelErrors,
+  LinkCampaignChannelResponses,
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
+  ListCampaignsData,
+  ListCampaignsErrors,
+  ListCampaignsResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
@@ -48,9 +66,15 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  StartNeurocommentData,
+  StartNeurocommentErrors,
+  StartNeurocommentResponses,
   StartWarmingData,
   StartWarmingErrors,
   StartWarmingResponses,
+  StopNeurocommentData,
+  StopNeurocommentErrors,
+  StopNeurocommentResponses,
   StopWarmingData,
   StopWarmingErrors,
   StopWarmingResponses,
@@ -341,3 +365,120 @@ export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * List Campaigns
+ */
+export const listCampaigns = <ThrowOnError extends boolean = false>(
+  options?: Options<ListCampaignsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<ListCampaignsResponses, ListCampaignsErrors, ThrowOnError>({
+    url: '/api/v1/neurocomment/campaigns',
+    ...options,
+  });
+
+/**
+ * Create Campaign
+ */
+export const createCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<CreateCampaignData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<CreateCampaignResponses, CreateCampaignErrors, ThrowOnError>({
+    url: '/api/v1/neurocomment/campaigns',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Board
+ */
+export const getNeurocommentBoard = <ThrowOnError extends boolean = false>(
+  options: Options<GetNeurocommentBoardData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    GetNeurocommentBoardResponses,
+    GetNeurocommentBoardErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/board', ...options });
+
+/**
+ * Link Channel
+ */
+export const linkCampaignChannel = <ThrowOnError extends boolean = false>(
+  options: Options<LinkCampaignChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    LinkCampaignChannelResponses,
+    LinkCampaignChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/channels',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Assign Account
+ */
+export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
+  options: Options<AssignCampaignAccountData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    AssignCampaignAccountResponses,
+    AssignCampaignAccountErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Runtime
+ */
+export const getNeurocommentRuntime = <ThrowOnError extends boolean = false>(
+  options?: Options<GetNeurocommentRuntimeData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    GetNeurocommentRuntimeResponses,
+    GetNeurocommentRuntimeErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/runtime', ...options });
+
+/**
+ * Start
+ */
+export const startNeurocomment = <ThrowOnError extends boolean = false>(
+  options: Options<StartNeurocommentData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    StartNeurocommentResponses,
+    StartNeurocommentErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/start',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Stop
+ */
+export const stopNeurocomment = <ThrowOnError extends boolean = false>(
+  options?: Options<StopNeurocommentData, ThrowOnError>,
+) =>
+  (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
+    { url: '/api/v1/neurocomment/stop', ...options },
+  );

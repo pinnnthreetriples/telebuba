@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 const LINKS = [
   { to: '/', key: 'accounts' },
   { to: '/warming', key: 'warming' },
+  { to: '/neurocomment', key: 'neurocomment' },
 ] as const;
 
 export function AppNav() {

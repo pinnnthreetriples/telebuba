@@ -45,7 +45,48 @@
   },
   "nav": {
     "accounts": "Accounts",
-    "warming": "Warming"
+    "warming": "Warming",
+    "neurocomment": "Neurocomment"
+  },
+  "neurocomment": {
+    "title": "Neurocomment",
+    "runtime": {
+      "running": "Listening to {{count}} channels",
+      "stopped": "Stopped",
+      "listener": "Listener account",
+      "start": "Start",
+      "stop": "Stop"
+    },
+    "campaigns": {
+      "title": "Campaigns",
+      "select": "Select campaign",
+      "none": "No campaigns",
+      "name": "Name",
+      "prompt": "Prompt (with the product mention)",
+      "create": "Create"
+    },
+    "setup": {
+      "channel": "Channel (link or @username)",
+      "linkChannel": "Link channel",
+      "assign": "Account",
+      "assignAccount": "Assign account"
+    },
+    "channels": {
+      "title": "Channels"
+    },
+    "accounts": {
+      "title": "Accounts",
+      "today": "Today: {{count}}"
+    },
+    "channelStatus": {
+      "ready": "Ready",
+      "comments_off": "Comments off",
+      "join_by_request": "Join by request",
+      "chat_restricted": "Chat restricted",
+      "bot_challenge": "Bot challenge",
+      "bot_challenge_backoff": "Challenge back-off",
+      "throttled": "Throttled"
+    }
   },
   "warming": {
     "title": "Warming",

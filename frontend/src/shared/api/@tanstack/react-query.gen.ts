@@ -11,21 +11,29 @@ import {
 import { client } from '../client.gen';
 import {
   addWarmingChannels,
+  assignCampaignAccount,
   checkAccount,
+  createCampaign,
   deleteAccount,
   getHealth,
   getMe,
+  getNeurocommentBoard,
+  getNeurocommentRuntime,
   getWarmingBoard,
   getWarmingSettings,
   importAccountTdata,
+  linkCampaignChannel,
   listAccounts,
+  listCampaigns,
   listWarmingChannels,
   login,
   logout,
   type Options,
   removeWarmingChannel,
   setAccountPhoto,
+  startNeurocomment,
   startWarming,
+  stopNeurocomment,
   stopWarming,
   updateAccountProfile,
   updateWarmingSettings,
@@ -34,9 +42,15 @@ import type {
   AddWarmingChannelsData,
   AddWarmingChannelsError,
   AddWarmingChannelsResponse,
+  AssignCampaignAccountData,
+  AssignCampaignAccountError,
+  AssignCampaignAccountResponse,
   CheckAccountData,
   CheckAccountError,
   CheckAccountResponse,
+  CreateCampaignData,
+  CreateCampaignError,
+  CreateCampaignResponse,
   DeleteAccountData,
   DeleteAccountError,
   DeleteAccountResponse,
@@ -45,6 +59,12 @@ import type {
   GetMeData,
   GetMeError,
   GetMeResponse,
+  GetNeurocommentBoardData,
+  GetNeurocommentBoardError,
+  GetNeurocommentBoardResponse,
+  GetNeurocommentRuntimeData,
+  GetNeurocommentRuntimeError,
+  GetNeurocommentRuntimeResponse,
   GetWarmingBoardData,
   GetWarmingBoardError,
   GetWarmingBoardResponse,
@@ -54,9 +74,15 @@ import type {
   ImportAccountTdataData,
   ImportAccountTdataError,
   ImportAccountTdataResponse,
+  LinkCampaignChannelData,
+  LinkCampaignChannelError,
+  LinkCampaignChannelResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
+  ListCampaignsData,
+  ListCampaignsError,
+  ListCampaignsResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
@@ -71,9 +97,15 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  StartNeurocommentData,
+  StartNeurocommentError,
+  StartNeurocommentResponse,
   StartWarmingData,
   StartWarmingError,
   StartWarmingResponse,
+  StopNeurocommentData,
+  StopNeurocommentError,
+  StopNeurocommentResponse,
   StopWarmingData,
   StopWarmingError,
   StopWarmingResponse,
@@ -629,6 +661,212 @@ export const updateWarmingSettingsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateWarmingSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listCampaignsQueryKey = (options?: Options<ListCampaignsData>) =>
+  createQueryKey('listCampaigns', options);
+
+/**
+ * List Campaigns
+ */
+export const listCampaignsOptions = (options?: Options<ListCampaignsData>) =>
+  queryOptions<
+    ListCampaignsResponse,
+    ListCampaignsError,
+    ListCampaignsResponse,
+    ReturnType<typeof listCampaignsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listCampaigns({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listCampaignsQueryKey(options),
+  });
+
+/**
+ * Create Campaign
+ */
+export const createCampaignMutation = (
+  options?: Partial<Options<CreateCampaignData>>,
+): UseMutationOptions<CreateCampaignResponse, CreateCampaignError, Options<CreateCampaignData>> => {
+  const mutationOptions: UseMutationOptions<
+    CreateCampaignResponse,
+    CreateCampaignError,
+    Options<CreateCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getNeurocommentBoardQueryKey = (options: Options<GetNeurocommentBoardData>) =>
+  createQueryKey('getNeurocommentBoard', options);
+
+/**
+ * Get Board
+ */
+export const getNeurocommentBoardOptions = (options: Options<GetNeurocommentBoardData>) =>
+  queryOptions<
+    GetNeurocommentBoardResponse,
+    GetNeurocommentBoardError,
+    GetNeurocommentBoardResponse,
+    ReturnType<typeof getNeurocommentBoardQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNeurocommentBoard({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNeurocommentBoardQueryKey(options),
+  });
+
+/**
+ * Link Channel
+ */
+export const linkCampaignChannelMutation = (
+  options?: Partial<Options<LinkCampaignChannelData>>,
+): UseMutationOptions<
+  LinkCampaignChannelResponse,
+  LinkCampaignChannelError,
+  Options<LinkCampaignChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    LinkCampaignChannelResponse,
+    LinkCampaignChannelError,
+    Options<LinkCampaignChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await linkCampaignChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Assign Account
+ */
+export const assignCampaignAccountMutation = (
+  options?: Partial<Options<AssignCampaignAccountData>>,
+): UseMutationOptions<
+  AssignCampaignAccountResponse,
+  AssignCampaignAccountError,
+  Options<AssignCampaignAccountData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AssignCampaignAccountResponse,
+    AssignCampaignAccountError,
+    Options<AssignCampaignAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await assignCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getNeurocommentRuntimeQueryKey = (options?: Options<GetNeurocommentRuntimeData>) =>
+  createQueryKey('getNeurocommentRuntime', options);
+
+/**
+ * Get Runtime
+ */
+export const getNeurocommentRuntimeOptions = (options?: Options<GetNeurocommentRuntimeData>) =>
+  queryOptions<
+    GetNeurocommentRuntimeResponse,
+    GetNeurocommentRuntimeError,
+    GetNeurocommentRuntimeResponse,
+    ReturnType<typeof getNeurocommentRuntimeQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNeurocommentRuntime({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNeurocommentRuntimeQueryKey(options),
+  });
+
+/**
+ * Start
+ */
+export const startNeurocommentMutation = (
+  options?: Partial<Options<StartNeurocommentData>>,
+): UseMutationOptions<
+  StartNeurocommentResponse,
+  StartNeurocommentError,
+  Options<StartNeurocommentData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartNeurocommentResponse,
+    StartNeurocommentError,
+    Options<StartNeurocommentData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Stop
+ */
+export const stopNeurocommentMutation = (
+  options?: Partial<Options<StopNeurocommentData>>,
+): UseMutationOptions<
+  StopNeurocommentResponse,
+  StopNeurocommentError,
+  Options<StopNeurocommentData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StopNeurocommentResponse,
+    StopNeurocommentError,
+    Options<StopNeurocommentData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await stopNeurocomment({
         ...options,
         ...fnOptions,
         throwOnError: true,
