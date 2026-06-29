@@ -25,6 +25,7 @@ test('renders an in-progress card per warming account with the stage labels', ()
 test('stops the clicked account', async () => {
   const onStop = vi.fn();
   render(<WarmingBoard warming={WARMING} onStop={onStop} busyId={null} />);
-  await userEvent.click(screen.getAllByText('Остановить')[0]!);
+  await userEvent.click(screen.getAllByText('Стоп')[0]!);
+  await userEvent.click(screen.getByText('Остановить'));
   expect(onStop).toHaveBeenCalledWith('79051184490');
 });

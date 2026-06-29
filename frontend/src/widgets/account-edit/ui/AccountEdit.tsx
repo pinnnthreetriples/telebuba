@@ -5,13 +5,17 @@ import { StatusBadge } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 
 const FIELD =
-  'tb-time w-full rounded-[10px] border border-line bg-white px-3 py-[9px] text-[13px] outline-none';
+  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 const FIELD_LOCKED =
   'w-full cursor-not-allowed rounded-[10px] border border-line bg-[#f6f5f2] px-3 py-[9px] text-[13px] text-ink-subtle outline-none';
 const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 const SEG_WRAP = 'mb-[10px] flex gap-1 rounded-[10px] bg-[#f1efed] p-1';
 const seg = (on: boolean): string =>
   `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
+
+// A check-button drives a tiny idle→loading→(ok|err) machine, settling back to
+// idle. ponytail: design-first — no backend call, just the visual states.
+type CheckState = 'idle' | 'loading' | 'ok' | 'err';
 
 // ponytail: device profile + spam signals are mock until AccountRead carries
 // them — design-first, backend wiring is a later step.
@@ -22,8 +26,34 @@ const SIGNALS = [
   { dot: 'bg-line-strong', label: 'Последняя проверка', value: 'сегодня' },
 ];
 
+// ponytail: design-first — uploaded files are a presentational mock (one settled
+// success, one in-flight) so the dropzone's file-card states exist visually.
+const UPLOAD_FILES = [
+  { id: 'f1', name: 'account_79051184490.session', meta: '34 КБ', archive: false, done: true },
+  { id: 'f2', name: 'tdata_backup.zip', meta: '2.4 МБ · загрузка…', archive: true, progress: 62 },
+];
+
 function mono(account: AccountRead): string {
   return (account.phone ?? account.account_id).replace(/\D/g, '').slice(-2) || '#';
+}
+
+// ponytail: design-first — backend carries no trust here, so derive a stable
+// value from the id (mirrors the design's 3-tier colour bands).
+function trustOf(account: AccountRead): number {
+  const hash = [...account.account_id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
+  return 40 + (hash % 60);
+}
+function trustColor(t: number): string {
+  return t >= 70 ? '#12a150' : t >= 45 ? '#e08700' : '#e5372a';
+}
+
+function Spinner({ size }: { size: number }) {
+  return (
+    <span
+      className="tb-spin inline-block rounded-full border-2 border-[#c8c6c2] border-t-primary"
+      style={{ width: size, height: size }}
+    />
+  );
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -116,26 +146,31 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const [importTab, setImportTab] = useState<'session' | 'tdata'>('session');
   const [proxyMode, setProxyMode] = useState<'pool' | 'manual'>('manual');
   const [showPass, setShowPass] = useState(false);
-  const trust = 76;
+  const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
+  const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
+  const [aliveCheck, setAliveCheck] = useState<CheckState>('idle');
+
+  // ponytail: design-first — flip to loading, then settle to ok.
+  const runCheck = (set: (s: CheckState) => void, hold = false) => {
+    set('loading');
+    setTimeout(() => {
+      set('ok');
+      if (hold) setTimeout(() => set('idle'), 2400);
+    }, 900);
+  };
+
+  const trust = trustOf(account);
+  const tColor = trustColor(trust);
+  const country = account.proxy_country_code?.toUpperCase() ?? '—';
 
   return (
     <div className="tb-fadeup max-w-[960px]">
       <button
         type="button"
         onClick={onBack}
-        className="mb-4 inline-flex items-center gap-[6px] text-[13px] font-medium text-ink-muted hover:text-ink"
+        className="mb-4 inline-flex items-center gap-[6px] bg-transparent p-0 text-[13px] font-medium text-ink-muted hover:text-ink"
       >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-        >
-          <path d="m15 18-6-6 6-6" />
-        </svg>
-        {t('accounts.edit.back')}
+        ← {t('accounts.edit.back')}
       </button>
 
       <div className="mb-[14px] flex flex-wrap items-center gap-[18px] rounded-2xl border border-line bg-white px-5 py-[18px]">
@@ -152,12 +187,14 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         <div className="min-w-[130px]">
           <div className="flex items-center justify-end gap-2">
             <span className="text-[12px] text-ink-muted">{t('accounts.edit.trust')}</span>
-            <span className="text-[18px] font-bold text-success">{trust}/100</span>
+            <span className="text-[18px] font-bold" style={{ color: tColor }}>
+              {trust}/100
+            </span>
           </div>
           <div className="mt-[6px] h-[6px] overflow-hidden rounded-full bg-track">
             <div
-              className="h-full rounded-full bg-success"
-              style={{ width: `${String(trust)}%` }}
+              className="h-full rounded-full"
+              style={{ width: `${String(trust)}%`, background: tColor }}
             />
           </div>
         </div>
@@ -172,7 +209,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             </span>
             <button
               type="button"
-              className="rounded-[8px] border border-line bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted"
+              className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted"
             >
               {t('accounts.edit.logout')}
             </button>
@@ -192,7 +229,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
-            className="w-full rounded-[10px] border border-line bg-white py-[9px] text-[13px] font-medium"
+            className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium"
           >
             {t('accounts.edit.confirmLogin')}
           </button>
@@ -232,14 +269,103 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.dropHint')}</div>
             </div>
           </div>
+          <div className="mt-[9px] flex flex-col gap-2">
+            {UPLOAD_FILES.map((file) => (
+              <div
+                key={file.id}
+                className="tb-fadeup rounded-[11px] border border-line bg-white px-[11px] py-[10px]"
+              >
+                <div className="flex items-center gap-[10px]">
+                  <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-[#f4f3f0] text-ink-muted">
+                    {file.archive ? (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                      >
+                        <rect x="3" y="3" width="18" height="18" rx="2" />
+                        <path d="M12 7v2M12 12v2M12 17v.5" />
+                      </svg>
+                    ) : (
+                      <svg
+                        width="16"
+                        height="16"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="1.7"
+                      >
+                        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                        <path d="M14 2v6h6" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <div className="truncate text-[12px] font-semibold">{file.name}</div>
+                        <div className="mt-px text-[10.5px] text-ink-subtle">{file.meta}</div>
+                      </div>
+                      <div className="flex shrink-0 items-center gap-[2px]">
+                        {file.done ? (
+                          <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
+                            <svg
+                              width="17"
+                              height="17"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="m8 12 2.5 2.5L16 9" />
+                            </svg>
+                          </span>
+                        ) : (
+                          <Spinner size={13} />
+                        )}
+                        <button
+                          type="button"
+                          aria-label={t('accounts.edit.removeFile')}
+                          className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path d="M18 6 6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      </div>
+                    </div>
+                    {file.progress !== undefined && (
+                      <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-[#eeedea]">
+                        <div
+                          className="h-full rounded-full bg-primary"
+                          style={{ width: `${String(file.progress)}%` }}
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
         </Section>
 
         <Section title={t('accounts.edit.proxy')}>
           <div className="mb-3 text-[12px] text-ink-subtle">{t('accounts.edit.proxyRequired')}</div>
           <div className="mb-3 flex items-center gap-2 rounded-[10px] bg-[#f6f5f2] px-3 py-[10px]">
-            <span className="h-2 w-2 rounded-full bg-success-dot" />
+            <span className="h-2 w-2 rounded-full bg-[#2e9e64]" />
             <span className="text-[12.5px] text-[#3a3a3a]">
-              {t('accounts.edit.proxyOk')} · {account.proxy_country_code?.toUpperCase() ?? '—'}
+              {t('accounts.edit.proxyOk')} · {country}
             </span>
           </div>
           <div className={SEG_WRAP}>
@@ -292,17 +418,33 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                       aria-label={t('accounts.edit.password')}
                       className="absolute right-2 top-1/2 -translate-y-1/2 text-ink-subtle"
                     >
-                      <svg
-                        width="16"
-                        height="16"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="1.8"
-                      >
-                        <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
-                        <circle cx="12" cy="12" r="3" />
-                      </svg>
+                      {showPass ? (
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        >
+                          <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a13.16 13.16 0 0 1-1.67 2.68" />
+                          <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.12 9.12 0 0 0 5.39-1.61" />
+                          <path d="M14.12 14.12A3 3 0 1 1 9.88 9.88" />
+                          <path d="M1 1l22 22" />
+                        </svg>
+                      ) : (
+                        <svg
+                          width="16"
+                          height="16"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                        >
+                          <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
+                          <circle cx="12" cy="12" r="3" />
+                        </svg>
+                      )}
                     </button>
                   </div>
                 </label>
@@ -317,23 +459,59 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               </select>
             </label>
           )}
-          <button
-            type="button"
-            className="inline-flex items-center gap-[7px] rounded-full border border-line bg-white px-4 py-2 text-[13px] font-medium"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.9"
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                runCheck(setProxyCheck);
+              }}
+              className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
             >
-              <path d="M21 12a9 9 0 1 1-6.2-8.6" />
-              <path d="M21 3v6h-6" />
-            </svg>
-            {t('accounts.edit.proxyCheck')}
-          </button>
+              {proxyCheck === 'loading' ? (
+                <Spinner size={13} />
+              ) : (
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.9"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+                  <path d="M21 3v6h-6" />
+                </svg>
+              )}
+              {t('accounts.edit.proxyCheck')}
+            </button>
+            {proxyCheck === 'loading' && (
+              <span className="text-[12.5px] text-ink-subtle">
+                {t('accounts.edit.proxyChecking')}
+              </span>
+            )}
+            {proxyCheck === 'ok' && (
+              <span className="tb-pop inline-flex items-center gap-[6px] rounded-full bg-[#e7f2ec] px-3 py-[5px] text-[12.5px] font-medium text-[#2e7d55]">
+                <span className="inline-block h-[13px] w-[18px] rounded-[2px] bg-[#21468b] shadow-[0_0_0_1px_rgba(0,0,0,.07)]" />
+                {country} · 12ms
+              </span>
+            )}
+            {proxyCheck === 'err' && (
+              <span className="inline-flex items-center gap-[6px] text-[12.5px] font-medium text-[#c0473f]">
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <circle cx="12" cy="12" r="10" />
+                  <path d="m15 9-6 6M9 9l6 6" />
+                </svg>
+                {t('accounts.edit.proxyDown')}
+              </span>
+            )}
+          </div>
         </Section>
       </div>
 
@@ -380,8 +558,51 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <span className="tb-tip">
               <button
                 type="button"
-                className="inline-flex items-center gap-[6px] rounded-full border border-line bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted"
+                onClick={() => {
+                  runCheck(setSpamCheck, true);
+                }}
+                className={`inline-flex items-center gap-[6px] rounded-full px-3 py-[5px] text-[12px] font-medium transition-[background-color,border-color,color] duration-300 ${
+                  spamCheck === 'ok'
+                    ? 'border border-[#2e9e64] bg-[#2e9e64] text-white'
+                    : spamCheck === 'err'
+                      ? 'border border-[#c0473f] bg-[#c0473f] text-white'
+                      : 'border border-line-input bg-white text-ink-muted'
+                }`}
               >
+                {spamCheck === 'loading' && <Spinner size={13} />}
+                {spamCheck === 'ok' && (
+                  <span className="tb-blur inline-flex">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="2.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                )}
+                {spamCheck === 'err' && (
+                  <span className="tb-blur inline-flex">
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="2.6"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M18 6 6 18" />
+                      <path d="m6 6 12 12" />
+                    </svg>
+                  </span>
+                )}
                 {t('accounts.edit.signalsCheck')}
               </button>
               <span className="tb-tip-pop">{t('accounts.edit.signalsTip')}</span>
@@ -414,29 +635,87 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         <div className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[14px]">
           <div>
             <div className="text-[13px] font-medium">{t('accounts.edit.aliveTitle')}</div>
-            <div className="mt-px text-[11.5px] text-ink-subtle">
-              {t('accounts.edit.aliveHint')}
+            <div
+              className="mt-px text-[11.5px]"
+              style={{
+                color:
+                  aliveCheck === 'ok' ? '#2e9e64' : aliveCheck === 'err' ? '#c0473f' : '#9a9893',
+              }}
+            >
+              {aliveCheck === 'ok'
+                ? t('accounts.edit.aliveOk')
+                : aliveCheck === 'err'
+                  ? t('accounts.edit.aliveErr')
+                  : t('accounts.edit.aliveHint')}
             </div>
           </div>
           <button
             type="button"
+            onClick={() => {
+              runCheck(setAliveCheck, true);
+            }}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
-            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border border-line bg-white text-ink-muted"
+            className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-300"
+            style={{
+              borderColor:
+                aliveCheck === 'ok' ? '#2e9e64' : aliveCheck === 'err' ? '#c0473f' : '#e6e5e3',
+              background:
+                aliveCheck === 'ok' ? '#2e9e64' : aliveCheck === 'err' ? '#c0473f' : '#fff',
+              color: aliveCheck === 'ok' || aliveCheck === 'err' ? '#fff' : '#74726e',
+            }}
           >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M21 12a9 9 0 1 1-6.2-8.6" />
-              <path d="M21 3v6h-6" />
-            </svg>
+            {aliveCheck === 'idle' && (
+              <span className="tb-blur inline-flex">
+                <svg
+                  width="17"
+                  height="17"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M21 12a9 9 0 1 1-6.2-8.6" />
+                  <path d="M21 3v6h-6" />
+                </svg>
+              </span>
+            )}
+            {aliveCheck === 'loading' && <Spinner size={15} />}
+            {aliveCheck === 'ok' && (
+              <span className="tb-blur inline-flex">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              </span>
+            )}
+            {aliveCheck === 'err' && (
+              <span className="tb-blur inline-flex">
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M18 6 6 18" />
+                  <path d="m6 6 12 12" />
+                </svg>
+              </span>
+            )}
           </button>
         </div>
         <div className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[14px]">
@@ -448,7 +727,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
-            className="shrink-0 rounded-full border border-line bg-white px-4 py-2 text-[13px] font-medium"
+            className="shrink-0 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
           >
             {t('accounts.edit.reset')}
           </button>

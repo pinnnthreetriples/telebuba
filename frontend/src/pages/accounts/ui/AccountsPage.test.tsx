@@ -98,3 +98,33 @@ test('runs the check action on a row', async () => {
     expect(checked).toBe(true);
   });
 });
+
+test('the add button opens the add-account wizard', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('+ Аккаунт'));
+  expect(screen.getByText('Добавить аккаунт')).toBeInTheDocument();
+});
+
+test('the profile pencil opens the profile modal for the row account', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByTitle('Редактировать профиль'));
+  expect(screen.getByText('Текст')).toBeInTheDocument();
+});
+
+test('the proxy-pool add button opens the proxy-add modal', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('Добавить'));
+  expect(screen.getByText('Добавить прокси')).toBeInTheDocument();
+});

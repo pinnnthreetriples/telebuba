@@ -23,7 +23,8 @@ const ACCOUNT: AccountRead = {
 test('renders the hero and every section header', () => {
   render(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
   expect(screen.getByText('+79051184490')).toBeInTheDocument();
-  expect(screen.getByText('76/100')).toBeInTheDocument();
+  // trust is derived from the account id (design-first) — acc-1 → 69
+  expect(screen.getByText('69/100')).toBeInTheDocument();
   for (const title of ['Сессия', 'Прокси', 'Device fingerprint', 'Спам/бан-сигналы', 'Действия']) {
     expect(screen.getByText(title)).toBeInTheDocument();
   }
@@ -50,6 +51,6 @@ test('section toggles, import tabs and proxy mode drive the handlers', async () 
   await userEvent.click(screen.getByText('Вручную'));
   expect(screen.getByText('Host')).toBeInTheDocument();
 
-  await userEvent.click(screen.getByText('Назад к списку'));
+  await userEvent.click(screen.getByText(/Назад к списку/));
   expect(onBack).toHaveBeenCalled();
 });

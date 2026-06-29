@@ -1,6 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
-import { StatusBadge } from '@/entities/account';
+import { accountDesignStatus, type DesignStatus, StatusBadge } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 
 interface AccountsTableProps {
@@ -8,6 +8,7 @@ interface AccountsTableProps {
   onCheck: (accountId: string) => void;
   onDelete: (accountId: string) => void;
   onOpen?: (account: AccountRead) => void;
+  onProfile?: (account: AccountRead) => void;
   busyId: string | null;
 }
 
@@ -15,15 +16,49 @@ const TH = 'px-4 py-[11px] text-[11px] font-medium uppercase tracking-[0.04em] t
 const ACTION_BTN =
   'flex h-[30px] w-[30px] items-center justify-center rounded-full border border-line bg-white disabled:opacity-50';
 
+// The design's mono avatar tint per status (monoMap).
+const AVATAR_CLASS: Record<DesignStatus, string> = {
+  active: 'bg-[#e8f0ff] text-[#0066ff]',
+  spam: 'bg-[#fbf3e2] text-[#9a7b22]',
+  code: 'bg-[#edebe7] text-[#74726e]',
+  banned: 'bg-[#fbecec] text-[#c0473f]',
+};
+
 // last two phone digits → the mono avatar initials, matching the design.
 function mono(account: AccountRead): string {
   const digits = (account.phone ?? account.account_id).replace(/\D/g, '');
   return digits.slice(-2) || '#';
 }
 
+// ponytail: trust / device / proxy-type / connectivity aren't carried by the
+// backend yet — derive deterministic design-first values from the id so the
+// table renders the design's richness (the branch is design-first, data later).
+const DEVICES = ['iPhone 13', 'iPhone 12', 'Pixel 7', 'Galaxy S22', 'iPhone 14'];
+const OSES = ['iOS 17.2', 'iOS 16.4', 'Android 14', 'Android 13', 'iOS 17.4'];
+function decorate(account: AccountRead) {
+  const seed = [...account.account_id].reduce((sum, c) => sum + c.charCodeAt(0), 0);
+  const trust = 40 + (seed % 60);
+  const trustColor = trust >= 70 ? '#12a150' : trust >= 45 ? '#e08700' : '#e5372a';
+  return {
+    trust,
+    trustColor,
+    connected: seed % 5 !== 0,
+    ptype: seed % 2 === 0 ? 'SOCKS5' : 'HTTPS',
+    device: `${DEVICES[seed % DEVICES.length]} · ${OSES[seed % OSES.length]}`,
+  };
+}
+
 // The design's accounts table: white card, uppercase header on #FAF9F7, rows
-// with a mono avatar, status pill, proxy flag, trust bar, and round actions.
-export function AccountsTable({ data, onCheck, onDelete, onOpen, busyId }: AccountsTableProps) {
+// with a status-tinted mono avatar, status pill, proxy flag + connectivity dot,
+// device, trust bar, and round actions (check / edit-profile / delete).
+export function AccountsTable({
+  data,
+  onCheck,
+  onDelete,
+  onOpen,
+  onProfile,
+  busyId,
+}: AccountsTableProps) {
   const { t } = useTranslation();
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white">
@@ -42,6 +77,8 @@ export function AccountsTable({ data, onCheck, onDelete, onOpen, busyId }: Accou
           <tbody>
             {data.map((account) => {
               const busy = busyId === account.account_id;
+              const ds = accountDesignStatus(account.status);
+              const d = decorate(account);
               return (
                 <tr
                   key={account.account_id}
@@ -50,7 +87,9 @@ export function AccountsTable({ data, onCheck, onDelete, onOpen, busyId }: Accou
                 >
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-[11px]">
-                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-tint text-[12px] font-semibold text-primary">
+                      <div
+                        className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${AVATAR_CLASS[ds]}`}
+                      >
                         {mono(account)}
                       </div>
                       <div>
@@ -67,27 +106,39 @@ export function AccountsTable({ data, onCheck, onDelete, onOpen, busyId }: Accou
                     <StatusBadge status={account.status} />
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-[7px]">
-                      {account.proxy_country_code ? (
+                    {account.proxy_country_code ? (
+                      <div className="flex items-center gap-[7px]">
                         <span
-                          className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px]`}
+                          className="h-[7px] w-[7px] shrink-0 rounded-full"
+                          style={{ background: d.connected ? '#2e9e64' : '#c0473f' }}
                         />
-                      ) : null}
-                      <span className="text-[12px] text-[#3a3a3a]">
-                        {account.proxy_country_code?.toUpperCase() ?? '—'}
-                      </span>
-                    </div>
+                        <span
+                          className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                        />
+                        <span className="text-[12px] text-[#3a3a3a]">
+                          {account.proxy_country_code.toUpperCase()} · {d.ptype}
+                        </span>
+                      </div>
+                    ) : (
+                      <span className="text-[12px] text-ink-subtle">—</span>
+                    )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-[12px] text-ink-muted">—</span>
+                    <span className="text-[12px] text-ink-muted">{d.device}</span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center gap-2">
                       <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
-                        <div className="h-full w-0 rounded-full bg-success" />
+                        <div
+                          className="h-full rounded-full"
+                          style={{ width: `${String(d.trust)}%`, background: d.trustColor }}
+                        />
                       </div>
-                      <span className="min-w-[20px] text-[12px] font-semibold text-ink-subtle">
-                        —
+                      <span
+                        className="min-w-[20px] text-[12px] font-semibold"
+                        style={{ color: d.trustColor }}
+                      >
+                        {d.trust}
                       </span>
                     </div>
                   </td>
@@ -101,10 +152,10 @@ export function AccountsTable({ data, onCheck, onDelete, onOpen, busyId }: Accou
                           event.stopPropagation();
                           onCheck(account.account_id);
                         }}
-                        className={`${ACTION_BTN} text-ink-muted hover:border-[#bfd6ff] hover:text-primary`}
+                        className={`${ACTION_BTN} text-ink-muted`}
                       >
                         {busy ? (
-                          <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line border-t-primary" />
+                          <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-[#c8c6c2] border-t-primary" />
                         ) : (
                           <svg
                             width="14"
@@ -120,6 +171,29 @@ export function AccountsTable({ data, onCheck, onDelete, onOpen, busyId }: Accou
                             <path d="M21 3v6h-6" />
                           </svg>
                         )}
+                      </button>
+                      <button
+                        type="button"
+                        title={t('accounts.actions.profile')}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          (onProfile ?? onOpen)?.(account);
+                        }}
+                        className={`${ACTION_BTN} text-ink-muted hover:border-[#bfd6ff] hover:text-primary`}
+                      >
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="1.8"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M12 20h9" />
+                          <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" />
+                        </svg>
                       </button>
                       <button
                         type="button"

@@ -1,5 +1,6 @@
 dist
 coverage
+.cov-tmp
 node_modules
 package-lock.json
 openapi.json

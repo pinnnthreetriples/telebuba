@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { expect, test } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
@@ -15,21 +16,28 @@ const BOARD: NeurocommentBoardData = {
   accounts: [
     {
       account_id: 'acc-1',
-      label: 'Main',
+      label: '+79261112233',
       health: 'ok',
       trust_score: 90,
       trust_band: 'excellent',
       comments_last_hour: 1,
       max_comments_per_hour: 10,
       comments_today: 4,
+      last_comment_at: 'now',
     },
   ],
 };
 
-test('renders channel rows with status badges and account cards', () => {
-  render(<NeurocommentBoard board={BOARD} />);
+test('renders the 4-column work table with channel and dot-pill status', () => {
+  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={() => undefined} />);
+  expect(screen.getByText('+79261112233')).toBeInTheDocument();
   expect(screen.getByText('@news')).toBeInTheDocument();
   expect(screen.getByText('Готов')).toBeInTheDocument();
-  expect(screen.getByText('acc-1')).toBeInTheDocument();
-  expect(screen.getByText('2/3')).toBeInTheDocument();
+});
+
+test('the gear button opens the accounts modal', async () => {
+  const onOpenAccounts = vi.fn();
+  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={onOpenAccounts} />);
+  await userEvent.click(screen.getByLabelText('Аккаунты в нейрокомментинге'));
+  expect(onOpenAccounts).toHaveBeenCalledOnce();
 });

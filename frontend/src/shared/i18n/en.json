@@ -42,7 +42,11 @@
       "total": "Total",
       "alive": "Alive",
       "attention": "Attention",
-      "errors": "Errors"
+      "errors": "Errors",
+      "active": "Active",
+      "idle": "Idle",
+      "code": "Needs code",
+      "problem": "Problem"
     },
     "proxyPool": {
       "title": "Proxy pool",
@@ -51,7 +55,10 @@
       "accounts": "Accounts",
       "full": "Full",
       "free_one": "{{count}} slot free",
-      "free_other": "{{count}} slots free"
+      "free_other": "{{count}} slots free",
+      "emptyTitle": "Pool is empty",
+      "emptyBody": "Add a proxy to assign it to accounts — one proxy serves up to 3 accounts",
+      "emptyAdd": "Add proxy"
     },
     "edit": {
       "back": "Back to list",
@@ -94,17 +101,120 @@
       "resetSessionHint": "Logs the account out and clears the auth token",
       "reset": "Reset",
       "deleteAccount": "Delete account",
-      "deleteHint": "Irreversible — session, proxy and history will be deleted"
+      "deleteHint": "Irreversible — session, proxy and history will be deleted",
+      "removeFile": "Remove file",
+      "proxyChecking": "Checking connection…",
+      "proxyDown": "Proxy not responding",
+      "aliveOk": "Account is alive",
+      "aliveErr": "Account unreachable"
     },
     "actions": {
       "add": "Account",
       "check": "Check",
       "delete": "Delete",
-      "importTdata": "Import tdata"
+      "importTdata": "Import tdata",
+      "profile": "Edit profile"
     },
     "pagination": {
       "prev": "Prev",
       "next": "Next"
+    },
+    "deleteModal": {
+      "title": "Delete account {{phone}}?",
+      "body": "The session, proxy and activity history will be deleted. This action is irreversible.",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "proxyForm": {
+      "host": "Host",
+      "port": "Port",
+      "login": "Login",
+      "loginPlaceholder": "login",
+      "password": "Password",
+      "passwordPlaceholder": "password",
+      "type": "Proxy type",
+      "detect": "Detect",
+      "detected": "Detect",
+      "checking": "Checking connection…",
+      "resultOk": "Netherlands · 24 ms",
+      "resultErr": "Proxy not responding"
+    },
+    "proxyAdd": {
+      "title": "Add proxy",
+      "close": "Close",
+      "cancel": "Cancel",
+      "add": "Add"
+    },
+    "addStory": {
+      "title": "New story",
+      "close": "Close",
+      "audience": "Who can see",
+      "contacts": "Contacts",
+      "closeFriends": "Close friends",
+      "public": "Public",
+      "caption": "Story caption",
+      "captionPlaceholder": "Enter a caption…",
+      "noForward": "Disable story forwarding",
+      "media": "Media",
+      "dropTitle": "Upload a photo or video",
+      "dropHint": "drag a file or click",
+      "cancel": "Cancel",
+      "publish": "Publish"
+    },
+    "profile": {
+      "close": "Close",
+      "tab": {
+        "text": "Text",
+        "photo": "Photo",
+        "stories": "Stories",
+        "music": "Music"
+      },
+      "firstName": "First name",
+      "lastName": "Last name",
+      "username": "Username",
+      "bio": "Bio",
+      "photoHint": "Current photo and history · drag to replace",
+      "removePhoto": "Remove photo",
+      "mainPhoto": "Main photo",
+      "makeMain": "Make main",
+      "upload": "Upload",
+      "storiesHint": "Current account stories",
+      "removeStory": "Remove story",
+      "addStory": "Add",
+      "play": "Play",
+      "trackTitle": "Track title",
+      "trackArtist": "Artist",
+      "removeMusic": "Remove track",
+      "noMusic": "No music selected",
+      "pickTrack": "Pick a track",
+      "cancel": "Cancel",
+      "save": "Save",
+      "saved": "Saved"
+    },
+    "addWizard": {
+      "title": "Add account",
+      "close": "Close",
+      "step1Label": "Step 1 · add method",
+      "step2Label": "Step 2 · proxy",
+      "sessionTitle": ".session file",
+      "sessionDesc": "Ready Telethon / Pyrogram session",
+      "tdataTitle": "tdata.zip archive",
+      "tdataDesc": "tdata folder from Telegram Desktop",
+      "dropTitle": "Upload a file",
+      "dropDescTdata": "drag tdata.zip or click",
+      "dropDescSession": "drag .session or click",
+      "browse": "Browse",
+      "fileReady": "File ready",
+      "cancel": "Cancel",
+      "next": "Next",
+      "back": "Back",
+      "skip": "Skip",
+      "done": "Done",
+      "added": "Account added. Assign a proxy to start.",
+      "proxyManual": "Add proxy",
+      "proxyManualDesc": "Enter host, port, login and password manually",
+      "proxyPool": "Pick from pool",
+      "proxyPoolDesc": "Ready, checked proxies from the shared pool"
     }
   },
   "nav": {
@@ -125,7 +235,10 @@
     "save": "Save",
     "saved": "Saved",
     "cancel": "Cancel",
-    "range": { "from": "from", "to": "to" },
+    "range": {
+      "from": "from",
+      "to": "to"
+    },
     "api": {
       "title": "API keys",
       "subtitle": "Access to the comment-generation model",
@@ -175,7 +288,8 @@
       "all": "All",
       "success": "Success",
       "warning": "Warning",
-      "error": "Error"
+      "error": "Error",
+      "allAccounts": "All accounts"
     },
     "status": {
       "success": "Success",
@@ -224,14 +338,16 @@
       "accounts": "Accounts",
       "comments": "Comments"
     },
-    "log": { "title": "Event log" },
+    "log": {
+      "title": "Event log"
+    },
     "campaigns": {
       "title": "Campaigns",
       "select": "Select campaign",
       "none": "No campaigns",
       "name": "Name",
       "prompt": "Prompt (with the product mention)",
-      "create": "Create"
+      "create": "+ Create campaign"
     },
     "setup": {
       "channel": "Channel (link or @username)",
@@ -240,7 +356,10 @@
       "assignAccount": "Assign account"
     },
     "channels": {
-      "title": "Channels"
+      "title": "Campaign channels",
+      "addPill": "+ Channel",
+      "placeholder": "t.me/channel or @channel",
+      "remove": "Remove channel"
     },
     "accounts": {
       "title": "Accounts",
@@ -254,6 +373,107 @@
       "bot_challenge": "Bot challenge",
       "bot_challenge_backoff": "Challenge back-off",
       "throttled": "Throttled"
+    },
+    "idle": {
+      "label": "{{count}} idle",
+      "sub": "Idle — assign a channel"
+    },
+    "listener": {
+      "title": "Listener account",
+      "choose": "Choose an account…",
+      "listening": "Listening",
+      "paused": "Paused",
+      "pause": "Pause",
+      "resume": "Resume",
+      "edit": "Change account",
+      "remove": "Remove listener",
+      "activeCampaigns": "active campaigns"
+    },
+    "captcha": {
+      "title": "Captcha solving",
+      "sub": "Auto bot-check pass",
+      "pending": "Needs check · {{count}}",
+      "solve": "Solve"
+    },
+    "campaign": {
+      "run": "Run",
+      "pause": "Pause",
+      "editPrompt": "Edit prompt",
+      "delete": "Delete campaign",
+      "meta": "{{channels}} channels · {{accounts}} accounts",
+      "status": {
+        "active": "Active",
+        "paused": "Paused",
+        "archived": "Archived"
+      }
+    },
+    "board": {
+      "title": "Work board",
+      "accounts": "{{count}} accounts",
+      "updated": "updated just now",
+      "commentPlaceholder": "Comment sent",
+      "empty": "No work yet",
+      "col": {
+        "account": "Account",
+        "channel": "Channel",
+        "comment": "Comment",
+        "status": "Status"
+      }
+    },
+    "howto": {
+      "title": "How it works",
+      "steps": {
+        "0": "Assign a listener account — it watches for new posts across all campaign channels.",
+        "1": "Create a campaign with a prompt and add the channels where accounts will comment.",
+        "2": "For each new post the LLM generates a comment from your prompt.",
+        "3": "Bot-checks and captchas are passed automatically when captcha solving is on."
+      }
+    },
+    "modal": {
+      "cancel": "Cancel",
+      "close": "Close",
+      "save": "Save",
+      "saved": "Saved",
+      "add": "Add",
+      "campaignDelete": {
+        "title": "Delete campaign “{{name}}”?",
+        "body": "The campaign, its channels and account links will be deleted. This cannot be undone.",
+        "confirm": "Delete"
+      },
+      "campaignPrompt": {
+        "title": "Campaign prompt",
+        "sub": "{{name}} · instruction for the LLM when generating comments",
+        "placeholder": "E.g.: write friendly on-topic comments, no links or ads, 1–2 sentences…",
+        "accounts": "Accounts in the campaign",
+        "empty": "No accounts in the campaign yet",
+        "removeAccount": "Remove from campaign",
+        "removeTitle": "Remove account from campaign?",
+        "removeBody": "Account {{phone}} ({{channel}}) will stop commenting in this campaign.",
+        "removeConfirm": "Remove"
+      },
+      "listenerEdit": {
+        "sub": "The listener watches new posts for all campaigns",
+        "account": "Account"
+      },
+      "createCampaign": {
+        "title": "New campaign",
+        "sub": "Prompt and channels where accounts will comment",
+        "nameLabel": "Name",
+        "namePlaceholder": "E.g., Crypto news",
+        "promptLabel": "Prompt for the LLM",
+        "promptPlaceholder": "Describe how and what to comment: tone, length, language, what to avoid…",
+        "channelsLabel": "Campaign channels",
+        "channelsHint": "These channels appear in the “Campaign channels” block after creation",
+        "confirm": "Create campaign"
+      },
+      "neuroAccounts": {
+        "title": "Accounts in neurocommenting",
+        "sub": "{{count}} accounts · redirect to another channel or remove from work",
+        "unassigned": "Unassigned",
+        "remove": "Remove from neurocommenting",
+        "empty": "No accounts in neurocommenting",
+        "done": "Done"
+      }
     }
   },
   "warming": {
@@ -262,12 +482,20 @@
     "loading": "Loading…",
     "error": "Failed to load the warming board",
     "summary": "Active: {{active}} of {{total}}",
-    "counter": { "warming": "warming", "ready": "ready", "errors": "errors" },
-    "pool": { "start": "Start pool", "stop": "Stop pool" },
+    "counter": {
+      "warming": "warming",
+      "ready": "ready",
+      "errors": "errors"
+    },
+    "pool": {
+      "start": "Start pool",
+      "stop": "Stop pool"
+    },
     "ready": {
       "title": "Ready to warm",
       "empty": "All available accounts are warming",
-      "start": "Warm"
+      "start": "Warm",
+      "unavailable": "Unavailable"
     },
     "howto": {
       "title": "How warming works",
@@ -281,13 +509,18 @@
         "Anti-ban pauses and rate-limit quotas"
       ]
     },
-    "inProgress": { "title": "Warming", "live": "warming in progress", "days": "Warming days" },
+    "inProgress": {
+      "title": "Warming",
+      "live": "warming in progress",
+      "days": "Warming days"
+    },
     "warmed": {
       "title": "Warmed up",
       "badge": "warmed",
       "days": "Warming",
       "trust": "Trust-score",
-      "toNeuro": "To neurocomment"
+      "toNeuro": "To neurocomment",
+      "backToWarm": "Back to warming"
     },
     "stage": {
       "subscribe": "Subscribe",
@@ -307,27 +540,107 @@
     },
     "column": {
       "idle": "Not warming",
-      "warming": "Warming"
+      "warming": "Warming",
+      "empty": "Drop accounts here to start warming"
     },
     "card": {
       "cycles": "Cycles: {{count}}",
-      "trust": "trust"
+      "trust": "trust",
+      "dayProgress": "{{days}} / 14 days",
+      "actionsTip": "actions",
+      "cfgTitle": "Warming settings",
+      "logToggle": "Activity log",
+      "completeTitle": "Warming complete",
+      "completeSub": "{{days}} · account ready",
+      "finish": "Send to warmed",
+      "helpTip": "1 cycle = 1 warming day"
     },
     "actions": {
       "start": "Start",
-      "stop": "Stop"
+      "stop": "Stop",
+      "stopShort": "Stop"
     },
     "channels": {
-      "title": "Channels",
+      "title": "Warming channels",
       "placeholder": "Links or @usernames, comma-separated…",
       "add": "Add",
-      "remove": "Remove"
+      "remove": "Remove",
+      "hint": "Accounts read and react in these channels",
+      "addPill": "+ Channel",
+      "placeholderSingle": "t.me/channel or @channel",
+      "cancel": "Cancel"
     },
     "settings": {
       "title": "Warming settings",
       "reactions_enabled": "Reactions",
       "join_enabled": "Join channels",
       "inter_account_chat": "Inter-account dialogues"
+    },
+    "warmStatus": {
+      "active": "warming up",
+      "sleeping": "asleep",
+      "idle": "idle",
+      "flood_wait": "paused",
+      "quarantine": "quarantine",
+      "error": "error"
+    },
+    "activity": {
+      "subscribe": "Joining channels",
+      "read": "Reading the feed",
+      "stories": "Viewing stories",
+      "reactions": "Reactions placed",
+      "pause": "Pause for realism",
+      "report": "Building report"
+    },
+    "stopModal": {
+      "title": "Stop warming?",
+      "body": "Warming for {{phone}} will be stopped and the current cycle interrupted. Are you sure you want to stop?",
+      "toWarmed": "To warmed",
+      "keep": "Continue",
+      "stop": "Stop"
+    },
+    "cfg": {
+      "title": "Warming settings",
+      "behavior": "Behaviour",
+      "limits": "Limits & safety",
+      "quietLabel": "Quiet hours (sleep)",
+      "quietHint": "Timezone is taken from the account locale",
+      "scopeOne": "This one",
+      "scopeAll": "All warming",
+      "save": "Save",
+      "cancel": "Cancel",
+      "reactions": {
+        "title": "Place reactions",
+        "desc": "Likes and emoji on channel posts"
+      },
+      "join": {
+        "title": "Join channels",
+        "desc": "Automatically join recommended ones"
+      },
+      "chat": {
+        "title": "Inter-account chat",
+        "desc": "Simulate direct-message conversations"
+      },
+      "readiness": {
+        "title": "Pre-start check",
+        "desc": "Do not start without a session and proxy"
+      },
+      "quietHours": {
+        "title": "Quiet hours",
+        "desc": "Stay inactive at night per account locale"
+      }
+    },
+    "days": {
+      "title": "Warm up account",
+      "subtitle": "{{phone}} · choose the warming length",
+      "min": "1 day",
+      "max": "14 days",
+      "start": "Start warming",
+      "cancel": "Cancel",
+      "spamCheck": "Spam check",
+      "spamTip": "via @SpamBot",
+      "label_one": "day",
+      "label_other": "days"
     }
   },
   "auth": {

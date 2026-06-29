@@ -12,7 +12,7 @@ export default {
         canvas: '#f1efed',
         surface: '#faf9f7',
         ink: { DEFAULT: '#0b0b0c', muted: '#74726e', subtle: '#9a9893' },
-        line: { DEFAULT: '#e6e5e3', strong: '#d8d6d2' },
+        line: { DEFAULT: '#e6e5e3', strong: '#d8d6d2', input: '#dedcd8' },
         track: '#eeedea',
         primary: { DEFAULT: '#0066ff', tint: '#eef4ff' },
         success: { DEFAULT: '#12a150', tint: '#ddf7e9', dot: '#16b364' },

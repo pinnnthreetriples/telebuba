@@ -10,7 +10,7 @@ test('renders the localized status label', () => {
   expect(screen.getByText('Активен')).toBeInTheDocument();
 });
 
-test('uses the danger colour for a permanent-failure status', () => {
+test('uses the design banned colour for a permanent-failure status', () => {
   render(<StatusBadge status="unauthorized" />);
-  expect(screen.getByText('Не авторизован').className).toContain('text-danger');
+  expect(screen.getByText('Не авторизован').className).toContain('text-[#e5372a]');
 });

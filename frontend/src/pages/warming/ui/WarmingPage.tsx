@@ -9,9 +9,10 @@ import {
   stopWarmingMutation,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
+import type { WarmingAccountState } from '@/shared/api';
 import { useLogEventStream } from '@/shared/lib';
 import { CollapsibleCard } from '@/shared/ui';
-import { WarmingBoard } from '@/widgets/warming-board';
+import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
 // SSE drives live board updates; this poll is just the fallback safety net.
 const FALLBACK_POLL_MS = 30000;
@@ -33,6 +34,25 @@ function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
 }
 
+// Trust 3-tier colour (design): healthy / watch / risk.
+function trustColor(trust: number): string {
+  if (trust >= 70) return '#12a150';
+  if (trust >= 45) return '#e08700';
+  return '#e5372a';
+}
+
+// Design-first derivations for fields the board read model doesn't expose yet
+// on idle accounts: a stable pseudo value keyed off the account id so the meta
+// row (trust / flag / proxy-type) renders per the spec.
+const FLAGS = ['ru', 'gb', 'de', 'us', 'fr', 'nl'] as const;
+const PROXY_TYPES = ['SOCKS5', 'HTTP', 'MTProto'] as const;
+
+function hash(id: string): number {
+  let h = 0;
+  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
+  return Math.abs(h);
+}
+
 function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
   return (
     <div className="text-right">
@@ -47,6 +67,8 @@ export function WarmingPage() {
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
   const [channelInput, setChannelInput] = useState('');
+  const [addingChannel, setAddingChannel] = useState(false);
+  const [warmDaysFor, setWarmDaysFor] = useState<WarmingAccountState | null>(null);
 
   const { data, isPending, isError } = useQuery({
     ...warmingBoardQueryOptions(),
@@ -62,6 +84,23 @@ export function WarmingPage() {
   const stop = useMutation(stopWarmingMutation());
   const addChannels = useMutation(addWarmingChannelsMutation());
   const removeChannel = useMutation(removeWarmingChannelMutation());
+
+  const cancelAddChannel = () => {
+    setAddingChannel(false);
+    setChannelInput('');
+  };
+  const addChannel = () => {
+    if (!channelInput.trim()) return;
+    addChannels.mutate(
+      { body: { raw: channelInput } },
+      {
+        onSettled: () => {
+          cancelAddChannel();
+          invalidate();
+        },
+      },
+    );
+  };
 
   const runOnAccount = (mutation: typeof start | typeof stop, accountId: string) => {
     setBusyId(accountId);
@@ -144,57 +183,81 @@ export function WarmingPage() {
                   {t('warming.ready.empty')}
                 </div>
               ) : (
-                idle.map((account) => (
-                  <div
-                    key={account.account_id}
-                    className="flex items-center gap-[10px] rounded-xl border border-line bg-white px-3 py-[11px]"
-                  >
-                    <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-[12px] font-semibold text-primary">
-                      {mono(account.account_id)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="truncate text-[13px] font-semibold">{account.account_id}</div>
-                      <div className="mt-[2px] flex items-center gap-[6px] text-ink-subtle">
-                        <svg
-                          width="13"
-                          height="13"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                        >
-                          <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
-                          <path d="m9 12 2 2 4-4" />
-                        </svg>
-                        <span className="text-[11px] font-semibold">
-                          {account.trust_score ?? '—'}
-                        </span>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      disabled={busyId === account.account_id}
-                      onClick={() => {
-                        runOnAccount(start, account.account_id);
-                      }}
-                      className="rounded-full bg-primary px-[14px] py-[6px] text-[12px] font-medium text-white disabled:opacity-50"
+                idle.map((account) => {
+                  const seed = hash(account.account_id);
+                  const trust = account.trust_score ?? 45 + (seed % 50);
+                  const tColor = trustColor(trust);
+                  const cc = (
+                    account.phone_country ??
+                    FLAGS[seed % FLAGS.length] ??
+                    'ru'
+                  ).toLowerCase();
+                  const ptype = PROXY_TYPES[seed % PROXY_TYPES.length];
+                  const available = account.health !== 'fail' && account.state !== 'error';
+                  return (
+                    <div
+                      key={account.account_id}
+                      className="flex items-center gap-[10px] rounded-xl border border-line bg-white px-3 py-[11px]"
                     >
-                      {t('warming.ready.start')}
-                    </button>
-                  </div>
-                ))
+                      <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-[12px] font-semibold text-primary">
+                        {mono(account.account_id)}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-[13px] font-semibold">
+                          {account.label ?? account.account_id}
+                        </div>
+                        <div className="mt-[2px] flex items-center gap-[6px]">
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke={tColor}
+                            strokeWidth="2"
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            className="shrink-0"
+                          >
+                            <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
+                            <path d="m9 12 2 2 4-4" />
+                          </svg>
+                          <span className="text-[11px] font-semibold" style={{ color: tColor }}>
+                            {trust}
+                          </span>
+                          <span className="text-[11px] text-line-strong">·</span>
+                          <span
+                            className={`fi fi-${cc} h-[11px] w-[15px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                          />
+                          <span className="text-[11px] text-[#9a9893]">{ptype}</span>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        disabled={!available || busyId === account.account_id}
+                        onClick={() => {
+                          setWarmDaysFor(account);
+                        }}
+                        className={`rounded-full px-[14px] py-[6px] text-[12px] font-medium disabled:opacity-50 ${available ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
+                      >
+                        {available ? t('warming.ready.start') : t('warming.ready.unavailable')}
+                      </button>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
 
           <CollapsibleCard
+            wrapperClassName="rounded-[13px] border border-line bg-white"
             header={
               <span className="text-[13px] font-semibold">{t('warming.channels.title')}</span>
             }
             label={t('warming.channels.title')}
           >
+            <div className="mb-[11px] text-[11px] leading-[1.4] text-[#9a9893]">
+              {t('warming.channels.hint')}
+            </div>
             <div className="flex flex-wrap gap-[7px]">
               {channels.map((channel) => (
                 <span
@@ -211,41 +274,70 @@ export function WarmingPage() {
                         { onSettled: invalidate },
                       );
                     }}
-                    className="text-[14px] leading-none text-ink-subtle"
+                    className="text-[14px] leading-none text-[#b5b3ae]"
                   >
                     ×
                   </button>
                 </span>
               ))}
-            </div>
-            <div className="mt-3 flex gap-2">
-              <input
-                value={channelInput}
-                onChange={(event) => {
-                  setChannelInput(event.target.value);
-                }}
-                placeholder={t('warming.channels.placeholder')}
-                aria-label={t('warming.channels.placeholder')}
-                className="tb-time flex-1 rounded-full border border-line px-3 py-[7px] text-[12px] outline-none"
-              />
-              <button
-                type="button"
-                disabled={!channelInput.trim()}
-                onClick={() => {
-                  addChannels.mutate(
-                    { body: { raw: channelInput } },
-                    {
-                      onSettled: () => {
-                        setChannelInput('');
-                        invalidate();
-                      },
-                    },
-                  );
-                }}
-                className="rounded-full bg-primary px-4 py-[7px] text-[12px] font-medium text-white disabled:opacity-50"
-              >
-                {t('warming.channels.add')}
-              </button>
+              {addingChannel ? (
+                <span className="inline-flex items-center gap-1 rounded-full border border-primary bg-white py-[3px] pl-[11px] pr-1">
+                  <input
+                    autoFocus
+                    value={channelInput}
+                    onChange={(event) => {
+                      setChannelInput(event.target.value);
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter') addChannel();
+                      if (event.key === 'Escape') cancelAddChannel();
+                    }}
+                    placeholder={t('warming.channels.placeholderSingle')}
+                    aria-label={t('warming.channels.placeholderSingle')}
+                    className="w-[150px] border-none bg-transparent text-[12px] outline-none"
+                  />
+                  <button
+                    type="button"
+                    title={t('warming.channels.add')}
+                    aria-label={t('warming.channels.add')}
+                    disabled={!channelInput.trim()}
+                    onClick={addChannel}
+                    className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-primary text-white disabled:opacity-50"
+                  >
+                    <svg
+                      width="12"
+                      height="12"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="#fff"
+                      strokeWidth="3"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    title={t('warming.channels.cancel')}
+                    aria-label={t('warming.channels.cancel')}
+                    onClick={cancelAddChannel}
+                    className="flex h-[22px] w-[22px] shrink-0 items-center justify-center rounded-full bg-[#f0eeeb] text-[14px] leading-none text-ink-muted"
+                  >
+                    ×
+                  </button>
+                </span>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAddingChannel(true);
+                  }}
+                  className="inline-flex items-center gap-1 rounded-full border border-dashed border-line-strong bg-white px-[11px] py-[5px] text-[12px] text-ink-muted hover:border-primary hover:text-primary"
+                >
+                  {t('warming.channels.addPill')}
+                </button>
+              )}
             </div>
           </CollapsibleCard>
 
@@ -288,7 +380,7 @@ export function WarmingPage() {
                         <span className="text-[11.5px] text-ink-subtle">{acc.proxy}</span>
                       </div>
                     </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[9.5px] font-bold uppercase tracking-[0.03em] text-success">
+                    <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[9.5px] font-bold tracking-[0.03em] text-success">
                       <svg
                         width="9"
                         height="9"
@@ -309,7 +401,7 @@ export function WarmingPage() {
                       </div>
                       <div className="text-[13px] font-bold">{acc.days}</div>
                     </div>
-                    <span className="h-[26px] w-px bg-line" />
+                    <span className="h-[26px] w-px bg-[#e4e2de]" />
                     <div className="flex-1 pl-[14px]">
                       <div className="text-[10.5px] text-ink-subtle">
                         {t('warming.warmed.trust')}
@@ -317,22 +409,42 @@ export function WarmingPage() {
                       <div className="text-[13px] font-bold text-success">{acc.trust}</div>
                     </div>
                   </div>
-                  <button
-                    type="button"
-                    className="mt-[13px] flex w-full items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white"
-                  >
-                    {t('warming.warmed.toNeuro')}
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.2"
+                  <div className="mt-[13px] flex items-center gap-[9px]">
+                    <button
+                      type="button"
+                      className="flex flex-1 items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white"
                     >
-                      <path d="M5 12h14M13 6l6 6-6 6" />
-                    </svg>
-                  </button>
+                      {t('warming.warmed.toNeuro')}
+                      <svg
+                        width="13"
+                        height="13"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2.2"
+                      >
+                        <path d="M5 12h14M13 6l6 6-6 6" />
+                      </svg>
+                    </button>
+                    <button
+                      type="button"
+                      title={t('warming.warmed.backToWarm')}
+                      aria-label={t('warming.warmed.backToWarm')}
+                      className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line-input bg-white text-ink-muted"
+                    >
+                      <svg
+                        width="15"
+                        height="15"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      >
+                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                        <path d="M3 3v5h5" />
+                      </svg>
+                    </button>
+                  </div>
                 </div>
               ))}
             </div>
@@ -343,7 +455,7 @@ export function WarmingPage() {
             wrapperClassName="rounded-2xl border border-line bg-[#f6f5f2]"
             header={<span className="text-[13px] font-semibold">{t('warming.howto.title')}</span>}
           >
-            <div className="mb-3 text-[11px] leading-[1.5] text-ink-subtle">
+            <div className="mb-[13px] text-[11px] leading-[1.4] text-[#9a9893]">
               {t('warming.howto.hint')}
             </div>
             <div className="grid grid-cols-2 gap-x-[22px] gap-y-[11px]">
@@ -369,6 +481,18 @@ export function WarmingPage() {
           busyId={busyId}
         />
       </div>
+
+      {warmDaysFor ? (
+        <WarmDaysModal
+          phone={warmDaysFor.label ?? warmDaysFor.account_id}
+          onClose={() => {
+            setWarmDaysFor(null);
+          }}
+          onConfirm={() => {
+            runOnAccount(start, warmDaysFor.account_id);
+          }}
+        />
+      ) : null}
     </div>
   );
 }

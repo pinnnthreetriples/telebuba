@@ -4,10 +4,10 @@ import type { LogEntry } from '@/shared/api';
 
 type LogStatus = LogEntry['status'];
 
-// The design's level pill — tinted by severity.
+// The design's level pill — solid severity tint.
 const STATUS_CLASS: Record<LogStatus, string> = {
   success: 'bg-success-tint text-success',
-  warning: 'bg-warning/10 text-warning',
+  warning: 'bg-[#fff0d2] text-[#e08700]',
   error: 'bg-danger-tint text-danger',
 };
 

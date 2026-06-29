@@ -6,7 +6,7 @@ import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/en
 import type { WarmingSettings } from '@/shared/api';
 
 const INPUT =
-  'tb-time w-full rounded-[10px] border border-line bg-white px-3 py-[9px] text-[13px] outline-none';
+  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 const FIELD_LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 
 // ponytail: limits + flags are local mock until the backend carries them — the
@@ -47,15 +47,17 @@ function Card({
   title,
   subtitle,
   className = 'px-5 py-[18px]',
+  mb = 'mb-[14px]',
   children,
 }: {
   title?: string;
   subtitle?: string;
   className?: string;
+  mb?: string;
   children: ReactNode;
 }) {
   return (
-    <div className={`mb-[14px] rounded-2xl border border-line bg-white ${className}`}>
+    <div className={`${mb} rounded-2xl border border-line bg-white ${className}`}>
       {title ? <div className="mb-[3px] text-[13px] font-semibold">{title}</div> : null}
       {subtitle ? <div className="mb-4 text-[12px] text-ink-subtle">{subtitle}</div> : null}
       {children}
@@ -102,7 +104,7 @@ function RangeField({
 }) {
   const { t } = useTranslation();
   const box =
-    'tb-time flex flex-1 items-center gap-[7px] rounded-[10px] border border-line bg-white px-3 py-[9px]';
+    'tb-time flex flex-1 items-center gap-[7px] rounded-[10px] border border-line-input bg-white px-3 py-[9px]';
   const inp = 'min-w-0 flex-1 border-none bg-transparent text-right text-[13px] outline-none';
   return (
     <div>
@@ -206,32 +208,31 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
               onClick={() => {
                 setShowKey((value) => !value);
               }}
-              className="flex w-[42px] items-center justify-center rounded-[10px] border border-line bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
+              className="flex w-[42px] items-center justify-center rounded-[10px] border border-line-input bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
             >
               {showKey ? (
                 <svg
-                  width="16"
-                  height="16"
+                  width="17"
+                  height="17"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
                 >
-                  <path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" />
-                  <path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" />
-                  <path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" />
-                  <path d="m2 2 20 20" />
+                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+                  <path d="M1 1l22 22" />
+                  <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.39-1.61" />
                 </svg>
               ) : (
                 <svg
-                  width="16"
-                  height="16"
+                  width="17"
+                  height="17"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
                   strokeWidth="1.8"
                 >
-                  <path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" />
+                  <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
                   <circle cx="12" cy="12" r="3" />
                 </svg>
               )}
@@ -314,7 +315,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
         </div>
       </Card>
 
-      <Card className="px-5 py-[6px]">
+      <Card className="px-5 py-[6px]" mb="mb-[18px]">
         {FLAGS.map((flag, index) => (
           <div
             key={flag}
@@ -341,7 +342,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-full border border-line bg-white px-[18px] py-[9px] text-[13px] font-medium"
+          className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium"
         >
           {t('settings.cancel')}
         </button>

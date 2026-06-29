@@ -7,4 +7,10 @@ export {
   updateAccountProfileMutation,
 } from './api/accounts.mutations';
 export { StatusBadge } from './ui/StatusBadge';
-export { accountHealth, type AccountHealth, type AccountStatus } from './model/status';
+export {
+  accountHealth,
+  accountDesignStatus,
+  type AccountHealth,
+  type AccountStatus,
+  type DesignStatus,
+} from './model/status';
