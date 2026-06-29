@@ -10,6 +10,7 @@ import {
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import { useLogEventStream } from '@/shared/lib';
+import { CollapsibleCard } from '@/shared/ui';
 import { WarmingBoard } from '@/widgets/warming-board';
 
 // SSE drives live board updates; this poll is just the fallback safety net.
@@ -188,8 +189,12 @@ export function WarmingPage() {
             </div>
           </div>
 
-          <div className="rounded-[13px] border border-line bg-white p-4">
-            <div className="mb-[11px] text-[13px] font-semibold">{t('warming.channels.title')}</div>
+          <CollapsibleCard
+            header={
+              <span className="text-[13px] font-semibold">{t('warming.channels.title')}</span>
+            }
+            label={t('warming.channels.title')}
+          >
             <div className="flex flex-wrap gap-[7px]">
               {channels.map((channel) => (
                 <span
@@ -242,29 +247,33 @@ export function WarmingPage() {
                 {t('warming.channels.add')}
               </button>
             </div>
-          </div>
+          </CollapsibleCard>
 
-          <div className="rounded-2xl border border-line bg-white p-4">
-            <div className="mb-3 flex items-center gap-[9px]">
-              <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-success-tint">
-                <svg
-                  width="15"
-                  height="15"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#12a150"
-                  strokeWidth="2.6"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-              </span>
-              <span className="text-[13.5px] font-bold">{t('warming.warmed.title')}</span>
-              <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
-                {WARMED_MOCK.length}
-              </span>
-            </div>
+          <CollapsibleCard
+            label={t('warming.warmed.title')}
+            header={
+              <>
+                <span className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-success-tint">
+                  <svg
+                    width="15"
+                    height="15"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#12a150"
+                    strokeWidth="2.6"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M20 6 9 17l-5-5" />
+                  </svg>
+                </span>
+                <span className="text-[13.5px] font-bold">{t('warming.warmed.title')}</span>
+                <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
+                  {WARMED_MOCK.length}
+                </span>
+              </>
+            }
+          >
             <div className="flex flex-col gap-3">
               {WARMED_MOCK.map((acc) => (
                 <div key={acc.id} className="rounded-[14px] border border-line p-[14px]">
@@ -327,11 +336,14 @@ export function WarmingPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </CollapsibleCard>
 
-          <div className="rounded-2xl border border-line bg-[#f6f5f2] p-4">
-            <div className="text-[13px] font-semibold">{t('warming.howto.title')}</div>
-            <div className="mb-3 mt-2 text-[11px] leading-[1.5] text-ink-subtle">
+          <CollapsibleCard
+            label={t('warming.howto.title')}
+            wrapperClassName="rounded-2xl border border-line bg-[#f6f5f2]"
+            header={<span className="text-[13px] font-semibold">{t('warming.howto.title')}</span>}
+          >
+            <div className="mb-3 text-[11px] leading-[1.5] text-ink-subtle">
               {t('warming.howto.hint')}
             </div>
             <div className="grid grid-cols-2 gap-x-[22px] gap-y-[11px]">
@@ -346,7 +358,7 @@ export function WarmingPage() {
                 </div>
               ))}
             </div>
-          </div>
+          </CollapsibleCard>
         </div>
 
         <WarmingBoard
