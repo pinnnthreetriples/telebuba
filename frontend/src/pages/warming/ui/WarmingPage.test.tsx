@@ -107,7 +107,8 @@ test('starts an idle account', async () => {
   await waitFor(() => {
     expect(screen.getByText('idle-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Запустить'));
+  await userEvent.click(screen.getByText('Прогреть'));
+  await userEvent.click(screen.getByText('Запустить прогрев'));
   await waitFor(() => {
     const started = vi
       .mocked(fetch)
@@ -122,8 +123,9 @@ test('adds a channel', async () => {
   await waitFor(() => {
     expect(screen.getByText('@news')).toBeInTheDocument();
   });
-  await userEvent.type(screen.getByLabelText(/Ссылки или/), '@more');
-  await userEvent.click(screen.getByText('Добавить'));
+  await userEvent.click(screen.getByText('+ Канал'));
+  await userEvent.type(screen.getByLabelText('t.me/канал или @канал'), '@more');
+  await userEvent.click(screen.getByLabelText('Добавить'));
   await waitFor(() => {
     const added = vi
       .mocked(fetch)

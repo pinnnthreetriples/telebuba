@@ -45,7 +45,7 @@ test('renders log rows from the API', async () => {
   await waitFor(() => {
     expect(screen.getByText('thing_happened')).toBeInTheDocument();
   });
-  expect(screen.getByText('acc-1')).toBeInTheDocument();
+  expect(screen.getAllByText('acc-1').length).toBeGreaterThan(0);
 });
 
 test('prepends a live SSE event to the newest page', async () => {
@@ -95,12 +95,15 @@ test('applies the status and account filters', async () => {
   await waitFor(() => {
     expect(screen.getByText('bad')).toBeInTheDocument();
   });
-  await userEvent.selectOptions(screen.getByLabelText('Статус'), 'error');
-  await userEvent.type(screen.getByLabelText('Аккаунт'), 'acc-1');
+  await userEvent.click(screen.getAllByText('Ошибка')[0]!);
+  await userEvent.click(screen.getByLabelText('Аккаунт'));
+  await userEvent.click(screen.getByRole('button', { name: 'acc-1' }));
   await waitFor(() => {
     const filtered = vi.mocked(fetch).mock.calls.some(([input]) => {
       const url = new URL((input as Request).url);
-      return url.searchParams.get('status') === 'error';
+      return (
+        url.searchParams.get('status') === 'error' && url.searchParams.get('account_id') === 'acc-1'
+      );
     });
     expect(filtered).toBe(true);
   });

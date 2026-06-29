@@ -90,11 +90,41 @@ test('runs the check action on a row', async () => {
   await waitFor(() => {
     expect(screen.getByText('acc-1')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Проверить'));
+  await userEvent.click(screen.getByTitle('Проверить'));
   await waitFor(() => {
     const checked = vi
       .mocked(fetch)
       .mock.calls.some(([input]) => (input as Request).url.includes('/accounts/check'));
     expect(checked).toBe(true);
   });
+});
+
+test('the add button opens the add-account wizard', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('+ Аккаунт'));
+  expect(screen.getByText('Добавить аккаунт')).toBeInTheDocument();
+});
+
+test('the profile pencil opens the profile modal for the row account', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByTitle('Редактировать профиль'));
+  expect(screen.getByText('Текст')).toBeInTheDocument();
+});
+
+test('the proxy-pool add button opens the proxy-add modal', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('Добавить'));
+  expect(screen.getByText('Добавить прокси')).toBeInTheDocument();
 });

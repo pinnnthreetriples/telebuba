@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -34,7 +34,19 @@ const BOARD = {
   campaign_name: 'Promo',
   status: 'active',
   channels: [{ channel: '@news', status: 'ready', ready_accounts: 1, total_accounts: 1 }],
-  accounts: [],
+  accounts: [
+    {
+      account_id: 'acc-1',
+      label: '+79261112233',
+      health: 'ok',
+      trust_score: 80,
+      trust_band: 'good',
+      comments_last_hour: 0,
+      max_comments_per_hour: 10,
+      comments_today: 2,
+      last_comment_at: 'now',
+    },
+  ],
 };
 
 function routeApi() {
@@ -53,7 +65,15 @@ function routeApi() {
     if (url.pathname === '/api/v1/accounts') {
       return Promise.resolve(
         jsonResponse({
-          items: [{ account_id: 'acc-1', status: 'alive', created_at: 'n', updated_at: 'n' }],
+          items: [
+            {
+              account_id: 'acc-1',
+              label: '+79261112233',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+          ],
           next_cursor: null,
         }),
       );
@@ -68,20 +88,63 @@ function lastEventSource(): { emit(data: unknown): void } | undefined {
   ).last();
 }
 
+// Variant of routeApi where the runtime already has a listener and is running,
+// so the page renders the listening surface + its pause/edit/remove actions.
+function routeApiRunning() {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: true, active_channels: 1, listener_account_id: 'acc-1' }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              account_id: 'acc-1',
+              label: '+79261112233',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+            {
+              account_id: 'acc-2',
+              label: '+79261119999',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+}
+
 test('renders campaigns and the board for the selected campaign', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
-    expect(screen.getByText('@news')).toBeInTheDocument();
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
   });
   expect(screen.getByText('Готов')).toBeInTheDocument();
+  expect(screen.getAllByText('Promo').length).toBeGreaterThan(0);
 });
 
 test('refetches runtime/board on a live SSE event', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
-    expect(screen.getByText('@news')).toBeInTheDocument();
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
   });
   const boardCalls = () =>
     vi.mocked(fetch).mock.calls.filter(([input]) => (input as Request).url.endsWith('/board'))
@@ -95,39 +158,171 @@ test('refetches runtime/board on a live SSE event', async () => {
   });
 });
 
-test('creates a campaign', async () => {
+test('the create-campaign button opens the create modal', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
-    expect(screen.getByText('@news')).toBeInTheDocument();
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
   });
-  await userEvent.type(screen.getByLabelText('Название'), 'New');
-  await userEvent.type(screen.getByLabelText(/Промпт/), 'sell it');
-  await userEvent.click(screen.getByText('Создать'));
-  await waitFor(() => {
-    const created = vi
-      .mocked(fetch)
-      .mock.calls.some(
-        ([input]) =>
-          (input as Request).url.endsWith('/neurocomment/campaigns') &&
-          (input as Request).method === 'POST',
-      );
-    expect(created).toBe(true);
-  });
+  await userEvent.click(screen.getByText('+ Создать кампанию'));
+  expect(screen.getByText('Создать кампанию')).toBeInTheDocument();
 });
 
-test('starts the runtime with a listener account', async () => {
+test('the gear in the board header opens the accounts modal', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
-    expect(screen.getByText('@news')).toBeInTheDocument();
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
   });
-  await userEvent.selectOptions(screen.getByLabelText('Аккаунт-слушатель'), 'acc-1');
+  await userEvent.click(screen.getByLabelText('Аккаунты в нейрокомментинге'));
+  expect(screen.getByText('Готово')).toBeInTheDocument();
+});
+
+test('picking a listener account enables the start button', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  // Listener is a custom dropdown; open it and choose the account.
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  const option = await screen.findByRole('button', { name: '+79261112233' });
+  await userEvent.click(option);
+  // Start button uses the existing runtime.start key ("Запустить").
   await userEvent.click(screen.getByText('Запустить'));
   await waitFor(() => {
     const started = vi
       .mocked(fetch)
       .mock.calls.some(([input]) => (input as Request).url.endsWith('/neurocomment/start'));
     expect(started).toBe(true);
+  });
+});
+
+test('selecting a campaign card marks it selected', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('Promo').length).toBeGreaterThan(0);
+  });
+  const card = screen
+    .getAllByText('Promo')
+    .map((node) => node.closest('[role="button"]'))
+    .find((node): node is HTMLElement => node !== null);
+  expect(card).toBeDefined();
+  await userEvent.click(card as HTMLElement);
+  expect((card as HTMLElement).className).toContain('border-primary');
+  // sanity: status pill uses the active campaign-status key path
+  within(card as HTMLElement).getByText('Активна');
+});
+
+test('listener pause/edit/remove actions fire their handlers', async () => {
+  routeApiRunning();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+
+  // The running listener surface shows a pause action (toggleRuntime → stop).
+  // Both the listener and the active campaign expose a "pause" title; the
+  // listener's is first in the DOM.
+  await userEvent.click(screen.getAllByTitle('Поставить на паузу')[0]!);
+  await waitFor(() => {
+    const stopped = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.endsWith('/neurocomment/stop'));
+    expect(stopped).toBe(true);
+  });
+
+  // Edit opens the listener-edit modal; close it to exercise both handlers.
+  await userEvent.click(screen.getByTitle('Изменить аккаунт'));
+  await userEvent.click(screen.getByText('Отмена'));
+
+  // Remove clears the local listener and stops the runtime again.
+  const stopCalls = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => (input as Request).url.endsWith('/neurocomment/stop')).length;
+  const before = stopCalls();
+  await userEvent.click(screen.getByTitle('Снять слушателя'));
+  await waitFor(() => {
+    expect(stopCalls()).toBeGreaterThan(before);
+  });
+});
+
+test('the captcha switch toggles', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  const sw = screen.getByRole('switch', { name: 'Решение капчи' });
+  expect(sw).toHaveAttribute('aria-checked', 'true');
+  await userEvent.click(sw);
+  expect(sw).toHaveAttribute('aria-checked', 'false');
+});
+
+test('the idle-accounts banner opens the accounts modal', async () => {
+  routeApiRunning();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  // Two accounts, one linked → one idle → the banner renders.
+  await userEvent.click(screen.getByText(/простаивающих/));
+  expect(screen.getByText('Готово')).toBeInTheDocument();
+  await userEvent.click(screen.getByText('Готово'));
+});
+
+test('campaign edit-prompt and delete actions open their modals', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('Promo').length).toBeGreaterThan(0);
+  });
+
+  await userEvent.click(screen.getByTitle('Редактировать промт'));
+  await waitFor(() => {
+    expect(screen.getAllByText('Отмена').length).toBeGreaterThan(0);
+  });
+  await userEvent.click(screen.getAllByText('Отмена')[0]!);
+
+  await userEvent.click(screen.getByTitle('Удалить кампанию'));
+  await waitFor(() => {
+    expect(screen.getAllByText('Отмена').length).toBeGreaterThan(0);
+  });
+  await userEvent.click(screen.getAllByText('Отмена')[0]!);
+});
+
+test('the add-channel pill reveals an input and adds the channel', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+
+  await userEvent.click(screen.getByText('+ Канал'));
+  const input = screen.getByPlaceholderText(/Введите|@|канал/i);
+  await userEvent.type(input, '@promo');
+  // The add button shares its aria-label with the modal's add ("Добавить").
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить' }));
+  await waitFor(() => {
+    const linked = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/channels'));
+    expect(linked).toBe(true);
+  });
+});
+
+test('the create-campaign modal closes via cancel', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  await userEvent.click(screen.getByText('+ Создать кампанию'));
+  expect(screen.getByText('Создать кампанию')).toBeInTheDocument();
+  await userEvent.click(screen.getAllByText('Отмена')[0]!);
+  await waitFor(() => {
+    expect(screen.queryByText('Создать кампанию')).not.toBeInTheDocument();
   });
 });

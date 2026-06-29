@@ -12,5 +12,6 @@ test('renders the localized channel status', () => {
 
 test('uses the danger colour for chat_restricted', () => {
   render(<ChannelStatusBadge status="chat_restricted" />);
-  expect(screen.getByText('Чат ограничен').className).toContain('text-danger');
+  // Design dot-pill: colour is an inline hex, not a token class.
+  expect(screen.getByText('Чат ограничен')).toHaveStyle({ color: '#c0473f' });
 });
