@@ -90,7 +90,12 @@ test('login-by-code requests a code then confirms sign-in', async () => {
     }
     if (pathname === '/api/v1/accounts/acc-1/submit-code') {
       return Promise.resolve(
-        jsonResponse({ account_id: 'acc-1', status: 'alive', created_at: 'now', updated_at: 'now' }),
+        jsonResponse({
+          account_id: 'acc-1',
+          status: 'alive',
+          created_at: 'now',
+          updated_at: 'now',
+        }),
       );
     }
     return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
