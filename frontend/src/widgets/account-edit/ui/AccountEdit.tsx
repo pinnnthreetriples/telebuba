@@ -1,4 +1,4 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -11,8 +11,15 @@ import {
   StatusBadge,
   submitLoginCodeMutation,
 } from '@/entities/account';
-import { checkProxyMutation } from '@/entities/proxy';
+import {
+  assignProxyMutation,
+  checkProxyMutation,
+  createProxyMutation,
+  proxyPoolQueryOptions,
+} from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
+
+import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
@@ -24,7 +31,7 @@ const seg = (on: boolean): string =>
   `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
 
 // A check-button drives a tiny idle→loading→(ok|err) machine, settling back to
-// idle. ponytail: design-first — no backend call, just the visual states.
+// idle. Backed by real check calls (proxy connectivity / @SpamBot / alive).
 type CheckState = 'idle' | 'loading' | 'ok' | 'err';
 
 // Real spam-status dot per verdict (matches the design's traffic-light tints).
@@ -144,11 +151,13 @@ function Section({
 
 // The design's account-edit view (reached by clicking a row): an always-visible
 // hero header above five collapsible cards — session, proxy, device, signals,
-// actions. ponytail: every form here is mock until the backend is wired.
+// actions. All wired to /api/v1 (proxy pool/manual assign, phone-code login,
+// checks, profile); only the .session/tdata dropzone is presentational (#6).
 export function AccountEdit({ account, onBack }: { account: AccountRead; onBack: () => void }) {
   const { t } = useTranslation();
   const [importTab, setImportTab] = useState<'session' | 'tdata'>('session');
   const [proxyMode, setProxyMode] = useState<'pool' | 'manual'>('manual');
+  const [proxyForm, setProxyForm] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
   const [showPass, setShowPass] = useState(false);
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
@@ -159,6 +168,10 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
 
   const queryClient = useQueryClient();
   const proxyMutation = useMutation(checkProxyMutation());
+  const createProxy = useMutation(createProxyMutation());
+  const assignProxy = useMutation(assignProxyMutation());
+  const pool = useQuery(proxyPoolQueryOptions());
+  const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
   const spamMutation = useMutation(spamCheckAccountMutation());
   const aliveMutation = useMutation(checkAccountMutation());
   const requestCode = useMutation(requestLoginCodeMutation());
@@ -224,6 +237,65 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         },
       },
     );
+  };
+
+  // Pool mode: picking a free pool proxy reassigns this account immediately.
+  const assignFromPool = (proxyId: string) => {
+    if (!proxyId) return;
+    assignProxy.mutate(
+      { path: { proxy_id: proxyId }, body: { account_id: account.account_id } },
+      { onSuccess: invalidate },
+    );
+  };
+
+  // Manual mode: create the entered proxy (idempotent), assign it, verify it.
+  const addManualProxy = () => {
+    setProxyCheck('loading');
+    createProxy.mutate(
+      {
+        body: {
+          proxy_type: proxyForm.proxy_type,
+          host: proxyForm.host.trim(),
+          port: Number(proxyForm.port),
+          username: proxyForm.username.trim() || null,
+          password: proxyForm.password || null,
+        },
+      },
+      {
+        onSuccess: (created) => {
+          assignProxy.mutate(
+            { path: { proxy_id: created.id }, body: { account_id: account.account_id } },
+            {
+              onSuccess: () => {
+                proxyMutation.mutate(
+                  { path: { proxy_id: created.id } },
+                  {
+                    onSuccess: (checked) => {
+                      setProxyCheck(checked.status === 'tcp_working' ? 'ok' : 'err');
+                      invalidate();
+                    },
+                    onError: () => {
+                      setProxyCheck('err');
+                    },
+                  },
+                );
+              },
+              onError: () => {
+                setProxyCheck('err');
+              },
+            },
+          );
+        },
+        onError: () => {
+          setProxyCheck('err');
+        },
+      },
+    );
+  };
+
+  const onProxyAction = () => {
+    if (proxyMode === 'manual') addManualProxy();
+    else runProxyCheck();
   };
 
   // Real @SpamBot probe; the result also refreshes the signals on next load.
@@ -551,30 +623,68 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <>
               <label className="mb-[10px] block">
                 <span className={LABEL}>{t('accounts.edit.host')}</span>
-                <input className={`${FIELD} font-mono`} />
+                <input
+                  value={proxyForm.host}
+                  onChange={(event) => {
+                    setProxyForm((value) => ({ ...value, host: event.target.value }));
+                  }}
+                  className={`${FIELD} font-mono`}
+                />
               </label>
               <div className="mb-[10px] grid grid-cols-2 gap-[10px]">
                 <label>
                   <span className={LABEL}>{t('accounts.edit.port')}</span>
-                  <input className={`${FIELD} font-mono`} />
+                  <input
+                    value={proxyForm.port}
+                    inputMode="numeric"
+                    onChange={(event) => {
+                      setProxyForm((value) => ({
+                        ...value,
+                        port: event.target.value.replace(/\D/g, ''),
+                      }));
+                    }}
+                    className={`${FIELD} font-mono`}
+                  />
                 </label>
                 <label>
                   <span className={LABEL}>{t('accounts.edit.type')}</span>
-                  <select className={FIELD}>
-                    <option>SOCKS5</option>
-                    <option>HTTPS</option>
+                  <select
+                    value={proxyForm.proxy_type}
+                    onChange={(event) => {
+                      setProxyForm((value) => ({
+                        ...value,
+                        proxy_type: event.target.value as ProxyFormValue['proxy_type'],
+                      }));
+                    }}
+                    className={FIELD}
+                  >
+                    <option value="socks5">SOCKS5</option>
+                    <option value="https">HTTPS</option>
                   </select>
                 </label>
               </div>
               <div className="mb-[14px] grid grid-cols-2 gap-[10px]">
                 <label>
                   <span className={LABEL}>{t('accounts.edit.login')}</span>
-                  <input className={FIELD} />
+                  <input
+                    value={proxyForm.username}
+                    onChange={(event) => {
+                      setProxyForm((value) => ({ ...value, username: event.target.value }));
+                    }}
+                    className={FIELD}
+                  />
                 </label>
                 <label>
                   <span className={LABEL}>{t('accounts.edit.password')}</span>
                   <div className="relative">
-                    <input type={showPass ? 'text' : 'password'} className={`${FIELD} pr-9`} />
+                    <input
+                      value={proxyForm.password}
+                      onChange={(event) => {
+                        setProxyForm((value) => ({ ...value, password: event.target.value }));
+                      }}
+                      type={showPass ? 'text' : 'password'}
+                      className={`${FIELD} pr-9`}
+                    />
                     <button
                       type="button"
                       onClick={() => {
@@ -618,16 +728,26 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           ) : (
             <label className="mb-[14px] block">
               <span className={LABEL}>{t('accounts.proxyPool.title')}</span>
-              <select className={FIELD}>
-                <option>nl-1.proxyhub.net:1080</option>
-                <option>de-2.proxyhub.net:1080</option>
+              <select
+                value={account.proxy_id ?? ''}
+                onChange={(event) => {
+                  assignFromPool(event.target.value);
+                }}
+                className={FIELD}
+              >
+                <option value="">{t('accounts.edit.choosePoolProxy')}</option>
+                {freeProxies.map((proxy) => (
+                  <option key={proxy.id} value={proxy.id}>
+                    {proxy.host}:{proxy.port}
+                  </option>
+                ))}
               </select>
             </label>
           )}
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={runProxyCheck}
+              onClick={onProxyAction}
               className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
             >
               {proxyCheck === 'loading' ? (

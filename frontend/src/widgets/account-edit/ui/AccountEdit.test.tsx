@@ -118,6 +118,65 @@ test('login-by-code requests a code then confirms sign-in', async () => {
   });
 });
 
+test('proxy: manual creates+assigns, pool select assigns', async () => {
+  const proxy = (over: Record<string, unknown> = {}) => ({
+    id: 'newp',
+    proxy_type: 'socks5',
+    host: '1.2.3.4',
+    port: 1080,
+    has_password: false,
+    status: 'tcp_working',
+    created_at: 'now',
+    updated_at: 'now',
+    used: 0,
+    capacity: 3,
+    free: 3,
+    ...over,
+  });
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/proxies' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ proxies: [proxy({ id: 'pool-1', host: '9.9.9.9' })] }));
+    }
+    if (pathname === '/api/v1/proxies') return Promise.resolve(jsonResponse(proxy()));
+    if (pathname.endsWith('/assign')) return Promise.resolve(jsonResponse(proxy()));
+    if (pathname.endsWith('/check')) return Promise.resolve(jsonResponse(proxy()));
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Прокси'));
+
+  // fill every manual field (covers each controlled onChange) then create+assign
+  await userEvent.type(screen.getByLabelText('Host'), '1.2.3.4');
+  await userEvent.type(screen.getByLabelText('Порт'), '1080');
+  await userEvent.type(screen.getByLabelText('Логин'), 'u');
+  await userEvent.type(screen.getAllByLabelText('Пароль')[0]!, 'p');
+  await userEvent.selectOptions(screen.getByLabelText('Тип'), 'https');
+  await userEvent.click(screen.getAllByText('Проверить')[0]!);
+  await waitFor(() => {
+    const created = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return new URL(request.url).pathname === '/api/v1/proxies' && request.method === 'POST';
+    });
+    expect(created).toBe(true);
+  });
+
+  // pool mode: selecting a free proxy assigns it
+  await userEvent.click(screen.getByText('Из пула'));
+  await waitFor(() => {
+    expect(screen.getByRole('option', { name: '9.9.9.9:1080' })).toBeInTheDocument();
+  });
+  await userEvent.selectOptions(screen.getByRole('combobox'), 'pool-1');
+  await waitFor(() => {
+    const assigned = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/proxies/pool-1/assign'));
+    expect(assigned).toBe(true);
+  });
+});
+
 test('the @SpamBot check fires the real spam-check endpoint', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

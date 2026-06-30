@@ -122,7 +122,8 @@
       "proxyChecking": "Checking connection…",
       "proxyDown": "Proxy not responding",
       "aliveOk": "Account is alive",
-      "aliveErr": "Account unreachable"
+      "aliveErr": "Account unreachable",
+      "choosePoolProxy": "Choose from pool"
     },
     "actions": {
       "add": "Account",
