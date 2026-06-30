@@ -238,7 +238,9 @@
       "proxyManual": "Add proxy",
       "proxyManualDesc": "Enter host, port, login and password manually",
       "proxyPool": "Pick from pool",
-      "proxyPoolDesc": "Ready, checked proxies from the shared pool"
+      "proxyPoolDesc": "Ready, checked proxies from the shared pool",
+      "poolEmpty": "No free proxies in the pool",
+      "poolFree": "{{count}} free"
     }
   },
   "nav": {

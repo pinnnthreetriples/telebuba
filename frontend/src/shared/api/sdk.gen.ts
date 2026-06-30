@@ -55,6 +55,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsErrors,
   GetWarmingSettingsResponses,
+  ImportAccountSessionData,
+  ImportAccountSessionErrors,
+  ImportAccountSessionResponses,
   ImportAccountTdataData,
   ImportAccountTdataErrors,
   ImportAccountTdataResponses,
@@ -348,6 +351,26 @@ export const importAccountTdata = <ThrowOnError extends boolean = false>(
   >({
     ...formDataBodySerializer,
     url: '/api/v1/accounts/import-tdata',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Import Account Session
+ */
+export const importAccountSession = <ThrowOnError extends boolean = false>(
+  options: Options<ImportAccountSessionData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    ImportAccountSessionResponses,
+    ImportAccountSessionErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/import-session',
     ...options,
     headers: {
       'Content-Type': null,

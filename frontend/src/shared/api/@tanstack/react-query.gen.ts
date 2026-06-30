@@ -26,6 +26,7 @@ import {
   getNeurocommentSettings,
   getWarmingBoard,
   getWarmingSettings,
+  importAccountSession,
   importAccountTdata,
   linkCampaignChannel,
   listAccounts,
@@ -105,6 +106,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsError,
   GetWarmingSettingsResponse,
+  ImportAccountSessionData,
+  ImportAccountSessionError,
+  ImportAccountSessionResponse,
   ImportAccountTdataData,
   ImportAccountTdataError,
   ImportAccountTdataResponse,
@@ -649,6 +653,33 @@ export const importAccountTdataMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await importAccountTdata({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Import Account Session
+ */
+export const importAccountSessionMutation = (
+  options?: Partial<Options<ImportAccountSessionData>>,
+): UseMutationOptions<
+  ImportAccountSessionResponse,
+  ImportAccountSessionError,
+  Options<ImportAccountSessionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ImportAccountSessionResponse,
+    ImportAccountSessionError,
+    Options<ImportAccountSessionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await importAccountSession({
         ...options,
         ...fnOptions,
         throwOnError: true,

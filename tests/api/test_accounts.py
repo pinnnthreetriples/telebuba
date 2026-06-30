@@ -12,7 +12,7 @@ from schemas.phone_login import PhoneCodeRequestResult
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataImportResult
 from schemas.telegram_actions import ActionResult
-from services.accounts import PhoneLoginError, add_account
+from services.accounts import PhoneLoginError, SessionAlreadyExistsError, add_account
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -243,6 +243,43 @@ async def test_import_tdata_accepts_multipart(
         )
     assert resp.status_code == 200
     assert [a["account_id"] for a in resp.json()["accounts"]] == ["imported"]
+
+
+@pytest.mark.asyncio
+async def test_import_session_accepts_multipart(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(data: object) -> AccountRead:  # noqa: ARG001
+        return _account("from-session")
+
+    monkeypatch.setattr("services.accounts.import_account_session", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            files={"file": ("acc.session", b"session-bytes", "application/octet-stream")},
+            data={"label": "S"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["account_id"] == "from-session"
+
+
+@pytest.mark.asyncio
+async def test_import_session_duplicate_is_409(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(data: object) -> AccountRead:  # noqa: ARG001
+        msg = "already exists"
+        raise SessionAlreadyExistsError(msg)
+
+    monkeypatch.setattr("services.accounts.import_account_session", _boom)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            files={"file": ("acc.session", b"x", "application/octet-stream")},
+        )
+    assert resp.status_code == 409
 
 
 @pytest.mark.asyncio

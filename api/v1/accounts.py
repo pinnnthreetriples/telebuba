@@ -13,7 +13,12 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
-from schemas.accounts import AccountCheckRequest, AccountProfileUpdateRequest, AccountRead
+from schemas.accounts import (
+    AccountCheckRequest,
+    AccountProfileUpdateRequest,
+    AccountRead,
+    AccountSessionFileImport,
+)
 from schemas.api import Page
 from schemas.phone_login import PhoneCodeRequestResult, SubmitCodeRequest
 from schemas.profile_media import AccountProfilePhotoUpload
@@ -152,6 +157,29 @@ async def import_account_tdata(
     )
     try:
         return await accounts.import_account_tdata(request)
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/import-session",
+    response_model=AccountRead,
+    operation_id="importAccountSession",
+)
+async def import_account_session(
+    file: Annotated[UploadFile, File()],
+    label: Annotated[str | None, Form()] = None,
+) -> AccountRead:
+    content = await file.read()
+    data = AccountSessionFileImport(
+        filename=file.filename or "account.session",
+        content=content,
+        label=label,
+    )
+    try:
+        return await accounts.import_account_session(data)
+    except accounts.SessionAlreadyExistsError as exc:
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 

@@ -272,6 +272,20 @@ export type AssignAccountRequest = {
 };
 
 /**
+ * Body_importAccountSession
+ */
+export type BodyImportAccountSession = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Label
+   */
+  label?: string | null;
+};
+
+/**
  * Body_importAccountTdata
  */
 export type BodyImportAccountTdata = {
@@ -1912,6 +1926,33 @@ export type ImportAccountTdataResponses = {
 
 export type ImportAccountTdataResponse =
   ImportAccountTdataResponses[keyof ImportAccountTdataResponses];
+
+export type ImportAccountSessionData = {
+  body: BodyImportAccountSession;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/import-session';
+};
+
+export type ImportAccountSessionErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ImportAccountSessionError =
+  ImportAccountSessionErrors[keyof ImportAccountSessionErrors];
+
+export type ImportAccountSessionResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type ImportAccountSessionResponse =
+  ImportAccountSessionResponses[keyof ImportAccountSessionResponses];
 
 export type SetAccountPhotoData = {
   body: BodySetAccountPhoto;
