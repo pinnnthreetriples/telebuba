@@ -2,7 +2,15 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { checkAccountMutation, spamCheckAccountMutation, StatusBadge } from '@/entities/account';
+import {
+  checkAccountMutation,
+  logoutAccountMutation,
+  requestLoginCodeMutation,
+  resetAccountSessionMutation,
+  spamCheckAccountMutation,
+  StatusBadge,
+  submitLoginCodeMutation,
+} from '@/entities/account';
 import { checkProxyMutation } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 
@@ -145,13 +153,56 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
   const [aliveCheck, setAliveCheck] = useState<CheckState>('idle');
+  const [smsCode, setSmsCode] = useState('');
+  const [twoFa, setTwoFa] = useState('');
+  const [loginNote, setLoginNote] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
   const proxyMutation = useMutation(checkProxyMutation());
   const spamMutation = useMutation(spamCheckAccountMutation());
   const aliveMutation = useMutation(checkAccountMutation());
+  const requestCode = useMutation(requestLoginCodeMutation());
+  const submitCode = useMutation(submitLoginCodeMutation());
+  const logout = useMutation(logoutAccountMutation());
+  const resetSession = useMutation(resetAccountSessionMutation());
   const invalidate = () => {
     void queryClient.invalidateQueries();
+  };
+
+  const path = { path: { account_id: account.account_id } } as const;
+  const onRequestCode = () => {
+    setLoginNote(null);
+    requestCode.mutate(path, {
+      onSuccess: (result) => {
+        setLoginNote(t('accounts.edit.codeSent', { phone: result.phone }));
+      },
+      onError: () => {
+        setLoginNote(t('accounts.edit.codeError'));
+      },
+    });
+  };
+  const onConfirmLogin = () => {
+    setLoginNote(null);
+    submitCode.mutate(
+      { ...path, body: { code: smsCode, password: twoFa || null } },
+      {
+        onSuccess: () => {
+          setSmsCode('');
+          setTwoFa('');
+          setLoginNote(t('accounts.edit.loginOk'));
+          invalidate();
+        },
+        onError: () => {
+          setLoginNote(t('accounts.edit.loginErr'));
+        },
+      },
+    );
+  };
+  const onLogout = () => {
+    logout.mutate(path, { onSuccess: invalidate });
+  };
+  const onReset = () => {
+    resetSession.mutate(path, { onSuccess: invalidate });
   };
 
   // Real proxy connectivity check against the assigned pool proxy.
@@ -291,30 +342,62 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             </span>
             <button
               type="button"
-              className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted"
+              onClick={onLogout}
+              disabled={logout.isPending}
+              className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted disabled:opacity-50"
             >
               {t('accounts.edit.logout')}
             </button>
           </div>
-          <div className="mb-[9px] mt-4 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
-            {t('accounts.edit.loginByCode')}
+          <div className="mb-[9px] mt-4 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+              {t('accounts.edit.loginByCode')}
+            </span>
+            <button
+              type="button"
+              onClick={onRequestCode}
+              disabled={requestCode.isPending}
+              className="rounded-full border border-line-input bg-white px-3 py-[4px] text-[11.5px] font-medium text-primary disabled:opacity-50"
+            >
+              {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
+            </button>
           </div>
           <div className="mb-[9px] grid grid-cols-2 gap-[10px]">
             <label>
               <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
-              <input placeholder="1 2 3 4 5" className={`${FIELD} tracking-[0.18em]`} />
+              <input
+                value={smsCode}
+                onChange={(event) => {
+                  setSmsCode(event.target.value);
+                }}
+                placeholder="1 2 3 4 5"
+                className={`${FIELD} tracking-[0.18em]`}
+              />
             </label>
             <label>
               <span className={LABEL}>{t('accounts.edit.twoFA')}</span>
-              <input type="password" placeholder="••••••" className={FIELD} />
+              <input
+                type="password"
+                value={twoFa}
+                onChange={(event) => {
+                  setTwoFa(event.target.value);
+                }}
+                placeholder="••••••"
+                className={FIELD}
+              />
             </label>
           </div>
           <button
             type="button"
-            className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium"
+            onClick={onConfirmLogin}
+            disabled={submitCode.isPending || !smsCode}
+            className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
           >
-            {t('accounts.edit.confirmLogin')}
+            {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
           </button>
+          {loginNote ? (
+            <div className="mt-[8px] text-[11.5px] text-ink-muted">{loginNote}</div>
+          ) : null}
           <div className="mb-[9px] mt-[18px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
             {t('accounts.edit.import')}
           </div>
@@ -807,9 +890,11 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
-            className="shrink-0 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
+            onClick={onReset}
+            disabled={resetSession.isPending}
+            className="shrink-0 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
           >
-            {t('accounts.edit.reset')}
+            {resetSession.isPending ? <Spinner size={14} /> : t('accounts.edit.reset')}
           </button>
         </div>
         <div className="flex items-center justify-between gap-3 py-[14px]">

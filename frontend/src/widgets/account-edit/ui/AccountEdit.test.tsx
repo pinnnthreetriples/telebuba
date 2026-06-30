@@ -81,6 +81,38 @@ test('section toggles, import tabs and proxy mode drive the handlers', async () 
   expect(onBack).toHaveBeenCalled();
 });
 
+test('login-by-code requests a code then confirms sign-in', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts/acc-1/request-code') {
+      return Promise.resolve(jsonResponse({ account_id: 'acc-1', phone: '+79051184490' }));
+    }
+    if (pathname === '/api/v1/accounts/acc-1/submit-code') {
+      return Promise.resolve(
+        jsonResponse({ account_id: 'acc-1', status: 'alive', created_at: 'now', updated_at: 'now' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сессия'));
+  await userEvent.click(screen.getByText('Отправить код'));
+  await waitFor(() => {
+    expect(screen.getByText(/Код отправлен/)).toBeInTheDocument();
+  });
+
+  await userEvent.type(screen.getByPlaceholderText('1 2 3 4 5'), '12345');
+  await userEvent.click(screen.getByText('Подтвердить вход'));
+  await waitFor(() => {
+    const submitted = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/submit-code'));
+    expect(submitted).toBe(true);
+  });
+});
+
 test('the @SpamBot check fires the real spam-check endpoint', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

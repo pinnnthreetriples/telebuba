@@ -43,6 +43,7 @@ telebuba/
 │   │   ├── _read_stories.py   story reading actions
 │   │   ├── _read_challenge.py WaitForBotChallenge match predicate + NewMessage wait shell (neurocomment solver)
 │   │   ├── _listener.py       standing post listener (subscribe_posts/stop_post_listener) for neurocomment
+│   │   ├── _auth.py           phone-code login RPCs (SendCode/SignIn/2FA) + log_out_session; the only place auth RPCs live
 │   │   └── _video.py          video/media actions
 │   ├── config.py           pydantic-settings, nested namespaces (incl. settings.api, settings.auth)
 │   ├── gemini.py           HTTP gateway for Gemini
@@ -51,7 +52,7 @@ telebuba/
 │   └── logging.py          loguru + SQLite logs + optional Sentry
 ├── schemas/                Pydantic models; shared types, no behavior, no I/O (incl. api.py: error envelope + generic Page[T]; challenge.py: bot-challenge message + audit-row models)
 ├── services/               business logic; UI-agnostic; no SDK imports
-│   ├── accounts/           account/session/profile operations
+│   ├── accounts/           account/session/profile operations (incl. login.py: phone-code re-auth + logout/reset over the gateway auth RPCs; _login_state.py: in-memory TTL cache of pending code hashes)
 │   ├── proxies.py          proxy-pool business logic (add/list/assign/unassign/remove/check over the pool repo)
 │   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview)
 │   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng)

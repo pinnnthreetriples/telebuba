@@ -76,6 +76,9 @@ import type {
   LoginData,
   LoginErrors,
   LoginResponses,
+  LogoutAccountData,
+  LogoutAccountErrors,
+  LogoutAccountResponses,
   LogoutData,
   LogoutResponses,
   ProbeProxyData,
@@ -84,6 +87,12 @@ import type {
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
+  RequestLoginCodeData,
+  RequestLoginCodeErrors,
+  RequestLoginCodeResponses,
+  ResetAccountSessionData,
+  ResetAccountSessionErrors,
+  ResetAccountSessionResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
@@ -102,6 +111,9 @@ import type {
   StopWarmingData,
   StopWarmingErrors,
   StopWarmingResponses,
+  SubmitLoginCodeData,
+  SubmitLoginCodeErrors,
+  SubmitLoginCodeResponses,
   UnassignProxyData,
   UnassignProxyErrors,
   UnassignProxyResponses,
@@ -217,6 +229,63 @@ export const spamCheckAccount = <ThrowOnError extends boolean = false>(
     url: '/api/v1/accounts/{account_id}/spam-check',
     ...options,
   });
+
+/**
+ * Request Login Code
+ *
+ * Send a Telegram login code to the account's phone (re-auth by code).
+ */
+export const requestLoginCode = <ThrowOnError extends boolean = false>(
+  options: Options<RequestLoginCodeData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<RequestLoginCodeResponses, RequestLoginCodeErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/request-code',
+    ...options,
+  });
+
+/**
+ * Submit Login Code
+ *
+ * Complete sign-in with the SMS code (+ optional 2FA password).
+ */
+export const submitLoginCode = <ThrowOnError extends boolean = false>(
+  options: Options<SubmitLoginCodeData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<SubmitLoginCodeResponses, SubmitLoginCodeErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/submit-code',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Logout Account
+ *
+ * Log the account out server-side and mark it unauthorized.
+ */
+export const logoutAccount = <ThrowOnError extends boolean = false>(
+  options: Options<LogoutAccountData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<LogoutAccountResponses, LogoutAccountErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/logout',
+    ...options,
+  });
+
+/**
+ * Reset Account Session
+ *
+ * Log out and wipe the local session token so the next login is clean.
+ */
+export const resetAccountSession = <ThrowOnError extends boolean = false>(
+  options: Options<ResetAccountSessionData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    ResetAccountSessionResponses,
+    ResetAccountSessionErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/reset-session', ...options });
 
 /**
  * Update Account Profile

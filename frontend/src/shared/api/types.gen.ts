@@ -640,6 +640,22 @@ export type PageLogEntry = {
 };
 
 /**
+ * PhoneCodeRequestResult
+ *
+ * API response after a code is sent — confirmation only, no secrets.
+ */
+export type PhoneCodeRequestResult = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Phone
+   */
+  phone: string;
+};
+
+/**
  * ProxyAssignRequest
  */
 export type ProxyAssignRequest = {
@@ -869,6 +885,22 @@ export type StopWarmingRequest = {
    * Account Id
    */
   account_id: string;
+};
+
+/**
+ * SubmitCodeRequest
+ *
+ * API body for ``POST /accounts/{id}/submit-code``.
+ */
+export type SubmitCodeRequest = {
+  /**
+   * Code
+   */
+  code: string;
+  /**
+   * Password
+   */
+  password?: string | null;
 };
 
 /**
@@ -1496,6 +1528,127 @@ export type SpamCheckAccountResponses = {
 };
 
 export type SpamCheckAccountResponse = SpamCheckAccountResponses[keyof SpamCheckAccountResponses];
+
+export type RequestLoginCodeData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/request-code';
+};
+
+export type RequestLoginCodeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RequestLoginCodeError = RequestLoginCodeErrors[keyof RequestLoginCodeErrors];
+
+export type RequestLoginCodeResponses = {
+  /**
+   * Successful Response
+   */
+  200: PhoneCodeRequestResult;
+};
+
+export type RequestLoginCodeResponse = RequestLoginCodeResponses[keyof RequestLoginCodeResponses];
+
+export type SubmitLoginCodeData = {
+  body: SubmitCodeRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/submit-code';
+};
+
+export type SubmitLoginCodeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SubmitLoginCodeError = SubmitLoginCodeErrors[keyof SubmitLoginCodeErrors];
+
+export type SubmitLoginCodeResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type SubmitLoginCodeResponse = SubmitLoginCodeResponses[keyof SubmitLoginCodeResponses];
+
+export type LogoutAccountData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/logout';
+};
+
+export type LogoutAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type LogoutAccountError = LogoutAccountErrors[keyof LogoutAccountErrors];
+
+export type LogoutAccountResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type LogoutAccountResponse = LogoutAccountResponses[keyof LogoutAccountResponses];
+
+export type ResetAccountSessionData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/reset-session';
+};
+
+export type ResetAccountSessionErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ResetAccountSessionError = ResetAccountSessionErrors[keyof ResetAccountSessionErrors];
+
+export type ResetAccountSessionResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type ResetAccountSessionResponse =
+  ResetAccountSessionResponses[keyof ResetAccountSessionResponses];
 
 export type UpdateAccountProfileData = {
   body: AccountProfileUpdateRequest;

@@ -15,6 +15,7 @@ from fastapi import status as http_status
 
 from schemas.accounts import AccountCheckRequest, AccountProfileUpdateRequest, AccountRead
 from schemas.api import Page
+from schemas.phone_login import PhoneCodeRequestResult, SubmitCodeRequest
 from schemas.profile_media import AccountProfilePhotoUpload
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
@@ -61,6 +62,58 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
 async def spam_check_account(account_id: str) -> SpamStatusVerdict:
     """Re-probe @SpamBot for one account and return the fresh, cached verdict."""
     return await spam_status.refresh_spam_status(account_id, force=True)
+
+
+@router.post(
+    "/accounts/{account_id}/request-code",
+    response_model=PhoneCodeRequestResult,
+    operation_id="requestLoginCode",
+)
+async def request_login_code(account_id: str) -> PhoneCodeRequestResult:
+    """Send a Telegram login code to the account's phone (re-auth by code)."""
+    try:
+        return await accounts.request_login_code(account_id)
+    except accounts.PhoneLoginError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/submit-code",
+    response_model=AccountRead,
+    operation_id="submitLoginCode",
+)
+async def submit_login_code(account_id: str, body: SubmitCodeRequest) -> AccountRead:
+    """Complete sign-in with the SMS code (+ optional 2FA password)."""
+    try:
+        return await accounts.submit_login_code(account_id, body.code, body.password)
+    except accounts.PhoneLoginError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/logout",
+    response_model=AccountRead,
+    operation_id="logoutAccount",
+)
+async def logout_account(account_id: str) -> AccountRead:
+    """Log the account out server-side and mark it unauthorized."""
+    try:
+        return await accounts.logout_account(account_id)
+    except accounts.PhoneLoginError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/reset-session",
+    response_model=AccountRead,
+    operation_id="resetAccountSession",
+)
+async def reset_account_session(account_id: str) -> AccountRead:
+    """Log out and wipe the local session token so the next login is clean."""
+    try:
+        return await accounts.reset_account_session(account_id)
+    except accounts.PhoneLoginError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post("/accounts/profile", response_model=AccountRead, operation_id="updateAccountProfile")

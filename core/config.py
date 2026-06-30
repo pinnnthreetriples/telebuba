@@ -37,6 +37,10 @@ class TelegramSettings(BaseSettings):
     # Default 0 = surface every flood event to our own state machine (no silent
     # auto-sleep) so flood-type differentiation and quarantine logic always see it.
     flood_sleep_threshold: int = Field(default=0, ge=0)
+    # Phone-login: how long a requested SMS code's ``phone_code_hash`` stays
+    # valid in the in-memory login cache before the operator must re-request.
+    # Telegram codes themselves expire in a few minutes; 300 s mirrors that.
+    phone_code_ttl_seconds: int = Field(default=300, ge=1)
 
 
 class ApiSettings(BaseSettings):

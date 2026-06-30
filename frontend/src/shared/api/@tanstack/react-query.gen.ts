@@ -34,15 +34,19 @@ import {
   listWarmingChannels,
   login,
   logout,
+  logoutAccount,
   type Options,
   probeProxy,
   removeWarmingChannel,
+  requestLoginCode,
+  resetAccountSession,
   setAccountPhoto,
   spamCheckAccount,
   startNeurocomment,
   startWarming,
   stopNeurocomment,
   stopWarming,
+  submitLoginCode,
   unassignProxy,
   updateAccountProfile,
   updateWarmingSettings,
@@ -116,6 +120,9 @@ import type {
   LoginData,
   LoginError,
   LoginResponse,
+  LogoutAccountData,
+  LogoutAccountError,
+  LogoutAccountResponse,
   LogoutData,
   LogoutResponse,
   ProbeProxyData,
@@ -124,6 +131,12 @@ import type {
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
+  RequestLoginCodeData,
+  RequestLoginCodeError,
+  RequestLoginCodeResponse,
+  ResetAccountSessionData,
+  ResetAccountSessionError,
+  ResetAccountSessionResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
@@ -142,6 +155,9 @@ import type {
   StopWarmingData,
   StopWarmingError,
   StopWarmingResponse,
+  SubmitLoginCodeData,
+  SubmitLoginCodeError,
+  SubmitLoginCodeResponse,
   UnassignProxyData,
   UnassignProxyError,
   UnassignProxyResponse,
@@ -420,6 +436,118 @@ export const spamCheckAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await spamCheckAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Request Login Code
+ *
+ * Send a Telegram login code to the account's phone (re-auth by code).
+ */
+export const requestLoginCodeMutation = (
+  options?: Partial<Options<RequestLoginCodeData>>,
+): UseMutationOptions<
+  RequestLoginCodeResponse,
+  RequestLoginCodeError,
+  Options<RequestLoginCodeData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RequestLoginCodeResponse,
+    RequestLoginCodeError,
+    Options<RequestLoginCodeData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await requestLoginCode({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Submit Login Code
+ *
+ * Complete sign-in with the SMS code (+ optional 2FA password).
+ */
+export const submitLoginCodeMutation = (
+  options?: Partial<Options<SubmitLoginCodeData>>,
+): UseMutationOptions<
+  SubmitLoginCodeResponse,
+  SubmitLoginCodeError,
+  Options<SubmitLoginCodeData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SubmitLoginCodeResponse,
+    SubmitLoginCodeError,
+    Options<SubmitLoginCodeData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await submitLoginCode({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Logout Account
+ *
+ * Log the account out server-side and mark it unauthorized.
+ */
+export const logoutAccountMutation = (
+  options?: Partial<Options<LogoutAccountData>>,
+): UseMutationOptions<LogoutAccountResponse, LogoutAccountError, Options<LogoutAccountData>> => {
+  const mutationOptions: UseMutationOptions<
+    LogoutAccountResponse,
+    LogoutAccountError,
+    Options<LogoutAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await logoutAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Reset Account Session
+ *
+ * Log out and wipe the local session token so the next login is clean.
+ */
+export const resetAccountSessionMutation = (
+  options?: Partial<Options<ResetAccountSessionData>>,
+): UseMutationOptions<
+  ResetAccountSessionResponse,
+  ResetAccountSessionError,
+  Options<ResetAccountSessionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ResetAccountSessionResponse,
+    ResetAccountSessionError,
+    Options<ResetAccountSessionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await resetAccountSession({
         ...options,
         ...fnOptions,
         throwOnError: true,

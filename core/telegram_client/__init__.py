@@ -20,6 +20,11 @@ Tests that monkeypatch internals target the submodule that owns the name
 from __future__ import annotations
 
 from core.telegram_client._actions import execute
+from core.telegram_client._auth import (
+    log_out_session,
+    request_phone_code,
+    submit_phone_code,
+)
 from core.telegram_client._client import (
     create_telegram_client,
     prepare_session_check_profile,
@@ -56,10 +61,13 @@ __all__ = [
     "execute_read",
     "execute_read_many",
     "get_client",
+    "log_out_session",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
+    "request_phone_code",
     "shutdown_telegram_pool",
     "stop_post_listener",
+    "submit_phone_code",
     "subscribe_posts",
     "telegram_client",
     "update_post_subscription",

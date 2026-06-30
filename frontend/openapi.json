@@ -345,6 +345,252 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/request-code": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Request Login Code",
+        "description": "Send a Telegram login code to the account's phone (re-auth by code).",
+        "operationId": "requestLoginCode",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneCodeRequestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/submit-code": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Submit Login Code",
+        "description": "Complete sign-in with the SMS code (+ optional 2FA password).",
+        "operationId": "submitLoginCode",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/logout": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Logout Account",
+        "description": "Log the account out server-side and mark it unauthorized.",
+        "operationId": "logoutAccount",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/reset-session": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Reset Account Session",
+        "description": "Log out and wipe the local session token so the next login is clean.",
+        "operationId": "resetAccountSession",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/profile": {
       "post": {
         "tags": [
@@ -3096,6 +3342,27 @@
         ],
         "title": "Page[LogEntry]"
       },
+      "PhoneCodeRequestResult": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Phone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "phone"
+        ],
+        "title": "PhoneCodeRequestResult",
+        "description": "API response after a code is sent \u2014 confirmation only, no secrets."
+      },
       "ProxyAssignRequest": {
         "properties": {
           "account_id": {
@@ -3520,6 +3787,32 @@
           "account_id"
         ],
         "title": "StopWarmingRequest"
+      },
+      "SubmitCodeRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Code"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "SubmitCodeRequest",
+        "description": "API body for ``POST /accounts/{id}/submit-code``."
       },
       "TdataImportResult": {
         "properties": {
