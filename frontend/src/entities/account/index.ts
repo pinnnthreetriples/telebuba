@@ -4,6 +4,7 @@ export {
   deleteAccountMutation,
   importAccountTdataMutation,
   setAccountPhotoMutation,
+  spamCheckAccountMutation,
   updateAccountProfileMutation,
 } from './api/accounts.mutations';
 export { StatusBadge } from './ui/StatusBadge';

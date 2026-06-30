@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from schemas.accounts import AccountCreate, AccountRead
+from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataImportResult
 from schemas.telegram_actions import ActionResult
 from services.accounts import add_account
@@ -54,6 +55,29 @@ async def test_check_account_maps_value_error_to_400(
         resp = await client.post("/api/v1/accounts/check", json={"account_id": "acc-1"})
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.asyncio
+async def test_spam_check_returns_the_fresh_verdict(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str, *, force: bool) -> SpamStatusVerdict:
+        assert force is True
+        return SpamStatusVerdict(
+            account_id=account_id,
+            status="limited",
+            detail="until 2026-07-01",
+            checked_at="2026-06-30T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr("services.spam_status.refresh_spam_status", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-1/spam-check")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["status"] == "limited"
+    assert body["detail"] == "until 2026-07-01"
 
 
 @pytest.mark.asyncio

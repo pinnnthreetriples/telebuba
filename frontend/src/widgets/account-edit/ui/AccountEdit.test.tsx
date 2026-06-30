@@ -1,5 +1,7 @@
-import { render, screen } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
@@ -14,6 +16,7 @@ const ACCOUNT: AccountRead = {
   status: 'alive',
   username: 'mainuser',
   phone: '+79051184490',
+  proxy_id: 'p1',
   proxy_country_code: 'nl',
   last_checked_at: '2026-06-28',
   trust_score: 82,
@@ -27,8 +30,20 @@ const ACCOUNT: AccountRead = {
   updated_at: 'now',
 };
 
+function renderWithClient(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
+function jsonResponse(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
+
 test('renders the hero and every section header', () => {
-  render(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
   expect(screen.getByText('+79051184490')).toBeInTheDocument();
   // trust comes from the backend-computed score
   expect(screen.getByText('82/100')).toBeInTheDocument();
@@ -45,7 +60,7 @@ test('renders the hero and every section header', () => {
 
 test('section toggles, import tabs and proxy mode drive the handlers', async () => {
   const onBack = vi.fn();
-  render(<AccountEdit account={ACCOUNT} onBack={onBack} />);
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={onBack} />);
 
   // expand accordions — covers both Section header layouts (plain + right-slot)
   await userEvent.click(screen.getByText('Сессия'));
@@ -64,4 +79,30 @@ test('section toggles, import tabs and proxy mode drive the handlers', async () 
 
   await userEvent.click(screen.getByText(/Назад к списку/));
   expect(onBack).toHaveBeenCalled();
+});
+
+test('the @SpamBot check fires the real spam-check endpoint', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/acc-1/spam-check') {
+      return Promise.resolve(
+        jsonResponse({ account_id: 'acc-1', status: 'clean', checked_at: 'now' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Спам/бан-сигналы'));
+  // both the proxy form and the signals header carry a «Проверить»; the signals
+  // one is rendered last (proxy section comes first in the layout).
+  const checks = screen.getAllByText('Проверить');
+  await userEvent.click(checks[checks.length - 1]!);
+
+  await waitFor(() => {
+    const probed = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/spam-check'));
+    expect(probed).toBe(true);
+  });
 });

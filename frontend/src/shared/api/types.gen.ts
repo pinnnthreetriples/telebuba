@@ -816,6 +816,30 @@ export type RemoveChannelRequest = {
 };
 
 /**
+ * SpamStatusVerdict
+ *
+ * Parsed, cacheable spam-status verdict for one account.
+ */
+export type SpamStatusVerdict = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'clean' | 'limited' | 'unknown';
+  /**
+   * Detail
+   */
+  detail?: string | null;
+  /**
+   * Checked At
+   */
+  checked_at: string;
+};
+
+/**
  * StartNeurocommentRequest
  *
  * Start the fleet listener on the given account.
@@ -1442,6 +1466,36 @@ export type CheckAccountResponses = {
 };
 
 export type CheckAccountResponse = CheckAccountResponses[keyof CheckAccountResponses];
+
+export type SpamCheckAccountData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/spam-check';
+};
+
+export type SpamCheckAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SpamCheckAccountError = SpamCheckAccountErrors[keyof SpamCheckAccountErrors];
+
+export type SpamCheckAccountResponses = {
+  /**
+   * Successful Response
+   */
+  200: SpamStatusVerdict;
+};
+
+export type SpamCheckAccountResponse = SpamCheckAccountResponses[keyof SpamCheckAccountResponses];
 
 export type UpdateAccountProfileData = {
   body: AccountProfileUpdateRequest;

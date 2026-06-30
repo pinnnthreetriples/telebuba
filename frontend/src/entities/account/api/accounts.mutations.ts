@@ -5,5 +5,6 @@ export {
   deleteAccountMutation,
   importAccountTdataMutation,
   setAccountPhotoMutation,
+  spamCheckAccountMutation,
   updateAccountProfileMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

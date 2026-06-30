@@ -87,6 +87,9 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  SpamCheckAccountData,
+  SpamCheckAccountErrors,
+  SpamCheckAccountResponses,
   StartNeurocommentData,
   StartNeurocommentErrors,
   StartNeurocommentResponses,
@@ -200,6 +203,19 @@ export const checkAccount = <ThrowOnError extends boolean = false>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * Spam Check Account
+ *
+ * Re-probe @SpamBot for one account and return the fresh, cached verdict.
+ */
+export const spamCheckAccount = <ThrowOnError extends boolean = false>(
+  options: Options<SpamCheckAccountData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/spam-check',
+    ...options,
   });
 
 /**

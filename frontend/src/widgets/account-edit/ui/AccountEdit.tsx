@@ -1,7 +1,9 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { StatusBadge } from '@/entities/account';
+import { checkAccountMutation, spamCheckAccountMutation, StatusBadge } from '@/entities/account';
+import { checkProxyMutation } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 
 const FIELD =
@@ -144,13 +146,73 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
   const [aliveCheck, setAliveCheck] = useState<CheckState>('idle');
 
-  // ponytail: design-first — flip to loading, then settle to ok.
-  const runCheck = (set: (s: CheckState) => void, hold = false) => {
-    set('loading');
-    setTimeout(() => {
-      set('ok');
-      if (hold) setTimeout(() => set('idle'), 2400);
-    }, 900);
+  const queryClient = useQueryClient();
+  const proxyMutation = useMutation(checkProxyMutation());
+  const spamMutation = useMutation(spamCheckAccountMutation());
+  const aliveMutation = useMutation(checkAccountMutation());
+  const invalidate = () => {
+    void queryClient.invalidateQueries();
+  };
+
+  // Real proxy connectivity check against the assigned pool proxy.
+  const runProxyCheck = () => {
+    if (!account.proxy_id) {
+      setProxyCheck('err');
+      return;
+    }
+    setProxyCheck('loading');
+    proxyMutation.mutate(
+      { path: { proxy_id: account.proxy_id } },
+      {
+        onSuccess: (proxy) => {
+          setProxyCheck(proxy.status === 'tcp_working' ? 'ok' : 'err');
+          invalidate();
+        },
+        onError: () => {
+          setProxyCheck('err');
+        },
+      },
+    );
+  };
+
+  // Real @SpamBot probe; the result also refreshes the signals on next load.
+  const runSpamCheck = () => {
+    setSpamCheck('loading');
+    spamMutation.mutate(
+      { path: { account_id: account.account_id } },
+      {
+        onSuccess: (verdict) => {
+          setSpamCheck(verdict.status === 'clean' ? 'ok' : 'err');
+          window.setTimeout(() => {
+            setSpamCheck('idle');
+          }, 2400);
+          invalidate();
+        },
+        onError: () => {
+          setSpamCheck('err');
+        },
+      },
+    );
+  };
+
+  // Real liveness check (reuses the accounts-table «Проверить» endpoint).
+  const runAliveCheck = () => {
+    setAliveCheck('loading');
+    aliveMutation.mutate(
+      { body: { account_id: account.account_id } },
+      {
+        onSuccess: (checked) => {
+          setAliveCheck(checked.status === 'alive' ? 'ok' : 'err');
+          window.setTimeout(() => {
+            setAliveCheck('idle');
+          }, 2400);
+          invalidate();
+        },
+        onError: () => {
+          setAliveCheck('err');
+        },
+      },
+    );
   };
 
   const trust = account.trust_score ?? 0;
@@ -482,9 +544,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => {
-                runCheck(setProxyCheck);
-              }}
+              onClick={runProxyCheck}
               className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
             >
               {proxyCheck === 'loading' ? (
@@ -582,9 +642,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <span className="tb-tip">
               <button
                 type="button"
-                onClick={() => {
-                  runCheck(setSpamCheck, true);
-                }}
+                onClick={runSpamCheck}
                 className={`inline-flex items-center gap-[6px] rounded-full px-3 py-[5px] text-[12px] font-medium transition-[background-color,border-color,color] duration-300 ${
                   spamCheck === 'ok'
                     ? 'border border-[#2e9e64] bg-[#2e9e64] text-white'
@@ -675,9 +733,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
-            onClick={() => {
-              runCheck(setAliveCheck, true);
-            }}
+            onClick={runAliveCheck}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-300"

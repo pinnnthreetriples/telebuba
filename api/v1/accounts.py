@@ -16,9 +16,10 @@ from fastapi import status as http_status
 from schemas.accounts import AccountCheckRequest, AccountProfileUpdateRequest, AccountRead
 from schemas.api import Page
 from schemas.profile_media import AccountProfilePhotoUpload
+from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from schemas.telegram_actions import ActionResult
-from services import accounts
+from services import accounts, spam_status
 
 router = APIRouter(tags=["accounts"])
 
@@ -50,6 +51,16 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
         return await accounts.check_account_session(body)
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/spam-check",
+    response_model=SpamStatusVerdict,
+    operation_id="spamCheckAccount",
+)
+async def spam_check_account(account_id: str) -> SpamStatusVerdict:
+    """Re-probe @SpamBot for one account and return the fresh, cached verdict."""
+    return await spam_status.refresh_spam_status(account_id, force=True)
 
 
 @router.post("/accounts/profile", response_model=AccountRead, operation_id="updateAccountProfile")

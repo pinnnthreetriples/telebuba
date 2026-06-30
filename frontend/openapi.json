@@ -286,6 +286,65 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/spam-check": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Spam Check Account",
+        "description": "Re-probe @SpamBot for one account and return the fresh, cached verdict.",
+        "operationId": "spamCheckAccount",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpamStatusVerdict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/profile": {
       "post": {
         "tags": [
@@ -3375,6 +3434,48 @@
           "channel"
         ],
         "title": "RemoveChannelRequest"
+      },
+      "SpamStatusVerdict": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "limited",
+              "unknown"
+            ],
+            "title": "Status"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "checked_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "status",
+          "checked_at"
+        ],
+        "title": "SpamStatusVerdict",
+        "description": "Parsed, cacheable spam-status verdict for one account."
       },
       "StartNeurocommentRequest": {
         "properties": {

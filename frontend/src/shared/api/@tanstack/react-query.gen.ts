@@ -38,6 +38,7 @@ import {
   probeProxy,
   removeWarmingChannel,
   setAccountPhoto,
+  spamCheckAccount,
   startNeurocomment,
   startWarming,
   stopNeurocomment,
@@ -126,6 +127,9 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  SpamCheckAccountData,
+  SpamCheckAccountError,
+  SpamCheckAccountResponse,
   StartNeurocommentData,
   StartNeurocommentError,
   StartNeurocommentResponse,
@@ -387,6 +391,35 @@ export const checkAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await checkAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Spam Check Account
+ *
+ * Re-probe @SpamBot for one account and return the fresh, cached verdict.
+ */
+export const spamCheckAccountMutation = (
+  options?: Partial<Options<SpamCheckAccountData>>,
+): UseMutationOptions<
+  SpamCheckAccountResponse,
+  SpamCheckAccountError,
+  Options<SpamCheckAccountData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SpamCheckAccountResponse,
+    SpamCheckAccountError,
+    Options<SpamCheckAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await spamCheckAccount({
         ...options,
         ...fnOptions,
         throwOnError: true,
