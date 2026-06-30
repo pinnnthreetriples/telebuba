@@ -3592,6 +3592,17 @@
             ],
             "title": "Last Comment At"
           },
+          "last_comment_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Comment Text"
+          },
           "readiness": {
             "items": {
               "$ref": "#/components/schemas/AccountChannelReadiness"

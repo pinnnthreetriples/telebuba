@@ -100,6 +100,7 @@ async def test_card_counts_today_and_last_hour() -> None:
     assert card.comments_today == 2
     assert card.comments_last_hour == 2
     assert card.last_comment_at is not None
+    assert card.last_comment_text == "hi"
 
 
 @pytest.mark.asyncio

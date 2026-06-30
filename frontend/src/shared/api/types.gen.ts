@@ -544,6 +544,10 @@ export type NeurocommentAccountCard = {
    */
   last_comment_at?: string | null;
   /**
+   * Last Comment Text
+   */
+  last_comment_text?: string | null;
+  /**
    * Readiness
    */
   readiness?: Array<AccountChannelReadiness>;

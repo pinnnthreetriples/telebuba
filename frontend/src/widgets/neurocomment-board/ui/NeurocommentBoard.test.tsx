@@ -24,7 +24,19 @@ const BOARD: NeurocommentBoardData = {
       max_comments_per_hour: 10,
       comments_today: 4,
       last_comment_at: 'now',
+      last_comment_text: 'Отличный пост!',
       readiness: [{ channel: '@news', ready: true, joined: true, captcha_passed: true }],
+    },
+    {
+      account_id: 'acc-2',
+      label: '+15550000000',
+      health: 'blocked',
+      trust_score: 30,
+      trust_band: 'at_risk',
+      comments_last_hour: 0,
+      max_comments_per_hour: 10,
+      comments_today: 0,
+      readiness: [],
     },
   ],
 };
@@ -34,6 +46,8 @@ test('renders the 4-column work table with channel and dot-pill status', () => {
   expect(screen.getByText('+79261112233')).toBeInTheDocument();
   expect(screen.getByText('@news')).toBeInTheDocument();
   expect(screen.getByText('Готов')).toBeInTheDocument();
+  // the real last-comment text is shown (was a generic placeholder)
+  expect(screen.getByText('Отличный пост!')).toBeInTheDocument();
 });
 
 test('the gear button opens the accounts modal', async () => {

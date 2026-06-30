@@ -278,6 +278,9 @@ class NeurocommentAccountCard(BaseModel):
     max_comments_per_hour: int
     comments_today: int
     last_comment_at: str | None = None
+    # Text of the most recent posted comment (None until the account comments, or
+    # when the stored row has no text). Surfaces the real comment in the board.
+    last_comment_text: str | None = None
     readiness: list[AccountChannelReadiness] = Field(default_factory=list)
 
 

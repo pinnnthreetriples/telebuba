@@ -140,7 +140,7 @@ def _build_card(
     health = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
     hour_ago = (now - timedelta(hours=1)).isoformat()
     last_hour = sum(1 for c in posted if c.created_at >= hour_ago)
-    last_comment_at = max((c.created_at for c in posted), default=None)
+    latest = max(posted, key=lambda c: c.created_at, default=None)
     return NeurocommentAccountCard(
         account_id=account.account_id,
         label=account.label or account.account_id,
@@ -151,7 +151,8 @@ def _build_card(
         comments_last_hour=last_hour,
         max_comments_per_hour=nc.max_comments_per_hour,
         comments_today=len(posted),
-        last_comment_at=last_comment_at,
+        last_comment_at=latest.created_at if latest else None,
+        last_comment_text=latest.comment_text if latest else None,
         readiness=[
             AccountChannelReadiness(
                 channel=r.channel,
