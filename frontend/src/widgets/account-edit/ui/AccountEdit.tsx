@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import {
   checkAccountMutation,
+  deleteAccountMutation,
   importAccountSessionMutation,
   importAccountTdataMutation,
   logoutAccountMutation,
@@ -20,6 +21,7 @@ import {
   proxyPoolQueryOptions,
 } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
+import { Modal } from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
@@ -161,6 +163,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const [proxyMode, setProxyMode] = useState<'pool' | 'manual'>('manual');
   const [proxyForm, setProxyForm] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
   const [uploads, setUploads] = useState<Upload[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
   const uploadInput = useRef<HTMLInputElement>(null);
   const [showPass, setShowPass] = useState(false);
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
@@ -176,6 +179,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const assignProxy = useMutation(assignProxyMutation());
   const importTdata = useMutation(importAccountTdataMutation());
   const importSession = useMutation(importAccountSessionMutation());
+  const deleteAccount = useMutation(deleteAccountMutation());
   const pool = useQuery(proxyPoolQueryOptions());
   const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
   const spamMutation = useMutation(spamCheckAccountMutation());
@@ -222,6 +226,14 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   };
   const onReset = () => {
     resetSession.mutate(path, { onSuccess: invalidate });
+  };
+  const onDelete = () => {
+    deleteAccount.mutate(path, {
+      onSuccess: () => {
+        invalidate();
+        onBack();
+      },
+    });
   };
 
   // Real proxy connectivity check against the assigned pool proxy.
@@ -1079,12 +1091,55 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
+            onClick={() => {
+              setConfirmDelete(true);
+            }}
             className="shrink-0 px-1 py-2 text-[13px] font-medium text-[#c0473f]"
           >
             {t('accounts.edit.deleteAccount')}
           </button>
         </div>
       </Section>
+
+      {confirmDelete ? (
+        <Modal
+          onClose={() => {
+            setConfirmDelete(false);
+          }}
+          z={70}
+          className="w-[420px]"
+        >
+          <div className="p-6">
+            <div className="mb-2 text-[16px] font-bold">
+              {t('accounts.deleteModal.title', { phone: account.phone ?? account.account_id })}
+            </div>
+            <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
+              {t('accounts.deleteModal.body')}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDelete(false);
+                }}
+                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+              >
+                {t('accounts.deleteModal.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDelete(false);
+                  onDelete();
+                }}
+                className="rounded-full border border-[#f0c9c5] bg-danger-tint px-5 py-[9px] text-[13px] font-semibold text-danger"
+              >
+                {t('accounts.deleteModal.confirm')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

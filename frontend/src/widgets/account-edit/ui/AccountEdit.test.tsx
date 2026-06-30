@@ -222,6 +222,24 @@ test('a failed tdata import shows the error state', async () => {
   await screen.findByText('ошибка');
 });
 
+test('the delete-account action confirms, deletes, and returns to the list', async () => {
+  vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse({})));
+  const onBack = vi.fn();
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={onBack} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить аккаунт' }));
+  await userEvent.click(await screen.findByText('Удалить'));
+  await waitFor(() => {
+    const deleted = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return request.url.endsWith('/accounts/acc-1') && request.method === 'DELETE';
+    });
+    expect(deleted).toBe(true);
+  });
+  await waitFor(() => {
+    expect(onBack).toHaveBeenCalled();
+  });
+});
+
 test('the @SpamBot check fires the real spam-check endpoint', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
