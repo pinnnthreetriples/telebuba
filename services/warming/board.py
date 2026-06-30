@@ -149,6 +149,8 @@ async def load_board() -> WarmingBoardState:
         card.dm_allowed = intensity.dm_allowed and (readiness.ready or not masked.enforce_readiness)
         card.phone_country = country_for_phone(account.phone)
         card.proxy_country = (account.proxy_country_code or "").upper() or None
+        card.phone = account.phone
+        card.proxy_type = account.proxy_type
         card.phase = intensity.phase
         card.phase_label = _PHASE_LABEL_RU[intensity.phase]
         card.daily_cap = intensity.daily_cap

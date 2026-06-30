@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { proxyTypeLabel } from '@/entities/proxy';
 import {
   addWarmingChannelsMutation,
   removeWarmingChannelMutation,
@@ -39,18 +40,6 @@ function trustColor(trust: number): string {
   if (trust >= 70) return '#12a150';
   if (trust >= 45) return '#e08700';
   return '#e5372a';
-}
-
-// Design-first derivations for fields the board read model doesn't expose yet
-// on idle accounts: a stable pseudo value keyed off the account id so the meta
-// row (trust / flag / proxy-type) renders per the spec.
-const FLAGS = ['ru', 'gb', 'de', 'us', 'fr', 'nl'] as const;
-const PROXY_TYPES = ['SOCKS5', 'HTTP', 'MTProto'] as const;
-
-function hash(id: string): number {
-  let h = 0;
-  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
-  return Math.abs(h);
 }
 
 function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
@@ -184,15 +173,10 @@ export function WarmingPage() {
                 </div>
               ) : (
                 idle.map((account) => {
-                  const seed = hash(account.account_id);
-                  const trust = account.trust_score ?? 45 + (seed % 50);
-                  const tColor = trustColor(trust);
-                  const cc = (
-                    account.phone_country ??
-                    FLAGS[seed % FLAGS.length] ??
-                    'ru'
-                  ).toLowerCase();
-                  const ptype = PROXY_TYPES[seed % PROXY_TYPES.length];
+                  const trust = account.trust_score;
+                  const tColor = trust != null ? trustColor(trust) : '#9a9893';
+                  const cc = account.phone_country?.toLowerCase() ?? null;
+                  const ptype = account.proxy_type;
                   const available = account.health !== 'fail' && account.state !== 'error';
                   return (
                     <div
@@ -222,13 +206,21 @@ export function WarmingPage() {
                             <path d="m9 12 2 2 4-4" />
                           </svg>
                           <span className="text-[11px] font-semibold" style={{ color: tColor }}>
-                            {trust}
+                            {trust ?? '—'}
                           </span>
-                          <span className="text-[11px] text-line-strong">·</span>
-                          <span
-                            className={`fi fi-${cc} h-[11px] w-[15px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                          />
-                          <span className="text-[11px] text-[#9a9893]">{ptype}</span>
+                          {cc ? (
+                            <>
+                              <span className="text-[11px] text-line-strong">·</span>
+                              <span
+                                className={`fi fi-${cc} h-[11px] w-[15px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                              />
+                            </>
+                          ) : null}
+                          {ptype ? (
+                            <span className="text-[11px] text-[#9a9893]">
+                              {proxyTypeLabel(ptype)}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <button

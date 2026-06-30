@@ -1202,6 +1202,14 @@ export type WarmingAccountState = {
    */
   proxy_country?: string | null;
   /**
+   * Phone
+   */
+  phone?: string | null;
+  /**
+   * Proxy Type
+   */
+  proxy_type?: string | null;
+  /**
    * Phase
    */
   phase?: 'intro' | 'settling' | 'warming' | 'active' | 'warmed' | null;

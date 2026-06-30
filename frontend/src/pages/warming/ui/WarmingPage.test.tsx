@@ -82,6 +82,26 @@ test('renders the board, channels and settings from live data', async () => {
   expect(screen.getByText('@news')).toBeInTheDocument();
 });
 
+test('shows real trust, flag and proxy type on a ready card', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    idle: [
+      { ...account('idle-2', 'idle'), trust_score: 73, phone_country: 'RU', proxy_type: 'https' },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-2')).toBeInTheDocument();
+  });
+  expect(screen.getByText('73')).toBeInTheDocument();
+  expect(screen.getByText('HTTPS')).toBeInTheDocument();
+});
+
 test('refetches the board on a live SSE event', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);

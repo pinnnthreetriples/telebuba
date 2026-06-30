@@ -4535,6 +4535,28 @@
             ],
             "title": "Proxy Country"
           },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "proxy_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Type"
+          },
           "phase": {
             "anyOf": [
               {

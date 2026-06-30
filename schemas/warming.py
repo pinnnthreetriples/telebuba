@@ -304,6 +304,13 @@ class WarmingAccountState(BaseModel):
     # phone can't be parsed or the proxy has no country code.
     phone_country: str | None = None
     proxy_country: str | None = None
+    # Account phone + assigned-proxy type, surfaced so the ready/warmed cards show
+    # the real flag + proxy badge (was a design-first hash mock). Both None when
+    # the account has no phone / no proxy assigned.
+    phone: str | None = None
+    # Mirrors ``AccountRead.proxy_type`` (a free ``str`` code, not the ProxyType
+    # literal) so the assignment in ``load_board`` type-checks.
+    proxy_type: str | None = None
     # Lifecycle phase + display affordances, derived per card from age + trust.
     phase: WarmingPhase | None = None
     phase_label: str | None = None
