@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -57,4 +57,29 @@ test('edits the profile text and saves via the real endpoint', async () => {
       .mock.calls.some(([input]) => (input as Request).url.endsWith('/accounts/profile'));
     expect(saved).toBe(true);
   });
+});
+
+test('uploads an avatar on the photo tab and toggles profile music', async () => {
+  vi.mocked(fetch).mockResolvedValue(
+    jsonResponse({ status: 'ok', action_type: 'set_profile_photo', account_id: 'acc-1' }),
+  );
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+
+  // Фото tab: the upload tile triggers the hidden file input → setAccountPhoto.
+  await userEvent.click(screen.getByText('Фото'));
+  await userEvent.click(screen.getByText('Загрузить'));
+  const fileInput = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  const avatar = new File(['x'], 'avatar.jpg', { type: 'image/jpeg' });
+  fireEvent.change(fileInput, { target: { files: [avatar] } });
+  await waitFor(() => {
+    const sent = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.endsWith('/accounts/photo'));
+    expect(sent).toBe(true);
+  });
+
+  // Музыка tab: remove then re-pick a track (exercises the music toggles).
+  await userEvent.click(screen.getByText('Музыка'));
+  await userEvent.click(screen.getByLabelText('Убрать трек'));
+  await userEvent.click(screen.getByText('Выбрать трек'));
 });
