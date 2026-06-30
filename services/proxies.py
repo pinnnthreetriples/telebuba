@@ -19,7 +19,14 @@ from core.db import (
 )
 from core.logging import log_event
 from core.proxy_check import check_proxy_connectivity
-from schemas.proxy import ProxyCheckUpdate, ProxyCreate, ProxyList, ProxyRead
+from schemas.proxy import (
+    ProxyCheckResult,
+    ProxyCheckUpdate,
+    ProxyCreate,
+    ProxyList,
+    ProxyRead,
+    ProxySettings,
+)
 
 __all__ = [
     "ProxyCapacityError",
@@ -27,6 +34,7 @@ __all__ = [
     "assign_proxy",
     "check_proxy",
     "list_pool",
+    "probe_proxy",
     "remove_proxy",
     "unassign_proxy",
 ]
@@ -34,6 +42,19 @@ __all__ = [
 
 async def list_pool() -> ProxyList:
     return await list_proxies()
+
+
+async def probe_proxy(data: ProxyCreate) -> ProxyCheckResult:
+    """Stateless connectivity probe for not-yet-saved proxy settings (the add form)."""
+    return await check_proxy_connectivity(
+        ProxySettings(
+            proxy_type=data.proxy_type,
+            host=data.host,
+            port=data.port,
+            username=data.username,
+            password=data.password,
+        ),
+    )
 
 
 async def add_proxy(data: ProxyCreate) -> ProxyRead:

@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { accountDesignStatus, type DesignStatus, StatusBadge } from '@/entities/account';
+import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 
 interface AccountsTableProps {
@@ -30,9 +31,9 @@ function mono(account: AccountRead): string {
   return digits.slice(-2) || '#';
 }
 
-// ponytail: trust / device / proxy-type / connectivity aren't carried by the
-// backend yet — derive deterministic design-first values from the id so the
-// table renders the design's richness (the branch is design-first, data later).
+// ponytail: trust + device aren't carried by the backend yet (Phase 1) — derive
+// deterministic design-first values from the id so the table keeps the design's
+// richness. The proxy column is real (AccountRead carries the assigned pool proxy).
 const DEVICES = ['iPhone 13', 'iPhone 12', 'Pixel 7', 'Galaxy S22', 'iPhone 14'];
 const OSES = ['iOS 17.2', 'iOS 16.4', 'Android 14', 'Android 13', 'iOS 17.4'];
 function decorate(account: AccountRead) {
@@ -42,10 +43,23 @@ function decorate(account: AccountRead) {
   return {
     trust,
     trustColor,
-    connected: seed % 5 !== 0,
-    ptype: seed % 2 === 0 ? 'SOCKS5' : 'HTTPS',
     device: `${DEVICES[seed % DEVICES.length]} · ${OSES[seed % OSES.length]}`,
   };
+}
+
+// Real proxy column, sourced from the account's assigned pool proxy.
+function proxyDotColor(status: string | null | undefined): string {
+  if (status === 'tcp_working') return '#2e9e64';
+  if (status === 'failed') return '#c0473f';
+  return '#c8c6c2';
+}
+function proxyMeta(account: AccountRead): string {
+  return [
+    account.proxy_country_code?.toUpperCase(),
+    account.proxy_type ? proxyTypeLabel(account.proxy_type) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 // The design's accounts table: white card, uppercase header on #FAF9F7, rows
@@ -106,18 +120,18 @@ export function AccountsTable({
                     <StatusBadge status={account.status} />
                   </td>
                   <td className="px-4 py-3">
-                    {account.proxy_country_code ? (
+                    {account.proxy_id ? (
                       <div className="flex items-center gap-[7px]">
                         <span
                           className="h-[7px] w-[7px] shrink-0 rounded-full"
-                          style={{ background: d.connected ? '#2e9e64' : '#c0473f' }}
+                          style={{ background: proxyDotColor(account.proxy_status) }}
                         />
-                        <span
-                          className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                        />
-                        <span className="text-[12px] text-[#3a3a3a]">
-                          {account.proxy_country_code.toUpperCase()} · {d.ptype}
-                        </span>
+                        {account.proxy_country_code ? (
+                          <span
+                            className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                          />
+                        ) : null}
+                        <span className="text-[12px] text-[#3a3a3a]">{proxyMeta(account)}</span>
                       </div>
                     ) : (
                       <span className="text-[12px] text-ink-subtle">—</span>

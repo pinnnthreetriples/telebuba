@@ -78,6 +78,9 @@ import type {
   LoginResponses,
   LogoutData,
   LogoutResponses,
+  ProbeProxyData,
+  ProbeProxyErrors,
+  ProbeProxyResponses,
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
@@ -284,6 +287,21 @@ export const createProxy = <ThrowOnError extends boolean = false>(
 ) =>
   (options.client ?? client).post<CreateProxyResponses, CreateProxyErrors, ThrowOnError>({
     url: '/api/v1/proxies',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Probe Proxy
+ */
+export const probeProxy = <ThrowOnError extends boolean = false>(
+  options: Options<ProbeProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<ProbeProxyResponses, ProbeProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/probe',
     ...options,
     headers: {
       'Content-Type': 'application/json',

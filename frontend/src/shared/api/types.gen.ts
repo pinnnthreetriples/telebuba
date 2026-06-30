@@ -630,6 +630,40 @@ export type ProxyAssignRequest = {
 };
 
 /**
+ * ProxyCheckResult
+ */
+export type ProxyCheckResult = {
+  /**
+   * Status
+   */
+  status: 'unknown' | 'tcp_working' | 'failed';
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Exit Ip
+   */
+  exit_ip?: string | null;
+  /**
+   * Country Code
+   */
+  country_code?: string | null;
+  /**
+   * Country Name
+   */
+  country_name?: string | null;
+  /**
+   * Asn
+   */
+  asn?: string | null;
+  /**
+   * Is Datacenter
+   */
+  is_datacenter?: boolean;
+};
+
+/**
  * ProxyCreate
  *
  * Operator input when adding a proxy to the pool.
@@ -1546,6 +1580,31 @@ export type CreateProxyResponses = {
 };
 
 export type CreateProxyResponse = CreateProxyResponses[keyof CreateProxyResponses];
+
+export type ProbeProxyData = {
+  body: ProxyCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies/probe';
+};
+
+export type ProbeProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ProbeProxyError = ProbeProxyErrors[keyof ProbeProxyErrors];
+
+export type ProbeProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyCheckResult;
+};
+
+export type ProbeProxyResponse = ProbeProxyResponses[keyof ProbeProxyResponses];
 
 export type CheckProxyData = {
   body?: never;

@@ -1,30 +1,62 @@
+import { useMutation } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-// Shared proxy-form fields (host / port / type / login / password+eye + a
-// detect button with idle→loading→(ok|err) states), reused by the add-account
-// wizard's proxy step and the standalone proxy-add modal. ponytail: design-first
-// — detect is a visual mock, no backend call.
+import { probeProxyMutation } from '@/entities/proxy';
+
+import type { ProxyFormValue } from './proxyFormValue';
+
+// Shared proxy-form fields (host / port / type / login / password+eye + a real
+// connectivity probe). Controlled by the parent (the add-proxy modal owns the
+// value + the create call); the probe hits POST /proxies/probe (stateless, no
+// persistence) so the operator can verify before adding.
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 
 type DetectState = 'idle' | 'loading' | 'ok' | 'err';
 
-export function ProxyForm() {
+export function ProxyForm({
+  value,
+  onChange,
+}: {
+  value: ProxyFormValue;
+  onChange: (value: ProxyFormValue) => void;
+}) {
   const { t } = useTranslation();
-  const [type, setType] = useState<'SOCKS5' | 'HTTPS'>('SOCKS5');
   const [showPass, setShowPass] = useState(false);
   const [detect, setDetect] = useState<DetectState>('idle');
+  const [country, setCountry] = useState<string | null>(null);
+  const probe = useMutation(probeProxyMutation());
 
   const seg = (on: boolean): string =>
     `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
+  const set = (patch: Partial<ProxyFormValue>) => {
+    onChange({ ...value, ...patch });
+  };
 
   const runDetect = () => {
     setDetect('loading');
-    setTimeout(() => {
-      setDetect('ok');
-    }, 900);
+    probe.mutate(
+      {
+        body: {
+          proxy_type: value.proxy_type,
+          host: value.host.trim(),
+          port: Number(value.port),
+          username: value.username.trim() || null,
+          password: value.password || null,
+        },
+      },
+      {
+        onSuccess: (result) => {
+          setCountry(result.country_code ?? null);
+          setDetect(result.status === 'tcp_working' ? 'ok' : 'err');
+        },
+        onError: () => {
+          setDetect('err');
+        },
+      },
+    );
   };
 
   return (
@@ -32,22 +64,48 @@ export function ProxyForm() {
       <div className="grid grid-cols-[2fr_1fr] gap-[10px]">
         <label>
           <span className={LABEL}>{t('accounts.proxyForm.host')}</span>
-          <input placeholder="123.45.67.89" className={`${FIELD} font-mono`} />
+          <input
+            value={value.host}
+            onChange={(event) => {
+              set({ host: event.target.value });
+            }}
+            placeholder="123.45.67.89"
+            className={`${FIELD} font-mono`}
+          />
         </label>
         <label>
           <span className={LABEL}>{t('accounts.proxyForm.port')}</span>
-          <input placeholder="1080" className={`${FIELD} font-mono`} />
+          <input
+            value={value.port}
+            inputMode="numeric"
+            onChange={(event) => {
+              set({ port: event.target.value.replace(/\D/g, '') });
+            }}
+            placeholder="1080"
+            className={`${FIELD} font-mono`}
+          />
         </label>
       </div>
       <div className="grid grid-cols-2 gap-[10px]">
         <label>
           <span className={LABEL}>{t('accounts.proxyForm.login')}</span>
-          <input placeholder={t('accounts.proxyForm.loginPlaceholder')} className={FIELD} />
+          <input
+            value={value.username}
+            onChange={(event) => {
+              set({ username: event.target.value });
+            }}
+            placeholder={t('accounts.proxyForm.loginPlaceholder')}
+            className={FIELD}
+          />
         </label>
         <label>
           <span className={LABEL}>{t('accounts.proxyForm.password')}</span>
           <div className="relative">
             <input
+              value={value.password}
+              onChange={(event) => {
+                set({ password: event.target.value });
+              }}
               type={showPass ? 'text' : 'password'}
               placeholder={t('accounts.proxyForm.passwordPlaceholder')}
               className={`${FIELD} pr-9`}
@@ -55,7 +113,7 @@ export function ProxyForm() {
             <button
               type="button"
               onClick={() => {
-                setShowPass((value) => !value);
+                setShowPass((shown) => !shown);
               }}
               aria-label={t('accounts.proxyForm.password')}
               className="absolute right-[6px] top-1/2 flex h-[26px] w-[26px] -translate-y-1/2 items-center justify-center text-ink-subtle"
@@ -94,16 +152,16 @@ export function ProxyForm() {
       <div>
         <span className={LABEL}>{t('accounts.proxyForm.type')}</span>
         <div className="flex gap-1 rounded-[10px] bg-[#f1efed] p-1">
-          {(['SOCKS5', 'HTTPS'] as const).map((value) => (
+          {(['socks5', 'https'] as const).map((option) => (
             <button
-              key={value}
+              key={option}
               type="button"
               onClick={() => {
-                setType(value);
+                set({ proxy_type: option });
               }}
-              className={seg(type === value)}
+              className={seg(value.proxy_type === option)}
             >
-              {value}
+              {option.toUpperCase()}
             </button>
           ))}
         </div>
@@ -112,7 +170,8 @@ export function ProxyForm() {
         <button
           type="button"
           onClick={runDetect}
-          className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
+          disabled={detect === 'loading' || !value.host || !value.port}
+          className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
         >
           {detect === 'loading' ? (
             <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-[#c8c6c2] border-t-primary" />
@@ -136,8 +195,12 @@ export function ProxyForm() {
         )}
         {detect === 'ok' && (
           <span className="tb-pop inline-flex items-center gap-[6px] rounded-full bg-[#e7f2ec] px-3 py-[5px] text-[12.5px] font-medium text-[#2e7d55]">
-            <span className="inline-block h-[13px] w-[18px] rounded-[2px] bg-[#21468b] shadow-[0_0_0_1px_rgba(0,0,0,.07)]" />
-            {t('accounts.proxyForm.resultOk')}
+            {country ? (
+              <span
+                className={`fi fi-${country.toLowerCase()} inline-block h-[13px] w-[18px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,.07)]`}
+              />
+            ) : null}
+            {country ?? t('accounts.proxyForm.resultOk')}
           </span>
         )}
         {detect === 'err' && (

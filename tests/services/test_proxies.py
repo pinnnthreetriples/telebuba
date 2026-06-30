@@ -74,3 +74,17 @@ async def test_check_proxy_unknown_raises(tmp_path) -> None:
     configure_database(tmp_path / "telebuba.db")
     with pytest.raises(ValueError, match="Proxy not found"):
         await proxies.check_proxy("missing")
+
+
+@pytest.mark.asyncio
+async def test_probe_proxy_does_not_persist(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+    configure_database(tmp_path / "telebuba.db")
+
+    async def fake_check(_proxy: object) -> ProxyCheckResult:
+        return ProxyCheckResult(status="tcp_working", country_code="DE")
+
+    monkeypatch.setattr("services.proxies.check_proxy_connectivity", fake_check)
+
+    result = await proxies.probe_proxy(ProxyCreate(proxy_type="https", host="h", port=8080))
+    assert result.status == "tcp_working"
+    assert (await proxies.list_pool()).proxies == []

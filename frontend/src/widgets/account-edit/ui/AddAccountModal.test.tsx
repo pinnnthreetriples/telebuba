@@ -1,15 +1,22 @@
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
 import { AddAccountModal } from './AddAccountModal';
 
+function renderWithClient(ui: ReactElement) {
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
+}
+
 test('stepper: method → next → proxy choice → manual form → back', async () => {
   const onClose = vi.fn();
   const onImport = vi.fn();
-  render(<AddAccountModal onClose={onClose} onImport={onImport} />);
+  renderWithClient(<AddAccountModal onClose={onClose} onImport={onImport} />);
   expect(screen.getByText('Добавить аккаунт')).toBeInTheDocument();
 
   // Next is disabled until a method is picked
@@ -43,7 +50,7 @@ test('stepper: method → next → proxy choice → manual form → back', async
 test('tdata method uploads a file and fires onImport', async () => {
   const onClose = vi.fn();
   const onImport = vi.fn();
-  render(<AddAccountModal onClose={onClose} onImport={onImport} />);
+  renderWithClient(<AddAccountModal onClose={onClose} onImport={onImport} />);
 
   await userEvent.click(screen.getByText('Архив tdata.zip'));
   const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
@@ -57,14 +64,14 @@ test('tdata method uploads a file and fires onImport', async () => {
 
 test('cancel on step 1 closes', async () => {
   const onClose = vi.fn();
-  render(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
+  renderWithClient(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
   await userEvent.click(screen.getByText('Отмена'));
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
 test('pool selection and skip close the wizard', async () => {
   const onClose = vi.fn();
-  render(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
+  renderWithClient(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
   await userEvent.click(screen.getByText('Файл .session'));
   await userEvent.click(screen.getByText('Далее'));
 
@@ -75,7 +82,7 @@ test('pool selection and skip close the wizard', async () => {
 
 test('done from the manual proxy form closes', async () => {
   const onClose = vi.fn();
-  render(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
+  renderWithClient(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
   await userEvent.click(screen.getByText('Файл .session'));
   await userEvent.click(screen.getByText('Далее'));
   await userEvent.click(screen.getByText('Добавить прокси'));
@@ -85,7 +92,7 @@ test('done from the manual proxy form closes', async () => {
 
 test('picking a pool proxy closes the wizard', async () => {
   const onClose = vi.fn();
-  render(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
+  renderWithClient(<AddAccountModal onClose={onClose} onImport={vi.fn()} />);
   await userEvent.click(screen.getByText('Файл .session'));
   await userEvent.click(screen.getByText('Далее'));
   await userEvent.click(screen.getByText('Выбрать из пула'));

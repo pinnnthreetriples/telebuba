@@ -129,3 +129,20 @@ async def test_unassign_and_delete(app: FastAPI) -> None:
 
         pool = await client.get("/api/v1/proxies")
     assert pool.json() == {"proxies": []}
+
+
+@pytest.mark.asyncio
+async def test_probe_proxy_does_not_persist(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_check(_proxy: object) -> ProxyCheckResult:
+        return ProxyCheckResult(status="tcp_working", country_code="DE")
+
+    monkeypatch.setattr("services.proxies.check_proxy_connectivity", fake_check)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/proxies/probe",
+            json={"proxy_type": "https", "host": "h", "port": 8080},
+        )
+        pool = await client.get("/api/v1/proxies")
+    assert resp.status_code == 200
+    assert resp.json()["country_code"] == "DE"
+    assert pool.json() == {"proxies": []}

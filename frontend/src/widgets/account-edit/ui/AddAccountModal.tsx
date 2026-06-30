@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Modal } from '@/shared/ui';
 
 import { ProxyForm } from './ProxyForm';
+import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
 // The design's add-account wizard: a two-step stepper. STEP 1 chooses a method
 // (.session or tdata.zip) and reveals a dropzone + file list; STEP 2 assigns a
@@ -33,6 +34,9 @@ export function AddAccountModal({
   const [method, setMethod] = useState<Method>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
+  // ponytail: the wizard's proxy step can probe (real) but not assign yet — the
+  // imported account's id isn't surfaced here; assignment lives in account-edit.
+  const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
 
   const onFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -377,7 +381,7 @@ export function AddAccountModal({
           </>
         ) : proxyStep === 'form' ? (
           <>
-            <ProxyForm />
+            <ProxyForm value={proxyValue} onChange={setProxyValue} />
             <div className="mt-5 flex justify-between gap-2">
               <button
                 type="button"

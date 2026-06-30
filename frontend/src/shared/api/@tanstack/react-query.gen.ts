@@ -35,6 +35,7 @@ import {
   login,
   logout,
   type Options,
+  probeProxy,
   removeWarmingChannel,
   setAccountPhoto,
   startNeurocomment,
@@ -116,6 +117,9 @@ import type {
   LoginResponse,
   LogoutData,
   LogoutResponse,
+  ProbeProxyData,
+  ProbeProxyError,
+  ProbeProxyResponse,
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
@@ -535,6 +539,29 @@ export const createProxyMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await createProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Probe Proxy
+ */
+export const probeProxyMutation = (
+  options?: Partial<Options<ProbeProxyData>>,
+): UseMutationOptions<ProbeProxyResponse, ProbeProxyError, Options<ProbeProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    ProbeProxyResponse,
+    ProbeProxyError,
+    Options<ProbeProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await probeProxy({
         ...options,
         ...fnOptions,
         throwOnError: true,
