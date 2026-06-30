@@ -2168,6 +2168,17 @@
             ],
             "title": "Device App Version"
           },
+          "device_lang": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Lang"
+          },
           "bio": {
             "anyOf": [
               {
@@ -2288,6 +2299,64 @@
               }
             ],
             "title": "Proxy Country Name"
+          },
+          "trust_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Score"
+          },
+          "trust_band": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "excellent",
+                  "good",
+                  "watch",
+                  "at_risk",
+                  "critical"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Band"
+          },
+          "spam_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "clean",
+                  "limited",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Status"
+          },
+          "spam_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Detail"
           }
         },
         "type": "object",

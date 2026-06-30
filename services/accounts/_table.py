@@ -5,7 +5,13 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
-from core.db import account_summary_counts, list_accounts
+from core.db import (
+    account_summary_counts,
+    list_accounts,
+    list_device_fingerprints,
+    list_spam_statuses,
+    list_warming_states,
+)
 from schemas.accounts import (
     AccountList,
     AccountsTableState,
@@ -14,6 +20,7 @@ from schemas.accounts import (
     health_for_status,
 )
 from schemas.api import Page
+from services.trust import account_trust_score_from
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountFilter, AccountRead
@@ -77,8 +84,41 @@ async def list_accounts_page(
     result = await list_accounts(query=query, status=status, limit=limit + 1, offset=offset)
     has_more = len(result.accounts) > limit
     items = result.accounts[:limit]
+    await _attach_signals(items)
     next_cursor = str(offset + limit) if has_more else None
     return Page(items=items, next_cursor=next_cursor)
+
+
+async def _attach_signals(accounts: list[AccountRead]) -> None:
+    """Enrich a page of accounts in place with Trust Score + last spam verdict.
+
+    Bulk-loads warming state, spam verdicts and device fingerprints once (mirrors
+    the warming board's pattern) so the table is not an N+1; trust is then a pure
+    per-account computation over the already-loaded signals.
+    """
+    if not accounts:
+        return
+    records = {record.account_id: record for record in await list_warming_states()}
+    spam_by_account = await list_spam_statuses()
+    fingerprints = await list_device_fingerprints()
+    now = datetime.now(UTC)
+    for account in accounts:
+        spam = spam_by_account.get(account.account_id)
+        fingerprint = fingerprints.get(account.account_id)
+        trust = account_trust_score_from(
+            account=account,
+            record=records.get(account.account_id),
+            spam=spam,
+            lang_code=fingerprint.system_lang_code if fingerprint else None,
+            now=now,
+        )
+        account.trust_score = trust.score
+        account.trust_band = trust.band
+        if spam is not None:
+            account.spam_status = spam.status
+            account.spam_detail = spam.detail
+        if fingerprint is not None:
+            account.device_lang = fingerprint.system_lang_code
 
 
 async def list_listener_accounts() -> AccountList:

@@ -94,6 +94,17 @@
       "signalsCheck": "Проверить",
       "signalsTip": "Проверка на @SpamBot",
       "signalsReadonly": "Данные от Telegram · только чтение",
+      "signalStatus": "Текущий статус",
+      "signalBlock": "Последний spam-block",
+      "signalChecked": "Последняя проверка",
+      "signalNone": "не зафиксирован",
+      "signalRecorded": "зафиксирован",
+      "signalNever": "никогда",
+      "spam": {
+        "clean": "Без ограничений",
+        "limited": "Ограничен",
+        "unknown": "Неизвестно"
+      },
       "actions": "Действия",
       "aliveTitle": "Проверить аккаунт",
       "aliveHint": "Проверить, активен ли аккаунт сейчас",

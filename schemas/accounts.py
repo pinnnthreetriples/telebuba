@@ -6,11 +6,13 @@ from pydantic import BaseModel, Field
 
 # Pydantic resolves these annotations at runtime to build the model fields,
 # so they cannot live in a TYPE_CHECKING block.
+from schemas.spam_status import SpamStatusKind  # noqa: TC001
 from schemas.telegram_profile_snapshot import (  # noqa: TC001
     TelegramMusicItem,
     TelegramProfilePhoto,
     TelegramStoryThumb,
 )
+from schemas.trust import TrustBand  # noqa: TC001
 
 # account_id is later joined into dialogue pair_keys via "|". Restricting the
 # charset here is cheaper than escaping every join site downstream. Allows
@@ -59,6 +61,9 @@ class AccountRead(BaseModel):
     device_model: str | None = None
     device_system_version: str | None = None
     device_app_version: str | None = None
+    # System language from the device fingerprint, enriched by the service layer
+    # for the edit card's read-only device panel (not an ``accounts`` column).
+    device_lang: str | None = None
     bio: str | None = None
     proxy_id: str | None = None
     proxy_type: str | None = None
@@ -70,6 +75,12 @@ class AccountRead(BaseModel):
     proxy_exit_ip: str | None = None
     proxy_country_code: str | None = None
     proxy_country_name: str | None = None
+    # Health signals enriched by the service layer (services.accounts._table),
+    # not the repository — left None when no page-level enrichment ran.
+    trust_score: int | None = Field(default=None, ge=0, le=100)
+    trust_band: TrustBand | None = None
+    spam_status: SpamStatusKind | None = None
+    spam_detail: str | None = None
 
 
 class AccountList(BaseModel):

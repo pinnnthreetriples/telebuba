@@ -146,6 +146,10 @@ export type AccountRead = {
    */
   device_app_version?: string | null;
   /**
+   * Device Lang
+   */
+  device_lang?: string | null;
+  /**
    * Bio
    */
   bio?: string | null;
@@ -189,6 +193,22 @@ export type AccountRead = {
    * Proxy Country Name
    */
   proxy_country_name?: string | null;
+  /**
+   * Trust Score
+   */
+  trust_score?: number | null;
+  /**
+   * Trust Band
+   */
+  trust_band?: 'excellent' | 'good' | 'watch' | 'at_risk' | 'critical' | null;
+  /**
+   * Spam Status
+   */
+  spam_status?: 'clean' | 'limited' | 'unknown' | null;
+  /**
+   * Spam Detail
+   */
+  spam_detail?: string | null;
 };
 
 /**

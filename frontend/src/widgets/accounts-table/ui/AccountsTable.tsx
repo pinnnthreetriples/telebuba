@@ -31,20 +31,15 @@ function mono(account: AccountRead): string {
   return digits.slice(-2) || '#';
 }
 
-// ponytail: trust + device aren't carried by the backend yet (Phase 1) — derive
-// deterministic design-first values from the id so the table keeps the design's
-// richness. The proxy column is real (AccountRead carries the assigned pool proxy).
-const DEVICES = ['iPhone 13', 'iPhone 12', 'Pixel 7', 'Galaxy S22', 'iPhone 14'];
-const OSES = ['iOS 17.2', 'iOS 16.4', 'Android 14', 'Android 13', 'iOS 17.4'];
-function decorate(account: AccountRead) {
-  const seed = [...account.account_id].reduce((sum, c) => sum + c.charCodeAt(0), 0);
-  const trust = 40 + (seed % 60);
-  const trustColor = trust >= 70 ? '#12a150' : trust >= 45 ? '#e08700' : '#e5372a';
-  return {
-    trust,
-    trustColor,
-    device: `${DEVICES[seed % DEVICES.length]} · ${OSES[seed % OSES.length]}`,
-  };
+// Trust Score is real (computed by the backend from session/spam/age signals).
+// The 3-tier colour band mirrors the design's thresholds.
+function trustColor(score: number): string {
+  return score >= 70 ? '#12a150' : score >= 45 ? '#e08700' : '#e5372a';
+}
+
+// Real device fingerprint — immutable, set at registration.
+function deviceLabel(account: AccountRead): string {
+  return [account.device_model, account.device_system_version].filter(Boolean).join(' · ') || '—';
 }
 
 // Real proxy column, sourced from the account's assigned pool proxy.
@@ -92,7 +87,7 @@ export function AccountsTable({
             {data.map((account) => {
               const busy = busyId === account.account_id;
               const ds = accountDesignStatus(account.status);
-              const d = decorate(account);
+              const trust = account.trust_score;
               return (
                 <tr
                   key={account.account_id}
@@ -138,23 +133,27 @@ export function AccountsTable({
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-[12px] text-ink-muted">{d.device}</span>
+                    <span className="text-[12px] text-ink-muted">{deviceLabel(account)}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${String(d.trust)}%`, background: d.trustColor }}
-                        />
+                    {trust == null ? (
+                      <span className="text-[12px] text-ink-subtle">—</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${String(trust)}%`, background: trustColor(trust) }}
+                          />
+                        </div>
+                        <span
+                          className="min-w-[20px] text-[12px] font-semibold"
+                          style={{ color: trustColor(trust) }}
+                        >
+                          {trust}
+                        </span>
                       </div>
-                      <span
-                        className="min-w-[20px] text-[12px] font-semibold"
-                        style={{ color: d.trustColor }}
-                      >
-                        {d.trust}
-                      </span>
-                    </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-[6px]">

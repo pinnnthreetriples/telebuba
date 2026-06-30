@@ -16,6 +16,13 @@ const ACCOUNT: AccountRead = {
   phone: '+79051184490',
   proxy_country_code: 'nl',
   last_checked_at: '2026-06-28',
+  trust_score: 82,
+  trust_band: 'good',
+  spam_status: 'limited',
+  spam_detail: 'до 2026-07-01',
+  device_model: 'Pixel 7',
+  device_system_version: 'Android 14',
+  device_lang: 'ru-RU',
   created_at: 'now',
   updated_at: 'now',
 };
@@ -23,13 +30,17 @@ const ACCOUNT: AccountRead = {
 test('renders the hero and every section header', () => {
   render(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
   expect(screen.getByText('+79051184490')).toBeInTheDocument();
-  // trust is derived from the account id (design-first) — acc-1 → 69
-  expect(screen.getByText('69/100')).toBeInTheDocument();
+  // trust comes from the backend-computed score
+  expect(screen.getByText('82/100')).toBeInTheDocument();
   for (const title of ['Сессия', 'Прокси', 'Device fingerprint', 'Спам/бан-сигналы', 'Действия']) {
     expect(screen.getByText(title)).toBeInTheDocument();
   }
-  // the locked device fingerprint shows the mock profile
-  expect(screen.getByDisplayValue('iPhone 13')).toBeInTheDocument();
+  // the locked device fingerprint shows the real fingerprint fields
+  expect(screen.getByDisplayValue('Pixel 7')).toBeInTheDocument();
+  expect(screen.getByDisplayValue('Android 14')).toBeInTheDocument();
+  // the real spam verdict surfaces in the signals section
+  expect(screen.getByText('Ограничен')).toBeInTheDocument();
+  expect(screen.getByText('до 2026-07-01')).toBeInTheDocument();
 });
 
 test('section toggles, import tabs and proxy mode drive the handlers', async () => {

@@ -93,6 +93,17 @@
       "signalsCheck": "Check",
       "signalsTip": "Check against @SpamBot",
       "signalsReadonly": "Telegram data · read-only",
+      "signalStatus": "Current status",
+      "signalBlock": "Last spam-block",
+      "signalChecked": "Last check",
+      "signalNone": "none recorded",
+      "signalRecorded": "recorded",
+      "signalNever": "never",
+      "spam": {
+        "clean": "No restrictions",
+        "limited": "Restricted",
+        "unknown": "Unknown"
+      },
       "actions": "Actions",
       "aliveTitle": "Check account",
       "aliveHint": "Check whether the account is active right now",

@@ -12,6 +12,7 @@ from core.db import (
     configure_database,
     update_account_from_session_check,
     update_proxy_check,
+    upsert_spam_status,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import (
@@ -30,6 +31,7 @@ from schemas.profile_media import (
     AccountStoryUpload,
 )
 from schemas.proxy import ProxyCheckUpdate
+from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
 from schemas.telegram_actions import (
     ActionResult,
@@ -50,6 +52,7 @@ from services.accounts import (
     import_account_session,
     import_account_tdata,
     list_accounts,
+    list_accounts_page,
     list_listener_accounts,
     load_accounts_table,
     post_account_story,
@@ -238,6 +241,38 @@ async def test_load_accounts_table_paginates_in_db() -> None:
     assert {row.account_id for row in page.rows} & {
         row.account_id for row in next_page.rows
     } == set()
+
+
+@pytest.mark.asyncio
+async def test_list_accounts_page_enriches_trust_and_spam() -> None:
+    """The accounts page carries a computed Trust Score + last cached spam verdict."""
+    await add_account(AccountCreate(account_id="limited"))
+    await add_account(AccountCreate(account_id="unprobed"))
+    await upsert_spam_status(
+        SpamStatusVerdict(
+            account_id="limited",
+            status="limited",
+            detail="restricted until 2026",
+            checked_at="2026-06-30T00:00:00+00:00",
+        ),
+    )
+
+    page = await list_accounts_page()
+    rows = {row.account_id: row for row in page.items}
+
+    # Trust is computed for every row regardless of whether a spam probe ran.
+    assert rows["limited"].trust_score is not None
+    assert rows["limited"].trust_band is not None
+    assert rows["unprobed"].trust_score is not None
+
+    # The cached spam verdict surfaces on the probed row and docks its score.
+    assert rows["limited"].spam_status == "limited"
+    assert rows["limited"].spam_detail == "restricted until 2026"
+    assert rows["unprobed"].spam_status is None
+    assert rows["limited"].trust_score < rows["unprobed"].trust_score
+
+    # The device fingerprint's system language is surfaced for the edit card.
+    assert rows["limited"].device_lang is not None
 
 
 @pytest.mark.asyncio

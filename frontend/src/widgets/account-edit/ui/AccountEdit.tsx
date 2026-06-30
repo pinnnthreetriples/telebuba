@@ -17,14 +17,12 @@ const seg = (on: boolean): string =>
 // idle. ponytail: design-first — no backend call, just the visual states.
 type CheckState = 'idle' | 'loading' | 'ok' | 'err';
 
-// ponytail: device profile + spam signals are mock until AccountRead carries
-// them — design-first, backend wiring is a later step.
-const DEVICE = { model: 'iPhone 13', os: 'iOS 17.2', lang: 'Русский (ru-RU)' };
-const SIGNALS = [
-  { dot: 'bg-[#2e9e64]', label: 'Текущий статус', value: 'Без ограничений' },
-  { dot: 'bg-line-strong', label: 'Последний spam-block', value: 'не зафиксирован' },
-  { dot: 'bg-line-strong', label: 'Последняя проверка', value: 'сегодня' },
-];
+// Real spam-status dot per verdict (matches the design's traffic-light tints).
+const SPAM_DOT: Record<NonNullable<AccountRead['spam_status']>, string> = {
+  clean: 'bg-[#2e9e64]',
+  limited: 'bg-[#c0473f]',
+  unknown: 'bg-line-strong',
+};
 
 // ponytail: design-first — uploaded files are a presentational mock (one settled
 // success, one in-flight) so the dropzone's file-card states exist visually.
@@ -37,12 +35,8 @@ function mono(account: AccountRead): string {
   return (account.phone ?? account.account_id).replace(/\D/g, '').slice(-2) || '#';
 }
 
-// ponytail: design-first — backend carries no trust here, so derive a stable
-// value from the id (mirrors the design's 3-tier colour bands).
-function trustOf(account: AccountRead): number {
-  const hash = [...account.account_id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-  return 40 + (hash % 60);
-}
+// Trust Score is real (computed by the backend); the 3-tier colour band mirrors
+// the design's thresholds.
 function trustColor(t: number): string {
   return t >= 70 ? '#12a150' : t >= 45 ? '#e08700' : '#e5372a';
 }
@@ -159,9 +153,35 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
     }, 900);
   };
 
-  const trust = trustOf(account);
+  const trust = account.trust_score ?? 0;
   const tColor = trustColor(trust);
   const country = account.proxy_country_code?.toUpperCase() ?? '—';
+
+  // Real spam/ban signals, sourced from the account's last cached @SpamBot verdict
+  // + last liveness check (read-only — refreshed by the «Спам-чек» button).
+  const spamStatus = account.spam_status;
+  const signals = [
+    {
+      dot: spamStatus ? SPAM_DOT[spamStatus] : 'bg-line-strong',
+      label: t('accounts.edit.signalStatus'),
+      value: t(`accounts.edit.spam.${spamStatus ?? 'unknown'}`),
+    },
+    {
+      dot: spamStatus === 'limited' ? SPAM_DOT.limited : 'bg-line-strong',
+      label: t('accounts.edit.signalBlock'),
+      value:
+        spamStatus === 'limited'
+          ? (account.spam_detail ?? t('accounts.edit.signalRecorded'))
+          : t('accounts.edit.signalNone'),
+    },
+    {
+      dot: account.last_checked_at ? 'bg-[#2e9e64]' : 'bg-line-strong',
+      label: t('accounts.edit.signalChecked'),
+      value: account.last_checked_at
+        ? account.last_checked_at.slice(0, 10)
+        : t('accounts.edit.signalNever'),
+    },
+  ];
 
   return (
     <div className="tb-fadeup max-w-[960px]">
@@ -539,15 +559,19 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           <div className="flex flex-col gap-[11px]">
             <label>
               <span className={LABEL}>{t('accounts.edit.deviceModel')}</span>
-              <input value={DEVICE.model} disabled className={FIELD_LOCKED} />
+              <input value={account.device_model ?? '—'} disabled className={FIELD_LOCKED} />
             </label>
             <label>
               <span className={LABEL}>{t('accounts.edit.deviceOs')}</span>
-              <input value={DEVICE.os} disabled className={FIELD_LOCKED} />
+              <input
+                value={account.device_system_version ?? '—'}
+                disabled
+                className={FIELD_LOCKED}
+              />
             </label>
             <label>
               <span className={LABEL}>{t('accounts.edit.deviceLang')}</span>
-              <input value={DEVICE.lang} disabled className={FIELD_LOCKED} />
+              <input value={account.device_lang ?? '—'} disabled className={FIELD_LOCKED} />
             </label>
           </div>
         </Section>
@@ -613,7 +637,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             {t('accounts.edit.signalsReadonly')}
           </div>
           <div className="flex flex-col">
-            {SIGNALS.map((signal) => (
+            {signals.map((signal) => (
               <div
                 key={signal.label}
                 className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[11px]"
