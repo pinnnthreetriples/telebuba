@@ -13,6 +13,7 @@ the gateway internals.
 
 from __future__ import annotations
 
+import base64
 import time
 from typing import TYPE_CHECKING, cast
 
@@ -24,6 +25,12 @@ from core.telegram_client import (
     execute_read_many,
 )
 from schemas.accounts import AccountProfileSnapshot
+from schemas.profile_media import (
+    AccountProfileView,
+    ProfileMusicView,
+    ProfilePhotoView,
+    ProfileStoryView,
+)
 from schemas.telegram_actions import (
     GetUserProfile,
     ListActiveStories,
@@ -42,7 +49,63 @@ if TYPE_CHECKING:
         TelegramStoryThumb,
     )
 
-__all__ = ["fetch_live_account_profile", "invalidate_account_profile_cache"]
+__all__ = [
+    "account_profile_view",
+    "fetch_live_account_profile",
+    "invalidate_account_profile_cache",
+]
+
+
+def _data_uri(data: bytes | None, mime: str = "image/jpeg") -> str | None:
+    """Encode raw image bytes as a ``data:`` URI for the JSON profile view."""
+    if not data:
+        return None
+    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+
+
+async def account_profile_view(
+    account_id: str,
+    *,
+    force_refresh: bool = False,
+) -> AccountProfileView:
+    """JSON-safe live profile for the edit-profile modal (the SPA reads this)."""
+    snapshot = await fetch_live_account_profile(account_id, force_refresh=force_refresh)
+    if snapshot.error is not None:
+        return AccountProfileView(error=snapshot.error)
+    return AccountProfileView(
+        avatar_data_uri=_data_uri(snapshot.avatar_bytes),
+        photos=[
+            ProfilePhotoView(
+                photo_id=photo.photo_id,
+                access_hash=photo.access_hash,
+                file_reference=base64.b64encode(photo.file_reference).decode("ascii"),
+                thumb_data_uri=_data_uri(photo.thumb_bytes),
+            )
+            for photo in snapshot.photos
+        ],
+        stories=[
+            ProfileStoryView(
+                story_id=story.story_id,
+                kind=story.kind,
+                caption=story.caption,
+                privacy_preset=story.privacy_preset,
+                is_pinned=story.is_pinned,
+                thumb_data_uri=_data_uri(story.thumb_bytes),
+            )
+            for story in snapshot.stories
+        ],
+        music=[
+            ProfileMusicView(
+                file_id=track.file_id,
+                title=track.title,
+                performer=track.performer,
+                access_hash=track.access_hash,
+                file_reference=base64.b64encode(track.file_reference).decode("ascii"),
+            )
+            for track in snapshot.music
+        ],
+        music_supported=snapshot.music_supported,
+    )
 
 
 _CACHE: dict[str, AccountProfileSnapshot] = {}

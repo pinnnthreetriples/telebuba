@@ -8,6 +8,9 @@ import {
 } from './client';
 import { client } from './client.gen';
 import type {
+  AddAccountMusicData,
+  AddAccountMusicErrors,
+  AddAccountMusicResponses,
   AddWarmingChannelsData,
   AddWarmingChannelsErrors,
   AddWarmingChannelsResponses,
@@ -38,6 +41,9 @@ import type {
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
+  GetAccountProfileSnapshotData,
+  GetAccountProfileSnapshotErrors,
+  GetAccountProfileSnapshotResponses,
   GetHealthData,
   GetHealthResponses,
   GetMeData,
@@ -96,12 +102,24 @@ import type {
   LogoutAccountResponses,
   LogoutData,
   LogoutResponses,
+  PostAccountStoryData,
+  PostAccountStoryErrors,
+  PostAccountStoryResponses,
   ProbeProxyData,
   ProbeProxyErrors,
   ProbeProxyResponses,
   PromoteToNeurocommentData,
   PromoteToNeurocommentErrors,
   PromoteToNeurocommentResponses,
+  RemoveAccountMusicData,
+  RemoveAccountMusicErrors,
+  RemoveAccountMusicResponses,
+  RemoveAccountPhotoData,
+  RemoveAccountPhotoErrors,
+  RemoveAccountPhotoResponses,
+  RemoveAccountStoryData,
+  RemoveAccountStoryErrors,
+  RemoveAccountStoryResponses,
   RemoveCampaignChannelData,
   RemoveCampaignChannelErrors,
   RemoveCampaignChannelResponses,
@@ -405,6 +423,109 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Account Profile Snapshot
+ *
+ * Live profile (photos / stories / music) for the edit-profile modal.
+ */
+export const getAccountProfileSnapshot = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountProfileSnapshotData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    GetAccountProfileSnapshotResponses,
+    GetAccountProfileSnapshotErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/profile-snapshot', ...options });
+
+/**
+ * Post Account Story
+ */
+export const postAccountStory = <ThrowOnError extends boolean = false>(
+  options: Options<PostAccountStoryData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<PostAccountStoryResponses, PostAccountStoryErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/story',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Add Account Music
+ */
+export const addAccountMusic = <ThrowOnError extends boolean = false>(
+  options: Options<AddAccountMusicData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<AddAccountMusicResponses, AddAccountMusicErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/music',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account Story
+ */
+export const removeAccountStory = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountStoryData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveAccountStoryResponses,
+    RemoveAccountStoryErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/story/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account Music
+ */
+export const removeAccountMusic = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountMusicData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveAccountMusicResponses,
+    RemoveAccountMusicErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/music/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account Photo
+ */
+export const removeAccountPhoto = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountPhotoData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveAccountPhotoResponses,
+    RemoveAccountPhotoErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/photo/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
       ...options.headers,
     },
   });

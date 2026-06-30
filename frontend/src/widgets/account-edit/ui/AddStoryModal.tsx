@@ -1,23 +1,65 @@
-import { useState } from 'react';
+import { useMutation } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { postAccountStoryMutation } from '@/entities/account';
 import { Modal } from '@/shared/ui';
 
 // The design's new-story modal: audience segmented control, caption, a
-// no-forward checkbox, and a media dropzone with a file list. Opened above the
-// profile modal (z=75). ponytail: design-first — no upload, presentational.
+// no-forward checkbox, and a media dropzone. Opened above the profile modal
+// (z=75). Publishing posts a real story (postAccountStory) for the account.
 type Audience = 'contacts' | 'closeFriends' | 'public';
+
+const PRIVACY: Record<Audience, 'contacts' | 'close_friends' | 'public'> = {
+  contacts: 'contacts',
+  closeFriends: 'close_friends',
+  public: 'public',
+};
 
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 
-export function AddStoryModal({ onClose }: { onClose: () => void }) {
+export function AddStoryModal({
+  accountId,
+  onClose,
+  onPosted,
+}: {
+  accountId: string;
+  onClose: () => void;
+  onPosted: () => void;
+}) {
   const { t } = useTranslation();
   const [audience, setAudience] = useState<Audience>('contacts');
   const [noForward, setNoForward] = useState(false);
+  const [caption, setCaption] = useState('');
+  const [file, setFile] = useState<File | null>(null);
+  const fileInput = useRef<HTMLInputElement>(null);
+  const post = useMutation(postAccountStoryMutation());
 
   const seg = (on: boolean): string =>
     `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
+
+  const publish = () => {
+    if (!file) return;
+    post.mutate(
+      {
+        path: { account_id: accountId },
+        body: {
+          file,
+          media_kind: file.type.startsWith('video') ? 'video' : 'image',
+          caption: caption.trim() || null,
+          privacy_preset: PRIVACY[audience],
+          protect_content: noForward,
+        },
+      },
+      {
+        onSuccess: () => {
+          onPosted();
+          onClose();
+        },
+      },
+    );
+  };
 
   return (
     <Modal onClose={onClose} z={75} backdrop={0.45} className="w-[460px]">
@@ -56,7 +98,14 @@ export function AddStoryModal({ onClose }: { onClose: () => void }) {
           <span className="mb-[6px] block text-[12px] font-medium text-[#3a3a3a]">
             {t('accounts.addStory.caption')}
           </span>
-          <input placeholder={t('accounts.addStory.captionPlaceholder')} className={FIELD} />
+          <input
+            value={caption}
+            onChange={(event) => {
+              setCaption(event.target.value);
+            }}
+            placeholder={t('accounts.addStory.captionPlaceholder')}
+            className={FIELD}
+          />
         </label>
 
         <button
@@ -88,7 +137,11 @@ export function AddStoryModal({ onClose }: { onClose: () => void }) {
         <div className="mb-[6px] text-[12px] font-medium text-[#3a3a3a]">
           {t('accounts.addStory.media')}
         </div>
-        <div className="flex items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-white px-4 py-[14px]">
+        <button
+          type="button"
+          onClick={() => fileInput.current?.click()}
+          className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-white px-4 py-[14px] text-left"
+        >
           <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[11px] border border-line bg-white text-primary">
             <svg
               width="20"
@@ -104,12 +157,22 @@ export function AddStoryModal({ onClose }: { onClose: () => void }) {
             </svg>
           </div>
           <div className="min-w-0 flex-1">
-            <div className="text-[12.5px] font-semibold">{t('accounts.addStory.dropTitle')}</div>
-            <div className="mt-px text-[11px] text-ink-subtle">
-              {t('accounts.addStory.dropHint')}
+            <div className="truncate text-[12.5px] font-semibold">
+              {file ? file.name : t('accounts.addStory.dropTitle')}
             </div>
+            <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.addStory.dropHint')}</div>
           </div>
-        </div>
+        </button>
+        <input
+          ref={fileInput}
+          type="file"
+          accept="image/*,video/*"
+          className="hidden"
+          onChange={(event) => {
+            setFile(event.target.files?.[0] ?? null);
+            event.target.value = '';
+          }}
+        />
 
         <div className="mt-5 flex justify-end gap-2">
           <button
@@ -121,8 +184,9 @@ export function AddStoryModal({ onClose }: { onClose: () => void }) {
           </button>
           <button
             type="button"
-            onClick={onClose}
-            className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white"
+            onClick={publish}
+            disabled={!file || post.isPending}
+            className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
           >
             {t('accounts.addStory.publish')}
           </button>

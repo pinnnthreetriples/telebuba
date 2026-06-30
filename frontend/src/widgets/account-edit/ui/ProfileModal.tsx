@@ -1,8 +1,16 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { setAccountPhotoMutation, updateAccountProfileMutation } from '@/entities/account';
+import {
+  accountProfileSnapshotQueryOptions,
+  addAccountMusicMutation,
+  removeAccountMusicMutation,
+  removeAccountPhotoMutation,
+  removeAccountStoryMutation,
+  setAccountPhotoMutation,
+  updateAccountProfileMutation,
+} from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { Modal } from '@/shared/ui';
 
@@ -10,26 +18,16 @@ import { AddStoryModal } from './AddStoryModal';
 
 // The design's profile-edit modal: hero header, a 4-tab segmented header
 // (text / photo / stories / music), per-tab bodies, and a save→saved swap
-// footer. The Текст tab persists the profile (updateAccountProfile) and the
-// Фото tab uploads a real avatar (setAccountPhoto). ponytail: the stories +
-// music tabs stay presentational — posting a story / setting profile music
-// needs its own gateway action + endpoint (deferred).
+// footer. Every tab is wired to /api/v1: Текст persists the profile, and the
+// photo / stories / music tabs render the account's live media (the
+// profile-snapshot view) with real upload + remove.
 type Tab = 'text' | 'photo' | 'stories' | 'music';
 
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
-
-// ponytail: design-first — placeholder avatar/story tiles so the photo & stories
-// tabs render their grids without backend media.
-const AVATARS = [
-  'linear-gradient(135deg,#7c9cff,#a0e0c0)',
-  'linear-gradient(135deg,#ffb3a0,#ffd9a0)',
-];
-const STORIES = [
-  { g: 'linear-gradient(135deg,#a0c4ff,#bdb2ff)', privacy: 'contacts' as const },
-  { g: 'linear-gradient(135deg,#ffc6a0,#ff9aa2)', privacy: 'public' as const },
-];
+// Fallback tile background when a media item carries no thumbnail.
+const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
 
 function DashedAdd({
   ratio,
@@ -62,16 +60,40 @@ function DashedAdd({
   );
 }
 
+function tileStyle(uri: string | null | undefined, ratio: string): React.CSSProperties {
+  if (!uri) return { aspectRatio: ratio, background: TILE };
+  return {
+    aspectRatio: ratio,
+    backgroundImage: `url(${uri})`,
+    backgroundSize: 'cover',
+    backgroundPosition: 'center',
+  };
+}
+
 export function ProfileModal({ account, onClose }: { account: AccountRead; onClose: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const updateProfile = useMutation(updateAccountProfileMutation());
   const setPhoto = useMutation(setAccountPhotoMutation());
+  const addMusic = useMutation(addAccountMusicMutation());
+  const removeStory = useMutation(removeAccountStoryMutation());
+  const removeMusic = useMutation(removeAccountMusicMutation());
+  const removePhoto = useMutation(removeAccountPhotoMutation());
   const photoInput = useRef<HTMLInputElement>(null);
+  const musicInput = useRef<HTMLInputElement>(null);
+
+  const snapshot = useQuery(
+    accountProfileSnapshotQueryOptions({ path: { account_id: account.account_id } }),
+  );
+  const photos = snapshot.data?.photos ?? [];
+  const stories = snapshot.data?.stories ?? [];
+  const music = snapshot.data?.music ?? [];
+  const refresh = () => {
+    void queryClient.invalidateQueries();
+  };
 
   const [tab, setTab] = useState<Tab>('text');
   const [storyOpen, setStoryOpen] = useState(false);
-  const [hasMusic, setHasMusic] = useState(true);
   const [saved, setSaved] = useState(false);
 
   const [firstName, setFirstName] = useState(account.first_name ?? '');
@@ -115,9 +137,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const onPhotoPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
-    setPhoto.mutate(
-      { body: { account_id: account.account_id, file } },
-      { onSuccess: () => void queryClient.invalidateQueries() },
+    setPhoto.mutate({ body: { account_id: account.account_id, file } }, { onSuccess: refresh });
+    event.target.value = '';
+  };
+
+  const onMusicPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    addMusic.mutate(
+      { path: { account_id: account.account_id }, body: { file } },
+      { onSuccess: refresh },
     );
     event.target.value = '';
   };
@@ -226,19 +255,34 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {t('accounts.profile.photoHint')}
                 </div>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
-                  {AVATARS.map((g, index) => (
-                    <div key={g} className="relative">
+                  {photos.map((photo, index) => (
+                    <div key={photo.photo_id} className="relative">
                       <div
                         className="rounded-[12px] border border-black/5"
-                        style={{ aspectRatio: '1', background: g }}
+                        style={tileStyle(photo.thumb_data_uri, '1')}
                       />
                       <button
                         type="button"
                         aria-label={t('accounts.profile.removePhoto')}
+                        onClick={() => {
+                          removePhoto.mutate(
+                            {
+                              path: { account_id: account.account_id },
+                              body: {
+                                photo_id: photo.photo_id,
+                                access_hash: photo.access_hash,
+                                file_reference: photo.file_reference,
+                              },
+                            },
+                            { onSuccess: refresh },
+                          );
+                        }}
                         className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
                       >
                         ×
                       </button>
+                      {/* ponytail: "make main" is a status label, not an action —
+                          Telegram has no set-existing-as-main RPC in the gateway. */}
                       <span className="mt-[6px] block w-full py-[2px] text-[11px] font-medium text-primary">
                         {index === 0
                           ? t('accounts.profile.mainPhoto')
@@ -268,21 +312,30 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {t('accounts.profile.storiesHint')}
                 </div>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-3">
-                  {STORIES.map((story) => (
-                    <div key={story.g} className="relative">
+                  {stories.map((story) => (
+                    <div key={story.story_id} className="relative">
                       <div
                         className="rounded-[12px] border border-black/5"
-                        style={{ aspectRatio: '9 / 16', background: story.g }}
+                        style={tileStyle(story.thumb_data_uri, '9 / 16')}
                       />
                       <button
                         type="button"
                         aria-label={t('accounts.profile.removeStory')}
+                        onClick={() => {
+                          removeStory.mutate(
+                            {
+                              path: { account_id: account.account_id },
+                              body: { story_id: story.story_id },
+                            },
+                            { onSuccess: refresh },
+                          );
+                        }}
                         className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
                       >
                         ×
                       </button>
                       <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-center text-[9px] font-medium text-white">
-                        {t(`accounts.addStory.${story.privacy}`)}
+                        {t(`accounts.addStory.${story.privacy_preset}`)}
                       </span>
                     </div>
                   ))}
@@ -299,35 +352,49 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
             {tab === 'music' && (
               <div>
-                {hasMusic ? (
-                  <div className="flex items-center gap-[13px] rounded-[12px] border border-line px-[14px] py-3">
-                    <button
-                      type="button"
-                      aria-label={t('accounts.profile.play')}
-                      className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M8 5v14l11-7z" />
-                      </svg>
-                    </button>
-                    <div className="min-w-0 flex-1">
-                      <div className="text-[13.5px] font-semibold">
-                        {t('accounts.profile.trackTitle')}
+                {music.length > 0 ? (
+                  <div className="flex flex-col gap-2">
+                    {music.map((track) => (
+                      <div
+                        key={track.file_id}
+                        className="flex items-center gap-[13px] rounded-[12px] border border-line px-[14px] py-3"
+                      >
+                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M8 5v14l11-7z" />
+                          </svg>
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="truncate text-[13.5px] font-semibold">
+                            {track.title ?? t('accounts.profile.trackTitle')}
+                          </div>
+                          <div className="truncate text-[12px] text-ink-subtle">
+                            {track.performer ?? t('accounts.profile.trackArtist')}
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!track.file_reference}
+                          onClick={() => {
+                            removeMusic.mutate(
+                              {
+                                path: { account_id: account.account_id },
+                                body: {
+                                  file_id: track.file_id,
+                                  access_hash: track.access_hash ?? 0,
+                                  file_reference: track.file_reference ?? '',
+                                },
+                              },
+                              { onSuccess: refresh },
+                            );
+                          }}
+                          aria-label={t('accounts.profile.removeMusic')}
+                          className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[15px] text-ink-subtle disabled:opacity-50"
+                        >
+                          ×
+                        </button>
                       </div>
-                      <div className="text-[12px] text-ink-subtle">
-                        {t('accounts.profile.trackArtist')}
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHasMusic(false);
-                      }}
-                      aria-label={t('accounts.profile.removeMusic')}
-                      className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[15px] text-ink-subtle"
-                    >
-                      ×
-                    </button>
+                    ))}
                   </div>
                 ) : (
                   <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
@@ -336,13 +403,18 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 )}
                 <button
                   type="button"
-                  onClick={() => {
-                    setHasMusic(true);
-                  }}
+                  onClick={() => musicInput.current?.click()}
                   className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
                 >
                   {t('accounts.profile.pickTrack')}
                 </button>
+                <input
+                  ref={musicInput}
+                  type="file"
+                  accept="audio/*"
+                  onChange={onMusicPicked}
+                  className="hidden"
+                />
               </div>
             )}
           </div>
@@ -389,9 +461,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       </Modal>
       {storyOpen && (
         <AddStoryModal
+          accountId={account.account_id}
           onClose={() => {
             setStoryOpen(false);
           }}
+          onPosted={refresh}
         />
       )}
     </>

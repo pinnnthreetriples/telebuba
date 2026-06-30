@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import base64
 from typing import TYPE_CHECKING
 
 import pytest
@@ -29,6 +30,7 @@ from schemas.telegram_profile_snapshot import (
     TelegramStoryThumb,
 )
 from services.accounts.profile_read import (
+    account_profile_view,
     fetch_live_account_profile,
     invalidate_account_profile_cache,
 )
@@ -305,3 +307,44 @@ async def test_invalidate_cache_drops_entry(monkeypatch: pytest.MonkeyPatch) -> 
     await fetch_live_account_profile("acc-1")
 
     assert len(calls) == 2, "Invalidated cache must trigger a fresh fetch"
+
+
+@pytest.mark.asyncio
+async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return AccountProfileSnapshot(
+            account_id=account_id,
+            avatar_bytes=b"\xff\xd8avatar",
+            photos=[
+                TelegramProfilePhoto(
+                    photo_id=1, access_hash=2, file_reference=b"ref", thumb_bytes=b"\x89PNG"
+                ),
+            ],
+            stories=[TelegramStoryThumb(story_id=3, kind="image", privacy_preset="contacts")],
+            music=[TelegramMusicItem(file_id=4, title="T", access_hash=5, file_reference=b"mref")],
+            music_supported=True,
+        )
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+    view = await account_profile_view("acc-1")
+
+    assert view.error is None
+    assert view.avatar_data_uri is not None
+    assert view.avatar_data_uri.startswith("data:image/jpeg;base64,")
+    assert view.photos[0].file_reference == base64.b64encode(b"ref").decode()
+    assert view.photos[0].thumb_data_uri is not None
+    assert view.stories[0].story_id == 3
+    assert view.music[0].file_reference == base64.b64encode(b"mref").decode()
+
+
+@pytest.mark.asyncio
+async def test_account_profile_view_surfaces_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return AccountProfileSnapshot(account_id=account_id, error="floodwait")
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+    view = await account_profile_view("acc-1")
+
+    assert view.error == "floodwait"
+    assert view.photos == []
+    assert view.music == []

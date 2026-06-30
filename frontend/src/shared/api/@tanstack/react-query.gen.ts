@@ -10,6 +10,7 @@ import {
 
 import { client } from '../client.gen';
 import {
+  addAccountMusic,
   addWarmingChannels,
   assignCampaignAccount,
   assignProxy,
@@ -20,6 +21,7 @@ import {
   deleteAccount,
   deleteCampaign,
   deleteProxy,
+  getAccountProfileSnapshot,
   getHealth,
   getMe,
   getNeurocommentBoard,
@@ -41,8 +43,12 @@ import {
   logout,
   logoutAccount,
   type Options,
+  postAccountStory,
   probeProxy,
   promoteToNeurocomment,
+  removeAccountMusic,
+  removeAccountPhoto,
+  removeAccountStory,
   removeCampaignChannel,
   removeWarmingChannel,
   requestLoginCode,
@@ -64,6 +70,9 @@ import {
   updateWarmingSettings,
 } from '../sdk.gen';
 import type {
+  AddAccountMusicData,
+  AddAccountMusicError,
+  AddAccountMusicResponse,
   AddWarmingChannelsData,
   AddWarmingChannelsError,
   AddWarmingChannelsResponse,
@@ -94,6 +103,9 @@ import type {
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
+  GetAccountProfileSnapshotData,
+  GetAccountProfileSnapshotError,
+  GetAccountProfileSnapshotResponse,
   GetHealthData,
   GetHealthResponse,
   GetMeData,
@@ -152,12 +164,24 @@ import type {
   LogoutAccountResponse,
   LogoutData,
   LogoutResponse,
+  PostAccountStoryData,
+  PostAccountStoryError,
+  PostAccountStoryResponse,
   ProbeProxyData,
   ProbeProxyError,
   ProbeProxyResponse,
   PromoteToNeurocommentData,
   PromoteToNeurocommentError,
   PromoteToNeurocommentResponse,
+  RemoveAccountMusicData,
+  RemoveAccountMusicError,
+  RemoveAccountMusicResponse,
+  RemoveAccountPhotoData,
+  RemoveAccountPhotoError,
+  RemoveAccountPhotoResponse,
+  RemoveAccountStoryData,
+  RemoveAccountStoryError,
+  RemoveAccountStoryResponse,
   RemoveCampaignChannelData,
   RemoveCampaignChannelError,
   RemoveCampaignChannelResponse,
@@ -727,6 +751,169 @@ export const setAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountProfileSnapshotQueryKey = (
+  options: Options<GetAccountProfileSnapshotData>,
+) => createQueryKey('getAccountProfileSnapshot', options);
+
+/**
+ * Get Account Profile Snapshot
+ *
+ * Live profile (photos / stories / music) for the edit-profile modal.
+ */
+export const getAccountProfileSnapshotOptions = (options: Options<GetAccountProfileSnapshotData>) =>
+  queryOptions<
+    GetAccountProfileSnapshotResponse,
+    GetAccountProfileSnapshotError,
+    GetAccountProfileSnapshotResponse,
+    ReturnType<typeof getAccountProfileSnapshotQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountProfileSnapshot({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountProfileSnapshotQueryKey(options),
+  });
+
+/**
+ * Post Account Story
+ */
+export const postAccountStoryMutation = (
+  options?: Partial<Options<PostAccountStoryData>>,
+): UseMutationOptions<
+  PostAccountStoryResponse,
+  PostAccountStoryError,
+  Options<PostAccountStoryData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    PostAccountStoryResponse,
+    PostAccountStoryError,
+    Options<PostAccountStoryData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await postAccountStory({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Add Account Music
+ */
+export const addAccountMusicMutation = (
+  options?: Partial<Options<AddAccountMusicData>>,
+): UseMutationOptions<
+  AddAccountMusicResponse,
+  AddAccountMusicError,
+  Options<AddAccountMusicData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddAccountMusicResponse,
+    AddAccountMusicError,
+    Options<AddAccountMusicData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addAccountMusic({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Story
+ */
+export const removeAccountStoryMutation = (
+  options?: Partial<Options<RemoveAccountStoryData>>,
+): UseMutationOptions<
+  RemoveAccountStoryResponse,
+  RemoveAccountStoryError,
+  Options<RemoveAccountStoryData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountStoryResponse,
+    RemoveAccountStoryError,
+    Options<RemoveAccountStoryData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountStory({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Music
+ */
+export const removeAccountMusicMutation = (
+  options?: Partial<Options<RemoveAccountMusicData>>,
+): UseMutationOptions<
+  RemoveAccountMusicResponse,
+  RemoveAccountMusicError,
+  Options<RemoveAccountMusicData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountMusicResponse,
+    RemoveAccountMusicError,
+    Options<RemoveAccountMusicData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountMusic({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Photo
+ */
+export const removeAccountPhotoMutation = (
+  options?: Partial<Options<RemoveAccountPhotoData>>,
+): UseMutationOptions<
+  RemoveAccountPhotoResponse,
+  RemoveAccountPhotoError,
+  Options<RemoveAccountPhotoData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountPhotoResponse,
+    RemoveAccountPhotoError,
+    Options<RemoveAccountPhotoData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountPhoto({
         ...options,
         ...fnOptions,
         throwOnError: true,

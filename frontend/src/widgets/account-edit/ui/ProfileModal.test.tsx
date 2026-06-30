@@ -32,19 +32,44 @@ const ACCOUNT: AccountRead = {
   updated_at: 'now',
 };
 
-test('switches to the stories tab and opens the add-story modal above it', async () => {
-  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
-  // header shows the account
-  expect(screen.getByText('Иван')).toBeInTheDocument();
+const VIEW = {
+  error: null,
+  avatar_data_uri: null,
+  photos: [{ photo_id: 1, access_hash: 2, file_reference: 'YWJj', thumb_data_uri: null }],
+  stories: [
+    { story_id: 3, kind: 'image', privacy_preset: 'contacts', is_pinned: false, thumb_data_uri: null },
+  ],
+  music: [{ file_id: 4, title: 'Track', performer: 'Artist', access_hash: 5, file_reference: 'YWJj' }],
+  music_supported: true,
+};
 
-  await userEvent.click(screen.getByText('Сторис'));
-  await userEvent.click(screen.getByText('Добавить'));
-  expect(screen.getByText('Новая сторис')).toBeInTheDocument();
-});
+function routeApi() {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (pathname === '/api/v1/accounts/profile') {
+      return Promise.resolve(jsonResponse({ ...ACCOUNT, first_name: 'Пётр' }));
+    }
+    return Promise.resolve(
+      jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }),
+    );
+  });
+}
+
+function fired(fragment: string, method = 'POST'): boolean {
+  return vi.mocked(fetch).mock.calls.some(([input]) => {
+    const request = input as Request;
+    return request.url.includes(fragment) && request.method === method;
+  });
+}
 
 test('edits the profile text and saves via the real endpoint', async () => {
-  vi.mocked(fetch).mockResolvedValue(jsonResponse({ ...ACCOUNT, first_name: 'Пётр' }));
+  routeApi();
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  expect(screen.getByText('Иван')).toBeInTheDocument();
 
   const firstName = screen.getByDisplayValue('Иван');
   await userEvent.clear(firstName);
@@ -52,34 +77,59 @@ test('edits the profile text and saves via the real endpoint', async () => {
   await userEvent.click(screen.getByText('Сохранить'));
 
   await waitFor(() => {
-    const saved = vi
-      .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.endsWith('/accounts/profile'));
-    expect(saved).toBe(true);
+    expect(fired('/accounts/profile')).toBe(true);
   });
 });
 
-test('uploads an avatar on the photo tab and toggles profile music', async () => {
-  vi.mocked(fetch).mockResolvedValue(
-    jsonResponse({ status: 'ok', action_type: 'set_profile_photo', account_id: 'acc-1' }),
-  );
+test('photo tab uploads an avatar and removes a photo', async () => {
+  routeApi();
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
-
-  // Фото tab: the upload tile triggers the hidden file input → setAccountPhoto.
   await userEvent.click(screen.getByText('Фото'));
-  await userEvent.click(screen.getByText('Загрузить'));
+
   const fileInput = document.body.querySelector('input[type="file"]') as HTMLInputElement;
-  const avatar = new File(['x'], 'avatar.jpg', { type: 'image/jpeg' });
-  fireEvent.change(fileInput, { target: { files: [avatar] } });
+  fireEvent.change(fileInput, {
+    target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] },
+  });
   await waitFor(() => {
-    const sent = vi
-      .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.endsWith('/accounts/photo'));
-    expect(sent).toBe(true);
+    expect(fired('/accounts/photo')).toBe(true);
   });
 
-  // Музыка tab: remove then re-pick a track (exercises the music toggles).
+  await userEvent.click(await screen.findByLabelText('Удалить фото'));
+  await waitFor(() => {
+    expect(fired('/photo/remove')).toBe(true);
+  });
+});
+
+test('stories tab opens the add-story modal and removes a story', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сторис'));
+
+  await userEvent.click(await screen.findByLabelText('Удалить сторис'));
+  await waitFor(() => {
+    expect(fired('/story/remove')).toBe(true);
+  });
+
+  await userEvent.click(screen.getByText('Добавить'));
+  expect(screen.getByText('Новая сторис')).toBeInTheDocument();
+});
+
+test('music tab removes the current track and picks a new one', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
   await userEvent.click(screen.getByText('Музыка'));
+
+  expect(await screen.findByText('Track')).toBeInTheDocument();
   await userEvent.click(screen.getByLabelText('Убрать трек'));
-  await userEvent.click(screen.getByText('Выбрать трек'));
+  await waitFor(() => {
+    expect(fired('/music/remove')).toBe(true);
+  });
+
+  const musicInput = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(musicInput, {
+    target: { files: [new File(['x'], 't.mp3', { type: 'audio/mpeg' })] },
+  });
+  await waitFor(() => {
+    expect(fired('/accounts/acc-1/music')).toBe(true);
+  });
 });

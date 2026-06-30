@@ -878,6 +878,405 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/profile-snapshot": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Account Profile Snapshot",
+        "description": "Live profile (photos / stories / music) for the edit-profile modal.",
+        "operationId": "getAccountProfileSnapshot",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/story": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Post Account Story",
+        "operationId": "postAccountStory",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_postAccountStory"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/music": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Add Account Music",
+        "operationId": "addAccountMusic",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_addAccountMusic"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/story/remove": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove Account Story",
+        "operationId": "removeAccountStory",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoryRemoveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/music/remove": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove Account Music",
+        "operationId": "removeAccountMusic",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MusicRemoveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/photo/remove": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove Account Photo",
+        "operationId": "removeAccountPhoto",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoRemoveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies": {
       "get": {
         "tags": [
@@ -3072,6 +3471,61 @@
         ],
         "title": "AccountProfileUpdateRequest"
       },
+      "AccountProfileView": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "avatar_data_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Data Uri"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/ProfilePhotoView"
+            },
+            "type": "array",
+            "title": "Photos"
+          },
+          "stories": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileStoryView"
+            },
+            "type": "array",
+            "title": "Stories"
+          },
+          "music": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileMusicView"
+            },
+            "type": "array",
+            "title": "Music"
+          },
+          "music_supported": {
+            "type": "boolean",
+            "title": "Music Supported",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "AccountProfileView",
+        "description": "JSON-safe live profile for the edit-profile modal."
+      },
       "AccountRead": {
         "properties": {
           "account_id": {
@@ -3544,6 +3998,42 @@
         "title": "AssignAccountRequest",
         "description": "Assign an account to a campaign (the campaign id is the route path param)."
       },
+      "Body_addAccountMusic": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "performer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_addAccountMusic"
+      },
       "Body_importAccountSession": {
         "properties": {
           "file": {
@@ -3593,6 +4083,55 @@
           "file"
         ],
         "title": "Body_importAccountTdata"
+      },
+      "Body_postAccountStory": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "media_kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ],
+            "title": "Media Kind",
+            "default": "image"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "privacy_preset": {
+            "type": "string",
+            "enum": [
+              "contacts",
+              "close_friends",
+              "public"
+            ],
+            "title": "Privacy Preset",
+            "default": "contacts"
+          },
+          "protect_content": {
+            "type": "boolean",
+            "title": "Protect Content",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_postAccountStory"
       },
       "Body_setAccountPhoto": {
         "properties": {
@@ -3876,6 +4415,31 @@
           "password"
         ],
         "title": "LoginRequest"
+      },
+      "MusicRemoveRequest": {
+        "properties": {
+          "file_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "File Id"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash"
+          },
+          "file_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "File Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "access_hash",
+          "file_reference"
+        ],
+        "title": "MusicRemoveRequest"
       },
       "NeurocommentAccountCard": {
         "properties": {
@@ -4316,6 +4880,161 @@
         ],
         "title": "PhoneCodeRequestResult",
         "description": "API response after a code is sent \u2014 confirmation only, no secrets."
+      },
+      "PhotoRemoveRequest": {
+        "properties": {
+          "photo_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Photo Id"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash"
+          },
+          "file_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "File Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photo_id",
+          "access_hash",
+          "file_reference"
+        ],
+        "title": "PhotoRemoveRequest"
+      },
+      "ProfileMusicView": {
+        "properties": {
+          "file_id": {
+            "type": "integer",
+            "title": "File Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "performer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performer"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash",
+            "default": 0
+          },
+          "file_reference": {
+            "type": "string",
+            "title": "File Reference",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id"
+        ],
+        "title": "ProfileMusicView"
+      },
+      "ProfilePhotoView": {
+        "properties": {
+          "photo_id": {
+            "type": "integer",
+            "title": "Photo Id"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash"
+          },
+          "file_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "File Reference"
+          },
+          "thumb_data_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Data Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photo_id",
+          "access_hash",
+          "file_reference"
+        ],
+        "title": "ProfilePhotoView"
+      },
+      "ProfileStoryView": {
+        "properties": {
+          "story_id": {
+            "type": "integer",
+            "title": "Story Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "unknown"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "privacy_preset": {
+            "type": "string",
+            "title": "Privacy Preset",
+            "default": "unknown"
+          },
+          "is_pinned": {
+            "type": "boolean",
+            "title": "Is Pinned",
+            "default": false
+          },
+          "thumb_data_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Data Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "story_id"
+        ],
+        "title": "ProfileStoryView"
       },
       "PromoteRequest": {
         "properties": {
@@ -4793,6 +5512,20 @@
           "account_id"
         ],
         "title": "StopWarmingRequest"
+      },
+      "StoryRemoveRequest": {
+        "properties": {
+          "story_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Story Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "story_id"
+        ],
+        "title": "StoryRemoveRequest"
       },
       "SubmitCodeRequest": {
         "properties": {

@@ -104,6 +104,38 @@ export type AccountProfileUpdateRequest = {
 };
 
 /**
+ * AccountProfileView
+ *
+ * JSON-safe live profile for the edit-profile modal.
+ */
+export type AccountProfileView = {
+  /**
+   * Error
+   */
+  error?: string | null;
+  /**
+   * Avatar Data Uri
+   */
+  avatar_data_uri?: string | null;
+  /**
+   * Photos
+   */
+  photos?: Array<ProfilePhotoView>;
+  /**
+   * Stories
+   */
+  stories?: Array<ProfileStoryView>;
+  /**
+   * Music
+   */
+  music?: Array<ProfileMusicView>;
+  /**
+   * Music Supported
+   */
+  music_supported?: boolean;
+};
+
+/**
  * AccountRead
  */
 export type AccountRead = {
@@ -307,6 +339,24 @@ export type AssignAccountRequest = {
 };
 
 /**
+ * Body_addAccountMusic
+ */
+export type BodyAddAccountMusic = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Title
+   */
+  title?: string | null;
+  /**
+   * Performer
+   */
+  performer?: string | null;
+};
+
+/**
  * Body_importAccountSession
  */
 export type BodyImportAccountSession = {
@@ -332,6 +382,32 @@ export type BodyImportAccountTdata = {
    * Label
    */
   label?: string | null;
+};
+
+/**
+ * Body_postAccountStory
+ */
+export type BodyPostAccountStory = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Media Kind
+   */
+  media_kind?: 'image' | 'video';
+  /**
+   * Caption
+   */
+  caption?: string | null;
+  /**
+   * Privacy Preset
+   */
+  privacy_preset?: 'contacts' | 'close_friends' | 'public';
+  /**
+   * Protect Content
+   */
+  protect_content?: boolean;
 };
 
 /**
@@ -530,6 +606,24 @@ export type LoginRequest = {
    * Password
    */
   password: string;
+};
+
+/**
+ * MusicRemoveRequest
+ */
+export type MusicRemoveRequest = {
+  /**
+   * File Id
+   */
+  file_id: number;
+  /**
+   * Access Hash
+   */
+  access_hash: number;
+  /**
+   * File Reference
+   */
+  file_reference: string;
 };
 
 /**
@@ -817,6 +911,102 @@ export type PhoneCodeRequestResult = {
 };
 
 /**
+ * PhotoRemoveRequest
+ */
+export type PhotoRemoveRequest = {
+  /**
+   * Photo Id
+   */
+  photo_id: number;
+  /**
+   * Access Hash
+   */
+  access_hash: number;
+  /**
+   * File Reference
+   */
+  file_reference: string;
+};
+
+/**
+ * ProfileMusicView
+ */
+export type ProfileMusicView = {
+  /**
+   * File Id
+   */
+  file_id: number;
+  /**
+   * Title
+   */
+  title?: string | null;
+  /**
+   * Performer
+   */
+  performer?: string | null;
+  /**
+   * Access Hash
+   */
+  access_hash?: number;
+  /**
+   * File Reference
+   */
+  file_reference?: string;
+};
+
+/**
+ * ProfilePhotoView
+ */
+export type ProfilePhotoView = {
+  /**
+   * Photo Id
+   */
+  photo_id: number;
+  /**
+   * Access Hash
+   */
+  access_hash: number;
+  /**
+   * File Reference
+   */
+  file_reference: string;
+  /**
+   * Thumb Data Uri
+   */
+  thumb_data_uri?: string | null;
+};
+
+/**
+ * ProfileStoryView
+ */
+export type ProfileStoryView = {
+  /**
+   * Story Id
+   */
+  story_id: number;
+  /**
+   * Kind
+   */
+  kind?: string;
+  /**
+   * Caption
+   */
+  caption?: string | null;
+  /**
+   * Privacy Preset
+   */
+  privacy_preset?: string;
+  /**
+   * Is Pinned
+   */
+  is_pinned?: boolean;
+  /**
+   * Thumb Data Uri
+   */
+  thumb_data_uri?: string | null;
+};
+
+/**
  * PromoteRequest
  *
  * Body for promote/unpromote: graduate an account to/from the neurocomment pool.
@@ -1086,6 +1276,16 @@ export type StopWarmingRequest = {
    * Account Id
    */
   account_id: string;
+};
+
+/**
+ * StoryRemoveRequest
+ */
+export type StoryRemoveRequest = {
+  /**
+   * Story Id
+   */
+  story_id: number;
 };
 
 /**
@@ -2057,6 +2257,191 @@ export type SetAccountPhotoResponses = {
 };
 
 export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
+
+export type GetAccountProfileSnapshotData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/profile-snapshot';
+};
+
+export type GetAccountProfileSnapshotErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetAccountProfileSnapshotError =
+  GetAccountProfileSnapshotErrors[keyof GetAccountProfileSnapshotErrors];
+
+export type GetAccountProfileSnapshotResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountProfileView;
+};
+
+export type GetAccountProfileSnapshotResponse =
+  GetAccountProfileSnapshotResponses[keyof GetAccountProfileSnapshotResponses];
+
+export type PostAccountStoryData = {
+  body: BodyPostAccountStory;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/story';
+};
+
+export type PostAccountStoryErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PostAccountStoryError = PostAccountStoryErrors[keyof PostAccountStoryErrors];
+
+export type PostAccountStoryResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type PostAccountStoryResponse = PostAccountStoryResponses[keyof PostAccountStoryResponses];
+
+export type AddAccountMusicData = {
+  body: BodyAddAccountMusic;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/music';
+};
+
+export type AddAccountMusicErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AddAccountMusicError = AddAccountMusicErrors[keyof AddAccountMusicErrors];
+
+export type AddAccountMusicResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type AddAccountMusicResponse = AddAccountMusicResponses[keyof AddAccountMusicResponses];
+
+export type RemoveAccountStoryData = {
+  body: StoryRemoveRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/story/remove';
+};
+
+export type RemoveAccountStoryErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveAccountStoryError = RemoveAccountStoryErrors[keyof RemoveAccountStoryErrors];
+
+export type RemoveAccountStoryResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type RemoveAccountStoryResponse =
+  RemoveAccountStoryResponses[keyof RemoveAccountStoryResponses];
+
+export type RemoveAccountMusicData = {
+  body: MusicRemoveRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/music/remove';
+};
+
+export type RemoveAccountMusicErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveAccountMusicError = RemoveAccountMusicErrors[keyof RemoveAccountMusicErrors];
+
+export type RemoveAccountMusicResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type RemoveAccountMusicResponse =
+  RemoveAccountMusicResponses[keyof RemoveAccountMusicResponses];
+
+export type RemoveAccountPhotoData = {
+  body: PhotoRemoveRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/photo/remove';
+};
+
+export type RemoveAccountPhotoErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveAccountPhotoError = RemoveAccountPhotoErrors[keyof RemoveAccountPhotoErrors];
+
+export type RemoveAccountPhotoResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type RemoveAccountPhotoResponse =
+  RemoveAccountPhotoResponses[keyof RemoveAccountPhotoResponses];
 
 export type ListProxiesData = {
   body?: never;
