@@ -764,6 +764,18 @@ export type PhoneCodeRequestResult = {
 };
 
 /**
+ * PromoteRequest
+ *
+ * Body for promote/unpromote: graduate an account to/from the neurocomment pool.
+ */
+export type PromoteRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
  * ProxyAssignRequest
  */
 export type ProxyAssignRequest = {
@@ -1073,6 +1085,58 @@ export type ValidationError = {
   ctx?: {
     [key: string]: unknown;
   };
+};
+
+/**
+ * WarmedAccount
+ *
+ * A graduated (operator-promoted) account, for the warming page's warmed card.
+ */
+export type WarmedAccount = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Label
+   */
+  label: string;
+  /**
+   * Warming Days
+   */
+  warming_days: number;
+  /**
+   * Phone
+   */
+  phone?: string | null;
+  /**
+   * Phone Country
+   */
+  phone_country?: string | null;
+  /**
+   * Proxy Type
+   */
+  proxy_type?: string | null;
+  /**
+   * Trust Score
+   */
+  trust_score?: number | null;
+  /**
+   * Target Days
+   */
+  target_days: number;
+};
+
+/**
+ * WarmedAccountList
+ *
+ * Wrapper for a bulk read of warmed accounts (non-negotiable #2).
+ */
+export type WarmedAccountList = {
+  /**
+   * Accounts
+   */
+  accounts?: Array<WarmedAccount>;
 };
 
 /**
@@ -2088,6 +2152,86 @@ export type GetWarmingBoardResponses = {
 };
 
 export type GetWarmingBoardResponse = GetWarmingBoardResponses[keyof GetWarmingBoardResponses];
+
+export type ListWarmedAccountsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/warmed';
+};
+
+export type ListWarmedAccountsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListWarmedAccountsError = ListWarmedAccountsErrors[keyof ListWarmedAccountsErrors];
+
+export type ListWarmedAccountsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmedAccountList;
+};
+
+export type ListWarmedAccountsResponse =
+  ListWarmedAccountsResponses[keyof ListWarmedAccountsResponses];
+
+export type PromoteToNeurocommentData = {
+  body: PromoteRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/promote';
+};
+
+export type PromoteToNeurocommentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PromoteToNeurocommentError =
+  PromoteToNeurocommentErrors[keyof PromoteToNeurocommentErrors];
+
+export type PromoteToNeurocommentResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type PromoteToNeurocommentResponse =
+  PromoteToNeurocommentResponses[keyof PromoteToNeurocommentResponses];
+
+export type UnpromoteFromNeurocommentData = {
+  body: PromoteRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/unpromote';
+};
+
+export type UnpromoteFromNeurocommentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UnpromoteFromNeurocommentError =
+  UnpromoteFromNeurocommentErrors[keyof UnpromoteFromNeurocommentErrors];
+
+export type UnpromoteFromNeurocommentResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type UnpromoteFromNeurocommentResponse =
+  UnpromoteFromNeurocommentResponses[keyof UnpromoteFromNeurocommentResponses];
 
 export type StartWarmingData = {
   body: StartWarmingRequest;

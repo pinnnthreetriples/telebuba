@@ -5,11 +5,14 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException
 from fastapi import status as http_status
 
+from core.config import settings
 from schemas.warming import (
     AddChannelsRequest,
+    PromoteRequest,
     RemoveChannelRequest,
     StartWarmingRequest,
     StopWarmingRequest,
+    WarmedAccountList,
     WarmingAccountState,
     WarmingBoardState,
     WarmingChannelList,
@@ -24,6 +27,28 @@ router = APIRouter(prefix="/warming", tags=["warming"])
 @router.get("/board", response_model=WarmingBoardState, operation_id="getWarmingBoard")
 async def get_warming_board() -> WarmingBoardState:
     return await warming_service.load_board()
+
+
+@router.get("/warmed", response_model=WarmedAccountList, operation_id="listWarmedAccounts")
+async def get_warmed_accounts() -> WarmedAccountList:
+    """Operator-graduated accounts (the warming page's "Прогретые аккаунты" card)."""
+    return await warming_service.list_warmed_accounts(settings.neurocomment.warmed_min_days)
+
+
+@router.post("/promote", response_model=WarmingAccountState, operation_id="promoteToNeurocomment")
+async def promote_account(body: PromoteRequest) -> WarmingAccountState:
+    """Graduate an account: stop warming + flag it for the neurocomment pool."""
+    return await warming_service.promote_to_neurocomment(body.account_id)
+
+
+@router.post(
+    "/unpromote",
+    response_model=WarmingAccountState,
+    operation_id="unpromoteFromNeurocomment",
+)
+async def unpromote_account(body: PromoteRequest) -> WarmingAccountState:
+    """Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»)."""
+    return await warming_service.unmark_neurocomment(body.account_id)
 
 
 @router.post("/start", response_model=WarmingAccountState, operation_id="startWarming")

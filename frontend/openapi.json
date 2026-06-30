@@ -1262,6 +1262,176 @@
         }
       }
     },
+    "/api/v1/warming/warmed": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Get Warmed Accounts",
+        "description": "Operator-graduated accounts (the warming page's \"\u041f\u0440\u043e\u0433\u0440\u0435\u0442\u044b\u0435 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u044b\" card).",
+        "operationId": "listWarmedAccounts",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmedAccountList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/promote": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Promote Account",
+        "description": "Graduate an account: stop warming + flag it for the neurocomment pool.",
+        "operationId": "promoteToNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/unpromote": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Unpromote Account",
+        "description": "Reverse a graduation: clear the promotion flag (the warmed card's \u00ab\u0432\u0435\u0440\u043d\u0443\u0442\u044c\u00bb).",
+        "operationId": "unpromoteFromNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/warming/start": {
       "post": {
         "tags": [
@@ -3707,6 +3877,21 @@
         "title": "PhoneCodeRequestResult",
         "description": "API response after a code is sent \u2014 confirmation only, no secrets."
       },
+      "PromoteRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "PromoteRequest",
+        "description": "Body for promote/unpromote: graduate an account to/from the neurocomment pool."
+      },
       "ProxyAssignRequest": {
         "properties": {
           "account_id": {
@@ -4235,6 +4420,99 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WarmedAccount": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label"
+          },
+          "warming_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Warming Days"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "phone_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Country"
+          },
+          "proxy_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Type"
+          },
+          "trust_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Score"
+          },
+          "target_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Target Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "label",
+          "warming_days",
+          "target_days"
+        ],
+        "title": "WarmedAccount",
+        "description": "A graduated (operator-promoted) account, for the warming page's warmed card."
+      },
+      "WarmedAccountList": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/WarmedAccount"
+            },
+            "type": "array",
+            "title": "Accounts"
+          }
+        },
+        "type": "object",
+        "title": "WarmedAccountList",
+        "description": "Wrapper for a bulk read of warmed accounts (non-negotiable #2)."
       },
       "WarmingAccountState": {
         "properties": {

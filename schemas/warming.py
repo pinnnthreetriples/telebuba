@@ -352,11 +352,19 @@ class WarmingBoardState(BaseModel):
 
 
 class WarmedAccount(BaseModel):
-    """A sufficiently-warmed account, for the neurocomment page's overview field."""
+    """A graduated (operator-promoted) account, for the warming page's warmed card."""
 
     account_id: str = Field(min_length=1)
     label: str = Field(min_length=1)
     warming_days: int = Field(ge=0)
+    # Card meta sourced from the warming board card (so the design's warmed card
+    # shows the real phone / flag / proxy badge / trust instead of a mock).
+    phone: str | None = None
+    phone_country: str | None = None
+    proxy_type: str | None = None
+    trust_score: int | None = Field(default=None, ge=0, le=100)
+    # The warming target (days) the account graduated against — the "X / Y дней" Y.
+    target_days: int = Field(ge=0)
 
 
 class WarmedAccountList(BaseModel):
@@ -366,6 +374,12 @@ class WarmedAccountList(BaseModel):
 
 
 class StartWarmingRequest(BaseModel):
+    account_id: str = Field(min_length=1)
+
+
+class PromoteRequest(BaseModel):
+    """Body for promote/unpromote: graduate an account to/from the neurocomment pool."""
+
     account_id: str = Field(min_length=1)
 
 

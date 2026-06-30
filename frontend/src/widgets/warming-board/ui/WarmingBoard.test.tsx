@@ -29,7 +29,7 @@ function account(id: string, state: WarmingAccountState['state']): WarmingAccoun
 const WARMING = [account('79051184490', 'active'), account('79161234567', 'sleeping')];
 
 test('renders an in-progress card per warming account with the stage labels', () => {
-  renderWithClient(<WarmingBoard warming={WARMING} onStop={vi.fn()} busyId={null} />);
+  renderWithClient(<WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />);
   expect(screen.getByText('79051184490')).toBeInTheDocument();
   expect(screen.getByText('79161234567')).toBeInTheDocument();
   expect(screen.getAllByText('Подписка').length).toBeGreaterThan(0);
@@ -38,10 +38,22 @@ test('renders an in-progress card per warming account with the stage labels', ()
 
 test('stops the clicked account', async () => {
   const onStop = vi.fn();
-  renderWithClient(<WarmingBoard warming={WARMING} onStop={onStop} busyId={null} />);
+  renderWithClient(
+    <WarmingBoard warming={WARMING} onStop={onStop} onPromote={vi.fn()} busyId={null} />,
+  );
   await userEvent.click(screen.getAllByText('Стоп')[0]!);
   await userEvent.click(screen.getByText('Остановить'));
   expect(onStop).toHaveBeenCalledWith('79051184490');
+});
+
+test('promotes a completed account via the finish button', async () => {
+  const onPromote = vi.fn();
+  const done = { ...account('79051184490', 'active'), cycles_completed: 14 };
+  renderWithClient(
+    <WarmingBoard warming={[done]} onStop={vi.fn()} onPromote={onPromote} busyId={null} />,
+  );
+  await userEvent.click(screen.getByText('Отправить в прогретые'));
+  expect(onPromote).toHaveBeenCalledWith('79051184490');
 });
 
 test('expanding a card fetches that account real activity log', async () => {
@@ -67,7 +79,7 @@ test('expanding a card fetches that account real activity log', async () => {
     return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
   });
 
-  renderWithClient(<WarmingBoard warming={WARMING} onStop={vi.fn()} busyId={null} />);
+  renderWithClient(<WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />);
   await userEvent.click(screen.getAllByText('Лог активности')[0]!);
   await waitFor(() => {
     expect(screen.getByText('warming_subscribe')).toBeInTheDocument();

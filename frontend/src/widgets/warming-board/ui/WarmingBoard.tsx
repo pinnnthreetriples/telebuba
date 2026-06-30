@@ -11,6 +11,7 @@ import { WarmStopModal } from './WarmStopModal';
 interface WarmingBoardProps {
   warming: WarmingAccountState[];
   onStop: (accountId: string) => void;
+  onPromote: (accountId: string) => void;
   busyId: string | null;
 }
 
@@ -59,10 +60,12 @@ function logTime(createdAt: string): string {
 function WarmingCard({
   account,
   onStop,
+  onPromote,
   busy,
 }: {
   account: WarmingAccountState;
   onStop: (id: string) => void;
+  onPromote: (id: string) => void;
   busy: boolean;
 }) {
   const { t } = useTranslation();
@@ -345,7 +348,11 @@ function WarmingCard({
           </div>
           <button
             type="button"
-            className="mt-[9px] flex w-full items-center justify-center gap-[7px] rounded-full bg-success px-[14px] py-[10px] text-[12px] font-semibold text-white transition-colors hover:bg-[#0e8c45]"
+            disabled={busy}
+            onClick={() => {
+              onPromote(account.account_id);
+            }}
+            className="mt-[9px] flex w-full items-center justify-center gap-[7px] rounded-full bg-success px-[14px] py-[10px] text-[12px] font-semibold text-white transition-colors hover:bg-[#0e8c45] disabled:opacity-50"
           >
             <svg
               width="14"
@@ -371,7 +378,7 @@ function WarmingCard({
 // The design's "Warming" panel: blue-tinted in-progress cards, each with the
 // day-bar histogram, six-stage pipeline stepper, live current-activity row,
 // expandable terminal log, and completion state.
-export function WarmingBoard({ warming, onStop, busyId }: WarmingBoardProps) {
+export function WarmingBoard({ warming, onStop, onPromote, busyId }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
     <div className="rounded-2xl border border-line bg-white p-4">
@@ -406,6 +413,7 @@ export function WarmingBoard({ warming, onStop, busyId }: WarmingBoardProps) {
             key={account.account_id}
             account={account}
             onStop={onStop}
+            onPromote={onPromote}
             busy={busyId === account.account_id}
           />
         ))}

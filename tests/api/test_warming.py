@@ -8,6 +8,8 @@ import httpx
 import pytest
 
 from schemas.warming import (
+    WarmedAccount,
+    WarmedAccountList,
     WarmingAccountState,
     WarmingBoardState,
     WarmingChannelList,
@@ -109,3 +111,61 @@ async def test_update_settings(app: FastAPI, monkeypatch: pytest.MonkeyPatch) ->
         resp = await client.put("/api/v1/warming/settings", json={"reactions_enabled": False})
     assert resp.status_code == 200
     assert resp.json()["gemini_model"] == "gemini-2.5-flash"
+
+
+@pytest.mark.asyncio
+async def test_warmed_lists_graduated_accounts(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _fake(min_days: int) -> WarmedAccountList:
+        return WarmedAccountList(
+            accounts=[
+                WarmedAccount(
+                    account_id="grad",
+                    label="Graduate",
+                    warming_days=20,
+                    phone="+79261112233",
+                    phone_country="RU",
+                    proxy_type="socks5",
+                    trust_score=88,
+                    target_days=min_days,
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("services.warming.list_warmed_accounts", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/warming/warmed")
+    assert resp.status_code == 200
+    account = resp.json()["accounts"][0]
+    assert account["proxy_type"] == "socks5"
+    assert account["trust_score"] == 88
+    assert account["target_days"] == 14  # settings.neurocomment.warmed_min_days default
+
+
+@pytest.mark.asyncio
+async def test_promote_graduates_account(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(account_id: str) -> WarmingAccountState:
+        return WarmingAccountState(
+            account_id=account_id, label="X", state="idle", health="idle", promoted_to_nc=True
+        )
+
+    monkeypatch.setattr("services.warming.promote_to_neurocomment", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/promote", json={"account_id": "acc-1"})
+    assert resp.status_code == 200
+    assert resp.json()["promoted_to_nc"] is True
+
+
+@pytest.mark.asyncio
+async def test_unpromote_clears_flag(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(account_id: str) -> WarmingAccountState:
+        return WarmingAccountState(
+            account_id=account_id, label="X", state="idle", health="idle", promoted_to_nc=False
+        )
+
+    monkeypatch.setattr("services.warming.unmark_neurocomment", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/unpromote", json={"account_id": "acc-1"})
+    assert resp.status_code == 200
+    assert resp.json()["promoted_to_nc"] is False

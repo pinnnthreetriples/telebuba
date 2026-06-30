@@ -122,6 +122,27 @@ async def test_promote_to_neurocomment_appears_in_warmed_list_after_threshold() 
 
 
 @pytest.mark.asyncio
+async def test_warmed_account_carries_card_meta() -> None:
+    """The warmed entry surfaces the card's proxy type + target days (de-mock enrichment)."""
+    from services.warming import promote_to_neurocomment  # noqa: PLC0415
+    from tests.factories import seed_account_proxy  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="meta", label="Meta"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="meta", state="active", started_at=_days_ago(20)),
+    )
+    await seed_account_proxy("meta")
+    await promote_to_neurocomment("meta")
+
+    result = await list_warmed_accounts(14)
+
+    assert len(result.accounts) == 1
+    warmed = result.accounts[0]
+    assert warmed.proxy_type == "socks5"
+    assert warmed.target_days == 14
+
+
+@pytest.mark.asyncio
 async def test_unmark_neurocomment_removes_from_warmed_list() -> None:
     """The un-promote affordance flips the flag back; the warmed-list drops the account."""
     from services.warming import promote_to_neurocomment, unmark_neurocomment  # noqa: PLC0415

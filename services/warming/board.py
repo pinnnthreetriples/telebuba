@@ -181,7 +181,16 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
     """
     board = await load_board()
     warmed = [
-        WarmedAccount(account_id=card.account_id, label=card.label, warming_days=card.warming_days)
+        WarmedAccount(
+            account_id=card.account_id,
+            label=card.label,
+            warming_days=card.warming_days,
+            phone=card.phone,
+            phone_country=card.phone_country,
+            proxy_type=card.proxy_type,
+            trust_score=card.trust_score,
+            target_days=min_days,
+        )
         for card in (*board.idle, *board.warming)
         if card.promoted_to_nc and card.warming_days is not None and card.warming_days >= min_days
     ]

@@ -8,7 +8,13 @@ import '@/shared/i18n';
 
 import type { WarmingAccountState, WarmingBoardState } from '@/shared/api';
 
-import { WarmingPage } from './WarmingPage';
+const navigate = vi.fn();
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+}));
+
+// Imported after the mock so WarmingPage picks up the stubbed useNavigate.
+const { WarmingPage } = await import('./WarmingPage');
 
 function renderWithClient(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -100,6 +106,46 @@ test('shows real trust, flag and proxy type on a ready card', async () => {
   });
   expect(screen.getByText('73')).toBeInTheDocument();
   expect(screen.getByText('HTTPS')).toBeInTheDocument();
+});
+
+test('shows graduated accounts and wires return-to-warming + navigate', async () => {
+  navigate.mockClear();
+  const warmed = {
+    accounts: [
+      {
+        account_id: 'grad',
+        label: 'Graduate',
+        warming_days: 20,
+        phone: '+79261112233',
+        phone_country: 'RU',
+        proxy_type: 'socks5',
+        trust_score: 88,
+        target_days: 14,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('+79261112233')).toBeInTheDocument();
+  });
+  expect(screen.getByText('SOCKS5')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByLabelText('Обратно в прогрев'));
+  await waitFor(() => {
+    const unpromoted = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/warming/unpromote'));
+    expect(unpromoted).toBe(true);
+  });
+
+  await userEvent.click(screen.getByText('В нейрокомментинг'));
+  expect(navigate).toHaveBeenCalledWith({ to: '/neurocomment' });
 });
 
 test('refetches the board on a live SSE event', async () => {

@@ -544,6 +544,7 @@
       "title": "Прогреты",
       "badge": "прогрет",
       "days": "Прогрев",
+      "daysValue": "{{days}} / {{target}} дней",
       "trust": "Trust-score",
       "toNeuro": "В нейрокомментинг",
       "backToWarm": "Обратно в прогрев"

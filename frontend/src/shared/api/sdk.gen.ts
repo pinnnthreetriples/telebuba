@@ -76,6 +76,9 @@ import type {
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
+  ListWarmedAccountsData,
+  ListWarmedAccountsErrors,
+  ListWarmedAccountsResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
@@ -90,6 +93,9 @@ import type {
   ProbeProxyData,
   ProbeProxyErrors,
   ProbeProxyResponses,
+  PromoteToNeurocommentData,
+  PromoteToNeurocommentErrors,
+  PromoteToNeurocommentResponses,
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
@@ -123,6 +129,9 @@ import type {
   UnassignProxyData,
   UnassignProxyErrors,
   UnassignProxyResponses,
+  UnpromoteFromNeurocommentData,
+  UnpromoteFromNeurocommentErrors,
+  UnpromoteFromNeurocommentResponses,
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
@@ -464,6 +473,62 @@ export const getWarmingBoard = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).get<GetWarmingBoardResponses, GetWarmingBoardErrors, ThrowOnError>({
     url: '/api/v1/warming/board',
     ...options,
+  });
+
+/**
+ * Get Warmed Accounts
+ *
+ * Operator-graduated accounts (the warming page's "Прогретые аккаунты" card).
+ */
+export const listWarmedAccounts = <ThrowOnError extends boolean = false>(
+  options?: Options<ListWarmedAccountsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    ListWarmedAccountsResponses,
+    ListWarmedAccountsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/warmed', ...options });
+
+/**
+ * Promote Account
+ *
+ * Graduate an account: stop warming + flag it for the neurocomment pool.
+ */
+export const promoteToNeurocomment = <ThrowOnError extends boolean = false>(
+  options: Options<PromoteToNeurocommentData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    PromoteToNeurocommentResponses,
+    PromoteToNeurocommentErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/promote',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Unpromote Account
+ *
+ * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ */
+export const unpromoteFromNeurocomment = <ThrowOnError extends boolean = false>(
+  options: Options<UnpromoteFromNeurocommentData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    UnpromoteFromNeurocommentResponses,
+    UnpromoteFromNeurocommentErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/unpromote',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
 
 /**

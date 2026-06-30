@@ -543,6 +543,7 @@
       "title": "Warmed up",
       "badge": "warmed",
       "days": "Warming",
+      "daysValue": "{{days}} / {{target}} days",
       "trust": "Trust-score",
       "toNeuro": "To neurocomment",
       "backToWarm": "Back to warming"

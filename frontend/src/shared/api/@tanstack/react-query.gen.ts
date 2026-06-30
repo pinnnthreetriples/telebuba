@@ -33,12 +33,14 @@ import {
   listCampaigns,
   listLogs,
   listProxies,
+  listWarmedAccounts,
   listWarmingChannels,
   login,
   logout,
   logoutAccount,
   type Options,
   probeProxy,
+  promoteToNeurocomment,
   removeWarmingChannel,
   requestLoginCode,
   resetAccountSession,
@@ -50,6 +52,7 @@ import {
   stopWarming,
   submitLoginCode,
   unassignProxy,
+  unpromoteFromNeurocomment,
   updateAccountProfile,
   updateNeurocommentSettings,
   updateWarmingSettings,
@@ -123,6 +126,9 @@ import type {
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
+  ListWarmedAccountsData,
+  ListWarmedAccountsError,
+  ListWarmedAccountsResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
@@ -137,6 +143,9 @@ import type {
   ProbeProxyData,
   ProbeProxyError,
   ProbeProxyResponse,
+  PromoteToNeurocommentData,
+  PromoteToNeurocommentError,
+  PromoteToNeurocommentResponse,
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
@@ -170,6 +179,9 @@ import type {
   UnassignProxyData,
   UnassignProxyError,
   UnassignProxyResponse,
+  UnpromoteFromNeurocommentData,
+  UnpromoteFromNeurocommentError,
+  UnpromoteFromNeurocommentResponse,
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
@@ -861,6 +873,91 @@ export const getWarmingBoardOptions = (options?: Options<GetWarmingBoardData>) =
     },
     queryKey: getWarmingBoardQueryKey(options),
   });
+
+export const listWarmedAccountsQueryKey = (options?: Options<ListWarmedAccountsData>) =>
+  createQueryKey('listWarmedAccounts', options);
+
+/**
+ * Get Warmed Accounts
+ *
+ * Operator-graduated accounts (the warming page's "Прогретые аккаунты" card).
+ */
+export const listWarmedAccountsOptions = (options?: Options<ListWarmedAccountsData>) =>
+  queryOptions<
+    ListWarmedAccountsResponse,
+    ListWarmedAccountsError,
+    ListWarmedAccountsResponse,
+    ReturnType<typeof listWarmedAccountsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmedAccounts({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmedAccountsQueryKey(options),
+  });
+
+/**
+ * Promote Account
+ *
+ * Graduate an account: stop warming + flag it for the neurocomment pool.
+ */
+export const promoteToNeurocommentMutation = (
+  options?: Partial<Options<PromoteToNeurocommentData>>,
+): UseMutationOptions<
+  PromoteToNeurocommentResponse,
+  PromoteToNeurocommentError,
+  Options<PromoteToNeurocommentData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    PromoteToNeurocommentResponse,
+    PromoteToNeurocommentError,
+    Options<PromoteToNeurocommentData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await promoteToNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Unpromote Account
+ *
+ * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ */
+export const unpromoteFromNeurocommentMutation = (
+  options?: Partial<Options<UnpromoteFromNeurocommentData>>,
+): UseMutationOptions<
+  UnpromoteFromNeurocommentResponse,
+  UnpromoteFromNeurocommentError,
+  Options<UnpromoteFromNeurocommentData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UnpromoteFromNeurocommentResponse,
+    UnpromoteFromNeurocommentError,
+    Options<UnpromoteFromNeurocommentData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await unpromoteFromNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 /**
  * Start Warming
