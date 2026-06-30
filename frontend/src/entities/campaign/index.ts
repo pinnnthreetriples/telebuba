@@ -8,6 +8,7 @@ export {
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
   neurocommentSettingsQueryOptions,
+  removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   retryChallengeMutation,
   setCampaignSolverMutation,

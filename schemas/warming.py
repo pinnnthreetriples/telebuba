@@ -206,6 +206,10 @@ class WarmingStateRecord(BaseModel):
     # this so accounts only appear there after an explicit hand-off, not when they
     # silently cross ``warmed_min_days``.
     promoted_to_nc: bool = False
+    # Operator-chosen warming duration (days). Stamped by ``start_warming`` from
+    # the day slider; the loop auto-completes the account once warming reaches it.
+    # ``None`` on legacy rows / no explicit pick → falls back to warmed_min_days.
+    target_days: int | None = Field(default=None, ge=1)
 
 
 class WarmingStateWrite(BaseModel):
@@ -246,6 +250,8 @@ class WarmingStateWrite(BaseModel):
     # See WarmingStateRecord — persisted lifecycle phase + entry timestamp.
     current_phase: WarmingPhase | None = None
     phase_entered_at: str | None = None
+    # See WarmingStateRecord.target_days — operator-chosen warming duration.
+    target_days: int | None = None
 
 
 class WarmingStateWriteResult(BaseModel):
@@ -320,6 +326,9 @@ class WarmingAccountState(BaseModel):
     # Whole days since warming was first started for this account (from
     # ``WarmingStateRecord.started_at``). ``None`` when warming never ran.
     warming_days: int | None = Field(default=None, ge=0)
+    # Operator-chosen warming duration (days). Drives the card's "день X / Y"
+    # progress + auto-complete state; ``None`` falls back to the 14-day default.
+    target_days: int | None = Field(default=None, ge=1)
     readiness: WarmingReadiness | None = None
     # Operator-set: account has been graduated to the neurocomment pool. Drives
     # the "переместить в нейрокомментинг" button on the card (hidden once True).
@@ -375,6 +384,9 @@ class WarmedAccountList(BaseModel):
 
 class StartWarmingRequest(BaseModel):
     account_id: str = Field(min_length=1)
+    # Operator-chosen warming duration from the start modal's day slider. ``None``
+    # (omitted) → the service falls back to ``settings.neurocomment.warmed_min_days``.
+    target_days: int | None = Field(default=None, ge=1, le=365)
 
 
 class PromoteRequest(BaseModel):

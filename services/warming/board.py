@@ -30,14 +30,17 @@ from schemas.warming import (
     warming_health,
 )
 from services.trust import account_trust_score_from
-from services.warming.pacing import _account_age_hours, compute_intensity, evaluate_readiness
+from services.warming.pacing import (
+    _account_age_hours,
+    compute_intensity,
+    evaluate_readiness,
+    warming_days_since,
+)
 from services.warming.settings_store import load_settings
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.warming import WarmingReadiness, WarmingStateRecord
-
-_HOURS_PER_DAY = 24
 
 # Russian labels for the lifecycle phases shown on the kanban card.
 #
@@ -64,16 +67,7 @@ def _warming_days_since(
     ``None`` when warming has never run on this account, so the card can hide
     the "в прогреве N дн" hint instead of showing a misleading zero.
     """
-    if record is None or not record.started_at:
-        return None
-    try:
-        started = datetime.fromisoformat(record.started_at)
-    except ValueError:
-        return None
-    if started.tzinfo is None:
-        started = started.replace(tzinfo=UTC)
-    delta_hours = (now - started).total_seconds() / 3600.0
-    return max(0, int(delta_hours // _HOURS_PER_DAY))
+    return warming_days_since(record.started_at if record else None, now)
 
 
 def _to_card(
@@ -189,7 +183,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
             phone_country=card.phone_country,
             proxy_type=card.proxy_type,
             trust_score=card.trust_score,
-            target_days=min_days,
+            target_days=card.target_days or min_days,
         )
         for card in (*board.idle, *board.warming)
         if card.promoted_to_nc and card.warming_days is not None and card.warming_days >= min_days

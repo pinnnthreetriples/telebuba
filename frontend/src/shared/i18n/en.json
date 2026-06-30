@@ -257,7 +257,9 @@
   },
   "shell": {
     "systemActive": "System active",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "account": "Account",
+    "logout": "Log out"
   },
   "settings": {
     "title": "Settings",
@@ -677,6 +679,14 @@
       "spamTip": "via @SpamBot",
       "label_one": "day",
       "label_other": "days"
+    },
+    "notReady": {
+      "noProxy": "no proxy",
+      "proxyFailed": "proxy not responding",
+      "noChannels": "no warming channels",
+      "spamLimited": "spam-limited",
+      "trustCritical": "critical trust",
+      "session": "no active session (login needed)"
     }
   },
   "auth": {

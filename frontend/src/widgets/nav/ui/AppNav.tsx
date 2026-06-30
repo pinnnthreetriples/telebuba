@@ -1,6 +1,9 @@
-import { Link, useRouterState } from '@tanstack/react-router';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
 import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { logoutMutation, meQueryOptions } from '@/shared/auth';
 
 const LINKS = [
   { to: '/', key: 'accounts' },
@@ -19,6 +22,11 @@ export function AppNav() {
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
+  const [menuOpen, setMenuOpen] = useState(false);
+  const navigate = useNavigate();
+  const me = useQuery(meQueryOptions());
+  const logout = useMutation(logoutMutation());
+  const initials = (me.data?.username ?? '').slice(0, 2).toUpperCase() || 'ОП';
 
   const activeIdx = LINKS.findIndex((link) =>
     link.to === '/' ? pathname === '/' : pathname.startsWith(link.to),
@@ -91,8 +99,67 @@ export function AppNav() {
             </svg>
             <span className="absolute right-[8px] top-[6px] h-[6px] w-[6px] rounded-full border-[1.5px] border-white bg-primary" />
           </button>
-          <div className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-primary text-[13px] font-semibold text-white">
-            ОП
+          <div className="relative">
+            <button
+              type="button"
+              aria-label={t('shell.account')}
+              onClick={() => {
+                setMenuOpen((open) => !open);
+              }}
+              className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-primary text-[13px] font-semibold text-white"
+            >
+              {initials}
+            </button>
+            {menuOpen ? (
+              <>
+                <button
+                  type="button"
+                  aria-hidden
+                  tabIndex={-1}
+                  onClick={() => {
+                    setMenuOpen(false);
+                  }}
+                  className="fixed inset-0 z-40 cursor-default"
+                />
+                <div className="absolute right-0 top-[42px] z-50 w-[190px] overflow-hidden rounded-[12px] border border-line bg-white py-1 shadow-[0_8px_24px_rgba(11,11,12,0.12)]">
+                  {me.data ? (
+                    <div className="truncate border-b border-[#f0eeeb] px-[14px] py-[8px] text-[12px] text-ink-muted">
+                      {me.data.username}
+                    </div>
+                  ) : null}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      logout.mutate(
+                        {},
+                        {
+                          onSuccess: () => {
+                            void navigate({ to: '/login' });
+                          },
+                        },
+                      );
+                    }}
+                    className="flex w-full items-center gap-[8px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors hover:bg-[#faf2f1]"
+                  >
+                    <svg
+                      width="15"
+                      height="15"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
+                      <path d="m16 17 5-5-5-5" />
+                      <path d="M21 12H9" />
+                    </svg>
+                    {t('shell.logout')}
+                  </button>
+                </div>
+              </>
+            ) : null}
           </div>
         </div>
       </div>

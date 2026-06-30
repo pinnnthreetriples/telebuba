@@ -79,9 +79,15 @@ function WarmingCard({
   });
   const logLines = logQuery.data?.items ?? [];
   const active = activeStage(account);
-  const days = Math.min(account.cycles_completed ?? 0, WARMING_DAYS);
-  const complete = days >= WARMING_DAYS;
-  const filled = Math.round((DAY_SEGMENTS.length * days) / WARMING_DAYS);
+  // Real elapsed warming days vs the operator-chosen target (the start slider);
+  // the card auto-flips to "complete" once the account reaches its own target.
+  const target = account.target_days ?? WARMING_DAYS;
+  const elapsed = account.warming_days ?? 0;
+  const days = Math.min(elapsed, target);
+  const complete = elapsed >= target;
+  const filled = Math.round((DAY_SEGMENTS.length * days) / target);
+  const dayTicks =
+    target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
   const connectorPct = (active / (STAGES.length - 1)) * 100;
   const status = WARM_STATUS[account.state];
   const actions = Math.min(account.cycles_completed ?? 0, 10);
@@ -205,7 +211,7 @@ function WarmingCard({
           ))}
         </div>
         <div className="mt-[7px] flex justify-between px-[2px] text-[9.5px] text-[#7a7a7e]">
-          {DAY_TICKS.map((tick) => (
+          {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
         </div>

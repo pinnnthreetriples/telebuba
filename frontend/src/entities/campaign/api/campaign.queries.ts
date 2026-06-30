@@ -10,6 +10,7 @@ export {
   linkCampaignChannelMutation,
   listCampaignChallengesOptions as campaignChallengesQueryOptions,
   listCampaignsOptions as campaignsQueryOptions,
+  removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   retryChallengeMutation,
   setCampaignSolverMutation,

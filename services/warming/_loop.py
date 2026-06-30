@@ -21,6 +21,7 @@ from services.warming._state import _set_state
 from services.warming._transitions import (
     _calculate_next_run,
     _gate_readiness,
+    _gate_target_reached,
     _matches_active_run,
     _resolve_phase_after_cycle,
 )
@@ -311,7 +312,7 @@ async def _finalize_after_cycle(
     return result
 
 
-async def run_loop_iteration(  # noqa: PLR0911 - sequential pre-cycle gates, each early-exits.
+async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gates, each early-exits.
     account_id: str,
     *,
     run_id: str | None = None,
@@ -329,6 +330,10 @@ async def run_loop_iteration(  # noqa: PLR0911 - sequential pre-cycle gates, eac
 
     if not _matches_active_run(record, run_id):
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+
+    done = await _gate_target_reached(account_id, record, now, run_id=run_id)
+    if done is not None:
+        return done
 
     if record is not None and record.state == "quarantine":
         return await _recover_from_quarantine(

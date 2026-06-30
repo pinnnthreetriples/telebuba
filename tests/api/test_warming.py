@@ -8,6 +8,7 @@ import httpx
 import pytest
 
 from schemas.warming import (
+    StartWarmingRequest,
     WarmedAccount,
     WarmedAccountList,
     WarmingAccountState,
@@ -63,6 +64,23 @@ async def test_start_returns_account_state(app: FastAPI, monkeypatch: pytest.Mon
         resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
     assert resp.status_code == 200
     assert resp.json()["account_id"] == "acc-1"
+
+
+@pytest.mark.asyncio
+async def test_start_forwards_target_days(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    async def _fake(body: StartWarmingRequest) -> WarmingAccountState:
+        seen["target_days"] = body.target_days
+        return _account()
+
+    monkeypatch.setattr("services.warming.start_warming", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/warming/start", json={"account_id": "acc-1", "target_days": 5}
+        )
+    assert resp.status_code == 200
+    assert seen["target_days"] == 5
 
 
 @pytest.mark.asyncio

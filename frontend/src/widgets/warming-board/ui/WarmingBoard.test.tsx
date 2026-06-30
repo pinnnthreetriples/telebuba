@@ -26,6 +26,18 @@ function account(id: string, state: WarmingAccountState['state']): WarmingAccoun
   return { account_id: id, label: id, state, health: 'ok', cycles_completed: 2, trust_score: 70 };
 }
 
+function warmed(id: string, days: number, target: number): WarmingAccountState {
+  return {
+    account_id: id,
+    label: id,
+    state: 'active',
+    health: 'ok',
+    cycles_completed: 4,
+    warming_days: days,
+    target_days: target,
+  };
+}
+
 const WARMING = [account('79051184490', 'active'), account('79161234567', 'sleeping')];
 
 test('renders an in-progress card per warming account with the stage labels', () => {
@@ -48,14 +60,30 @@ test('stops the clicked account', async () => {
   expect(onStop).toHaveBeenCalledWith('79051184490');
 });
 
-test('promotes a completed account via the finish button', async () => {
+test('auto-completes at the per-account target and promotes via the finish button', async () => {
   const onPromote = vi.fn();
-  const done = { ...account('79051184490', 'active'), cycles_completed: 14 };
+  // 3 elapsed days against a chosen target of 3 → the card flips to complete
+  // even though cycles_completed is well under the old hardcoded 14.
+  const done = warmed('79051184490', 3, 3);
   renderWithClient(
     <WarmingBoard warming={[done]} onStop={vi.fn()} onPromote={onPromote} busyId={null} />,
   );
   await userEvent.click(screen.getByText('Отправить в прогретые'));
   expect(onPromote).toHaveBeenCalledWith('79051184490');
+});
+
+test('keeps an account in progress below its target', () => {
+  renderWithClient(
+    <WarmingBoard
+      warming={[warmed('79051184490', 2, 7)]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+    />,
+  );
+  // Below target: still shows the stop control and stage rail, not the finish button.
+  expect(screen.getByText('Стоп')).toBeInTheDocument();
+  expect(screen.queryByText('Отправить в прогретые')).not.toBeInTheDocument();
 });
 
 test('expanding a card fetches that account real activity log', async () => {

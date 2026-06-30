@@ -263,6 +263,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         current_phase=cast("WarmingPhase | None", phase_raw),
         phase_entered_at=_optional_str(mapping.get("phase_entered_at")),
         promoted_to_nc=bool(mapping.get("promoted_to_nc") or 0),
+        target_days=_optional_int(mapping.get("target_days")),
     )
 
 
@@ -390,6 +391,7 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         "run_id": data.run_id,
         "current_phase": data.current_phase,
         "phase_entered_at": data.phase_entered_at,
+        "target_days": data.target_days,
     }
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:

@@ -49,6 +49,7 @@ import {
   removeAccountMusic,
   removeAccountPhoto,
   removeAccountStory,
+  removeCampaignAccount,
   removeCampaignChannel,
   removeWarmingChannel,
   requestLoginCode,
@@ -182,6 +183,9 @@ import type {
   RemoveAccountStoryData,
   RemoveAccountStoryError,
   RemoveAccountStoryResponse,
+  RemoveCampaignAccountData,
+  RemoveCampaignAccountError,
+  RemoveCampaignAccountResponse,
   RemoveCampaignChannelData,
   RemoveCampaignChannelError,
   RemoveCampaignChannelResponse,
@@ -1491,6 +1495,33 @@ export const assignCampaignAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await assignCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account
+ */
+export const removeCampaignAccountMutation = (
+  options?: Partial<Options<RemoveCampaignAccountData>>,
+): UseMutationOptions<
+  RemoveCampaignAccountResponse,
+  RemoveCampaignAccountError,
+  Options<RemoveCampaignAccountData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveCampaignAccountResponse,
+    RemoveCampaignAccountError,
+    Options<RemoveCampaignAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeCampaignAccount({
         ...options,
         ...fnOptions,
         throwOnError: true,

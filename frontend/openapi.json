@@ -2572,6 +2572,67 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Remove Account",
+        "operationId": "removeCampaignAccount",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}": {
       "delete": {
         "tags": [
@@ -5491,6 +5552,19 @@
             "type": "string",
             "minLength": 1,
             "title": "Account Id"
+          },
+          "target_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 365.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Days"
           }
         },
         "type": "object",
@@ -6132,6 +6206,18 @@
               }
             ],
             "title": "Warming Days"
+          },
+          "target_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Days"
           },
           "readiness": {
             "anyOf": [

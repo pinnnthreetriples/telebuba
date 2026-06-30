@@ -120,6 +120,9 @@ import type {
   RemoveAccountStoryData,
   RemoveAccountStoryErrors,
   RemoveAccountStoryResponses,
+  RemoveCampaignAccountData,
+  RemoveCampaignAccountErrors,
+  RemoveCampaignAccountResponses,
   RemoveCampaignChannelData,
   RemoveCampaignChannelErrors,
   RemoveCampaignChannelResponses,
@@ -870,6 +873,25 @@ export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account
+ */
+export const removeCampaignAccount = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveCampaignAccountData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveCampaignAccountResponses,
+    RemoveCampaignAccountErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove',
     ...options,
     headers: {
       'Content-Type': 'application/json',

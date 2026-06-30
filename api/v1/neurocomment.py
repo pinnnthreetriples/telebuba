@@ -70,6 +70,15 @@ async def assign_account(campaign_id: str, body: AssignAccountRequest) -> None:
     await nc_service.assign_account_to_campaign(campaign_id, body.account_id)
 
 
+@router.post(
+    "/campaigns/{campaign_id}/accounts/remove",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="removeCampaignAccount",
+)
+async def remove_account(campaign_id: str, body: AssignAccountRequest) -> None:
+    await nc_service.remove_account_from_campaign(campaign_id, body.account_id)
+
+
 @router.delete(
     "/campaigns/{campaign_id}",
     status_code=http_status.HTTP_204_NO_CONTENT,

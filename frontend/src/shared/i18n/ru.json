@@ -258,7 +258,9 @@
   },
   "shell": {
     "systemActive": "Система активна",
-    "notifications": "Уведомления"
+    "notifications": "Уведомления",
+    "account": "Аккаунт",
+    "logout": "Выйти"
   },
   "settings": {
     "title": "Настройки",
@@ -679,6 +681,14 @@
       "label_one": "день",
       "label_few": "дня",
       "label_many": "дней"
+    },
+    "notReady": {
+      "noProxy": "нет прокси",
+      "proxyFailed": "прокси не отвечает",
+      "noChannels": "нет каналов прогрева",
+      "spamLimited": "спам-лимит",
+      "trustCritical": "критический trust",
+      "session": "нет активной сессии (нужен вход)"
     }
   },
   "auth": {

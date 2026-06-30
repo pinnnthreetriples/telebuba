@@ -33,6 +33,22 @@ function trustColor(trust: number): string {
   return '#e5372a';
 }
 
+// Map a backend readiness reason (English, from evaluate_readiness) to its RU
+// i18n key: "session <status>" / "no proxy" / "proxy failed" / "no channels" /
+// "spam limited" / "trust critical".
+const READINESS_REASON_KEY: Record<string, string> = {
+  'no proxy': 'warming.notReady.noProxy',
+  'proxy failed': 'warming.notReady.proxyFailed',
+  'no channels': 'warming.notReady.noChannels',
+  'spam limited': 'warming.notReady.spamLimited',
+  'trust critical': 'warming.notReady.trustCritical',
+};
+function reasonKey(reason: string): string {
+  return reason.startsWith('session ')
+    ? 'warming.notReady.session'
+    : (READINESS_REASON_KEY[reason] ?? '');
+}
+
 function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
   return (
     <div className="text-right">
@@ -191,7 +207,13 @@ export function WarmingPage() {
                   const tColor = trust != null ? trustColor(trust) : '#9a9893';
                   const cc = account.phone_country?.toLowerCase() ?? null;
                   const ptype = account.proxy_type;
-                  const available = account.health !== 'fail' && account.state !== 'error';
+                  const ready = account.readiness?.ready ?? false;
+                  const blockers = (account.readiness?.reasons ?? [])
+                    .map((reason) => {
+                      const key = reasonKey(reason);
+                      return key ? t(key) : reason;
+                    })
+                    .join(', ');
                   return (
                     <div
                       key={account.account_id}
@@ -239,13 +261,14 @@ export function WarmingPage() {
                       </div>
                       <button
                         type="button"
-                        disabled={!available || busyId === account.account_id}
+                        disabled={!ready || busyId === account.account_id}
+                        title={ready ? undefined : blockers}
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-[14px] py-[6px] text-[12px] font-medium disabled:opacity-50 ${available ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
+                        className={`rounded-full px-[14px] py-[6px] text-[12px] font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
                       >
-                        {available ? t('warming.ready.start') : t('warming.ready.unavailable')}
+                        {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </button>
                     </div>
                   );
@@ -519,8 +542,17 @@ export function WarmingPage() {
           onClose={() => {
             setWarmDaysFor(null);
           }}
-          onConfirm={() => {
-            runOnAccount(start, warmDaysFor.account_id);
+          onConfirm={(days) => {
+            setBusyId(warmDaysFor.account_id);
+            start.mutate(
+              { body: { account_id: warmDaysFor.account_id, target_days: days } },
+              {
+                onSettled: () => {
+                  setBusyId(null);
+                  invalidate();
+                },
+              },
+            );
           }}
         />
       ) : null}

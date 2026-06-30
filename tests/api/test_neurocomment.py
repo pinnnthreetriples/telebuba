@@ -182,6 +182,24 @@ async def test_assign_account_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
+async def test_remove_account_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, str] = {}
+
+    async def _fake(campaign_id: str, account_id: str) -> None:
+        seen["campaign_id"] = campaign_id
+        seen["account_id"] = account_id
+
+    monkeypatch.setattr("services.neurocomment.remove_account_from_campaign", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/accounts/remove",
+            json={"account_id": "acc-1"},
+        )
+    assert resp.status_code == 204
+    assert seen == {"campaign_id": "c1", "account_id": "acc-1"}
+
+
+@pytest.mark.asyncio
 async def test_start_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _start(listener_account_id: str) -> None:  # noqa: ARG001
         return None

@@ -21,12 +21,19 @@ function renderWithClient(ui: ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-function account(id: string, state: WarmingAccountState['state']): WarmingAccountState {
-  return { account_id: id, label: id, state, health: 'ok', cycles_completed: 1 };
+function account(
+  id: string,
+  state: WarmingAccountState['state'],
+  readiness: WarmingAccountState['readiness'] = { ready: true, reasons: [] },
+): WarmingAccountState {
+  return { account_id: id, label: id, state, health: 'ok', cycles_completed: 1, readiness };
 }
 
 const BOARD: WarmingBoardState = {
-  idle: [account('idle-1', 'idle')],
+  idle: [
+    account('idle-1', 'idle'),
+    account('idle-2', 'idle', { ready: false, reasons: ['no proxy'] }),
+  ],
   warming: [account('warm-1', 'active')],
   channels: { channels: [{ channel: '@news', created_at: 'now' }] },
   settings: {
@@ -86,6 +93,17 @@ test('renders the board, channels and settings from live data', async () => {
   });
   expect(screen.getByText('warm-1')).toBeInTheDocument();
   expect(screen.getByText('@news')).toBeInTheDocument();
+});
+
+test('disables warming for a not-ready account and shows the reason', async () => {
+  routeApi();
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-2')).toBeInTheDocument();
+  });
+  const blocked = screen.getByText('Недоступен');
+  expect(blocked).toBeDisabled();
+  expect(blocked.getAttribute('title')).toBe('нет прокси');
 });
 
 test('shows real trust, flag and proxy type on a ready card', async () => {
@@ -175,12 +193,16 @@ test('starts an idle account', async () => {
   });
   await userEvent.click(screen.getByText('Прогреть'));
   await userEvent.click(screen.getByText('Запустить прогрев'));
+  let startCall: [unknown, ...unknown[]] | undefined;
   await waitFor(() => {
-    const started = vi
+    startCall = vi
       .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.includes('/warming/start'));
-    expect(started).toBe(true);
+      .mock.calls.find(([input]) => (input as Request).url.includes('/warming/start'));
+    expect(startCall).toBeDefined();
   });
+  // The day slider's value (default 7) must reach the backend — was dropped before.
+  const body = (await (startCall![0] as Request).clone().json()) as { target_days?: number };
+  expect(body.target_days).toBe(7);
 });
 
 test('adds a channel', async () => {

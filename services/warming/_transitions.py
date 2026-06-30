@@ -22,10 +22,12 @@ from services.warming.pacing import (
     _PHASE_ORDER,
     _SECONDS_PER_HOUR,
     _account_tz,
+    _next_utc_midnight,
     _now_iso,
     _shift_to_active_hours,
     compute_intensity,
     evaluate_readiness,
+    warming_days_since,
 )
 
 if TYPE_CHECKING:
@@ -122,6 +124,47 @@ async def _gate_readiness(  # noqa: PLR0913 - explicit readiness signals read cl
         extra={"reasons": readiness.reasons},
     )
     return WarmingCycleResult(account_id=account_id, status="error", detail=reasons)
+
+
+async def _gate_target_reached(
+    account_id: str,
+    record: WarmingStateRecord | None,
+    now: datetime,
+    *,
+    run_id: str | None,
+) -> WarmingCycleResult | None:
+    """Stop warming once the operator-chosen ``target_days`` has elapsed.
+
+    The account is parked in ``sleeping`` (still a warming state, so it stays in
+    the warming column) with ``last_event="warming_complete"`` — the card derives
+    its completion UI + hand-off button from ``warming_days >= target_days``, and
+    the loop stops doing warming work. Manual ``stop_warming`` is unaffected.
+    Idempotent: a row already flagged complete re-parks silently (no re-log).
+    """
+    if record is None or record.target_days is None:
+        return None
+    days = warming_days_since(record.started_at, now)
+    if days is None or days < record.target_days:
+        return None
+    if record.last_event == "warming_complete":
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="target reached")
+    write = await _set_state(
+        account_id,
+        "sleeping",
+        last_event="warming_complete",
+        next_run_at=_next_utc_midnight(now).isoformat(),
+        heartbeat_at=now.isoformat(),
+        expected_run_id=run_id,
+    )
+    if run_id is not None and not write.applied:
+        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
+    await log_event(
+        "INFO",
+        "warming_target_reached",
+        account_id=account_id,
+        extra={"target_days": record.target_days, "warming_days": days},
+    )
+    return WarmingCycleResult(account_id=account_id, status="skipped", detail="target reached")
 
 
 async def _calculate_next_run(

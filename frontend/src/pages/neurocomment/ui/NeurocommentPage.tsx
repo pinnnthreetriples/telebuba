@@ -17,6 +17,7 @@ import {
   NeuroAccountsModal,
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
+  removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   retryChallengeMutation,
   setCampaignSolverMutation,
@@ -193,6 +194,7 @@ export function NeurocommentPage() {
   const retry = useMutation(retryChallengeMutation());
   const deleteCampaign = useMutation(deleteCampaignMutation());
   const removeChannel = useMutation(removeCampaignChannelMutation());
+  const removeAccount = useMutation(removeCampaignAccountMutation());
   const updatePrompt = useMutation(updateCampaignPromptMutation());
 
   const accountOptions = accounts.data?.items ?? [];
@@ -1044,8 +1046,13 @@ export function NeurocommentPage() {
             }
             void channel;
           }}
-          onRemove={() => {
-            invalidate();
+          onRemove={(accountId) => {
+            if (campaignId !== null) {
+              removeAccount.mutate(
+                { path: { campaign_id: campaignId }, body: { account_id: accountId } },
+                { onSettled: invalidate },
+              );
+            }
           }}
         />
       ) : null}
@@ -1114,8 +1121,11 @@ export function NeurocommentPage() {
             );
             setPromptFor(null);
           }}
-          onRemoveAccount={() => {
-            invalidate();
+          onRemoveAccount={(accountId) => {
+            removeAccount.mutate(
+              { path: { campaign_id: promptFor.campaign_id }, body: { account_id: accountId } },
+              { onSettled: invalidate },
+            );
           }}
         />
       ) : null}

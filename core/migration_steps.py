@@ -409,6 +409,17 @@ def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
         )
 
 
+def _add_warming_state_target_days(connection: Connection) -> None:
+    # Operator-chosen warming duration (the start modal's day slider). NULL on
+    # legacy rows / no explicit pick → the board falls back to warmed_min_days.
+    if not _sqlite_table_exists(connection, "warming_account_state"):
+        return
+    if "target_days" not in _sqlite_columns(connection, "warming_account_state"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state ADD COLUMN target_days INTEGER",
+        )
+
+
 def _sqlite_table_exists(connection: Connection, table_name: str) -> bool:
     row = connection.exec_driver_sql(
         "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",

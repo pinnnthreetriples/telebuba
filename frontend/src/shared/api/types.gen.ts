@@ -1266,6 +1266,10 @@ export type StartWarmingRequest = {
    * Account Id
    */
   account_id: string;
+  /**
+   * Target Days
+   */
+  target_days?: number | null;
 };
 
 /**
@@ -1590,6 +1594,10 @@ export type WarmingAccountState = {
    * Warming Days
    */
   warming_days?: number | null;
+  /**
+   * Target Days
+   */
+  target_days?: number | null;
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc
@@ -3064,6 +3072,38 @@ export type AssignCampaignAccountResponses = {
 
 export type AssignCampaignAccountResponse =
   AssignCampaignAccountResponses[keyof AssignCampaignAccountResponses];
+
+export type RemoveCampaignAccountData = {
+  body: AssignAccountRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove';
+};
+
+export type RemoveCampaignAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveCampaignAccountError =
+  RemoveCampaignAccountErrors[keyof RemoveCampaignAccountErrors];
+
+export type RemoveCampaignAccountResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type RemoveCampaignAccountResponse =
+  RemoveCampaignAccountResponses[keyof RemoveCampaignAccountResponses];
 
 export type DeleteCampaignData = {
   body?: never;
