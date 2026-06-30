@@ -567,6 +567,8 @@
       "actionsTip": "действий",
       "cfgTitle": "Настройки прогрева",
       "logToggle": "Лог активности",
+      "logLoading": "Загрузка лога…",
+      "logEmpty": "Событий пока нет",
       "completeTitle": "Прогрев завершён",
       "completeSub": "{{days}} · аккаунт готов",
       "finish": "Отправить в прогретые",

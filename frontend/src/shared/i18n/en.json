@@ -566,6 +566,8 @@
       "actionsTip": "actions",
       "cfgTitle": "Warming settings",
       "logToggle": "Activity log",
+      "logLoading": "Loading log…",
+      "logEmpty": "No events yet",
       "completeTitle": "Warming complete",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
