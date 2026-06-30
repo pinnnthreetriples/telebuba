@@ -3,14 +3,17 @@ export {
   campaignChallengesQueryOptions,
   campaignsQueryOptions,
   createCampaignMutation,
+  deleteCampaignMutation,
   linkCampaignChannelMutation,
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
   neurocommentSettingsQueryOptions,
+  removeCampaignChannelMutation,
   retryChallengeMutation,
   setCampaignSolverMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
+  updateCampaignPromptMutation,
   updateNeurocommentSettingsMutation,
 } from './api/campaign.queries';
 export { CampaignDeleteModal } from './ui/CampaignDeleteModal';

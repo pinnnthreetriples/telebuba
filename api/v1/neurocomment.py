@@ -23,6 +23,7 @@ from schemas.neurocomment import (
     RetryPairRequest,
     SolverToggleRequest,
     StartNeurocommentRequest,
+    UpdatePromptRequest,
 )
 from services import neurocomment as nc_service
 
@@ -67,6 +68,36 @@ async def link_channel(campaign_id: str, body: LinkChannelRequest) -> ChannelLin
 )
 async def assign_account(campaign_id: str, body: AssignAccountRequest) -> None:
     await nc_service.assign_account_to_campaign(campaign_id, body.account_id)
+
+
+@router.delete(
+    "/campaigns/{campaign_id}",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="deleteCampaign",
+)
+async def delete_campaign(campaign_id: str) -> None:
+    """Delete a campaign and all its serving links, channels, and comments."""
+    await nc_service.delete_campaign(campaign_id)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/channels/remove",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="removeCampaignChannel",
+)
+async def remove_channel(campaign_id: str, body: LinkChannelRequest) -> None:
+    """Detach a channel from a campaign (frees its slot for another campaign)."""
+    await nc_service.deactivate_channel(campaign_id, body.channel)
+
+
+@router.put(
+    "/campaigns/{campaign_id}/prompt",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="updateCampaignPrompt",
+)
+async def update_prompt(campaign_id: str, body: UpdatePromptRequest) -> None:
+    """Replace a campaign's generation prompt (the edit-prompt modal)."""
+    await nc_service.update_campaign_prompt(campaign_id, body.prompt)
 
 
 @router.post(

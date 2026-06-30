@@ -324,7 +324,7 @@ test('the idle-accounts banner opens the accounts modal', async () => {
   await userEvent.click(screen.getByText('Готово'));
 });
 
-test('campaign edit-prompt and delete actions open their modals', async () => {
+test('campaign edit-prompt saves and delete removes the campaign', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
@@ -332,16 +332,39 @@ test('campaign edit-prompt and delete actions open their modals', async () => {
   });
 
   await userEvent.click(screen.getByTitle('Редактировать промт'));
+  await userEvent.click(await screen.findByText('Сохранить'));
   await waitFor(() => {
-    expect(screen.getAllByText('Отмена').length).toBeGreaterThan(0);
+    const saved = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return request.url.includes('/campaigns/c1/prompt') && request.method === 'PUT';
+    });
+    expect(saved).toBe(true);
   });
-  await userEvent.click(screen.getAllByText('Отмена')[0]!);
 
   await userEvent.click(screen.getByTitle('Удалить кампанию'));
+  await userEvent.click(await screen.findByText('Удалить'));
   await waitFor(() => {
-    expect(screen.getAllByText('Отмена').length).toBeGreaterThan(0);
+    const deleted = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return request.url.endsWith('/neurocomment/campaigns/c1') && request.method === 'DELETE';
+    });
+    expect(deleted).toBe(true);
   });
-  await userEvent.click(screen.getAllByText('Отмена')[0]!);
+});
+
+test('removing a campaign channel calls the deactivate endpoint', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  await userEvent.click(screen.getByLabelText('Убрать канал'));
+  await waitFor(() => {
+    const removed = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove'));
+    expect(removed).toBe(true);
+  });
 });
 
 test('the add-channel pill reveals an input and adds the channel', async () => {

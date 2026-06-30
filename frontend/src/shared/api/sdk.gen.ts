@@ -32,6 +32,9 @@ import type {
   DeleteAccountData,
   DeleteAccountErrors,
   DeleteAccountResponses,
+  DeleteCampaignData,
+  DeleteCampaignErrors,
+  DeleteCampaignResponses,
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
@@ -99,6 +102,9 @@ import type {
   PromoteToNeurocommentData,
   PromoteToNeurocommentErrors,
   PromoteToNeurocommentResponses,
+  RemoveCampaignChannelData,
+  RemoveCampaignChannelErrors,
+  RemoveCampaignChannelResponses,
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
@@ -144,6 +150,9 @@ import type {
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
+  UpdateCampaignPromptData,
+  UpdateCampaignPromptErrors,
+  UpdateCampaignPromptResponses,
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsErrors,
   UpdateNeurocommentSettingsResponses,
@@ -740,6 +749,61 @@ export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign and all its serving links, channels, and comments.
+ */
+export const deleteCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteCampaignData, ThrowOnError>,
+) =>
+  (options.client ?? client).delete<DeleteCampaignResponses, DeleteCampaignErrors, ThrowOnError>({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}',
+    ...options,
+  });
+
+/**
+ * Remove Channel
+ *
+ * Detach a channel from a campaign (frees its slot for another campaign).
+ */
+export const removeCampaignChannel = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveCampaignChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveCampaignChannelResponses,
+    RemoveCampaignChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/channels/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Update Prompt
+ *
+ * Replace a campaign's generation prompt (the edit-prompt modal).
+ */
+export const updateCampaignPrompt = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateCampaignPromptData, ThrowOnError>,
+) =>
+  (options.client ?? client).put<
+    UpdateCampaignPromptResponses,
+    UpdateCampaignPromptErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/prompt',
     ...options,
     headers: {
       'Content-Type': 'application/json',

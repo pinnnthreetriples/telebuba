@@ -383,6 +383,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     resolve_pending_outcome,
     save_neurocomment_settings,
     set_listener_account_id,
+    update_campaign_prompt,
     update_solver_enabled,
     upsert_linked_group,
     upsert_readiness,

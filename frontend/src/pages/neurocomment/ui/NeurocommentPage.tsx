@@ -11,15 +11,18 @@ import {
   campaignsQueryOptions,
   createCampaignMutation,
   CreateCampaignModal,
+  deleteCampaignMutation,
   linkCampaignChannelMutation,
   ListenerEditModal,
   NeuroAccountsModal,
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
+  removeCampaignChannelMutation,
   retryChallengeMutation,
   setCampaignSolverMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
+  updateCampaignPromptMutation,
 } from '@/entities/campaign';
 import { logsQueryOptions } from '@/entities/log';
 import type { NeurocommentCampaign } from '@/shared/api';
@@ -188,6 +191,9 @@ export function NeurocommentPage() {
   const stop = useMutation(stopNeurocommentMutation());
   const setSolver = useMutation(setCampaignSolverMutation());
   const retry = useMutation(retryChallengeMutation());
+  const deleteCampaign = useMutation(deleteCampaignMutation());
+  const removeChannel = useMutation(removeCampaignChannelMutation());
+  const updatePrompt = useMutation(updateCampaignPromptMutation());
 
   const accountOptions = accounts.data?.items ?? [];
   const running = runtime.data?.running ?? false;
@@ -916,9 +922,24 @@ export function NeurocommentPage() {
                       className="inline-flex items-center gap-[6px] rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[5px] text-[12px] text-[#3a3a3a]"
                     >
                       {channel.channel}
-                      <span className="cursor-default text-[14px] leading-none text-[#b5b3ae]">
+                      <button
+                        type="button"
+                        aria-label={t('neurocomment.channels.remove')}
+                        onClick={() => {
+                          if (campaignId !== null) {
+                            removeChannel.mutate(
+                              {
+                                path: { campaign_id: campaignId },
+                                body: { channel: channel.channel },
+                              },
+                              { onSettled: invalidate },
+                            );
+                          }
+                        }}
+                        className="text-[14px] leading-none text-[#b5b3ae]"
+                      >
                         ×
-                      </span>
+                      </button>
                     </span>
                   ))}
                   {addingChannel ? (
@@ -1086,9 +1107,12 @@ export function NeurocommentPage() {
           onClose={() => {
             setPromptFor(null);
           }}
-          onSave={() => {
-            // ponytail: no update-prompt endpoint on the generated client yet.
-            invalidate();
+          onSave={(prompt) => {
+            updatePrompt.mutate(
+              { path: { campaign_id: promptFor.campaign_id }, body: { prompt } },
+              { onSettled: invalidate },
+            );
+            setPromptFor(null);
           }}
           onRemoveAccount={() => {
             invalidate();
@@ -1103,8 +1127,12 @@ export function NeurocommentPage() {
             setDeleteFor(null);
           }}
           onConfirm={() => {
-            // ponytail: no delete-campaign endpoint on the generated client yet.
-            invalidate();
+            deleteCampaign.mutate(
+              { path: { campaign_id: deleteFor.campaign_id } },
+              { onSettled: invalidate },
+            );
+            setDeleteFor(null);
+            if (selected === deleteFor.campaign_id) setSelected(null);
           }}
         />
       ) : null}

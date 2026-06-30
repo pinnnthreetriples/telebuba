@@ -25,6 +25,7 @@ from core.repositories.neurocomment._campaigns import (
     list_campaign_channels,
     list_campaigns,
     remove_account_from_campaign,
+    update_campaign_prompt,
     update_solver_enabled,
 )
 from core.repositories.neurocomment._challenges import (
@@ -106,6 +107,7 @@ __all__ = [
     "resolve_pending_outcome",
     "save_neurocomment_settings",
     "set_listener_account_id",
+    "update_campaign_prompt",
     "update_solver_enabled",
     "upsert_linked_group",
     "upsert_readiness",

@@ -18,6 +18,7 @@ import {
   createCampaign,
   createProxy,
   deleteAccount,
+  deleteCampaign,
   deleteProxy,
   getHealth,
   getMe,
@@ -42,6 +43,7 @@ import {
   type Options,
   probeProxy,
   promoteToNeurocomment,
+  removeCampaignChannel,
   removeWarmingChannel,
   requestLoginCode,
   resetAccountSession,
@@ -57,6 +59,7 @@ import {
   unassignProxy,
   unpromoteFromNeurocomment,
   updateAccountProfile,
+  updateCampaignPrompt,
   updateNeurocommentSettings,
   updateWarmingSettings,
 } from '../sdk.gen';
@@ -85,6 +88,9 @@ import type {
   DeleteAccountData,
   DeleteAccountError,
   DeleteAccountResponse,
+  DeleteCampaignData,
+  DeleteCampaignError,
+  DeleteCampaignResponse,
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
@@ -152,6 +158,9 @@ import type {
   PromoteToNeurocommentData,
   PromoteToNeurocommentError,
   PromoteToNeurocommentResponse,
+  RemoveCampaignChannelData,
+  RemoveCampaignChannelError,
+  RemoveCampaignChannelResponse,
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
@@ -197,6 +206,9 @@ import type {
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
+  UpdateCampaignPromptData,
+  UpdateCampaignPromptError,
+  UpdateCampaignPromptResponse,
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsError,
   UpdateNeurocommentSettingsResponse,
@@ -1292,6 +1304,89 @@ export const assignCampaignAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await assignCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign and all its serving links, channels, and comments.
+ */
+export const deleteCampaignMutation = (
+  options?: Partial<Options<DeleteCampaignData>>,
+): UseMutationOptions<DeleteCampaignResponse, DeleteCampaignError, Options<DeleteCampaignData>> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteCampaignResponse,
+    DeleteCampaignError,
+    Options<DeleteCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Channel
+ *
+ * Detach a channel from a campaign (frees its slot for another campaign).
+ */
+export const removeCampaignChannelMutation = (
+  options?: Partial<Options<RemoveCampaignChannelData>>,
+): UseMutationOptions<
+  RemoveCampaignChannelResponse,
+  RemoveCampaignChannelError,
+  Options<RemoveCampaignChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveCampaignChannelResponse,
+    RemoveCampaignChannelError,
+    Options<RemoveCampaignChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeCampaignChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Update Prompt
+ *
+ * Replace a campaign's generation prompt (the edit-prompt modal).
+ */
+export const updateCampaignPromptMutation = (
+  options?: Partial<Options<UpdateCampaignPromptData>>,
+): UseMutationOptions<
+  UpdateCampaignPromptResponse,
+  UpdateCampaignPromptError,
+  Options<UpdateCampaignPromptData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateCampaignPromptResponse,
+    UpdateCampaignPromptError,
+    Options<UpdateCampaignPromptData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateCampaignPrompt({
         ...options,
         ...fnOptions,
         throwOnError: true,

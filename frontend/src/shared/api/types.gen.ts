@@ -1123,6 +1123,18 @@ export type TdataImportResult = {
 };
 
 /**
+ * UpdatePromptRequest
+ *
+ * Replace a campaign's generation prompt (the edit-prompt modal).
+ */
+export type UpdatePromptRequest = {
+  /**
+   * Prompt
+   */
+  prompt: string;
+};
+
+/**
  * UserRead
  */
 export type UserRead = {
@@ -2667,6 +2679,100 @@ export type AssignCampaignAccountResponses = {
 
 export type AssignCampaignAccountResponse =
   AssignCampaignAccountResponses[keyof AssignCampaignAccountResponses];
+
+export type DeleteCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}';
+};
+
+export type DeleteCampaignErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteCampaignError = DeleteCampaignErrors[keyof DeleteCampaignErrors];
+
+export type DeleteCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteCampaignResponse = DeleteCampaignResponses[keyof DeleteCampaignResponses];
+
+export type RemoveCampaignChannelData = {
+  body: LinkChannelRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/channels/remove';
+};
+
+export type RemoveCampaignChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveCampaignChannelError =
+  RemoveCampaignChannelErrors[keyof RemoveCampaignChannelErrors];
+
+export type RemoveCampaignChannelResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type RemoveCampaignChannelResponse =
+  RemoveCampaignChannelResponses[keyof RemoveCampaignChannelResponses];
+
+export type UpdateCampaignPromptData = {
+  body: UpdatePromptRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/prompt';
+};
+
+export type UpdateCampaignPromptErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateCampaignPromptError =
+  UpdateCampaignPromptErrors[keyof UpdateCampaignPromptErrors];
+
+export type UpdateCampaignPromptResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type UpdateCampaignPromptResponse =
+  UpdateCampaignPromptResponses[keyof UpdateCampaignPromptResponses];
 
 export type SetCampaignSolverData = {
   body: SolverToggleRequest;

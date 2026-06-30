@@ -35,6 +35,7 @@ from services.neurocomment.campaigns import (
     remove_account_from_campaign,
     set_solver_enabled,
     skip_pair,
+    update_campaign_prompt,
 )
 from services.neurocomment.challenge import retry_pair
 from services.neurocomment.engine import handle_new_post
@@ -76,4 +77,5 @@ __all__ = [
     "skip_pair",
     "start_neurocomment",
     "stop_neurocomment",
+    "update_campaign_prompt",
 ]

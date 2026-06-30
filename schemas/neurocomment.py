@@ -59,6 +59,14 @@ class SolverToggleRequest(BaseModel):
     enabled: bool
 
 
+class UpdatePromptRequest(BaseModel):
+    """Replace a campaign's generation prompt (the edit-prompt modal)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prompt: str = Field(min_length=1)
+
+
 class RetryPairRequest(BaseModel):
     """Operator retry of one (account, channel) challenge — the captcha «Решить»."""
 

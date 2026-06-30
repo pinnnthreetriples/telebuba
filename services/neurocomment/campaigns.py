@@ -108,6 +108,11 @@ async def set_solver_enabled(campaign_id: str, value: bool | None) -> None:  # n
     await db.update_solver_enabled(campaign_id, value)
 
 
+async def update_campaign_prompt(campaign_id: str, prompt: str) -> None:
+    """Replace a campaign's generation prompt (the edit-prompt modal)."""
+    await db.update_campaign_prompt(campaign_id, prompt)
+
+
 async def skip_pair(account_id: str, channel: str) -> None:
     """Operator "Skip channel for this account": the engine never selects the pair (#148)."""
     await db.mark_human_skipped(account_id, channel)

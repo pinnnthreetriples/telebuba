@@ -231,3 +231,42 @@ async def test_retry_challenge_reonboards(app: FastAPI, monkeypatch: pytest.Monk
         )
     assert resp.status_code == 200
     assert resp.json()["state"] == "ready"
+
+
+@pytest.mark.asyncio
+async def test_delete_campaign_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(campaign_id: str) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.neurocomment.delete_campaign", _fake)
+    async with _client(app) as client:
+        resp = await client.delete("/api/v1/neurocomment/campaigns/c1")
+    assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_remove_channel_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(campaign_id: str, channel: str) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.neurocomment.deactivate_channel", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/channels/remove",
+            json={"channel": "@news"},
+        )
+    assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_update_prompt_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(campaign_id: str, prompt: str) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.neurocomment.update_campaign_prompt", _fake)
+    async with _client(app) as client:
+        resp = await client.put(
+            "/api/v1/neurocomment/campaigns/c1/prompt",
+            json={"prompt": "be nice"},
+        )
+    assert resp.status_code == 204

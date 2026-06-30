@@ -3,15 +3,18 @@
 export {
   assignCampaignAccountMutation,
   createCampaignMutation,
+  deleteCampaignMutation,
   getNeurocommentBoardOptions as neurocommentBoardQueryOptions,
   getNeurocommentRuntimeOptions as neurocommentRuntimeQueryOptions,
   getNeurocommentSettingsOptions as neurocommentSettingsQueryOptions,
   linkCampaignChannelMutation,
   listCampaignChallengesOptions as campaignChallengesQueryOptions,
   listCampaignsOptions as campaignsQueryOptions,
+  removeCampaignChannelMutation,
   retryChallengeMutation,
   setCampaignSolverMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
+  updateCampaignPromptMutation,
   updateNeurocommentSettingsMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

@@ -2173,6 +2173,182 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}": {
+      "delete": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Delete Campaign",
+        "description": "Delete a campaign and all its serving links, channels, and comments.",
+        "operationId": "deleteCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/channels/remove": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Remove Channel",
+        "description": "Detach a channel from a campaign (frees its slot for another campaign).",
+        "operationId": "removeCampaignChannel",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkChannelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/prompt": {
+      "put": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Update Prompt",
+        "description": "Replace a campaign's generation prompt (the edit-prompt modal).",
+        "operationId": "updateCampaignPrompt",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}/solver": {
       "post": {
         "tags": [
@@ -4657,6 +4833,22 @@
         "type": "object",
         "title": "TdataImportResult",
         "description": "Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.\n\nWrapping the imported accounts in a model (instead of returning a raw\n``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room\nto add per-import metadata (counts, partial-failure summaries) without\nbreaking every call site, and matches the convention used by ``list_accounts``\nand other multi-row reads."
+      },
+      "UpdatePromptRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "UpdatePromptRequest",
+        "description": "Replace a campaign's generation prompt (the edit-prompt modal)."
       },
       "UserRead": {
         "properties": {

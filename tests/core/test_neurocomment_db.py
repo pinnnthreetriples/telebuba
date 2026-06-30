@@ -44,6 +44,7 @@ from core.db import (  # type: ignore[attr-defined]
     mark_human_skipped,
     remove_account_from_campaign,
     resolve_pending_outcome,
+    update_campaign_prompt,
     update_solver_enabled,
     upsert_linked_group,
     upsert_readiness,
@@ -717,3 +718,12 @@ async def test_list_active_watch_channels_only_active_links_and_campaigns() -> N
 
     watch = await list_active_watch_channels()
     assert set(watch.channels) == {"@a", "@b"}
+
+
+@pytest.mark.asyncio
+async def test_update_campaign_prompt_replaces_text() -> None:
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="old prompt"))
+    await update_campaign_prompt(campaign.campaign_id, "new prompt")
+    got = await fetch_campaign(campaign.campaign_id)
+    assert got is not None
+    assert got.prompt == "new prompt"
