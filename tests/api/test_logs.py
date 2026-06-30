@@ -55,6 +55,16 @@ async def test_logs_filter_by_status(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
+async def test_logs_filter_by_event_prefix(app: FastAPI) -> None:
+    await log_event("INFO", "neurocomment_comment_posted")
+    await log_event("INFO", "warming_subscribe")
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/logs", params={"event_prefix": "neurocomment"})
+    events = [row["event"] for row in resp.json()["items"]]
+    assert events == ["neurocomment_comment_posted"]
+
+
+@pytest.mark.asyncio
 async def test_logs_invalid_cursor_is_400(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.get("/api/v1/logs", params={"cursor": "nope"})

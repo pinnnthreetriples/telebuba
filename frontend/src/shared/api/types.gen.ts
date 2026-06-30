@@ -332,6 +332,54 @@ export type CampaignList = {
 };
 
 /**
+ * ChallengeRow
+ *
+ * One persisted challenge audit row, as the operator drill-down reads it.
+ */
+export type ChallengeRow = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Raw Text
+   */
+  raw_text: string;
+  /**
+   * Button Labels
+   */
+  button_labels?: Array<string>;
+  /**
+   * Outcome
+   */
+  outcome: string;
+  /**
+   * Decided At
+   */
+  decided_at: string;
+  /**
+   * Reasoning
+   */
+  reasoning?: string | null;
+};
+
+/**
+ * ChallengeRowList
+ *
+ * Wrapper so the repo returns a model, never a raw list (non-negotiable #2).
+ */
+export type ChallengeRowList = {
+  /**
+   * Rows
+   */
+  rows?: Array<ChallengeRow>;
+};
+
+/**
  * ChannelLinkOutcome
  *
  * Result of attaching a channel to a campaign.
@@ -2300,6 +2348,43 @@ export type AssignCampaignAccountResponses = {
 export type AssignCampaignAccountResponse =
   AssignCampaignAccountResponses[keyof AssignCampaignAccountResponses];
 
+export type ListCampaignChallengesData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: {
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges';
+};
+
+export type ListCampaignChallengesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListCampaignChallengesError =
+  ListCampaignChallengesErrors[keyof ListCampaignChallengesErrors];
+
+export type ListCampaignChallengesResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChallengeRowList;
+};
+
+export type ListCampaignChallengesResponse =
+  ListCampaignChallengesResponses[keyof ListCampaignChallengesResponses];
+
 export type GetNeurocommentRuntimeData = {
   body?: never;
   path?: never;
@@ -2390,6 +2475,10 @@ export type ListLogsData = {
      * Account Id
      */
     account_id?: string;
+    /**
+     * Event Prefix
+     */
+    event_prefix?: string;
     /**
      * Cursor
      */

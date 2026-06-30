@@ -45,6 +45,7 @@ const BOARD = {
       max_comments_per_hour: 10,
       comments_today: 2,
       last_comment_at: 'now',
+      readiness: [{ channel: '@news', ready: true, joined: true, captcha_passed: true }],
     },
   ],
 };

@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from schemas.challenge import ChallengeRow, ChallengeRowList
 from schemas.neurocomment import (
     CampaignList,
     ChannelLinkOutcome,
@@ -45,6 +46,28 @@ async def test_list_campaigns(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> 
         resp = await client.get("/api/v1/neurocomment/campaigns")
     assert resp.status_code == 200
     assert [c["campaign_id"] for c in resp.json()["campaigns"]] == ["c1"]
+
+
+@pytest.mark.asyncio
+async def test_list_campaign_challenges(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(campaign_id: str, limit: int) -> ChallengeRowList:  # noqa: ARG001
+        return ChallengeRowList(
+            rows=[
+                ChallengeRow(
+                    account_id="acc-1",
+                    channel="@a",
+                    raw_text="captcha",
+                    outcome="failed",
+                    decided_at="2026-06-30T12:00:00+00:00",
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("services.neurocomment.list_campaign_challenges", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/neurocomment/campaigns/c1/challenges")
+    assert resp.status_code == 200
+    assert [r["channel"] for r in resp.json()["rows"]] == ["@a"]
 
 
 @pytest.mark.asyncio

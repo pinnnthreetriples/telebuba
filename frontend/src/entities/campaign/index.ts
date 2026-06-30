@@ -1,5 +1,6 @@
 export {
   assignCampaignAccountMutation,
+  campaignChallengesQueryOptions,
   campaignsQueryOptions,
   createCampaignMutation,
   linkCampaignChannelMutation,

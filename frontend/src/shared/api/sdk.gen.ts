@@ -61,6 +61,9 @@ import type {
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
+  ListCampaignChallengesData,
+  ListCampaignChallengesErrors,
+  ListCampaignChallengesResponses,
   ListCampaignsData,
   ListCampaignsErrors,
   ListCampaignsResponses,
@@ -643,6 +646,20 @@ export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * List Campaign Challenges
+ *
+ * Recent unsolved bot-challenges across the campaign's channels (captcha queue).
+ */
+export const listCampaignChallenges = <ThrowOnError extends boolean = false>(
+  options: Options<ListCampaignChallengesData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    ListCampaignChallengesResponses,
+    ListCampaignChallengesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges', ...options });
 
 /**
  * Get Runtime

@@ -28,6 +28,7 @@ import {
   importAccountTdata,
   linkCampaignChannel,
   listAccounts,
+  listCampaignChallenges,
   listCampaigns,
   listLogs,
   listProxies,
@@ -105,6 +106,9 @@ import type {
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
+  ListCampaignChallengesData,
+  ListCampaignChallengesError,
+  ListCampaignChallengesResponse,
   ListCampaignsData,
   ListCampaignsError,
   ListCampaignsResponse,
@@ -1153,6 +1157,33 @@ export const assignCampaignAccountMutation = (
   };
   return mutationOptions;
 };
+
+export const listCampaignChallengesQueryKey = (options: Options<ListCampaignChallengesData>) =>
+  createQueryKey('listCampaignChallenges', options);
+
+/**
+ * List Campaign Challenges
+ *
+ * Recent unsolved bot-challenges across the campaign's channels (captcha queue).
+ */
+export const listCampaignChallengesOptions = (options: Options<ListCampaignChallengesData>) =>
+  queryOptions<
+    ListCampaignChallengesResponse,
+    ListCampaignChallengesError,
+    ListCampaignChallengesResponse,
+    ReturnType<typeof listCampaignChallengesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listCampaignChallenges({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listCampaignChallengesQueryKey(options),
+  });
 
 export const getNeurocommentRuntimeQueryKey = (options?: Options<GetNeurocommentRuntimeData>) =>
   createQueryKey('getNeurocommentRuntime', options);

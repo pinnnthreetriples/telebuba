@@ -14,20 +14,21 @@ interface BoardRow {
   status: NeurocommentChannelRow['status'];
 }
 
-// ponytail: the board read model carries per-account cards and per-channel
-// rows, but not a joined "account commented X on channel Y" feed. Derive a
-// display-only work row per account by pairing it with the first channel and a
-// placeholder comment until the API exposes a real activity join.
+// One work row per account, joined on the account's OWN channel: its first
+// joined channel from the readiness list (a real link, not an arbitrary pairing)
+// with that channel's real aggregate status. The read model carries no stored
+// comment text, so the comment cell shows recency from last_comment_at.
 function deriveRows(board: NeurocommentBoardData, placeholder: string): BoardRow[] {
-  const channels = board.channels ?? [];
-  const accounts = board.accounts ?? [];
-  return accounts.map((account, index) => {
-    const channel = channels[index % Math.max(channels.length, 1)];
+  const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
+  return (board.accounts ?? []).map((account) => {
+    const readiness = account.readiness ?? [];
+    const primary = readiness.find((r) => r.joined) ?? readiness[0];
+    const channel = primary?.channel ?? '—';
     return {
       account: account.label,
-      channel: channel?.channel ?? '—',
+      channel,
       text: account.last_comment_at ? placeholder : '—',
-      status: channel?.status ?? 'comments_off',
+      status: channelStatus.get(channel) ?? 'comments_off',
     };
   });
 }

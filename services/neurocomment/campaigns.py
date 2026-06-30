@@ -12,10 +12,11 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core import db
+from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import ChannelLinkOutcome
 
 if TYPE_CHECKING:
-    from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
+    from schemas.challenge import ChallengeOutcomeCounts
     from schemas.neurocomment import (
         CampaignAccountList,
         CampaignChannelList,
@@ -77,6 +78,24 @@ async def remove_account_from_campaign(campaign_id: str, account_id: str) -> Non
 async def list_channel_challenges(channel: str, limit: int) -> ChallengeRowList:
     """Recent non-solved challenges for a channel — the work-view drill-down (Ф2 #145)."""
     return await db.list_failed_for_channel(channel, limit)
+
+
+async def list_campaign_challenges(campaign_id: str, limit: int) -> ChallengeRowList:
+    """Recent non-solved challenges across a campaign's active channels (the captcha queue).
+
+    Merges each active channel's drill-down (``list_failed_for_channel``), newest
+    first, capped at ``limit``. A campaign has a handful of channels, so the
+    per-channel fan-out is cheap and avoids a bespoke multi-channel query.
+    """
+    channel_links = await db.list_campaign_channels(campaign_id)
+    merged = ChallengeRowList()
+    for link in channel_links.links:
+        if not link.active:
+            continue
+        result = await db.list_failed_for_channel(link.channel, limit)
+        merged.rows.extend(result.rows)
+    merged.rows.sort(key=lambda row: row.decided_at, reverse=True)
+    return ChallengeRowList(rows=merged.rows[:limit])
 
 
 async def count_challenge_outcomes(channels: list[str], since: str) -> ChallengeOutcomeCounts:

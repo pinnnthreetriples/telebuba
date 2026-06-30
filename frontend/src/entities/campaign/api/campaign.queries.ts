@@ -6,6 +6,7 @@ export {
   getNeurocommentBoardOptions as neurocommentBoardQueryOptions,
   getNeurocommentRuntimeOptions as neurocommentRuntimeQueryOptions,
   linkCampaignChannelMutation,
+  listCampaignChallengesOptions as campaignChallengesQueryOptions,
   listCampaignsOptions as campaignsQueryOptions,
   startNeurocommentMutation,
   stopNeurocommentMutation,

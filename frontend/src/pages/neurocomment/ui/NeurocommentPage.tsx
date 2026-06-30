@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { accountsQueryOptions } from '@/entities/account';
 import {
   assignCampaignAccountMutation,
+  campaignChallengesQueryOptions,
   CampaignDeleteModal,
   CampaignPromptModal,
   campaignsQueryOptions,
@@ -18,6 +19,7 @@ import {
   startNeurocommentMutation,
   stopNeurocommentMutation,
 } from '@/entities/campaign';
+import { logsQueryOptions } from '@/entities/log';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { useLogEventStream } from '@/shared/lib';
 import { CollapsibleCard } from '@/shared/ui';
@@ -28,21 +30,20 @@ const FALLBACK_POLL_MS = 30000;
 const STAGES = ['listen', 'detect', 'filter', 'generate', 'solve', 'comment'] as const;
 const HOW_STEPS = [0, 1, 2, 3] as const;
 
-// ponytail: mock activity feed until the runtime streams real log events here.
-const NEURO_LOG = [
-  { time: '12:00:09', msg: 'Комментарий отправлен ✓', color: '#7be0a6' },
-  { time: '12:00:05', msg: 'Gemini: генерация комментария…', color: '#ffd27f' },
-  { time: '12:00:03', msg: 'Новый пост в @crypto_daily', color: '#5ba3ff' },
-  { time: '11:59:40', msg: 'Капча решена', color: '#7be0a6' },
-  { time: '11:58:12', msg: 'Слушатель подключён', color: '#9aa0aa' },
-] as const;
+const NEURO_LOG_LIMIT = 40;
+const CAPTCHA_QUEUE_LIMIT = 20;
 
-// ponytail: per-account captcha queue isn't on the read model yet — mock until
-// the runtime exposes pending bot-checks.
-const CAPTCHA_QUEUE = [
-  { id: 'cap-1', acc: '+79261112233', channel: '@crypto_daily', time: '2 мин назад' },
-  { id: 'cap-2', acc: '+447700900123', channel: '@web3news', time: '5 мин назад' },
-] as const;
+// Activity-feed line colour by the real log row's status.
+const NEURO_LOG_COLOR: Record<'success' | 'warning' | 'error', string> = {
+  success: '#7be0a6',
+  warning: '#ffd27f',
+  error: '#e5736b',
+};
+
+function logTime(createdAt: string): string {
+  // ISO-8601 → HH:MM:SS; raw fallback if unparseable.
+  return createdAt.length >= 19 ? createdAt.slice(11, 19) : createdAt;
+}
 
 const STATUS_COLOR = {
   active: '#12a150',
@@ -159,6 +160,22 @@ export function NeurocommentPage() {
     refetchInterval: FALLBACK_POLL_MS,
     enabled: campaignId !== null,
   });
+  // Real neurocomment activity feed (live-invalidated by the SSE stream above).
+  const neuroLog = useQuery({
+    ...logsQueryOptions({ query: { event_prefix: 'neurocomment', limit: NEURO_LOG_LIMIT } }),
+    refetchInterval: FALLBACK_POLL_MS,
+  });
+  // Real captcha queue — unsolved bot-challenges across the campaign's channels.
+  const challenges = useQuery({
+    ...campaignChallengesQueryOptions({
+      path: { campaign_id: campaignId ?? '' },
+      query: { limit: CAPTCHA_QUEUE_LIMIT },
+    }),
+    refetchInterval: FALLBACK_POLL_MS,
+    enabled: campaignId !== null,
+  });
+  const logLines = neuroLog.data?.items ?? [];
+  const captchaQueue = challenges.data?.rows ?? [];
 
   const createCampaign = useMutation(createCampaignMutation());
   const linkChannel = useMutation(linkCampaignChannelMutation());
@@ -362,18 +379,22 @@ export function NeurocommentPage() {
                 <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
                 <span className="text-[13px] font-semibold">{t('neurocomment.log.title')}</span>
                 <span className="rounded-full bg-[#f2f1ee] px-2 py-[2px] text-[11px] font-medium text-ink-muted">
-                  {NEURO_LOG.length}
+                  {logLines.length}
                 </span>
               </>
             }
           >
             <div className="term tb-scroll max-h-[220px] overflow-y-auto rounded-[10px] bg-[#16161a] px-[14px] py-3 font-mono text-[11px] leading-[1.85]">
-              {NEURO_LOG.map((line) => (
-                <div key={line.time} className="flex gap-[10px]">
-                  <span className="shrink-0 text-[#5c5c66]">{line.time}</span>
-                  <span style={{ color: line.color }}>{line.msg}</span>
-                </div>
-              ))}
+              {logLines.length === 0 ? (
+                <div className="text-[#5c5c66]">{t('neurocomment.log.empty')}</div>
+              ) : (
+                logLines.map((line) => (
+                  <div key={line.id} className="flex gap-[10px]">
+                    <span className="shrink-0 text-[#5c5c66]">{logTime(line.created_at)}</span>
+                    <span style={{ color: NEURO_LOG_COLOR[line.status] }}>{line.event}</span>
+                  </div>
+                ))
+              )}
             </div>
           </CollapsibleCard>
         </div>
@@ -658,7 +679,7 @@ export function NeurocommentPage() {
                 </span>
               </button>
             </div>
-            {captchaSolve && CAPTCHA_QUEUE.length > 0 ? (
+            {captchaSolve && captchaQueue.length > 0 ? (
               <div className="px-[14px] pb-[14px]">
                 <div className="mb-[9px] flex items-center gap-[7px] border-t border-[#f0eeea] pt-[11px]">
                   <svg
@@ -676,23 +697,23 @@ export function NeurocommentPage() {
                     <path d="M12 16h.01" />
                   </svg>
                   <span className="text-[11px] font-semibold uppercase tracking-[.03em] text-[#9a7b22]">
-                    {t('neurocomment.captcha.pending', { count: CAPTCHA_QUEUE.length })}
+                    {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
                   </span>
                 </div>
                 <div className="flex flex-col gap-[7px]">
-                  {CAPTCHA_QUEUE.map((item) => (
+                  {captchaQueue.map((item, index) => (
                     <div
-                      key={item.id}
+                      key={`${item.account_id}-${item.channel}-${String(index)}`}
                       className="flex items-center justify-between gap-[10px] rounded-[11px] border border-[#efe5cc] bg-[#fcfaf4] py-2 pl-[11px] pr-2"
                     >
                       <div className="flex min-w-0 items-center gap-[9px]">
                         <span className="tb-livedot h-[7px] w-[7px] shrink-0 rounded-full bg-[#e0a82e]" />
                         <div className="min-w-0">
                           <div className="truncate text-[12.5px] font-semibold text-ink">
-                            {item.acc}
+                            {item.account_id}
                           </div>
                           <div className="text-[10.5px] text-ink-subtle">
-                            {item.channel} · {item.time}
+                            {item.channel} · {logTime(item.decided_at)}
                           </div>
                         </div>
                       </div>

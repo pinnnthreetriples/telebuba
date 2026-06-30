@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
+from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import (
     AssignAccountRequest,
     CampaignCreate,
@@ -59,6 +62,19 @@ async def link_channel(campaign_id: str, body: LinkChannelRequest) -> ChannelLin
 )
 async def assign_account(campaign_id: str, body: AssignAccountRequest) -> None:
     await nc_service.assign_account_to_campaign(campaign_id, body.account_id)
+
+
+@router.get(
+    "/campaigns/{campaign_id}/challenges",
+    response_model=ChallengeRowList,
+    operation_id="listCampaignChallenges",
+)
+async def list_campaign_challenges(
+    campaign_id: str,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ChallengeRowList:
+    """Recent unsolved bot-challenges across the campaign's channels (captcha queue)."""
+    return await nc_service.list_campaign_challenges(campaign_id, limit)
 
 
 @router.get(

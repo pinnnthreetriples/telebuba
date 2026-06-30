@@ -355,7 +355,8 @@
       "comments": "Comments"
     },
     "log": {
-      "title": "Event log"
+      "title": "Event log",
+      "empty": "No events yet"
     },
     "campaigns": {
       "title": "Campaigns",

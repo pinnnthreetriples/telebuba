@@ -1944,6 +1944,77 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/challenges": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "List Campaign Challenges",
+        "description": "Recent unsolved bot-challenges across the campaign's channels (captcha queue).",
+        "operationId": "listCampaignChallenges",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeRowList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/runtime": {
       "get": {
         "tags": [
@@ -2133,6 +2204,16 @@
               "type": "string",
               "default": "",
               "title": "Account Id"
+            }
+          },
+          {
+            "name": "event_prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Event Prefix"
             }
           },
           {
@@ -2872,6 +2953,76 @@
         "type": "object",
         "title": "CampaignList",
         "description": "Wrapper so callers never receive a raw list (non-negotiable #2)."
+      },
+      "ChallengeRow": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "raw_text": {
+            "type": "string",
+            "title": "Raw Text"
+          },
+          "button_labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Button Labels"
+          },
+          "outcome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Outcome"
+          },
+          "decided_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Decided At"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "channel",
+          "raw_text",
+          "outcome",
+          "decided_at"
+        ],
+        "title": "ChallengeRow",
+        "description": "One persisted challenge audit row, as the operator drill-down reads it."
+      },
+      "ChallengeRowList": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ChallengeRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "title": "ChallengeRowList",
+        "description": "Wrapper so the repo returns a model, never a raw list (non-negotiable #2)."
       },
       "ChannelLinkOutcome": {
         "properties": {
