@@ -9,6 +9,8 @@ export {
   linkCampaignChannelMutation,
   listCampaignChallengesOptions as campaignChallengesQueryOptions,
   listCampaignsOptions as campaignsQueryOptions,
+  retryChallengeMutation,
+  setCampaignSolverMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateNeurocommentSettingsMutation,

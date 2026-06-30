@@ -7,6 +7,8 @@ export {
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
   neurocommentSettingsQueryOptions,
+  retryChallengeMutation,
+  setCampaignSolverMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateNeurocommentSettingsMutation,

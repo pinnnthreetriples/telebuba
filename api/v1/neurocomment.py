@@ -9,6 +9,7 @@ from fastapi import status as http_status
 
 from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import (
+    AccountChannelOnboarding,
     AssignAccountRequest,
     CampaignCreate,
     CampaignList,
@@ -19,6 +20,8 @@ from schemas.neurocomment import (
     NeurocommentRuntimeStatus,
     NeurocommentSettings,
     NeurocommentSettingsUpdate,
+    RetryPairRequest,
+    SolverToggleRequest,
     StartNeurocommentRequest,
 )
 from services import neurocomment as nc_service
@@ -64,6 +67,30 @@ async def link_channel(campaign_id: str, body: LinkChannelRequest) -> ChannelLin
 )
 async def assign_account(campaign_id: str, body: AssignAccountRequest) -> None:
     await nc_service.assign_account_to_campaign(campaign_id, body.account_id)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/solver",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="setCampaignSolver",
+)
+async def set_campaign_solver(campaign_id: str, body: SolverToggleRequest) -> None:
+    """Turn the campaign's challenge (captcha) solver on/off."""
+    await nc_service.set_solver_enabled(campaign_id, body.enabled)
+
+
+@router.post(
+    "/retry",
+    response_model=AccountChannelOnboarding,
+    operation_id="retryChallenge",
+)
+async def retry_challenge(body: RetryPairRequest) -> AccountChannelOnboarding:
+    """Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
+
+    Re-onboards the pair (re-running the solver) — account+channel scoped, so it
+    is campaign-agnostic.
+    """
+    return await nc_service.retry_pair(body.account_id, body.channel)
 
 
 @router.get(

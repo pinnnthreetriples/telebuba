@@ -2173,6 +2173,128 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/solver": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Set Campaign Solver",
+        "description": "Turn the campaign's challenge (captcha) solver on/off.",
+        "operationId": "setCampaignSolver",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolverToggleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/retry": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Retry Challenge",
+        "description": "Operator retry of one challenged (account, channel) pair (the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb).\n\nRe-onboards the pair (re-running the solver) \u2014 account+channel scoped, so it\nis campaign-agnostic.",
+        "operationId": "retryChallenge",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryPairRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountChannelOnboarding"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}/challenges": {
       "get": {
         "tags": [
@@ -2623,6 +2745,53 @@
   },
   "components": {
     "schemas": {
+      "AccountChannelOnboarding": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "comments_off",
+              "join_by_request",
+              "chat_restricted",
+              "bot_challenge",
+              "bot_challenge_backoff",
+              "joining",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "channel",
+          "state"
+        ],
+        "title": "AccountChannelOnboarding",
+        "description": "Outcome of preparing one account to comment on one channel.\n\n``reason`` carries a short human note for the non-``ready`` states (the\nflood-wait detail, the failing error type, etc.)."
+      },
       "AccountChannelReadiness": {
         "properties": {
           "channel": {
@@ -4325,6 +4494,43 @@
           "channel"
         ],
         "title": "RemoveChannelRequest"
+      },
+      "RetryPairRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "account_id",
+          "channel"
+        ],
+        "title": "RetryPairRequest",
+        "description": "Operator retry of one (account, channel) challenge \u2014 the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb."
+      },
+      "SolverToggleRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "SolverToggleRequest",
+        "description": "Turn the per-campaign challenge (captcha) solver on/off."
       },
       "SpamStatusVerdict": {
         "properties": {

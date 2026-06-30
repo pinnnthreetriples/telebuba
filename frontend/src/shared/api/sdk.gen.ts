@@ -108,9 +108,15 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionErrors,
   ResetAccountSessionResponses,
+  RetryChallengeData,
+  RetryChallengeErrors,
+  RetryChallengeResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  SetCampaignSolverData,
+  SetCampaignSolverErrors,
+  SetCampaignSolverResponses,
   SpamCheckAccountData,
   SpamCheckAccountErrors,
   SpamCheckAccountResponses,
@@ -734,6 +740,47 @@ export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Campaign Solver
+ *
+ * Turn the campaign's challenge (captcha) solver on/off.
+ */
+export const setCampaignSolver = <ThrowOnError extends boolean = false>(
+  options: Options<SetCampaignSolverData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetCampaignSolverResponses,
+    SetCampaignSolverErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/solver',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Retry Challenge
+ *
+ * Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
+ *
+ * Re-onboards the pair (re-running the solver) — account+channel scoped, so it
+ * is campaign-agnostic.
+ */
+export const retryChallenge = <ThrowOnError extends boolean = false>(
+  options: Options<RetryChallengeData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<RetryChallengeResponses, RetryChallengeErrors, ThrowOnError>({
+    url: '/api/v1/neurocomment/retry',
     ...options,
     headers: {
       'Content-Type': 'application/json',

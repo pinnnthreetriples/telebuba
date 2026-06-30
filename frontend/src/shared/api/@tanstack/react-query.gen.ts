@@ -45,7 +45,9 @@ import {
   removeWarmingChannel,
   requestLoginCode,
   resetAccountSession,
+  retryChallenge,
   setAccountPhoto,
+  setCampaignSolver,
   spamCheckAccount,
   startNeurocomment,
   startWarming,
@@ -159,9 +161,15 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionError,
   ResetAccountSessionResponse,
+  RetryChallengeData,
+  RetryChallengeError,
+  RetryChallengeResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  SetCampaignSolverData,
+  SetCampaignSolverError,
+  SetCampaignSolverResponse,
   SpamCheckAccountData,
   SpamCheckAccountError,
   SpamCheckAccountResponse,
@@ -1284,6 +1292,63 @@ export const assignCampaignAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await assignCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Campaign Solver
+ *
+ * Turn the campaign's challenge (captcha) solver on/off.
+ */
+export const setCampaignSolverMutation = (
+  options?: Partial<Options<SetCampaignSolverData>>,
+): UseMutationOptions<
+  SetCampaignSolverResponse,
+  SetCampaignSolverError,
+  Options<SetCampaignSolverData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetCampaignSolverResponse,
+    SetCampaignSolverError,
+    Options<SetCampaignSolverData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setCampaignSolver({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Retry Challenge
+ *
+ * Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
+ *
+ * Re-onboards the pair (re-running the solver) — account+channel scoped, so it
+ * is campaign-agnostic.
+ */
+export const retryChallengeMutation = (
+  options?: Partial<Options<RetryChallengeData>>,
+): UseMutationOptions<RetryChallengeResponse, RetryChallengeError, Options<RetryChallengeData>> => {
+  const mutationOptions: UseMutationOptions<
+    RetryChallengeResponse,
+    RetryChallengeError,
+    Options<RetryChallengeData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await retryChallenge({
         ...options,
         ...fnOptions,
         throwOnError: true,

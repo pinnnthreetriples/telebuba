@@ -16,6 +16,8 @@ import {
   NeuroAccountsModal,
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
+  retryChallengeMutation,
+  setCampaignSolverMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
 } from '@/entities/campaign';
@@ -133,7 +135,6 @@ export function NeurocommentPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [listener, setListener] = useState('');
   const [listenerOpen, setListenerOpen] = useState(false);
-  const [captchaSolve, setCaptchaSolve] = useState(true);
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
 
@@ -176,12 +177,17 @@ export function NeurocommentPage() {
   });
   const logLines = neuroLog.data?.items ?? [];
   const captchaQueue = challenges.data?.rows ?? [];
+  // The captcha solver toggle reflects the campaign's per-campaign solver_enabled
+  // override (null/true = on, only off when explicitly disabled).
+  const solverEnabled = board.data?.solver_enabled !== false;
 
   const createCampaign = useMutation(createCampaignMutation());
   const linkChannel = useMutation(linkCampaignChannelMutation());
   const assignAccount = useMutation(assignCampaignAccountMutation());
   const start = useMutation(startNeurocommentMutation());
   const stop = useMutation(stopNeurocommentMutation());
+  const setSolver = useMutation(setCampaignSolverMutation());
+  const retry = useMutation(retryChallengeMutation());
 
   const accountOptions = accounts.data?.items ?? [];
   const running = runtime.data?.running ?? false;
@@ -663,23 +669,29 @@ export function NeurocommentPage() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={captchaSolve}
+                aria-checked={solverEnabled}
                 aria-label={t('neurocomment.captcha.title')}
+                disabled={campaignId === null}
                 onClick={() => {
-                  setCaptchaSolve((v) => !v);
+                  if (campaignId !== null) {
+                    setSolver.mutate(
+                      { path: { campaign_id: campaignId }, body: { enabled: !solverEnabled } },
+                      { onSettled: invalidate },
+                    );
+                  }
                 }}
-                className="tb-sw relative h-[26px] w-[46px] shrink-0 rounded-full transition-colors"
-                style={{ background: captchaSolve ? '#0066ff' : '#d8d6d2' }}
+                className="tb-sw relative h-[26px] w-[46px] shrink-0 rounded-full transition-colors disabled:opacity-50"
+                style={{ background: solverEnabled ? '#0066ff' : '#d8d6d2' }}
               >
                 <span
                   className="absolute top-[3px] transition-[left] duration-200"
-                  style={{ left: captchaSolve ? '23px' : '3px' }}
+                  style={{ left: solverEnabled ? '23px' : '3px' }}
                 >
                   <span className="tb-sw-thumb block h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)]" />
                 </span>
               </button>
             </div>
-            {captchaSolve && captchaQueue.length > 0 ? (
+            {solverEnabled && captchaQueue.length > 0 ? (
               <div className="px-[14px] pb-[14px]">
                 <div className="mb-[9px] flex items-center gap-[7px] border-t border-[#f0eeea] pt-[11px]">
                   <svg
@@ -719,6 +731,12 @@ export function NeurocommentPage() {
                       </div>
                       <button
                         type="button"
+                        onClick={() => {
+                          retry.mutate(
+                            { body: { account_id: item.account_id, channel: item.channel } },
+                            { onSettled: invalidate },
+                          );
+                        }}
                         className="shrink-0 rounded-full bg-ink px-[13px] py-[6px] text-[11.5px] font-medium text-white"
                       >
                         {t('neurocomment.captcha.solve')}

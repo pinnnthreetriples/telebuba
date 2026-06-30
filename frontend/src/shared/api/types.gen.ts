@@ -5,6 +5,41 @@ export type ClientOptions = {
 };
 
 /**
+ * AccountChannelOnboarding
+ *
+ * Outcome of preparing one account to comment on one channel.
+ *
+ * ``reason`` carries a short human note for the non-``ready`` states (the
+ * flood-wait detail, the failing error type, etc.).
+ */
+export type AccountChannelOnboarding = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * State
+   */
+  state:
+    | 'ready'
+    | 'comments_off'
+    | 'join_by_request'
+    | 'chat_restricted'
+    | 'bot_challenge'
+    | 'bot_challenge_backoff'
+    | 'joining'
+    | 'failed';
+  /**
+   * Reason
+   */
+  reason?: string | null;
+};
+
+/**
  * AccountChannelReadiness
  *
  * One channel's readiness summary on an account card.
@@ -967,6 +1002,34 @@ export type RemoveChannelRequest = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * RetryPairRequest
+ *
+ * Operator retry of one (account, channel) challenge — the captcha «Решить».
+ */
+export type RetryPairRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Channel
+   */
+  channel: string;
+};
+
+/**
+ * SolverToggleRequest
+ *
+ * Turn the per-campaign challenge (captcha) solver on/off.
+ */
+export type SolverToggleRequest = {
+  /**
+   * Enabled
+   */
+  enabled: boolean;
 };
 
 /**
@@ -2604,6 +2667,62 @@ export type AssignCampaignAccountResponses = {
 
 export type AssignCampaignAccountResponse =
   AssignCampaignAccountResponses[keyof AssignCampaignAccountResponses];
+
+export type SetCampaignSolverData = {
+  body: SolverToggleRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/solver';
+};
+
+export type SetCampaignSolverErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetCampaignSolverError = SetCampaignSolverErrors[keyof SetCampaignSolverErrors];
+
+export type SetCampaignSolverResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type SetCampaignSolverResponse =
+  SetCampaignSolverResponses[keyof SetCampaignSolverResponses];
+
+export type RetryChallengeData = {
+  body: RetryPairRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/retry';
+};
+
+export type RetryChallengeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RetryChallengeError = RetryChallengeErrors[keyof RetryChallengeErrors];
+
+export type RetryChallengeResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountChannelOnboarding;
+};
+
+export type RetryChallengeResponse = RetryChallengeResponses[keyof RetryChallengeResponses];
 
 export type ListCampaignChallengesData = {
   body?: never;

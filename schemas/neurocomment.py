@@ -51,6 +51,23 @@ class AssignAccountRequest(BaseModel):
     account_id: str = Field(min_length=1)
 
 
+class SolverToggleRequest(BaseModel):
+    """Turn the per-campaign challenge (captcha) solver on/off."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
+class RetryPairRequest(BaseModel):
+    """Operator retry of one (account, channel) challenge — the captcha «Решить»."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str = Field(min_length=1)
+    channel: str = Field(min_length=1)
+
+
 class StartNeurocommentRequest(BaseModel):
     """Start the fleet listener on the given account."""
 

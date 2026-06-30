@@ -33,6 +33,7 @@ const BOARD = {
   campaign_id: 'c1',
   campaign_name: 'Promo',
   status: 'active',
+  solver_enabled: true,
   channels: [{ channel: '@news', status: 'ready', ready_accounts: 1, total_accounts: 1 }],
   accounts: [
     {
@@ -250,7 +251,7 @@ test('listener pause/edit/remove actions fire their handlers', async () => {
   });
 });
 
-test('the captcha switch toggles', async () => {
+test('toggling the captcha solver persists the campaign override', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
@@ -259,7 +260,56 @@ test('the captcha switch toggles', async () => {
   const sw = screen.getByRole('switch', { name: 'Решение капчи' });
   expect(sw).toHaveAttribute('aria-checked', 'true');
   await userEvent.click(sw);
-  expect(sw).toHaveAttribute('aria-checked', 'false');
+  await waitFor(() => {
+    const posted = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return request.url.includes('/campaigns/c1/solver') && request.method === 'POST';
+    });
+    expect(posted).toBe(true);
+  });
+});
+
+test('Решить retries a challenged pair', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname.endsWith('/challenges')) {
+      return Promise.resolve(
+        jsonResponse({
+          rows: [
+            {
+              account_id: 'acc-9',
+              channel: '@x',
+              raw_text: 'cap',
+              outcome: 'failed',
+              decided_at: '2026-06-30T12:00:00+00:00',
+            },
+          ],
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Пройти')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('Пройти'));
+  await waitFor(() => {
+    const retried = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.endsWith('/neurocomment/retry'));
+    expect(retried).toBe(true);
+  });
 });
 
 test('the idle-accounts banner opens the accounts modal', async () => {

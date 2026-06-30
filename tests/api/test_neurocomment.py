@@ -9,6 +9,7 @@ import pytest
 
 from schemas.challenge import ChallengeRow, ChallengeRowList
 from schemas.neurocomment import (
+    AccountChannelOnboarding,
     CampaignList,
     ChannelLinkOutcome,
     NeurocommentBoard,
@@ -201,3 +202,32 @@ async def test_start_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> N
         )
     assert resp.status_code == 200
     assert resp.json()["running"] is True
+
+
+@pytest.mark.asyncio
+async def test_set_solver_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(campaign_id: str, value: object) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.neurocomment.set_solver_enabled", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/solver",
+            json={"enabled": False},
+        )
+    assert resp.status_code == 204
+
+
+@pytest.mark.asyncio
+async def test_retry_challenge_reonboards(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(account_id: str, channel: str) -> AccountChannelOnboarding:
+        return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
+
+    monkeypatch.setattr("services.neurocomment.retry_pair", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/retry",
+            json={"account_id": "acc-1", "channel": "@news"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["state"] == "ready"
