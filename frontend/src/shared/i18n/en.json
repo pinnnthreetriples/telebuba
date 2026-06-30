@@ -141,6 +141,13 @@
       "cancel": "Cancel",
       "confirm": "Delete"
     },
+    "proxyDeleteModal": {
+      "title": "Delete proxy {{endpoint}}?",
+      "body": "The proxy will be removed from the pool. This action is irreversible.",
+      "bodyAssigned": "{{count}} account(s) use this proxy — they will be detached (left without a proxy). This action is irreversible.",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
     "proxyForm": {
       "host": "Host",
       "port": "Port",

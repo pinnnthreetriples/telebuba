@@ -63,7 +63,7 @@ test('shows the empty state and triggers add', async () => {
   expect(onAdd).toHaveBeenCalled();
 });
 
-test('delete fires a DELETE request', async () => {
+function routeWithDelete() {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     if (request.method === 'DELETE') {
@@ -71,15 +71,39 @@ test('delete fires a DELETE request', async () => {
     }
     return Promise.resolve(jsonResponse({ proxies: [proxy()] }));
   });
+}
+
+function sawDelete(): boolean {
+  return vi.mocked(fetch).mock.calls.some(([input]) => (input as Request).method === 'DELETE');
+}
+
+test('delete asks for confirmation, then fires the DELETE on confirm', async () => {
+  routeWithDelete();
   renderWithClient(<ProxyPool onAdd={vi.fn()} />);
   await waitFor(() => {
     expect(screen.getByText('nl.example:1080')).toBeInTheDocument();
   });
+
+  // the card × opens a confirm dialog — nothing is deleted yet
   await userEvent.click(screen.getByLabelText('Удалить'));
+  expect(screen.getByText(/Удалить прокси/)).toBeInTheDocument();
+  expect(sawDelete()).toBe(false);
+
+  // confirming fires the DELETE
+  await userEvent.click(screen.getByText('Удалить'));
   await waitFor(() => {
-    const sawDelete = vi
-      .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).method === 'DELETE');
-    expect(sawDelete).toBe(true);
+    expect(sawDelete()).toBe(true);
   });
+});
+
+test('cancelling the confirm dialog does not delete', async () => {
+  routeWithDelete();
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  await waitFor(() => {
+    expect(screen.getByText('nl.example:1080')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByLabelText('Удалить'));
+  await userEvent.click(screen.getByText('Отмена'));
+  expect(sawDelete()).toBe(false);
 });

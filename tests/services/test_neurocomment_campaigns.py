@@ -7,7 +7,15 @@ from typing import TYPE_CHECKING
 import pytest
 from sqlalchemy import insert, select
 
-from core.db import _get_engine, configure_database, create_account, insert_challenge
+from core.db import (
+    _get_engine,
+    configure_database,
+    create_account,
+    fetch_account,
+    insert_challenge,
+    list_campaign_readiness,
+    upsert_readiness,
+)
 from core.repositories.neurocomment._tables import (
     _neurocomment_campaign_accounts,
     _neurocomment_campaign_channels,
@@ -16,6 +24,7 @@ from core.repositories.neurocomment._tables import (
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate
+from services.accounts import remove_account
 from services.neurocomment import campaigns
 
 if TYPE_CHECKING:
@@ -95,6 +104,24 @@ async def test_list_campaign_challenges_merges_failed_across_channels() -> None:
     assert {row.channel for row in queue.rows} == {"@a", "@b"}
     assert {row.outcome for row in queue.rows} <= {"failed", "give_up"}
     assert len(queue.rows) == 2
+
+
+@pytest.mark.asyncio
+async def test_remove_account_clears_neurocomment_links() -> None:
+    """Deleting a campaign-assigned account must not explode on the FK (was a 500)."""
+    campaign = await campaigns.create_campaign(CampaignCreate(name="C", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@chan")
+    await create_account(AccountCreate(account_id="neuro-acc", label="A", session_name="neuro-acc"))
+    await campaigns.assign_account_to_campaign(campaign.campaign_id, "neuro-acc")
+    await upsert_readiness("neuro-acc", "@chan", joined=True, captcha_passed=True, ready=True)
+
+    # Previously raised IntegrityError (FK accounts) → 500; now the children go first.
+    await remove_account("neuro-acc")
+
+    assert await fetch_account("neuro-acc") is None
+    assert (await campaigns.list_campaign_accounts(campaign.campaign_id)).links == []
+    readiness = (await list_campaign_readiness(campaign.campaign_id)).readiness
+    assert all(r.account_id != "neuro-acc" for r in readiness)
 
 
 @pytest.mark.asyncio

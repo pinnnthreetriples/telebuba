@@ -10,6 +10,8 @@ import {
 } from '@/entities/proxy';
 import type { ProxyRead } from '@/shared/api';
 
+import { ProxyDeleteModal } from './ProxyDeleteModal';
+
 // The design's proxy-pool card: one card per pool proxy with a usage bar
 // (used/capacity), or an empty-state when the pool has none. Both add buttons
 // open the add-proxy modal (owned by the page). Wired to the real /proxies pool.
@@ -20,6 +22,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
   const remove = useMutation(deleteProxyMutation());
   const check = useMutation(checkProxyMutation());
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [toDelete, setToDelete] = useState<ProxyRead | null>(null);
 
   const proxies = data?.proxies ?? [];
   const empty = proxies.length === 0;
@@ -127,7 +130,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
               proxy={proxy}
               busy={busyId === proxy.id}
               onDelete={() => {
-                onDelete(proxy.id);
+                setToDelete(proxy);
               }}
               onCheck={() => {
                 onCheck(proxy.id);
@@ -135,6 +138,18 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             />
           ))}
         </div>
+      )}
+      {toDelete && (
+        <ProxyDeleteModal
+          endpoint={`${toDelete.host}:${String(toDelete.port)}`}
+          used={toDelete.used}
+          onClose={() => {
+            setToDelete(null);
+          }}
+          onConfirm={() => {
+            onDelete(toDelete.id);
+          }}
+        />
       )}
     </div>
   );

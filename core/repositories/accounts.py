@@ -286,8 +286,30 @@ def _delete_account(account_id: str) -> None:
     # must outlive the account, so it is left untouched here.
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
+    from core.repositories.neurocomment._tables import (  # noqa: PLC0415
+        _neurocomment_campaign_accounts,
+        _neurocomment_comments,
+        _neurocomment_readiness,
+    )
 
     with _get_engine().begin() as connection:
+        # Neurocomment children FK accounts.account_id (campaign serving links,
+        # per-channel readiness, posted/claimed comments) → clear them first too.
+        connection.execute(
+            delete(_neurocomment_campaign_accounts).where(
+                _neurocomment_campaign_accounts.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_neurocomment_readiness).where(
+                _neurocomment_readiness.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_neurocomment_comments).where(
+                _neurocomment_comments.c.account_id == account_id,
+            ),
+        )
         connection.execute(
             delete(_warming_joined_channels).where(
                 _warming_joined_channels.c.account_id == account_id,
