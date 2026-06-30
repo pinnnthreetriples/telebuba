@@ -1,19 +1,35 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import {
+  neurocommentSettingsQueryOptions,
+  updateNeurocommentSettingsMutation,
+} from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
-import type { WarmingSettings } from '@/shared/api';
+import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
 
 const INPUT =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 const FIELD_LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 
-// ponytail: limits + flags are local mock until the backend carries them — the
-// page is design-first; only the Gemini key persists (the field that maps 1:1).
+// Warming per-action counts are auto-managed by the engine (phase + trust), not
+// operator-set — shown read-only for reference (the editable warming controls
+// are the toggles below). Neuro limits ARE real + editable (loaded from the API).
 const WARM_LIMITS = { sub: '15', read: '80', react: '25', pauseFrom: '3', pauseTo: '12' };
-const NEURO_LIMITS = { cpd: '20', delayFrom: '8', delayTo: '25', parallel: '6', trust: '45' };
-const FLAGS = ['autostart', 'notifyErr', 'antidetect'] as const;
+// The three real, engine-used warming toggles surfaced as the design's flag rows.
+const WARMING_TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
+type WarmingToggle = (typeof WARMING_TOGGLES)[number];
+
+function neuroForm(s: NeurocommentSettings) {
+  return {
+    cpd: String(s.max_comments_per_channel_per_day),
+    delayFrom: String(s.reply_delay_min_seconds),
+    delayTo: String(s.reply_delay_max_seconds),
+    parallel: String(s.max_comments_per_hour),
+    trust: String(s.min_trust_score),
+  };
+}
 
 // The design's pill switch (track + sliding thumb), 18px of travel.
 function Switch({
@@ -69,10 +85,12 @@ function NumberField({
   label,
   value,
   onChange,
+  readOnly = false,
 }: {
   label: string;
   value: string;
   onChange: (value: string) => void;
+  readOnly?: boolean;
 }) {
   return (
     <label className="block">
@@ -80,10 +98,12 @@ function NumberField({
       <input
         inputMode="numeric"
         value={value}
+        readOnly={readOnly}
+        disabled={readOnly}
         onChange={(event) => {
           onChange(event.target.value);
         }}
-        className={INPUT}
+        className={readOnly ? `${INPUT} cursor-not-allowed bg-[#f6f5f2] text-ink-subtle` : INPUT}
       />
     </label>
   );
@@ -95,17 +115,18 @@ function RangeField({
   to,
   onFrom,
   onTo,
+  readOnly = false,
 }: {
   label: string;
   from: string;
   to: string;
   onFrom: (value: string) => void;
   onTo: (value: string) => void;
+  readOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  const box =
-    'tb-time flex flex-1 items-center gap-[7px] rounded-[10px] border border-line-input bg-white px-3 py-[9px]';
-  const inp = 'min-w-0 flex-1 border-none bg-transparent text-right text-[13px] outline-none';
+  const box = `tb-time flex flex-1 items-center gap-[7px] rounded-[10px] border border-line-input px-3 py-[9px] ${readOnly ? 'bg-[#f6f5f2]' : 'bg-white'}`;
+  const inp = `min-w-0 flex-1 border-none bg-transparent text-right text-[13px] outline-none ${readOnly ? 'text-ink-subtle' : ''}`;
   return (
     <div>
       <span className={FIELD_LABEL}>{label}</span>
@@ -115,6 +136,8 @@ function RangeField({
           <input
             inputMode="numeric"
             value={from}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(event) => {
               onFrom(event.target.value);
             }}
@@ -126,6 +149,8 @@ function RangeField({
           <input
             inputMode="numeric"
             value={to}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(event) => {
               onTo(event.target.value);
             }}
@@ -137,25 +162,42 @@ function RangeField({
   );
 }
 
-function SettingsForm({ settings }: { settings: WarmingSettings }) {
+function SettingsForm({
+  settings,
+  neuroSettings,
+}: {
+  settings: WarmingSettings;
+  neuroSettings: NeurocommentSettings;
+}) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const save = useMutation(updateWarmingSettingsMutation());
+  const saveWarm = useMutation(updateWarmingSettingsMutation());
+  const saveNeuro = useMutation(updateNeurocommentSettingsMutation());
 
   const [geminiKey, setGeminiKey] = useState('');
   const [showKey, setShowKey] = useState(false);
-  const [warm, setWarm] = useState(WARM_LIMITS);
-  const [neuro, setNeuro] = useState(NEURO_LIMITS);
-  const [flags, setFlags] = useState({ autostart: true, notifyErr: true, antidetect: true });
+  const [neuro, setNeuro] = useState(() => neuroForm(neuroSettings));
+  const [toggles, setToggles] = useState<Record<WarmingToggle, boolean>>({
+    reactions_enabled: settings.reactions_enabled ?? true,
+    join_enabled: settings.join_enabled ?? true,
+    inter_account_chat: settings.inter_account_chat ?? false,
+  });
   const [justSaved, setJustSaved] = useState(false);
 
+  // Re-sync the neuro form if the server value changes (e.g. another tab saved).
+  useEffect(() => {
+    setNeuro(neuroForm(neuroSettings));
+  }, [neuroSettings]);
+
+  const pending = saveWarm.isPending || saveNeuro.isPending;
+
   const onSave = () => {
-    save.mutate(
-      {
+    void Promise.all([
+      saveWarm.mutateAsync({
         body: {
-          reactions_enabled: settings.reactions_enabled ?? true,
-          join_enabled: settings.join_enabled ?? true,
-          inter_account_chat: settings.inter_account_chat ?? false,
+          reactions_enabled: toggles.reactions_enabled,
+          join_enabled: toggles.join_enabled,
+          inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: settings.enforce_readiness ?? true,
           quiet_hours_enabled: settings.quiet_hours_enabled ?? false,
           quiet_hours_start: settings.quiet_hours_start ?? 0,
@@ -165,24 +207,33 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
           gemini_api_key: geminiKey.trim() === '' ? null : geminiKey,
           clear_gemini_key: false,
         },
-      },
-      {
-        onSuccess: () => {
-          setJustSaved(true);
-          window.setTimeout(() => {
-            setJustSaved(false);
-          }, 1400);
-          void queryClient.invalidateQueries();
+      }),
+      saveNeuro.mutateAsync({
+        body: {
+          max_comments_per_channel_per_day: Number(neuro.cpd),
+          reply_delay_min_seconds: Number(neuro.delayFrom),
+          reply_delay_max_seconds: Number(neuro.delayTo),
+          max_comments_per_hour: Number(neuro.parallel),
+          min_trust_score: Number(neuro.trust),
         },
-      },
-    );
+      }),
+    ]).then(() => {
+      setJustSaved(true);
+      window.setTimeout(() => {
+        setJustSaved(false);
+      }, 1400);
+      void queryClient.invalidateQueries();
+    }, undefined);
   };
 
   const onCancel = () => {
     setGeminiKey('');
-    setWarm(WARM_LIMITS);
-    setNeuro(NEURO_LIMITS);
-    setFlags({ autostart: true, notifyErr: true, antidetect: true });
+    setNeuro(neuroForm(neuroSettings));
+    setToggles({
+      reactions_enabled: settings.reactions_enabled ?? true,
+      join_enabled: settings.join_enabled ?? true,
+      inter_account_chat: settings.inter_account_chat ?? false,
+    });
   };
 
   return (
@@ -242,38 +293,33 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
       </Card>
 
       <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>
+        <div className="mb-3 text-[11.5px] text-ink-subtle">{t('settings.warmLimits.auto')}</div>
         <div className="grid grid-cols-2 gap-3">
           <NumberField
             label={t('settings.warmLimits.sub')}
-            value={warm.sub}
-            onChange={(v) => {
-              setWarm((w) => ({ ...w, sub: v }));
-            }}
+            value={WARM_LIMITS.sub}
+            onChange={() => undefined}
+            readOnly
           />
           <NumberField
             label={t('settings.warmLimits.read')}
-            value={warm.read}
-            onChange={(v) => {
-              setWarm((w) => ({ ...w, read: v }));
-            }}
+            value={WARM_LIMITS.read}
+            onChange={() => undefined}
+            readOnly
           />
           <NumberField
             label={t('settings.warmLimits.react')}
-            value={warm.react}
-            onChange={(v) => {
-              setWarm((w) => ({ ...w, react: v }));
-            }}
+            value={WARM_LIMITS.react}
+            onChange={() => undefined}
+            readOnly
           />
           <RangeField
             label={t('settings.warmLimits.pause')}
-            from={warm.pauseFrom}
-            to={warm.pauseTo}
-            onFrom={(v) => {
-              setWarm((w) => ({ ...w, pauseFrom: v }));
-            }}
-            onTo={(v) => {
-              setWarm((w) => ({ ...w, pauseTo: v }));
-            }}
+            from={WARM_LIMITS.pauseFrom}
+            to={WARM_LIMITS.pauseTo}
+            onFrom={() => undefined}
+            onTo={() => undefined}
+            readOnly
           />
         </div>
       </Card>
@@ -316,10 +362,10 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
       </Card>
 
       <Card className="px-5 py-[6px]" mb="mb-[18px]">
-        {FLAGS.map((flag, index) => (
+        {WARMING_TOGGLES.map((flag, index) => (
           <div
             key={flag}
-            className={`flex items-center justify-between gap-3 py-[13px] ${index < FLAGS.length - 1 ? 'border-b border-[#f0eeeb]' : ''}`}
+            className={`flex items-center justify-between gap-3 py-[13px] ${index < WARMING_TOGGLES.length - 1 ? 'border-b border-[#f0eeeb]' : ''}`}
           >
             <div>
               <div className="text-[13px] font-medium">{t(`settings.flag.${flag}.label`)}</div>
@@ -328,9 +374,9 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
               </div>
             </div>
             <Switch
-              checked={flags[flag]}
+              checked={toggles[flag]}
               onChange={(v) => {
-                setFlags((f) => ({ ...f, [flag]: v }));
+                setToggles((f) => ({ ...f, [flag]: v }));
               }}
               label={t(`settings.flag.${flag}.label`)}
             />
@@ -349,7 +395,7 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
         <button
           type="button"
           onClick={onSave}
-          disabled={save.isPending}
+          disabled={pending}
           className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
         >
           {justSaved ? (
@@ -381,21 +427,25 @@ function SettingsForm({ settings }: { settings: WarmingSettings }) {
 
 export function SettingsPage() {
   const { t } = useTranslation();
-  const { data, isPending, isError } = useQuery(warmingSettingsQueryOptions());
+  const warming = useQuery(warmingSettingsQueryOptions());
+  const neuro = useQuery(neurocommentSettingsQueryOptions());
+
+  const loading = warming.isPending || neuro.isPending;
+  const failed = warming.isError || neuro.isError || !warming.data || !neuro.data;
 
   return (
     <div className="tb-fadeup mx-auto max-w-[760px]">
       <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">
         {t('settings.title')}
       </h1>
-      {isPending ? (
+      {loading ? (
         <p className="text-ink-muted">{t('settings.loading')}</p>
-      ) : isError || !data ? (
+      ) : failed ? (
         <p role="alert" className="text-danger">
           {t('settings.error')}
         </p>
       ) : (
-        <SettingsForm settings={data} />
+        <SettingsForm settings={warming.data} neuroSettings={neuro.data} />
       )}
     </div>
   );

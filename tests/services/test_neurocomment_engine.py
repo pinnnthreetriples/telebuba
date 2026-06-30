@@ -33,10 +33,10 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
-from schemas.accounts import AccountCreate, AccountList
+from schemas.accounts import AccountCreate, AccountList, AccountRead
 from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.gemini import GeminiResult
-from schemas.neurocomment import CampaignCreate
+from schemas.neurocomment import CampaignCreate, NeurocommentSettings
 from schemas.telegram_actions import ActionResult, NewPostEvent
 from services.content import try_reserve_sent
 from services.neurocomment import _seams, _state, engine
@@ -901,3 +901,33 @@ async def test_selection_reads_cached_spam_and_never_probes(
 
     assert probed == []
     assert len(comment.calls) == 1
+
+
+def test_min_trust_gate_rejects_below_threshold() -> None:
+    """An account whose Trust Score is below the operator's floor is not healthy."""
+    account = AccountRead(
+        account_id="low",
+        status="new",  # not alive → docks trust well below a 100 floor
+        created_at="2026-06-30T00:00:00+00:00",
+        updated_at="2026-06-30T00:00:00+00:00",
+    )
+    limits = NeurocommentSettings(
+        max_comments_per_hour=10,
+        max_comments_per_channel_per_day=3,
+        reply_delay_min_seconds=1.0,
+        reply_delay_max_seconds=2.0,
+        min_trust_score=100,
+        updated_at="now",
+    )
+    pool = engine._SelectionPool(
+        accounts={"low": account},
+        ready_account_ids=frozenset({"low"}),
+        states={},
+        spam={},
+        fingerprints={},
+        hourly_counts={},
+        daily_counts={},
+        limits=limits,
+    )
+
+    assert engine._is_healthy(account, 1, datetime.now(UTC), pool) is False

@@ -5,9 +5,11 @@ export {
   createCampaignMutation,
   getNeurocommentBoardOptions as neurocommentBoardQueryOptions,
   getNeurocommentRuntimeOptions as neurocommentRuntimeQueryOptions,
+  getNeurocommentSettingsOptions as neurocommentSettingsQueryOptions,
   linkCampaignChannelMutation,
   listCampaignChallengesOptions as campaignChallengesQueryOptions,
   listCampaignsOptions as campaignsQueryOptions,
   startNeurocommentMutation,
   stopNeurocommentMutation,
+  updateNeurocommentSettingsMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

@@ -17,6 +17,8 @@ from schemas.neurocomment import (
     NeurocommentBoard,
     NeurocommentCampaign,
     NeurocommentRuntimeStatus,
+    NeurocommentSettings,
+    NeurocommentSettingsUpdate,
     StartNeurocommentRequest,
 )
 from services import neurocomment as nc_service
@@ -96,3 +98,21 @@ async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
 async def stop() -> NeurocommentRuntimeStatus:
     await nc_service.stop_neurocomment()
     return await nc_service.neurocomment_runtime_status()
+
+
+@router.get(
+    "/settings",
+    response_model=NeurocommentSettings,
+    operation_id="getNeurocommentSettings",
+)
+async def get_settings() -> NeurocommentSettings:
+    return await nc_service.load_neurocomment_settings()
+
+
+@router.put(
+    "/settings",
+    response_model=NeurocommentSettings,
+    operation_id="updateNeurocommentSettings",
+)
+async def update_settings(body: NeurocommentSettingsUpdate) -> NeurocommentSettings:
+    return await nc_service.save_neurocomment_settings(body)

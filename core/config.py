@@ -319,6 +319,9 @@ class NeurocommentSettings(BaseSettings):
     join_delay_max_seconds: float = Field(default=60.0, ge=0.0)
     # Per-account throughput ceiling.
     max_comments_per_hour: int = Field(default=10, ge=1)
+    # Minimum Trust Score an account needs to be picked for commenting (0 = no
+    # gate). Operator-tunable via the neurocomment settings store + Settings UI.
+    min_trust_score: int = Field(default=0, ge=0, le=100)
     # Comment length guardrail (words).
     comment_max_words: int = Field(default=30, ge=1)
     # Per-(account, channel) daily comment cap (0 = no cap).

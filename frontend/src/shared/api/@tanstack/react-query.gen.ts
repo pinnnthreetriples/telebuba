@@ -23,6 +23,7 @@ import {
   getMe,
   getNeurocommentBoard,
   getNeurocommentRuntime,
+  getNeurocommentSettings,
   getWarmingBoard,
   getWarmingSettings,
   importAccountTdata,
@@ -50,6 +51,7 @@ import {
   submitLoginCode,
   unassignProxy,
   updateAccountProfile,
+  updateNeurocommentSettings,
   updateWarmingSettings,
 } from '../sdk.gen';
 import type {
@@ -91,6 +93,9 @@ import type {
   GetNeurocommentRuntimeData,
   GetNeurocommentRuntimeError,
   GetNeurocommentRuntimeResponse,
+  GetNeurocommentSettingsData,
+  GetNeurocommentSettingsError,
+  GetNeurocommentSettingsResponse,
   GetWarmingBoardData,
   GetWarmingBoardError,
   GetWarmingBoardResponse,
@@ -168,6 +173,9 @@ import type {
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
+  UpdateNeurocommentSettingsData,
+  UpdateNeurocommentSettingsError,
+  UpdateNeurocommentSettingsResponse,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
@@ -1254,6 +1262,58 @@ export const stopNeurocommentMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getNeurocommentSettingsQueryKey = (options?: Options<GetNeurocommentSettingsData>) =>
+  createQueryKey('getNeurocommentSettings', options);
+
+/**
+ * Get Settings
+ */
+export const getNeurocommentSettingsOptions = (options?: Options<GetNeurocommentSettingsData>) =>
+  queryOptions<
+    GetNeurocommentSettingsResponse,
+    GetNeurocommentSettingsError,
+    GetNeurocommentSettingsResponse,
+    ReturnType<typeof getNeurocommentSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNeurocommentSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNeurocommentSettingsQueryKey(options),
+  });
+
+/**
+ * Update Settings
+ */
+export const updateNeurocommentSettingsMutation = (
+  options?: Partial<Options<UpdateNeurocommentSettingsData>>,
+): UseMutationOptions<
+  UpdateNeurocommentSettingsResponse,
+  UpdateNeurocommentSettingsError,
+  Options<UpdateNeurocommentSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateNeurocommentSettingsResponse,
+    UpdateNeurocommentSettingsError,
+    Options<UpdateNeurocommentSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateNeurocommentSettings({
         ...options,
         ...fnOptions,
         throwOnError: true,

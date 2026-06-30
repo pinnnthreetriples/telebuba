@@ -27,6 +27,15 @@ const SETTINGS = {
   updated_at: 'now',
 };
 
+const NEURO_SETTINGS = {
+  max_comments_per_hour: 10,
+  max_comments_per_channel_per_day: 3,
+  reply_delay_min_seconds: 3,
+  reply_delay_max_seconds: 10,
+  min_trust_score: 45,
+  updated_at: 'now',
+};
+
 function jsonResponse(body: unknown): Response {
   return new Response(JSON.stringify(body), {
     status: 200,
@@ -35,66 +44,57 @@ function jsonResponse(body: unknown): Response {
 }
 
 function routeSettings() {
-  vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse(SETTINGS)));
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/neurocomment/settings') {
+      return Promise.resolve(jsonResponse(NEURO_SETTINGS));
+    }
+    return Promise.resolve(jsonResponse(SETTINGS));
+  });
 }
 
-test('renders the design cards and animates the save', async () => {
+test('saves both warming toggles and neuro limits, then confirms', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
   await waitFor(() => {
     expect(screen.getByText('Сохранить')).toBeInTheDocument();
   });
-  // the limit cards and the described toggles from the reference are present
   expect(screen.getByText('Лимиты прогрева')).toBeInTheDocument();
   expect(screen.getByText('Лимиты нейрокомментинга')).toBeInTheDocument();
+  // neuro limits are loaded from the API
+  expect(screen.getByLabelText('Мин. trust-score для работы')).toHaveValue('45');
 
-  await userEvent.click(screen.getByLabelText('Автозапуск процессов'));
+  // a real warming toggle + save fires both the warming and neuro PUTs
+  await userEvent.click(screen.getByLabelText('Реакции в прогреве'));
   await userEvent.click(screen.getByText('Сохранить'));
   await waitFor(() => {
-    const saved = vi.mocked(fetch).mock.calls.some(([input]) => {
-      const request = input as Request;
-      return request.url.endsWith('/warming/settings') && request.method === 'PUT';
-    });
-    expect(saved).toBe(true);
+    const calls = vi.mocked(fetch).mock.calls.map(([i]) => i as Request);
+    const warmPut = calls.some((r) => r.url.endsWith('/warming/settings') && r.method === 'PUT');
+    const neuroPut = calls.some(
+      (r) => r.url.endsWith('/neurocomment/settings') && r.method === 'PUT',
+    );
+    expect(warmPut && neuroPut).toBe(true);
   });
-  // save swaps to the animated "Сохранено" confirmation
   expect(await screen.findByText('Сохранено')).toBeInTheDocument();
 });
 
-test('edits the key and limits, toggles a flag, then cancel resets', async () => {
+test('warming limits are read-only; neuro limits edit and cancel resets', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
   await waitFor(() => {
     expect(screen.getByText('Сохранить')).toBeInTheDocument();
   });
 
-  await userEvent.type(screen.getByPlaceholderText(/Ключ задан/), 'secret');
-  await userEvent.click(screen.getByRole('button', { name: 'Gemini API key' }));
+  // warming limits are auto-managed → shown read-only
+  expect(screen.getByLabelText('Подписок в день')).toHaveAttribute('readonly');
 
-  const sub = screen.getByLabelText('Подписок в день');
-  await userEvent.clear(sub);
-  await userEvent.type(sub, '20');
-  expect(sub).toHaveValue('20');
-
-  const cpd = screen.getByLabelText('Комментариев в день на аккаунт');
+  // neuro limits are editable
+  const cpd = screen.getByLabelText('Комментариев в день на канал');
   await userEvent.clear(cpd);
-  await userEvent.type(cpd, '30');
-  expect(cpd).toHaveValue('30');
+  await userEvent.type(cpd, '7');
+  expect(cpd).toHaveValue('7');
 
-  // exercise the remaining limit handlers (number fields + range от/до inputs)
-  for (const label of [
-    'Чтений постов в день',
-    'Реакций в день',
-    'Параллельных аккаунтов',
-    'Мин. trust-score для работы',
-  ]) {
-    await userEvent.type(screen.getByLabelText(label), '5');
-  }
-  for (const range of [...screen.getAllByLabelText('от'), ...screen.getAllByLabelText('до')]) {
-    await userEvent.type(range, '9');
-  }
-
-  await userEvent.click(screen.getByLabelText('Анти-детект профили'));
   await userEvent.click(screen.getByText('Отмена'));
-  expect(screen.getByLabelText('Подписок в день')).toHaveValue('15');
+  // cancel resets the neuro field back to the loaded value
+  expect(screen.getByLabelText('Комментариев в день на канал')).toHaveValue('3');
 });

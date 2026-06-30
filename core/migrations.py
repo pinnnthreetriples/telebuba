@@ -17,6 +17,7 @@ from core.migration_steps import (
     _add_neurocomment_challenges,
     _add_neurocomment_comment_indexes,
     _add_neurocomment_runtime,
+    _add_neurocomment_settings,
     _add_neurocomment_tables,
     _add_readiness_human_skipped,
     _add_unique_session_name_index,
@@ -61,6 +62,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (16, "add_warming_state_promoted_to_nc", _add_warming_state_promoted_to_nc),
     (17, "add_users_table", _add_users_table),
     (18, "add_proxy_pool", _add_proxy_pool),
+    (19, "add_neurocomment_settings", _add_neurocomment_settings),
 )
 
 

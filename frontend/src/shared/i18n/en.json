@@ -265,6 +265,7 @@
     "warmLimits": {
       "title": "Warming limits",
       "subtitle": "Actions per day per account",
+      "auto": "Auto-managed by phase and trust-score (shown for reference)",
       "sub": "Subscriptions per day",
       "read": "Post reads per day",
       "react": "Reactions per day",
@@ -273,23 +274,23 @@
     "neuroLimits": {
       "title": "Neurocomment limits",
       "subtitle": "Comment publishing pace",
-      "cpd": "Comments per day per account",
-      "delay": "Delay between comments (min)",
-      "parallel": "Parallel accounts",
+      "cpd": "Comments per day per channel",
+      "delay": "Reply delay (sec)",
+      "parallel": "Comments per hour",
       "trust": "Min. trust-score to run"
     },
     "flag": {
-      "autostart": {
-        "label": "Autostart processes",
-        "desc": "Resume warming and commenting on startup"
+      "reactions_enabled": {
+        "label": "Reactions in warming",
+        "desc": "Leave reactions during warming"
       },
-      "notifyErr": {
-        "label": "Error notifications",
-        "desc": "Alert the operator on bans and captchas"
+      "join_enabled": {
+        "label": "Join channels",
+        "desc": "Subscribe to channels during warming"
       },
-      "antidetect": {
-        "label": "Anti-detect profiles",
-        "desc": "Pin the device fingerprint to the account"
+      "inter_account_chat": {
+        "label": "Inter-account chat",
+        "desc": "Allow accounts to message each other"
       }
     }
   },

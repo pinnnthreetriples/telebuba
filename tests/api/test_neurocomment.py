@@ -14,6 +14,7 @@ from schemas.neurocomment import (
     NeurocommentBoard,
     NeurocommentCampaign,
     NeurocommentRuntimeStatus,
+    NeurocommentSettings,
 )
 
 if TYPE_CHECKING:
@@ -68,6 +69,47 @@ async def test_list_campaign_challenges(app: FastAPI, monkeypatch: pytest.Monkey
         resp = await client.get("/api/v1/neurocomment/campaigns/c1/challenges")
     assert resp.status_code == 200
     assert [r["channel"] for r in resp.json()["rows"]] == ["@a"]
+
+
+def _settings() -> NeurocommentSettings:
+    return NeurocommentSettings(
+        max_comments_per_hour=10,
+        max_comments_per_channel_per_day=3,
+        reply_delay_min_seconds=3.0,
+        reply_delay_max_seconds=10.0,
+        min_trust_score=45,
+        updated_at="now",
+    )
+
+
+@pytest.mark.asyncio
+async def test_get_and_update_neuro_settings(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _load() -> NeurocommentSettings:
+        return _settings()
+
+    async def _save(body: object) -> NeurocommentSettings:  # noqa: ARG001
+        return _settings()
+
+    monkeypatch.setattr("services.neurocomment.load_neurocomment_settings", _load)
+    monkeypatch.setattr("services.neurocomment.save_neurocomment_settings", _save)
+    async with _client(app) as client:
+        got = await client.get("/api/v1/neurocomment/settings")
+        put = await client.put(
+            "/api/v1/neurocomment/settings",
+            json={
+                "max_comments_per_hour": 10,
+                "max_comments_per_channel_per_day": 3,
+                "reply_delay_min_seconds": 3.0,
+                "reply_delay_max_seconds": 10.0,
+                "min_trust_score": 45,
+            },
+        )
+    assert got.status_code == 200
+    assert got.json()["min_trust_score"] == 45
+    assert put.status_code == 200
 
 
 @pytest.mark.asyncio

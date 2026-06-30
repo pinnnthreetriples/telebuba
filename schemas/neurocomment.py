@@ -313,3 +313,26 @@ class NeurocommentRuntimeStatus(BaseModel):
     running: bool
     active_channels: int = 0
     listener_account_id: str | None = None
+
+
+class NeurocommentSettings(BaseModel):
+    """Operator-editable neurocomment limits — the engine reads these at selection."""
+
+    max_comments_per_hour: int = Field(ge=1)
+    max_comments_per_channel_per_day: int = Field(ge=0)
+    reply_delay_min_seconds: float = Field(ge=0)
+    reply_delay_max_seconds: float = Field(ge=0)
+    min_trust_score: int = Field(ge=0, le=100)
+    updated_at: str = Field(min_length=1)
+
+
+class NeurocommentSettingsUpdate(BaseModel):
+    """Caller-supplied neurocomment-settings change from the Settings screen."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    max_comments_per_hour: int = Field(ge=1)
+    max_comments_per_channel_per_day: int = Field(ge=0)
+    reply_delay_min_seconds: float = Field(ge=0)
+    reply_delay_max_seconds: float = Field(ge=0)
+    min_trust_score: int = Field(ge=0, le=100)

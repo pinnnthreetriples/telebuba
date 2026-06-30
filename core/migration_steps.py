@@ -300,6 +300,22 @@ def _add_neurocomment_runtime(connection: Connection) -> None:
     )
 
 
+def _add_neurocomment_settings(connection: Connection) -> None:
+    # #19: single-row operator-editable neurocomment limits. Empty until the
+    # operator saves; reads fall back to settings.neurocomment config defaults.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_settings ("
+        "  id INTEGER PRIMARY KEY CHECK (id = 1),"
+        "  max_comments_per_hour INTEGER NOT NULL,"
+        "  max_comments_per_channel_per_day INTEGER NOT NULL,"
+        "  reply_delay_min_seconds REAL NOT NULL,"
+        "  reply_delay_max_seconds REAL NOT NULL,"
+        "  min_trust_score INTEGER NOT NULL,"
+        "  updated_at VARCHAR NOT NULL"
+        ")",
+    )
+
+
 def _add_neurocomment_comment_indexes(connection: Connection) -> None:
     # Secondary indexes for the quota gate + bulk account selection. The PK
     # (channel, post_id) serves the per-post claim/mark lookups but not the

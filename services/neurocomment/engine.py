@@ -51,13 +51,14 @@ from services.content import (
     try_reserve_sent,
 )
 from services.neurocomment import _filters, _seams, _state
+from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from services.trust import account_trust_score_from
 from services.warming.pacing import evaluate_readiness
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.device_fingerprint import DeviceFingerprint
-    from schemas.neurocomment import NeurocommentCampaign
+    from schemas.neurocomment import NeurocommentCampaign, NeurocommentSettings
     from schemas.spam_status import SpamStatusVerdict
     from schemas.warming import WarmingStateRecord
 
@@ -148,11 +149,12 @@ class _SelectionPool(NamedTuple):
     fingerprints: dict[str, DeviceFingerprint]
     hourly_counts: dict[str, int]
     daily_counts: dict[str, int]
+    limits: NeurocommentSettings  # operator-editable caps/min-trust (saved or config)
 
 
 async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) -> _SelectionPool:
     """Bulk-read every selection signal once (mirrors ``services.neurocomment.board``)."""
-    nc = settings.neurocomment
+    limits = await load_neuro_settings()
     accounts = {acc.account_id: acc for acc in (await list_accounts()).accounts}
     ready_account_ids = frozenset(
         r.account_id
@@ -167,7 +169,7 @@ async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) ->
     hourly_rows = (await count_comments_per_account_since(hour_ago)).counts
     hourly = {c.account_id: c.count for c in hourly_rows}
     daily: dict[str, int] = {}
-    if nc.max_comments_per_channel_per_day > 0:
+    if limits.max_comments_per_channel_per_day > 0:
         day_ago = (now - timedelta(days=1)).isoformat()
         daily_rows = (await count_channel_comments_per_account_since(channel, day_ago)).counts
         daily = {c.account_id: c.count for c in daily_rows}
@@ -179,6 +181,7 @@ async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) ->
         fingerprints=fingerprints,
         hourly_counts=hourly,
         daily_counts=daily,
+        limits=limits,
     )
 
 
@@ -244,6 +247,8 @@ def _is_healthy(
         lang_code=fingerprint.system_lang_code if fingerprint else None,
         now=now,
     )
+    if trust.score < pool.limits.min_trust_score:
+        return False
     health = evaluate_readiness(account, channel_count, spam=spam, trust_score=trust)
     return health.ready
 
@@ -254,9 +259,8 @@ def _under_quota(account_id: str, pool: _SelectionPool) -> bool:
     # cap — each claim consumes quota the moment it is won.
     # ponytail: a sub-millisecond race still exists in the select->claim gap; a
     # per-account asyncio.Lock would close it fully if it ever bites.
-    nc = settings.neurocomment
-    day_cap = nc.max_comments_per_channel_per_day
-    over_hour = pool.hourly_counts.get(account_id, 0) >= nc.max_comments_per_hour
+    day_cap = pool.limits.max_comments_per_channel_per_day
+    over_hour = pool.hourly_counts.get(account_id, 0) >= pool.limits.max_comments_per_hour
     over_day = day_cap > 0 and pool.daily_counts.get(account_id, 0) >= day_cap
     return not (over_hour or over_day)
 
@@ -278,8 +282,10 @@ async def _generate_and_post(
         )
         return
 
-    nc = settings.neurocomment
-    await asyncio.sleep(_seams.rng.uniform(nc.reply_delay_min_seconds, nc.reply_delay_max_seconds))
+    limits = await load_neuro_settings()
+    await asyncio.sleep(
+        _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
+    )
 
     result = await _seams.execute(
         account_id,

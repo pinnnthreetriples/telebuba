@@ -660,6 +660,66 @@ export type NeurocommentRuntimeStatus = {
 };
 
 /**
+ * NeurocommentSettings
+ *
+ * Operator-editable neurocomment limits — the engine reads these at selection.
+ */
+export type NeurocommentSettings = {
+  /**
+   * Max Comments Per Hour
+   */
+  max_comments_per_hour: number;
+  /**
+   * Max Comments Per Channel Per Day
+   */
+  max_comments_per_channel_per_day: number;
+  /**
+   * Reply Delay Min Seconds
+   */
+  reply_delay_min_seconds: number;
+  /**
+   * Reply Delay Max Seconds
+   */
+  reply_delay_max_seconds: number;
+  /**
+   * Min Trust Score
+   */
+  min_trust_score: number;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * NeurocommentSettingsUpdate
+ *
+ * Caller-supplied neurocomment-settings change from the Settings screen.
+ */
+export type NeurocommentSettingsUpdate = {
+  /**
+   * Max Comments Per Hour
+   */
+  max_comments_per_hour: number;
+  /**
+   * Max Comments Per Channel Per Day
+   */
+  max_comments_per_channel_per_day: number;
+  /**
+   * Reply Delay Min Seconds
+   */
+  reply_delay_min_seconds: number;
+  /**
+   * Reply Delay Max Seconds
+   */
+  reply_delay_max_seconds: number;
+  /**
+   * Min Trust Score
+   */
+  min_trust_score: number;
+};
+
+/**
  * Page[AccountRead]
  */
 export type PageAccountRead = {
@@ -2462,6 +2522,60 @@ export type StopNeurocommentResponses = {
 };
 
 export type StopNeurocommentResponse = StopNeurocommentResponses[keyof StopNeurocommentResponses];
+
+export type GetNeurocommentSettingsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/settings';
+};
+
+export type GetNeurocommentSettingsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetNeurocommentSettingsError =
+  GetNeurocommentSettingsErrors[keyof GetNeurocommentSettingsErrors];
+
+export type GetNeurocommentSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentSettings;
+};
+
+export type GetNeurocommentSettingsResponse =
+  GetNeurocommentSettingsResponses[keyof GetNeurocommentSettingsResponses];
+
+export type UpdateNeurocommentSettingsData = {
+  body: NeurocommentSettingsUpdate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/settings';
+};
+
+export type UpdateNeurocommentSettingsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateNeurocommentSettingsError =
+  UpdateNeurocommentSettingsErrors[keyof UpdateNeurocommentSettingsErrors];
+
+export type UpdateNeurocommentSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentSettings;
+};
+
+export type UpdateNeurocommentSettingsResponse =
+  UpdateNeurocommentSettingsResponses[keyof UpdateNeurocommentSettingsResponses];
 
 export type ListLogsData = {
   body?: never;

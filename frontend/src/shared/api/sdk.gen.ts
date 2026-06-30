@@ -46,6 +46,9 @@ import type {
   GetNeurocommentRuntimeData,
   GetNeurocommentRuntimeErrors,
   GetNeurocommentRuntimeResponses,
+  GetNeurocommentSettingsData,
+  GetNeurocommentSettingsErrors,
+  GetNeurocommentSettingsResponses,
   GetWarmingBoardData,
   GetWarmingBoardErrors,
   GetWarmingBoardResponses,
@@ -123,6 +126,9 @@ import type {
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
+  UpdateNeurocommentSettingsData,
+  UpdateNeurocommentSettingsErrors,
+  UpdateNeurocommentSettingsResponses,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
@@ -701,6 +707,37 @@ export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
     { url: '/api/v1/neurocomment/stop', ...options },
   );
+
+/**
+ * Get Settings
+ */
+export const getNeurocommentSettings = <ThrowOnError extends boolean = false>(
+  options?: Options<GetNeurocommentSettingsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    GetNeurocommentSettingsResponses,
+    GetNeurocommentSettingsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/settings', ...options });
+
+/**
+ * Update Settings
+ */
+export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateNeurocommentSettingsData, ThrowOnError>,
+) =>
+  (options.client ?? client).put<
+    UpdateNeurocommentSettingsResponses,
+    UpdateNeurocommentSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * List Logs

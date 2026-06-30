@@ -2172,6 +2172,112 @@
         }
       }
     },
+    "/api/v1/neurocomment/settings": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Get Settings",
+        "operationId": "getNeurocommentSettings",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Update Settings",
+        "operationId": "updateNeurocommentSettings",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeurocommentSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/logs": {
       "get": {
         "tags": [
@@ -3438,6 +3544,93 @@
         ],
         "title": "NeurocommentRuntimeStatus",
         "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: the engine is\none fleet listener (not per-campaign), so the persisted listener account id\nbeing set means the engine is live. ``active_channels`` is the size of the\nwatch set across all active campaigns (what the listener actually watches)."
+      },
+      "NeurocommentSettings": {
+        "properties": {
+          "max_comments_per_hour": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Max Comments Per Hour"
+          },
+          "max_comments_per_channel_per_day": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Max Comments Per Channel Per Day"
+          },
+          "reply_delay_min_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Min Seconds"
+          },
+          "reply_delay_max_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Max Seconds"
+          },
+          "min_trust_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min Trust Score"
+          },
+          "updated_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_comments_per_hour",
+          "max_comments_per_channel_per_day",
+          "reply_delay_min_seconds",
+          "reply_delay_max_seconds",
+          "min_trust_score",
+          "updated_at"
+        ],
+        "title": "NeurocommentSettings",
+        "description": "Operator-editable neurocomment limits \u2014 the engine reads these at selection."
+      },
+      "NeurocommentSettingsUpdate": {
+        "properties": {
+          "max_comments_per_hour": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Max Comments Per Hour"
+          },
+          "max_comments_per_channel_per_day": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Max Comments Per Channel Per Day"
+          },
+          "reply_delay_min_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Min Seconds"
+          },
+          "reply_delay_max_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Max Seconds"
+          },
+          "min_trust_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min Trust Score"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "max_comments_per_hour",
+          "max_comments_per_channel_per_day",
+          "reply_delay_min_seconds",
+          "reply_delay_max_seconds",
+          "min_trust_score"
+        ],
+        "title": "NeurocommentSettingsUpdate",
+        "description": "Caller-supplied neurocomment-settings change from the Settings screen."
       },
       "Page_AccountRead_": {
         "properties": {
