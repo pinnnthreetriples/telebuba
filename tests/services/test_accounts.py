@@ -11,7 +11,7 @@ from core.config import settings
 from core.db import (
     configure_database,
     update_account_from_session_check,
-    update_account_proxy_check,
+    update_proxy_check,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import (
@@ -29,13 +29,7 @@ from schemas.profile_media import (
     AccountStoryRemove,
     AccountStoryUpload,
 )
-from schemas.proxy import (
-    AccountProxyCheckRequest,
-    AccountProxyCheckUpdate,
-    AccountProxyDelete,
-    AccountProxyUpsert,
-    ProxyCheckResult,
-)
+from schemas.proxy import ProxyCheckUpdate
 from schemas.tdata import TdataAccountSummary, TdataConvertRequest, TdataConvertResult
 from schemas.telegram_actions import (
     ActionResult,
@@ -51,9 +45,7 @@ from services.accounts import (
     SessionAlreadyExistsError,
     add_account,
     add_account_profile_music,
-    check_account_proxy,
     check_account_session,
-    delete_account_proxy,
     evaluate_account_geo,
     import_account_session,
     import_account_tdata,
@@ -63,11 +55,11 @@ from services.accounts import (
     post_account_story,
     remove_account_profile_photo,
     remove_account_story,
-    save_account_proxy,
     set_account_profile_photo,
     update_account_profile,
 )
 from services.accounts._table import _format_last_checked
+from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -452,76 +444,6 @@ async def test_check_account_session_rejects_unknown_account() -> None:
     """A missing account_id must surface as a domain ValueError, not StopIteration."""
     with pytest.raises(ValueError, match=r"Unknown account: account-missing"):
         await check_account_session(AccountCheckRequest(account_id="account-missing"))
-
-
-@pytest.mark.asyncio
-async def test_save_and_delete_account_proxy_updates_table_row() -> None:
-    await add_account(AccountCreate(account_id="account-proxy"))
-
-    proxy = await save_account_proxy(
-        AccountProxyUpsert(
-            account_id="account-proxy",
-            proxy_type="socks5",
-            host="127.0.0.1",
-            port=9050,
-            username="alice",
-            password="secret",
-        ),
-    )
-    with_proxy = await load_accounts_table(AccountFilter())
-
-    assert proxy.username == "a***e"
-    assert with_proxy.rows[0].proxy == "SOCKS5 127.0.0.1:9050"
-
-    await delete_account_proxy(AccountProxyDelete(account_id="account-proxy"))
-    without_proxy = await load_accounts_table(AccountFilter())
-
-    assert without_proxy.rows[0].proxy == "-"
-
-
-@pytest.mark.asyncio
-async def test_check_account_proxy_persists_route_metadata(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    await add_account(AccountCreate(account_id="account-proxy-check"))
-    await save_account_proxy(
-        AccountProxyUpsert(
-            account_id="account-proxy-check",
-            proxy_type="socks5",
-            host="127.0.0.1",
-            port=9050,
-        ),
-    )
-
-    async def fake_check(_proxy: object) -> ProxyCheckResult:
-        return ProxyCheckResult(
-            status="tcp_working",
-            exit_ip="45.130.253.155",
-            country_code="NL",
-            country_name="Netherlands",
-        )
-
-    monkeypatch.setattr("services.accounts.proxy.check_proxy_connectivity", fake_check)
-
-    proxy = await check_account_proxy(AccountProxyCheckRequest(account_id="account-proxy-check"))
-    state = await load_accounts_table(AccountFilter())
-
-    assert proxy.status == "tcp_working"
-    assert proxy.exit_ip == "45.130.253.155"
-    assert state.rows[0].proxy_status == "tcp_working"
-    assert state.rows[0].proxy_country_code == "NL"
-    assert state.rows[0].proxy_country_name == "Netherlands"
-    # Country code is surfaced in the main proxy label so it's visible at a glance
-    # in the table cell, not only in the caption row underneath.
-    assert "NL" in state.rows[0].proxy
-
-
-@pytest.mark.asyncio
-async def test_check_account_proxy_requires_saved_proxy() -> None:
-    await add_account(AccountCreate(account_id="account-without-proxy"))
-
-    with pytest.raises(ValueError, match="Proxy not found"):
-        await check_account_proxy(AccountProxyCheckRequest(account_id="account-without-proxy"))
 
 
 @pytest.mark.asyncio
@@ -921,11 +843,9 @@ async def test_evaluate_account_geo_flags_mismatch() -> None:
             phone="+77011234567",
         ),
     )
-    await save_account_proxy(
-        AccountProxyUpsert(account_id="acc-1", proxy_type="socks5", host="h", port=1080),
-    )
-    await update_account_proxy_check(
-        AccountProxyCheckUpdate(account_id="acc-1", status="tcp_working", country_code="US"),
+    proxy_id = await seed_account_proxy("acc-1", host="h")
+    await update_proxy_check(
+        ProxyCheckUpdate(proxy_id=proxy_id, status="tcp_working", country_code="US"),
     )
 
     verdict = await evaluate_account_geo("acc-1")

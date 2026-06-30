@@ -11,7 +11,7 @@ from core.proxy_check import (
     _payload_to_result,
     check_proxy_connectivity,
 )
-from schemas.proxy import AccountProxySettings
+from schemas.proxy import ProxySettings
 
 
 class _FakeReader:
@@ -114,14 +114,13 @@ def test_payload_to_result_residential_asn_is_not_datacenter() -> None:
 
 @pytest.mark.asyncio
 async def test_check_proxy_connectivity_maps_timeout(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_fetch(_proxy: AccountProxySettings) -> dict[str, object]:
+    async def fake_fetch(_proxy: ProxySettings) -> dict[str, object]:
         raise TimeoutError
 
     monkeypatch.setattr(proxy_check_module, "_fetch_check_payload", fake_fetch)
 
     result = await check_proxy_connectivity(
-        AccountProxySettings(
-            account_id="acc",
+        ProxySettings(
             proxy_type="socks5",
             host="127.0.0.1",
             port=9050,
@@ -134,15 +133,14 @@ async def test_check_proxy_connectivity_maps_timeout(monkeypatch: pytest.MonkeyP
 
 @pytest.mark.asyncio
 async def test_check_proxy_connectivity_maps_os_error(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def fake_fetch(_proxy: AccountProxySettings) -> dict[str, object]:
+    async def fake_fetch(_proxy: ProxySettings) -> dict[str, object]:
         error_message = "connection refused"
         raise OSError(error_message)
 
     monkeypatch.setattr(proxy_check_module, "_fetch_check_payload", fake_fetch)
 
     result = await check_proxy_connectivity(
-        AccountProxySettings(
-            account_id="acc",
+        ProxySettings(
             proxy_type="https",
             host="127.0.0.1",
             port=8080,
@@ -184,8 +182,7 @@ async def test_fetch_check_payload_uses_proxy_socket(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(proxy_check_module.asyncio, "open_connection", fake_open_connection)
 
     payload = await _fetch_check_payload(
-        AccountProxySettings(
-            account_id="acc",
+        ProxySettings(
             proxy_type="socks5",
             host="127.0.0.1",
             port=9050,

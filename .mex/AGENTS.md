@@ -21,19 +21,20 @@ telebuba/
 ├── .env                    local secrets — gitignored
 ├── .env.example            committed template; must mirror core/config.py
 ├── api/                    UI-thin top layer (replaces features/): /api/v1 routes — validate → call service → serialize; imports only services/schemas/core.config/core.logging/fastapi
-│   ├── v1/                 versioned routers, one per domain (accounts/warming/neurocomment/logs/settings/auth) + events.py (SSE live-event stream, text/event-stream; hidden from OpenAPI)
+│   ├── v1/                 versioned routers, one per domain (accounts/proxies/warming/neurocomment/logs/settings/auth) + events.py (SSE live-event stream, text/event-stream; hidden from OpenAPI)
 │   ├── deps.py             shared dependencies (Depends(get_current_user), pagination params)
 │   └── errors.py           error-envelope mapping ({error:{code,message,fields?}}, 422 remapped)
 ├── core/                   infrastructure gateways; only layer touching third-party SDKs
 │   ├── db.py               shared SQLite plumbing + compatibility re-exports
 │   ├── migrations.py       versioned append-only migration registry + runner; apply_migrations() runs on engine init
 │   ├── migration_steps.py  migration step bodies (split from migrations.py for the file-size budget)
+│   ├── migration_steps_pool.py  proxy-pool migration (#18) body — split from migration_steps.py for the size budget
 │   ├── device_fingerprint.py  generates/reads immutable per-account device profile
 │   ├── phone_geo.py        phone number → geo lookup helper
 │   ├── proxy_check.py      connectivity check for proxy configs
 │   ├── tdata_import.py     converts tdata.zip to Telethon .session files (safe-extract)
 │   ├── repositories/       per-aggregate DB query modules
-│   │   ├── _proxies.py        internal proxy query helpers
+│   │   ├── proxies.py         proxy-pool data layer (shared proxies + accounts.proxy_id assignment, capacity, connectivity-check persistence)
 │   │   ├── warming_joined.py  tracks channels an account already joined (join-dedup)
 │   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims, comment quota counts in _quota.py, challenge audit+cache in _challenges.py)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
@@ -50,7 +51,8 @@ telebuba/
 │   └── logging.py          loguru + SQLite logs + optional Sentry
 ├── schemas/                Pydantic models; shared types, no behavior, no I/O (incl. api.py: error envelope + generic Page[T]; challenge.py: bot-challenge message + audit-row models)
 ├── services/               business logic; UI-agnostic; no SDK imports
-│   ├── accounts/           account/session/profile/proxy operations
+│   ├── accounts/           account/session/profile operations
+│   ├── proxies.py          proxy-pool business logic (add/list/assign/unassign/remove/check over the pool repo)
 │   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview)
 │   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng)
 │   ├── content.py          content generation orchestration

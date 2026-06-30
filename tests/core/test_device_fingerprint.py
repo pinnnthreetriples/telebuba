@@ -10,7 +10,6 @@ from core.db import (
     configure_database,
     create_account,
     insert_device_fingerprint,
-    upsert_account_proxy,
 )
 from core.device_fingerprint import (
     generate_random_device_fingerprint,
@@ -30,8 +29,8 @@ from schemas.device_fingerprint import (
 from schemas.telegram_session import TelegramSessionCheckRequest
 from tests.factories import (
     AccountCreateFactory,
-    AccountProxyUpsertFactory,
     DeviceFingerprintFactory,
+    seed_account_proxy,
 )
 
 if TYPE_CHECKING:
@@ -84,13 +83,11 @@ async def test_telegram_client_profile_includes_saved_proxy(
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
     await create_account(AccountCreateFactory.build(account_id="account-proxy"))
-    await upsert_account_proxy(
-        AccountProxyUpsertFactory.build(
-            account_id="account-proxy",
-            port=9050,
-            username="alice",
-            password="secret",
-        ),
+    await seed_account_proxy(
+        "account-proxy",
+        port=9050,
+        username="alice",
+        password="secret",
     )
 
     profile = await prepare_telegram_client_profile(

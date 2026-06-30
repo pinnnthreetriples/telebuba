@@ -1,10 +1,11 @@
-"""Accounts + per-account proxies repository (split out of core.db for #38).
+"""Accounts repository (split out of core.db for #38).
 
-Owns reads/writes of the ``accounts`` and ``account_proxies`` tables (one
-aggregate — proxies have a FK to accounts and are masked into the account read
-model). Shared plumbing (engine, table objects, generic row helpers) is imported
-from ``core.db``; the public async functions are re-exported by ``core.db`` so
-existing call sites are unaffected.
+Owns reads/writes of the ``accounts`` table. The proxy a account uses lives in
+the shared pool (``proxies`` table, ``core.repositories.proxies``) and is joined
+into the account read model via ``accounts.proxy_id``. Shared plumbing (engine,
+table objects, generic row helpers) is imported from ``core.db``; the public
+async functions are re-exported by ``core.db`` so existing call sites are
+unaffected.
 """
 
 from __future__ import annotations
@@ -16,13 +17,13 @@ from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
 from core.db import (
-    _account_proxies,
     _accounts,
     _device_fingerprints,
     _get_engine,
     _now_iso,
     _optional_int,
     _optional_str,
+    _proxies,
     _warming_joined_channels,
 )
 from schemas.accounts import (
@@ -62,6 +63,7 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         last_checked_at=_optional_str(mapping.get("last_checked_at")),
         created_at=str(mapping["created_at"]),
         updated_at=str(mapping["updated_at"]),
+        proxy_id=_optional_str(mapping.get("proxy_id")),
         device_platform=_optional_str(mapping.get("device_platform")),
         device_model=_optional_str(mapping.get("device_model")),
         device_system_version=_optional_str(mapping.get("device_system_version")),
@@ -93,26 +95,27 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.last_checked_at,
         _accounts.c.created_at,
         _accounts.c.updated_at,
+        _accounts.c.proxy_id,
         _device_fingerprints.c.platform.label("device_platform"),
         _device_fingerprints.c.device_model.label("device_model"),
         _device_fingerprints.c.system_version.label("device_system_version"),
         _device_fingerprints.c.app_version.label("device_app_version"),
-        _account_proxies.c.proxy_type.label("proxy_type"),
-        _account_proxies.c.host.label("proxy_host"),
-        _account_proxies.c.port.label("proxy_port"),
-        _account_proxies.c.status.label("proxy_status"),
-        _account_proxies.c.last_checked_at.label("proxy_last_checked_at"),
-        _account_proxies.c.last_error.label("proxy_last_error"),
-        _account_proxies.c.exit_ip.label("proxy_exit_ip"),
-        _account_proxies.c.country_code.label("proxy_country_code"),
-        _account_proxies.c.country_name.label("proxy_country_name"),
+        _proxies.c.proxy_type.label("proxy_type"),
+        _proxies.c.host.label("proxy_host"),
+        _proxies.c.port.label("proxy_port"),
+        _proxies.c.status.label("proxy_status"),
+        _proxies.c.last_checked_at.label("proxy_last_checked_at"),
+        _proxies.c.last_error.label("proxy_last_error"),
+        _proxies.c.exit_ip.label("proxy_exit_ip"),
+        _proxies.c.country_code.label("proxy_country_code"),
+        _proxies.c.country_name.label("proxy_country_name"),
     ).select_from(
         _accounts.outerjoin(
             _device_fingerprints,
             _accounts.c.account_id == _device_fingerprints.c.account_id,
         ).outerjoin(
-            _account_proxies,
-            _accounts.c.account_id == _account_proxies.c.account_id,
+            _proxies,
+            _accounts.c.proxy_id == _proxies.c.id,
         ),
     )
 
@@ -274,11 +277,13 @@ async def account_summary_counts() -> dict[str, int]:
 
 
 def _delete_account(account_id: str) -> None:
-    # F4: schema declares ForeignKey on account_proxies / warming_account_state /
+    # F4: schema declares ForeignKey on warming_account_state /
     # account_spam_status without ON DELETE CASCADE, and PRAGMA foreign_keys=ON,
     # so deleting a warmed account explodes with IntegrityError unless we clean
     # the children first. device_fingerprints / dialogue tables have no FK but
-    # are still per-account data that must not outlive the account.
+    # are still per-account data that must not outlive the account. The proxy is
+    # a shared pool row (accounts.proxy_id → proxies.id) — it is NOT a child and
+    # must outlive the account, so it is left untouched here.
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
 
@@ -292,9 +297,6 @@ def _delete_account(account_id: str) -> None:
             delete(_warming_account_state).where(
                 _warming_account_state.c.account_id == account_id,
             ),
-        )
-        connection.execute(
-            delete(_account_proxies).where(_account_proxies.c.account_id == account_id),
         )
         connection.execute(
             delete(_account_spam_status).where(
@@ -325,11 +327,11 @@ async def delete_account(account_id: str) -> None:
     """Delete an account row + every per-account child row.
 
     SQLite FKs are declared without ``ON DELETE CASCADE`` (see F4); this
-    helper manually purges ``warming_account_state`` / ``account_proxies`` /
+    helper manually purges ``warming_account_state`` /
     ``account_spam_status`` / ``device_fingerprints`` / dialogue tables /
-    joined channels before deleting the ``accounts`` row. New per-account
-    tables MUST be added to ``_delete_account`` — relying on FK cascade is
-    a bug.
+    joined channels before deleting the ``accounts`` row. The shared pool
+    proxy is left intact. New per-account tables MUST be added to
+    ``_delete_account`` — relying on FK cascade is a bug.
 
     Does not stop a running warming task. Service callers should use
     :func:`services.accounts.lifecycle.remove_account` instead, which holds

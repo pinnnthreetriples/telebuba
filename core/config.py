@@ -99,6 +99,9 @@ class DbSettings(BaseSettings):
 class ProxySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PROXY__", extra="ignore")
 
+    # Pool capacity: how many accounts may share one proxy. The design's
+    # "до N аккаунтов на прокси". Global (no per-proxy override — YAGNI).
+    max_accounts_per_proxy: int = Field(default=3, ge=1)
     check_host: str = Field(default="ip-api.com", min_length=1)
     check_path: str = Field(default="/json?fields=status,message,query,country,countryCode,as")
     check_port: int = Field(default=80, ge=1, le=65535)

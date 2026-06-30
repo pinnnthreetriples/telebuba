@@ -8,15 +8,16 @@ The implementations live in per-concern submodules:
 
 - :mod:`.lifecycle` — registration + geo evaluation
 - :mod:`.sessions`  — ``.session`` and tdata-archive imports + liveness check
-- :mod:`.proxy`     — proxy attach / detach / connectivity probe
 - :mod:`.profile`   — profile-field updates (name / username / bio)
 - :mod:`.media`     — profile photo / story / music uploads
 
+Proxies are a fleet-level pool, not an account sub-concern — that logic lives in
+:mod:`services.proxies` over the ``proxies`` table.
+
 This module is intentionally re-export only: per non-negotiable #11 callers in
-``features/`` and tests take the public functions from here. Tests that need to
+``api/`` and tests take the public functions from here. Tests that need to
 fake an external collaborator monkeypatch it on its owning submodule, e.g.
-``services.accounts.sessions.convert_tdata_zip`` or
-``services.accounts.proxy.check_proxy_connectivity``.
+``services.accounts.sessions.convert_tdata_zip``.
 """
 
 from __future__ import annotations
@@ -42,12 +43,6 @@ from services.accounts.profile_read import (
     fetch_live_account_profile,
     invalidate_account_profile_cache,
 )
-from services.accounts.proxy import (
-    check_account_proxy,
-    delete_account_proxy,
-    fetch_account_proxy_settings,
-    save_account_proxy,
-)
 from services.accounts.sessions import (
     SessionAlreadyExistsError,
     check_account_session,
@@ -60,11 +55,8 @@ __all__ = [
     "SessionAlreadyExistsError",
     "add_account",
     "add_account_profile_music",
-    "check_account_proxy",
     "check_account_session",
-    "delete_account_proxy",
     "evaluate_account_geo",
-    "fetch_account_proxy_settings",
     "fetch_live_account_profile",
     "import_account_session",
     "import_account_tdata",
@@ -78,7 +70,6 @@ __all__ = [
     "remove_account_profile_music",
     "remove_account_profile_photo",
     "remove_account_story",
-    "save_account_proxy",
     "set_account_profile_photo",
     "update_account_profile",
 ]

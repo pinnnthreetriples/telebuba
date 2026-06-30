@@ -12,9 +12,13 @@ import { client } from '../client.gen';
 import {
   addWarmingChannels,
   assignCampaignAccount,
+  assignProxy,
   checkAccount,
+  checkProxy,
   createCampaign,
+  createProxy,
   deleteAccount,
+  deleteProxy,
   getHealth,
   getMe,
   getNeurocommentBoard,
@@ -26,6 +30,7 @@ import {
   listAccounts,
   listCampaigns,
   listLogs,
+  listProxies,
   listWarmingChannels,
   login,
   logout,
@@ -36,6 +41,7 @@ import {
   startWarming,
   stopNeurocomment,
   stopWarming,
+  unassignProxy,
   updateAccountProfile,
   updateWarmingSettings,
 } from '../sdk.gen';
@@ -46,15 +52,27 @@ import type {
   AssignCampaignAccountData,
   AssignCampaignAccountError,
   AssignCampaignAccountResponse,
+  AssignProxyData,
+  AssignProxyError,
+  AssignProxyResponse,
   CheckAccountData,
   CheckAccountError,
   CheckAccountResponse,
+  CheckProxyData,
+  CheckProxyError,
+  CheckProxyResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
+  CreateProxyData,
+  CreateProxyError,
+  CreateProxyResponse,
   DeleteAccountData,
   DeleteAccountError,
   DeleteAccountResponse,
+  DeleteProxyData,
+  DeleteProxyError,
+  DeleteProxyResponse,
   GetHealthData,
   GetHealthResponse,
   GetMeData,
@@ -87,6 +105,9 @@ import type {
   ListLogsData,
   ListLogsError,
   ListLogsResponse,
+  ListProxiesData,
+  ListProxiesError,
+  ListProxiesResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
@@ -113,6 +134,9 @@ import type {
   StopWarmingData,
   StopWarmingError,
   StopWarmingResponse,
+  UnassignProxyData,
+  UnassignProxyError,
+  UnassignProxyResponse,
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
@@ -463,6 +487,146 @@ export const setAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listProxiesQueryKey = (options?: Options<ListProxiesData>) =>
+  createQueryKey('listProxies', options);
+
+/**
+ * List Proxies
+ */
+export const listProxiesOptions = (options?: Options<ListProxiesData>) =>
+  queryOptions<
+    ListProxiesResponse,
+    ListProxiesError,
+    ListProxiesResponse,
+    ReturnType<typeof listProxiesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listProxies({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listProxiesQueryKey(options),
+  });
+
+/**
+ * Create Proxy
+ */
+export const createProxyMutation = (
+  options?: Partial<Options<CreateProxyData>>,
+): UseMutationOptions<CreateProxyResponse, CreateProxyError, Options<CreateProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    CreateProxyResponse,
+    CreateProxyError,
+    Options<CreateProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Check Proxy
+ */
+export const checkProxyMutation = (
+  options?: Partial<Options<CheckProxyData>>,
+): UseMutationOptions<CheckProxyResponse, CheckProxyError, Options<CheckProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    CheckProxyResponse,
+    CheckProxyError,
+    Options<CheckProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await checkProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Assign Proxy
+ */
+export const assignProxyMutation = (
+  options?: Partial<Options<AssignProxyData>>,
+): UseMutationOptions<AssignProxyResponse, AssignProxyError, Options<AssignProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    AssignProxyResponse,
+    AssignProxyError,
+    Options<AssignProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await assignProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Unassign Proxy
+ */
+export const unassignProxyMutation = (
+  options?: Partial<Options<UnassignProxyData>>,
+): UseMutationOptions<UnassignProxyResponse, UnassignProxyError, Options<UnassignProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    UnassignProxyResponse,
+    UnassignProxyError,
+    Options<UnassignProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await unassignProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Proxy
+ */
+export const deleteProxyMutation = (
+  options?: Partial<Options<DeleteProxyData>>,
+): UseMutationOptions<DeleteProxyResponse, DeleteProxyError, Options<DeleteProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteProxyResponse,
+    DeleteProxyError,
+    Options<DeleteProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteProxy({
         ...options,
         ...fnOptions,
         throwOnError: true,

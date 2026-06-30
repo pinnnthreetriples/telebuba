@@ -70,7 +70,11 @@ def test_legacy_database_is_brought_up_to_date(tmp_path: Path) -> None:
             "proxy_type VARCHAR NOT NULL,"
             "host VARCHAR NOT NULL,"
             "port INTEGER NOT NULL,"
+            "username VARCHAR,"
+            "password VARCHAR,"
             "status VARCHAR NOT NULL,"
+            "last_checked_at VARCHAR,"
+            "last_error VARCHAR,"
             "created_at VARCHAR NOT NULL,"
             "updated_at VARCHAR NOT NULL"
             ")",
@@ -105,15 +109,20 @@ def test_legacy_database_is_brought_up_to_date(tmp_path: Path) -> None:
     assert any(row["name"] == "bio" for row in bio_present)
 
 
-def test_rename_proxy_type_http_to_https_migrates_existing_rows() -> None:
-    """Pre-existing rows stored as proxy_type='http' must surface as 'https' after migration."""
-    engine = _get_engine()
+def test_rename_proxy_type_http_to_https_migrates_existing_rows(tmp_path: Path) -> None:
+    """Pre-existing rows stored as proxy_type='http' must surface as 'https'.
+
+    ``account_proxies`` was retired by migration #18, so this exercises the #9
+    body directly against a hand-built legacy table.
+    """
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
     now = "2026-01-01T00:00:00+00:00"
     with engine.begin() as connection:
         connection.exec_driver_sql(
-            "INSERT INTO accounts (account_id, status, created_at, updated_at) "
-            "VALUES ('acc-legacy', 'new', ?, ?)",
-            (now, now),
+            "CREATE TABLE account_proxies ("
+            "account_id VARCHAR PRIMARY KEY, proxy_type VARCHAR NOT NULL, host VARCHAR NOT NULL, "
+            "port INTEGER NOT NULL, status VARCHAR NOT NULL, created_at VARCHAR NOT NULL, "
+            "updated_at VARCHAR NOT NULL)",
         )
         connection.exec_driver_sql(
             "INSERT INTO account_proxies "
@@ -127,7 +136,66 @@ def test_rename_proxy_type_http_to_https_migrates_existing_rows() -> None:
         proxy_type = connection.exec_driver_sql(
             "SELECT proxy_type FROM account_proxies WHERE account_id = 'acc-legacy'",
         ).scalar()
+    engine.dispose()
     assert proxy_type == "https"
+
+
+def test_proxy_pool_migration_collapses_and_drops_account_proxies(tmp_path: Path) -> None:
+    """#18: two accounts on one endpoint collapse to a single pool proxy; old table dropped."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE accounts ("
+            "account_id VARCHAR PRIMARY KEY, session_name VARCHAR, status VARCHAR NOT NULL, "
+            "created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE account_proxies ("
+            "account_id VARCHAR PRIMARY KEY, proxy_type VARCHAR NOT NULL, host VARCHAR NOT NULL, "
+            "port INTEGER NOT NULL, username VARCHAR, password VARCHAR, status VARCHAR NOT NULL, "
+            "last_checked_at VARCHAR, last_error VARCHAR, "
+            "created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE warming_account_state ("
+            "account_id VARCHAR PRIMARY KEY, state VARCHAR NOT NULL, "
+            "cycles_completed INTEGER NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE warming_settings ("
+            "id INTEGER PRIMARY KEY, inter_account_chat INTEGER NOT NULL, "
+            "reactions_enabled INTEGER NOT NULL, gemini_api_key VARCHAR NOT NULL, "
+            "gemini_model VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        for account_id in ("acc-a", "acc-b"):
+            connection.exec_driver_sql(
+                "INSERT INTO accounts (account_id, status, created_at, updated_at) "
+                "VALUES (?, 'new', ?, ?)",
+                (account_id, now, now),
+            )
+            connection.exec_driver_sql(
+                "INSERT INTO account_proxies "
+                "(account_id, proxy_type, host, port, status, created_at, updated_at) "
+                "VALUES (?, 'socks5', 'shared.example', 1080, 'tcp_working', ?, ?)",
+                (account_id, now, now),
+            )
+
+    apply_migrations(engine)
+
+    with engine.connect() as connection:
+        proxies = connection.exec_driver_sql("SELECT id FROM proxies").all()
+        assigned = connection.exec_driver_sql(
+            "SELECT DISTINCT proxy_id FROM accounts WHERE proxy_id IS NOT NULL",
+        ).all()
+        table_gone = connection.exec_driver_sql(
+            "SELECT name FROM sqlite_master WHERE type = 'table' AND name = 'account_proxies'",
+        ).first()
+    engine.dispose()
+
+    assert len(proxies) == 1  # both accounts shared one endpoint → one pool proxy
+    assert len(assigned) == 1  # both point at it
+    assert table_gone is None  # account_proxies dropped
 
 
 def test_append_only_versions_are_unique() -> None:

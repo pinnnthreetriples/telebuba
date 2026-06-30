@@ -60,6 +60,7 @@ class AccountRead(BaseModel):
     device_system_version: str | None = None
     device_app_version: str | None = None
     bio: str | None = None
+    proxy_id: str | None = None
     proxy_type: str | None = None
     proxy_host: str | None = None
     proxy_port: int | None = None

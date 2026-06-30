@@ -14,15 +14,27 @@ import type {
   AssignCampaignAccountData,
   AssignCampaignAccountErrors,
   AssignCampaignAccountResponses,
+  AssignProxyData,
+  AssignProxyErrors,
+  AssignProxyResponses,
   CheckAccountData,
   CheckAccountErrors,
   CheckAccountResponses,
+  CheckProxyData,
+  CheckProxyErrors,
+  CheckProxyResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
+  CreateProxyData,
+  CreateProxyErrors,
+  CreateProxyResponses,
   DeleteAccountData,
   DeleteAccountErrors,
   DeleteAccountResponses,
+  DeleteProxyData,
+  DeleteProxyErrors,
+  DeleteProxyResponses,
   GetHealthData,
   GetHealthResponses,
   GetMeData,
@@ -55,6 +67,9 @@ import type {
   ListLogsData,
   ListLogsErrors,
   ListLogsResponses,
+  ListProxiesData,
+  ListProxiesErrors,
+  ListProxiesResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
@@ -81,6 +96,9 @@ import type {
   StopWarmingData,
   StopWarmingErrors,
   StopWarmingResponses,
+  UnassignProxyData,
+  UnassignProxyErrors,
+  UnassignProxyResponses,
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
@@ -245,6 +263,84 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
       'Content-Type': null,
       ...options.headers,
     },
+  });
+
+/**
+ * List Proxies
+ */
+export const listProxies = <ThrowOnError extends boolean = false>(
+  options?: Options<ListProxiesData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<ListProxiesResponses, ListProxiesErrors, ThrowOnError>({
+    url: '/api/v1/proxies',
+    ...options,
+  });
+
+/**
+ * Create Proxy
+ */
+export const createProxy = <ThrowOnError extends boolean = false>(
+  options: Options<CreateProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<CreateProxyResponses, CreateProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Check Proxy
+ */
+export const checkProxy = <ThrowOnError extends boolean = false>(
+  options: Options<CheckProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<CheckProxyResponses, CheckProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/{proxy_id}/check',
+    ...options,
+  });
+
+/**
+ * Assign Proxy
+ */
+export const assignProxy = <ThrowOnError extends boolean = false>(
+  options: Options<AssignProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<AssignProxyResponses, AssignProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/{proxy_id}/assign',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Unassign Proxy
+ */
+export const unassignProxy = <ThrowOnError extends boolean = false>(
+  options: Options<UnassignProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<UnassignProxyResponses, UnassignProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/unassign',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Proxy
+ */
+export const deleteProxy = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).delete<DeleteProxyResponses, DeleteProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/{proxy_id}',
+    ...options,
   });
 
 /**

@@ -41,6 +41,10 @@ def _add_account_bio(connection: Connection) -> None:
 
 
 def _add_account_proxy_geo(connection: Connection) -> None:
+    # ``account_proxies`` was retired by the proxy-pool migration (#18); on a
+    # fresh DB the table no longer exists, so this legacy ALTER is a no-op.
+    if not _sqlite_table_exists(connection, "account_proxies"):
+        return
     proxy_columns = _sqlite_columns(connection, "account_proxies")
     new_columns: tuple[tuple[str, str], ...] = (
         ("exit_ip", "VARCHAR"),
@@ -387,3 +391,11 @@ def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
             "ALTER TABLE warming_account_state "
             "ADD COLUMN promoted_to_nc INTEGER NOT NULL DEFAULT 0",
         )
+
+
+def _sqlite_table_exists(connection: Connection, table_name: str) -> bool:
+    row = connection.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).first()
+    return row is not None

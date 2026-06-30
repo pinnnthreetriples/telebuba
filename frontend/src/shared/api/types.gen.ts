@@ -150,6 +150,10 @@ export type AccountRead = {
    */
   bio?: string | null;
   /**
+   * Proxy Id
+   */
+  proxy_id?: string | null;
+  /**
    * Proxy Type
    */
   proxy_type?: string | null;
@@ -613,6 +617,138 @@ export type PageLogEntry = {
    * Next Cursor
    */
   next_cursor?: string | null;
+};
+
+/**
+ * ProxyAssignRequest
+ */
+export type ProxyAssignRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
+ * ProxyCreate
+ *
+ * Operator input when adding a proxy to the pool.
+ */
+export type ProxyCreate = {
+  /**
+   * Proxy Type
+   */
+  proxy_type: 'socks5' | 'https';
+  /**
+   * Host
+   */
+  host: string;
+  /**
+   * Port
+   */
+  port: number;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Password
+   */
+  password?: string | null;
+};
+
+/**
+ * ProxyList
+ */
+export type ProxyList = {
+  /**
+   * Proxies
+   */
+  proxies: Array<ProxyRead>;
+};
+
+/**
+ * ProxyRead
+ *
+ * A pool proxy as shown on the Accounts page (masked credentials).
+ */
+export type ProxyRead = {
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Proxy Type
+   */
+  proxy_type: 'socks5' | 'https';
+  /**
+   * Host
+   */
+  host: string;
+  /**
+   * Port
+   */
+  port: number;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Has Password
+   */
+  has_password: boolean;
+  /**
+   * Status
+   */
+  status: 'unknown' | 'tcp_working' | 'failed';
+  /**
+   * Last Checked At
+   */
+  last_checked_at?: string | null;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Exit Ip
+   */
+  exit_ip?: string | null;
+  /**
+   * Country Code
+   */
+  country_code?: string | null;
+  /**
+   * Country Name
+   */
+  country_name?: string | null;
+  /**
+   * Asn
+   */
+  asn?: string | null;
+  /**
+   * Is Datacenter
+   */
+  is_datacenter?: boolean;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+  /**
+   * Used
+   */
+  used: number;
+  /**
+   * Capacity
+   */
+  capacity: number;
+  /**
+   * Free
+   */
+  free: number;
 };
 
 /**
@@ -1360,6 +1496,171 @@ export type SetAccountPhotoResponses = {
 };
 
 export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
+
+export type ListProxiesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies';
+};
+
+export type ListProxiesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListProxiesError = ListProxiesErrors[keyof ListProxiesErrors];
+
+export type ListProxiesResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyList;
+};
+
+export type ListProxiesResponse = ListProxiesResponses[keyof ListProxiesResponses];
+
+export type CreateProxyData = {
+  body: ProxyCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies';
+};
+
+export type CreateProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateProxyError = CreateProxyErrors[keyof CreateProxyErrors];
+
+export type CreateProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyRead;
+};
+
+export type CreateProxyResponse = CreateProxyResponses[keyof CreateProxyResponses];
+
+export type CheckProxyData = {
+  body?: never;
+  path: {
+    /**
+     * Proxy Id
+     */
+    proxy_id: string;
+  };
+  query?: never;
+  url: '/api/v1/proxies/{proxy_id}/check';
+};
+
+export type CheckProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CheckProxyError = CheckProxyErrors[keyof CheckProxyErrors];
+
+export type CheckProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyRead;
+};
+
+export type CheckProxyResponse = CheckProxyResponses[keyof CheckProxyResponses];
+
+export type AssignProxyData = {
+  body: ProxyAssignRequest;
+  path: {
+    /**
+     * Proxy Id
+     */
+    proxy_id: string;
+  };
+  query?: never;
+  url: '/api/v1/proxies/{proxy_id}/assign';
+};
+
+export type AssignProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AssignProxyError = AssignProxyErrors[keyof AssignProxyErrors];
+
+export type AssignProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyRead;
+};
+
+export type AssignProxyResponse = AssignProxyResponses[keyof AssignProxyResponses];
+
+export type UnassignProxyData = {
+  body: ProxyAssignRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies/unassign';
+};
+
+export type UnassignProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UnassignProxyError = UnassignProxyErrors[keyof UnassignProxyErrors];
+
+export type UnassignProxyResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type UnassignProxyResponse = UnassignProxyResponses[keyof UnassignProxyResponses];
+
+export type DeleteProxyData = {
+  body?: never;
+  path: {
+    /**
+     * Proxy Id
+     */
+    proxy_id: string;
+  };
+  query?: never;
+  url: '/api/v1/proxies/{proxy_id}';
+};
+
+export type DeleteProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteProxyError = DeleteProxyErrors[keyof DeleteProxyErrors];
+
+export type DeleteProxyResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteProxyResponse = DeleteProxyResponses[keyof DeleteProxyResponses];
 
 export type GetWarmingBoardData = {
   body?: never;

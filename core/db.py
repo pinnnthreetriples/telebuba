@@ -69,15 +69,19 @@ _accounts = Table(
     Column("last_checked_at", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+    # Proxy pool: the one pool proxy this account uses (nullable = unassigned →
+    # "—" in the UI). Many accounts → one proxy; SET NULL on proxy delete is
+    # done in the repo (SQLite needs the constraint declared at create time).
+    Column("proxy_id", String, ForeignKey("proxies.id"), nullable=True),
     # F5: two accounts pointing at the same .session file would race on the
     # same Telethon SQLite session DB. SQLite treats NULLs as distinct in a
     # UNIQUE index, so accounts without a custom session_name still coexist.
     Index("ix_accounts_session_name_unique", "session_name", unique=True),
 )
-_account_proxies = Table(
-    "account_proxies",
+_proxies = Table(
+    "proxies",
     _metadata,
-    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
+    Column("id", String, primary_key=True),
     Column("proxy_type", String, nullable=False),
     Column("host", String, nullable=False),
     Column("port", Integer, nullable=False),
@@ -93,6 +97,9 @@ _account_proxies = Table(
     Column("is_datacenter", Integer, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+    # One pool entry per endpoint — adding the same host:port:type twice is a
+    # no-op upsert, never a duplicate card.
+    Index("ix_proxies_identity", "host", "port", "proxy_type", unique=True),
 )
 _logs = Table(
     "logs",
@@ -295,14 +302,6 @@ def _optional_int(value: object) -> int | None:
 # imports live at the bottom because the repositories import the table objects
 # and helpers defined above.
 # --------------------------------------------------------------------------- #
-from core.repositories._proxies import (  # noqa: E402, F401
-    delete_account_proxy,
-    exit_ip_collisions,
-    fetch_account_proxy,
-    fetch_account_proxy_settings,
-    update_account_proxy_check,
-    upsert_account_proxy,
-)
 from core.repositories.accounts import (  # noqa: E402, F401
     DuplicateSessionNameError,
     account_summary_counts,
@@ -385,6 +384,18 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     update_solver_enabled,
     upsert_linked_group,
     upsert_readiness,
+)
+from core.repositories.proxies import (  # noqa: E402, F401
+    ProxyCapacityError,
+    assign_account_to_proxy,
+    create_proxy,
+    delete_proxy,
+    fetch_account_proxy_settings,
+    fetch_proxy,
+    fetch_proxy_settings,
+    list_proxies,
+    unassign_account_from_proxy,
+    update_proxy_check,
 )
 from core.repositories.spam_status import (  # noqa: E402, F401
     get_spam_status,
