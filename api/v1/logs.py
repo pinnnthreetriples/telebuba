@@ -18,10 +18,16 @@ router = APIRouter(tags=["logs"])
 async def list_logs(
     status: LogStatusFilter = "all",
     account_id: str = "",
+    event_prefix: str = "",
     cursor: str | None = None,
     limit: Annotated[int, Query(ge=1, le=1000)] = 100,
 ) -> Page[LogEntry]:
-    log_filter = LogFilter(status=status, account_id=account_id, limit=limit)
+    log_filter = LogFilter(
+        status=status,
+        account_id=account_id,
+        event_prefix=event_prefix,
+        limit=limit,
+    )
     try:
         return await logs_service.list_logs_page(log_filter, cursor)
     except logs_service.InvalidCursorError as exc:

@@ -14,15 +14,27 @@ import type {
   AssignCampaignAccountData,
   AssignCampaignAccountErrors,
   AssignCampaignAccountResponses,
+  AssignProxyData,
+  AssignProxyErrors,
+  AssignProxyResponses,
   CheckAccountData,
   CheckAccountErrors,
   CheckAccountResponses,
+  CheckProxyData,
+  CheckProxyErrors,
+  CheckProxyResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
+  CreateProxyData,
+  CreateProxyErrors,
+  CreateProxyResponses,
   DeleteAccountData,
   DeleteAccountErrors,
   DeleteAccountResponses,
+  DeleteProxyData,
+  DeleteProxyErrors,
+  DeleteProxyResponses,
   GetHealthData,
   GetHealthResponses,
   GetMeData,
@@ -34,6 +46,9 @@ import type {
   GetNeurocommentRuntimeData,
   GetNeurocommentRuntimeErrors,
   GetNeurocommentRuntimeResponses,
+  GetNeurocommentSettingsData,
+  GetNeurocommentSettingsErrors,
+  GetNeurocommentSettingsResponses,
   GetWarmingBoardData,
   GetWarmingBoardErrors,
   GetWarmingBoardResponses,
@@ -49,26 +64,47 @@ import type {
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
+  ListCampaignChallengesData,
+  ListCampaignChallengesErrors,
+  ListCampaignChallengesResponses,
   ListCampaignsData,
   ListCampaignsErrors,
   ListCampaignsResponses,
   ListLogsData,
   ListLogsErrors,
   ListLogsResponses,
+  ListProxiesData,
+  ListProxiesErrors,
+  ListProxiesResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
   LoginData,
   LoginErrors,
   LoginResponses,
+  LogoutAccountData,
+  LogoutAccountErrors,
+  LogoutAccountResponses,
   LogoutData,
   LogoutResponses,
+  ProbeProxyData,
+  ProbeProxyErrors,
+  ProbeProxyResponses,
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
+  RequestLoginCodeData,
+  RequestLoginCodeErrors,
+  RequestLoginCodeResponses,
+  ResetAccountSessionData,
+  ResetAccountSessionErrors,
+  ResetAccountSessionResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  SpamCheckAccountData,
+  SpamCheckAccountErrors,
+  SpamCheckAccountResponses,
   StartNeurocommentData,
   StartNeurocommentErrors,
   StartNeurocommentResponses,
@@ -81,9 +117,18 @@ import type {
   StopWarmingData,
   StopWarmingErrors,
   StopWarmingResponses,
+  SubmitLoginCodeData,
+  SubmitLoginCodeErrors,
+  SubmitLoginCodeResponses,
+  UnassignProxyData,
+  UnassignProxyErrors,
+  UnassignProxyResponses,
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
+  UpdateNeurocommentSettingsData,
+  UpdateNeurocommentSettingsErrors,
+  UpdateNeurocommentSettingsResponses,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsErrors,
   UpdateWarmingSettingsResponses,
@@ -182,6 +227,76 @@ export const checkAccount = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Spam Check Account
+ *
+ * Re-probe @SpamBot for one account and return the fresh, cached verdict.
+ */
+export const spamCheckAccount = <ThrowOnError extends boolean = false>(
+  options: Options<SpamCheckAccountData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/spam-check',
+    ...options,
+  });
+
+/**
+ * Request Login Code
+ *
+ * Send a Telegram login code to the account's phone (re-auth by code).
+ */
+export const requestLoginCode = <ThrowOnError extends boolean = false>(
+  options: Options<RequestLoginCodeData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<RequestLoginCodeResponses, RequestLoginCodeErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/request-code',
+    ...options,
+  });
+
+/**
+ * Submit Login Code
+ *
+ * Complete sign-in with the SMS code (+ optional 2FA password).
+ */
+export const submitLoginCode = <ThrowOnError extends boolean = false>(
+  options: Options<SubmitLoginCodeData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<SubmitLoginCodeResponses, SubmitLoginCodeErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/submit-code',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Logout Account
+ *
+ * Log the account out server-side and mark it unauthorized.
+ */
+export const logoutAccount = <ThrowOnError extends boolean = false>(
+  options: Options<LogoutAccountData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<LogoutAccountResponses, LogoutAccountErrors, ThrowOnError>({
+    url: '/api/v1/accounts/{account_id}/logout',
+    ...options,
+  });
+
+/**
+ * Reset Account Session
+ *
+ * Log out and wipe the local session token so the next login is clean.
+ */
+export const resetAccountSession = <ThrowOnError extends boolean = false>(
+  options: Options<ResetAccountSessionData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    ResetAccountSessionResponses,
+    ResetAccountSessionErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/reset-session', ...options });
+
+/**
  * Update Account Profile
  */
 export const updateAccountProfile = <ThrowOnError extends boolean = false>(
@@ -245,6 +360,99 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
       'Content-Type': null,
       ...options.headers,
     },
+  });
+
+/**
+ * List Proxies
+ */
+export const listProxies = <ThrowOnError extends boolean = false>(
+  options?: Options<ListProxiesData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<ListProxiesResponses, ListProxiesErrors, ThrowOnError>({
+    url: '/api/v1/proxies',
+    ...options,
+  });
+
+/**
+ * Create Proxy
+ */
+export const createProxy = <ThrowOnError extends boolean = false>(
+  options: Options<CreateProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<CreateProxyResponses, CreateProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Probe Proxy
+ */
+export const probeProxy = <ThrowOnError extends boolean = false>(
+  options: Options<ProbeProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<ProbeProxyResponses, ProbeProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/probe',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Check Proxy
+ */
+export const checkProxy = <ThrowOnError extends boolean = false>(
+  options: Options<CheckProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<CheckProxyResponses, CheckProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/{proxy_id}/check',
+    ...options,
+  });
+
+/**
+ * Assign Proxy
+ */
+export const assignProxy = <ThrowOnError extends boolean = false>(
+  options: Options<AssignProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<AssignProxyResponses, AssignProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/{proxy_id}/assign',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Unassign Proxy
+ */
+export const unassignProxy = <ThrowOnError extends boolean = false>(
+  options: Options<UnassignProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<UnassignProxyResponses, UnassignProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/unassign',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Proxy
+ */
+export const deleteProxy = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteProxyData, ThrowOnError>,
+) =>
+  (options.client ?? client).delete<DeleteProxyResponses, DeleteProxyErrors, ThrowOnError>({
+    url: '/api/v1/proxies/{proxy_id}',
+    ...options,
   });
 
 /**
@@ -446,6 +654,20 @@ export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Campaign Challenges
+ *
+ * Recent unsolved bot-challenges across the campaign's channels (captcha queue).
+ */
+export const listCampaignChallenges = <ThrowOnError extends boolean = false>(
+  options: Options<ListCampaignChallengesData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    ListCampaignChallengesResponses,
+    ListCampaignChallengesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges', ...options });
+
+/**
  * Get Runtime
  */
 export const getNeurocommentRuntime = <ThrowOnError extends boolean = false>(
@@ -485,6 +707,37 @@ export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
     { url: '/api/v1/neurocomment/stop', ...options },
   );
+
+/**
+ * Get Settings
+ */
+export const getNeurocommentSettings = <ThrowOnError extends boolean = false>(
+  options?: Options<GetNeurocommentSettingsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    GetNeurocommentSettingsResponses,
+    GetNeurocommentSettingsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/settings', ...options });
+
+/**
+ * Update Settings
+ */
+export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateNeurocommentSettingsData, ThrowOnError>,
+) =>
+  (options.client ?? client).put<
+    UpdateNeurocommentSettingsResponses,
+    UpdateNeurocommentSettingsErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/settings',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * List Logs

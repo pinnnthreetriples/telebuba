@@ -12,31 +12,46 @@ import { client } from '../client.gen';
 import {
   addWarmingChannels,
   assignCampaignAccount,
+  assignProxy,
   checkAccount,
+  checkProxy,
   createCampaign,
+  createProxy,
   deleteAccount,
+  deleteProxy,
   getHealth,
   getMe,
   getNeurocommentBoard,
   getNeurocommentRuntime,
+  getNeurocommentSettings,
   getWarmingBoard,
   getWarmingSettings,
   importAccountTdata,
   linkCampaignChannel,
   listAccounts,
+  listCampaignChallenges,
   listCampaigns,
   listLogs,
+  listProxies,
   listWarmingChannels,
   login,
   logout,
+  logoutAccount,
   type Options,
+  probeProxy,
   removeWarmingChannel,
+  requestLoginCode,
+  resetAccountSession,
   setAccountPhoto,
+  spamCheckAccount,
   startNeurocomment,
   startWarming,
   stopNeurocomment,
   stopWarming,
+  submitLoginCode,
+  unassignProxy,
   updateAccountProfile,
+  updateNeurocommentSettings,
   updateWarmingSettings,
 } from '../sdk.gen';
 import type {
@@ -46,15 +61,27 @@ import type {
   AssignCampaignAccountData,
   AssignCampaignAccountError,
   AssignCampaignAccountResponse,
+  AssignProxyData,
+  AssignProxyError,
+  AssignProxyResponse,
   CheckAccountData,
   CheckAccountError,
   CheckAccountResponse,
+  CheckProxyData,
+  CheckProxyError,
+  CheckProxyResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
+  CreateProxyData,
+  CreateProxyError,
+  CreateProxyResponse,
   DeleteAccountData,
   DeleteAccountError,
   DeleteAccountResponse,
+  DeleteProxyData,
+  DeleteProxyError,
+  DeleteProxyResponse,
   GetHealthData,
   GetHealthResponse,
   GetMeData,
@@ -66,6 +93,9 @@ import type {
   GetNeurocommentRuntimeData,
   GetNeurocommentRuntimeError,
   GetNeurocommentRuntimeResponse,
+  GetNeurocommentSettingsData,
+  GetNeurocommentSettingsError,
+  GetNeurocommentSettingsResponse,
   GetWarmingBoardData,
   GetWarmingBoardError,
   GetWarmingBoardResponse,
@@ -81,26 +111,47 @@ import type {
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
+  ListCampaignChallengesData,
+  ListCampaignChallengesError,
+  ListCampaignChallengesResponse,
   ListCampaignsData,
   ListCampaignsError,
   ListCampaignsResponse,
   ListLogsData,
   ListLogsError,
   ListLogsResponse,
+  ListProxiesData,
+  ListProxiesError,
+  ListProxiesResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
   LoginData,
   LoginError,
   LoginResponse,
+  LogoutAccountData,
+  LogoutAccountError,
+  LogoutAccountResponse,
   LogoutData,
   LogoutResponse,
+  ProbeProxyData,
+  ProbeProxyError,
+  ProbeProxyResponse,
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
+  RequestLoginCodeData,
+  RequestLoginCodeError,
+  RequestLoginCodeResponse,
+  ResetAccountSessionData,
+  ResetAccountSessionError,
+  ResetAccountSessionResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  SpamCheckAccountData,
+  SpamCheckAccountError,
+  SpamCheckAccountResponse,
   StartNeurocommentData,
   StartNeurocommentError,
   StartNeurocommentResponse,
@@ -113,9 +164,18 @@ import type {
   StopWarmingData,
   StopWarmingError,
   StopWarmingResponse,
+  SubmitLoginCodeData,
+  SubmitLoginCodeError,
+  SubmitLoginCodeResponse,
+  UnassignProxyData,
+  UnassignProxyError,
+  UnassignProxyResponse,
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
+  UpdateNeurocommentSettingsData,
+  UpdateNeurocommentSettingsError,
+  UpdateNeurocommentSettingsResponse,
   UpdateWarmingSettingsData,
   UpdateWarmingSettingsError,
   UpdateWarmingSettingsResponse,
@@ -370,6 +430,147 @@ export const checkAccountMutation = (
 };
 
 /**
+ * Spam Check Account
+ *
+ * Re-probe @SpamBot for one account and return the fresh, cached verdict.
+ */
+export const spamCheckAccountMutation = (
+  options?: Partial<Options<SpamCheckAccountData>>,
+): UseMutationOptions<
+  SpamCheckAccountResponse,
+  SpamCheckAccountError,
+  Options<SpamCheckAccountData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SpamCheckAccountResponse,
+    SpamCheckAccountError,
+    Options<SpamCheckAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await spamCheckAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Request Login Code
+ *
+ * Send a Telegram login code to the account's phone (re-auth by code).
+ */
+export const requestLoginCodeMutation = (
+  options?: Partial<Options<RequestLoginCodeData>>,
+): UseMutationOptions<
+  RequestLoginCodeResponse,
+  RequestLoginCodeError,
+  Options<RequestLoginCodeData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RequestLoginCodeResponse,
+    RequestLoginCodeError,
+    Options<RequestLoginCodeData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await requestLoginCode({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Submit Login Code
+ *
+ * Complete sign-in with the SMS code (+ optional 2FA password).
+ */
+export const submitLoginCodeMutation = (
+  options?: Partial<Options<SubmitLoginCodeData>>,
+): UseMutationOptions<
+  SubmitLoginCodeResponse,
+  SubmitLoginCodeError,
+  Options<SubmitLoginCodeData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SubmitLoginCodeResponse,
+    SubmitLoginCodeError,
+    Options<SubmitLoginCodeData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await submitLoginCode({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Logout Account
+ *
+ * Log the account out server-side and mark it unauthorized.
+ */
+export const logoutAccountMutation = (
+  options?: Partial<Options<LogoutAccountData>>,
+): UseMutationOptions<LogoutAccountResponse, LogoutAccountError, Options<LogoutAccountData>> => {
+  const mutationOptions: UseMutationOptions<
+    LogoutAccountResponse,
+    LogoutAccountError,
+    Options<LogoutAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await logoutAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Reset Account Session
+ *
+ * Log out and wipe the local session token so the next login is clean.
+ */
+export const resetAccountSessionMutation = (
+  options?: Partial<Options<ResetAccountSessionData>>,
+): UseMutationOptions<
+  ResetAccountSessionResponse,
+  ResetAccountSessionError,
+  Options<ResetAccountSessionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ResetAccountSessionResponse,
+    ResetAccountSessionError,
+    Options<ResetAccountSessionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await resetAccountSession({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
  * Update Account Profile
  */
 export const updateAccountProfileMutation = (
@@ -463,6 +664,169 @@ export const setAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listProxiesQueryKey = (options?: Options<ListProxiesData>) =>
+  createQueryKey('listProxies', options);
+
+/**
+ * List Proxies
+ */
+export const listProxiesOptions = (options?: Options<ListProxiesData>) =>
+  queryOptions<
+    ListProxiesResponse,
+    ListProxiesError,
+    ListProxiesResponse,
+    ReturnType<typeof listProxiesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listProxies({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listProxiesQueryKey(options),
+  });
+
+/**
+ * Create Proxy
+ */
+export const createProxyMutation = (
+  options?: Partial<Options<CreateProxyData>>,
+): UseMutationOptions<CreateProxyResponse, CreateProxyError, Options<CreateProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    CreateProxyResponse,
+    CreateProxyError,
+    Options<CreateProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Probe Proxy
+ */
+export const probeProxyMutation = (
+  options?: Partial<Options<ProbeProxyData>>,
+): UseMutationOptions<ProbeProxyResponse, ProbeProxyError, Options<ProbeProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    ProbeProxyResponse,
+    ProbeProxyError,
+    Options<ProbeProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await probeProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Check Proxy
+ */
+export const checkProxyMutation = (
+  options?: Partial<Options<CheckProxyData>>,
+): UseMutationOptions<CheckProxyResponse, CheckProxyError, Options<CheckProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    CheckProxyResponse,
+    CheckProxyError,
+    Options<CheckProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await checkProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Assign Proxy
+ */
+export const assignProxyMutation = (
+  options?: Partial<Options<AssignProxyData>>,
+): UseMutationOptions<AssignProxyResponse, AssignProxyError, Options<AssignProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    AssignProxyResponse,
+    AssignProxyError,
+    Options<AssignProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await assignProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Unassign Proxy
+ */
+export const unassignProxyMutation = (
+  options?: Partial<Options<UnassignProxyData>>,
+): UseMutationOptions<UnassignProxyResponse, UnassignProxyError, Options<UnassignProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    UnassignProxyResponse,
+    UnassignProxyError,
+    Options<UnassignProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await unassignProxy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Proxy
+ */
+export const deleteProxyMutation = (
+  options?: Partial<Options<DeleteProxyData>>,
+): UseMutationOptions<DeleteProxyResponse, DeleteProxyError, Options<DeleteProxyData>> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteProxyResponse,
+    DeleteProxyError,
+    Options<DeleteProxyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteProxy({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -802,6 +1166,33 @@ export const assignCampaignAccountMutation = (
   return mutationOptions;
 };
 
+export const listCampaignChallengesQueryKey = (options: Options<ListCampaignChallengesData>) =>
+  createQueryKey('listCampaignChallenges', options);
+
+/**
+ * List Campaign Challenges
+ *
+ * Recent unsolved bot-challenges across the campaign's channels (captcha queue).
+ */
+export const listCampaignChallengesOptions = (options: Options<ListCampaignChallengesData>) =>
+  queryOptions<
+    ListCampaignChallengesResponse,
+    ListCampaignChallengesError,
+    ListCampaignChallengesResponse,
+    ReturnType<typeof listCampaignChallengesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listCampaignChallenges({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listCampaignChallengesQueryKey(options),
+  });
+
 export const getNeurocommentRuntimeQueryKey = (options?: Options<GetNeurocommentRuntimeData>) =>
   createQueryKey('getNeurocommentRuntime', options);
 
@@ -871,6 +1262,58 @@ export const stopNeurocommentMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getNeurocommentSettingsQueryKey = (options?: Options<GetNeurocommentSettingsData>) =>
+  createQueryKey('getNeurocommentSettings', options);
+
+/**
+ * Get Settings
+ */
+export const getNeurocommentSettingsOptions = (options?: Options<GetNeurocommentSettingsData>) =>
+  queryOptions<
+    GetNeurocommentSettingsResponse,
+    GetNeurocommentSettingsError,
+    GetNeurocommentSettingsResponse,
+    ReturnType<typeof getNeurocommentSettingsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getNeurocommentSettings({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getNeurocommentSettingsQueryKey(options),
+  });
+
+/**
+ * Update Settings
+ */
+export const updateNeurocommentSettingsMutation = (
+  options?: Partial<Options<UpdateNeurocommentSettingsData>>,
+): UseMutationOptions<
+  UpdateNeurocommentSettingsResponse,
+  UpdateNeurocommentSettingsError,
+  Options<UpdateNeurocommentSettingsData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateNeurocommentSettingsResponse,
+    UpdateNeurocommentSettingsError,
+    Options<UpdateNeurocommentSettingsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateNeurocommentSettings({
         ...options,
         ...fnOptions,
         throwOnError: true,

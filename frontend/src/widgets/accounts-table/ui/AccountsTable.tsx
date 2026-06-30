@@ -1,6 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import { accountDesignStatus, type DesignStatus, StatusBadge } from '@/entities/account';
+import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 
 interface AccountsTableProps {
@@ -30,22 +31,30 @@ function mono(account: AccountRead): string {
   return digits.slice(-2) || '#';
 }
 
-// ponytail: trust / device / proxy-type / connectivity aren't carried by the
-// backend yet — derive deterministic design-first values from the id so the
-// table renders the design's richness (the branch is design-first, data later).
-const DEVICES = ['iPhone 13', 'iPhone 12', 'Pixel 7', 'Galaxy S22', 'iPhone 14'];
-const OSES = ['iOS 17.2', 'iOS 16.4', 'Android 14', 'Android 13', 'iOS 17.4'];
-function decorate(account: AccountRead) {
-  const seed = [...account.account_id].reduce((sum, c) => sum + c.charCodeAt(0), 0);
-  const trust = 40 + (seed % 60);
-  const trustColor = trust >= 70 ? '#12a150' : trust >= 45 ? '#e08700' : '#e5372a';
-  return {
-    trust,
-    trustColor,
-    connected: seed % 5 !== 0,
-    ptype: seed % 2 === 0 ? 'SOCKS5' : 'HTTPS',
-    device: `${DEVICES[seed % DEVICES.length]} · ${OSES[seed % OSES.length]}`,
-  };
+// Trust Score is real (computed by the backend from session/spam/age signals).
+// The 3-tier colour band mirrors the design's thresholds.
+function trustColor(score: number): string {
+  return score >= 70 ? '#12a150' : score >= 45 ? '#e08700' : '#e5372a';
+}
+
+// Real device fingerprint — immutable, set at registration.
+function deviceLabel(account: AccountRead): string {
+  return [account.device_model, account.device_system_version].filter(Boolean).join(' · ') || '—';
+}
+
+// Real proxy column, sourced from the account's assigned pool proxy.
+function proxyDotColor(status: string | null | undefined): string {
+  if (status === 'tcp_working') return '#2e9e64';
+  if (status === 'failed') return '#c0473f';
+  return '#c8c6c2';
+}
+function proxyMeta(account: AccountRead): string {
+  return [
+    account.proxy_country_code?.toUpperCase(),
+    account.proxy_type ? proxyTypeLabel(account.proxy_type) : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 }
 
 // The design's accounts table: white card, uppercase header on #FAF9F7, rows
@@ -78,7 +87,7 @@ export function AccountsTable({
             {data.map((account) => {
               const busy = busyId === account.account_id;
               const ds = accountDesignStatus(account.status);
-              const d = decorate(account);
+              const trust = account.trust_score;
               return (
                 <tr
                   key={account.account_id}
@@ -106,41 +115,45 @@ export function AccountsTable({
                     <StatusBadge status={account.status} />
                   </td>
                   <td className="px-4 py-3">
-                    {account.proxy_country_code ? (
+                    {account.proxy_id ? (
                       <div className="flex items-center gap-[7px]">
                         <span
                           className="h-[7px] w-[7px] shrink-0 rounded-full"
-                          style={{ background: d.connected ? '#2e9e64' : '#c0473f' }}
+                          style={{ background: proxyDotColor(account.proxy_status) }}
                         />
-                        <span
-                          className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                        />
-                        <span className="text-[12px] text-[#3a3a3a]">
-                          {account.proxy_country_code.toUpperCase()} · {d.ptype}
-                        </span>
+                        {account.proxy_country_code ? (
+                          <span
+                            className={`fi fi-${account.proxy_country_code.toLowerCase()} h-3 w-4 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                          />
+                        ) : null}
+                        <span className="text-[12px] text-[#3a3a3a]">{proxyMeta(account)}</span>
                       </div>
                     ) : (
                       <span className="text-[12px] text-ink-subtle">—</span>
                     )}
                   </td>
                   <td className="px-4 py-3">
-                    <span className="text-[12px] text-ink-muted">{d.device}</span>
+                    <span className="text-[12px] text-ink-muted">{deviceLabel(account)}</span>
                   </td>
                   <td className="px-4 py-3">
-                    <div className="flex items-center gap-2">
-                      <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${String(d.trust)}%`, background: d.trustColor }}
-                        />
+                    {trust == null ? (
+                      <span className="text-[12px] text-ink-subtle">—</span>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <div className="h-[5px] w-[46px] overflow-hidden rounded-full bg-track">
+                          <div
+                            className="h-full rounded-full"
+                            style={{ width: `${String(trust)}%`, background: trustColor(trust) }}
+                          />
+                        </div>
+                        <span
+                          className="min-w-[20px] text-[12px] font-semibold"
+                          style={{ color: trustColor(trust) }}
+                        >
+                          {trust}
+                        </span>
                       </div>
-                      <span
-                        className="min-w-[20px] text-[12px] font-semibold"
-                        style={{ color: d.trustColor }}
-                      >
-                        {d.trust}
-                      </span>
-                    </div>
+                    )}
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex items-center justify-end gap-[6px]">

@@ -24,6 +24,7 @@ const BOARD: NeurocommentBoardData = {
       max_comments_per_hour: 10,
       comments_today: 4,
       last_comment_at: 'now',
+      readiness: [{ channel: '@news', ready: true, joined: true, captcha_passed: true }],
     },
   ],
 };

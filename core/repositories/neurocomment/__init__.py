@@ -61,6 +61,10 @@ from core.repositories.neurocomment._runtime import (
     get_listener_account_id,
     set_listener_account_id,
 )
+from core.repositories.neurocomment._settings import (
+    load_neurocomment_settings,
+    save_neurocomment_settings,
+)
 
 __all__ = [
     "ChannelAlreadyAssignedError",
@@ -93,12 +97,14 @@ __all__ = [
     "list_linked_groups",
     "list_posted_comments_for_channel_since",
     "list_posted_comments_since",
+    "load_neurocomment_settings",
     "lookup_cached_decision",
     "mark_comment_failed",
     "mark_comment_posted",
     "mark_human_skipped",
     "remove_account_from_campaign",
     "resolve_pending_outcome",
+    "save_neurocomment_settings",
     "set_listener_account_id",
     "update_solver_enabled",
     "upsert_linked_group",

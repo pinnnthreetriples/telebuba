@@ -1,12 +1,15 @@
 export {
   assignCampaignAccountMutation,
+  campaignChallengesQueryOptions,
   campaignsQueryOptions,
   createCampaignMutation,
   linkCampaignChannelMutation,
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
+  neurocommentSettingsQueryOptions,
   startNeurocommentMutation,
   stopNeurocommentMutation,
+  updateNeurocommentSettingsMutation,
 } from './api/campaign.queries';
 export { CampaignDeleteModal } from './ui/CampaignDeleteModal';
 export { CampaignPromptModal, type PromptAccount } from './ui/CampaignPromptModal';

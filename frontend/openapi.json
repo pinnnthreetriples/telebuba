@@ -286,6 +286,311 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/spam-check": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Spam Check Account",
+        "description": "Re-probe @SpamBot for one account and return the fresh, cached verdict.",
+        "operationId": "spamCheckAccount",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SpamStatusVerdict"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/request-code": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Request Login Code",
+        "description": "Send a Telegram login code to the account's phone (re-auth by code).",
+        "operationId": "requestLoginCode",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PhoneCodeRequestResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/submit-code": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Submit Login Code",
+        "description": "Complete sign-in with the SMS code (+ optional 2FA password).",
+        "operationId": "submitLoginCode",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SubmitCodeRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/logout": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Logout Account",
+        "description": "Log the account out server-side and mark it unauthorized.",
+        "operationId": "logoutAccount",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/reset-session": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Reset Account Session",
+        "description": "Log out and wipe the local session token so the next login is clean.",
+        "operationId": "resetAccountSession",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/profile": {
       "post": {
         "tags": [
@@ -500,6 +805,400 @@
                 }
               }
             }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/proxies": {
+      "get": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "List Proxies",
+        "operationId": "listProxies",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "Create Proxy",
+        "operationId": "createProxy",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/probe": {
+      "post": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "Probe Proxy",
+        "operationId": "probeProxy",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyCheckResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/{proxy_id}/check": {
+      "post": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "Check Proxy",
+        "operationId": "checkProxy",
+        "parameters": [
+          {
+            "name": "proxy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proxy Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/{proxy_id}/assign": {
+      "post": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "Assign Proxy",
+        "operationId": "assignProxy",
+        "parameters": [
+          {
+            "name": "proxy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proxy Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyAssignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ProxyRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/unassign": {
+      "post": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "Unassign Proxy",
+        "operationId": "unassignProxy",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ProxyAssignRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/proxies/{proxy_id}": {
+      "delete": {
+        "tags": [
+          "proxies"
+        ],
+        "summary": "Delete Proxy",
+        "operationId": "deleteProxy",
+        "parameters": [
+          {
+            "name": "proxy_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Proxy Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
           },
           "422": {
             "description": "Validation Error",
@@ -1245,6 +1944,77 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/challenges": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "List Campaign Challenges",
+        "description": "Recent unsolved bot-challenges across the campaign's channels (captcha queue).",
+        "operationId": "listCampaignChallenges",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeRowList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/runtime": {
       "get": {
         "tags": [
@@ -1402,6 +2172,112 @@
         }
       }
     },
+    "/api/v1/neurocomment/settings": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Get Settings",
+        "operationId": "getNeurocommentSettings",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Update Settings",
+        "operationId": "updateNeurocommentSettings",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NeurocommentSettingsUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentSettings"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/logs": {
       "get": {
         "tags": [
@@ -1434,6 +2310,16 @@
               "type": "string",
               "default": "",
               "title": "Account Id"
+            }
+          },
+          {
+            "name": "event_prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Event Prefix"
             }
           },
           {
@@ -1774,6 +2660,17 @@
             ],
             "title": "Device App Version"
           },
+          "device_lang": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Device Lang"
+          },
           "bio": {
             "anyOf": [
               {
@@ -1784,6 +2681,17 @@
               }
             ],
             "title": "Bio"
+          },
+          "proxy_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Id"
           },
           "proxy_type": {
             "anyOf": [
@@ -1883,6 +2791,64 @@
               }
             ],
             "title": "Proxy Country Name"
+          },
+          "trust_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Score"
+          },
+          "trust_band": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "excellent",
+                  "good",
+                  "watch",
+                  "at_risk",
+                  "critical"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Band"
+          },
+          "spam_status": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "clean",
+                  "limited",
+                  "unknown"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Status"
+          },
+          "spam_detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spam Detail"
           }
         },
         "type": "object",
@@ -2093,6 +3059,76 @@
         "type": "object",
         "title": "CampaignList",
         "description": "Wrapper so callers never receive a raw list (non-negotiable #2)."
+      },
+      "ChallengeRow": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "raw_text": {
+            "type": "string",
+            "title": "Raw Text"
+          },
+          "button_labels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Button Labels"
+          },
+          "outcome": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Outcome"
+          },
+          "decided_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Decided At"
+          },
+          "reasoning": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reasoning"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "channel",
+          "raw_text",
+          "outcome",
+          "decided_at"
+        ],
+        "title": "ChallengeRow",
+        "description": "One persisted challenge audit row, as the operator drill-down reads it."
+      },
+      "ChallengeRowList": {
+        "properties": {
+          "rows": {
+            "items": {
+              "$ref": "#/components/schemas/ChallengeRow"
+            },
+            "type": "array",
+            "title": "Rows"
+          }
+        },
+        "type": "object",
+        "title": "ChallengeRowList",
+        "description": "Wrapper so the repo returns a model, never a raw list (non-negotiable #2)."
       },
       "ChannelLinkOutcome": {
         "properties": {
@@ -2509,6 +3545,93 @@
         "title": "NeurocommentRuntimeStatus",
         "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: the engine is\none fleet listener (not per-campaign), so the persisted listener account id\nbeing set means the engine is live. ``active_channels`` is the size of the\nwatch set across all active campaigns (what the listener actually watches)."
       },
+      "NeurocommentSettings": {
+        "properties": {
+          "max_comments_per_hour": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Max Comments Per Hour"
+          },
+          "max_comments_per_channel_per_day": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Max Comments Per Channel Per Day"
+          },
+          "reply_delay_min_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Min Seconds"
+          },
+          "reply_delay_max_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Max Seconds"
+          },
+          "min_trust_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min Trust Score"
+          },
+          "updated_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "max_comments_per_hour",
+          "max_comments_per_channel_per_day",
+          "reply_delay_min_seconds",
+          "reply_delay_max_seconds",
+          "min_trust_score",
+          "updated_at"
+        ],
+        "title": "NeurocommentSettings",
+        "description": "Operator-editable neurocomment limits \u2014 the engine reads these at selection."
+      },
+      "NeurocommentSettingsUpdate": {
+        "properties": {
+          "max_comments_per_hour": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Max Comments Per Hour"
+          },
+          "max_comments_per_channel_per_day": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Max Comments Per Channel Per Day"
+          },
+          "reply_delay_min_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Min Seconds"
+          },
+          "reply_delay_max_seconds": {
+            "type": "number",
+            "minimum": 0.0,
+            "title": "Reply Delay Max Seconds"
+          },
+          "min_trust_score": {
+            "type": "integer",
+            "maximum": 100.0,
+            "minimum": 0.0,
+            "title": "Min Trust Score"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "max_comments_per_hour",
+          "max_comments_per_channel_per_day",
+          "reply_delay_min_seconds",
+          "reply_delay_max_seconds",
+          "min_trust_score"
+        ],
+        "title": "NeurocommentSettingsUpdate",
+        "description": "Caller-supplied neurocomment-settings change from the Settings screen."
+      },
       "Page_AccountRead_": {
         "properties": {
           "items": {
@@ -2563,6 +3686,352 @@
         ],
         "title": "Page[LogEntry]"
       },
+      "PhoneCodeRequestResult": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Phone"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "phone"
+        ],
+        "title": "PhoneCodeRequestResult",
+        "description": "API response after a code is sent \u2014 confirmation only, no secrets."
+      },
+      "ProxyAssignRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "ProxyAssignRequest"
+      },
+      "ProxyCheckResult": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "tcp_working",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "exit_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Ip"
+          },
+          "country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          },
+          "country_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Name"
+          },
+          "asn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asn"
+          },
+          "is_datacenter": {
+            "type": "boolean",
+            "title": "Is Datacenter",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "ProxyCheckResult"
+      },
+      "ProxyCreate": {
+        "properties": {
+          "proxy_type": {
+            "type": "string",
+            "enum": [
+              "socks5",
+              "https"
+            ],
+            "title": "Proxy Type"
+          },
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Host"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proxy_type",
+          "host",
+          "port"
+        ],
+        "title": "ProxyCreate",
+        "description": "Operator input when adding a proxy to the pool."
+      },
+      "ProxyList": {
+        "properties": {
+          "proxies": {
+            "items": {
+              "$ref": "#/components/schemas/ProxyRead"
+            },
+            "type": "array",
+            "title": "Proxies"
+          }
+        },
+        "type": "object",
+        "required": [
+          "proxies"
+        ],
+        "title": "ProxyList"
+      },
+      "ProxyRead": {
+        "properties": {
+          "id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Id"
+          },
+          "proxy_type": {
+            "type": "string",
+            "enum": [
+              "socks5",
+              "https"
+            ],
+            "title": "Proxy Type"
+          },
+          "host": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Host"
+          },
+          "port": {
+            "type": "integer",
+            "maximum": 65535.0,
+            "minimum": 1.0,
+            "title": "Port"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "has_password": {
+            "type": "boolean",
+            "title": "Has Password"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "tcp_working",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "last_checked_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Checked At"
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          },
+          "exit_ip": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Exit Ip"
+          },
+          "country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Code"
+          },
+          "country_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country Name"
+          },
+          "asn": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Asn"
+          },
+          "is_datacenter": {
+            "type": "boolean",
+            "title": "Is Datacenter",
+            "default": false
+          },
+          "created_at": {
+            "type": "string",
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "title": "Updated At"
+          },
+          "used": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Used"
+          },
+          "capacity": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Capacity"
+          },
+          "free": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Free"
+          }
+        },
+        "type": "object",
+        "required": [
+          "id",
+          "proxy_type",
+          "host",
+          "port",
+          "has_password",
+          "status",
+          "created_at",
+          "updated_at",
+          "used",
+          "capacity",
+          "free"
+        ],
+        "title": "ProxyRead",
+        "description": "A pool proxy as shown on the Accounts page (masked credentials)."
+      },
       "RemoveChannelRequest": {
         "properties": {
           "channel": {
@@ -2576,6 +4045,48 @@
           "channel"
         ],
         "title": "RemoveChannelRequest"
+      },
+      "SpamStatusVerdict": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "clean",
+              "limited",
+              "unknown"
+            ],
+            "title": "Status"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          },
+          "checked_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Checked At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "status",
+          "checked_at"
+        ],
+        "title": "SpamStatusVerdict",
+        "description": "Parsed, cacheable spam-status verdict for one account."
       },
       "StartNeurocommentRequest": {
         "properties": {
@@ -2620,6 +4131,32 @@
           "account_id"
         ],
         "title": "StopWarmingRequest"
+      },
+      "SubmitCodeRequest": {
+        "properties": {
+          "code": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Code"
+          },
+          "password": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Password"
+          }
+        },
+        "type": "object",
+        "required": [
+          "code"
+        ],
+        "title": "SubmitCodeRequest",
+        "description": "API body for ``POST /accounts/{id}/submit-code``."
       },
       "TdataImportResult": {
         "properties": {

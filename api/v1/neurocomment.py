@@ -2,9 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
+from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import (
     AssignAccountRequest,
     CampaignCreate,
@@ -14,6 +17,8 @@ from schemas.neurocomment import (
     NeurocommentBoard,
     NeurocommentCampaign,
     NeurocommentRuntimeStatus,
+    NeurocommentSettings,
+    NeurocommentSettingsUpdate,
     StartNeurocommentRequest,
 )
 from services import neurocomment as nc_service
@@ -62,6 +67,19 @@ async def assign_account(campaign_id: str, body: AssignAccountRequest) -> None:
 
 
 @router.get(
+    "/campaigns/{campaign_id}/challenges",
+    response_model=ChallengeRowList,
+    operation_id="listCampaignChallenges",
+)
+async def list_campaign_challenges(
+    campaign_id: str,
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ChallengeRowList:
+    """Recent unsolved bot-challenges across the campaign's channels (captcha queue)."""
+    return await nc_service.list_campaign_challenges(campaign_id, limit)
+
+
+@router.get(
     "/runtime",
     response_model=NeurocommentRuntimeStatus,
     operation_id="getNeurocommentRuntime",
@@ -80,3 +98,21 @@ async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
 async def stop() -> NeurocommentRuntimeStatus:
     await nc_service.stop_neurocomment()
     return await nc_service.neurocomment_runtime_status()
+
+
+@router.get(
+    "/settings",
+    response_model=NeurocommentSettings,
+    operation_id="getNeurocommentSettings",
+)
+async def get_settings() -> NeurocommentSettings:
+    return await nc_service.load_neurocomment_settings()
+
+
+@router.put(
+    "/settings",
+    response_model=NeurocommentSettings,
+    operation_id="updateNeurocommentSettings",
+)
+async def update_settings(body: NeurocommentSettingsUpdate) -> NeurocommentSettings:
+    return await nc_service.save_neurocomment_settings(body)

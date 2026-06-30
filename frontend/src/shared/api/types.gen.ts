@@ -146,9 +146,17 @@ export type AccountRead = {
    */
   device_app_version?: string | null;
   /**
+   * Device Lang
+   */
+  device_lang?: string | null;
+  /**
    * Bio
    */
   bio?: string | null;
+  /**
+   * Proxy Id
+   */
+  proxy_id?: string | null;
   /**
    * Proxy Type
    */
@@ -185,6 +193,22 @@ export type AccountRead = {
    * Proxy Country Name
    */
   proxy_country_name?: string | null;
+  /**
+   * Trust Score
+   */
+  trust_score?: number | null;
+  /**
+   * Trust Band
+   */
+  trust_band?: 'excellent' | 'good' | 'watch' | 'at_risk' | 'critical' | null;
+  /**
+   * Spam Status
+   */
+  spam_status?: 'clean' | 'limited' | 'unknown' | null;
+  /**
+   * Spam Detail
+   */
+  spam_detail?: string | null;
 };
 
 /**
@@ -305,6 +329,54 @@ export type CampaignList = {
    * Campaigns
    */
   campaigns?: Array<NeurocommentCampaign>;
+};
+
+/**
+ * ChallengeRow
+ *
+ * One persisted challenge audit row, as the operator drill-down reads it.
+ */
+export type ChallengeRow = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Raw Text
+   */
+  raw_text: string;
+  /**
+   * Button Labels
+   */
+  button_labels?: Array<string>;
+  /**
+   * Outcome
+   */
+  outcome: string;
+  /**
+   * Decided At
+   */
+  decided_at: string;
+  /**
+   * Reasoning
+   */
+  reasoning?: string | null;
+};
+
+/**
+ * ChallengeRowList
+ *
+ * Wrapper so the repo returns a model, never a raw list (non-negotiable #2).
+ */
+export type ChallengeRowList = {
+  /**
+   * Rows
+   */
+  rows?: Array<ChallengeRow>;
 };
 
 /**
@@ -588,6 +660,66 @@ export type NeurocommentRuntimeStatus = {
 };
 
 /**
+ * NeurocommentSettings
+ *
+ * Operator-editable neurocomment limits — the engine reads these at selection.
+ */
+export type NeurocommentSettings = {
+  /**
+   * Max Comments Per Hour
+   */
+  max_comments_per_hour: number;
+  /**
+   * Max Comments Per Channel Per Day
+   */
+  max_comments_per_channel_per_day: number;
+  /**
+   * Reply Delay Min Seconds
+   */
+  reply_delay_min_seconds: number;
+  /**
+   * Reply Delay Max Seconds
+   */
+  reply_delay_max_seconds: number;
+  /**
+   * Min Trust Score
+   */
+  min_trust_score: number;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
+ * NeurocommentSettingsUpdate
+ *
+ * Caller-supplied neurocomment-settings change from the Settings screen.
+ */
+export type NeurocommentSettingsUpdate = {
+  /**
+   * Max Comments Per Hour
+   */
+  max_comments_per_hour: number;
+  /**
+   * Max Comments Per Channel Per Day
+   */
+  max_comments_per_channel_per_day: number;
+  /**
+   * Reply Delay Min Seconds
+   */
+  reply_delay_min_seconds: number;
+  /**
+   * Reply Delay Max Seconds
+   */
+  reply_delay_max_seconds: number;
+  /**
+   * Min Trust Score
+   */
+  min_trust_score: number;
+};
+
+/**
  * Page[AccountRead]
  */
 export type PageAccountRead = {
@@ -616,6 +748,188 @@ export type PageLogEntry = {
 };
 
 /**
+ * PhoneCodeRequestResult
+ *
+ * API response after a code is sent — confirmation only, no secrets.
+ */
+export type PhoneCodeRequestResult = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Phone
+   */
+  phone: string;
+};
+
+/**
+ * ProxyAssignRequest
+ */
+export type ProxyAssignRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
+ * ProxyCheckResult
+ */
+export type ProxyCheckResult = {
+  /**
+   * Status
+   */
+  status: 'unknown' | 'tcp_working' | 'failed';
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Exit Ip
+   */
+  exit_ip?: string | null;
+  /**
+   * Country Code
+   */
+  country_code?: string | null;
+  /**
+   * Country Name
+   */
+  country_name?: string | null;
+  /**
+   * Asn
+   */
+  asn?: string | null;
+  /**
+   * Is Datacenter
+   */
+  is_datacenter?: boolean;
+};
+
+/**
+ * ProxyCreate
+ *
+ * Operator input when adding a proxy to the pool.
+ */
+export type ProxyCreate = {
+  /**
+   * Proxy Type
+   */
+  proxy_type: 'socks5' | 'https';
+  /**
+   * Host
+   */
+  host: string;
+  /**
+   * Port
+   */
+  port: number;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Password
+   */
+  password?: string | null;
+};
+
+/**
+ * ProxyList
+ */
+export type ProxyList = {
+  /**
+   * Proxies
+   */
+  proxies: Array<ProxyRead>;
+};
+
+/**
+ * ProxyRead
+ *
+ * A pool proxy as shown on the Accounts page (masked credentials).
+ */
+export type ProxyRead = {
+  /**
+   * Id
+   */
+  id: string;
+  /**
+   * Proxy Type
+   */
+  proxy_type: 'socks5' | 'https';
+  /**
+   * Host
+   */
+  host: string;
+  /**
+   * Port
+   */
+  port: number;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Has Password
+   */
+  has_password: boolean;
+  /**
+   * Status
+   */
+  status: 'unknown' | 'tcp_working' | 'failed';
+  /**
+   * Last Checked At
+   */
+  last_checked_at?: string | null;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+  /**
+   * Exit Ip
+   */
+  exit_ip?: string | null;
+  /**
+   * Country Code
+   */
+  country_code?: string | null;
+  /**
+   * Country Name
+   */
+  country_name?: string | null;
+  /**
+   * Asn
+   */
+  asn?: string | null;
+  /**
+   * Is Datacenter
+   */
+  is_datacenter?: boolean;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+  /**
+   * Used
+   */
+  used: number;
+  /**
+   * Capacity
+   */
+  capacity: number;
+  /**
+   * Free
+   */
+  free: number;
+};
+
+/**
  * RemoveChannelRequest
  */
 export type RemoveChannelRequest = {
@@ -623,6 +937,30 @@ export type RemoveChannelRequest = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * SpamStatusVerdict
+ *
+ * Parsed, cacheable spam-status verdict for one account.
+ */
+export type SpamStatusVerdict = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'clean' | 'limited' | 'unknown';
+  /**
+   * Detail
+   */
+  detail?: string | null;
+  /**
+   * Checked At
+   */
+  checked_at: string;
 };
 
 /**
@@ -655,6 +993,22 @@ export type StopWarmingRequest = {
    * Account Id
    */
   account_id: string;
+};
+
+/**
+ * SubmitCodeRequest
+ *
+ * API body for ``POST /accounts/{id}/submit-code``.
+ */
+export type SubmitCodeRequest = {
+  /**
+   * Code
+   */
+  code: string;
+  /**
+   * Password
+   */
+  password?: string | null;
 };
 
 /**
@@ -1253,6 +1607,157 @@ export type CheckAccountResponses = {
 
 export type CheckAccountResponse = CheckAccountResponses[keyof CheckAccountResponses];
 
+export type SpamCheckAccountData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/spam-check';
+};
+
+export type SpamCheckAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SpamCheckAccountError = SpamCheckAccountErrors[keyof SpamCheckAccountErrors];
+
+export type SpamCheckAccountResponses = {
+  /**
+   * Successful Response
+   */
+  200: SpamStatusVerdict;
+};
+
+export type SpamCheckAccountResponse = SpamCheckAccountResponses[keyof SpamCheckAccountResponses];
+
+export type RequestLoginCodeData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/request-code';
+};
+
+export type RequestLoginCodeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RequestLoginCodeError = RequestLoginCodeErrors[keyof RequestLoginCodeErrors];
+
+export type RequestLoginCodeResponses = {
+  /**
+   * Successful Response
+   */
+  200: PhoneCodeRequestResult;
+};
+
+export type RequestLoginCodeResponse = RequestLoginCodeResponses[keyof RequestLoginCodeResponses];
+
+export type SubmitLoginCodeData = {
+  body: SubmitCodeRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/submit-code';
+};
+
+export type SubmitLoginCodeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SubmitLoginCodeError = SubmitLoginCodeErrors[keyof SubmitLoginCodeErrors];
+
+export type SubmitLoginCodeResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type SubmitLoginCodeResponse = SubmitLoginCodeResponses[keyof SubmitLoginCodeResponses];
+
+export type LogoutAccountData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/logout';
+};
+
+export type LogoutAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type LogoutAccountError = LogoutAccountErrors[keyof LogoutAccountErrors];
+
+export type LogoutAccountResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type LogoutAccountResponse = LogoutAccountResponses[keyof LogoutAccountResponses];
+
+export type ResetAccountSessionData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/reset-session';
+};
+
+export type ResetAccountSessionErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ResetAccountSessionError = ResetAccountSessionErrors[keyof ResetAccountSessionErrors];
+
+export type ResetAccountSessionResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type ResetAccountSessionResponse =
+  ResetAccountSessionResponses[keyof ResetAccountSessionResponses];
+
 export type UpdateAccountProfileData = {
   body: AccountProfileUpdateRequest;
   path?: never;
@@ -1360,6 +1865,196 @@ export type SetAccountPhotoResponses = {
 };
 
 export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
+
+export type ListProxiesData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies';
+};
+
+export type ListProxiesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListProxiesError = ListProxiesErrors[keyof ListProxiesErrors];
+
+export type ListProxiesResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyList;
+};
+
+export type ListProxiesResponse = ListProxiesResponses[keyof ListProxiesResponses];
+
+export type CreateProxyData = {
+  body: ProxyCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies';
+};
+
+export type CreateProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateProxyError = CreateProxyErrors[keyof CreateProxyErrors];
+
+export type CreateProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyRead;
+};
+
+export type CreateProxyResponse = CreateProxyResponses[keyof CreateProxyResponses];
+
+export type ProbeProxyData = {
+  body: ProxyCreate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies/probe';
+};
+
+export type ProbeProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ProbeProxyError = ProbeProxyErrors[keyof ProbeProxyErrors];
+
+export type ProbeProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyCheckResult;
+};
+
+export type ProbeProxyResponse = ProbeProxyResponses[keyof ProbeProxyResponses];
+
+export type CheckProxyData = {
+  body?: never;
+  path: {
+    /**
+     * Proxy Id
+     */
+    proxy_id: string;
+  };
+  query?: never;
+  url: '/api/v1/proxies/{proxy_id}/check';
+};
+
+export type CheckProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CheckProxyError = CheckProxyErrors[keyof CheckProxyErrors];
+
+export type CheckProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyRead;
+};
+
+export type CheckProxyResponse = CheckProxyResponses[keyof CheckProxyResponses];
+
+export type AssignProxyData = {
+  body: ProxyAssignRequest;
+  path: {
+    /**
+     * Proxy Id
+     */
+    proxy_id: string;
+  };
+  query?: never;
+  url: '/api/v1/proxies/{proxy_id}/assign';
+};
+
+export type AssignProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AssignProxyError = AssignProxyErrors[keyof AssignProxyErrors];
+
+export type AssignProxyResponses = {
+  /**
+   * Successful Response
+   */
+  200: ProxyRead;
+};
+
+export type AssignProxyResponse = AssignProxyResponses[keyof AssignProxyResponses];
+
+export type UnassignProxyData = {
+  body: ProxyAssignRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/proxies/unassign';
+};
+
+export type UnassignProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UnassignProxyError = UnassignProxyErrors[keyof UnassignProxyErrors];
+
+export type UnassignProxyResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type UnassignProxyResponse = UnassignProxyResponses[keyof UnassignProxyResponses];
+
+export type DeleteProxyData = {
+  body?: never;
+  path: {
+    /**
+     * Proxy Id
+     */
+    proxy_id: string;
+  };
+  query?: never;
+  url: '/api/v1/proxies/{proxy_id}';
+};
+
+export type DeleteProxyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteProxyError = DeleteProxyErrors[keyof DeleteProxyErrors];
+
+export type DeleteProxyResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteProxyResponse = DeleteProxyResponses[keyof DeleteProxyResponses];
 
 export type GetWarmingBoardData = {
   body?: never;
@@ -1713,6 +2408,43 @@ export type AssignCampaignAccountResponses = {
 export type AssignCampaignAccountResponse =
   AssignCampaignAccountResponses[keyof AssignCampaignAccountResponses];
 
+export type ListCampaignChallengesData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: {
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges';
+};
+
+export type ListCampaignChallengesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListCampaignChallengesError =
+  ListCampaignChallengesErrors[keyof ListCampaignChallengesErrors];
+
+export type ListCampaignChallengesResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChallengeRowList;
+};
+
+export type ListCampaignChallengesResponse =
+  ListCampaignChallengesResponses[keyof ListCampaignChallengesResponses];
+
 export type GetNeurocommentRuntimeData = {
   body?: never;
   path?: never;
@@ -1791,6 +2523,60 @@ export type StopNeurocommentResponses = {
 
 export type StopNeurocommentResponse = StopNeurocommentResponses[keyof StopNeurocommentResponses];
 
+export type GetNeurocommentSettingsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/settings';
+};
+
+export type GetNeurocommentSettingsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetNeurocommentSettingsError =
+  GetNeurocommentSettingsErrors[keyof GetNeurocommentSettingsErrors];
+
+export type GetNeurocommentSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentSettings;
+};
+
+export type GetNeurocommentSettingsResponse =
+  GetNeurocommentSettingsResponses[keyof GetNeurocommentSettingsResponses];
+
+export type UpdateNeurocommentSettingsData = {
+  body: NeurocommentSettingsUpdate;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/settings';
+};
+
+export type UpdateNeurocommentSettingsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateNeurocommentSettingsError =
+  UpdateNeurocommentSettingsErrors[keyof UpdateNeurocommentSettingsErrors];
+
+export type UpdateNeurocommentSettingsResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentSettings;
+};
+
+export type UpdateNeurocommentSettingsResponse =
+  UpdateNeurocommentSettingsResponses[keyof UpdateNeurocommentSettingsResponses];
+
 export type ListLogsData = {
   body?: never;
   path?: never;
@@ -1803,6 +2589,10 @@ export type ListLogsData = {
      * Account Id
      */
     account_id?: string;
+    /**
+     * Event Prefix
+     */
+    event_prefix?: string;
     /**
      * Cursor
      */

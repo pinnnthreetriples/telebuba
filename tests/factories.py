@@ -12,9 +12,10 @@ from __future__ import annotations
 
 import factory
 
+from core.db import assign_account_to_proxy, create_proxy
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.device_fingerprint import DeviceFingerprint
-from schemas.proxy import AccountProxyUpsert
+from schemas.proxy import ProxyCreate
 
 _TS = "2024-01-01T00:00:00+00:00"
 
@@ -49,11 +50,36 @@ class DeviceFingerprintFactory(factory.Factory):
     system_lang_code = "en-US"
 
 
-class AccountProxyUpsertFactory(factory.Factory):
+class ProxyCreateFactory(factory.Factory):
     class Meta:
-        model = AccountProxyUpsert
+        model = ProxyCreate
 
-    account_id = factory.Sequence(lambda n: f"acc-{n}")
     proxy_type = "socks5"
     host = "127.0.0.1"
     port = 1080
+
+
+async def seed_account_proxy(
+    account_id: str,
+    *,
+    host: str = "127.0.0.1",
+    port: int = 1080,
+    username: str | None = None,
+    password: str | None = None,
+) -> str:
+    """Create a SOCKS5 pool proxy and assign it to an account; return the proxy id.
+
+    The pool replaced the per-account 1:1 proxy, so tests that just need "this
+    account has a proxy" use this seam instead of a single upsert.
+    """
+    proxy = await create_proxy(
+        ProxyCreate(
+            proxy_type="socks5",
+            host=host,
+            port=port,
+            username=username,
+            password=password,
+        ),
+    )
+    await assign_account_to_proxy(proxy.id, account_id)
+    return proxy.id

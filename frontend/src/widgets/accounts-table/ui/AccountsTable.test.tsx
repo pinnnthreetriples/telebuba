@@ -14,7 +14,13 @@ const ACCOUNTS: AccountRead[] = [
     label: 'Main',
     status: 'alive',
     username: 'mainuser',
+    proxy_id: 'p1',
+    proxy_type: 'socks5',
+    proxy_status: 'tcp_working',
     proxy_country_code: 'RU',
+    trust_score: 82,
+    device_model: 'iPhone 13',
+    device_system_version: 'iOS 17.2',
     last_checked_at: '2026-06-28',
     created_at: 'now',
     updated_at: 'now',
@@ -30,6 +36,15 @@ test('renders a row per account with handle and country flag', () => {
   expect(screen.getByText('@mainuser')).toBeInTheDocument();
   expect(screen.getByText('acc-2')).toBeInTheDocument();
   expect(container.querySelector('.fi-ru')).not.toBeNull();
+});
+
+test('renders the real trust score and device, dashes when absent', () => {
+  render(<AccountsTable data={ACCOUNTS} onCheck={vi.fn()} onDelete={vi.fn()} busyId={null} />);
+  // acc-1 carries a backend trust score + device fingerprint
+  expect(screen.getByText('82')).toBeInTheDocument();
+  expect(screen.getByText('iPhone 13 · iOS 17.2')).toBeInTheDocument();
+  // acc-2 has neither → both columns fall back to an em dash
+  expect(screen.getAllByText('—').length).toBeGreaterThanOrEqual(2);
 });
 
 test('fires the row actions for the clicked account', async () => {

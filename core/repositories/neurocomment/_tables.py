@@ -14,6 +14,7 @@ from sqlalchemy import (
     Boolean,
     CheckConstraint,
     Column,
+    Float,
     ForeignKey,
     Integer,
     String,
@@ -124,4 +125,18 @@ _neurocomment_runtime = Table(
     Column("listener_account_id", String, nullable=True),
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_neurocomment_runtime_single_row"),
+)
+# Single-row operator-editable neurocomment limits (migration #19). Empty until
+# the operator saves; reads fall back to ``settings.neurocomment`` config.
+_neurocomment_settings = Table(
+    "neurocomment_settings",
+    _metadata,
+    Column("id", Integer, primary_key=True),
+    Column("max_comments_per_hour", Integer, nullable=False),
+    Column("max_comments_per_channel_per_day", Integer, nullable=False),
+    Column("reply_delay_min_seconds", Float, nullable=False),
+    Column("reply_delay_max_seconds", Float, nullable=False),
+    Column("min_trust_score", Integer, nullable=False),
+    Column("updated_at", String, nullable=False),
+    CheckConstraint("id = 1", name="ck_neurocomment_settings_single_row"),
 )

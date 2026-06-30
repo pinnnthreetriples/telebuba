@@ -8,7 +8,7 @@ from python_socks import ProxyType as SocksProxyType
 from python_socks.async_.asyncio import Proxy
 
 from core.config import settings
-from schemas.proxy import AccountProxySettings, ProxyCheckResult, ProxyType
+from schemas.proxy import ProxyCheckResult, ProxySettings, ProxyType
 
 _PROXY_TYPE_BY_NAME: dict[ProxyType, SocksProxyType] = {
     "socks5": SocksProxyType.SOCKS5,
@@ -18,7 +18,7 @@ _HTTP_STATUS_INDEX = 1
 _MAX_ERROR_LENGTH = 240
 
 
-async def check_proxy_connectivity(proxy: AccountProxySettings) -> ProxyCheckResult:
+async def check_proxy_connectivity(proxy: ProxySettings) -> ProxyCheckResult:
     try:
         payload = await _fetch_check_payload(proxy)
     except TimeoutError:
@@ -30,7 +30,7 @@ async def check_proxy_connectivity(proxy: AccountProxySettings) -> ProxyCheckRes
     return _payload_to_result(payload)
 
 
-async def _fetch_check_payload(proxy: AccountProxySettings) -> dict[str, Any]:
+async def _fetch_check_payload(proxy: ProxySettings) -> dict[str, Any]:
     socks_proxy = Proxy(
         proxy_type=_PROXY_TYPE_BY_NAME[proxy.proxy_type],
         host=proxy.host,

@@ -41,6 +41,10 @@ def _add_account_bio(connection: Connection) -> None:
 
 
 def _add_account_proxy_geo(connection: Connection) -> None:
+    # ``account_proxies`` was retired by the proxy-pool migration (#18); on a
+    # fresh DB the table no longer exists, so this legacy ALTER is a no-op.
+    if not _sqlite_table_exists(connection, "account_proxies"):
+        return
     proxy_columns = _sqlite_columns(connection, "account_proxies")
     new_columns: tuple[tuple[str, str], ...] = (
         ("exit_ip", "VARCHAR"),
@@ -296,6 +300,22 @@ def _add_neurocomment_runtime(connection: Connection) -> None:
     )
 
 
+def _add_neurocomment_settings(connection: Connection) -> None:
+    # #19: single-row operator-editable neurocomment limits. Empty until the
+    # operator saves; reads fall back to settings.neurocomment config defaults.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_settings ("
+        "  id INTEGER PRIMARY KEY CHECK (id = 1),"
+        "  max_comments_per_hour INTEGER NOT NULL,"
+        "  max_comments_per_channel_per_day INTEGER NOT NULL,"
+        "  reply_delay_min_seconds REAL NOT NULL,"
+        "  reply_delay_max_seconds REAL NOT NULL,"
+        "  min_trust_score INTEGER NOT NULL,"
+        "  updated_at VARCHAR NOT NULL"
+        ")",
+    )
+
+
 def _add_neurocomment_comment_indexes(connection: Connection) -> None:
     # Secondary indexes for the quota gate + bulk account selection. The PK
     # (channel, post_id) serves the per-post claim/mark lookups but not the
@@ -387,3 +407,11 @@ def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
             "ALTER TABLE warming_account_state "
             "ADD COLUMN promoted_to_nc INTEGER NOT NULL DEFAULT 0",
         )
+
+
+def _sqlite_table_exists(connection: Connection, table_name: str) -> bool:
+    row = connection.exec_driver_sql(
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
+        (table_name,),
+    ).first()
+    return row is not None

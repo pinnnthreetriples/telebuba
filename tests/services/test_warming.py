@@ -32,15 +32,14 @@ from core.db import (
     record_dialogue_message,
     save_warming_settings,
     update_account_from_session_check,
-    update_account_proxy_check,
-    upsert_account_proxy,
+    update_proxy_check,
     upsert_spam_status,
     upsert_warming_state,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.gemini import GeminiResult
-from schemas.proxy import AccountProxyCheckUpdate, AccountProxyUpsert
+from schemas.proxy import ProxyCheckUpdate
 from schemas.spam_status import SpamStatusKind, SpamStatusVerdict
 from schemas.telegram_actions import ActionResult, TelegramAction
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -61,6 +60,7 @@ from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
 from services.warming import _loop, _runner, _runtime, _seams
+from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -1376,12 +1376,10 @@ async def _seed_ready_account(account_id: str = "acc-1") -> None:
             user_id=111,
         ),
     )
-    await upsert_account_proxy(
-        AccountProxyUpsert(account_id=account_id, proxy_type="socks5", host="1.2.3.4", port=1080),
-    )
-    await update_account_proxy_check(
-        AccountProxyCheckUpdate(
-            account_id=account_id,
+    proxy_id = await seed_account_proxy(account_id, host="1.2.3.4")
+    await update_proxy_check(
+        ProxyCheckUpdate(
+            proxy_id=proxy_id,
             status="tcp_working",
             exit_ip="9.9.9.9",
             country_code="US",
@@ -2101,12 +2099,12 @@ async def test_joined_channels_cleanup_on_account_delete() -> None:
 async def test_delete_account_with_all_related_rows() -> None:
     """F4 regression: deleting a warmed account must not raise IntegrityError.
 
-    Schema declares ForeignKey on account_proxies / warming_account_state /
-    account_spam_status without ON DELETE CASCADE, so the repo has to clean
-    children explicitly. We seed every per-account table that exists.
+    Schema declares ForeignKey on warming_account_state / account_spam_status
+    without ON DELETE CASCADE, so the repo has to clean children explicitly. We
+    seed every per-account table that exists. The shared pool proxy is NOT a
+    child (accounts.proxy_id → proxies.id) and must survive the deletion.
     """
     from core.db import (  # noqa: PLC0415
-        _account_proxies,
         _account_spam_status,
         _accounts,
         _device_fingerprints,
@@ -2114,6 +2112,7 @@ async def test_delete_account_with_all_related_rows() -> None:
         _warming_account_state,
         _warming_joined_channels,
         add_warming_channel,
+        list_proxies,
         record_channel_joined,
         upsert_warming_state,
     )
@@ -2130,16 +2129,7 @@ async def test_delete_account_with_all_related_rows() -> None:
     await add_warming_channel("testchan")
     await record_channel_joined("acc-a", "testchan")
     await upsert_warming_state(WarmingStateWrite(account_id="acc-a", state="active"))
-    await upsert_account_proxy(
-        AccountProxyUpsert(
-            account_id="acc-a",
-            proxy_type="socks5",
-            host="127.0.0.1",
-            port=1080,
-            username=None,
-            password=None,
-        ),
-    )
+    await seed_account_proxy("acc-a")
     await upsert_spam_status(
         SpamStatusVerdict(
             account_id="acc-a",
@@ -2177,12 +2167,6 @@ async def test_delete_account_with_all_related_rows() -> None:
         )
         assert (
             conn.execute(
-                _account_proxies.select().where(_account_proxies.c.account_id == "acc-a"),
-            ).all()
-            == []
-        )
-        assert (
-            conn.execute(
                 _account_spam_status.select().where(
                     _account_spam_status.c.account_id == "acc-a",
                 ),
@@ -2215,6 +2199,9 @@ async def test_delete_account_with_all_related_rows() -> None:
             ).all()
             == []
         )
+
+    # The shared pool proxy is not a child — it must outlive the deleted account.
+    assert len((await list_proxies()).proxies) == 1
 
 
 @pytest.mark.asyncio

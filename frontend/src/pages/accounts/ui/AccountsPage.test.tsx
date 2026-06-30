@@ -40,6 +40,27 @@ function routeApi(options: { page1: unknown; page2?: unknown; listStatus?: numbe
         : options.page1;
       return Promise.resolve(jsonResponse(body));
     }
+    if (url.pathname === '/api/v1/proxies' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse({
+          proxies: [
+            {
+              id: 'p1',
+              proxy_type: 'socks5',
+              host: 'nl',
+              port: 1080,
+              has_password: false,
+              status: 'unknown',
+              used: 0,
+              capacity: 3,
+              free: 3,
+              created_at: 'now',
+              updated_at: 'now',
+            },
+          ],
+        }),
+      );
+    }
     return Promise.resolve(jsonResponse(account('acc-1')));
   });
 }

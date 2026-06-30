@@ -37,6 +37,10 @@ class TelegramSettings(BaseSettings):
     # Default 0 = surface every flood event to our own state machine (no silent
     # auto-sleep) so flood-type differentiation and quarantine logic always see it.
     flood_sleep_threshold: int = Field(default=0, ge=0)
+    # Phone-login: how long a requested SMS code's ``phone_code_hash`` stays
+    # valid in the in-memory login cache before the operator must re-request.
+    # Telegram codes themselves expire in a few minutes; 300 s mirrors that.
+    phone_code_ttl_seconds: int = Field(default=300, ge=1)
 
 
 class ApiSettings(BaseSettings):
@@ -99,6 +103,9 @@ class DbSettings(BaseSettings):
 class ProxySettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="PROXY__", extra="ignore")
 
+    # Pool capacity: how many accounts may share one proxy. The design's
+    # "до N аккаунтов на прокси". Global (no per-proxy override — YAGNI).
+    max_accounts_per_proxy: int = Field(default=3, ge=1)
     check_host: str = Field(default="ip-api.com", min_length=1)
     check_path: str = Field(default="/json?fields=status,message,query,country,countryCode,as")
     check_port: int = Field(default=80, ge=1, le=65535)
@@ -312,6 +319,9 @@ class NeurocommentSettings(BaseSettings):
     join_delay_max_seconds: float = Field(default=60.0, ge=0.0)
     # Per-account throughput ceiling.
     max_comments_per_hour: int = Field(default=10, ge=1)
+    # Minimum Trust Score an account needs to be picked for commenting (0 = no
+    # gate). Operator-tunable via the neurocomment settings store + Settings UI.
+    min_trust_score: int = Field(default=0, ge=0, le=100)
     # Comment length guardrail (words).
     comment_max_words: int = Field(default=30, ge=1)
     # Per-(account, channel) daily comment cap (0 = no cap).

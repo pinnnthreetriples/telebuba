@@ -1,7 +1,17 @@
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { StatusBadge } from '@/entities/account';
+import {
+  checkAccountMutation,
+  logoutAccountMutation,
+  requestLoginCodeMutation,
+  resetAccountSessionMutation,
+  spamCheckAccountMutation,
+  StatusBadge,
+  submitLoginCodeMutation,
+} from '@/entities/account';
+import { checkProxyMutation } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 
 const FIELD =
@@ -17,14 +27,12 @@ const seg = (on: boolean): string =>
 // idle. ponytail: design-first — no backend call, just the visual states.
 type CheckState = 'idle' | 'loading' | 'ok' | 'err';
 
-// ponytail: device profile + spam signals are mock until AccountRead carries
-// them — design-first, backend wiring is a later step.
-const DEVICE = { model: 'iPhone 13', os: 'iOS 17.2', lang: 'Русский (ru-RU)' };
-const SIGNALS = [
-  { dot: 'bg-[#2e9e64]', label: 'Текущий статус', value: 'Без ограничений' },
-  { dot: 'bg-line-strong', label: 'Последний spam-block', value: 'не зафиксирован' },
-  { dot: 'bg-line-strong', label: 'Последняя проверка', value: 'сегодня' },
-];
+// Real spam-status dot per verdict (matches the design's traffic-light tints).
+const SPAM_DOT: Record<NonNullable<AccountRead['spam_status']>, string> = {
+  clean: 'bg-[#2e9e64]',
+  limited: 'bg-[#c0473f]',
+  unknown: 'bg-line-strong',
+};
 
 // ponytail: design-first — uploaded files are a presentational mock (one settled
 // success, one in-flight) so the dropzone's file-card states exist visually.
@@ -37,12 +45,8 @@ function mono(account: AccountRead): string {
   return (account.phone ?? account.account_id).replace(/\D/g, '').slice(-2) || '#';
 }
 
-// ponytail: design-first — backend carries no trust here, so derive a stable
-// value from the id (mirrors the design's 3-tier colour bands).
-function trustOf(account: AccountRead): number {
-  const hash = [...account.account_id].reduce((sum, ch) => sum + ch.charCodeAt(0), 0);
-  return 40 + (hash % 60);
-}
+// Trust Score is real (computed by the backend); the 3-tier colour band mirrors
+// the design's thresholds.
 function trustColor(t: number): string {
   return t >= 70 ? '#12a150' : t >= 45 ? '#e08700' : '#e5372a';
 }
@@ -149,19 +153,148 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
   const [aliveCheck, setAliveCheck] = useState<CheckState>('idle');
+  const [smsCode, setSmsCode] = useState('');
+  const [twoFa, setTwoFa] = useState('');
+  const [loginNote, setLoginNote] = useState<string | null>(null);
 
-  // ponytail: design-first — flip to loading, then settle to ok.
-  const runCheck = (set: (s: CheckState) => void, hold = false) => {
-    set('loading');
-    setTimeout(() => {
-      set('ok');
-      if (hold) setTimeout(() => set('idle'), 2400);
-    }, 900);
+  const queryClient = useQueryClient();
+  const proxyMutation = useMutation(checkProxyMutation());
+  const spamMutation = useMutation(spamCheckAccountMutation());
+  const aliveMutation = useMutation(checkAccountMutation());
+  const requestCode = useMutation(requestLoginCodeMutation());
+  const submitCode = useMutation(submitLoginCodeMutation());
+  const logout = useMutation(logoutAccountMutation());
+  const resetSession = useMutation(resetAccountSessionMutation());
+  const invalidate = () => {
+    void queryClient.invalidateQueries();
   };
 
-  const trust = trustOf(account);
+  const path = { path: { account_id: account.account_id } } as const;
+  const onRequestCode = () => {
+    setLoginNote(null);
+    requestCode.mutate(path, {
+      onSuccess: (result) => {
+        setLoginNote(t('accounts.edit.codeSent', { phone: result.phone }));
+      },
+      onError: () => {
+        setLoginNote(t('accounts.edit.codeError'));
+      },
+    });
+  };
+  const onConfirmLogin = () => {
+    setLoginNote(null);
+    submitCode.mutate(
+      { ...path, body: { code: smsCode, password: twoFa || null } },
+      {
+        onSuccess: () => {
+          setSmsCode('');
+          setTwoFa('');
+          setLoginNote(t('accounts.edit.loginOk'));
+          invalidate();
+        },
+        onError: () => {
+          setLoginNote(t('accounts.edit.loginErr'));
+        },
+      },
+    );
+  };
+  const onLogout = () => {
+    logout.mutate(path, { onSuccess: invalidate });
+  };
+  const onReset = () => {
+    resetSession.mutate(path, { onSuccess: invalidate });
+  };
+
+  // Real proxy connectivity check against the assigned pool proxy.
+  const runProxyCheck = () => {
+    if (!account.proxy_id) {
+      setProxyCheck('err');
+      return;
+    }
+    setProxyCheck('loading');
+    proxyMutation.mutate(
+      { path: { proxy_id: account.proxy_id } },
+      {
+        onSuccess: (proxy) => {
+          setProxyCheck(proxy.status === 'tcp_working' ? 'ok' : 'err');
+          invalidate();
+        },
+        onError: () => {
+          setProxyCheck('err');
+        },
+      },
+    );
+  };
+
+  // Real @SpamBot probe; the result also refreshes the signals on next load.
+  const runSpamCheck = () => {
+    setSpamCheck('loading');
+    spamMutation.mutate(
+      { path: { account_id: account.account_id } },
+      {
+        onSuccess: (verdict) => {
+          setSpamCheck(verdict.status === 'clean' ? 'ok' : 'err');
+          window.setTimeout(() => {
+            setSpamCheck('idle');
+          }, 2400);
+          invalidate();
+        },
+        onError: () => {
+          setSpamCheck('err');
+        },
+      },
+    );
+  };
+
+  // Real liveness check (reuses the accounts-table «Проверить» endpoint).
+  const runAliveCheck = () => {
+    setAliveCheck('loading');
+    aliveMutation.mutate(
+      { body: { account_id: account.account_id } },
+      {
+        onSuccess: (checked) => {
+          setAliveCheck(checked.status === 'alive' ? 'ok' : 'err');
+          window.setTimeout(() => {
+            setAliveCheck('idle');
+          }, 2400);
+          invalidate();
+        },
+        onError: () => {
+          setAliveCheck('err');
+        },
+      },
+    );
+  };
+
+  const trust = account.trust_score ?? 0;
   const tColor = trustColor(trust);
   const country = account.proxy_country_code?.toUpperCase() ?? '—';
+
+  // Real spam/ban signals, sourced from the account's last cached @SpamBot verdict
+  // + last liveness check (read-only — refreshed by the «Спам-чек» button).
+  const spamStatus = account.spam_status;
+  const signals = [
+    {
+      dot: spamStatus ? SPAM_DOT[spamStatus] : 'bg-line-strong',
+      label: t('accounts.edit.signalStatus'),
+      value: t(`accounts.edit.spam.${spamStatus ?? 'unknown'}`),
+    },
+    {
+      dot: spamStatus === 'limited' ? SPAM_DOT.limited : 'bg-line-strong',
+      label: t('accounts.edit.signalBlock'),
+      value:
+        spamStatus === 'limited'
+          ? (account.spam_detail ?? t('accounts.edit.signalRecorded'))
+          : t('accounts.edit.signalNone'),
+    },
+    {
+      dot: account.last_checked_at ? 'bg-[#2e9e64]' : 'bg-line-strong',
+      label: t('accounts.edit.signalChecked'),
+      value: account.last_checked_at
+        ? account.last_checked_at.slice(0, 10)
+        : t('accounts.edit.signalNever'),
+    },
+  ];
 
   return (
     <div className="tb-fadeup max-w-[960px]">
@@ -209,30 +342,62 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             </span>
             <button
               type="button"
-              className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted"
+              onClick={onLogout}
+              disabled={logout.isPending}
+              className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted disabled:opacity-50"
             >
               {t('accounts.edit.logout')}
             </button>
           </div>
-          <div className="mb-[9px] mt-4 text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
-            {t('accounts.edit.loginByCode')}
+          <div className="mb-[9px] mt-4 flex items-center justify-between gap-2">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
+              {t('accounts.edit.loginByCode')}
+            </span>
+            <button
+              type="button"
+              onClick={onRequestCode}
+              disabled={requestCode.isPending}
+              className="rounded-full border border-line-input bg-white px-3 py-[4px] text-[11.5px] font-medium text-primary disabled:opacity-50"
+            >
+              {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
+            </button>
           </div>
           <div className="mb-[9px] grid grid-cols-2 gap-[10px]">
             <label>
               <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
-              <input placeholder="1 2 3 4 5" className={`${FIELD} tracking-[0.18em]`} />
+              <input
+                value={smsCode}
+                onChange={(event) => {
+                  setSmsCode(event.target.value);
+                }}
+                placeholder="1 2 3 4 5"
+                className={`${FIELD} tracking-[0.18em]`}
+              />
             </label>
             <label>
               <span className={LABEL}>{t('accounts.edit.twoFA')}</span>
-              <input type="password" placeholder="••••••" className={FIELD} />
+              <input
+                type="password"
+                value={twoFa}
+                onChange={(event) => {
+                  setTwoFa(event.target.value);
+                }}
+                placeholder="••••••"
+                className={FIELD}
+              />
             </label>
           </div>
           <button
             type="button"
-            className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium"
+            onClick={onConfirmLogin}
+            disabled={submitCode.isPending || !smsCode}
+            className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
           >
-            {t('accounts.edit.confirmLogin')}
+            {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
           </button>
+          {loginNote ? (
+            <div className="mt-[8px] text-[11.5px] text-ink-muted">{loginNote}</div>
+          ) : null}
           <div className="mb-[9px] mt-[18px] text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
             {t('accounts.edit.import')}
           </div>
@@ -462,9 +627,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={() => {
-                runCheck(setProxyCheck);
-              }}
+              onClick={runProxyCheck}
               className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
             >
               {proxyCheck === 'loading' ? (
@@ -539,15 +702,19 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           <div className="flex flex-col gap-[11px]">
             <label>
               <span className={LABEL}>{t('accounts.edit.deviceModel')}</span>
-              <input value={DEVICE.model} disabled className={FIELD_LOCKED} />
+              <input value={account.device_model ?? '—'} disabled className={FIELD_LOCKED} />
             </label>
             <label>
               <span className={LABEL}>{t('accounts.edit.deviceOs')}</span>
-              <input value={DEVICE.os} disabled className={FIELD_LOCKED} />
+              <input
+                value={account.device_system_version ?? '—'}
+                disabled
+                className={FIELD_LOCKED}
+              />
             </label>
             <label>
               <span className={LABEL}>{t('accounts.edit.deviceLang')}</span>
-              <input value={DEVICE.lang} disabled className={FIELD_LOCKED} />
+              <input value={account.device_lang ?? '—'} disabled className={FIELD_LOCKED} />
             </label>
           </div>
         </Section>
@@ -558,9 +725,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <span className="tb-tip">
               <button
                 type="button"
-                onClick={() => {
-                  runCheck(setSpamCheck, true);
-                }}
+                onClick={runSpamCheck}
                 className={`inline-flex items-center gap-[6px] rounded-full px-3 py-[5px] text-[12px] font-medium transition-[background-color,border-color,color] duration-300 ${
                   spamCheck === 'ok'
                     ? 'border border-[#2e9e64] bg-[#2e9e64] text-white'
@@ -613,7 +778,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             {t('accounts.edit.signalsReadonly')}
           </div>
           <div className="flex flex-col">
-            {SIGNALS.map((signal) => (
+            {signals.map((signal) => (
               <div
                 key={signal.label}
                 className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[11px]"
@@ -651,9 +816,7 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
-            onClick={() => {
-              runCheck(setAliveCheck, true);
-            }}
+            onClick={runAliveCheck}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-300"
@@ -727,9 +890,11 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
-            className="shrink-0 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
+            onClick={onReset}
+            disabled={resetSession.isPending}
+            className="shrink-0 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
           >
-            {t('accounts.edit.reset')}
+            {resetSession.isPending ? <Spinner size={14} /> : t('accounts.edit.reset')}
           </button>
         </div>
         <div className="flex items-center justify-between gap-3 py-[14px]">

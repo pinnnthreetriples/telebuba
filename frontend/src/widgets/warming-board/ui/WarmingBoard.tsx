@@ -1,7 +1,9 @@
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { WarmingAccountState } from '@/shared/api';
+import { logsQueryOptions } from '@/entities/log';
+import type { LogEntry, WarmingAccountState } from '@/shared/api';
 
 import { WarmConfigModal } from './WarmConfigModal';
 import { WarmStopModal } from './WarmStopModal';
@@ -41,13 +43,18 @@ function activeStage(account: WarmingAccountState): number {
   return (account.cycles_completed ?? 0) % STAGES.length;
 }
 
-// ponytail: design-first mock terminal log until the board carries real events.
-const MOCK_LOG: { t: string; msg: string; color: string }[] = [
-  { t: '12:04', msg: '✓ Подписка на 3 канала', color: '#7FCDA0' },
-  { t: '12:18', msg: '· Прочитано 14 постов', color: '#9A9AA6' },
-  { t: '12:41', msg: '✓ Поставлено 2 реакции', color: '#7FCDA0' },
-  { t: '12:50', msg: '· Пауза 38 мин', color: '#9A9AA6' },
-];
+// Real per-account activity log, coloured by the log row's status.
+const LOG_COLOR: Record<LogEntry['status'], string> = {
+  success: '#7FCDA0',
+  warning: '#E0B341',
+  error: '#E5736B',
+};
+const CARD_LOG_LIMIT = 20;
+
+function logTime(createdAt: string): string {
+  // ISO-8601 → HH:MM; fall back to the raw value if it is not parseable.
+  return createdAt.length >= 16 ? createdAt.slice(11, 16) : createdAt;
+}
 
 function WarmingCard({
   account,
@@ -62,6 +69,12 @@ function WarmingCard({
   const [open, setOpen] = useState(false);
   const [stopOpen, setStopOpen] = useState(false);
   const [cfgOpen, setCfgOpen] = useState(false);
+  // Real per-account activity log, fetched only while the terminal is expanded.
+  const logQuery = useQuery({
+    ...logsQueryOptions({ query: { account_id: account.account_id, limit: CARD_LOG_LIMIT } }),
+    enabled: open,
+  });
+  const logLines = logQuery.data?.items ?? [];
   const active = activeStage(account);
   const days = Math.min(account.cycles_completed ?? 0, WARMING_DAYS);
   const complete = days >= WARMING_DAYS;
@@ -288,12 +301,18 @@ function WarmingCard({
           </button>
           {open ? (
             <div className="term tb-scroll mt-[9px] max-h-[120px] overflow-y-auto rounded-[9px] bg-[#16161a] px-[11px] py-[10px] font-mono text-[10.5px] leading-[1.7]">
-              {MOCK_LOG.map((line) => (
-                <div key={line.t} className="flex gap-2">
-                  <span className="shrink-0 text-[#5c5c66]">{line.t}</span>
-                  <span style={{ color: line.color }}>{line.msg}</span>
+              {logLines.length === 0 ? (
+                <div className="text-[#5c5c66]">
+                  {logQuery.isPending ? t('warming.card.logLoading') : t('warming.card.logEmpty')}
                 </div>
-              ))}
+              ) : (
+                logLines.map((line) => (
+                  <div key={line.id} className="flex gap-2">
+                    <span className="shrink-0 text-[#5c5c66]">{logTime(line.created_at)}</span>
+                    <span style={{ color: LOG_COLOR[line.status] }}>{line.event}</span>
+                  </div>
+                ))
+              )}
             </div>
           ) : null}
         </>

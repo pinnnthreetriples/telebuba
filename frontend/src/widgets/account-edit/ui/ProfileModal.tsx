@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { setAccountPhotoMutation, updateAccountProfileMutation } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { Modal } from '@/shared/ui';
 
@@ -8,8 +10,10 @@ import { AddStoryModal } from './AddStoryModal';
 
 // The design's profile-edit modal: hero header, a 4-tab segmented header
 // (text / photo / stories / music), per-tab bodies, and a save→saved swap
-// footer. The Сторис tab opens AddStoryModal above it. ponytail: design-first —
-// fields and uploads are presentational; only Save flips the swap state.
+// footer. The Текст tab persists the profile (updateAccountProfile) and the
+// Фото tab uploads a real avatar (setAccountPhoto). ponytail: the stories +
+// music tabs stay presentational — posting a story / setting profile music
+// needs its own gateway action + endpoint (deferred).
 type Tab = 'text' | 'photo' | 'stories' | 'music';
 
 const FIELD =
@@ -60,10 +64,20 @@ function DashedAdd({
 
 export function ProfileModal({ account, onClose }: { account: AccountRead; onClose: () => void }) {
   const { t } = useTranslation();
+  const queryClient = useQueryClient();
+  const updateProfile = useMutation(updateAccountProfileMutation());
+  const setPhoto = useMutation(setAccountPhotoMutation());
+  const photoInput = useRef<HTMLInputElement>(null);
+
   const [tab, setTab] = useState<Tab>('text');
   const [storyOpen, setStoryOpen] = useState(false);
   const [hasMusic, setHasMusic] = useState(true);
   const [saved, setSaved] = useState(false);
+
+  const [firstName, setFirstName] = useState(account.first_name ?? '');
+  const [lastName, setLastName] = useState(account.last_name ?? '');
+  const [username, setUsername] = useState(account.username ?? '');
+  const [bio, setBio] = useState(account.bio ?? '');
 
   const initial = (account.first_name ?? account.phone ?? account.account_id)
     .trim()
@@ -73,11 +87,39 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     [account.first_name, account.last_name].filter(Boolean).join(' ') ||
     (account.phone ?? account.account_id);
 
+  // Telegram requires a non-empty first name; the Save button gates on it.
   const onSave = () => {
-    setSaved(true);
-    window.setTimeout(() => {
-      setSaved(false);
-    }, 1400);
+    if (!firstName.trim()) return;
+    updateProfile.mutate(
+      {
+        body: {
+          account_id: account.account_id,
+          first_name: firstName.trim(),
+          last_name: lastName.trim() || null,
+          username: username.trim() || null,
+          bio: bio.trim() || null,
+        },
+      },
+      {
+        onSuccess: () => {
+          setSaved(true);
+          window.setTimeout(() => {
+            setSaved(false);
+          }, 1400);
+          void queryClient.invalidateQueries();
+        },
+      },
+    );
+  };
+
+  const onPhotoPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setPhoto.mutate(
+      { body: { account_id: account.account_id, file } },
+      { onSuccess: () => void queryClient.invalidateQueries() },
+    );
+    event.target.value = '';
   };
 
   const tabBtn = (value: Tab): string =>
@@ -132,23 +174,48 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 <div className="grid grid-cols-2 gap-3">
                   <label>
                     <span className={LABEL}>{t('accounts.profile.firstName')}</span>
-                    <input defaultValue={account.first_name ?? ''} className={FIELD} />
+                    <input
+                      value={firstName}
+                      onChange={(event) => {
+                        setFirstName(event.target.value);
+                      }}
+                      className={FIELD}
+                    />
                   </label>
                   <label>
                     <span className={LABEL}>{t('accounts.profile.lastName')}</span>
-                    <input defaultValue={account.last_name ?? ''} className={FIELD} />
+                    <input
+                      value={lastName}
+                      onChange={(event) => {
+                        setLastName(event.target.value);
+                      }}
+                      className={FIELD}
+                    />
                   </label>
                 </div>
                 <label>
                   <span className={LABEL}>{t('accounts.profile.username')}</span>
                   <div className="relative flex items-center">
                     <span className="absolute left-3 text-[13px] text-ink-subtle">@</span>
-                    <input defaultValue={account.username ?? ''} className={`${FIELD} pl-[26px]`} />
+                    <input
+                      value={username}
+                      onChange={(event) => {
+                        setUsername(event.target.value);
+                      }}
+                      className={`${FIELD} pl-[26px]`}
+                    />
                   </div>
                 </label>
                 <label>
                   <span className={LABEL}>{t('accounts.profile.bio')}</span>
-                  <textarea rows={3} className={`${FIELD} resize-none [font-family:inherit]`} />
+                  <textarea
+                    rows={3}
+                    value={bio}
+                    onChange={(event) => {
+                      setBio(event.target.value);
+                    }}
+                    className={`${FIELD} resize-none [font-family:inherit]`}
+                  />
                 </label>
               </div>
             )}
@@ -182,9 +249,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   <DashedAdd
                     ratio="1"
                     label={t('accounts.profile.upload')}
-                    onClick={() => undefined}
+                    onClick={() => photoInput.current?.click()}
                   />
                 </div>
+                <input
+                  ref={photoInput}
+                  type="file"
+                  accept="image/*"
+                  onChange={onPhotoPicked}
+                  className="hidden"
+                />
               </div>
             )}
 
@@ -285,7 +359,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             <button
               type="button"
               onClick={onSave}
-              className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors ${saved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
+              disabled={updateProfile.isPending || !firstName.trim()}
+              className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${saved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
             >
               {saved ? (
                 <span className="inline-flex items-center gap-[6px]">

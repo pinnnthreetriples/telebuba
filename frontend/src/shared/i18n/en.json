@@ -93,6 +93,22 @@
       "signalsCheck": "Check",
       "signalsTip": "Check against @SpamBot",
       "signalsReadonly": "Telegram data · read-only",
+      "sendCode": "Send code",
+      "codeSent": "Code sent to {{phone}}",
+      "codeError": "Could not send the code",
+      "loginOk": "Signed in",
+      "loginErr": "Sign-in failed — check the code",
+      "signalStatus": "Current status",
+      "signalBlock": "Last spam-block",
+      "signalChecked": "Last check",
+      "signalNone": "none recorded",
+      "signalRecorded": "recorded",
+      "signalNever": "never",
+      "spam": {
+        "clean": "No restrictions",
+        "limited": "Restricted",
+        "unknown": "Unknown"
+      },
       "actions": "Actions",
       "aliveTitle": "Check account",
       "aliveHint": "Check whether the account is active right now",
@@ -122,6 +138,13 @@
     "deleteModal": {
       "title": "Delete account {{phone}}?",
       "body": "The session, proxy and activity history will be deleted. This action is irreversible.",
+      "cancel": "Cancel",
+      "confirm": "Delete"
+    },
+    "proxyDeleteModal": {
+      "title": "Delete proxy {{endpoint}}?",
+      "body": "The proxy will be removed from the pool. This action is irreversible.",
+      "bodyAssigned": "{{count}} account(s) use this proxy — they will be detached (left without a proxy). This action is irreversible.",
       "cancel": "Cancel",
       "confirm": "Delete"
     },
@@ -249,6 +272,7 @@
     "warmLimits": {
       "title": "Warming limits",
       "subtitle": "Actions per day per account",
+      "auto": "Auto-managed by phase and trust-score (shown for reference)",
       "sub": "Subscriptions per day",
       "read": "Post reads per day",
       "react": "Reactions per day",
@@ -257,23 +281,23 @@
     "neuroLimits": {
       "title": "Neurocomment limits",
       "subtitle": "Comment publishing pace",
-      "cpd": "Comments per day per account",
-      "delay": "Delay between comments (min)",
-      "parallel": "Parallel accounts",
+      "cpd": "Comments per day per channel",
+      "delay": "Reply delay (sec)",
+      "parallel": "Comments per hour",
       "trust": "Min. trust-score to run"
     },
     "flag": {
-      "autostart": {
-        "label": "Autostart processes",
-        "desc": "Resume warming and commenting on startup"
+      "reactions_enabled": {
+        "label": "Reactions in warming",
+        "desc": "Leave reactions during warming"
       },
-      "notifyErr": {
-        "label": "Error notifications",
-        "desc": "Alert the operator on bans and captchas"
+      "join_enabled": {
+        "label": "Join channels",
+        "desc": "Subscribe to channels during warming"
       },
-      "antidetect": {
-        "label": "Anti-detect profiles",
-        "desc": "Pin the device fingerprint to the account"
+      "inter_account_chat": {
+        "label": "Inter-account chat",
+        "desc": "Allow accounts to message each other"
       }
     }
   },
@@ -339,7 +363,8 @@
       "comments": "Comments"
     },
     "log": {
-      "title": "Event log"
+      "title": "Event log",
+      "empty": "No events yet"
     },
     "campaigns": {
       "title": "Campaigns",
@@ -550,6 +575,8 @@
       "actionsTip": "actions",
       "cfgTitle": "Warming settings",
       "logToggle": "Activity log",
+      "logLoading": "Loading log…",
+      "logEmpty": "No events yet",
       "completeTitle": "Warming complete",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
