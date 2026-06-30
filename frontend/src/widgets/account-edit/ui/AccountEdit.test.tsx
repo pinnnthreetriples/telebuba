@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -175,6 +175,51 @@ test('proxy: manual creates+assigns, pool select assigns', async () => {
       .mock.calls.some(([input]) => (input as Request).url.includes('/proxies/pool-1/assign'));
     expect(assigned).toBe(true);
   });
+});
+
+test('the import dropzone uploads a .session file then dismisses the card', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-session') {
+      return Promise.resolve(
+        jsonResponse({ account_id: 'new', status: 'new', created_at: 'n', updated_at: 'n' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
+  });
+  await waitFor(() => {
+    const imported = vi
+      .mocked(fetch)
+      .mock.calls.some(([i]) => (i as Request).url.includes('/accounts/import-session'));
+    expect(imported).toBe(true);
+  });
+  await screen.findByText('готово');
+  await userEvent.click(screen.getByLabelText('Удалить файл'));
+  expect(screen.queryByText('acc.session')).not.toBeInTheDocument();
+});
+
+test('a failed tdata import shows the error state', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-tdata') {
+      return Promise.reject(new Error('boom'));
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('tdata.zip'));
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 'b.zip', { type: 'application/zip' })] },
+  });
+  await screen.findByText('ошибка');
 });
 
 test('the @SpamBot check fires the real spam-check endpoint', async () => {

@@ -124,7 +124,12 @@
       "proxyDown": "Прокси не отвечает",
       "aliveOk": "Аккаунт живой",
       "aliveErr": "Аккаунт недоступен",
-      "choosePoolProxy": "Выбрать из пула"
+      "choosePoolProxy": "Выбрать из пула",
+      "upload": {
+        "uploading": "загрузка…",
+        "done": "готово",
+        "error": "ошибка"
+      }
     },
     "actions": {
       "add": "Аккаунт",

@@ -1,9 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   checkAccountMutation,
+  importAccountSessionMutation,
+  importAccountTdataMutation,
   logoutAccountMutation,
   requestLoginCodeMutation,
   resetAccountSessionMutation,
@@ -41,12 +43,12 @@ const SPAM_DOT: Record<NonNullable<AccountRead['spam_status']>, string> = {
   unknown: 'bg-line-strong',
 };
 
-// ponytail: design-first — uploaded files are a presentational mock (one settled
-// success, one in-flight) so the dropzone's file-card states exist visually.
-const UPLOAD_FILES = [
-  { id: 'f1', name: 'account_79051184490.session', meta: '34 КБ', archive: false, done: true },
-  { id: 'f2', name: 'tdata_backup.zip', meta: '2.4 МБ · загрузка…', archive: true, progress: 62 },
-];
+// One queued/finished import in the dropzone's file list.
+interface Upload {
+  name: string;
+  archive: boolean;
+  status: 'uploading' | 'done' | 'error';
+}
 
 function mono(account: AccountRead): string {
   return (account.phone ?? account.account_id).replace(/\D/g, '').slice(-2) || '#';
@@ -158,6 +160,8 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const [importTab, setImportTab] = useState<'session' | 'tdata'>('session');
   const [proxyMode, setProxyMode] = useState<'pool' | 'manual'>('manual');
   const [proxyForm, setProxyForm] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
+  const [uploads, setUploads] = useState<Upload[]>([]);
+  const uploadInput = useRef<HTMLInputElement>(null);
   const [showPass, setShowPass] = useState(false);
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
@@ -170,6 +174,8 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const proxyMutation = useMutation(checkProxyMutation());
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
+  const importTdata = useMutation(importAccountTdataMutation());
+  const importSession = useMutation(importAccountSessionMutation());
   const pool = useQuery(proxyPoolQueryOptions());
   const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
   const spamMutation = useMutation(spamCheckAccountMutation());
@@ -296,6 +302,31 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const onProxyAction = () => {
     if (proxyMode === 'manual') addManualProxy();
     else runProxyCheck();
+  };
+
+  // Import a .session / tdata.zip file as a new account (the active import tab
+  // picks the endpoint); the file card tracks uploading → done | error.
+  const onUploadFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const { name } = file;
+    const archive = importTab === 'tdata';
+    setUploads((list) => [{ name, archive, status: 'uploading' }, ...list]);
+    const settle = (status: Upload['status']) => {
+      setUploads((list) => list.map((item) => (item.name === name ? { ...item, status } : item)));
+      if (status === 'done') invalidate();
+    };
+    const handlers = {
+      onSuccess: () => {
+        settle('done');
+      },
+      onError: () => {
+        settle('error');
+      },
+    };
+    if (archive) importTdata.mutate({ body: { file } }, handlers);
+    else importSession.mutate({ body: { file } }, handlers);
+    event.target.value = '';
   };
 
   // Real @SpamBot probe; the result also refreshes the signals on next load.
@@ -487,7 +518,11 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-canvas/40 px-4 py-[14px]">
+          <button
+            type="button"
+            onClick={() => uploadInput.current?.click()}
+            className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-canvas/40 px-4 py-[14px] text-left"
+          >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-line bg-white text-primary">
               <svg
                 width="19"
@@ -505,11 +540,18 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               <div className="text-[12.5px] font-semibold">{t('accounts.edit.dropTitle')}</div>
               <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.dropHint')}</div>
             </div>
-          </div>
+          </button>
+          <input
+            ref={uploadInput}
+            type="file"
+            accept={importTab === 'tdata' ? '.zip' : '.session'}
+            className="hidden"
+            onChange={onUploadFile}
+          />
           <div className="mt-[9px] flex flex-col gap-2">
-            {UPLOAD_FILES.map((file) => (
+            {uploads.map((file, index) => (
               <div
-                key={file.id}
+                key={`${file.name}-${String(index)}`}
                 className="tb-fadeup rounded-[11px] border border-line bg-white px-[11px] py-[10px]"
               >
                 <div className="flex items-center gap-[10px]">
@@ -544,10 +586,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate text-[12px] font-semibold">{file.name}</div>
-                        <div className="mt-px text-[10.5px] text-ink-subtle">{file.meta}</div>
+                        <div className="mt-px text-[10.5px] text-ink-subtle">
+                          {t(`accounts.edit.upload.${file.status}`)}
+                        </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-[2px]">
-                        {file.done ? (
+                        {file.status === 'done' ? (
                           <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
                             <svg
                               width="17"
@@ -561,12 +605,29 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                               <path d="m8 12 2.5 2.5L16 9" />
                             </svg>
                           </span>
+                        ) : file.status === 'error' ? (
+                          <span className="m-[3px] inline-flex text-[#c0473f]">
+                            <svg
+                              width="17"
+                              height="17"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="m15 9-6 6M9 9l6 6" />
+                            </svg>
+                          </span>
                         ) : (
                           <Spinner size={13} />
                         )}
                         <button
                           type="button"
                           aria-label={t('accounts.edit.removeFile')}
+                          onClick={() => {
+                            setUploads((list) => list.filter((_, position) => position !== index));
+                          }}
                           className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
                         >
                           <svg
@@ -582,14 +643,6 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                         </button>
                       </div>
                     </div>
-                    {file.progress !== undefined && (
-                      <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-[#eeedea]">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${String(file.progress)}%` }}
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>

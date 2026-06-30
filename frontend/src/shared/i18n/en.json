@@ -123,7 +123,12 @@
       "proxyDown": "Proxy not responding",
       "aliveOk": "Account is alive",
       "aliveErr": "Account unreachable",
-      "choosePoolProxy": "Choose from pool"
+      "choosePoolProxy": "Choose from pool",
+      "upload": {
+        "uploading": "uploading…",
+        "done": "done",
+        "error": "error"
+      }
     },
     "actions": {
       "add": "Account",
