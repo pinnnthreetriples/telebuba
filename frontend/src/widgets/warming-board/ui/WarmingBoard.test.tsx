@@ -29,7 +29,9 @@ function account(id: string, state: WarmingAccountState['state']): WarmingAccoun
 const WARMING = [account('79051184490', 'active'), account('79161234567', 'sleeping')];
 
 test('renders an in-progress card per warming account with the stage labels', () => {
-  renderWithClient(<WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />);
+  renderWithClient(
+    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
   expect(screen.getByText('79051184490')).toBeInTheDocument();
   expect(screen.getByText('79161234567')).toBeInTheDocument();
   expect(screen.getAllByText('Подписка').length).toBeGreaterThan(0);
@@ -79,7 +81,9 @@ test('expanding a card fetches that account real activity log', async () => {
     return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
   });
 
-  renderWithClient(<WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />);
+  renderWithClient(
+    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
   await userEvent.click(screen.getAllByText('Лог активности')[0]!);
   await waitFor(() => {
     expect(screen.getByText('warming_subscribe')).toBeInTheDocument();

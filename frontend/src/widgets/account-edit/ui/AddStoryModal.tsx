@@ -160,7 +160,9 @@ export function AddStoryModal({
             <div className="truncate text-[12.5px] font-semibold">
               {file ? file.name : t('accounts.addStory.dropTitle')}
             </div>
-            <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.addStory.dropHint')}</div>
+            <div className="mt-px text-[11px] text-ink-subtle">
+              {t('accounts.addStory.dropHint')}
+            </div>
           </div>
         </button>
         <input

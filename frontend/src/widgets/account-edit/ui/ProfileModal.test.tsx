@@ -37,9 +37,17 @@ const VIEW = {
   avatar_data_uri: null,
   photos: [{ photo_id: 1, access_hash: 2, file_reference: 'YWJj', thumb_data_uri: null }],
   stories: [
-    { story_id: 3, kind: 'image', privacy_preset: 'contacts', is_pinned: false, thumb_data_uri: null },
+    {
+      story_id: 3,
+      kind: 'image',
+      privacy_preset: 'contacts',
+      is_pinned: false,
+      thumb_data_uri: null,
+    },
   ],
-  music: [{ file_id: 4, title: 'Track', performer: 'Artist', access_hash: 5, file_reference: 'YWJj' }],
+  music: [
+    { file_id: 4, title: 'Track', performer: 'Artist', access_hash: 5, file_reference: 'YWJj' },
+  ],
   music_supported: true,
 };
 
@@ -53,9 +61,7 @@ function routeApi() {
     if (pathname === '/api/v1/accounts/profile') {
       return Promise.resolve(jsonResponse({ ...ACCOUNT, first_name: 'Пётр' }));
     }
-    return Promise.resolve(
-      jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }),
-    );
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
   });
 }
 

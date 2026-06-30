@@ -374,10 +374,7 @@ export function WarmingPage() {
           >
             <div className="flex flex-col gap-3">
               {warmed.map((acc) => (
-                <div
-                  key={acc.account_id}
-                  className="rounded-[14px] border border-line p-[14px]"
-                >
+                <div key={acc.account_id} className="rounded-[14px] border border-line p-[14px]">
                   <div className="flex items-start gap-[11px]">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-tint text-[11.5px] font-bold text-primary ring-2 ring-success">
                       {mono(acc.phone ?? acc.label)}

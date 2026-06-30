@@ -491,7 +491,8 @@ export function AddAccountModal({
                     ) : null}
                     <span className="flex-1">
                       <span className="block text-[13px] font-semibold">
-                        {(proxy.country_code ?? '—').toUpperCase()} · {proxyTypeLabel(proxy.proxy_type)}
+                        {(proxy.country_code ?? '—').toUpperCase()} ·{' '}
+                        {proxyTypeLabel(proxy.proxy_type)}
                       </span>
                       <span className="block font-mono text-[11.5px] text-ink-subtle">
                         {proxy.host}:{proxy.port}

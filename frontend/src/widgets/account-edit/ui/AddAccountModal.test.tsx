@@ -46,11 +46,15 @@ function routeApi() {
     if (pathname.endsWith('/assign')) return Promise.resolve(jsonResponse(POOL_PROXY));
     if (pathname === '/api/v1/accounts/import-tdata') {
       return Promise.resolve(
-        jsonResponse({ accounts: [{ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }] }),
+        jsonResponse({
+          accounts: [{ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }],
+        }),
       );
     }
     if (pathname === '/api/v1/accounts/import-session') {
-      return Promise.resolve(jsonResponse({ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }));
+      return Promise.resolve(
+        jsonResponse({ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }),
+      );
     }
     return Promise.resolve(jsonResponse({}));
   });
