@@ -103,6 +103,20 @@ async def update_solver_enabled(campaign_id: str, value: bool | None) -> None:  
     await asyncio.to_thread(_update_solver_enabled, campaign_id, value)
 
 
+def _update_campaign_prompt(campaign_id: str, prompt: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_campaigns)
+            .where(_neurocomment_campaigns.c.campaign_id == campaign_id)
+            .values(prompt=prompt, updated_at=_now_iso()),
+        )
+
+
+async def update_campaign_prompt(campaign_id: str, prompt: str) -> None:
+    """Replace a campaign's generation prompt (the edit-prompt modal)."""
+    await asyncio.to_thread(_update_campaign_prompt, campaign_id, prompt)
+
+
 class ChannelAlreadyAssignedError(RuntimeError):
     """A channel is already active in another campaign (the one-active invariant)."""
 

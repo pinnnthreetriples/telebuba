@@ -10,6 +10,7 @@ import {
 
 import { client } from '../client.gen';
 import {
+  addAccountMusic,
   addWarmingChannels,
   assignCampaignAccount,
   assignProxy,
@@ -18,7 +19,9 @@ import {
   createCampaign,
   createProxy,
   deleteAccount,
+  deleteCampaign,
   deleteProxy,
+  getAccountProfileSnapshot,
   getHealth,
   getMe,
   getNeurocommentBoard,
@@ -26,6 +29,7 @@ import {
   getNeurocommentSettings,
   getWarmingBoard,
   getWarmingSettings,
+  importAccountSession,
   importAccountTdata,
   linkCampaignChannel,
   listAccounts,
@@ -33,16 +37,26 @@ import {
   listCampaigns,
   listLogs,
   listProxies,
+  listWarmedAccounts,
   listWarmingChannels,
   login,
   logout,
   logoutAccount,
   type Options,
+  postAccountStory,
   probeProxy,
+  promoteToNeurocomment,
+  removeAccountMusic,
+  removeAccountPhoto,
+  removeAccountStory,
+  removeCampaignAccount,
+  removeCampaignChannel,
   removeWarmingChannel,
   requestLoginCode,
   resetAccountSession,
+  retryChallenge,
   setAccountPhoto,
+  setCampaignSolver,
   spamCheckAccount,
   startNeurocomment,
   startWarming,
@@ -50,11 +64,16 @@ import {
   stopWarming,
   submitLoginCode,
   unassignProxy,
+  unpromoteFromNeurocomment,
   updateAccountProfile,
+  updateCampaignPrompt,
   updateNeurocommentSettings,
   updateWarmingSettings,
 } from '../sdk.gen';
 import type {
+  AddAccountMusicData,
+  AddAccountMusicError,
+  AddAccountMusicResponse,
   AddWarmingChannelsData,
   AddWarmingChannelsError,
   AddWarmingChannelsResponse,
@@ -79,9 +98,15 @@ import type {
   DeleteAccountData,
   DeleteAccountError,
   DeleteAccountResponse,
+  DeleteCampaignData,
+  DeleteCampaignError,
+  DeleteCampaignResponse,
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
+  GetAccountProfileSnapshotData,
+  GetAccountProfileSnapshotError,
+  GetAccountProfileSnapshotResponse,
   GetHealthData,
   GetHealthResponse,
   GetMeData,
@@ -102,6 +127,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsError,
   GetWarmingSettingsResponse,
+  ImportAccountSessionData,
+  ImportAccountSessionError,
+  ImportAccountSessionResponse,
   ImportAccountTdataData,
   ImportAccountTdataError,
   ImportAccountTdataResponse,
@@ -123,6 +151,9 @@ import type {
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
+  ListWarmedAccountsData,
+  ListWarmedAccountsError,
+  ListWarmedAccountsResponse,
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
@@ -134,9 +165,30 @@ import type {
   LogoutAccountResponse,
   LogoutData,
   LogoutResponse,
+  PostAccountStoryData,
+  PostAccountStoryError,
+  PostAccountStoryResponse,
   ProbeProxyData,
   ProbeProxyError,
   ProbeProxyResponse,
+  PromoteToNeurocommentData,
+  PromoteToNeurocommentError,
+  PromoteToNeurocommentResponse,
+  RemoveAccountMusicData,
+  RemoveAccountMusicError,
+  RemoveAccountMusicResponse,
+  RemoveAccountPhotoData,
+  RemoveAccountPhotoError,
+  RemoveAccountPhotoResponse,
+  RemoveAccountStoryData,
+  RemoveAccountStoryError,
+  RemoveAccountStoryResponse,
+  RemoveCampaignAccountData,
+  RemoveCampaignAccountError,
+  RemoveCampaignAccountResponse,
+  RemoveCampaignChannelData,
+  RemoveCampaignChannelError,
+  RemoveCampaignChannelResponse,
   RemoveWarmingChannelData,
   RemoveWarmingChannelError,
   RemoveWarmingChannelResponse,
@@ -146,9 +198,15 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionError,
   ResetAccountSessionResponse,
+  RetryChallengeData,
+  RetryChallengeError,
+  RetryChallengeResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  SetCampaignSolverData,
+  SetCampaignSolverError,
+  SetCampaignSolverResponse,
   SpamCheckAccountData,
   SpamCheckAccountError,
   SpamCheckAccountResponse,
@@ -170,9 +228,15 @@ import type {
   UnassignProxyData,
   UnassignProxyError,
   UnassignProxyResponse,
+  UnpromoteFromNeurocommentData,
+  UnpromoteFromNeurocommentError,
+  UnpromoteFromNeurocommentResponse,
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
+  UpdateCampaignPromptData,
+  UpdateCampaignPromptError,
+  UpdateCampaignPromptResponse,
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsError,
   UpdateNeurocommentSettingsResponse,
@@ -648,6 +712,33 @@ export const importAccountTdataMutation = (
 };
 
 /**
+ * Import Account Session
+ */
+export const importAccountSessionMutation = (
+  options?: Partial<Options<ImportAccountSessionData>>,
+): UseMutationOptions<
+  ImportAccountSessionResponse,
+  ImportAccountSessionError,
+  Options<ImportAccountSessionData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ImportAccountSessionResponse,
+    ImportAccountSessionError,
+    Options<ImportAccountSessionData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await importAccountSession({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
  * Set Account Photo
  */
 export const setAccountPhotoMutation = (
@@ -664,6 +755,169 @@ export const setAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountProfileSnapshotQueryKey = (
+  options: Options<GetAccountProfileSnapshotData>,
+) => createQueryKey('getAccountProfileSnapshot', options);
+
+/**
+ * Get Account Profile Snapshot
+ *
+ * Live profile (photos / stories / music) for the edit-profile modal.
+ */
+export const getAccountProfileSnapshotOptions = (options: Options<GetAccountProfileSnapshotData>) =>
+  queryOptions<
+    GetAccountProfileSnapshotResponse,
+    GetAccountProfileSnapshotError,
+    GetAccountProfileSnapshotResponse,
+    ReturnType<typeof getAccountProfileSnapshotQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountProfileSnapshot({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountProfileSnapshotQueryKey(options),
+  });
+
+/**
+ * Post Account Story
+ */
+export const postAccountStoryMutation = (
+  options?: Partial<Options<PostAccountStoryData>>,
+): UseMutationOptions<
+  PostAccountStoryResponse,
+  PostAccountStoryError,
+  Options<PostAccountStoryData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    PostAccountStoryResponse,
+    PostAccountStoryError,
+    Options<PostAccountStoryData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await postAccountStory({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Add Account Music
+ */
+export const addAccountMusicMutation = (
+  options?: Partial<Options<AddAccountMusicData>>,
+): UseMutationOptions<
+  AddAccountMusicResponse,
+  AddAccountMusicError,
+  Options<AddAccountMusicData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AddAccountMusicResponse,
+    AddAccountMusicError,
+    Options<AddAccountMusicData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await addAccountMusic({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Story
+ */
+export const removeAccountStoryMutation = (
+  options?: Partial<Options<RemoveAccountStoryData>>,
+): UseMutationOptions<
+  RemoveAccountStoryResponse,
+  RemoveAccountStoryError,
+  Options<RemoveAccountStoryData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountStoryResponse,
+    RemoveAccountStoryError,
+    Options<RemoveAccountStoryData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountStory({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Music
+ */
+export const removeAccountMusicMutation = (
+  options?: Partial<Options<RemoveAccountMusicData>>,
+): UseMutationOptions<
+  RemoveAccountMusicResponse,
+  RemoveAccountMusicError,
+  Options<RemoveAccountMusicData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountMusicResponse,
+    RemoveAccountMusicError,
+    Options<RemoveAccountMusicData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountMusic({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account Photo
+ */
+export const removeAccountPhotoMutation = (
+  options?: Partial<Options<RemoveAccountPhotoData>>,
+): UseMutationOptions<
+  RemoveAccountPhotoResponse,
+  RemoveAccountPhotoError,
+  Options<RemoveAccountPhotoData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveAccountPhotoResponse,
+    RemoveAccountPhotoError,
+    Options<RemoveAccountPhotoData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeAccountPhoto({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -861,6 +1115,91 @@ export const getWarmingBoardOptions = (options?: Options<GetWarmingBoardData>) =
     },
     queryKey: getWarmingBoardQueryKey(options),
   });
+
+export const listWarmedAccountsQueryKey = (options?: Options<ListWarmedAccountsData>) =>
+  createQueryKey('listWarmedAccounts', options);
+
+/**
+ * Get Warmed Accounts
+ *
+ * Operator-graduated accounts (the warming page's "Прогретые аккаунты" card).
+ */
+export const listWarmedAccountsOptions = (options?: Options<ListWarmedAccountsData>) =>
+  queryOptions<
+    ListWarmedAccountsResponse,
+    ListWarmedAccountsError,
+    ListWarmedAccountsResponse,
+    ReturnType<typeof listWarmedAccountsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmedAccounts({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmedAccountsQueryKey(options),
+  });
+
+/**
+ * Promote Account
+ *
+ * Graduate an account: stop warming + flag it for the neurocomment pool.
+ */
+export const promoteToNeurocommentMutation = (
+  options?: Partial<Options<PromoteToNeurocommentData>>,
+): UseMutationOptions<
+  PromoteToNeurocommentResponse,
+  PromoteToNeurocommentError,
+  Options<PromoteToNeurocommentData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    PromoteToNeurocommentResponse,
+    PromoteToNeurocommentError,
+    Options<PromoteToNeurocommentData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await promoteToNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Unpromote Account
+ *
+ * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ */
+export const unpromoteFromNeurocommentMutation = (
+  options?: Partial<Options<UnpromoteFromNeurocommentData>>,
+): UseMutationOptions<
+  UnpromoteFromNeurocommentResponse,
+  UnpromoteFromNeurocommentError,
+  Options<UnpromoteFromNeurocommentData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UnpromoteFromNeurocommentResponse,
+    UnpromoteFromNeurocommentError,
+    Options<UnpromoteFromNeurocommentData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await unpromoteFromNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 /**
  * Start Warming
@@ -1156,6 +1495,173 @@ export const assignCampaignAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await assignCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Account
+ */
+export const removeCampaignAccountMutation = (
+  options?: Partial<Options<RemoveCampaignAccountData>>,
+): UseMutationOptions<
+  RemoveCampaignAccountResponse,
+  RemoveCampaignAccountError,
+  Options<RemoveCampaignAccountData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveCampaignAccountResponse,
+    RemoveCampaignAccountError,
+    Options<RemoveCampaignAccountData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign and all its serving links, channels, and comments.
+ */
+export const deleteCampaignMutation = (
+  options?: Partial<Options<DeleteCampaignData>>,
+): UseMutationOptions<DeleteCampaignResponse, DeleteCampaignError, Options<DeleteCampaignData>> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteCampaignResponse,
+    DeleteCampaignError,
+    Options<DeleteCampaignData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteCampaign({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Remove Channel
+ *
+ * Detach a channel from a campaign (frees its slot for another campaign).
+ */
+export const removeCampaignChannelMutation = (
+  options?: Partial<Options<RemoveCampaignChannelData>>,
+): UseMutationOptions<
+  RemoveCampaignChannelResponse,
+  RemoveCampaignChannelError,
+  Options<RemoveCampaignChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    RemoveCampaignChannelResponse,
+    RemoveCampaignChannelError,
+    Options<RemoveCampaignChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await removeCampaignChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Update Prompt
+ *
+ * Replace a campaign's generation prompt (the edit-prompt modal).
+ */
+export const updateCampaignPromptMutation = (
+  options?: Partial<Options<UpdateCampaignPromptData>>,
+): UseMutationOptions<
+  UpdateCampaignPromptResponse,
+  UpdateCampaignPromptError,
+  Options<UpdateCampaignPromptData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateCampaignPromptResponse,
+    UpdateCampaignPromptError,
+    Options<UpdateCampaignPromptData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateCampaignPrompt({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Campaign Solver
+ *
+ * Turn the campaign's challenge (captcha) solver on/off.
+ */
+export const setCampaignSolverMutation = (
+  options?: Partial<Options<SetCampaignSolverData>>,
+): UseMutationOptions<
+  SetCampaignSolverResponse,
+  SetCampaignSolverError,
+  Options<SetCampaignSolverData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetCampaignSolverResponse,
+    SetCampaignSolverError,
+    Options<SetCampaignSolverData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setCampaignSolver({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Retry Challenge
+ *
+ * Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
+ *
+ * Re-onboards the pair (re-running the solver) — account+channel scoped, so it
+ * is campaign-agnostic.
+ */
+export const retryChallengeMutation = (
+  options?: Partial<Options<RetryChallengeData>>,
+): UseMutationOptions<RetryChallengeResponse, RetryChallengeError, Options<RetryChallengeData>> => {
+  const mutationOptions: UseMutationOptions<
+    RetryChallengeResponse,
+    RetryChallengeError,
+    Options<RetryChallengeData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await retryChallenge({
         ...options,
         ...fnOptions,
         throwOnError: true,

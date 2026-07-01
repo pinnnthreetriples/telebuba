@@ -134,6 +134,23 @@ def _classify_flood(result: ActionResult) -> tuple[bool, int | None, str | None]
     return True, seconds, until
 
 
+def warming_days_since(started_at: str | None, now: datetime) -> int | None:
+    """Whole days since ``started_at`` (ISO-8601); ``None`` when never started.
+
+    Shared by the board card (the "в прогреве N дн" hint) and the loop's
+    target-reached gate (auto-complete once N ≥ the operator's chosen duration).
+    """
+    if not started_at:
+        return None
+    try:
+        started = datetime.fromisoformat(started_at)
+    except ValueError:
+        return None
+    if started.tzinfo is None:
+        started = started.replace(tzinfo=UTC)
+    return max(0, int((now - started).total_seconds() / _SECONDS_PER_HOUR // 24))
+
+
 def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
     """Hours since the account was created; full-ramp age when unknown.
 

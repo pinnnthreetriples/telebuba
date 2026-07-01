@@ -1,9 +1,12 @@
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { useState, type ReactNode } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   checkAccountMutation,
+  deleteAccountMutation,
+  importAccountSessionMutation,
+  importAccountTdataMutation,
   logoutAccountMutation,
   requestLoginCodeMutation,
   resetAccountSessionMutation,
@@ -11,8 +14,16 @@ import {
   StatusBadge,
   submitLoginCodeMutation,
 } from '@/entities/account';
-import { checkProxyMutation } from '@/entities/proxy';
+import {
+  assignProxyMutation,
+  checkProxyMutation,
+  createProxyMutation,
+  proxyPoolQueryOptions,
+} from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
+import { Modal } from '@/shared/ui';
+
+import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
@@ -24,7 +35,7 @@ const seg = (on: boolean): string =>
   `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
 
 // A check-button drives a tiny idle→loading→(ok|err) machine, settling back to
-// idle. ponytail: design-first — no backend call, just the visual states.
+// idle. Backed by real check calls (proxy connectivity / @SpamBot / alive).
 type CheckState = 'idle' | 'loading' | 'ok' | 'err';
 
 // Real spam-status dot per verdict (matches the design's traffic-light tints).
@@ -34,12 +45,12 @@ const SPAM_DOT: Record<NonNullable<AccountRead['spam_status']>, string> = {
   unknown: 'bg-line-strong',
 };
 
-// ponytail: design-first — uploaded files are a presentational mock (one settled
-// success, one in-flight) so the dropzone's file-card states exist visually.
-const UPLOAD_FILES = [
-  { id: 'f1', name: 'account_79051184490.session', meta: '34 КБ', archive: false, done: true },
-  { id: 'f2', name: 'tdata_backup.zip', meta: '2.4 МБ · загрузка…', archive: true, progress: 62 },
-];
+// One queued/finished import in the dropzone's file list.
+interface Upload {
+  name: string;
+  archive: boolean;
+  status: 'uploading' | 'done' | 'error';
+}
 
 function mono(account: AccountRead): string {
   return (account.phone ?? account.account_id).replace(/\D/g, '').slice(-2) || '#';
@@ -144,11 +155,16 @@ function Section({
 
 // The design's account-edit view (reached by clicking a row): an always-visible
 // hero header above five collapsible cards — session, proxy, device, signals,
-// actions. ponytail: every form here is mock until the backend is wired.
+// actions. All wired to /api/v1 (proxy pool/manual assign, phone-code login,
+// checks, profile); only the .session/tdata dropzone is presentational (#6).
 export function AccountEdit({ account, onBack }: { account: AccountRead; onBack: () => void }) {
   const { t } = useTranslation();
   const [importTab, setImportTab] = useState<'session' | 'tdata'>('session');
   const [proxyMode, setProxyMode] = useState<'pool' | 'manual'>('manual');
+  const [proxyForm, setProxyForm] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
+  const [uploads, setUploads] = useState<Upload[]>([]);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const uploadInput = useRef<HTMLInputElement>(null);
   const [showPass, setShowPass] = useState(false);
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
@@ -159,6 +175,13 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
 
   const queryClient = useQueryClient();
   const proxyMutation = useMutation(checkProxyMutation());
+  const createProxy = useMutation(createProxyMutation());
+  const assignProxy = useMutation(assignProxyMutation());
+  const importTdata = useMutation(importAccountTdataMutation());
+  const importSession = useMutation(importAccountSessionMutation());
+  const deleteAccount = useMutation(deleteAccountMutation());
+  const pool = useQuery(proxyPoolQueryOptions());
+  const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
   const spamMutation = useMutation(spamCheckAccountMutation());
   const aliveMutation = useMutation(checkAccountMutation());
   const requestCode = useMutation(requestLoginCodeMutation());
@@ -204,6 +227,14 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const onReset = () => {
     resetSession.mutate(path, { onSuccess: invalidate });
   };
+  const onDelete = () => {
+    deleteAccount.mutate(path, {
+      onSuccess: () => {
+        invalidate();
+        onBack();
+      },
+    });
+  };
 
   // Real proxy connectivity check against the assigned pool proxy.
   const runProxyCheck = () => {
@@ -224,6 +255,90 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         },
       },
     );
+  };
+
+  // Pool mode: picking a free pool proxy reassigns this account immediately.
+  const assignFromPool = (proxyId: string) => {
+    if (!proxyId) return;
+    assignProxy.mutate(
+      { path: { proxy_id: proxyId }, body: { account_id: account.account_id } },
+      { onSuccess: invalidate },
+    );
+  };
+
+  // Manual mode: create the entered proxy (idempotent), assign it, verify it.
+  const addManualProxy = () => {
+    setProxyCheck('loading');
+    createProxy.mutate(
+      {
+        body: {
+          proxy_type: proxyForm.proxy_type,
+          host: proxyForm.host.trim(),
+          port: Number(proxyForm.port),
+          username: proxyForm.username.trim() || null,
+          password: proxyForm.password || null,
+        },
+      },
+      {
+        onSuccess: (created) => {
+          assignProxy.mutate(
+            { path: { proxy_id: created.id }, body: { account_id: account.account_id } },
+            {
+              onSuccess: () => {
+                proxyMutation.mutate(
+                  { path: { proxy_id: created.id } },
+                  {
+                    onSuccess: (checked) => {
+                      setProxyCheck(checked.status === 'tcp_working' ? 'ok' : 'err');
+                      invalidate();
+                    },
+                    onError: () => {
+                      setProxyCheck('err');
+                    },
+                  },
+                );
+              },
+              onError: () => {
+                setProxyCheck('err');
+              },
+            },
+          );
+        },
+        onError: () => {
+          setProxyCheck('err');
+        },
+      },
+    );
+  };
+
+  const onProxyAction = () => {
+    if (proxyMode === 'manual') addManualProxy();
+    else runProxyCheck();
+  };
+
+  // Import a .session / tdata.zip file as a new account (the active import tab
+  // picks the endpoint); the file card tracks uploading → done | error.
+  const onUploadFile = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const { name } = file;
+    const archive = importTab === 'tdata';
+    setUploads((list) => [{ name, archive, status: 'uploading' }, ...list]);
+    const settle = (status: Upload['status']) => {
+      setUploads((list) => list.map((item) => (item.name === name ? { ...item, status } : item)));
+      if (status === 'done') invalidate();
+    };
+    const handlers = {
+      onSuccess: () => {
+        settle('done');
+      },
+      onError: () => {
+        settle('error');
+      },
+    };
+    if (archive) importTdata.mutate({ body: { file } }, handlers);
+    else importSession.mutate({ body: { file } }, handlers);
+    event.target.value = '';
   };
 
   // Real @SpamBot probe; the result also refreshes the signals on next load.
@@ -415,7 +530,11 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               </button>
             ))}
           </div>
-          <div className="flex items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-canvas/40 px-4 py-[14px]">
+          <button
+            type="button"
+            onClick={() => uploadInput.current?.click()}
+            className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-canvas/40 px-4 py-[14px] text-left"
+          >
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[11px] border border-line bg-white text-primary">
               <svg
                 width="19"
@@ -433,11 +552,18 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               <div className="text-[12.5px] font-semibold">{t('accounts.edit.dropTitle')}</div>
               <div className="mt-px text-[11px] text-ink-subtle">{t('accounts.edit.dropHint')}</div>
             </div>
-          </div>
+          </button>
+          <input
+            ref={uploadInput}
+            type="file"
+            accept={importTab === 'tdata' ? '.zip' : '.session'}
+            className="hidden"
+            onChange={onUploadFile}
+          />
           <div className="mt-[9px] flex flex-col gap-2">
-            {UPLOAD_FILES.map((file) => (
+            {uploads.map((file, index) => (
               <div
-                key={file.id}
+                key={`${file.name}-${String(index)}`}
                 className="tb-fadeup rounded-[11px] border border-line bg-white px-[11px] py-[10px]"
               >
                 <div className="flex items-center gap-[10px]">
@@ -472,10 +598,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0">
                         <div className="truncate text-[12px] font-semibold">{file.name}</div>
-                        <div className="mt-px text-[10.5px] text-ink-subtle">{file.meta}</div>
+                        <div className="mt-px text-[10.5px] text-ink-subtle">
+                          {t(`accounts.edit.upload.${file.status}`)}
+                        </div>
                       </div>
                       <div className="flex shrink-0 items-center gap-[2px]">
-                        {file.done ? (
+                        {file.status === 'done' ? (
                           <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
                             <svg
                               width="17"
@@ -489,12 +617,29 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                               <path d="m8 12 2.5 2.5L16 9" />
                             </svg>
                           </span>
+                        ) : file.status === 'error' ? (
+                          <span className="m-[3px] inline-flex text-[#c0473f]">
+                            <svg
+                              width="17"
+                              height="17"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="m15 9-6 6M9 9l6 6" />
+                            </svg>
+                          </span>
                         ) : (
                           <Spinner size={13} />
                         )}
                         <button
                           type="button"
                           aria-label={t('accounts.edit.removeFile')}
+                          onClick={() => {
+                            setUploads((list) => list.filter((_, position) => position !== index));
+                          }}
                           className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
                         >
                           <svg
@@ -510,14 +655,6 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
                         </button>
                       </div>
                     </div>
-                    {file.progress !== undefined && (
-                      <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-[#eeedea]">
-                        <div
-                          className="h-full rounded-full bg-primary"
-                          style={{ width: `${String(file.progress)}%` }}
-                        />
-                      </div>
-                    )}
                   </div>
                 </div>
               </div>
@@ -551,30 +688,68 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             <>
               <label className="mb-[10px] block">
                 <span className={LABEL}>{t('accounts.edit.host')}</span>
-                <input className={`${FIELD} font-mono`} />
+                <input
+                  value={proxyForm.host}
+                  onChange={(event) => {
+                    setProxyForm((value) => ({ ...value, host: event.target.value }));
+                  }}
+                  className={`${FIELD} font-mono`}
+                />
               </label>
               <div className="mb-[10px] grid grid-cols-2 gap-[10px]">
                 <label>
                   <span className={LABEL}>{t('accounts.edit.port')}</span>
-                  <input className={`${FIELD} font-mono`} />
+                  <input
+                    value={proxyForm.port}
+                    inputMode="numeric"
+                    onChange={(event) => {
+                      setProxyForm((value) => ({
+                        ...value,
+                        port: event.target.value.replace(/\D/g, ''),
+                      }));
+                    }}
+                    className={`${FIELD} font-mono`}
+                  />
                 </label>
                 <label>
                   <span className={LABEL}>{t('accounts.edit.type')}</span>
-                  <select className={FIELD}>
-                    <option>SOCKS5</option>
-                    <option>HTTPS</option>
+                  <select
+                    value={proxyForm.proxy_type}
+                    onChange={(event) => {
+                      setProxyForm((value) => ({
+                        ...value,
+                        proxy_type: event.target.value as ProxyFormValue['proxy_type'],
+                      }));
+                    }}
+                    className={FIELD}
+                  >
+                    <option value="socks5">SOCKS5</option>
+                    <option value="https">HTTPS</option>
                   </select>
                 </label>
               </div>
               <div className="mb-[14px] grid grid-cols-2 gap-[10px]">
                 <label>
                   <span className={LABEL}>{t('accounts.edit.login')}</span>
-                  <input className={FIELD} />
+                  <input
+                    value={proxyForm.username}
+                    onChange={(event) => {
+                      setProxyForm((value) => ({ ...value, username: event.target.value }));
+                    }}
+                    className={FIELD}
+                  />
                 </label>
                 <label>
                   <span className={LABEL}>{t('accounts.edit.password')}</span>
                   <div className="relative">
-                    <input type={showPass ? 'text' : 'password'} className={`${FIELD} pr-9`} />
+                    <input
+                      value={proxyForm.password}
+                      onChange={(event) => {
+                        setProxyForm((value) => ({ ...value, password: event.target.value }));
+                      }}
+                      type={showPass ? 'text' : 'password'}
+                      className={`${FIELD} pr-9`}
+                    />
                     <button
                       type="button"
                       onClick={() => {
@@ -618,16 +793,26 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           ) : (
             <label className="mb-[14px] block">
               <span className={LABEL}>{t('accounts.proxyPool.title')}</span>
-              <select className={FIELD}>
-                <option>nl-1.proxyhub.net:1080</option>
-                <option>de-2.proxyhub.net:1080</option>
+              <select
+                value={account.proxy_id ?? ''}
+                onChange={(event) => {
+                  assignFromPool(event.target.value);
+                }}
+                className={FIELD}
+              >
+                <option value="">{t('accounts.edit.choosePoolProxy')}</option>
+                {freeProxies.map((proxy) => (
+                  <option key={proxy.id} value={proxy.id}>
+                    {proxy.host}:{proxy.port}
+                  </option>
+                ))}
               </select>
             </label>
           )}
           <div className="flex flex-wrap items-center gap-3">
             <button
               type="button"
-              onClick={runProxyCheck}
+              onClick={onProxyAction}
               className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
             >
               {proxyCheck === 'loading' ? (
@@ -906,12 +1091,55 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
           </div>
           <button
             type="button"
+            onClick={() => {
+              setConfirmDelete(true);
+            }}
             className="shrink-0 px-1 py-2 text-[13px] font-medium text-[#c0473f]"
           >
             {t('accounts.edit.deleteAccount')}
           </button>
         </div>
       </Section>
+
+      {confirmDelete ? (
+        <Modal
+          onClose={() => {
+            setConfirmDelete(false);
+          }}
+          z={70}
+          className="w-[420px]"
+        >
+          <div className="p-6">
+            <div className="mb-2 text-[16px] font-bold">
+              {t('accounts.deleteModal.title', { phone: account.phone ?? account.account_id })}
+            </div>
+            <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
+              {t('accounts.deleteModal.body')}
+            </div>
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDelete(false);
+                }}
+                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+              >
+                {t('accounts.deleteModal.cancel')}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setConfirmDelete(false);
+                  onDelete();
+                }}
+                className="rounded-full border border-[#f0c9c5] bg-danger-tint px-5 py-[9px] text-[13px] font-semibold text-danger"
+              >
+                {t('accounts.deleteModal.confirm')}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      ) : null}
     </div>
   );
 }

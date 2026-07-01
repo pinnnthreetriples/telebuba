@@ -11,13 +11,19 @@ import {
   campaignsQueryOptions,
   createCampaignMutation,
   CreateCampaignModal,
+  deleteCampaignMutation,
   linkCampaignChannelMutation,
   ListenerEditModal,
   NeuroAccountsModal,
   neurocommentBoardQueryOptions,
   neurocommentRuntimeQueryOptions,
+  removeCampaignAccountMutation,
+  removeCampaignChannelMutation,
+  retryChallengeMutation,
+  setCampaignSolverMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
+  updateCampaignPromptMutation,
 } from '@/entities/campaign';
 import { logsQueryOptions } from '@/entities/log';
 import type { NeurocommentCampaign } from '@/shared/api';
@@ -133,7 +139,6 @@ export function NeurocommentPage() {
   const [selected, setSelected] = useState<string | null>(null);
   const [listener, setListener] = useState('');
   const [listenerOpen, setListenerOpen] = useState(false);
-  const [captchaSolve, setCaptchaSolve] = useState(true);
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
 
@@ -176,12 +181,21 @@ export function NeurocommentPage() {
   });
   const logLines = neuroLog.data?.items ?? [];
   const captchaQueue = challenges.data?.rows ?? [];
+  // The captcha solver toggle reflects the campaign's per-campaign solver_enabled
+  // override (null/true = on, only off when explicitly disabled).
+  const solverEnabled = board.data?.solver_enabled !== false;
 
   const createCampaign = useMutation(createCampaignMutation());
   const linkChannel = useMutation(linkCampaignChannelMutation());
   const assignAccount = useMutation(assignCampaignAccountMutation());
   const start = useMutation(startNeurocommentMutation());
   const stop = useMutation(stopNeurocommentMutation());
+  const setSolver = useMutation(setCampaignSolverMutation());
+  const retry = useMutation(retryChallengeMutation());
+  const deleteCampaign = useMutation(deleteCampaignMutation());
+  const removeChannel = useMutation(removeCampaignChannelMutation());
+  const removeAccount = useMutation(removeCampaignAccountMutation());
+  const updatePrompt = useMutation(updateCampaignPromptMutation());
 
   const accountOptions = accounts.data?.items ?? [];
   const running = runtime.data?.running ?? false;
@@ -663,23 +677,29 @@ export function NeurocommentPage() {
               <button
                 type="button"
                 role="switch"
-                aria-checked={captchaSolve}
+                aria-checked={solverEnabled}
                 aria-label={t('neurocomment.captcha.title')}
+                disabled={campaignId === null}
                 onClick={() => {
-                  setCaptchaSolve((v) => !v);
+                  if (campaignId !== null) {
+                    setSolver.mutate(
+                      { path: { campaign_id: campaignId }, body: { enabled: !solverEnabled } },
+                      { onSettled: invalidate },
+                    );
+                  }
                 }}
-                className="tb-sw relative h-[26px] w-[46px] shrink-0 rounded-full transition-colors"
-                style={{ background: captchaSolve ? '#0066ff' : '#d8d6d2' }}
+                className="tb-sw relative h-[26px] w-[46px] shrink-0 rounded-full transition-colors disabled:opacity-50"
+                style={{ background: solverEnabled ? '#0066ff' : '#d8d6d2' }}
               >
                 <span
                   className="absolute top-[3px] transition-[left] duration-200"
-                  style={{ left: captchaSolve ? '23px' : '3px' }}
+                  style={{ left: solverEnabled ? '23px' : '3px' }}
                 >
                   <span className="tb-sw-thumb block h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)]" />
                 </span>
               </button>
             </div>
-            {captchaSolve && captchaQueue.length > 0 ? (
+            {solverEnabled && captchaQueue.length > 0 ? (
               <div className="px-[14px] pb-[14px]">
                 <div className="mb-[9px] flex items-center gap-[7px] border-t border-[#f0eeea] pt-[11px]">
                   <svg
@@ -719,6 +739,12 @@ export function NeurocommentPage() {
                       </div>
                       <button
                         type="button"
+                        onClick={() => {
+                          retry.mutate(
+                            { body: { account_id: item.account_id, channel: item.channel } },
+                            { onSettled: invalidate },
+                          );
+                        }}
                         className="shrink-0 rounded-full bg-ink px-[13px] py-[6px] text-[11.5px] font-medium text-white"
                       >
                         {t('neurocomment.captcha.solve')}
@@ -898,9 +924,24 @@ export function NeurocommentPage() {
                       className="inline-flex items-center gap-[6px] rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[5px] text-[12px] text-[#3a3a3a]"
                     >
                       {channel.channel}
-                      <span className="cursor-default text-[14px] leading-none text-[#b5b3ae]">
+                      <button
+                        type="button"
+                        aria-label={t('neurocomment.channels.remove')}
+                        onClick={() => {
+                          if (campaignId !== null) {
+                            removeChannel.mutate(
+                              {
+                                path: { campaign_id: campaignId },
+                                body: { channel: channel.channel },
+                              },
+                              { onSettled: invalidate },
+                            );
+                          }
+                        }}
+                        className="text-[14px] leading-none text-[#b5b3ae]"
+                      >
                         ×
-                      </span>
+                      </button>
                     </span>
                   ))}
                   {addingChannel ? (
@@ -1005,8 +1046,13 @@ export function NeurocommentPage() {
             }
             void channel;
           }}
-          onRemove={() => {
-            invalidate();
+          onRemove={(accountId) => {
+            if (campaignId !== null) {
+              removeAccount.mutate(
+                { path: { campaign_id: campaignId }, body: { account_id: accountId } },
+                { onSettled: invalidate },
+              );
+            }
           }}
         />
       ) : null}
@@ -1068,12 +1114,18 @@ export function NeurocommentPage() {
           onClose={() => {
             setPromptFor(null);
           }}
-          onSave={() => {
-            // ponytail: no update-prompt endpoint on the generated client yet.
-            invalidate();
+          onSave={(prompt) => {
+            updatePrompt.mutate(
+              { path: { campaign_id: promptFor.campaign_id }, body: { prompt } },
+              { onSettled: invalidate },
+            );
+            setPromptFor(null);
           }}
-          onRemoveAccount={() => {
-            invalidate();
+          onRemoveAccount={(accountId) => {
+            removeAccount.mutate(
+              { path: { campaign_id: promptFor.campaign_id }, body: { account_id: accountId } },
+              { onSettled: invalidate },
+            );
           }}
         />
       ) : null}
@@ -1085,8 +1137,12 @@ export function NeurocommentPage() {
             setDeleteFor(null);
           }}
           onConfirm={() => {
-            // ponytail: no delete-campaign endpoint on the generated client yet.
-            invalidate();
+            deleteCampaign.mutate(
+              { path: { campaign_id: deleteFor.campaign_id } },
+              { onSettled: invalidate },
+            );
+            setDeleteFor(null);
+            if (selected === deleteFor.campaign_id) setSelected(null);
           }}
         />
       ) : null}

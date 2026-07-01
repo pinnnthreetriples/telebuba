@@ -122,7 +122,13 @@
       "proxyChecking": "Checking connection…",
       "proxyDown": "Proxy not responding",
       "aliveOk": "Account is alive",
-      "aliveErr": "Account unreachable"
+      "aliveErr": "Account unreachable",
+      "choosePoolProxy": "Choose from pool",
+      "upload": {
+        "uploading": "uploading…",
+        "done": "done",
+        "error": "error"
+      }
     },
     "actions": {
       "add": "Account",
@@ -237,7 +243,9 @@
       "proxyManual": "Add proxy",
       "proxyManualDesc": "Enter host, port, login and password manually",
       "proxyPool": "Pick from pool",
-      "proxyPoolDesc": "Ready, checked proxies from the shared pool"
+      "proxyPoolDesc": "Ready, checked proxies from the shared pool",
+      "poolEmpty": "No free proxies in the pool",
+      "poolFree": "{{count}} free"
     }
   },
   "nav": {
@@ -249,7 +257,9 @@
   },
   "shell": {
     "systemActive": "System active",
-    "notifications": "Notifications"
+    "notifications": "Notifications",
+    "account": "Account",
+    "logout": "Log out"
   },
   "settings": {
     "title": "Settings",
@@ -543,6 +553,7 @@
       "title": "Warmed up",
       "badge": "warmed",
       "days": "Warming",
+      "daysValue": "{{days}} / {{target}} days",
       "trust": "Trust-score",
       "toNeuro": "To neurocomment",
       "backToWarm": "Back to warming"
@@ -668,6 +679,14 @@
       "spamTip": "via @SpamBot",
       "label_one": "day",
       "label_other": "days"
+    },
+    "notReady": {
+      "noProxy": "no proxy",
+      "proxyFailed": "proxy not responding",
+      "noChannels": "no warming channels",
+      "spamLimited": "spam-limited",
+      "trustCritical": "critical trust",
+      "session": "no active session (login needed)"
     }
   },
   "auth": {

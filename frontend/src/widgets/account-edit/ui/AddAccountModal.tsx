@@ -1,32 +1,32 @@
+import { useMutation, useQuery } from '@tanstack/react-query';
 import { useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { importAccountSessionMutation, importAccountTdataMutation } from '@/entities/account';
+import {
+  assignProxyMutation,
+  createProxyMutation,
+  proxyPoolQueryOptions,
+  proxyTypeLabel,
+} from '@/entities/proxy';
 import { Modal } from '@/shared/ui';
 
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
-// The design's add-account wizard: a two-step stepper. STEP 1 chooses a method
-// (.session or tdata.zip) and reveals a dropzone + file list; STEP 2 assigns a
-// proxy (choice → manual form or pool). ponytail: design-first — the only live
-// path is the tdata import, surfaced through onImport so the existing capability
-// stays reachable; everything else is presentational.
+// The design's add-account wizard: a two-step stepper. STEP 1 imports an account
+// (.session or tdata.zip) via the real import endpoints; STEP 2 assigns a proxy
+// to the just-imported account — pick from the pool, or enter one manually
+// (create + assign). The created account's id threads from step 1 into step 2.
 type Method = 'session' | 'tdata' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
 
-// ponytail: mock pool until a proxy-pool endpoint exists — mirrors AccountsPage.
-const POOL = [
-  { cc: 'nl', type: 'SOCKS5', host: 'nl-1.proxyhub.net:1080', ping: '24 мс' },
-  { cc: 'de', type: 'SOCKS5', host: 'de-2.proxyhub.net:1080', ping: '31 мс' },
-  { cc: 'us', type: 'HTTPS', host: 'us-3.proxyhub.net:8080', ping: '88 мс' },
-] as const;
-
 export function AddAccountModal({
   onClose,
-  onImport,
+  onImported,
 }: {
   onClose: () => void;
-  onImport: (file: File) => void;
+  onImported: () => void;
 }) {
   const { t } = useTranslation();
   const fileInput = useRef<HTMLInputElement>(null);
@@ -34,16 +34,82 @@ export function AddAccountModal({
   const [method, setMethod] = useState<Method>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
-  // ponytail: the wizard's proxy step can probe (real) but not assign yet — the
-  // imported account's id isn't surfaced here; assignment lives in account-edit.
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
+  // The id of the account imported in step 1, so step 2 can assign a proxy to it.
+  const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
+
+  const importTdata = useMutation(importAccountTdataMutation());
+  const importSession = useMutation(importAccountSessionMutation());
+  const createProxy = useMutation(createProxyMutation());
+  const assignProxy = useMutation(assignProxyMutation());
+  const pool = useQuery(proxyPoolQueryOptions());
+  const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
 
   const onFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
-    if (method === 'tdata') onImport(file);
+    if (method === 'tdata') {
+      importTdata.mutate(
+        { body: { file } },
+        {
+          onSuccess: (result) => {
+            setCreatedAccountId(result.accounts?.[0]?.account_id ?? null);
+          },
+          onSettled: onImported,
+        },
+      );
+    } else {
+      importSession.mutate(
+        { body: { file } },
+        {
+          onSuccess: (account) => {
+            setCreatedAccountId(account.account_id);
+          },
+          onSettled: onImported,
+        },
+      );
+    }
     event.target.value = '';
+  };
+
+  // Step 2: assign a pool proxy to the just-imported account, then close.
+  const assignFromPool = (proxyId: string) => {
+    if (createdAccountId) {
+      assignProxy.mutate(
+        { path: { proxy_id: proxyId }, body: { account_id: createdAccountId } },
+        { onSettled: onImported },
+      );
+    }
+    onClose();
+  };
+
+  // Step 2 manual: create the entered proxy (idempotent), assign it, then close.
+  const createAndAssign = () => {
+    if (!createdAccountId) {
+      onClose();
+      return;
+    }
+    createProxy.mutate(
+      {
+        body: {
+          proxy_type: proxyValue.proxy_type,
+          host: proxyValue.host.trim(),
+          port: Number(proxyValue.port),
+          username: proxyValue.username.trim() || null,
+          password: proxyValue.password || null,
+        },
+      },
+      {
+        onSuccess: (created) => {
+          assignProxy.mutate(
+            { path: { proxy_id: created.id }, body: { account_id: createdAccountId } },
+            { onSettled: onImported },
+          );
+        },
+        onSettled: onClose,
+      },
+    );
   };
 
   const choiceCard =
@@ -394,7 +460,7 @@ export function AddAccountModal({
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={createAndAssign}
                 className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white"
               >
                 {t('accounts.addWizard.done')}
@@ -404,27 +470,40 @@ export function AddAccountModal({
         ) : (
           <>
             <div className="flex flex-col gap-2">
-              {POOL.map((proxy) => (
-                <button
-                  key={proxy.host}
-                  type="button"
-                  onClick={onClose}
-                  className="flex items-center gap-[11px] rounded-[12px] border border-line-input bg-white px-[14px] py-3 text-left transition-colors hover:border-[#bfd6ff]"
-                >
-                  <span
-                    className={`fi fi-${proxy.cc} block h-[17px] w-6 shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                  />
-                  <span className="flex-1">
-                    <span className="block text-[13px] font-semibold">
-                      {proxy.cc.toUpperCase()} · {proxy.type}
+              {freeProxies.length === 0 ? (
+                <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+                  {t('accounts.addWizard.poolEmpty')}
+                </div>
+              ) : (
+                freeProxies.map((proxy) => (
+                  <button
+                    key={proxy.id}
+                    type="button"
+                    onClick={() => {
+                      assignFromPool(proxy.id);
+                    }}
+                    className="flex items-center gap-[11px] rounded-[12px] border border-line-input bg-white px-[14px] py-3 text-left transition-colors hover:border-[#bfd6ff]"
+                  >
+                    {proxy.country_code ? (
+                      <span
+                        className={`fi fi-${proxy.country_code.toLowerCase()} block h-[17px] w-6 shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                      />
+                    ) : null}
+                    <span className="flex-1">
+                      <span className="block text-[13px] font-semibold">
+                        {(proxy.country_code ?? '—').toUpperCase()} ·{' '}
+                        {proxyTypeLabel(proxy.proxy_type)}
+                      </span>
+                      <span className="block font-mono text-[11.5px] text-ink-subtle">
+                        {proxy.host}:{proxy.port}
+                      </span>
                     </span>
-                    <span className="block font-mono text-[11.5px] text-ink-subtle">
-                      {proxy.host}
+                    <span className="text-[12px] font-medium text-[#2e7d55]">
+                      {t('accounts.addWizard.poolFree', { count: proxy.free })}
                     </span>
-                  </span>
-                  <span className="text-[12px] font-medium text-[#2e7d55]">{proxy.ping}</span>
-                </button>
-              ))}
+                  </button>
+                ))
+              )}
             </div>
             <div className="mt-5 flex justify-between gap-2">
               <button

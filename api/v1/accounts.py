@@ -8,15 +8,35 @@ drives: session check, profile update, delete, and the two multipart uploads
 
 from __future__ import annotations
 
+import base64
+import binascii
 from typing import Annotated
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
-from schemas.accounts import AccountCheckRequest, AccountProfileUpdateRequest, AccountRead
+from schemas.accounts import (
+    AccountCheckRequest,
+    AccountProfileUpdateRequest,
+    AccountRead,
+    AccountSessionFileImport,
+)
 from schemas.api import Page
 from schemas.phone_login import PhoneCodeRequestResult, SubmitCodeRequest
-from schemas.profile_media import AccountProfilePhotoUpload
+from schemas.profile_media import (
+    AccountProfileMusicRemove,
+    AccountProfileMusicUpload,
+    AccountProfilePhotoRemove,
+    AccountProfilePhotoUpload,
+    AccountProfileView,
+    AccountStoryRemove,
+    AccountStoryUpload,
+    MusicRemoveRequest,
+    PhotoRemoveRequest,
+    StoryMediaKind,
+    StoryPrivacyPreset,
+    StoryRemoveRequest,
+)
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from schemas.telegram_actions import ActionResult
@@ -156,6 +176,29 @@ async def import_account_tdata(
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
+@router.post(
+    "/accounts/import-session",
+    response_model=AccountRead,
+    operation_id="importAccountSession",
+)
+async def import_account_session(
+    file: Annotated[UploadFile, File()],
+    label: Annotated[str | None, Form()] = None,
+) -> AccountRead:
+    content = await file.read()
+    data = AccountSessionFileImport(
+        filename=file.filename or "account.session",
+        content=content,
+        label=label,
+    )
+    try:
+        return await accounts.import_account_session(data)
+    except accounts.SessionAlreadyExistsError as exc:
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
 @router.post("/accounts/photo", response_model=ActionResult, operation_id="setAccountPhoto")
 async def set_account_photo(
     account_id: Annotated[str, Form()],
@@ -168,3 +211,128 @@ async def set_account_photo(
         content=content,
     )
     return await accounts.set_account_profile_photo(upload)
+
+
+def _decode_ref(value: str) -> bytes:
+    """Decode a base64 ``file_reference`` from the profile view, or 400."""
+    try:
+        return base64.b64decode(value, validate=True)
+    except (binascii.Error, ValueError) as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="invalid file_reference",
+        ) from exc
+
+
+@router.get(
+    "/accounts/{account_id}/profile-snapshot",
+    response_model=AccountProfileView,
+    operation_id="getAccountProfileSnapshot",
+)
+async def get_account_profile_snapshot(account_id: str) -> AccountProfileView:
+    """Live profile (photos / stories / music) for the edit-profile modal."""
+    return await accounts.account_profile_view(account_id)
+
+
+@router.post(
+    "/accounts/{account_id}/story",
+    response_model=ActionResult,
+    operation_id="postAccountStory",
+)
+async def post_account_story(  # noqa: PLR0913 - one Form param per story field
+    account_id: str,
+    file: Annotated[UploadFile, File()],
+    media_kind: Annotated[StoryMediaKind, Form()] = "image",
+    caption: Annotated[str | None, Form()] = None,
+    privacy_preset: Annotated[StoryPrivacyPreset, Form()] = "contacts",
+    protect_content: Annotated[bool, Form()] = False,  # noqa: FBT002 - multipart form field
+) -> ActionResult:
+    content = await file.read()
+    upload = AccountStoryUpload(
+        account_id=account_id,
+        filename=file.filename or "story",
+        content=content,
+        media_kind=media_kind,
+        caption=caption,
+        privacy_preset=privacy_preset,
+        protect_content=protect_content,
+    )
+    try:
+        return await accounts.post_account_story(upload)
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/music",
+    response_model=ActionResult,
+    operation_id="addAccountMusic",
+)
+async def add_account_music(
+    account_id: str,
+    file: Annotated[UploadFile, File()],
+    title: Annotated[str | None, Form()] = None,
+    performer: Annotated[str | None, Form()] = None,
+) -> ActionResult:
+    content = await file.read()
+    upload = AccountProfileMusicUpload(
+        account_id=account_id,
+        filename=file.filename or "track",
+        content=content,
+        title=title,
+        performer=performer,
+    )
+    try:
+        return await accounts.add_account_profile_music(upload)
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/story/remove",
+    response_model=ActionResult,
+    operation_id="removeAccountStory",
+)
+async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> ActionResult:
+    try:
+        return await accounts.remove_account_story(
+            AccountStoryRemove(account_id=account_id, story_id=body.story_id),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/music/remove",
+    response_model=ActionResult,
+    operation_id="removeAccountMusic",
+)
+async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> ActionResult:
+    remove = AccountProfileMusicRemove(
+        account_id=account_id,
+        file_id=body.file_id,
+        access_hash=body.access_hash,
+        file_reference=_decode_ref(body.file_reference),
+    )
+    try:
+        return await accounts.remove_account_profile_music(remove)
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/photo/remove",
+    response_model=ActionResult,
+    operation_id="removeAccountPhoto",
+)
+async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> ActionResult:
+    remove = AccountProfilePhotoRemove(
+        account_id=account_id,
+        photo_id=body.photo_id,
+        access_hash=body.access_hash,
+        file_reference=_decode_ref(body.file_reference),
+    )
+    try:
+        return await accounts.remove_account_profile_photo(remove)
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

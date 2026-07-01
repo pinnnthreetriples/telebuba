@@ -48,6 +48,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     expected_run_id: str | None = None,
     current_phase: WarmingPhase | None | _Sentinel = _SENTINEL,
     phase_entered_at: str | None | _Sentinel = _SENTINEL,
+    target_days: int | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
@@ -101,6 +102,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
                 "str | None",
                 _resolve(phase_entered_at, "phase_entered_at"),
             ),
+            target_days=cast("int | None", _resolve(target_days, "target_days")),
         ),
     )
 
@@ -118,26 +120,20 @@ async def _current_card(account_id: str) -> WarmingAccountState:
     if account is not None:
         return _to_card(account, record)
     state: WarmingState = record.state if record else "idle"
+    # No account row (deleted mid-flight): synthesise the card from the warming
+    # record alone, mirroring ``_to_card``'s model-dump spread so every column
+    # (incl. target_days) carries through without a per-field ternary wall.
+    record_fields = (
+        record.model_dump(
+            exclude={"account_id", "state", "run_id", "current_phase", "phase_entered_at"}
+        )
+        if record
+        else {}
+    )
     return WarmingAccountState(
         account_id=account_id,
         label=account_id,
         state=state,
         health=warming_health(state),
-        cycles_completed=record.cycles_completed if record else 0,
-        last_event=record.last_event if record else None,
-        last_cycle_at=record.last_cycle_at if record else None,
-        next_run_at=record.next_run_at if record else None,
-        updated_at=record.updated_at if record else None,
-        last_error=record.last_error if record else None,
-        last_action=record.last_action if record else None,
-        last_channel=record.last_channel if record else None,
-        heartbeat_at=record.heartbeat_at if record else None,
-        started_at=record.started_at if record else None,
-        stopped_at=record.stopped_at if record else None,
-        flood_wait_seconds=record.flood_wait_seconds if record else None,
-        flood_wait_until=record.flood_wait_until if record else None,
-        proxy_snapshot=record.proxy_snapshot if record else None,
-        daily_actions=record.daily_actions if record else 0,
-        daily_count_date=record.daily_count_date if record else None,
-        quarantine_count=record.quarantine_count if record else 0,
+        **record_fields,
     )

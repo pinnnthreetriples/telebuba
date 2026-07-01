@@ -120,6 +120,16 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             if existing and existing.started_at and is_warming(existing.state)
             else _now_iso()
         )
+        # Operator-chosen warming duration (the start modal's day slider). A
+        # restart-while-warming keeps the original pick; a genuine (re)start
+        # honours the new value, falling back to the configured floor when the
+        # request omits it. The loop auto-completes the account once warming
+        # reaches this many days.
+        target_days = (
+            data.target_days
+            or (existing.target_days if existing and existing.target_days else None)
+            or settings.neurocomment.warmed_min_days
+        )
         # Bug 2: a previously-promoted account dragged back into warming would
         # otherwise live in both pools — clear the flag so neurocomment's
         # warmed-account overview drops it on the next poll.
@@ -147,6 +157,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             flood_wait_until=None,
             proxy_snapshot=_proxy_snapshot(account),
             run_id=run_id,
+            target_days=target_days,
         )
         # F2: an existing task may still be inside the inter-cycle
         # ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous*

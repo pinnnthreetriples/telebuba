@@ -51,6 +51,31 @@ class AssignAccountRequest(BaseModel):
     account_id: str = Field(min_length=1)
 
 
+class SolverToggleRequest(BaseModel):
+    """Turn the per-campaign challenge (captcha) solver on/off."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    enabled: bool
+
+
+class UpdatePromptRequest(BaseModel):
+    """Replace a campaign's generation prompt (the edit-prompt modal)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    prompt: str = Field(min_length=1)
+
+
+class RetryPairRequest(BaseModel):
+    """Operator retry of one (account, channel) challenge — the captcha «Решить»."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    account_id: str = Field(min_length=1)
+    channel: str = Field(min_length=1)
+
+
 class StartNeurocommentRequest(BaseModel):
     """Start the fleet listener on the given account."""
 
@@ -278,6 +303,9 @@ class NeurocommentAccountCard(BaseModel):
     max_comments_per_hour: int
     comments_today: int
     last_comment_at: str | None = None
+    # Text of the most recent posted comment (None until the account comments, or
+    # when the stored row has no text). Surfaces the real comment in the board.
+    last_comment_text: str | None = None
     readiness: list[AccountChannelReadiness] = Field(default_factory=list)
 
 

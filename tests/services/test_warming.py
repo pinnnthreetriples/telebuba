@@ -59,7 +59,7 @@ from schemas.warming import (
 from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
-from services.warming import _loop, _runner, _runtime, _seams
+from services.warming import _loop, _runner, _runtime, _seams, _transitions
 from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
@@ -804,6 +804,152 @@ async def test_stop_warming_without_running_task_is_safe() -> None:
     stopped = await warming.stop_warming(StopWarmingRequest(account_id="acc-1"))
 
     assert stopped.state == "idle"
+
+
+async def _fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+    await asyncio.sleep(3600)
+
+
+@pytest.mark.asyncio
+async def test_start_warming_persists_chosen_target_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The day slider's value reaches the warming-state row (was silently dropped).
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1", target_days=5))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.target_days == 5
+
+
+@pytest.mark.asyncio
+async def test_start_warming_defaults_target_to_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Omitting target_days falls back to the configured warmed_min_days floor.
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    monkeypatch.setattr(settings.neurocomment, "warmed_min_days", 9)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.target_days == 9
+
+
+@pytest.mark.asyncio
+async def test_loop_auto_completes_at_target_days(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Once warming has run for the operator-chosen target, the loop parks the
+    # account complete (no further cycle) instead of warming on indefinitely.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_ready_account("acc-1")
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    old_start = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1", state="sleeping", started_at=old_start, target_days=3
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "target reached"
+    assert recorder.actions == []  # no cycle ran
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "sleeping"
+    assert record.last_event == "warming_complete"
+
+
+@pytest.mark.asyncio
+async def test_loop_keeps_warming_before_target(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Below the chosen target the account keeps cycling normally.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_ready_account("acc-1")
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    recent_start = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1", state="sleeping", started_at=recent_start, target_days=7
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "ok"
+    assert "set_online" in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_loop_target_complete_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A row already flagged complete re-parks silently — no second cycle, no re-log.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_ready_account("acc-1")
+    old_start = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            started_at=old_start,
+            target_days=3,
+            last_event="warming_complete",
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "target reached"
+    assert recorder.actions == []
+
+
+@pytest.mark.asyncio
+async def test_target_gate_bails_on_stale_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A concurrent stop/restart flips run_id, so the CAS write is rejected and the
+    # gate bails as "stale run" rather than logging a phantom completion.
+    record = WarmingStateRecord(
+        account_id="acc-1",
+        state="sleeping",
+        updated_at="2026-06-01T00:00:00+00:00",
+        started_at=(datetime.now(UTC) - timedelta(days=10)).isoformat(),
+        target_days=3,
+    )
+
+    async def _rejected(*_args: object, **_kwargs: object) -> WarmingStateWriteResult:
+        return WarmingStateWriteResult(record=record, applied=False)
+
+    monkeypatch.setattr(_transitions, "_set_state", _rejected)
+
+    result = await _transitions._gate_target_reached(
+        "acc-1", record, datetime.now(UTC), run_id="gen-1"
+    )
+
+    assert result is not None
+    assert result.detail == "stale run"
+
+
+@pytest.mark.asyncio
+async def test_load_board_card_exposes_target_days() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="active",
+            started_at="2026-06-01T00:00:00+00:00",
+            target_days=10,
+        ),
+    )
+
+    board = await warming.load_board()
+
+    card = next(c for c in board.warming if c.account_id == "acc-1")
+    assert card.target_days == 10
 
 
 @pytest.mark.asyncio

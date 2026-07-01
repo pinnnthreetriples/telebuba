@@ -11,6 +11,7 @@ import { WarmStopModal } from './WarmStopModal';
 interface WarmingBoardProps {
   warming: WarmingAccountState[];
   onStop: (accountId: string) => void;
+  onPromote: (accountId: string) => void;
   busyId: string | null;
 }
 
@@ -59,10 +60,12 @@ function logTime(createdAt: string): string {
 function WarmingCard({
   account,
   onStop,
+  onPromote,
   busy,
 }: {
   account: WarmingAccountState;
   onStop: (id: string) => void;
+  onPromote: (id: string) => void;
   busy: boolean;
 }) {
   const { t } = useTranslation();
@@ -76,9 +79,15 @@ function WarmingCard({
   });
   const logLines = logQuery.data?.items ?? [];
   const active = activeStage(account);
-  const days = Math.min(account.cycles_completed ?? 0, WARMING_DAYS);
-  const complete = days >= WARMING_DAYS;
-  const filled = Math.round((DAY_SEGMENTS.length * days) / WARMING_DAYS);
+  // Real elapsed warming days vs the operator-chosen target (the start slider);
+  // the card auto-flips to "complete" once the account reaches its own target.
+  const target = account.target_days ?? WARMING_DAYS;
+  const elapsed = account.warming_days ?? 0;
+  const days = Math.min(elapsed, target);
+  const complete = elapsed >= target;
+  const filled = Math.round((DAY_SEGMENTS.length * days) / target);
+  const dayTicks =
+    target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
   const connectorPct = (active / (STAGES.length - 1)) * 100;
   const status = WARM_STATUS[account.state];
   const actions = Math.min(account.cycles_completed ?? 0, 10);
@@ -202,7 +211,7 @@ function WarmingCard({
           ))}
         </div>
         <div className="mt-[7px] flex justify-between px-[2px] text-[9.5px] text-[#7a7a7e]">
-          {DAY_TICKS.map((tick) => (
+          {dayTicks.map((tick) => (
             <span key={tick}>{tick}</span>
           ))}
         </div>
@@ -345,7 +354,11 @@ function WarmingCard({
           </div>
           <button
             type="button"
-            className="mt-[9px] flex w-full items-center justify-center gap-[7px] rounded-full bg-success px-[14px] py-[10px] text-[12px] font-semibold text-white transition-colors hover:bg-[#0e8c45]"
+            disabled={busy}
+            onClick={() => {
+              onPromote(account.account_id);
+            }}
+            className="mt-[9px] flex w-full items-center justify-center gap-[7px] rounded-full bg-success px-[14px] py-[10px] text-[12px] font-semibold text-white transition-colors hover:bg-[#0e8c45] disabled:opacity-50"
           >
             <svg
               width="14"
@@ -371,7 +384,7 @@ function WarmingCard({
 // The design's "Warming" panel: blue-tinted in-progress cards, each with the
 // day-bar histogram, six-stage pipeline stepper, live current-activity row,
 // expandable terminal log, and completion state.
-export function WarmingBoard({ warming, onStop, busyId }: WarmingBoardProps) {
+export function WarmingBoard({ warming, onStop, onPromote, busyId }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
     <div className="rounded-2xl border border-line bg-white p-4">
@@ -406,6 +419,7 @@ export function WarmingBoard({ warming, onStop, busyId }: WarmingBoardProps) {
             key={account.account_id}
             account={account}
             onStop={onStop}
+            onPromote={onPromote}
             busy={busyId === account.account_id}
           />
         ))}

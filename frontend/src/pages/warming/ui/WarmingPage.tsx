@@ -1,12 +1,17 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { proxyTypeLabel } from '@/entities/proxy';
 import {
   addWarmingChannelsMutation,
+  promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
   startWarmingMutation,
   stopWarmingMutation,
+  unpromoteFromNeurocommentMutation,
+  warmedAccountsQueryOptions,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
@@ -16,19 +21,6 @@ import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
 // SSE drives live board updates; this poll is just the fallback safety net.
 const FALLBACK_POLL_MS = 30000;
-
-// ponytail: mock graduated accounts until the board exposes a "warmed" list.
-const WARMED_MOCK = [
-  { id: 'wm-1', phone: '+79261112233', cc: 'ru', proxy: 'SOCKS5', days: '14 / 14 дней', trust: 88 },
-  {
-    id: 'wm-2',
-    phone: '+447700900123',
-    cc: 'gb',
-    proxy: 'SOCKS5',
-    days: '14 / 14 дней',
-    trust: 91,
-  },
-] as const;
 
 function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
@@ -41,16 +33,20 @@ function trustColor(trust: number): string {
   return '#e5372a';
 }
 
-// Design-first derivations for fields the board read model doesn't expose yet
-// on idle accounts: a stable pseudo value keyed off the account id so the meta
-// row (trust / flag / proxy-type) renders per the spec.
-const FLAGS = ['ru', 'gb', 'de', 'us', 'fr', 'nl'] as const;
-const PROXY_TYPES = ['SOCKS5', 'HTTP', 'MTProto'] as const;
-
-function hash(id: string): number {
-  let h = 0;
-  for (const ch of id) h = (h * 31 + ch.charCodeAt(0)) | 0;
-  return Math.abs(h);
+// Map a backend readiness reason (English, from evaluate_readiness) to its RU
+// i18n key: "session <status>" / "no proxy" / "proxy failed" / "no channels" /
+// "spam limited" / "trust critical".
+const READINESS_REASON_KEY: Record<string, string> = {
+  'no proxy': 'warming.notReady.noProxy',
+  'proxy failed': 'warming.notReady.proxyFailed',
+  'no channels': 'warming.notReady.noChannels',
+  'spam limited': 'warming.notReady.spamLimited',
+  'trust critical': 'warming.notReady.trustCritical',
+};
+function reasonKey(reason: string): string {
+  return reason.startsWith('session ')
+    ? 'warming.notReady.session'
+    : (READINESS_REASON_KEY[reason] ?? '');
 }
 
 function Counter({ value, label, cls }: { value: number; label: string; cls: string }) {
@@ -84,6 +80,29 @@ export function WarmingPage() {
   const stop = useMutation(stopWarmingMutation());
   const addChannels = useMutation(addWarmingChannelsMutation());
   const removeChannel = useMutation(removeWarmingChannelMutation());
+  const promote = useMutation(promoteToNeurocommentMutation());
+  const unpromote = useMutation(unpromoteFromNeurocommentMutation());
+  const navigate = useNavigate();
+
+  const warmedQuery = useQuery({
+    ...warmedAccountsQueryOptions(),
+    refetchInterval: FALLBACK_POLL_MS,
+  });
+  const warmed = warmedQuery.data?.accounts ?? [];
+
+  // promote (graduate) / unpromote (return to warming) share the {account_id} body.
+  const runGraduation = (mutation: typeof promote, accountId: string) => {
+    setBusyId(accountId);
+    mutation.mutate(
+      { body: { account_id: accountId } },
+      {
+        onSettled: () => {
+          setBusyId(null);
+          invalidate();
+        },
+      },
+    );
+  };
 
   const cancelAddChannel = () => {
     setAddingChannel(false);
@@ -184,16 +203,17 @@ export function WarmingPage() {
                 </div>
               ) : (
                 idle.map((account) => {
-                  const seed = hash(account.account_id);
-                  const trust = account.trust_score ?? 45 + (seed % 50);
-                  const tColor = trustColor(trust);
-                  const cc = (
-                    account.phone_country ??
-                    FLAGS[seed % FLAGS.length] ??
-                    'ru'
-                  ).toLowerCase();
-                  const ptype = PROXY_TYPES[seed % PROXY_TYPES.length];
-                  const available = account.health !== 'fail' && account.state !== 'error';
+                  const trust = account.trust_score;
+                  const tColor = trust != null ? trustColor(trust) : '#9a9893';
+                  const cc = account.phone_country?.toLowerCase() ?? null;
+                  const ptype = account.proxy_type;
+                  const ready = account.readiness?.ready ?? false;
+                  const blockers = (account.readiness?.reasons ?? [])
+                    .map((reason) => {
+                      const key = reasonKey(reason);
+                      return key ? t(key) : reason;
+                    })
+                    .join(', ');
                   return (
                     <div
                       key={account.account_id}
@@ -222,24 +242,33 @@ export function WarmingPage() {
                             <path d="m9 12 2 2 4-4" />
                           </svg>
                           <span className="text-[11px] font-semibold" style={{ color: tColor }}>
-                            {trust}
+                            {trust ?? '—'}
                           </span>
-                          <span className="text-[11px] text-line-strong">·</span>
-                          <span
-                            className={`fi fi-${cc} h-[11px] w-[15px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                          />
-                          <span className="text-[11px] text-[#9a9893]">{ptype}</span>
+                          {cc ? (
+                            <>
+                              <span className="text-[11px] text-line-strong">·</span>
+                              <span
+                                className={`fi fi-${cc} h-[11px] w-[15px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                              />
+                            </>
+                          ) : null}
+                          {ptype ? (
+                            <span className="text-[11px] text-[#9a9893]">
+                              {proxyTypeLabel(ptype)}
+                            </span>
+                          ) : null}
                         </div>
                       </div>
                       <button
                         type="button"
-                        disabled={!available || busyId === account.account_id}
+                        disabled={!ready || busyId === account.account_id}
+                        title={ready ? undefined : blockers}
                         onClick={() => {
                           setWarmDaysFor(account);
                         }}
-                        className={`rounded-full px-[14px] py-[6px] text-[12px] font-medium disabled:opacity-50 ${available ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
+                        className={`rounded-full px-[14px] py-[6px] text-[12px] font-medium disabled:opacity-50 ${ready ? 'bg-primary text-white' : 'cursor-not-allowed bg-track text-ink-subtle'}`}
                       >
-                        {available ? t('warming.ready.start') : t('warming.ready.unavailable')}
+                        {ready ? t('warming.ready.start') : t('warming.ready.unavailable')}
                       </button>
                     </div>
                   );
@@ -361,23 +390,31 @@ export function WarmingPage() {
                 </span>
                 <span className="text-[13.5px] font-bold">{t('warming.warmed.title')}</span>
                 <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
-                  {WARMED_MOCK.length}
+                  {warmed.length}
                 </span>
               </>
             }
           >
             <div className="flex flex-col gap-3">
-              {WARMED_MOCK.map((acc) => (
-                <div key={acc.id} className="rounded-[14px] border border-line p-[14px]">
+              {warmed.map((acc) => (
+                <div key={acc.account_id} className="rounded-[14px] border border-line p-[14px]">
                   <div className="flex items-start gap-[11px]">
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-tint text-[11.5px] font-bold text-primary ring-2 ring-success">
-                      {acc.phone.slice(-2)}
+                      {mono(acc.phone ?? acc.label)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[14px] font-bold leading-tight">{acc.phone}</div>
+                      <div className="text-[14px] font-bold leading-tight">
+                        {acc.phone ?? acc.label}
+                      </div>
                       <div className="mt-[5px] flex items-center gap-[6px]">
-                        <span className={`fi fi-${acc.cc} h-[10px] w-[14px] rounded-[2px]`} />
-                        <span className="text-[11.5px] text-ink-subtle">{acc.proxy}</span>
+                        {acc.phone_country ? (
+                          <span
+                            className={`fi fi-${acc.phone_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
+                          />
+                        ) : null}
+                        <span className="text-[11.5px] text-ink-subtle">
+                          {acc.proxy_type ? proxyTypeLabel(acc.proxy_type) : '—'}
+                        </span>
                       </div>
                     </div>
                     <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[9.5px] font-bold tracking-[0.03em] text-success">
@@ -399,19 +436,29 @@ export function WarmingPage() {
                       <div className="text-[10.5px] text-ink-subtle">
                         {t('warming.warmed.days')}
                       </div>
-                      <div className="text-[13px] font-bold">{acc.days}</div>
+                      <div className="text-[13px] font-bold">
+                        {t('warming.warmed.daysValue', {
+                          days: acc.warming_days,
+                          target: acc.target_days,
+                        })}
+                      </div>
                     </div>
                     <span className="h-[26px] w-px bg-[#e4e2de]" />
                     <div className="flex-1 pl-[14px]">
                       <div className="text-[10.5px] text-ink-subtle">
                         {t('warming.warmed.trust')}
                       </div>
-                      <div className="text-[13px] font-bold text-success">{acc.trust}</div>
+                      <div className="text-[13px] font-bold text-success">
+                        {acc.trust_score ?? '—'}
+                      </div>
                     </div>
                   </div>
                   <div className="mt-[13px] flex items-center gap-[9px]">
                     <button
                       type="button"
+                      onClick={() => {
+                        void navigate({ to: '/neurocomment' });
+                      }}
                       className="flex flex-1 items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white"
                     >
                       {t('warming.warmed.toNeuro')}
@@ -430,7 +477,11 @@ export function WarmingPage() {
                       type="button"
                       title={t('warming.warmed.backToWarm')}
                       aria-label={t('warming.warmed.backToWarm')}
-                      className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line-input bg-white text-ink-muted"
+                      disabled={busyId === acc.account_id}
+                      onClick={() => {
+                        runGraduation(unpromote, acc.account_id);
+                      }}
+                      className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line-input bg-white text-ink-muted disabled:opacity-50"
                     >
                       <svg
                         width="15"
@@ -478,6 +529,9 @@ export function WarmingPage() {
           onStop={(id) => {
             runOnAccount(stop, id);
           }}
+          onPromote={(id) => {
+            runGraduation(promote, id);
+          }}
           busyId={busyId}
         />
       </div>
@@ -488,8 +542,17 @@ export function WarmingPage() {
           onClose={() => {
             setWarmDaysFor(null);
           }}
-          onConfirm={() => {
-            runOnAccount(start, warmDaysFor.account_id);
+          onConfirm={(days) => {
+            setBusyId(warmDaysFor.account_id);
+            start.mutate(
+              { body: { account_id: warmDaysFor.account_id, target_days: days } },
+              {
+                onSettled: () => {
+                  setBusyId(null);
+                  invalidate();
+                },
+              },
+            );
           }}
         />
       ) : null}

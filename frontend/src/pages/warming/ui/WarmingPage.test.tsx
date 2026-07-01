@@ -8,19 +8,32 @@ import '@/shared/i18n';
 
 import type { WarmingAccountState, WarmingBoardState } from '@/shared/api';
 
-import { WarmingPage } from './WarmingPage';
+const navigate = vi.fn();
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+}));
+
+// Imported after the mock so WarmingPage picks up the stubbed useNavigate.
+const { WarmingPage } = await import('./WarmingPage');
 
 function renderWithClient(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-function account(id: string, state: WarmingAccountState['state']): WarmingAccountState {
-  return { account_id: id, label: id, state, health: 'ok', cycles_completed: 1 };
+function account(
+  id: string,
+  state: WarmingAccountState['state'],
+  readiness: WarmingAccountState['readiness'] = { ready: true, reasons: [] },
+): WarmingAccountState {
+  return { account_id: id, label: id, state, health: 'ok', cycles_completed: 1, readiness };
 }
 
 const BOARD: WarmingBoardState = {
-  idle: [account('idle-1', 'idle')],
+  idle: [
+    account('idle-1', 'idle'),
+    account('idle-2', 'idle', { ready: false, reasons: ['no proxy'] }),
+  ],
   warming: [account('warm-1', 'active')],
   channels: { channels: [{ channel: '@news', created_at: 'now' }] },
   settings: {
@@ -82,6 +95,77 @@ test('renders the board, channels and settings from live data', async () => {
   expect(screen.getByText('@news')).toBeInTheDocument();
 });
 
+test('disables warming for a not-ready account and shows the reason', async () => {
+  routeApi();
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-2')).toBeInTheDocument();
+  });
+  const blocked = screen.getByText('Недоступен');
+  expect(blocked).toBeDisabled();
+  expect(blocked.getAttribute('title')).toBe('нет прокси');
+});
+
+test('shows real trust, flag and proxy type on a ready card', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    idle: [
+      { ...account('idle-2', 'idle'), trust_score: 73, phone_country: 'RU', proxy_type: 'https' },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-2')).toBeInTheDocument();
+  });
+  expect(screen.getByText('73')).toBeInTheDocument();
+  expect(screen.getByText('HTTPS')).toBeInTheDocument();
+});
+
+test('shows graduated accounts and wires return-to-warming + navigate', async () => {
+  navigate.mockClear();
+  const warmed = {
+    accounts: [
+      {
+        account_id: 'grad',
+        label: 'Graduate',
+        warming_days: 20,
+        phone: '+79261112233',
+        phone_country: 'RU',
+        proxy_type: 'socks5',
+        trust_score: 88,
+        target_days: 14,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('+79261112233')).toBeInTheDocument();
+  });
+  expect(screen.getByText('SOCKS5')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByLabelText('Обратно в прогрев'));
+  await waitFor(() => {
+    const unpromoted = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/warming/unpromote'));
+    expect(unpromoted).toBe(true);
+  });
+
+  await userEvent.click(screen.getByText('В нейрокомментинг'));
+  expect(navigate).toHaveBeenCalledWith({ to: '/neurocomment' });
+});
+
 test('refetches the board on a live SSE event', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);
@@ -109,12 +193,16 @@ test('starts an idle account', async () => {
   });
   await userEvent.click(screen.getByText('Прогреть'));
   await userEvent.click(screen.getByText('Запустить прогрев'));
+  let startCall: [unknown, ...unknown[]] | undefined;
   await waitFor(() => {
-    const started = vi
+    startCall = vi
       .mocked(fetch)
-      .mock.calls.some(([input]) => (input as Request).url.includes('/warming/start'));
-    expect(started).toBe(true);
+      .mock.calls.find(([input]) => (input as Request).url.includes('/warming/start'));
+    expect(startCall).toBeDefined();
   });
+  // The day slider's value (default 7) must reach the backend — was dropped before.
+  const body = (await (startCall![0] as Request).clone().json()) as { target_days?: number };
+  expect(body.target_days).toBe(7);
 });
 
 test('adds a channel', async () => {

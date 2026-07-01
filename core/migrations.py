@@ -28,6 +28,7 @@ from core.migration_steps import (
     _add_warming_state_promoted_to_nc,
     _add_warming_state_run_id,
     _add_warming_state_runtime_columns,
+    _add_warming_state_target_days,
     _add_warming_user_controls,
     _rename_proxy_type_http_to_https,
 )
@@ -63,6 +64,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (17, "add_users_table", _add_users_table),
     (18, "add_proxy_pool", _add_proxy_pool),
     (19, "add_neurocomment_settings", _add_neurocomment_settings),
+    (20, "add_warming_state_target_days", _add_warming_state_target_days),
 )
 
 

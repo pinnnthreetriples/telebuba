@@ -9,10 +9,17 @@ import pytest
 
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.phone_login import PhoneCodeRequestResult
+from schemas.profile_media import (
+    AccountProfileMusicRemove,
+    AccountProfileView,
+    ProfileMusicView,
+    ProfilePhotoView,
+    ProfileStoryView,
+)
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataImportResult
 from schemas.telegram_actions import ActionResult
-from services.accounts import PhoneLoginError, add_account
+from services.accounts import PhoneLoginError, SessionAlreadyExistsError, add_account
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -246,6 +253,43 @@ async def test_import_tdata_accepts_multipart(
 
 
 @pytest.mark.asyncio
+async def test_import_session_accepts_multipart(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(data: object) -> AccountRead:  # noqa: ARG001
+        return _account("from-session")
+
+    monkeypatch.setattr("services.accounts.import_account_session", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            files={"file": ("acc.session", b"session-bytes", "application/octet-stream")},
+            data={"label": "S"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["account_id"] == "from-session"
+
+
+@pytest.mark.asyncio
+async def test_import_session_duplicate_is_409(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(data: object) -> AccountRead:  # noqa: ARG001
+        msg = "already exists"
+        raise SessionAlreadyExistsError(msg)
+
+    monkeypatch.setattr("services.accounts.import_account_session", _boom)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            files={"file": ("acc.session", b"x", "application/octet-stream")},
+        )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_set_photo_accepts_multipart(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
@@ -262,3 +306,107 @@ async def test_set_photo_accepts_multipart(
         )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_profile_snapshot_returns_view(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> AccountProfileView:  # noqa: ARG001
+        return AccountProfileView(
+            avatar_data_uri="data:image/jpeg;base64,YWJj",
+            photos=[ProfilePhotoView(photo_id=1, access_hash=2, file_reference="YWJj")],
+            stories=[ProfileStoryView(story_id=5, kind="image", privacy_preset="contacts")],
+            music=[ProfileMusicView(file_id=7, title="T", access_hash=3, file_reference="YWJj")],
+        )
+
+    monkeypatch.setattr("services.accounts.account_profile_view", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/profile-snapshot")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["photos"][0]["photo_id"] == 1
+    assert body["music"][0]["title"] == "T"
+
+
+@pytest.mark.asyncio
+async def test_post_story_accepts_multipart(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(upload: object) -> ActionResult:  # noqa: ARG001
+        return ActionResult(status="ok", action_type="post_story", account_id="acc-1")
+
+    monkeypatch.setattr("services.accounts.post_account_story", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story",
+            files={"file": ("s.jpg", b"img", "image/jpeg")},
+            data={"media_kind": "image", "privacy_preset": "contacts"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_add_music_accepts_multipart(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(upload: object) -> ActionResult:  # noqa: ARG001
+        return ActionResult(status="ok", action_type="add_profile_music", account_id="acc-1")
+
+    monkeypatch.setattr("services.accounts.add_account_profile_music", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/music",
+            files={"file": ("t.mp3", b"snd", "audio/mpeg")},
+            data={"title": "Song"},
+        )
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_remove_story(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(data: object) -> ActionResult:  # noqa: ARG001
+        return ActionResult(status="ok", action_type="remove_story", account_id="acc-1")
+
+    monkeypatch.setattr("services.accounts.remove_account_story", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story/remove",
+            json={"story_id": 9},
+        )
+    assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+async def test_remove_music_decodes_file_reference(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def _fake(data: AccountProfileMusicRemove) -> ActionResult:
+        seen["ref"] = data.file_reference
+        return ActionResult(status="ok", action_type="remove_profile_music", account_id="acc-1")
+
+    monkeypatch.setattr("services.accounts.remove_account_profile_music", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/music/remove",
+            json={"file_id": 7, "access_hash": 3, "file_reference": "YWJj"},
+        )
+    assert resp.status_code == 200
+    assert seen["ref"] == b"abc"  # base64 "YWJj" -> b"abc"
+
+
+@pytest.mark.asyncio
+async def test_remove_photo_bad_reference_is_400(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/photo/remove",
+            json={"photo_id": 1, "access_hash": 2, "file_reference": "!!notbase64!!"},
+        )
+    assert resp.status_code == 400

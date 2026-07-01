@@ -123,7 +123,13 @@
       "proxyChecking": "Проверяем соединение…",
       "proxyDown": "Прокси не отвечает",
       "aliveOk": "Аккаунт живой",
-      "aliveErr": "Аккаунт недоступен"
+      "aliveErr": "Аккаунт недоступен",
+      "choosePoolProxy": "Выбрать из пула",
+      "upload": {
+        "uploading": "загрузка…",
+        "done": "готово",
+        "error": "ошибка"
+      }
     },
     "actions": {
       "add": "Аккаунт",
@@ -238,7 +244,9 @@
       "proxyManual": "Добавить прокси",
       "proxyManualDesc": "Ввести host, порт, логин и пароль вручную",
       "proxyPool": "Выбрать из пула",
-      "proxyPoolDesc": "Готовые проверенные прокси из общего пула"
+      "proxyPoolDesc": "Готовые проверенные прокси из общего пула",
+      "poolEmpty": "В пуле нет свободных прокси",
+      "poolFree": "{{count}} своб."
     }
   },
   "nav": {
@@ -250,7 +258,9 @@
   },
   "shell": {
     "systemActive": "Система активна",
-    "notifications": "Уведомления"
+    "notifications": "Уведомления",
+    "account": "Аккаунт",
+    "logout": "Выйти"
   },
   "settings": {
     "title": "Настройки",
@@ -544,6 +554,7 @@
       "title": "Прогреты",
       "badge": "прогрет",
       "days": "Прогрев",
+      "daysValue": "{{days}} / {{target}} дней",
       "trust": "Trust-score",
       "toNeuro": "В нейрокомментинг",
       "backToWarm": "Обратно в прогрев"
@@ -670,6 +681,14 @@
       "label_one": "день",
       "label_few": "дня",
       "label_many": "дней"
+    },
+    "notReady": {
+      "noProxy": "нет прокси",
+      "proxyFailed": "прокси не отвечает",
+      "noChannels": "нет каналов прогрева",
+      "spamLimited": "спам-лимит",
+      "trustCritical": "критический trust",
+      "session": "нет активной сессии (нужен вход)"
     }
   },
   "auth": {

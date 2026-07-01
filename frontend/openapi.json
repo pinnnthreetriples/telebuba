@@ -760,6 +760,65 @@
         }
       }
     },
+    "/api/v1/accounts/import-session": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Import Account Session",
+        "operationId": "importAccountSession",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_importAccountSession"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/photo": {
       "post": {
         "tags": [
@@ -791,6 +850,405 @@
             "multipart/form-data": {
               "schema": {
                 "$ref": "#/components/schemas/Body_setAccountPhoto"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/profile-snapshot": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Account Profile Snapshot",
+        "description": "Live profile (photos / stories / music) for the edit-profile modal.",
+        "operationId": "getAccountProfileSnapshot",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountProfileView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/story": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Post Account Story",
+        "operationId": "postAccountStory",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_postAccountStory"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/music": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Add Account Music",
+        "operationId": "addAccountMusic",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "multipart/form-data": {
+              "schema": {
+                "$ref": "#/components/schemas/Body_addAccountMusic"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/story/remove": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove Account Story",
+        "operationId": "removeAccountStory",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoryRemoveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/music/remove": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove Account Music",
+        "operationId": "removeAccountMusic",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/MusicRemoveRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/{account_id}/photo/remove": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Remove Account Photo",
+        "operationId": "removeAccountPhoto",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoRemoveRequest"
               }
             }
           }
@@ -1245,6 +1703,176 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/WarmingBoardState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/warmed": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Get Warmed Accounts",
+        "description": "Operator-graduated accounts (the warming page's \"\u041f\u0440\u043e\u0433\u0440\u0435\u0442\u044b\u0435 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u044b\" card).",
+        "operationId": "listWarmedAccounts",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmedAccountList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/promote": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Promote Account",
+        "description": "Graduate an account: stop warming + flag it for the neurocomment pool.",
+        "operationId": "promoteToNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/warming/unpromote": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Unpromote Account",
+        "description": "Reverse a graduation: clear the promotion flag (the warmed card's \u00ab\u0432\u0435\u0440\u043d\u0443\u0442\u044c\u00bb).",
+        "operationId": "unpromoteFromNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
                 }
               }
             }
@@ -1944,6 +2572,365 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Remove Account",
+        "operationId": "removeCampaignAccount",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AssignAccountRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}": {
+      "delete": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Delete Campaign",
+        "description": "Delete a campaign and all its serving links, channels, and comments.",
+        "operationId": "deleteCampaign",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/channels/remove": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Remove Channel",
+        "description": "Detach a channel from a campaign (frees its slot for another campaign).",
+        "operationId": "removeCampaignChannel",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LinkChannelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/prompt": {
+      "put": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Update Prompt",
+        "description": "Replace a campaign's generation prompt (the edit-prompt modal).",
+        "operationId": "updateCampaignPrompt",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdatePromptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/solver": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Set Campaign Solver",
+        "description": "Turn the campaign's challenge (captcha) solver on/off.",
+        "operationId": "setCampaignSolver",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SolverToggleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/retry": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Retry Challenge",
+        "description": "Operator retry of one challenged (account, channel) pair (the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb).\n\nRe-onboards the pair (re-running the solver) \u2014 account+channel scoped, so it\nis campaign-agnostic.",
+        "operationId": "retryChallenge",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryPairRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountChannelOnboarding"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}/challenges": {
       "get": {
         "tags": [
@@ -2394,6 +3381,53 @@
   },
   "components": {
     "schemas": {
+      "AccountChannelOnboarding": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ready",
+              "comments_off",
+              "join_by_request",
+              "chat_restricted",
+              "bot_challenge",
+              "bot_challenge_backoff",
+              "joining",
+              "failed"
+            ],
+            "title": "State"
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "channel",
+          "state"
+        ],
+        "title": "AccountChannelOnboarding",
+        "description": "Outcome of preparing one account to comment on one channel.\n\n``reason`` carries a short human note for the non-``ready`` states (the\nflood-wait detail, the failing error type, etc.)."
+      },
       "AccountChannelReadiness": {
         "properties": {
           "channel": {
@@ -2497,6 +3531,61 @@
           "first_name"
         ],
         "title": "AccountProfileUpdateRequest"
+      },
+      "AccountProfileView": {
+        "properties": {
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          },
+          "avatar_data_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Data Uri"
+          },
+          "photos": {
+            "items": {
+              "$ref": "#/components/schemas/ProfilePhotoView"
+            },
+            "type": "array",
+            "title": "Photos"
+          },
+          "stories": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileStoryView"
+            },
+            "type": "array",
+            "title": "Stories"
+          },
+          "music": {
+            "items": {
+              "$ref": "#/components/schemas/ProfileMusicView"
+            },
+            "type": "array",
+            "title": "Music"
+          },
+          "music_supported": {
+            "type": "boolean",
+            "title": "Music Supported",
+            "default": true
+          }
+        },
+        "type": "object",
+        "title": "AccountProfileView",
+        "description": "JSON-safe live profile for the edit-profile modal."
       },
       "AccountRead": {
         "properties": {
@@ -2970,6 +4059,67 @@
         "title": "AssignAccountRequest",
         "description": "Assign an account to a campaign (the campaign id is the route path param)."
       },
+      "Body_addAccountMusic": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "performer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performer"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_addAccountMusic"
+      },
+      "Body_importAccountSession": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_importAccountSession"
+      },
       "Body_importAccountTdata": {
         "properties": {
           "file": {
@@ -2994,6 +4144,55 @@
           "file"
         ],
         "title": "Body_importAccountTdata"
+      },
+      "Body_postAccountStory": {
+        "properties": {
+          "file": {
+            "type": "string",
+            "contentMediaType": "application/octet-stream",
+            "title": "File"
+          },
+          "media_kind": {
+            "type": "string",
+            "enum": [
+              "image",
+              "video"
+            ],
+            "title": "Media Kind",
+            "default": "image"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "privacy_preset": {
+            "type": "string",
+            "enum": [
+              "contacts",
+              "close_friends",
+              "public"
+            ],
+            "title": "Privacy Preset",
+            "default": "contacts"
+          },
+          "protect_content": {
+            "type": "boolean",
+            "title": "Protect Content",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "file"
+        ],
+        "title": "Body_postAccountStory"
       },
       "Body_setAccountPhoto": {
         "properties": {
@@ -3278,6 +4477,31 @@
         ],
         "title": "LoginRequest"
       },
+      "MusicRemoveRequest": {
+        "properties": {
+          "file_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "File Id"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash"
+          },
+          "file_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "File Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id",
+          "access_hash",
+          "file_reference"
+        ],
+        "title": "MusicRemoveRequest"
+      },
       "NeurocommentAccountCard": {
         "properties": {
           "account_id": {
@@ -3337,6 +4561,17 @@
               }
             ],
             "title": "Last Comment At"
+          },
+          "last_comment_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Comment Text"
           },
           "readiness": {
             "items": {
@@ -3707,6 +4942,176 @@
         "title": "PhoneCodeRequestResult",
         "description": "API response after a code is sent \u2014 confirmation only, no secrets."
       },
+      "PhotoRemoveRequest": {
+        "properties": {
+          "photo_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Photo Id"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash"
+          },
+          "file_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "File Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photo_id",
+          "access_hash",
+          "file_reference"
+        ],
+        "title": "PhotoRemoveRequest"
+      },
+      "ProfileMusicView": {
+        "properties": {
+          "file_id": {
+            "type": "integer",
+            "title": "File Id"
+          },
+          "title": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Title"
+          },
+          "performer": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Performer"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash",
+            "default": 0
+          },
+          "file_reference": {
+            "type": "string",
+            "title": "File Reference",
+            "default": ""
+          }
+        },
+        "type": "object",
+        "required": [
+          "file_id"
+        ],
+        "title": "ProfileMusicView"
+      },
+      "ProfilePhotoView": {
+        "properties": {
+          "photo_id": {
+            "type": "integer",
+            "title": "Photo Id"
+          },
+          "access_hash": {
+            "type": "integer",
+            "title": "Access Hash"
+          },
+          "file_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "File Reference"
+          },
+          "thumb_data_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Data Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photo_id",
+          "access_hash",
+          "file_reference"
+        ],
+        "title": "ProfilePhotoView"
+      },
+      "ProfileStoryView": {
+        "properties": {
+          "story_id": {
+            "type": "integer",
+            "title": "Story Id"
+          },
+          "kind": {
+            "type": "string",
+            "title": "Kind",
+            "default": "unknown"
+          },
+          "caption": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Caption"
+          },
+          "privacy_preset": {
+            "type": "string",
+            "title": "Privacy Preset",
+            "default": "unknown"
+          },
+          "is_pinned": {
+            "type": "boolean",
+            "title": "Is Pinned",
+            "default": false
+          },
+          "thumb_data_uri": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Thumb Data Uri"
+          }
+        },
+        "type": "object",
+        "required": [
+          "story_id"
+        ],
+        "title": "ProfileStoryView"
+      },
+      "PromoteRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id"
+        ],
+        "title": "PromoteRequest",
+        "description": "Body for promote/unpromote: graduate an account to/from the neurocomment pool."
+      },
       "ProxyAssignRequest": {
         "properties": {
           "account_id": {
@@ -4046,6 +5451,43 @@
         ],
         "title": "RemoveChannelRequest"
       },
+      "RetryPairRequest": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "account_id",
+          "channel"
+        ],
+        "title": "RetryPairRequest",
+        "description": "Operator retry of one (account, channel) challenge \u2014 the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb."
+      },
+      "SolverToggleRequest": {
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enabled"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "enabled"
+        ],
+        "title": "SolverToggleRequest",
+        "description": "Turn the per-campaign challenge (captcha) solver on/off."
+      },
       "SpamStatusVerdict": {
         "properties": {
           "account_id": {
@@ -4110,6 +5552,19 @@
             "type": "string",
             "minLength": 1,
             "title": "Account Id"
+          },
+          "target_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 365.0,
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Days"
           }
         },
         "type": "object",
@@ -4131,6 +5586,20 @@
           "account_id"
         ],
         "title": "StopWarmingRequest"
+      },
+      "StoryRemoveRequest": {
+        "properties": {
+          "story_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Story Id"
+          }
+        },
+        "type": "object",
+        "required": [
+          "story_id"
+        ],
+        "title": "StoryRemoveRequest"
       },
       "SubmitCodeRequest": {
         "properties": {
@@ -4171,6 +5640,22 @@
         "type": "object",
         "title": "TdataImportResult",
         "description": "Outcome of one :func:`services.accounts.sessions.import_account_tdata` call.\n\nWrapping the imported accounts in a model (instead of returning a raw\n``list[AccountRead]``) keeps the service boundary Pydantic-only, leaves room\nto add per-import metadata (counts, partial-failure summaries) without\nbreaking every call site, and matches the convention used by ``list_accounts``\nand other multi-row reads."
+      },
+      "UpdatePromptRequest": {
+        "properties": {
+          "prompt": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Prompt"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "prompt"
+        ],
+        "title": "UpdatePromptRequest",
+        "description": "Replace a campaign's generation prompt (the edit-prompt modal)."
       },
       "UserRead": {
         "properties": {
@@ -4235,6 +5720,99 @@
           "type"
         ],
         "title": "ValidationError"
+      },
+      "WarmedAccount": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Label"
+          },
+          "warming_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Warming Days"
+          },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "phone_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone Country"
+          },
+          "proxy_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Type"
+          },
+          "trust_score": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "maximum": 100.0,
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Trust Score"
+          },
+          "target_days": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Target Days"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "label",
+          "warming_days",
+          "target_days"
+        ],
+        "title": "WarmedAccount",
+        "description": "A graduated (operator-promoted) account, for the warming page's warmed card."
+      },
+      "WarmedAccountList": {
+        "properties": {
+          "accounts": {
+            "items": {
+              "$ref": "#/components/schemas/WarmedAccount"
+            },
+            "type": "array",
+            "title": "Accounts"
+          }
+        },
+        "type": "object",
+        "title": "WarmedAccountList",
+        "description": "Wrapper for a bulk read of warmed accounts (non-negotiable #2)."
       },
       "WarmingAccountState": {
         "properties": {
@@ -4535,6 +6113,28 @@
             ],
             "title": "Proxy Country"
           },
+          "phone": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Phone"
+          },
+          "proxy_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Type"
+          },
           "phase": {
             "anyOf": [
               {
@@ -4606,6 +6206,18 @@
               }
             ],
             "title": "Warming Days"
+          },
+          "target_days": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 1.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Target Days"
           },
           "readiness": {
             "anyOf": [

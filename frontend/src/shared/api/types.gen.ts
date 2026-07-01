@@ -5,6 +5,41 @@ export type ClientOptions = {
 };
 
 /**
+ * AccountChannelOnboarding
+ *
+ * Outcome of preparing one account to comment on one channel.
+ *
+ * ``reason`` carries a short human note for the non-``ready`` states (the
+ * flood-wait detail, the failing error type, etc.).
+ */
+export type AccountChannelOnboarding = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * State
+   */
+  state:
+    | 'ready'
+    | 'comments_off'
+    | 'join_by_request'
+    | 'chat_restricted'
+    | 'bot_challenge'
+    | 'bot_challenge_backoff'
+    | 'joining'
+    | 'failed';
+  /**
+   * Reason
+   */
+  reason?: string | null;
+};
+
+/**
  * AccountChannelReadiness
  *
  * One channel's readiness summary on an account card.
@@ -66,6 +101,38 @@ export type AccountProfileUpdateRequest = {
    * Bio
    */
   bio?: string | null;
+};
+
+/**
+ * AccountProfileView
+ *
+ * JSON-safe live profile for the edit-profile modal.
+ */
+export type AccountProfileView = {
+  /**
+   * Error
+   */
+  error?: string | null;
+  /**
+   * Avatar Data Uri
+   */
+  avatar_data_uri?: string | null;
+  /**
+   * Photos
+   */
+  photos?: Array<ProfilePhotoView>;
+  /**
+   * Stories
+   */
+  stories?: Array<ProfileStoryView>;
+  /**
+   * Music
+   */
+  music?: Array<ProfileMusicView>;
+  /**
+   * Music Supported
+   */
+  music_supported?: boolean;
 };
 
 /**
@@ -272,6 +339,38 @@ export type AssignAccountRequest = {
 };
 
 /**
+ * Body_addAccountMusic
+ */
+export type BodyAddAccountMusic = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Title
+   */
+  title?: string | null;
+  /**
+   * Performer
+   */
+  performer?: string | null;
+};
+
+/**
+ * Body_importAccountSession
+ */
+export type BodyImportAccountSession = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Label
+   */
+  label?: string | null;
+};
+
+/**
  * Body_importAccountTdata
  */
 export type BodyImportAccountTdata = {
@@ -283,6 +382,32 @@ export type BodyImportAccountTdata = {
    * Label
    */
   label?: string | null;
+};
+
+/**
+ * Body_postAccountStory
+ */
+export type BodyPostAccountStory = {
+  /**
+   * File
+   */
+  file: Blob | File;
+  /**
+   * Media Kind
+   */
+  media_kind?: 'image' | 'video';
+  /**
+   * Caption
+   */
+  caption?: string | null;
+  /**
+   * Privacy Preset
+   */
+  privacy_preset?: 'contacts' | 'close_friends' | 'public';
+  /**
+   * Protect Content
+   */
+  protect_content?: boolean;
 };
 
 /**
@@ -484,6 +609,24 @@ export type LoginRequest = {
 };
 
 /**
+ * MusicRemoveRequest
+ */
+export type MusicRemoveRequest = {
+  /**
+   * File Id
+   */
+  file_id: number;
+  /**
+   * Access Hash
+   */
+  access_hash: number;
+  /**
+   * File Reference
+   */
+  file_reference: string;
+};
+
+/**
  * NeurocommentAccountCard
  *
  * Per-account card in the work view: limits, health, last activity.
@@ -529,6 +672,10 @@ export type NeurocommentAccountCard = {
    * Last Comment At
    */
   last_comment_at?: string | null;
+  /**
+   * Last Comment Text
+   */
+  last_comment_text?: string | null;
   /**
    * Readiness
    */
@@ -764,6 +911,114 @@ export type PhoneCodeRequestResult = {
 };
 
 /**
+ * PhotoRemoveRequest
+ */
+export type PhotoRemoveRequest = {
+  /**
+   * Photo Id
+   */
+  photo_id: number;
+  /**
+   * Access Hash
+   */
+  access_hash: number;
+  /**
+   * File Reference
+   */
+  file_reference: string;
+};
+
+/**
+ * ProfileMusicView
+ */
+export type ProfileMusicView = {
+  /**
+   * File Id
+   */
+  file_id: number;
+  /**
+   * Title
+   */
+  title?: string | null;
+  /**
+   * Performer
+   */
+  performer?: string | null;
+  /**
+   * Access Hash
+   */
+  access_hash?: number;
+  /**
+   * File Reference
+   */
+  file_reference?: string;
+};
+
+/**
+ * ProfilePhotoView
+ */
+export type ProfilePhotoView = {
+  /**
+   * Photo Id
+   */
+  photo_id: number;
+  /**
+   * Access Hash
+   */
+  access_hash: number;
+  /**
+   * File Reference
+   */
+  file_reference: string;
+  /**
+   * Thumb Data Uri
+   */
+  thumb_data_uri?: string | null;
+};
+
+/**
+ * ProfileStoryView
+ */
+export type ProfileStoryView = {
+  /**
+   * Story Id
+   */
+  story_id: number;
+  /**
+   * Kind
+   */
+  kind?: string;
+  /**
+   * Caption
+   */
+  caption?: string | null;
+  /**
+   * Privacy Preset
+   */
+  privacy_preset?: string;
+  /**
+   * Is Pinned
+   */
+  is_pinned?: boolean;
+  /**
+   * Thumb Data Uri
+   */
+  thumb_data_uri?: string | null;
+};
+
+/**
+ * PromoteRequest
+ *
+ * Body for promote/unpromote: graduate an account to/from the neurocomment pool.
+ */
+export type PromoteRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+};
+
+/**
  * ProxyAssignRequest
  */
 export type ProxyAssignRequest = {
@@ -940,6 +1195,34 @@ export type RemoveChannelRequest = {
 };
 
 /**
+ * RetryPairRequest
+ *
+ * Operator retry of one (account, channel) challenge — the captcha «Решить».
+ */
+export type RetryPairRequest = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Channel
+   */
+  channel: string;
+};
+
+/**
+ * SolverToggleRequest
+ *
+ * Turn the per-campaign challenge (captcha) solver on/off.
+ */
+export type SolverToggleRequest = {
+  /**
+   * Enabled
+   */
+  enabled: boolean;
+};
+
+/**
  * SpamStatusVerdict
  *
  * Parsed, cacheable spam-status verdict for one account.
@@ -983,6 +1266,10 @@ export type StartWarmingRequest = {
    * Account Id
    */
   account_id: string;
+  /**
+   * Target Days
+   */
+  target_days?: number | null;
 };
 
 /**
@@ -993,6 +1280,16 @@ export type StopWarmingRequest = {
    * Account Id
    */
   account_id: string;
+};
+
+/**
+ * StoryRemoveRequest
+ */
+export type StoryRemoveRequest = {
+  /**
+   * Story Id
+   */
+  story_id: number;
 };
 
 /**
@@ -1027,6 +1324,18 @@ export type TdataImportResult = {
    * Accounts
    */
   accounts?: Array<AccountRead>;
+};
+
+/**
+ * UpdatePromptRequest
+ *
+ * Replace a campaign's generation prompt (the edit-prompt modal).
+ */
+export type UpdatePromptRequest = {
+  /**
+   * Prompt
+   */
+  prompt: string;
 };
 
 /**
@@ -1073,6 +1382,58 @@ export type ValidationError = {
   ctx?: {
     [key: string]: unknown;
   };
+};
+
+/**
+ * WarmedAccount
+ *
+ * A graduated (operator-promoted) account, for the warming page's warmed card.
+ */
+export type WarmedAccount = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Label
+   */
+  label: string;
+  /**
+   * Warming Days
+   */
+  warming_days: number;
+  /**
+   * Phone
+   */
+  phone?: string | null;
+  /**
+   * Phone Country
+   */
+  phone_country?: string | null;
+  /**
+   * Proxy Type
+   */
+  proxy_type?: string | null;
+  /**
+   * Trust Score
+   */
+  trust_score?: number | null;
+  /**
+   * Target Days
+   */
+  target_days: number;
+};
+
+/**
+ * WarmedAccountList
+ *
+ * Wrapper for a bulk read of warmed accounts (non-negotiable #2).
+ */
+export type WarmedAccountList = {
+  /**
+   * Accounts
+   */
+  accounts?: Array<WarmedAccount>;
 };
 
 /**
@@ -1202,6 +1563,14 @@ export type WarmingAccountState = {
    */
   proxy_country?: string | null;
   /**
+   * Phone
+   */
+  phone?: string | null;
+  /**
+   * Proxy Type
+   */
+  proxy_type?: string | null;
+  /**
    * Phase
    */
   phase?: 'intro' | 'settling' | 'warming' | 'active' | 'warmed' | null;
@@ -1225,6 +1594,10 @@ export type WarmingAccountState = {
    * Warming Days
    */
   warming_days?: number | null;
+  /**
+   * Target Days
+   */
+  target_days?: number | null;
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc
@@ -1841,6 +2214,33 @@ export type ImportAccountTdataResponses = {
 export type ImportAccountTdataResponse =
   ImportAccountTdataResponses[keyof ImportAccountTdataResponses];
 
+export type ImportAccountSessionData = {
+  body: BodyImportAccountSession;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/import-session';
+};
+
+export type ImportAccountSessionErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ImportAccountSessionError =
+  ImportAccountSessionErrors[keyof ImportAccountSessionErrors];
+
+export type ImportAccountSessionResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type ImportAccountSessionResponse =
+  ImportAccountSessionResponses[keyof ImportAccountSessionResponses];
+
 export type SetAccountPhotoData = {
   body: BodySetAccountPhoto;
   path?: never;
@@ -1865,6 +2265,191 @@ export type SetAccountPhotoResponses = {
 };
 
 export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
+
+export type GetAccountProfileSnapshotData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/profile-snapshot';
+};
+
+export type GetAccountProfileSnapshotErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetAccountProfileSnapshotError =
+  GetAccountProfileSnapshotErrors[keyof GetAccountProfileSnapshotErrors];
+
+export type GetAccountProfileSnapshotResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountProfileView;
+};
+
+export type GetAccountProfileSnapshotResponse =
+  GetAccountProfileSnapshotResponses[keyof GetAccountProfileSnapshotResponses];
+
+export type PostAccountStoryData = {
+  body: BodyPostAccountStory;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/story';
+};
+
+export type PostAccountStoryErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PostAccountStoryError = PostAccountStoryErrors[keyof PostAccountStoryErrors];
+
+export type PostAccountStoryResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type PostAccountStoryResponse = PostAccountStoryResponses[keyof PostAccountStoryResponses];
+
+export type AddAccountMusicData = {
+  body: BodyAddAccountMusic;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/music';
+};
+
+export type AddAccountMusicErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AddAccountMusicError = AddAccountMusicErrors[keyof AddAccountMusicErrors];
+
+export type AddAccountMusicResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type AddAccountMusicResponse = AddAccountMusicResponses[keyof AddAccountMusicResponses];
+
+export type RemoveAccountStoryData = {
+  body: StoryRemoveRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/story/remove';
+};
+
+export type RemoveAccountStoryErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveAccountStoryError = RemoveAccountStoryErrors[keyof RemoveAccountStoryErrors];
+
+export type RemoveAccountStoryResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type RemoveAccountStoryResponse =
+  RemoveAccountStoryResponses[keyof RemoveAccountStoryResponses];
+
+export type RemoveAccountMusicData = {
+  body: MusicRemoveRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/music/remove';
+};
+
+export type RemoveAccountMusicErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveAccountMusicError = RemoveAccountMusicErrors[keyof RemoveAccountMusicErrors];
+
+export type RemoveAccountMusicResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type RemoveAccountMusicResponse =
+  RemoveAccountMusicResponses[keyof RemoveAccountMusicResponses];
+
+export type RemoveAccountPhotoData = {
+  body: PhotoRemoveRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/photo/remove';
+};
+
+export type RemoveAccountPhotoErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveAccountPhotoError = RemoveAccountPhotoErrors[keyof RemoveAccountPhotoErrors];
+
+export type RemoveAccountPhotoResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type RemoveAccountPhotoResponse =
+  RemoveAccountPhotoResponses[keyof RemoveAccountPhotoResponses];
 
 export type ListProxiesData = {
   body?: never;
@@ -2080,6 +2665,86 @@ export type GetWarmingBoardResponses = {
 };
 
 export type GetWarmingBoardResponse = GetWarmingBoardResponses[keyof GetWarmingBoardResponses];
+
+export type ListWarmedAccountsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/warmed';
+};
+
+export type ListWarmedAccountsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListWarmedAccountsError = ListWarmedAccountsErrors[keyof ListWarmedAccountsErrors];
+
+export type ListWarmedAccountsResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmedAccountList;
+};
+
+export type ListWarmedAccountsResponse =
+  ListWarmedAccountsResponses[keyof ListWarmedAccountsResponses];
+
+export type PromoteToNeurocommentData = {
+  body: PromoteRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/promote';
+};
+
+export type PromoteToNeurocommentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PromoteToNeurocommentError =
+  PromoteToNeurocommentErrors[keyof PromoteToNeurocommentErrors];
+
+export type PromoteToNeurocommentResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type PromoteToNeurocommentResponse =
+  PromoteToNeurocommentResponses[keyof PromoteToNeurocommentResponses];
+
+export type UnpromoteFromNeurocommentData = {
+  body: PromoteRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/unpromote';
+};
+
+export type UnpromoteFromNeurocommentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UnpromoteFromNeurocommentError =
+  UnpromoteFromNeurocommentErrors[keyof UnpromoteFromNeurocommentErrors];
+
+export type UnpromoteFromNeurocommentResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type UnpromoteFromNeurocommentResponse =
+  UnpromoteFromNeurocommentResponses[keyof UnpromoteFromNeurocommentResponses];
 
 export type StartWarmingData = {
   body: StartWarmingRequest;
@@ -2407,6 +3072,188 @@ export type AssignCampaignAccountResponses = {
 
 export type AssignCampaignAccountResponse =
   AssignCampaignAccountResponses[keyof AssignCampaignAccountResponses];
+
+export type RemoveCampaignAccountData = {
+  body: AssignAccountRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove';
+};
+
+export type RemoveCampaignAccountErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveCampaignAccountError =
+  RemoveCampaignAccountErrors[keyof RemoveCampaignAccountErrors];
+
+export type RemoveCampaignAccountResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type RemoveCampaignAccountResponse =
+  RemoveCampaignAccountResponses[keyof RemoveCampaignAccountResponses];
+
+export type DeleteCampaignData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}';
+};
+
+export type DeleteCampaignErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteCampaignError = DeleteCampaignErrors[keyof DeleteCampaignErrors];
+
+export type DeleteCampaignResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type DeleteCampaignResponse = DeleteCampaignResponses[keyof DeleteCampaignResponses];
+
+export type RemoveCampaignChannelData = {
+  body: LinkChannelRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/channels/remove';
+};
+
+export type RemoveCampaignChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RemoveCampaignChannelError =
+  RemoveCampaignChannelErrors[keyof RemoveCampaignChannelErrors];
+
+export type RemoveCampaignChannelResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type RemoveCampaignChannelResponse =
+  RemoveCampaignChannelResponses[keyof RemoveCampaignChannelResponses];
+
+export type UpdateCampaignPromptData = {
+  body: UpdatePromptRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/prompt';
+};
+
+export type UpdateCampaignPromptErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateCampaignPromptError =
+  UpdateCampaignPromptErrors[keyof UpdateCampaignPromptErrors];
+
+export type UpdateCampaignPromptResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type UpdateCampaignPromptResponse =
+  UpdateCampaignPromptResponses[keyof UpdateCampaignPromptResponses];
+
+export type SetCampaignSolverData = {
+  body: SolverToggleRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/solver';
+};
+
+export type SetCampaignSolverErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetCampaignSolverError = SetCampaignSolverErrors[keyof SetCampaignSolverErrors];
+
+export type SetCampaignSolverResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type SetCampaignSolverResponse =
+  SetCampaignSolverResponses[keyof SetCampaignSolverResponses];
+
+export type RetryChallengeData = {
+  body: RetryPairRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/retry';
+};
+
+export type RetryChallengeErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type RetryChallengeError = RetryChallengeErrors[keyof RetryChallengeErrors];
+
+export type RetryChallengeResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountChannelOnboarding;
+};
+
+export type RetryChallengeResponse = RetryChallengeResponses[keyof RetryChallengeResponses];
 
 export type ListCampaignChallengesData = {
   body?: never;

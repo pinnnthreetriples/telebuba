@@ -8,7 +8,6 @@ import {
   checkAccountMutation,
   deleteAccountMutation,
   type DesignStatus,
-  importAccountTdataMutation,
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
@@ -40,7 +39,6 @@ export function AccountsPage() {
   };
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
-  const importTdata = useMutation(importAccountTdataMutation());
 
   const onCheck = (accountId: string) => {
     setBusyId(accountId);
@@ -70,10 +68,6 @@ export function AccountsPage() {
       },
     );
   };
-  const onImport = (file: File) => {
-    importTdata.mutate({ body: { file } }, { onSettled: invalidate });
-  };
-
   const items = data?.items ?? [];
   const byDesign = (s: DesignStatus) =>
     items.filter((a) => accountDesignStatus(a.status) === s).length;
@@ -217,7 +211,7 @@ export function AccountsPage() {
           onClose={() => {
             setAdding(false);
           }}
-          onImport={onImport}
+          onImported={invalidate}
         />
       ) : null}
       {proxyAdding ? (

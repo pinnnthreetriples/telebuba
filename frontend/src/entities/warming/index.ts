@@ -1,9 +1,12 @@
 export {
   addWarmingChannelsMutation,
+  promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
   startWarmingMutation,
   stopWarmingMutation,
+  unpromoteFromNeurocommentMutation,
   updateWarmingSettingsMutation,
+  warmedAccountsQueryOptions,
   warmingBoardQueryOptions,
   warmingChannelsQueryOptions,
   warmingSettingsQueryOptions,

@@ -8,6 +8,9 @@ import {
 } from './client';
 import { client } from './client.gen';
 import type {
+  AddAccountMusicData,
+  AddAccountMusicErrors,
+  AddAccountMusicResponses,
   AddWarmingChannelsData,
   AddWarmingChannelsErrors,
   AddWarmingChannelsResponses,
@@ -32,9 +35,15 @@ import type {
   DeleteAccountData,
   DeleteAccountErrors,
   DeleteAccountResponses,
+  DeleteCampaignData,
+  DeleteCampaignErrors,
+  DeleteCampaignResponses,
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
+  GetAccountProfileSnapshotData,
+  GetAccountProfileSnapshotErrors,
+  GetAccountProfileSnapshotResponses,
   GetHealthData,
   GetHealthResponses,
   GetMeData,
@@ -55,6 +64,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsErrors,
   GetWarmingSettingsResponses,
+  ImportAccountSessionData,
+  ImportAccountSessionErrors,
+  ImportAccountSessionResponses,
   ImportAccountTdataData,
   ImportAccountTdataErrors,
   ImportAccountTdataResponses,
@@ -76,6 +88,9 @@ import type {
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
+  ListWarmedAccountsData,
+  ListWarmedAccountsErrors,
+  ListWarmedAccountsResponses,
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
@@ -87,9 +102,30 @@ import type {
   LogoutAccountResponses,
   LogoutData,
   LogoutResponses,
+  PostAccountStoryData,
+  PostAccountStoryErrors,
+  PostAccountStoryResponses,
   ProbeProxyData,
   ProbeProxyErrors,
   ProbeProxyResponses,
+  PromoteToNeurocommentData,
+  PromoteToNeurocommentErrors,
+  PromoteToNeurocommentResponses,
+  RemoveAccountMusicData,
+  RemoveAccountMusicErrors,
+  RemoveAccountMusicResponses,
+  RemoveAccountPhotoData,
+  RemoveAccountPhotoErrors,
+  RemoveAccountPhotoResponses,
+  RemoveAccountStoryData,
+  RemoveAccountStoryErrors,
+  RemoveAccountStoryResponses,
+  RemoveCampaignAccountData,
+  RemoveCampaignAccountErrors,
+  RemoveCampaignAccountResponses,
+  RemoveCampaignChannelData,
+  RemoveCampaignChannelErrors,
+  RemoveCampaignChannelResponses,
   RemoveWarmingChannelData,
   RemoveWarmingChannelErrors,
   RemoveWarmingChannelResponses,
@@ -99,9 +135,15 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionErrors,
   ResetAccountSessionResponses,
+  RetryChallengeData,
+  RetryChallengeErrors,
+  RetryChallengeResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  SetCampaignSolverData,
+  SetCampaignSolverErrors,
+  SetCampaignSolverResponses,
   SpamCheckAccountData,
   SpamCheckAccountErrors,
   SpamCheckAccountResponses,
@@ -123,9 +165,15 @@ import type {
   UnassignProxyData,
   UnassignProxyErrors,
   UnassignProxyResponses,
+  UnpromoteFromNeurocommentData,
+  UnpromoteFromNeurocommentErrors,
+  UnpromoteFromNeurocommentResponses,
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
+  UpdateCampaignPromptData,
+  UpdateCampaignPromptErrors,
+  UpdateCampaignPromptResponses,
   UpdateNeurocommentSettingsData,
   UpdateNeurocommentSettingsErrors,
   UpdateNeurocommentSettingsResponses,
@@ -347,6 +395,26 @@ export const importAccountTdata = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Import Account Session
+ */
+export const importAccountSession = <ThrowOnError extends boolean = false>(
+  options: Options<ImportAccountSessionData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    ImportAccountSessionResponses,
+    ImportAccountSessionErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/import-session',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
  * Set Account Photo
  */
 export const setAccountPhoto = <ThrowOnError extends boolean = false>(
@@ -358,6 +426,109 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
     ...options,
     headers: {
       'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Account Profile Snapshot
+ *
+ * Live profile (photos / stories / music) for the edit-profile modal.
+ */
+export const getAccountProfileSnapshot = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountProfileSnapshotData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    GetAccountProfileSnapshotResponses,
+    GetAccountProfileSnapshotErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/profile-snapshot', ...options });
+
+/**
+ * Post Account Story
+ */
+export const postAccountStory = <ThrowOnError extends boolean = false>(
+  options: Options<PostAccountStoryData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<PostAccountStoryResponses, PostAccountStoryErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/story',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Add Account Music
+ */
+export const addAccountMusic = <ThrowOnError extends boolean = false>(
+  options: Options<AddAccountMusicData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<AddAccountMusicResponses, AddAccountMusicErrors, ThrowOnError>({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/music',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account Story
+ */
+export const removeAccountStory = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountStoryData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveAccountStoryResponses,
+    RemoveAccountStoryErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/story/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account Music
+ */
+export const removeAccountMusic = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountMusicData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveAccountMusicResponses,
+    RemoveAccountMusicErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/music/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account Photo
+ */
+export const removeAccountPhoto = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveAccountPhotoData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveAccountPhotoResponses,
+    RemoveAccountPhotoErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/photo/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
       ...options.headers,
     },
   });
@@ -464,6 +635,62 @@ export const getWarmingBoard = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).get<GetWarmingBoardResponses, GetWarmingBoardErrors, ThrowOnError>({
     url: '/api/v1/warming/board',
     ...options,
+  });
+
+/**
+ * Get Warmed Accounts
+ *
+ * Operator-graduated accounts (the warming page's "Прогретые аккаунты" card).
+ */
+export const listWarmedAccounts = <ThrowOnError extends boolean = false>(
+  options?: Options<ListWarmedAccountsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    ListWarmedAccountsResponses,
+    ListWarmedAccountsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/warmed', ...options });
+
+/**
+ * Promote Account
+ *
+ * Graduate an account: stop warming + flag it for the neurocomment pool.
+ */
+export const promoteToNeurocomment = <ThrowOnError extends boolean = false>(
+  options: Options<PromoteToNeurocommentData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    PromoteToNeurocommentResponses,
+    PromoteToNeurocommentErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/promote',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Unpromote Account
+ *
+ * Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).
+ */
+export const unpromoteFromNeurocomment = <ThrowOnError extends boolean = false>(
+  options: Options<UnpromoteFromNeurocommentData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    UnpromoteFromNeurocommentResponses,
+    UnpromoteFromNeurocommentErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/unpromote',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
 
 /**
@@ -646,6 +873,121 @@ export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Remove Account
+ */
+export const removeCampaignAccount = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveCampaignAccountData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveCampaignAccountResponses,
+    RemoveCampaignAccountErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Campaign
+ *
+ * Delete a campaign and all its serving links, channels, and comments.
+ */
+export const deleteCampaign = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteCampaignData, ThrowOnError>,
+) =>
+  (options.client ?? client).delete<DeleteCampaignResponses, DeleteCampaignErrors, ThrowOnError>({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}',
+    ...options,
+  });
+
+/**
+ * Remove Channel
+ *
+ * Detach a channel from a campaign (frees its slot for another campaign).
+ */
+export const removeCampaignChannel = <ThrowOnError extends boolean = false>(
+  options: Options<RemoveCampaignChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    RemoveCampaignChannelResponses,
+    RemoveCampaignChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/channels/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Update Prompt
+ *
+ * Replace a campaign's generation prompt (the edit-prompt modal).
+ */
+export const updateCampaignPrompt = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateCampaignPromptData, ThrowOnError>,
+) =>
+  (options.client ?? client).put<
+    UpdateCampaignPromptResponses,
+    UpdateCampaignPromptErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/prompt',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Campaign Solver
+ *
+ * Turn the campaign's challenge (captcha) solver on/off.
+ */
+export const setCampaignSolver = <ThrowOnError extends boolean = false>(
+  options: Options<SetCampaignSolverData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetCampaignSolverResponses,
+    SetCampaignSolverErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/solver',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Retry Challenge
+ *
+ * Operator retry of one challenged (account, channel) pair (the captcha «Решить»).
+ *
+ * Re-onboards the pair (re-running the solver) — account+channel scoped, so it
+ * is campaign-agnostic.
+ */
+export const retryChallenge = <ThrowOnError extends boolean = false>(
+  options: Options<RetryChallengeData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<RetryChallengeResponses, RetryChallengeErrors, ThrowOnError>({
+    url: '/api/v1/neurocomment/retry',
     ...options,
     headers: {
       'Content-Type': 'application/json',

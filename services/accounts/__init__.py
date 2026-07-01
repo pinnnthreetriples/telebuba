@@ -47,6 +47,7 @@ from services.accounts.media import (
 )
 from services.accounts.profile import update_account_profile
 from services.accounts.profile_read import (
+    account_profile_view,
     fetch_live_account_profile,
     invalidate_account_profile_cache,
 )
@@ -61,6 +62,7 @@ __all__ = [
     "InvalidCursorError",
     "PhoneLoginError",
     "SessionAlreadyExistsError",
+    "account_profile_view",
     "add_account",
     "add_account_profile_music",
     "check_account_session",

@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -115,6 +115,128 @@ test('login-by-code requests a code then confirms sign-in', async () => {
       .mocked(fetch)
       .mock.calls.some(([input]) => (input as Request).url.includes('/submit-code'));
     expect(submitted).toBe(true);
+  });
+});
+
+test('proxy: manual creates+assigns, pool select assigns', async () => {
+  const proxy = (over: Record<string, unknown> = {}) => ({
+    id: 'newp',
+    proxy_type: 'socks5',
+    host: '1.2.3.4',
+    port: 1080,
+    has_password: false,
+    status: 'tcp_working',
+    created_at: 'now',
+    updated_at: 'now',
+    used: 0,
+    capacity: 3,
+    free: 3,
+    ...over,
+  });
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/proxies' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ proxies: [proxy({ id: 'pool-1', host: '9.9.9.9' })] }));
+    }
+    if (pathname === '/api/v1/proxies') return Promise.resolve(jsonResponse(proxy()));
+    if (pathname.endsWith('/assign')) return Promise.resolve(jsonResponse(proxy()));
+    if (pathname.endsWith('/check')) return Promise.resolve(jsonResponse(proxy()));
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Прокси'));
+
+  // fill every manual field (covers each controlled onChange) then create+assign
+  await userEvent.type(screen.getByLabelText('Host'), '1.2.3.4');
+  await userEvent.type(screen.getByLabelText('Порт'), '1080');
+  await userEvent.type(screen.getByLabelText('Логин'), 'u');
+  await userEvent.type(screen.getAllByLabelText('Пароль')[0]!, 'p');
+  await userEvent.selectOptions(screen.getByLabelText('Тип'), 'https');
+  await userEvent.click(screen.getAllByText('Проверить')[0]!);
+  await waitFor(() => {
+    const created = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return new URL(request.url).pathname === '/api/v1/proxies' && request.method === 'POST';
+    });
+    expect(created).toBe(true);
+  });
+
+  // pool mode: selecting a free proxy assigns it
+  await userEvent.click(screen.getByText('Из пула'));
+  await waitFor(() => {
+    expect(screen.getByRole('option', { name: '9.9.9.9:1080' })).toBeInTheDocument();
+  });
+  await userEvent.selectOptions(screen.getByRole('combobox'), 'pool-1');
+  await waitFor(() => {
+    const assigned = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/proxies/pool-1/assign'));
+    expect(assigned).toBe(true);
+  });
+});
+
+test('the import dropzone uploads a .session file then dismisses the card', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-session') {
+      return Promise.resolve(
+        jsonResponse({ account_id: 'new', status: 'new', created_at: 'n', updated_at: 'n' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
+  });
+  await waitFor(() => {
+    const imported = vi
+      .mocked(fetch)
+      .mock.calls.some(([i]) => (i as Request).url.includes('/accounts/import-session'));
+    expect(imported).toBe(true);
+  });
+  await screen.findByText('готово');
+  await userEvent.click(screen.getByLabelText('Удалить файл'));
+  expect(screen.queryByText('acc.session')).not.toBeInTheDocument();
+});
+
+test('a failed tdata import shows the error state', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-tdata') {
+      return Promise.reject(new Error('boom'));
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('tdata.zip'));
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 'b.zip', { type: 'application/zip' })] },
+  });
+  await screen.findByText('ошибка');
+});
+
+test('the delete-account action confirms, deletes, and returns to the list', async () => {
+  vi.mocked(fetch).mockImplementation(() => Promise.resolve(jsonResponse({})));
+  const onBack = vi.fn();
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={onBack} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Удалить аккаунт' }));
+  await userEvent.click(await screen.findByText('Удалить'));
+  await waitFor(() => {
+    const deleted = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return request.url.endsWith('/accounts/acc-1') && request.method === 'DELETE';
+    });
+    expect(deleted).toBe(true);
+  });
+  await waitFor(() => {
+    expect(onBack).toHaveBeenCalled();
   });
 });
 

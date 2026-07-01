@@ -73,3 +73,56 @@ class AccountProfileMusicRemove(BaseModel):
     file_id: int = Field(gt=0)
     access_hash: int
     file_reference: bytes = Field(min_length=1)
+
+
+# The *View models are the JSON-safe edit-profile snapshot: file_reference (raw
+# bytes in the live snapshot) travels as base64, thumbnails as data: URIs.
+class ProfilePhotoView(BaseModel):
+    photo_id: int
+    access_hash: int
+    file_reference: str = Field(min_length=1)  # base64
+    thumb_data_uri: str | None = None
+
+
+class ProfileStoryView(BaseModel):
+    story_id: int
+    kind: str = "unknown"
+    caption: str | None = None
+    privacy_preset: str = "unknown"
+    is_pinned: bool = False
+    thumb_data_uri: str | None = None
+
+
+class ProfileMusicView(BaseModel):
+    file_id: int
+    title: str | None = None
+    performer: str | None = None
+    access_hash: int = 0
+    file_reference: str = ""  # base64 (empty for optimistic-add rows)
+
+
+class AccountProfileView(BaseModel):
+    """JSON-safe live profile for the edit-profile modal."""
+
+    error: str | None = None
+    avatar_data_uri: str | None = None
+    photos: list[ProfilePhotoView] = Field(default_factory=list)
+    stories: list[ProfileStoryView] = Field(default_factory=list)
+    music: list[ProfileMusicView] = Field(default_factory=list)
+    music_supported: bool = True
+
+
+class StoryRemoveRequest(BaseModel):
+    story_id: int = Field(gt=0)
+
+
+class MusicRemoveRequest(BaseModel):
+    file_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: str = Field(min_length=1)  # base64 from the view
+
+
+class PhotoRemoveRequest(BaseModel):
+    photo_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: str = Field(min_length=1)  # base64 from the view
