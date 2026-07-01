@@ -313,8 +313,13 @@ async def test_profile_snapshot_returns_view(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    async def _fake(account_id: str) -> AccountProfileView:  # noqa: ARG001
+    seen: dict[str, bool] = {}
+
+    async def _fake(account_id: str, *, force_refresh: bool = False) -> AccountProfileView:  # noqa: ARG001
+        seen["force_refresh"] = force_refresh
         return AccountProfileView(
+            first_name="Petr",
+            username="petr_tg",
             avatar_data_uri="data:image/jpeg;base64,YWJj",
             photos=[ProfilePhotoView(photo_id=1, access_hash=2, file_reference="YWJj")],
             stories=[ProfileStoryView(story_id=5, kind="image", privacy_preset="contacts")],
@@ -323,11 +328,13 @@ async def test_profile_snapshot_returns_view(
 
     monkeypatch.setattr("services.accounts.account_profile_view", _fake)
     async with _client(app) as client:
-        resp = await client.get("/api/v1/accounts/acc-1/profile-snapshot")
+        resp = await client.get("/api/v1/accounts/acc-1/profile-snapshot?refresh=true")
     assert resp.status_code == 200
     body = resp.json()
+    assert body["first_name"] == "Petr"
     assert body["photos"][0]["photo_id"] == 1
     assert body["music"][0]["title"] == "T"
+    assert seen["force_refresh"] is True  # the ?refresh=true query forwards to the service
 
 
 @pytest.mark.asyncio

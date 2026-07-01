@@ -23,7 +23,9 @@ from schemas.warming import (
     WarmedAccountList,
     WarmingAccountState,
     WarmingBoardState,
+    WarmingChannelList,
     WarmingPhase,
+    WarmingSettings,
     WarmingState,
     WarmingSummary,
     is_warming,
@@ -99,7 +101,14 @@ def _to_card(
     )
 
 
-async def load_board() -> WarmingBoardState:
+async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, WarmingSettings]:
+    """Build one enriched card per account, unfiltered.
+
+    Shared by ``load_board`` (which splits the result into idle/warming) and
+    ``list_warmed_accounts`` (which needs promoted accounts that ``load_board``
+    deliberately excludes from both those buckets) — avoids re-deriving the
+    same trust/readiness/phase enrichment in two places.
+    """
     accounts = await list_accounts()
     records = {record.account_id: record for record in await list_warming_states()}
     channels = await list_warming_channels()
@@ -110,8 +119,7 @@ async def load_board() -> WarmingBoardState:
     fingerprints = await list_device_fingerprints()
     channel_count = len(channels.channels)
     now = datetime.now(UTC)
-    idle: list[WarmingAccountState] = []
-    warming: list[WarmingAccountState] = []
+    cards: list[WarmingAccountState] = []
     for account in accounts.accounts:
         record = records.get(account.account_id)
         spam = spam_by_account.get(account.account_id)
@@ -151,7 +159,17 @@ async def load_board() -> WarmingBoardState:
         card.progress_to_next = intensity.progress_to_next
         card.days_to_next_phase = intensity.days_to_next_phase
         card.warming_days = _warming_days_since(record, now)
-        (warming if is_warming(card.state) else idle).append(card)
+        cards.append(card)
+    return cards, channels, masked
+
+
+async def load_board() -> WarmingBoardState:
+    cards, channels, masked = await _load_cards()
+    # A promoted account has been claimed by the neurocomment pool — it must
+    # not also linger in "ready to warm" just because stopping the loop
+    # happens to leave its state at "idle" (see list_warmed_accounts).
+    idle = [card for card in cards if not is_warming(card.state) and not card.promoted_to_nc]
+    warming = [card for card in cards if is_warming(card.state)]
     return WarmingBoardState(
         idle=idle,
         warming=warming,
@@ -173,7 +191,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
     ``min_days`` argument is kept as a sanity floor (so an accidental click on a
     fresh account doesn't promote it), but the primary filter is the flag.
     """
-    board = await load_board()
+    cards, _channels, _masked = await _load_cards()
     warmed = [
         WarmedAccount(
             account_id=card.account_id,
@@ -185,7 +203,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
             trust_score=card.trust_score,
             target_days=card.target_days or min_days,
         )
-        for card in (*board.idle, *board.warming)
+        for card in cards
         if card.promoted_to_nc and card.warming_days is not None and card.warming_days >= min_days
     ]
     warmed.sort(key=lambda a: a.warming_days, reverse=True)

@@ -7,6 +7,8 @@ interface MockSource {
   onmessage: ((event: MessageEvent) => void) | null;
   readyState: number;
   emit(data: unknown): void;
+  emitOpen(): void;
+  emitError(): void;
 }
 interface MockSourceCtor {
   instances: MockSource[];
@@ -41,6 +43,18 @@ test('closes the connection on unmount', () => {
   const source = Sources.last();
   unmount();
   expect(source?.readyState).toBe(2);
+});
+
+test('reports connection status transitions', () => {
+  const onStatus = vi.fn();
+  renderHook(() => {
+    useLogEventStream(vi.fn(), onStatus);
+  });
+  expect(onStatus).toHaveBeenCalledWith('connecting');
+  Sources.last()?.emitOpen();
+  expect(onStatus).toHaveBeenCalledWith('open');
+  Sources.last()?.emitError();
+  expect(onStatus).toHaveBeenCalledWith('error');
 });
 
 test('uses the latest callback without reconnecting', () => {

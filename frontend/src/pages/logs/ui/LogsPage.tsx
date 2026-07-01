@@ -4,7 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { PageLogEntry } from '@/shared/api';
-import { useLogEventStream } from '@/shared/lib';
+import { formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
 const STATUS_FILTERS = ['all', 'success', 'warning', 'error'] as const;
@@ -223,7 +223,7 @@ export function LogsPage() {
                   {items.map((row) => (
                     <tr key={row.id} className="border-t border-[#f0eeeb]">
                       <td className="px-4 py-[10px] font-mono text-[12px] text-ink-subtle">
-                        {row.created_at}
+                        {formatLocalTime(row.created_at, { seconds: true })}
                       </td>
                       <td className="px-4 py-[10px]">
                         <LogStatusBadge status={row.status} />

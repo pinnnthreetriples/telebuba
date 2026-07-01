@@ -188,7 +188,12 @@
       "dropTitle": "Upload a photo or video",
       "dropHint": "drag a file or click",
       "cancel": "Cancel",
-      "publish": "Publish"
+      "publish": "Publish",
+      "stUploading": "Uploading…",
+      "stDone": "Published",
+      "stError": "Error",
+      "retry": "Retry",
+      "removeFile": "Remove file"
     },
     "profile": {
       "close": "Close",
@@ -204,21 +209,34 @@
       "bio": "Bio",
       "photoHint": "Current photo and history · drag to replace",
       "removePhoto": "Remove photo",
+      "removePhotoTitle": "Remove photo?",
+      "removePhotoBody": "The photo will be removed from the Telegram profile. This cannot be undone.",
+      "removePhotoConfirm": "Delete",
       "mainPhoto": "Main photo",
       "makeMain": "Make main",
       "upload": "Upload",
       "storiesHint": "Current account stories",
       "removeStory": "Remove story",
+      "removeStoryTitle": "Remove story?",
+      "removeStoryBody": "The story will be removed from the profile. This cannot be undone.",
+      "removeStoryConfirm": "Delete",
       "addStory": "Add",
       "play": "Play",
       "trackTitle": "Track title",
       "trackArtist": "Artist",
       "removeMusic": "Remove track",
+      "removeMusicTitle": "Remove track?",
+      "removeMusicBody": "The track will be removed from the profile. This cannot be undone.",
+      "removeMusicConfirm": "Remove",
       "noMusic": "No music selected",
       "pickTrack": "Pick a track",
       "cancel": "Cancel",
       "save": "Save",
-      "saved": "Saved"
+      "saved": "Saved",
+      "saving": "Saving…",
+      "refresh": "Refresh",
+      "updatedJustNow": "Updated just now",
+      "updatedMinAgo": "Updated {{n}} min ago"
     },
     "addWizard": {
       "title": "Add account",
@@ -257,6 +275,7 @@
   },
   "shell": {
     "systemActive": "System active",
+    "systemOffline": "Disconnected",
     "notifications": "Notifications",
     "account": "Account",
     "logout": "Log out"
@@ -267,10 +286,15 @@
     "error": "Failed to load settings",
     "save": "Save",
     "saved": "Saved",
+    "saveFailed": "Failed to save",
     "cancel": "Cancel",
     "range": {
       "from": "from",
       "to": "to"
+    },
+    "quietHours": {
+      "rangeLabel": "Quiet hours (0–23)",
+      "hint": "The timezone is taken from the account locale"
     },
     "api": {
       "title": "API keys",
@@ -308,6 +332,10 @@
       "inter_account_chat": {
         "label": "Inter-account chat",
         "desc": "Allow accounts to message each other"
+      },
+      "quiet_hours": {
+        "label": "Quiet hours",
+        "desc": "Warming won't run during this time of day"
       }
     }
   },
@@ -394,7 +422,10 @@
       "title": "Campaign channels",
       "addPill": "+ Channel",
       "placeholder": "t.me/channel or @channel",
-      "remove": "Remove channel"
+      "remove": "Remove channel",
+      "removeTitle": "Remove channel {{channel}} from the campaign?",
+      "removeBody": "Campaign accounts will stop commenting in this channel.",
+      "removeConfirm": "Remove"
     },
     "accounts": {
       "title": "Accounts",
@@ -427,6 +458,7 @@
     "captcha": {
       "title": "Captcha solving",
       "sub": "Auto bot-check pass",
+      "tooltip": "The engine solves the channel's bot-check itself via Gemini or a cache of past answers. Turn it on when a channel asks you to prove you're not a bot — otherwise those channels get skipped.",
       "pending": "Needs check · {{count}}",
       "solve": "Solve"
     },
@@ -503,9 +535,13 @@
       },
       "neuroAccounts": {
         "title": "Accounts in neurocommenting",
-        "sub": "{{count}} accounts · redirect to another channel or remove from work",
+        "sub": "{{count}} accounts · assign to the campaign or remove from work",
         "unassigned": "Unassigned",
+        "assign": "Add to campaign",
         "remove": "Remove from neurocommenting",
+        "removeTitle": "Remove {{phone}} from neurocommenting?",
+        "removeBody": "The account will stop commenting in this campaign.",
+        "removeConfirm": "Remove",
         "empty": "No accounts in neurocommenting",
         "done": "Done"
       }
@@ -606,7 +642,10 @@
       "hint": "Accounts read and react in these channels",
       "addPill": "+ Channel",
       "placeholderSingle": "t.me/channel or @channel",
-      "cancel": "Cancel"
+      "cancel": "Cancel",
+      "removeTitle": "Delete channel {{channel}}?",
+      "removeBody": "Warming accounts will stop reading and reacting in this channel. This cannot be undone.",
+      "removeConfirm": "Delete"
     },
     "settings": {
       "title": "Warming settings",
@@ -639,6 +678,9 @@
     },
     "cfg": {
       "title": "Warming settings",
+      "globalHint": "Warming behaviour settings are shared by every account (including {{phone}}) and are edited on the Settings page.",
+      "close": "Close",
+      "openSettings": "Open settings",
       "behavior": "Behaviour",
       "limits": "Limits & safety",
       "quietLabel": "Quiet hours (sleep)",

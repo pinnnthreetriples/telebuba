@@ -114,6 +114,22 @@ export type AccountProfileView = {
    */
   error?: string | null;
   /**
+   * First Name
+   */
+  first_name?: string | null;
+  /**
+   * Last Name
+   */
+  last_name?: string | null;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Bio
+   */
+  bio?: string | null;
+  /**
    * Avatar Data Uri
    */
   avatar_data_uri?: string | null;
@@ -2274,7 +2290,12 @@ export type GetAccountProfileSnapshotData = {
      */
     account_id: string;
   };
-  query?: never;
+  query?: {
+    /**
+     * Refresh
+     */
+    refresh?: boolean;
+  };
   url: '/api/v1/accounts/{account_id}/profile-snapshot';
 };
 

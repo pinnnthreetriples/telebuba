@@ -229,9 +229,16 @@ def _decode_ref(value: str) -> bytes:
     response_model=AccountProfileView,
     operation_id="getAccountProfileSnapshot",
 )
-async def get_account_profile_snapshot(account_id: str) -> AccountProfileView:
-    """Live profile (photos / stories / music) for the edit-profile modal."""
-    return await accounts.account_profile_view(account_id)
+async def get_account_profile_snapshot(
+    account_id: str,
+    refresh: Annotated[bool, Query()] = False,  # noqa: FBT002 - refresh flag
+) -> AccountProfileView:
+    """Live profile (name / bio / photos / stories / music) for the edit modal.
+
+    ``refresh=true`` (the modal's «Обновить» button) bypasses the read cache and
+    re-pulls from Telegram.
+    """
+    return await accounts.account_profile_view(account_id, force_refresh=refresh)
 
 
 @router.post(

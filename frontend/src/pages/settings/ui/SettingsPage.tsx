@@ -31,6 +31,14 @@ function neuroForm(s: NeurocommentSettings) {
   };
 }
 
+function quietHoursForm(s: WarmingSettings) {
+  return {
+    enabled: s.quiet_hours_enabled ?? false,
+    start: String(s.quiet_hours_start ?? 23),
+    end: String(s.quiet_hours_end ?? 8),
+  };
+}
+
 // The design's pill switch (track + sliding thumb), 18px of travel.
 function Switch({
   checked,
@@ -125,10 +133,10 @@ function RangeField({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  const box = `tb-time flex flex-1 items-center gap-[7px] rounded-[10px] border border-line-input px-3 py-[9px] ${readOnly ? 'bg-[#f6f5f2]' : 'bg-white'}`;
+  const box = `tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-[10px] border border-line-input px-3 py-[9px] ${readOnly ? 'bg-[#f6f5f2]' : 'bg-white'}`;
   const inp = `min-w-0 flex-1 border-none bg-transparent text-right text-[13px] outline-none ${readOnly ? 'text-ink-subtle' : ''}`;
   return (
-    <div>
+    <div className="min-w-0">
       <span className={FIELD_LABEL}>{label}</span>
       <div className="flex items-center gap-[9px]">
         <label className={box}>
@@ -182,16 +190,22 @@ function SettingsForm({
     join_enabled: settings.join_enabled ?? true,
     inter_account_chat: settings.inter_account_chat ?? false,
   });
+  const [quietHours, setQuietHours] = useState(() => quietHoursForm(settings));
   const [justSaved, setJustSaved] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   // Re-sync the neuro form if the server value changes (e.g. another tab saved).
   useEffect(() => {
     setNeuro(neuroForm(neuroSettings));
   }, [neuroSettings]);
+  useEffect(() => {
+    setQuietHours(quietHoursForm(settings));
+  }, [settings]);
 
   const pending = saveWarm.isPending || saveNeuro.isPending;
 
   const onSave = () => {
+    setSaveFailed(false);
     void Promise.all([
       saveWarm.mutateAsync({
         body: {
@@ -199,9 +213,9 @@ function SettingsForm({
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: settings.enforce_readiness ?? true,
-          quiet_hours_enabled: settings.quiet_hours_enabled ?? false,
-          quiet_hours_start: settings.quiet_hours_start ?? 0,
-          quiet_hours_end: settings.quiet_hours_end ?? 0,
+          quiet_hours_enabled: quietHours.enabled,
+          quiet_hours_start: Number(quietHours.start),
+          quiet_hours_end: Number(quietHours.end),
           max_daily_actions: 0,
           gemini_model: settings.gemini_model,
           gemini_api_key: geminiKey.trim() === '' ? null : geminiKey,
@@ -217,13 +231,21 @@ function SettingsForm({
           min_trust_score: Number(neuro.trust),
         },
       }),
-    ]).then(() => {
-      setJustSaved(true);
-      window.setTimeout(() => {
-        setJustSaved(false);
-      }, 1400);
-      void queryClient.invalidateQueries();
-    }, undefined);
+    ]).then(
+      () => {
+        setJustSaved(true);
+        window.setTimeout(() => {
+          setJustSaved(false);
+        }, 1400);
+        void queryClient.invalidateQueries();
+      },
+      () => {
+        setSaveFailed(true);
+        window.setTimeout(() => {
+          setSaveFailed(false);
+        }, 2400);
+      },
+    );
   };
 
   const onCancel = () => {
@@ -234,6 +256,7 @@ function SettingsForm({
       join_enabled: settings.join_enabled ?? true,
       inter_account_chat: settings.inter_account_chat ?? false,
     });
+    setQuietHours(quietHoursForm(settings));
   };
 
   return (
@@ -362,10 +385,10 @@ function SettingsForm({
       </Card>
 
       <Card className="px-5 py-[6px]" mb="mb-[18px]">
-        {WARMING_TOGGLES.map((flag, index) => (
+        {WARMING_TOGGLES.map((flag) => (
           <div
             key={flag}
-            className={`flex items-center justify-between gap-3 py-[13px] ${index < WARMING_TOGGLES.length - 1 ? 'border-b border-[#f0eeeb]' : ''}`}
+            className="flex items-center justify-between gap-3 border-b border-[#f0eeeb] py-[13px]"
           >
             <div>
               <div className="text-[13px] font-medium">{t(`settings.flag.${flag}.label`)}</div>
@@ -382,6 +405,42 @@ function SettingsForm({
             />
           </div>
         ))}
+
+        <div className="py-[13px]">
+          <div className="flex items-center justify-between gap-3">
+            <div>
+              <div className="text-[13px] font-medium">{t('settings.flag.quiet_hours.label')}</div>
+              <div className="mt-px text-[11.5px] text-ink-subtle">
+                {t('settings.flag.quiet_hours.desc')}
+              </div>
+            </div>
+            <Switch
+              checked={quietHours.enabled}
+              onChange={(v) => {
+                setQuietHours((q) => ({ ...q, enabled: v }));
+              }}
+              label={t('settings.flag.quiet_hours.label')}
+            />
+          </div>
+          {quietHours.enabled ? (
+            <div className="mt-[13px] [animation:fadeup_0.28s_ease]">
+              <RangeField
+                label={t('settings.quietHours.rangeLabel')}
+                from={quietHours.start}
+                to={quietHours.end}
+                onFrom={(v) => {
+                  setQuietHours((q) => ({ ...q, start: v }));
+                }}
+                onTo={(v) => {
+                  setQuietHours((q) => ({ ...q, end: v }));
+                }}
+              />
+              <div className="mt-[9px] text-[11px] leading-[1.4] text-ink-subtle">
+                {t('settings.quietHours.hint')}
+              </div>
+            </div>
+          ) : null}
+        </div>
       </Card>
 
       <div className="flex justify-end gap-2">
@@ -396,7 +455,7 @@ function SettingsForm({
           type="button"
           onClick={onSave}
           disabled={pending}
-          className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
+          className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-[#2e9e64]' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
         >
           {justSaved ? (
             <span className="inline-flex items-center gap-[6px]">
@@ -414,6 +473,24 @@ function SettingsForm({
               </span>
               <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
                 {t('settings.saved')}
+              </span>
+            </span>
+          ) : saveFailed ? (
+            <span className="inline-flex items-center gap-[6px]">
+              <span className="tb-swapin inline-flex">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </span>
+              <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
+                {t('settings.saveFailed')}
               </span>
             </span>
           ) : (
