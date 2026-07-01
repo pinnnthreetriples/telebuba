@@ -27,8 +27,8 @@ import {
 } from '@/entities/campaign';
 import { logsQueryOptions } from '@/entities/log';
 import type { NeurocommentCampaign } from '@/shared/api';
-import { useLogEventStream } from '@/shared/lib';
-import { CollapsibleCard } from '@/shared/ui';
+import { formatLocalTime, useLogEventStream, useTransientFeedback } from '@/shared/lib';
+import { CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 // SSE drives live runtime/board updates; this poll is just the fallback net.
@@ -45,11 +45,6 @@ const NEURO_LOG_COLOR: Record<'success' | 'warning' | 'error', string> = {
   warning: '#ffd27f',
   error: '#e5736b',
 };
-
-function logTime(createdAt: string): string {
-  // ISO-8601 → HH:MM:SS; raw fallback if unparseable.
-  return createdAt.length >= 19 ? createdAt.slice(11, 19) : createdAt;
-}
 
 const STATUS_COLOR = {
   active: '#12a150',
@@ -141,6 +136,9 @@ export function NeurocommentPage() {
   const [listenerOpen, setListenerOpen] = useState(false);
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
+  const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
+  const channelFeedback = useTransientFeedback();
+  const accountFeedback = useTransientFeedback();
 
   // Modal open state.
   const [showAccounts, setShowAccounts] = useState(false);
@@ -241,9 +239,25 @@ export function NeurocommentPage() {
     linkChannel.mutate(
       { path: { campaign_id: campaignId }, body: { channel: value } },
       {
-        onSettled: () => {
+        onSettled: (_data, error) => {
           setChannelInput('');
           setAddingChannel(false);
+          channelFeedback.mark(value, !error);
+          invalidate();
+        },
+      },
+    );
+  };
+
+  const confirmRemoveChannel = () => {
+    if (!channelToRemove || campaignId === null) return;
+    const channel = channelToRemove;
+    setChannelToRemove(null);
+    removeChannel.mutate(
+      { path: { campaign_id: campaignId }, body: { channel } },
+      {
+        onSettled: (_data, error) => {
+          channelFeedback.mark(channel, !error);
           invalidate();
         },
       },
@@ -404,7 +418,9 @@ export function NeurocommentPage() {
               ) : (
                 logLines.map((line) => (
                   <div key={line.id} className="flex gap-[10px]">
-                    <span className="shrink-0 text-[#5c5c66]">{logTime(line.created_at)}</span>
+                    <span className="shrink-0 text-[#5c5c66]">
+                      {formatLocalTime(line.created_at, { seconds: true })}
+                    </span>
                     <span style={{ color: NEURO_LOG_COLOR[line.status] }}>{line.event}</span>
                   </div>
                 ))
@@ -649,7 +665,7 @@ export function NeurocommentPage() {
           </div>
 
           {/* captcha solve + bot-check */}
-          <div className="overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="rounded-2xl border border-line bg-white">
             <div className="flex items-center justify-between gap-[10px] px-[14px] py-3">
               <div className="flex min-w-0 items-center gap-[9px]">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
@@ -666,8 +682,18 @@ export function NeurocommentPage() {
                   </svg>
                 </span>
                 <div className="min-w-0">
-                  <div className="text-[12.5px] font-semibold text-ink">
-                    {t('neurocomment.captcha.title')}
+                  <div className="flex items-center gap-[6px]">
+                    <span className="text-[12.5px] font-semibold text-ink">
+                      {t('neurocomment.captcha.title')}
+                    </span>
+                    <span className="tb-tip inline-flex">
+                      <span className="inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-line-input bg-white text-[10px] font-bold text-ink-subtle">
+                        ?
+                      </span>
+                      <span className="tb-tip-pop w-[220px] whitespace-normal text-left">
+                        {t('neurocomment.captcha.tooltip')}
+                      </span>
+                    </span>
                   </div>
                   <div className="text-[10.5px] leading-[1.35] text-ink-subtle">
                     {t('neurocomment.captcha.sub')}
@@ -733,7 +759,7 @@ export function NeurocommentPage() {
                             {item.account_id}
                           </div>
                           <div className="text-[10.5px] text-ink-subtle">
-                            {item.channel} · {logTime(item.decided_at)}
+                            {item.channel} · {formatLocalTime(item.decided_at, { seconds: true })}
                           </div>
                         </div>
                       </div>
@@ -923,20 +949,13 @@ export function NeurocommentPage() {
                       key={channel.channel}
                       className="inline-flex items-center gap-[6px] rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[5px] text-[12px] text-[#3a3a3a]"
                     >
+                      <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
                       {channel.channel}
                       <button
                         type="button"
                         aria-label={t('neurocomment.channels.remove')}
                         onClick={() => {
-                          if (campaignId !== null) {
-                            removeChannel.mutate(
-                              {
-                                path: { campaign_id: campaignId },
-                                body: { channel: channel.channel },
-                              },
-                              { onSettled: invalidate },
-                            );
-                          }
+                          setChannelToRemove(channel.channel);
                         }}
                         className="text-[14px] leading-none text-[#b5b3ae]"
                       >
@@ -1033,27 +1052,49 @@ export function NeurocommentPage() {
             phone: a.label,
             channel: a.readiness?.[0]?.channel ?? null,
           }))}
-          channelOptions={boardChannels.map((c) => c.channel)}
+          feedback={accountFeedback.feedback}
           onClose={() => {
             setShowAccounts(false);
           }}
-          onPick={(accountId, channel) => {
+          onPick={(accountId) => {
             if (campaignId !== null) {
               assignAccount.mutate(
                 { path: { campaign_id: campaignId }, body: { account_id: accountId } },
-                { onSettled: invalidate },
+                {
+                  onSettled: (_data, error) => {
+                    accountFeedback.mark(accountId, !error);
+                    invalidate();
+                  },
+                },
               );
             }
-            void channel;
           }}
           onRemove={(accountId) => {
             if (campaignId !== null) {
               removeAccount.mutate(
                 { path: { campaign_id: campaignId }, body: { account_id: accountId } },
-                { onSettled: invalidate },
+                {
+                  onSettled: (_data, error) => {
+                    accountFeedback.mark(accountId, !error);
+                    invalidate();
+                  },
+                },
               );
             }
           }}
+        />
+      ) : null}
+
+      {channelToRemove ? (
+        <ConfirmModal
+          title={t('neurocomment.channels.removeTitle', { channel: channelToRemove })}
+          body={t('neurocomment.channels.removeBody')}
+          confirmLabel={t('neurocomment.channels.removeConfirm')}
+          cancelLabel={t('neurocomment.modal.cancel')}
+          onClose={() => {
+            setChannelToRemove(null);
+          }}
+          onConfirm={confirmRemoveChannel}
         />
       ) : null}
 

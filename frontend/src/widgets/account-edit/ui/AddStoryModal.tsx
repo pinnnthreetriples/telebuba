@@ -19,6 +19,19 @@ const PRIVACY: Record<Audience, 'contacts' | 'close_friends' | 'public'> = {
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 
+function fileSize(file: File | null): string {
+  if (!file) return '';
+  if (file.size >= 1_048_576) return `${(file.size / 1_048_576).toFixed(1)} МБ`;
+  return `${Math.max(1, Math.round(file.size / 1024))} КБ`;
+}
+
+// Pull the reason out of the /api/v1 error envelope ({error:{code,message}}) the
+// failed publish rejects with, so the hover tooltip shows *why* it failed.
+function errorText(err: unknown, fallback: string): string {
+  const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
+  return typeof message === 'string' && message.trim() ? message : fallback;
+}
+
 export function AddStoryModal({
   accountId,
   onClose,
@@ -35,6 +48,22 @@ export function AddStoryModal({
   const [file, setFile] = useState<File | null>(null);
   const fileInput = useRef<HTMLInputElement>(null);
   const post = useMutation(postAccountStoryMutation());
+  const busy = post.isPending;
+  const done = post.isSuccess;
+  const failed = post.isError;
+
+  let metaText = fileSize(file);
+  let metaColor = '#9a9893';
+  if (failed) {
+    metaText = t('accounts.addStory.stError');
+    metaColor = '#c0473f';
+  } else if (done) {
+    metaText = t('accounts.addStory.stDone');
+    metaColor = '#2e9e64';
+  } else if (busy) {
+    metaText = t('accounts.addStory.stUploading');
+  }
+  const errorDetail = errorText(post.error, t('accounts.addStory.stError'));
 
   const seg = (on: boolean): string =>
     `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
@@ -53,9 +82,11 @@ export function AddStoryModal({
         },
       },
       {
+        // Hold the modal open a beat so the success (tb-pop check + full bar)
+        // animation plays before the profile refresh + close, per the design.
         onSuccess: () => {
           onPosted();
-          onClose();
+          window.setTimeout(onClose, 900);
         },
       },
     );
@@ -158,7 +189,7 @@ export function AddStoryModal({
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-[12.5px] font-semibold">
-              {file ? file.name : t('accounts.addStory.dropTitle')}
+              {t('accounts.addStory.dropTitle')}
             </div>
             <div className="mt-px text-[11px] text-ink-subtle">
               {t('accounts.addStory.dropHint')}
@@ -172,9 +203,137 @@ export function AddStoryModal({
           className="hidden"
           onChange={(event) => {
             setFile(event.target.files?.[0] ?? null);
+            post.reset();
             event.target.value = '';
           }}
         />
+
+        {/* Selected-file row: idle size → uploading spinner + progress bar →
+            success check / error + retry (the design's per-file publish animation). */}
+        {file && (
+          <div className="mt-[9px] flex flex-col gap-2">
+            <div className="tb-fadeup rounded-[11px] border border-line bg-white px-[11px] py-[10px]">
+              <div className="flex items-center gap-[10px]">
+                <div className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[9px] bg-[#f4f3f0] text-ink-muted">
+                  <svg
+                    width="16"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.7"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="3" />
+                    <path d="M3 15l5-5 4 4" />
+                    <circle cx="9" cy="9" r="1.6" />
+                  </svg>
+                </div>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <div className="truncate text-[12px] font-semibold">{file.name}</div>
+                      <div className="mt-px text-[10.5px]" style={{ color: metaColor }}>
+                        {metaText}
+                      </div>
+                    </div>
+                    <div className="flex shrink-0 items-center gap-[2px]">
+                      {busy && (
+                        <span className="tb-spin m-[5px] inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
+                      )}
+                      {done && (
+                        <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
+                          <svg
+                            width="17"
+                            height="17"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <circle cx="12" cy="12" r="10" />
+                            <path d="m8 12 2.5 2.5L16 9" />
+                          </svg>
+                        </span>
+                      )}
+                      {failed && (
+                        <>
+                          <span className="group relative m-[3px] inline-flex text-[#c0473f]">
+                            <svg
+                              width="17"
+                              height="17"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="M12 8v4M12 16h.01" />
+                            </svg>
+                            {/* Hover reveals *why* the publish failed (the backend
+                                error message), per the design's error tooltip. */}
+                            <span
+                              role="tooltip"
+                              className="pointer-events-none absolute right-0 top-[calc(100%+6px)] z-30 hidden w-max max-w-[240px] whitespace-normal rounded-[8px] bg-[#16161a] px-[10px] py-[7px] text-left text-[11px] font-normal leading-[1.5] text-white shadow-[0_6px_20px_rgba(0,0,0,0.18)] group-hover:block"
+                            >
+                              {errorDetail}
+                            </span>
+                          </span>
+                          <button
+                            type="button"
+                            onClick={publish}
+                            aria-label={t('accounts.addStory.retry')}
+                            className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-muted"
+                          >
+                            <svg
+                              width="13"
+                              height="13"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="1.9"
+                            >
+                              <path d="M3 2v6h6" />
+                              <path d="M3 8a9 9 0 1 0 2.5-3.5L3 8" />
+                            </svg>
+                          </button>
+                        </>
+                      )}
+                      {!busy && !done && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFile(null);
+                            post.reset();
+                          }}
+                          aria-label={t('accounts.addStory.removeFile')}
+                          className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
+                        >
+                          <svg
+                            width="13"
+                            height="13"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path d="M18 6 6 18M6 6l12 12" />
+                          </svg>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                  {(busy || done) && (
+                    <div className="mt-2 h-[5px] overflow-hidden rounded-full bg-[#eeedea]">
+                      <div
+                        className={`h-full rounded-full ${done ? 'w-full bg-[#2e9e64]' : 'tb-upbar bg-primary'}`}
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
 
         <div className="mt-5 flex justify-end gap-2">
           <button

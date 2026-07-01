@@ -75,6 +75,32 @@ test('saves both warming toggles and neuro limits, then confirms', async () => {
   expect(await screen.findByText('Сохранено')).toBeInTheDocument();
 });
 
+test('a failed save shows the error state instead of silently doing nothing', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (request.method === 'PUT' && url.pathname === '/api/v1/warming/settings') {
+      return Promise.resolve(
+        new Response(JSON.stringify({ error: { code: 'internal', message: 'boom' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        }),
+      );
+    }
+    if (url.pathname === '/api/v1/neurocomment/settings') {
+      return Promise.resolve(jsonResponse(NEURO_SETTINGS));
+    }
+    return Promise.resolve(jsonResponse(SETTINGS));
+  });
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByText('Сохранить'));
+  expect(await screen.findByText('Не удалось сохранить')).toBeInTheDocument();
+});
+
 test('warming limits are read-only; neuro limits edit and cancel resets', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);

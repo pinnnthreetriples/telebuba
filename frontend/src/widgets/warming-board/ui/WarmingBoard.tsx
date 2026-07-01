@@ -4,6 +4,8 @@ import { useTranslation } from 'react-i18next';
 
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
+import { formatLocalTime, type FeedbackResult } from '@/shared/lib';
+import { FeedbackMark } from '@/shared/ui';
 
 import { WarmConfigModal } from './WarmConfigModal';
 import { WarmStopModal } from './WarmStopModal';
@@ -13,6 +15,7 @@ interface WarmingBoardProps {
   onStop: (accountId: string) => void;
   onPromote: (accountId: string) => void;
   busyId: string | null;
+  feedback?: Record<string, FeedbackResult>;
 }
 
 type WarmingState = WarmingAccountState['state'];
@@ -52,21 +55,18 @@ const LOG_COLOR: Record<LogEntry['status'], string> = {
 };
 const CARD_LOG_LIMIT = 20;
 
-function logTime(createdAt: string): string {
-  // ISO-8601 → HH:MM; fall back to the raw value if it is not parseable.
-  return createdAt.length >= 16 ? createdAt.slice(11, 16) : createdAt;
-}
-
 function WarmingCard({
   account,
   onStop,
   onPromote,
   busy,
+  result,
 }: {
   account: WarmingAccountState;
   onStop: (id: string) => void;
   onPromote: (id: string) => void;
   busy: boolean;
+  result?: FeedbackResult;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -150,16 +150,19 @@ function WarmingCard({
             </svg>
           </button>
           {!complete ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => {
-                setStopOpen(true);
-              }}
-              className="rounded-full border border-line bg-white px-[11px] py-[5px] text-[11px] font-medium text-ink-muted disabled:opacity-50"
-            >
-              {t('warming.actions.stopShort')}
-            </button>
+            <>
+              <FeedbackMark result={result} />
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => {
+                  setStopOpen(true);
+                }}
+                className="rounded-full border border-line bg-white px-[11px] py-[5px] text-[11px] font-medium text-ink-muted disabled:opacity-50"
+              >
+                {t('warming.actions.stopShort')}
+              </button>
+            </>
           ) : null}
         </div>
       </div>
@@ -174,7 +177,7 @@ function WarmingCard({
             onStop(account.account_id);
           }}
           onFinish={() => {
-            onStop(account.account_id);
+            onPromote(account.account_id);
           }}
         />
       ) : null}
@@ -317,7 +320,9 @@ function WarmingCard({
               ) : (
                 logLines.map((line) => (
                   <div key={line.id} className="flex gap-2">
-                    <span className="shrink-0 text-[#5c5c66]">{logTime(line.created_at)}</span>
+                    <span className="shrink-0 text-[#5c5c66]">
+                      {formatLocalTime(line.created_at)}
+                    </span>
                     <span style={{ color: LOG_COLOR[line.status] }}>{line.event}</span>
                   </div>
                 ))
@@ -352,29 +357,32 @@ function WarmingCard({
               </div>
             </div>
           </div>
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              onPromote(account.account_id);
-            }}
-            className="mt-[9px] flex w-full items-center justify-center gap-[7px] rounded-full bg-success px-[14px] py-[10px] text-[12px] font-semibold text-white transition-colors hover:bg-[#0e8c45] disabled:opacity-50"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2.2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
+          <div className="mt-[9px] flex items-center gap-[8px]">
+            <FeedbackMark result={result} />
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => {
+                onPromote(account.account_id);
+              }}
+              className="flex flex-1 items-center justify-center gap-[7px] rounded-full bg-success px-[14px] py-[10px] text-[12px] font-semibold text-white transition-colors hover:bg-[#0e8c45] disabled:opacity-50"
             >
-              <path d="M5 12h14" />
-              <path d="m12 5 7 7-7 7" />
-            </svg>
-            {t('warming.card.finish')}
-          </button>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <path d="M5 12h14" />
+                <path d="m12 5 7 7-7 7" />
+              </svg>
+              {t('warming.card.finish')}
+            </button>
+          </div>
         </>
       )}
     </div>
@@ -384,7 +392,13 @@ function WarmingCard({
 // The design's "Warming" panel: blue-tinted in-progress cards, each with the
 // day-bar histogram, six-stage pipeline stepper, live current-activity row,
 // expandable terminal log, and completion state.
-export function WarmingBoard({ warming, onStop, onPromote, busyId }: WarmingBoardProps) {
+export function WarmingBoard({
+  warming,
+  onStop,
+  onPromote,
+  busyId,
+  feedback = {},
+}: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
     <div className="rounded-2xl border border-line bg-white p-4">
@@ -421,6 +435,7 @@ export function WarmingBoard({ warming, onStop, onPromote, busyId }: WarmingBoar
             onStop={onStop}
             onPromote={onPromote}
             busy={busyId === account.account_id}
+            result={feedback[account.account_id]}
           />
         ))}
         {warming.length === 0 ? (

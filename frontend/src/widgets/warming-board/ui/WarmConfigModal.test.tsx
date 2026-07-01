@@ -4,42 +4,28 @@ import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
+const navigate = vi.fn();
+vi.mock('@tanstack/react-router', () => ({
+  useNavigate: () => navigate,
+}));
+
 import { WarmConfigModal } from './WarmConfigModal';
 
-test('toggles a switch, switches scope tabs and hides the quiet-hours block', async () => {
-  render(<WarmConfigModal phone="+79991234567" onClose={vi.fn()} />);
-  expect(screen.getByText('Настройки прогрева')).toBeInTheDocument();
-
-  // switches render in order: reactions, join, chat (behaviour), readiness,
-  // quietHours (limits). Flipping the first toggles its aria-checked.
-  const switches = screen.getAllByRole('switch');
-  const reactions = switches[0]!;
-  expect(reactions).toHaveAttribute('aria-checked', 'true');
-  await userEvent.click(reactions);
-  expect(reactions).toHaveAttribute('aria-checked', 'false');
-
-  // quiet-hours starts on → time picker (the hint) is shown, then toggling hides it
-  expect(screen.getByText('Часовой пояс берётся из локали аккаунта')).toBeInTheDocument();
-  await userEvent.click(switches[4]!);
-  expect(screen.queryByText('Часовой пояс берётся из локали аккаунта')).not.toBeInTheDocument();
-
-  // scope tabs
-  await userEvent.click(screen.getByText('Все в прогреве'));
-  await userEvent.click(screen.getByText('Только этот'));
-});
-
-test('save and cancel both close', async () => {
+test('close just closes the modal', async () => {
   const onClose = vi.fn();
   render(<WarmConfigModal phone="+79991234567" onClose={onClose} />);
-  await userEvent.click(screen.getByText('Сохранить'));
-  await userEvent.click(screen.getByText('Отмена'));
-  expect(onClose).toHaveBeenCalledTimes(2);
+  expect(screen.getByText('Настройки прогрева')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByText('Закрыть'));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(navigate).not.toHaveBeenCalled();
 });
 
-test('typing into the quiet-hours time inputs updates them', async () => {
-  render(<WarmConfigModal phone="+79991234567" onClose={vi.fn()} />);
-  const inputs = screen.getAllByDisplayValue('00');
-  await userEvent.clear(inputs[0]!);
-  await userEvent.type(inputs[0]!, '30');
-  expect(inputs[0]).toHaveValue('30');
+test('opening settings closes the modal and navigates to /settings', async () => {
+  const onClose = vi.fn();
+  render(<WarmConfigModal phone="+79991234567" onClose={onClose} />);
+
+  await userEvent.click(screen.getByText('Открыть настройки'));
+  expect(onClose).toHaveBeenCalledTimes(1);
+  expect(navigate).toHaveBeenCalledWith({ to: '/settings' });
 });

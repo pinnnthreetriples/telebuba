@@ -87,7 +87,11 @@ async def test_seed_admin_is_a_noop_when_users_exist(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_seed_admin_is_a_noop_without_settings() -> None:
+async def test_seed_admin_is_a_noop_without_settings(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Pin the seed inputs empty so the test is hermetic — it must not depend on a
+    # developer's local .env (which may set AUTH__ADMIN_* for login).
+    monkeypatch.setattr(settings.auth, "admin_username", "")
+    monkeypatch.setattr(settings.auth, "admin_password", "")
     await auth_service.seed_admin_if_empty()
     assert await count_users() == 0
 
