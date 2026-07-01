@@ -201,7 +201,13 @@ test('assigning an unpaired board account calls the assign endpoint and shows fe
       return Promise.resolve(
         jsonResponse({
           items: [
-            { account_id: 'acc-1', label: '+79261112233', status: 'alive', created_at: 'n', updated_at: 'n' },
+            {
+              account_id: 'acc-1',
+              label: '+79261112233',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
           ],
           next_cursor: null,
         }),
@@ -219,7 +225,8 @@ test('assigning an unpaired board account calls the assign endpoint and shows fe
     const assigned = vi
       .mocked(fetch)
       .mock.calls.some(
-        ([i]) => (i as Request).url.endsWith('/campaigns/c1/accounts') && (i as Request).method === 'POST',
+        ([i]) =>
+          (i as Request).url.endsWith('/campaigns/c1/accounts') && (i as Request).method === 'POST',
       );
     expect(assigned).toBe(true);
   });
@@ -406,7 +413,9 @@ test('removing a campaign channel asks for confirmation, then calls the deactiva
   await userEvent.click(screen.getByLabelText('Убрать канал'));
   const removeConfirm = await screen.findByText('Убрать');
   expect(
-    vi.mocked(fetch).mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove')),
+    vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove')),
   ).toBe(false);
   await userEvent.click(removeConfirm);
   await waitFor(() => {

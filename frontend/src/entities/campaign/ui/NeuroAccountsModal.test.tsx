@@ -16,7 +16,12 @@ test('assigns an idle account, confirms removal, and closes', async () => {
   const onPick = vi.fn();
   const onRemove = vi.fn();
   render(
-    <NeuroAccountsModal accounts={ACCOUNTS} onClose={onClose} onPick={onPick} onRemove={onRemove} />,
+    <NeuroAccountsModal
+      accounts={ACCOUNTS}
+      onClose={onClose}
+      onPick={onPick}
+      onRemove={onRemove}
+    />,
   );
   expect(screen.getByText('Аккаунты в нейрокомментинге')).toBeInTheDocument();
   // an already-assigned account shows its real channel as a static label,
@@ -38,7 +43,9 @@ test('assigns an idle account, confirms removal, and closes', async () => {
 });
 
 test('empty list shows the empty hint', () => {
-  render(<NeuroAccountsModal accounts={[]} onClose={vi.fn()} onPick={vi.fn()} onRemove={vi.fn()} />);
+  render(
+    <NeuroAccountsModal accounts={[]} onClose={vi.fn()} onPick={vi.fn()} onRemove={vi.fn()} />,
+  );
   expect(screen.getByText('Нет аккаунтов в нейрокомментинге')).toBeInTheDocument();
 });
 

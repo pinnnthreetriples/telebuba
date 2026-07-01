@@ -479,7 +479,11 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               <span className="text-[12.5px] text-[#3a3a3a]">{t('accounts.edit.sessionOk')}</span>
             </span>
             <span className="flex items-center gap-[7px]">
-              <FeedbackMark result={logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck} />
+              <FeedbackMark
+                result={
+                  logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck
+                }
+              />
               <button
                 type="button"
                 onClick={onLogout}
@@ -1100,7 +1104,9 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
             </div>
           </div>
           <span className="flex shrink-0 items-center gap-[7px]">
-            <FeedbackMark result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck} />
+            <FeedbackMark
+              result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck}
+            />
             <button
               type="button"
               onClick={onReset}

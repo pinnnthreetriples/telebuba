@@ -214,7 +214,9 @@ test('removing a channel asks for confirmation, then calls the remove endpoint',
   await userEvent.click(screen.getByLabelText('Удалить'));
   const confirm = await screen.findByText('Удалить', { selector: 'button' });
   expect(
-    vi.mocked(fetch).mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove')),
+    vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove')),
   ).toBe(false);
   await userEvent.click(confirm);
   await waitFor(() => {
