@@ -104,6 +104,57 @@ test('a failed save shows the error state instead of silently doing nothing', as
   expect(await screen.findByText('Не удалось сохранить')).toBeInTheDocument();
 });
 
+test('quiet hours: enabling reveals the real saved hours, editing them persists on save', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/settings') {
+      return Promise.resolve(jsonResponse(NEURO_SETTINGS));
+    }
+    return Promise.resolve(
+      jsonResponse({ ...SETTINGS, quiet_hours_start: 23, quiet_hours_end: 8 }),
+    );
+  });
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  // disabled by default (per SETTINGS.quiet_hours_enabled) → no hour range shown yet
+  expect(screen.queryByDisplayValue('23')).not.toBeInTheDocument();
+
+  await userEvent.click(screen.getByLabelText('Тихие часы'));
+  const fromInput = await screen.findByDisplayValue('23');
+  const toInput = screen.getByDisplayValue('8');
+
+  await userEvent.clear(fromInput);
+  await userEvent.type(fromInput, '22');
+  await userEvent.clear(toInput);
+  await userEvent.type(toInput, '7');
+
+  await userEvent.click(screen.getByText('Сохранить'));
+  let putCall: [unknown, ...unknown[]] | undefined;
+  await waitFor(() => {
+    putCall = vi
+      .mocked(fetch)
+      .mock.calls.find(
+        ([i]) =>
+          (i as Request).url.endsWith('/warming/settings') && (i as Request).method === 'PUT',
+      );
+    expect(putCall).toBeDefined();
+  });
+  const body = (await (putCall![0] as Request).clone().json()) as {
+    quiet_hours_enabled: boolean;
+    quiet_hours_start: number;
+    quiet_hours_end: number;
+  };
+  expect(body).toMatchObject({
+    quiet_hours_enabled: true,
+    quiet_hours_start: 22,
+    quiet_hours_end: 7,
+  });
+});
+
 test('warming limits are read-only; neuro limits edit and cancel resets', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);

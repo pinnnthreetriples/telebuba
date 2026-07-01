@@ -292,6 +292,10 @@
       "from": "from",
       "to": "to"
     },
+    "quietHours": {
+      "rangeLabel": "Quiet hours (0–23)",
+      "hint": "The timezone is taken from the account locale"
+    },
     "api": {
       "title": "API keys",
       "subtitle": "Access to the comment-generation model",
@@ -328,6 +332,10 @@
       "inter_account_chat": {
         "label": "Inter-account chat",
         "desc": "Allow accounts to message each other"
+      },
+      "quiet_hours": {
+        "label": "Quiet hours",
+        "desc": "Warming won't run during this time of day"
       }
     }
   },
