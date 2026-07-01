@@ -4,6 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { logoutMutation, meQueryOptions } from '@/shared/auth';
+import { useLogEventStream, type SseStatus } from '@/shared/lib';
 
 const LINKS = [
   { to: '/', key: 'accounts' },
@@ -27,6 +28,9 @@ export function AppNav() {
   const me = useQuery(meQueryOptions());
   const logout = useMutation(logoutMutation());
   const initials = (me.data?.username ?? '').slice(0, 2).toUpperCase() || 'ОП';
+  const [sseStatus, setSseStatus] = useState<SseStatus>('connecting');
+  useLogEventStream(() => undefined, setSseStatus);
+  const systemActive = sseStatus === 'open';
 
   const activeIdx = LINKS.findIndex((link) =>
     link.to === '/' ? pathname === '/' : pathname.startsWith(link.to),
@@ -77,9 +81,17 @@ export function AppNav() {
         </nav>
 
         <div className="flex shrink-0 items-center gap-[10px]">
-          <div className="flex items-center gap-[7px] rounded-full bg-success-tint px-[11px] py-[5px]">
-            <span className="h-[7px] w-[7px] rounded-full bg-success-dot" />
-            <span className="text-[12px] font-medium text-success">{t('shell.systemActive')}</span>
+          <div
+            className={`flex items-center gap-[7px] rounded-full px-[11px] py-[5px] ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
+          >
+            <span
+              className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success-dot' : 'bg-ink-subtle'}`}
+            />
+            <span
+              className={`text-[12px] font-medium ${systemActive ? 'text-success' : 'text-ink-muted'}`}
+            >
+              {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
+            </span>
           </div>
           <button
             type="button"
@@ -97,7 +109,6 @@ export function AppNav() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <span className="absolute right-[8px] top-[6px] h-[6px] w-[6px] rounded-full border-[1.5px] border-white bg-primary" />
           </button>
           <div className="relative">
             <button

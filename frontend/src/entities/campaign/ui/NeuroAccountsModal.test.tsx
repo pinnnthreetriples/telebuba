@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -11,32 +11,26 @@ const ACCOUNTS: NeuroAccountRow[] = [
   { account_id: 'a2', phone: '+79990000002', channel: null },
 ];
 
-test('picks a channel, removes an account and closes', async () => {
+test('assigns an idle account, confirms removal, and closes', async () => {
   const onClose = vi.fn();
   const onPick = vi.fn();
   const onRemove = vi.fn();
   render(
-    <NeuroAccountsModal
-      accounts={ACCOUNTS}
-      channelOptions={['@crypto', '@news']}
-      onClose={onClose}
-      onPick={onPick}
-      onRemove={onRemove}
-    />,
+    <NeuroAccountsModal accounts={ACCOUNTS} onClose={onClose} onPick={onPick} onRemove={onRemove} />,
   );
   expect(screen.getByText('Аккаунты в нейрокомментинге')).toBeInTheDocument();
-  // the unassigned account shows the placeholder label
-  expect(screen.getByText('Не назначен')).toBeInTheDocument();
+  // an already-assigned account shows its real channel as a static label,
+  // not an editable dropdown (there's no backend concept of picking one)
+  expect(screen.getByText('@crypto')).toBeInTheDocument();
 
-  // open the second (unassigned) account's dropdown and pick a channel —
-  // scoped to that row since both rows render an @news option.
-  const row = screen.getByText('+79990000002').closest('div') as HTMLElement;
-  await userEvent.click(within(row).getByText('Не назначен'));
-  await userEvent.click(within(row).getByText('@news'));
-  expect(onPick).toHaveBeenCalledWith('a2', '@news');
+  // assign the idle account to the campaign
+  await userEvent.click(screen.getByText('Добавить в кампанию'));
+  expect(onPick).toHaveBeenCalledWith('a2');
 
-  // remove the first account
+  // removing asks for confirmation before calling onRemove
   await userEvent.click(screen.getAllByLabelText('Убрать из нейрокомментинга')[0]!);
+  expect(onRemove).not.toHaveBeenCalled();
+  await userEvent.click(screen.getByText('Убрать', { selector: 'button' }));
   expect(onRemove).toHaveBeenCalledWith('a1');
 
   await userEvent.click(screen.getByText('Готово'));
@@ -44,14 +38,32 @@ test('picks a channel, removes an account and closes', async () => {
 });
 
 test('empty list shows the empty hint', () => {
-  render(
+  render(<NeuroAccountsModal accounts={[]} onClose={vi.fn()} onPick={vi.fn()} onRemove={vi.fn()} />);
+  expect(screen.getByText('Нет аккаунтов в нейрокомментинге')).toBeInTheDocument();
+});
+
+test('shows a success or error mark from the feedback map', () => {
+  // Modal content is rendered via a portal onto document.body, not inside
+  // the render() container — query the document instead.
+  const { rerender } = render(
     <NeuroAccountsModal
-      accounts={[]}
-      channelOptions={[]}
+      accounts={ACCOUNTS}
       onClose={vi.fn()}
       onPick={vi.fn()}
       onRemove={vi.fn()}
+      feedback={{ a1: 'ok' }}
     />,
   );
-  expect(screen.getByText('Нет аккаунтов в нейрокомментинге')).toBeInTheDocument();
+  expect(document.querySelector('.text-success svg')).toBeInTheDocument();
+
+  rerender(
+    <NeuroAccountsModal
+      accounts={ACCOUNTS}
+      onClose={vi.fn()}
+      onPick={vi.fn()}
+      onRemove={vi.fn()}
+      feedback={{ a1: 'err' }}
+    />,
+  );
+  expect(document.querySelector('.text-danger svg')).toBeInTheDocument();
 });

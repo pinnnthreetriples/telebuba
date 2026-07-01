@@ -18,6 +18,8 @@ class MockEventSource {
     return MockEventSource.instances.at(-1);
   }
   onmessage: ((event: MessageEvent) => void) | null = null;
+  onopen: (() => void) | null = null;
+  onerror: (() => void) | null = null;
   readyState = 0;
   constructor(public url: string) {
     MockEventSource.instances.push(this);
@@ -27,6 +29,13 @@ class MockEventSource {
   }
   emit(data: unknown): void {
     this.onmessage?.(new MessageEvent('message', { data: JSON.stringify(data) }));
+  }
+  emitOpen(): void {
+    this.readyState = 1;
+    this.onopen?.();
+  }
+  emitError(): void {
+    this.onerror?.();
   }
 }
 vi.stubGlobal('EventSource', MockEventSource);

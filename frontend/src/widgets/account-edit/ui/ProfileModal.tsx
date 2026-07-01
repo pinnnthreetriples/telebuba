@@ -11,8 +11,13 @@ import {
   setAccountPhotoMutation,
   updateAccountProfileMutation,
 } from '@/entities/account';
-import type { AccountRead } from '@/shared/api';
-import { Modal } from '@/shared/ui';
+import type {
+  AccountRead,
+  ProfileMusicView,
+  ProfilePhotoView,
+  ProfileStoryView,
+} from '@/shared/api';
+import { ConfirmModal, Modal } from '@/shared/ui';
 
 import { AddStoryModal } from './AddStoryModal';
 
@@ -105,6 +110,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [tab, setTab] = useState<Tab>('text');
   const [storyOpen, setStoryOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
+  const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
+  const [confirmMusic, setConfirmMusic] = useState<ProfileMusicView | null>(null);
 
   const [firstName, setFirstName] = useState(account.first_name ?? '');
   const [lastName, setLastName] = useState(account.last_name ?? '');
@@ -323,17 +331,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         type="button"
                         aria-label={t('accounts.profile.removePhoto')}
                         onClick={() => {
-                          removePhoto.mutate(
-                            {
-                              path: { account_id: account.account_id },
-                              body: {
-                                photo_id: photo.photo_id,
-                                access_hash: photo.access_hash,
-                                file_reference: photo.file_reference,
-                              },
-                            },
-                            { onSuccess: refresh },
-                          );
+                          setConfirmPhoto(photo);
                         }}
                         className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
                       >
@@ -380,13 +378,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         type="button"
                         aria-label={t('accounts.profile.removeStory')}
                         onClick={() => {
-                          removeStory.mutate(
-                            {
-                              path: { account_id: account.account_id },
-                              body: { story_id: story.story_id },
-                            },
-                            { onSuccess: refresh },
-                          );
+                          setConfirmStory(story);
                         }}
                         className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
                       >
@@ -434,17 +426,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                           type="button"
                           disabled={!track.file_reference}
                           onClick={() => {
-                            removeMusic.mutate(
-                              {
-                                path: { account_id: account.account_id },
-                                body: {
-                                  file_id: track.file_id,
-                                  access_hash: track.access_hash ?? 0,
-                                  file_reference: track.file_reference ?? '',
-                                },
-                              },
-                              { onSuccess: refresh },
-                            );
+                            setConfirmMusic(track);
                           }}
                           aria-label={t('accounts.profile.removeMusic')}
                           className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[15px] text-ink-subtle disabled:opacity-50"
@@ -531,6 +513,74 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           onPosted={refresh}
         />
       )}
+      {confirmPhoto ? (
+        <ConfirmModal
+          title={t('accounts.profile.removePhotoTitle')}
+          body={t('accounts.profile.removePhotoBody')}
+          confirmLabel={t('accounts.profile.removePhotoConfirm')}
+          cancelLabel={t('accounts.profile.cancel')}
+          onClose={() => {
+            setConfirmPhoto(null);
+          }}
+          onConfirm={() => {
+            removePhoto.mutate(
+              {
+                path: { account_id: account.account_id },
+                body: {
+                  photo_id: confirmPhoto.photo_id,
+                  access_hash: confirmPhoto.access_hash,
+                  file_reference: confirmPhoto.file_reference,
+                },
+              },
+              { onSuccess: refresh },
+            );
+          }}
+        />
+      ) : null}
+      {confirmStory ? (
+        <ConfirmModal
+          title={t('accounts.profile.removeStoryTitle')}
+          body={t('accounts.profile.removeStoryBody')}
+          confirmLabel={t('accounts.profile.removeStoryConfirm')}
+          cancelLabel={t('accounts.profile.cancel')}
+          onClose={() => {
+            setConfirmStory(null);
+          }}
+          onConfirm={() => {
+            removeStory.mutate(
+              {
+                path: { account_id: account.account_id },
+                body: { story_id: confirmStory.story_id },
+              },
+              { onSuccess: refresh },
+            );
+          }}
+        />
+      ) : null}
+      {confirmMusic ? (
+        <ConfirmModal
+          title={t('accounts.profile.removeMusicTitle')}
+          body={t('accounts.profile.removeMusicBody')}
+          confirmLabel={t('accounts.profile.removeMusicConfirm')}
+          cancelLabel={t('accounts.profile.cancel')}
+          onClose={() => {
+            setConfirmMusic(null);
+          }}
+          onConfirm={() => {
+            removeMusic.mutate(
+              {
+                path: { account_id: account.account_id },
+                body: {
+                  file_id: confirmMusic.file_id,
+                  access_hash: confirmMusic.access_hash ?? 0,
+                  file_reference: confirmMusic.file_reference ?? '',
+                },
+              },
+              { onSuccess: refresh },
+            );
+          }}
+        />
+      ) : null}
     </>
   );
 }

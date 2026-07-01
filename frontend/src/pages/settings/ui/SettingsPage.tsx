@@ -125,10 +125,10 @@ function RangeField({
   readOnly?: boolean;
 }) {
   const { t } = useTranslation();
-  const box = `tb-time flex flex-1 items-center gap-[7px] rounded-[10px] border border-line-input px-3 py-[9px] ${readOnly ? 'bg-[#f6f5f2]' : 'bg-white'}`;
+  const box = `tb-time flex min-w-0 flex-1 items-center gap-[7px] rounded-[10px] border border-line-input px-3 py-[9px] ${readOnly ? 'bg-[#f6f5f2]' : 'bg-white'}`;
   const inp = `min-w-0 flex-1 border-none bg-transparent text-right text-[13px] outline-none ${readOnly ? 'text-ink-subtle' : ''}`;
   return (
-    <div>
+    <div className="min-w-0">
       <span className={FIELD_LABEL}>{label}</span>
       <div className="flex items-center gap-[9px]">
         <label className={box}>
@@ -183,6 +183,7 @@ function SettingsForm({
     inter_account_chat: settings.inter_account_chat ?? false,
   });
   const [justSaved, setJustSaved] = useState(false);
+  const [saveFailed, setSaveFailed] = useState(false);
 
   // Re-sync the neuro form if the server value changes (e.g. another tab saved).
   useEffect(() => {
@@ -192,6 +193,7 @@ function SettingsForm({
   const pending = saveWarm.isPending || saveNeuro.isPending;
 
   const onSave = () => {
+    setSaveFailed(false);
     void Promise.all([
       saveWarm.mutateAsync({
         body: {
@@ -217,13 +219,21 @@ function SettingsForm({
           min_trust_score: Number(neuro.trust),
         },
       }),
-    ]).then(() => {
-      setJustSaved(true);
-      window.setTimeout(() => {
-        setJustSaved(false);
-      }, 1400);
-      void queryClient.invalidateQueries();
-    }, undefined);
+    ]).then(
+      () => {
+        setJustSaved(true);
+        window.setTimeout(() => {
+          setJustSaved(false);
+        }, 1400);
+        void queryClient.invalidateQueries();
+      },
+      () => {
+        setSaveFailed(true);
+        window.setTimeout(() => {
+          setSaveFailed(false);
+        }, 2400);
+      },
+    );
   };
 
   const onCancel = () => {
@@ -396,7 +406,7 @@ function SettingsForm({
           type="button"
           onClick={onSave}
           disabled={pending}
-          className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
+          className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${justSaved ? 'bg-[#2e9e64]' : saveFailed ? 'bg-danger' : 'bg-primary'}`}
         >
           {justSaved ? (
             <span className="inline-flex items-center gap-[6px]">
@@ -414,6 +424,24 @@ function SettingsForm({
               </span>
               <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
                 {t('settings.saved')}
+              </span>
+            </span>
+          ) : saveFailed ? (
+            <span className="inline-flex items-center gap-[6px]">
+              <span className="tb-swapin inline-flex">
+                <svg
+                  width="15"
+                  height="15"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.4"
+                >
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </span>
+              <span className="tb-swapin inline-block" style={{ animationDelay: '0.09s' }}>
+                {t('settings.saveFailed')}
               </span>
             </span>
           ) : (

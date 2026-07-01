@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Modal } from '@/shared/ui';
+import { ConfirmModal, FeedbackMark, Modal } from '@/shared/ui';
 
 export interface NeuroAccountRow {
   account_id: string;
@@ -9,87 +9,46 @@ export interface NeuroAccountRow {
   channel: string | null;
 }
 
-const TRIGGER =
-  'tb-time flex w-full cursor-pointer items-center justify-between gap-2 rounded-[9px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink';
-
 function AccountRow({
   account,
-  channelOptions,
   onPick,
   onRemove,
+  result,
 }: {
   account: NeuroAccountRow;
-  channelOptions: string[];
-  onPick: (accountId: string, channel: string) => void;
+  onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
+  result?: 'ok' | 'err';
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(false);
-  const label = account.channel ?? t('neurocomment.modal.neuroAccounts.unassigned');
+  const [confirmRemove, setConfirmRemove] = useState(false);
 
   return (
     <div className="flex items-center gap-[10px] border-b border-[#f4f2ef] py-[11px]">
+      <FeedbackMark result={result} />
       <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
         {account.phone}
       </span>
-      <div className="relative w-[180px] shrink-0">
+      {account.channel !== null ? (
+        <span className="w-[180px] shrink-0 truncate rounded-[9px] border border-line-input bg-[#f6f5f2] px-[11px] py-[8px] text-[12.5px] text-ink-subtle">
+          {account.channel}
+        </span>
+      ) : (
         <button
           type="button"
           onClick={() => {
-            setOpen((v) => !v);
+            onPick(account.account_id);
           }}
-          className={TRIGGER}
+          className="w-[180px] shrink-0 rounded-[9px] border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary"
         >
-          <span className="truncate">{label}</span>
-          <span className={`tb-ddchev flex shrink-0 text-ink-subtle ${open ? 'open' : ''}`}>
-            <svg
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </span>
+          {t('neurocomment.modal.neuroAccounts.assign')}
         </button>
-        <div
-          className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${open ? 'open' : ''}`}
-        >
-          {channelOptions.map((channel) => (
-            <button
-              key={channel}
-              type="button"
-              onClick={() => {
-                onPick(account.account_id, channel);
-                setOpen(false);
-              }}
-              className="flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff]"
-            >
-              <span className="truncate">{channel}</span>
-              {channel === account.channel ? (
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#0066ff"
-                  strokeWidth="2.5"
-                  className="shrink-0"
-                >
-                  <path d="M20 6 9 17l-5-5" />
-                </svg>
-              ) : null}
-            </button>
-          ))}
-        </div>
-      </div>
+      )}
       <button
         type="button"
         aria-label={t('neurocomment.modal.neuroAccounts.remove')}
         onClick={() => {
-          onRemove(account.account_id);
+          setConfirmRemove(true);
         }}
         className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-line bg-white text-danger hover:border-[#f0c9c5] hover:bg-danger-tint"
       >
@@ -104,24 +63,42 @@ function AccountRow({
           <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
         </svg>
       </button>
+      {confirmRemove ? (
+        <ConfirmModal
+          title={t('neurocomment.modal.neuroAccounts.removeTitle', { phone: account.phone })}
+          body={t('neurocomment.modal.neuroAccounts.removeBody')}
+          confirmLabel={t('neurocomment.modal.neuroAccounts.removeConfirm')}
+          cancelLabel={t('neurocomment.modal.cancel')}
+          onClose={() => {
+            setConfirmRemove(false);
+          }}
+          onConfirm={() => {
+            onRemove(account.account_id);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
 
 // Design modal: neuro-accounts (L1460-1495) — manage every account in
-// neurocommenting: redirect to another channel or remove from the work pool.
+// neurocommenting: assign an idle account to the campaign, or remove one.
+// Channel pairing itself is automatic (onboard_campaign cross-joins every
+// assigned account against the campaign's channels) — there is no backend
+// concept of pinning one account to one channel, so this only offers assign /
+// remove, not a per-channel picker.
 export function NeuroAccountsModal({
   accounts,
-  channelOptions,
   onClose,
   onPick,
   onRemove,
+  feedback = {},
 }: {
   accounts: NeuroAccountRow[];
-  channelOptions: string[];
   onClose: () => void;
-  onPick: (accountId: string, channel: string) => void;
+  onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
+  feedback?: Record<string, 'ok' | 'err'>;
 }) {
   const { t } = useTranslation();
   return (
@@ -157,9 +134,9 @@ export function NeuroAccountsModal({
             <AccountRow
               key={account.account_id}
               account={account}
-              channelOptions={channelOptions}
               onPick={onPick}
               onRemove={onRemove}
+              result={feedback[account.account_id]}
             />
           ))
         ) : (

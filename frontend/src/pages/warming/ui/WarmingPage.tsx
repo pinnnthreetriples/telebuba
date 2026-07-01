@@ -15,8 +15,8 @@ import {
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
-import { useLogEventStream } from '@/shared/lib';
-import { CollapsibleCard } from '@/shared/ui';
+import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
+import { CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
 import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
 // SSE drives live board updates; this poll is just the fallback safety net.
@@ -65,6 +65,9 @@ export function WarmingPage() {
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
   const [warmDaysFor, setWarmDaysFor] = useState<WarmingAccountState | null>(null);
+  const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
+  const accountFeedback = useTransientFeedback();
+  const channelFeedback = useTransientFeedback();
 
   const { data, isPending, isError } = useQuery({
     ...warmingBoardQueryOptions(),
@@ -96,8 +99,9 @@ export function WarmingPage() {
     mutation.mutate(
       { body: { account_id: accountId } },
       {
-        onSettled: () => {
+        onSettled: (_data, error) => {
           setBusyId(null);
+          accountFeedback.mark(accountId, !error);
           invalidate();
         },
       },
@@ -110,11 +114,27 @@ export function WarmingPage() {
   };
   const addChannel = () => {
     if (!channelInput.trim()) return;
+    const raw = channelInput.trim();
     addChannels.mutate(
-      { body: { raw: channelInput } },
+      { body: { raw } },
       {
-        onSettled: () => {
+        onSettled: (_data, error) => {
           cancelAddChannel();
+          channelFeedback.mark(raw, !error);
+          invalidate();
+        },
+      },
+    );
+  };
+  const confirmRemoveChannel = () => {
+    if (!channelToRemove) return;
+    const channel = channelToRemove;
+    setChannelToRemove(null);
+    removeChannel.mutate(
+      { body: { channel } },
+      {
+        onSettled: (_data, error) => {
+          channelFeedback.mark(channel, !error);
           invalidate();
         },
       },
@@ -126,8 +146,9 @@ export function WarmingPage() {
     mutation.mutate(
       { body: { account_id: accountId } },
       {
-        onSettled: () => {
+        onSettled: (_data, error) => {
           setBusyId(null);
+          accountFeedback.mark(accountId, !error);
           invalidate();
         },
       },
@@ -293,15 +314,13 @@ export function WarmingPage() {
                   key={channel.channel}
                   className="inline-flex items-center gap-[6px] rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[5px] text-[12px] text-[#3a3a3a]"
                 >
+                  <FeedbackMark result={channelFeedback.feedback[channel.channel]} />
                   {channel.channel}
                   <button
                     type="button"
                     aria-label={t('warming.channels.remove')}
                     onClick={() => {
-                      removeChannel.mutate(
-                        { body: { channel: channel.channel } },
-                        { onSettled: invalidate },
-                      );
+                      setChannelToRemove(channel.channel);
                     }}
                     className="text-[14px] leading-none text-[#b5b3ae]"
                   >
@@ -473,6 +492,7 @@ export function WarmingPage() {
                         <path d="M5 12h14M13 6l6 6-6 6" />
                       </svg>
                     </button>
+                    <FeedbackMark result={accountFeedback.feedback[acc.account_id]} />
                     <button
                       type="button"
                       title={t('warming.warmed.backToWarm')}
@@ -533,6 +553,7 @@ export function WarmingPage() {
             runGraduation(promote, id);
           }}
           busyId={busyId}
+          feedback={accountFeedback.feedback}
         />
       </div>
 
@@ -543,17 +564,32 @@ export function WarmingPage() {
             setWarmDaysFor(null);
           }}
           onConfirm={(days) => {
-            setBusyId(warmDaysFor.account_id);
+            const accountId = warmDaysFor.account_id;
+            setBusyId(accountId);
             start.mutate(
-              { body: { account_id: warmDaysFor.account_id, target_days: days } },
+              { body: { account_id: accountId, target_days: days } },
               {
-                onSettled: () => {
+                onSettled: (_data, error) => {
                   setBusyId(null);
+                  accountFeedback.mark(accountId, !error);
                   invalidate();
                 },
               },
             );
           }}
+        />
+      ) : null}
+
+      {channelToRemove ? (
+        <ConfirmModal
+          title={t('warming.channels.removeTitle', { channel: channelToRemove })}
+          body={t('warming.channels.removeBody')}
+          confirmLabel={t('warming.channels.removeConfirm')}
+          cancelLabel={t('warming.channels.cancel')}
+          onClose={() => {
+            setChannelToRemove(null);
+          }}
+          onConfirm={confirmRemoveChannel}
         />
       ) : null}
     </div>

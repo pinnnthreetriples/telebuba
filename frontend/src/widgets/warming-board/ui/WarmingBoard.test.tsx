@@ -86,6 +86,32 @@ test('keeps an account in progress below its target', () => {
   expect(screen.queryByText('Отправить в прогретые')).not.toBeInTheDocument();
 });
 
+test('shows a success or error mark from the feedback map', () => {
+  const { rerender } = renderWithClient(
+    <WarmingBoard
+      warming={WARMING}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+      feedback={{ '79051184490': 'ok' }}
+    />,
+  );
+  expect(document.querySelector('.text-success svg')).toBeInTheDocument();
+
+  rerender(
+    <QueryClientProvider client={new QueryClient()}>
+      <WarmingBoard
+        warming={WARMING}
+        onStop={vi.fn()}
+        onPromote={vi.fn()}
+        busyId={null}
+        feedback={{ '79051184490': 'err' }}
+      />
+    </QueryClientProvider>,
+  );
+  expect(document.querySelector('.text-danger svg')).toBeInTheDocument();
+});
+
 test('expanding a card fetches that account real activity log', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

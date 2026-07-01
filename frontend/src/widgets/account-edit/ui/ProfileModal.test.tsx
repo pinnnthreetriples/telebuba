@@ -101,6 +101,7 @@ test('photo tab uploads an avatar and removes a photo', async () => {
   });
 
   await userEvent.click(await screen.findByLabelText('Удалить фото'));
+  await userEvent.click(await screen.findByText('Удалить', { selector: 'button' }));
   await waitFor(() => {
     expect(fired('/photo/remove')).toBe(true);
   });
@@ -112,6 +113,7 @@ test('stories tab opens the add-story modal and removes a story', async () => {
   await userEvent.click(screen.getByText('Сторис'));
 
   await userEvent.click(await screen.findByLabelText('Удалить сторис'));
+  await userEvent.click(await screen.findByText('Удалить', { selector: 'button' }));
   await waitFor(() => {
     expect(fired('/story/remove')).toBe(true);
   });
@@ -127,6 +129,7 @@ test('music tab removes the current track and picks a new one', async () => {
 
   expect(await screen.findByText('Track')).toBeInTheDocument();
   await userEvent.click(screen.getByLabelText('Убрать трек'));
+  await userEvent.click(await screen.findByText('Убрать', { selector: 'button' }));
   await waitFor(() => {
     expect(fired('/music/remove')).toBe(true);
   });

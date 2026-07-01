@@ -21,7 +21,7 @@ import {
   proxyPoolQueryOptions,
 } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { Modal } from '@/shared/ui';
+import { FeedbackMark, Modal } from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
@@ -169,6 +169,8 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
   const [aliveCheck, setAliveCheck] = useState<CheckState>('idle');
+  const [logoutCheck, setLogoutCheck] = useState<CheckState>('idle');
+  const [resetCheck, setResetCheck] = useState<CheckState>('idle');
   const [smsCode, setSmsCode] = useState('');
   const [twoFa, setTwoFa] = useState('');
   const [loginNote, setLoginNote] = useState<string | null>(null);
@@ -221,11 +223,32 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
       },
     );
   };
+  // Shared shape behind the logout/reset buttons: loading → ok/err → idle.
+  const runSessionAction = (
+    mutation: typeof logout | typeof resetSession,
+    setCheck: typeof setLogoutCheck,
+  ) => {
+    setCheck('loading');
+    mutation.mutate(path, {
+      onSuccess: () => {
+        setCheck('ok');
+        invalidate();
+      },
+      onError: () => {
+        setCheck('err');
+      },
+      onSettled: () => {
+        window.setTimeout(() => {
+          setCheck('idle');
+        }, 1600);
+      },
+    });
+  };
   const onLogout = () => {
-    logout.mutate(path, { onSuccess: invalidate });
+    runSessionAction(logout, setLogoutCheck);
   };
   const onReset = () => {
-    resetSession.mutate(path, { onSuccess: invalidate });
+    runSessionAction(resetSession, setResetCheck);
   };
   const onDelete = () => {
     deleteAccount.mutate(path, {
@@ -455,14 +478,17 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               <span className="h-2 w-2 rounded-full bg-success-dot" />
               <span className="text-[12.5px] text-[#3a3a3a]">{t('accounts.edit.sessionOk')}</span>
             </span>
-            <button
-              type="button"
-              onClick={onLogout}
-              disabled={logout.isPending}
-              className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted disabled:opacity-50"
-            >
-              {t('accounts.edit.logout')}
-            </button>
+            <span className="flex items-center gap-[7px]">
+              <FeedbackMark result={logoutCheck === 'idle' || logoutCheck === 'loading' ? undefined : logoutCheck} />
+              <button
+                type="button"
+                onClick={onLogout}
+                disabled={logout.isPending}
+                className="rounded-[8px] border border-line-input bg-white px-3 py-[5px] text-[12px] font-medium text-ink-muted disabled:opacity-50"
+              >
+                {logoutCheck === 'loading' ? <Spinner size={12} /> : t('accounts.edit.logout')}
+              </button>
+            </span>
           </div>
           <div className="mb-[9px] mt-4 flex items-center justify-between gap-2">
             <span className="text-[11px] font-semibold uppercase tracking-[0.04em] text-ink-subtle">
@@ -1073,14 +1099,17 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
               {t('accounts.edit.resetSessionHint')}
             </div>
           </div>
-          <button
-            type="button"
-            onClick={onReset}
-            disabled={resetSession.isPending}
-            className="shrink-0 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
-          >
-            {resetSession.isPending ? <Spinner size={14} /> : t('accounts.edit.reset')}
-          </button>
+          <span className="flex shrink-0 items-center gap-[7px]">
+            <FeedbackMark result={resetCheck === 'idle' || resetCheck === 'loading' ? undefined : resetCheck} />
+            <button
+              type="button"
+              onClick={onReset}
+              disabled={resetSession.isPending}
+              className="rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
+            >
+              {resetCheck === 'loading' ? <Spinner size={14} /> : t('accounts.edit.reset')}
+            </button>
+          </span>
         </div>
         <div className="flex items-center justify-between gap-3 py-[14px]">
           <div>

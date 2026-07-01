@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement, ReactNode } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -44,6 +44,27 @@ test('shows real initials from the current user', async () => {
   await waitFor(() => {
     expect(screen.getByText('AD')).toBeInTheDocument();
   });
+});
+
+interface MockSourceCtor {
+  last(): { emitOpen(): void; emitError(): void } | undefined;
+}
+const Sources = globalThis.EventSource as unknown as MockSourceCtor;
+
+test('the system pill reflects the real SSE connection state', async () => {
+  routeApi();
+  renderWithClient(<AppNav />);
+  expect(screen.getByText('Нет соединения')).toBeInTheDocument();
+
+  act(() => {
+    Sources.last()?.emitOpen();
+  });
+  expect(await screen.findByText('Система активна')).toBeInTheDocument();
+
+  act(() => {
+    Sources.last()?.emitError();
+  });
+  expect(await screen.findByText('Нет соединения')).toBeInTheDocument();
 });
 
 test('logs out from the avatar menu and redirects to login', async () => {

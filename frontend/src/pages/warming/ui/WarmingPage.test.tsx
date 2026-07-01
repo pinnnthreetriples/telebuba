@@ -205,6 +205,26 @@ test('starts an idle account', async () => {
   expect(body.target_days).toBe(7);
 });
 
+test('removing a channel asks for confirmation, then calls the remove endpoint', async () => {
+  routeApi();
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('@news')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByLabelText('Удалить'));
+  const confirm = await screen.findByText('Удалить', { selector: 'button' });
+  expect(
+    vi.mocked(fetch).mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove')),
+  ).toBe(false);
+  await userEvent.click(confirm);
+  await waitFor(() => {
+    const removed = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove'));
+    expect(removed).toBe(true);
+  });
+});
+
 test('adds a channel', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);

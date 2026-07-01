@@ -180,6 +180,51 @@ test('the gear in the board header opens the accounts modal', async () => {
   expect(screen.getByText('Готово')).toBeInTheDocument();
 });
 
+test('assigning an unpaired board account calls the assign endpoint and shows feedback', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) {
+      return Promise.resolve(
+        jsonResponse({ ...BOARD, accounts: [{ ...BOARD.accounts[0]!, readiness: [] }] }),
+      );
+    }
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            { account_id: 'acc-1', label: '+79261112233', status: 'alive', created_at: 'n', updated_at: 'n' },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  await userEvent.click(screen.getByLabelText('Аккаунты в нейрокомментинге'));
+  await userEvent.click(screen.getByText('Добавить в кампанию'));
+  await waitFor(() => {
+    const assigned = vi
+      .mocked(fetch)
+      .mock.calls.some(
+        ([i]) => (i as Request).url.endsWith('/campaigns/c1/accounts') && (i as Request).method === 'POST',
+      );
+    expect(assigned).toBe(true);
+  });
+});
+
 test('picking a listener account enables the start button', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
@@ -352,13 +397,18 @@ test('campaign edit-prompt saves and delete removes the campaign', async () => {
   });
 });
 
-test('removing a campaign channel calls the deactivate endpoint', async () => {
+test('removing a campaign channel asks for confirmation, then calls the deactivate endpoint', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
     expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
   });
   await userEvent.click(screen.getByLabelText('Убрать канал'));
+  const removeConfirm = await screen.findByText('Убрать');
+  expect(
+    vi.mocked(fetch).mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove')),
+  ).toBe(false);
+  await userEvent.click(removeConfirm);
   await waitFor(() => {
     const removed = vi
       .mocked(fetch)
