@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 import pytest
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.messages import SendReactionRequest
+from telethon.tl.functions.stories import GetPeerStoriesRequest, ReadStoriesRequest
 
 from core.config import settings
 from core.db import configure_database
@@ -18,6 +19,7 @@ from schemas.telegram_actions import (
     ReadChannel,
     SendDirectMessage,
     SetOnline,
+    WatchPeerStories,
 )
 
 if TYPE_CHECKING:
@@ -191,3 +193,55 @@ async def test_send_dm_returns_message_id(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert result.status == "ok"
     assert result.message_id == 88
+
+
+@pytest.mark.asyncio
+async def test_watch_peer_stories_marks_up_to_newest(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, peer: str) -> str:
+            return f"peer:{peer}"
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, GetPeerStoriesRequest):
+                return MagicMock(stories=MagicMock(stories=[MagicMock(id=3), MagicMock(id=7)]))
+            return None
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-5", WatchPeerStories(peer="@news"))
+
+    assert result.status == "ok"
+    reads = [req for req in captured if isinstance(req, ReadStoriesRequest)]
+    assert reads
+    assert reads[0].max_id == 7
+
+
+@pytest.mark.asyncio
+async def test_watch_peer_stories_no_stories_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, peer: str) -> str:
+            return peer
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, GetPeerStoriesRequest):
+                return MagicMock(stories=MagicMock(stories=[]))
+            return None  # pragma: no cover - no ReadStories when there are no stories
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-5b", WatchPeerStories(peer="@news"))
+
+    assert result.status == "ok"
+    assert not any(isinstance(req, ReadStoriesRequest) for req in captured)

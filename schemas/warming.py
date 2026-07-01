@@ -1,16 +1,11 @@
 """Pydantic schemas for the account-warming domain.
 
-These models flow between ``features/warming.py`` (UI), ``services/warming.py``
-(business logic), and ``core/db.py`` (persistence). No behaviour, no I/O — just
-the data contract per non-negotiable #2.
+Data contract only — no behaviour, no I/O (non-negotiable #2). Flows between the
+``api/v1/warming`` routes, ``services/warming/``, and ``core/db.py``.
 
-Warming lifecycle (``WarmingState``):
-
-- ``idle``      — account sits in the left kanban column, no loop running.
-- ``active``    — currently performing a warming cycle (joining / reading / reacting).
-- ``sleeping``  — cycle finished, waiting 12-30h before the next one.
-- ``flood_wait``— Telegram rate-limited the account; cooling down.
-- ``error``     — last cycle failed; needs attention.
+``WarmingState``: idle (not running) · active (running a cycle) · sleeping
+(waiting for the next persona-paced run) · flood_wait / quarantine (cooling
+down) · error (last cycle failed).
 """
 
 from __future__ import annotations
@@ -26,6 +21,11 @@ WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 # what behaviour is unlocked. Computed from (calendar age, trust_band) and
 # capped from above by trust — see ``services.warming.pacing.effective_phase``.
 WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
+
+# Operator-chosen *target* cadence (sessions/day + reaction/DM frequency), bounded
+# by the phase ceiling (effective = min(persona, phase/trust)); orthogonal to
+# ``WarmingPhase``. See the 2026-07-01 ADR in ``.mex/context/decisions.md``.
+ActivityPersona = Literal["calm", "normal", "active"]
 
 _ACTIVE_STATES: frozenset[WarmingState] = frozenset(
     {"active", "sleeping", "flood_wait", "quarantine", "error"},
@@ -85,9 +85,6 @@ class WarmingSettings(BaseModel):
     reactions_enabled: bool = True
     join_enabled: bool = True
     enforce_readiness: bool = True
-    quiet_hours_enabled: bool = False
-    quiet_hours_start: int = Field(default=0, ge=0, le=23)
-    quiet_hours_end: int = Field(default=0, ge=0, le=23)
     # Deprecated (audit П2): the fleet-wide override is retired — the engine uses
     # the per-account auto cap (phase + trust) only. Kept so existing rows load;
     # no longer read by the cycle or surfaced in the UI.
@@ -104,9 +101,6 @@ class WarmingSettingsSecret(BaseModel):
     reactions_enabled: bool
     join_enabled: bool = True
     enforce_readiness: bool = True
-    quiet_hours_enabled: bool = False
-    quiet_hours_start: int = Field(default=0, ge=0, le=23)
-    quiet_hours_end: int = Field(default=0, ge=0, le=23)
     max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str
     gemini_model: str = Field(min_length=1)
@@ -129,9 +123,6 @@ class WarmingSettingsUpdate(BaseModel):
     reactions_enabled: bool = True
     join_enabled: bool = True
     enforce_readiness: bool = True
-    quiet_hours_enabled: bool = False
-    quiet_hours_start: int = Field(default=0, ge=0, le=23)
-    quiet_hours_end: int = Field(default=0, ge=0, le=23)
     max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str | None = None
     gemini_model: str | None = None
@@ -210,6 +201,9 @@ class WarmingStateRecord(BaseModel):
     # the day slider; the loop auto-completes the account once warming reaches it.
     # ``None`` on legacy rows / no explicit pick → falls back to warmed_min_days.
     target_days: int | None = Field(default=None, ge=1)
+    # Operator-chosen activity persona. Legacy rows / NULL column → "normal" (the
+    # reader maps NULL up), so this is never None on a loaded record.
+    activity_persona: ActivityPersona = "normal"
 
 
 class WarmingStateWrite(BaseModel):
@@ -252,6 +246,8 @@ class WarmingStateWrite(BaseModel):
     phase_entered_at: str | None = None
     # See WarmingStateRecord.target_days — operator-chosen warming duration.
     target_days: int | None = None
+    # See WarmingStateRecord.activity_persona. ``None`` = carry current.
+    activity_persona: ActivityPersona | None = None
 
 
 class WarmingStateWriteResult(BaseModel):
@@ -329,6 +325,8 @@ class WarmingAccountState(BaseModel):
     # Operator-chosen warming duration (days). Drives the card's "день X / Y"
     # progress + auto-complete state; ``None`` falls back to the 14-day default.
     target_days: int | None = Field(default=None, ge=1)
+    # Operator-chosen activity persona, surfaced on the card.
+    activity_persona: ActivityPersona | None = None
     readiness: WarmingReadiness | None = None
     # Operator-set: account has been graduated to the neurocomment pool. Drives
     # the "переместить в нейрокомментинг" button on the card (hidden once True).
@@ -387,6 +385,8 @@ class StartWarmingRequest(BaseModel):
     # Operator-chosen warming duration from the start modal's day slider. ``None``
     # (omitted) → the service falls back to ``settings.neurocomment.warmed_min_days``.
     target_days: int | None = Field(default=None, ge=1, le=365)
+    # Operator-chosen activity persona (default = balanced).
+    activity_persona: ActivityPersona = "normal"
 
 
 class PromoteRequest(BaseModel):
@@ -405,6 +405,8 @@ class WarmingCycleRequest(BaseModel):
     # Trust+readiness-aware DM permission computed by the loop (П11). ``None``
     # means "decide from age alone" so direct callers keep the old behaviour.
     dm_allowed: bool | None = None
+    # Operator persona — drives per-session reaction/DM probability + story view.
+    activity_persona: ActivityPersona = "normal"
 
 
 CycleStatus = Literal["ok", "skipped", "flood_wait", "peer_flood", "error", "failed"]

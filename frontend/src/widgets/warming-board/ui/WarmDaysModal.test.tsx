@@ -27,8 +27,20 @@ test('presets, keyboard arrows and confirm', async () => {
   expect(slider).toHaveAttribute('aria-valuenow', '4');
 
   await userEvent.click(screen.getByText('Запустить прогрев'));
-  expect(onConfirm).toHaveBeenCalledWith(4);
+  // defaults to the balanced persona when none is picked
+  expect(onConfirm).toHaveBeenCalledWith(4, 'normal');
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('persona chip selection is forwarded on confirm', async () => {
+  const onClose = vi.fn();
+  const onConfirm = vi.fn();
+  render(<WarmDaysModal phone="+79991234567" onClose={onClose} onConfirm={onConfirm} />);
+
+  await userEvent.click(screen.getByText('Активный'));
+  await userEvent.click(screen.getByText('Запустить прогрев'));
+
+  expect(onConfirm).toHaveBeenCalledWith(7, 'active');
 });
 
 test('cancel closes without confirming', async () => {

@@ -19,7 +19,7 @@ from schemas.warming import is_warming
 from services.warming import _seams
 from services.warming._loop import run_loop_iteration
 from services.warming._state import _set_state
-from services.warming.pacing import _SECONDS_PER_HOUR, _now_iso, _seconds_until
+from services.warming.pacing import _now_iso, _seconds_until, persona_next_run_seconds
 
 if TYPE_CHECKING:
     from schemas.warming import WarmingStateRecord
@@ -44,16 +44,13 @@ def _is_live_generation(record: WarmingStateRecord | None, run_id: str | None) -
 def _loop_sleep_seconds(record: WarmingStateRecord | None, now: datetime) -> float:
     """Seconds to wait before the next cycle, from the persisted ``next_run_at``.
 
-    Falls back to a fresh randomised 12-30h sleep only if the schedule is missing
+    Falls back to a fresh persona-paced gap only if the schedule is missing
     (it never should be after ``run_loop_iteration`` writes one).
     """
     if record is not None and record.next_run_at is not None:
         return _seconds_until(record.next_run_at, now)
-    warm = settings.warming
-    return _seams.rng.uniform(
-        warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
-        warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
-    )
+    persona = record.activity_persona if record is not None else "normal"
+    return persona_next_run_seconds(persona, 0, _seams.rng)
 
 
 def _initial_delay_seconds(record: WarmingStateRecord | None, now: datetime) -> float:

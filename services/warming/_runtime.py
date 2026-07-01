@@ -130,6 +130,13 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             or (existing.target_days if existing and existing.target_days else None)
             or settings.neurocomment.warmed_min_days
         )
+        # Persona mirrors started_at: a restart-while-warming keeps the original
+        # cadence; a genuine (re)start from idle/stopped honours the new pick.
+        activity_persona = (
+            existing.activity_persona
+            if existing is not None and is_warming(existing.state)
+            else data.activity_persona
+        )
         # Bug 2: a previously-promoted account dragged back into warming would
         # otherwise live in both pools — clear the flag so neurocomment's
         # warmed-account overview drops it on the next poll.
@@ -158,6 +165,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             proxy_snapshot=_proxy_snapshot(account),
             run_id=run_id,
             target_days=target_days,
+            activity_persona=activity_persona,
         )
         # F2: an existing task may still be inside the inter-cycle
         # ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous*

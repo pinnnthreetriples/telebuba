@@ -31,6 +31,7 @@ from core.db import (
     _warming_settings,
 )
 from schemas.warming import (
+    ActivityPersona,
     WarmingChannel,
     WarmingChannelList,
     WarmingPhase,
@@ -120,9 +121,6 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         reactions_enabled=bool(mapping["reactions_enabled"]),
         join_enabled=_bool_or(mapping.get("join_enabled"), default=True),
         enforce_readiness=_bool_or(mapping.get("enforce_readiness"), warm.enforce_readiness),
-        quiet_hours_enabled=_bool_or(mapping.get("quiet_hours_enabled"), warm.quiet_hours_enabled),
-        quiet_hours_start=_int_or(mapping.get("quiet_hours_start"), warm.quiet_hours_start),
-        quiet_hours_end=_int_or(mapping.get("quiet_hours_end"), warm.quiet_hours_end),
         max_daily_actions=_int_or(mapping.get("max_daily_actions"), warm.max_daily_actions),
         gemini_api_key=settings.gemini.api_key,
         gemini_model=settings.gemini.model,
@@ -138,9 +136,6 @@ def _default_warming_settings_values() -> dict[str, object]:
         "reactions_enabled": 1,
         "join_enabled": 1,
         "enforce_readiness": int(warm.enforce_readiness),
-        "quiet_hours_enabled": int(warm.quiet_hours_enabled),
-        "quiet_hours_start": warm.quiet_hours_start,
-        "quiet_hours_end": warm.quiet_hours_end,
         "max_daily_actions": warm.max_daily_actions,
         "gemini_api_key": "",
         "gemini_model": settings.gemini.model,
@@ -170,9 +165,6 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     reactions_enabled: bool,
     join_enabled: bool = True,
     enforce_readiness: bool = True,
-    quiet_hours_enabled: bool = False,
-    quiet_hours_start: int = 0,
-    quiet_hours_end: int = 0,
     max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
@@ -188,9 +180,6 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
         "reactions_enabled": int(reactions_enabled),
         "join_enabled": int(join_enabled),
         "enforce_readiness": int(enforce_readiness),
-        "quiet_hours_enabled": int(quiet_hours_enabled),
-        "quiet_hours_start": quiet_hours_start,
-        "quiet_hours_end": quiet_hours_end,
         "max_daily_actions": max_daily_actions,
         "gemini_api_key": "",
         "gemini_model": settings.gemini.model,
@@ -211,9 +200,6 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     reactions_enabled: bool,
     join_enabled: bool = True,
     enforce_readiness: bool = True,
-    quiet_hours_enabled: bool = False,
-    quiet_hours_start: int = 0,
-    quiet_hours_end: int = 0,
     max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
@@ -228,9 +214,6 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         reactions_enabled=reactions_enabled,
         join_enabled=join_enabled,
         enforce_readiness=enforce_readiness,
-        quiet_hours_enabled=quiet_hours_enabled,
-        quiet_hours_start=quiet_hours_start,
-        quiet_hours_end=quiet_hours_end,
         max_daily_actions=max_daily_actions,
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
@@ -264,6 +247,10 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         phase_entered_at=_optional_str(mapping.get("phase_entered_at")),
         promoted_to_nc=bool(mapping.get("promoted_to_nc") or 0),
         target_days=_optional_int(mapping.get("target_days")),
+        activity_persona=cast(
+            "ActivityPersona",
+            _optional_str(mapping.get("activity_persona")) or "normal",
+        ),
     )
 
 
@@ -392,6 +379,9 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
         "current_phase": data.current_phase,
         "phase_entered_at": data.phase_entered_at,
         "target_days": data.target_days,
+        # NOT NULL column — coalesce a carried/absent value to the balanced
+        # persona so an explicit NULL write can never violate the constraint.
+        "activity_persona": data.activity_persona or "normal",
     }
     update_values: dict[str, object] = dict(insert_values)
     if data.increment_cycle:

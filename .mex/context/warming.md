@@ -18,7 +18,7 @@ edges:
     condition: when changing the warming service package
   - target: patterns/add-warming-job.md
     condition: when adding a new warming runtime task
-last_updated: 2026-06-28
+last_updated: 2026-07-01
 ---
 
 # Warming Runtime
@@ -47,8 +47,9 @@ services/warming/
 ├── pacing.py          scheduling, readiness, intensity, time helpers
 ├── _seams.py          injectable execute/generate_text/status/rng seams
 ├── _state.py          state transition helpers
-├── _chat.py           Gemini chat helper + text sanitisation
+├── _chat.py           Gemini chat helper + text sanitisation + per-session DM step (_run_chat_step)
 ├── _cycle.py          one-cycle execution
+├── _stories.py        story-view cycle step (WatchPeerStories, once per session)
 ├── _transitions.py    post-cycle next-run/state + phase-transition helpers
 ├── _loop.py           one loop iteration: gates + quarantine recovery
 ├── _runner.py         long-running loop task wrapper + timing helpers
@@ -92,3 +93,21 @@ Important invariant: `load_board()` bulk-loads accounts, runtime states, channel
 - No business logic in the `api/v1/warming` routes or the React Warming screen — they delegate to `services/warming/`.
 - No APScheduler assumptions for this domain.
 - No `telegram_outbox` assumptions; the current model is direct executor + persisted runtime state.
+
+## Glossary
+
+**Cycle**:
+One warming pass — `run_one_cycle`. Sometimes called a *session* / *заход* in product copy (one "the account opens Telegram, does a little, leaves").
+_Avoid_: run, tick.
+
+**Phase**:
+The account's safety maturity — intro → settling → warming → active → warmed, derived from age (with a trust-band ceiling). Drives the per-phase daily action **cap** and DM age/trust gates. Engine-controlled; the operator cannot speed it up.
+_Avoid_: stage, level (level = persona).
+
+**Persona активности** (`activity_persona`, design — see the 2026-07-01 ADR in `decisions.md`, not yet built):
+The operator's chosen *target activity level* for an account — `calm` / `normal` / `active` (Спокойный / Обычный / Активный), picked at start beside `target_days`. Sets sessions-per-day + reaction/DM frequency. **Orthogonal to phase**: persona is the ceiling the account aims for, phase is how fast it may get there. Effective activity = `min(persona, phase/trust)`.
+_Avoid_: profile (collides with account **profile**), pattern.
+
+**Окно активности** (active hours):
+The account-local daytime window (08–23 by default, timezone from the phone) in which warming activity is scheduled; a run computed for the night is shifted to the next window start. The single "when awake" concept — *quiet hours are retired* (2026-07-01 ADR).
+_Avoid_: quiet hours, active-hours + quiet-hours as two concepts.

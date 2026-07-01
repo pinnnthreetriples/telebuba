@@ -27,6 +27,7 @@ from services.warming.pacing import (
     _shift_to_active_hours,
     compute_intensity,
     evaluate_readiness,
+    persona_next_run_seconds,
     warming_days_since,
 )
 
@@ -35,6 +36,7 @@ if TYPE_CHECKING:
     from schemas.logs import LogLevel
     from schemas.trust import TrustScore
     from schemas.warming import (
+        ActivityPersona,
         WarmingPhase,
         WarmingSettingsSecret,
         WarmingState,
@@ -170,6 +172,8 @@ async def _gate_target_reached(
 async def _calculate_next_run(
     account_id: str,
     result: WarmingCycleResult,
+    persona: ActivityPersona,
+    daily_cap: int,
 ) -> tuple[int, datetime, WarmingState]:
     warm = settings.warming
     actions_done = result.attempted_actions
@@ -185,14 +189,11 @@ async def _calculate_next_run(
         sleep_seconds = (
             float(result.flood_wait_seconds)
             if result.flood_wait_seconds is not None
-            else warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR
+            else warm.flood_wait_fallback_hours * _SECONDS_PER_HOUR
         )
         next_state = "flood_wait"
     elif result.status == "failed":
-        sleep_seconds = _seams.rng.uniform(
-            warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
-            warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
-        )
+        sleep_seconds = persona_next_run_seconds(persona, daily_cap, _seams.rng)
         work_actions = (
             result.channels_joined
             + result.channels_read
@@ -209,10 +210,9 @@ async def _calculate_next_run(
         else:
             next_state = "error"
     else:
-        sleep_seconds = _seams.rng.uniform(
-            warm.cycle_sleep_min_hours * _SECONDS_PER_HOUR,
-            warm.cycle_sleep_max_hours * _SECONDS_PER_HOUR,
-        )
+        # Persona-derived gap: the active window split into the persona's
+        # sessions/day (capped by what the phase budget affords), ±jitter.
+        sleep_seconds = persona_next_run_seconds(persona, daily_cap, _seams.rng)
         next_state = "sleeping"
 
     next_run_dt = datetime.now(UTC) + timedelta(seconds=sleep_seconds)

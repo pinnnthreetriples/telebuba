@@ -174,8 +174,9 @@ class WarmingSettings(BaseSettings):
     typing_max_seconds: float = Field(default=30.0, ge=0.0)
     reading_min_seconds: float = Field(default=8.0, ge=0.0)
     reading_max_seconds: float = Field(default=45.0, ge=0.0)
-    cycle_sleep_min_hours: float = Field(default=12.0, ge=0.0)
-    cycle_sleep_max_hours: float = Field(default=30.0, ge=0.0)
+    # Fallback sleep when Telegram signals a FloodWait with no duration attached
+    # (a full cool-down rather than an immediate retry of the just-flooded account).
+    flood_wait_fallback_hours: float = Field(default=24.0, ge=0.0)
     startup_jitter_max_seconds: float = Field(default=8.0, ge=0.0)
     channels_per_cycle_min: int = Field(default=1, ge=1)
     channels_per_cycle_max: int = Field(default=3, ge=1)
@@ -197,23 +198,16 @@ class WarmingSettings(BaseSettings):
     # Refuse to start warming an account that is not ready (dead session, no
     # proxy, no channels). Set False to bypass the pre-start gate.
     enforce_readiness: bool = True
-    # Quiet hours (account-local time, from the phone's timezone): when enabled,
-    # an account performs no actions inside the [start, end) hour window and
-    # parks until it ends. start == end disables it.
-    quiet_hours_enabled: bool = False
-    quiet_hours_start: int = Field(default=0, ge=0, le=23)
-    quiet_hours_end: int = Field(default=0, ge=0, le=23)
     # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
     # When the day's count reaches the cap the account parks until the next daily
     # reset (UTC date rollover), shifted into its local active-hours window.
     max_daily_actions: int = Field(default=0, ge=0)
-    # Age-based ramp ("balanced" profile): a fresh account behaves quietly and
-    # grows to full intensity over ``ramp_full_age_hours``. Disable to make every
-    # account run at full intensity from day one.
-    ramp_enabled: bool = True
-    ramp_full_age_hours: float = Field(default=192.0, ge=0.0)
-    ramp_initial_channels_max: int = Field(default=1, ge=1)
-    ramp_initial_reaction_probability: float = Field(default=0.1, ge=0.0, le=1.0)
+    # Watch subscribed channels' stories once per session (a low-risk, very human
+    # signal). Applies to every persona; disable to skip the story-view step.
+    story_view_enabled: bool = True
+    # Jitter applied to the persona-derived inter-session gap: the even-spread gap
+    # is multiplied by 1 ± this fraction so runs don't land on a rigid grid.
+    next_run_jitter_fraction: float = Field(default=0.25, ge=0.0, le=1.0)
     # Cold-start guard: no outbound DM until the account is at least this old.
     dm_min_age_hours: float = Field(default=36.0, ge=0.0)
     # How long a cached @SpamBot verdict stays fresh before we re-probe. Frequent

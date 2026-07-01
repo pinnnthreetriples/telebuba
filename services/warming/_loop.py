@@ -28,21 +28,17 @@ from services.warming._transitions import (
 from services.warming.pacing import (
     _account_age_hours,
     _account_tz,
-    _in_quiet_hours,
-    _local_now,
     _next_utc_midnight,
     _now_iso,
-    _quiet_hours_end_at,
     _roll_daily,
     _shift_to_active_hours,
     compute_intensity,
 )
 
 if TYPE_CHECKING:
-    from schemas.warming import (
-        WarmingSettingsSecret,
-        WarmingStateRecord,
-    )
+    from schemas.warming import WarmingState, WarmingStateRecord
+
+    _Schedule = tuple[int, datetime, WarmingState]
 
 
 # A cycle always spends one action on the SetOnline presence flip; require room
@@ -62,7 +58,6 @@ async def _recover_from_quarantine(
     record: WarmingStateRecord,
     now: datetime,
     *,
-    controls: WarmingSettingsSecret,
     run_id: str | None = None,
 ) -> WarmingCycleResult:
     """Re-check a quarantined account: resume if cleared, escalate otherwise.
@@ -79,28 +74,6 @@ async def _recover_from_quarantine(
     quarantine was still open.
     """
     warm = settings.warming
-    # Quiet hours apply to the quarantine re-probe too: the @SpamBot ``/start``
-    # below is live Telegram I/O, so defer it to the end of the quiet window
-    # rather than break the "no actions inside quiet hours" guarantee. State and
-    # quarantine_count are preserved so recovery resumes after the window.
-    if controls.quiet_hours_enabled:
-        local_now = await _local_now(account_id, now)
-        if _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
-            next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
-            deferred = await _set_state(
-                account_id,
-                "quarantine",
-                last_event="quarantine_quiet_hours",
-                next_run_at=next_run,
-                heartbeat_at=now.isoformat(),
-                quarantine_count=record.quarantine_count,
-                expected_run_id=run_id,
-            )
-            if run_id is not None and not deferred.applied:
-                return WarmingCycleResult(
-                    account_id=account_id, status="skipped", detail="stale run"
-                )
-            return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
     # Round-5 P1: pre-probe CAS. Telegram I/O lives behind this gate.
     probe_started = await _set_state(
         account_id,
@@ -171,37 +144,6 @@ async def _recover_from_quarantine(
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
 
 
-async def _gate_quiet_hours(
-    account_id: str,
-    controls: WarmingSettingsSecret,
-    now: datetime,
-    *,
-    run_id: str | None,
-) -> WarmingCycleResult | None:
-    """Park the account if the quiet-hours window is currently active.
-
-    Returns the terminal ``WarmingCycleResult`` when the iteration should
-    exit early, or ``None`` when the cycle may proceed.
-    """
-    if not controls.quiet_hours_enabled:
-        return None
-    local_now = await _local_now(account_id, now)
-    if not _in_quiet_hours(local_now, controls.quiet_hours_start, controls.quiet_hours_end):
-        return None
-    next_run = _quiet_hours_end_at(local_now, controls.quiet_hours_end).isoformat()
-    write = await _set_state(
-        account_id,
-        "sleeping",
-        last_event="quiet_hours",
-        next_run_at=next_run,
-        heartbeat_at=now.isoformat(),
-        expected_run_id=run_id,
-    )
-    if run_id is not None and not write.applied:
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
-    return WarmingCycleResult(account_id=account_id, status="skipped", detail="quiet hours")
-
-
 async def _gate_daily_limit(
     account_id: str,
     effective_cap: int,
@@ -244,24 +186,27 @@ async def _gate_daily_limit(
     return WarmingCycleResult(account_id=account_id, status="skipped", detail="daily limit")
 
 
-async def _finalize_after_cycle(
+async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs read clearer than a bag.
     account_id: str,
     result: WarmingCycleResult,
     age_hours: float,
     daily: tuple[int, str],
+    schedule: _Schedule,
     *,
     run_id: str | None,
 ) -> WarmingCycleResult:
     """Write the post-cycle state, honouring concurrent stop/restart.
 
-    F1 + P1.2: if ``stop_warming`` wrote ``idle`` OR ``start_warming``
-    minted a fresh ``run_id`` while we were inside ``run_one_cycle``, do
-    not resurrect the cycle's ``next_state`` on top of it. The CAS clause
-    on the final write provides the same guarantee even when the run_id
-    flips between this read and the write (Round-2 P1 + Round-4 P1.1).
+    ``schedule`` is the ``(actions_done, next_run_dt, next_state)`` triple the
+    caller computed via :func:`_calculate_next_run` (kept out of here so the
+    parameter list stays small). F1 + P1.2: if ``stop_warming`` wrote ``idle``
+    OR ``start_warming`` minted a fresh ``run_id`` while we were inside
+    ``run_one_cycle``, do not resurrect the cycle's ``next_state`` on top of it.
+    The CAS clause on the final write provides the same guarantee even when the
+    run_id flips between this read and the write (Round-2 P1 + Round-4 P1.1).
     """
     daily_count, daily_date = daily
-    actions_done, next_run_dt, next_state = await _calculate_next_run(account_id, result)
+    actions_done, next_run_dt, next_state = schedule
     new_daily = daily_count + actions_done
     next_run = next_run_dt.isoformat()
 
@@ -312,7 +257,7 @@ async def _finalize_after_cycle(
     return result
 
 
-async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gates, each early-exits.
+async def run_loop_iteration(  # noqa: PLR0911 - sequential pre-cycle gates, each early-exits.
     account_id: str,
     *,
     run_id: str | None = None,
@@ -336,13 +281,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
         return done
 
     if record is not None and record.state == "quarantine":
-        return await _recover_from_quarantine(
-            account_id, record, now, controls=controls, run_id=run_id
-        )
-
-    quiet = await _gate_quiet_hours(account_id, controls, now, run_id=run_id)
-    if quiet is not None:
-        return quiet
+        return await _recover_from_quarantine(account_id, record, now, run_id=run_id)
 
     account = await fetch_account(account_id)
     age_hours = _account_age_hours(account, now)
@@ -411,6 +350,7 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
                 extra={"step": step, "error_type": type(exc).__name__, "message": str(exc)},
             )
 
+    persona = record.activity_persona if record is not None else "normal"
     remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
     result = await run_one_cycle(
         WarmingCycleRequest(
@@ -420,13 +360,11 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
             # the gate above when enabled). The cycle's own intensity is
             # trust-blind, so pass the loop's trust-aware value instead.
             dm_allowed=intensity.dm_allowed,
+            activity_persona=persona,
         ),
         on_step=_on_step,
     )
+    schedule = await _calculate_next_run(account_id, result, persona, effective_cap)
     return await _finalize_after_cycle(
-        account_id,
-        result,
-        age_hours,
-        daily,
-        run_id=run_id,
+        account_id, result, age_hours, daily, schedule, run_id=run_id
     )

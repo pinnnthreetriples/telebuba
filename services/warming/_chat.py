@@ -28,11 +28,13 @@ from schemas.telegram_actions import ActionResult, SendDirectMessage
 from services.content import is_acceptable, release_sent_text, try_reserve_sent
 from services.dialogues import get_partners
 from services.warming import _seams
+from services.warming.pacing import _classify_flood, persona_dm_probability
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.dialogues import DialogueMessage
-    from schemas.warming import WarmingSettingsSecret
+    from schemas.warming import WarmingCycleRequest, WarmingSettingsSecret
+    from services.warming._cycle import _ChannelTally
 
 # Control characters: strip from Gemini output before sending it as a DM.
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
@@ -144,6 +146,47 @@ async def _maybe_inter_account_chat(
     if incoming is not None and incoming.from_account in partners:
         return await _reply_to_partner(sender_id, incoming, secret, accounts)
     return await _open_with_partner(sender_id, partners, secret, accounts)
+
+
+async def _run_chat_step(
+    data: WarmingCycleRequest,
+    secret: WarmingSettingsSecret,
+    tally: _ChannelTally,
+    *,
+    dm_allowed: bool,
+    can_attempt: bool,
+) -> int:
+    """Maybe start/continue an inter-account DM; return messages_sent.
+
+    П11: ``dm_allowed`` is the loop's trust+readiness-aware permission (age-only
+    for direct callers). The persona roll is last so it draws only once every
+    prior gate passed — it decides *how often* to chat, not whether it may. Any
+    flood is folded into ``tally``.
+    """
+    if not (
+        can_attempt
+        and not tally.flooded
+        and not tally.peer_flooded
+        and dm_allowed
+        and secret.inter_account_chat
+        and secret.gemini_api_key
+        and _seams.rng.random() < persona_dm_probability(data.activity_persona)
+    ):
+        return 0
+    chat_result = await _maybe_inter_account_chat(data.account_id, secret)
+    tally.attempts += chat_result.attempted_actions
+    tally.failures += chat_result.failures
+    if chat_result.last_failed_action:
+        tally.last_failed_action = chat_result.last_failed_action
+    if chat_result.flood_result:
+        if chat_result.flood_result.status == "peer_flood":
+            tally.peer_flooded = True
+        else:
+            tally.flooded, tally.flood_seconds, tally.flood_until = _classify_flood(
+                chat_result.flood_result,
+            )
+        tally.last_failed_action = chat_result.last_failed_action or "send_dm"
+    return chat_result.messages_sent
 
 
 async def _reply_to_partner(  # noqa: PLR0911

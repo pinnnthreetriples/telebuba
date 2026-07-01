@@ -28,7 +28,7 @@ telebuba/
 │   ├── db.py               shared SQLite plumbing + compatibility re-exports
 │   ├── migrations.py       versioned append-only migration registry + runner; apply_migrations() runs on engine init
 │   ├── migration_steps.py  migration step bodies (split from migrations.py for the file-size budget)
-│   ├── migration_steps_pool.py  proxy-pool migration (#18) body — split from migration_steps.py for the size budget
+│   ├── migration_steps_pool.py  overflow migration bodies split from migration_steps.py for the size budget (proxy pool #18, warming activity_persona #21)
 │   ├── device_fingerprint.py  generates/reads immutable per-account device profile
 │   ├── phone_geo.py        phone number → geo lookup helper
 │   ├── proxy_check.py      connectivity check for proxy configs
@@ -40,7 +40,7 @@ telebuba/
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
 │   │   ├── _pool.py           client pool management
 │   │   ├── _read.py           message reading actions (incl. CheckMessagesAlive deletion probe)
-│   │   ├── _read_stories.py   story reading actions
+│   │   ├── _read_stories.py   story reading actions (self-story snapshot + WatchPeerStories view-and-mark-seen for warming)
 │   │   ├── _read_challenge.py WaitForBotChallenge match predicate + NewMessage wait shell (neurocomment solver)
 │   │   ├── _listener.py       standing post listener (subscribe_posts/stop_post_listener) for neurocomment
 │   │   ├── _auth.py           phone-code login RPCs (SendCode/SignIn/2FA) + log_out_session; the only place auth RPCs live

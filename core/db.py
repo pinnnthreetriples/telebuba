@@ -180,6 +180,9 @@ _warming_account_state = Table(
     # loop auto-completes the account once warming reaches it. NULL = no pick →
     # the board falls back to ``settings.neurocomment.warmed_min_days``.
     Column("target_days", Integer, nullable=True),
+    # Operator-chosen activity persona from the start modal. server_default keeps
+    # existing/inserted rows on the balanced cadence; the reader maps NULL → normal.
+    Column("activity_persona", String, nullable=False, server_default="normal"),
 )
 _account_spam_status = Table(
     "account_spam_status",

@@ -4,7 +4,7 @@ The pure helpers — ``_phase_from_age``, ``_phase_cap_by_trust``,
 ``effective_phase``, ``_phase_progress`` — drive the per-account daily cap
 and the phase chip on the kanban card. They have to:
 
-- Honour the day boundaries (2 / 7 / 14 / 29) and the < 72 h hard floor.
+- Honour the day boundaries (1 / 7 / 14 / 29) and the < 24 h hard floor.
 - Treat trust as a ceiling, not a floor: a 60-day-old "critical" account
   must come out as ``settling``, not as the higher of (age, trust).
 - Round progress and ``days_to_next_phase`` to safe whole values.
@@ -30,9 +30,10 @@ from services.warming.pacing import (
     ("hours", "expected"),
     [
         (0.0, "intro"),
-        (24.0, "intro"),  # day 1 — still < 72 h floor
-        (71.9, "intro"),  # just below the 72-h floor
-        (72.0, "settling"),  # crosses the floor exactly at 3 days
+        (23.9, "intro"),  # just below the 24-h hard floor
+        (24.0, "intro"),  # day 1 — top of intro (intro day-bound is 1)
+        (24.1, "settling"),  # just past day 1 → settling
+        (72.0, "settling"),  # day 3 — settling
         (7 * 24.0, "settling"),  # day 7 — still settling
         (7 * 24.0 + 1, "warming"),  # day 7+ → warming
         (14 * 24.0, "warming"),  # day 14 boundary inclusive
@@ -89,10 +90,10 @@ def test_effective_phase_intro_never_promoted_by_high_trust() -> None:
 
 
 def test_phase_progress_start_of_phase_is_zero() -> None:
-    # 3 days = start of settling — progress should be 0.0.
-    progress, days_to_next = _phase_progress("settling", 3 * 24.0)
+    # 2 days = start of settling (intro now ends at day 1) — progress should be 0.0.
+    progress, days_to_next = _phase_progress("settling", 2 * 24.0)
     assert progress == pytest.approx(0.0)
-    assert days_to_next == 5  # settling boundary is day 7 → 7+1-3 = 5 days
+    assert days_to_next == 6  # settling boundary is day 7 → 7+1-2 = 6 days
 
 
 def test_phase_progress_end_of_phase_approaches_one() -> None:

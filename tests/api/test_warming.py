@@ -84,6 +84,26 @@ async def test_start_forwards_target_days(app: FastAPI, monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
+async def test_start_forwards_activity_persona(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def _fake(body: StartWarmingRequest) -> WarmingAccountState:
+        seen["activity_persona"] = body.activity_persona
+        return _account()
+
+    monkeypatch.setattr("services.warming.start_warming", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/warming/start",
+            json={"account_id": "acc-1", "activity_persona": "active"},
+        )
+    assert resp.status_code == 200
+    assert seen["activity_persona"] == "active"
+
+
+@pytest.mark.asyncio
 async def test_start_unknown_account_is_404(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
         raise warming_service.UnknownAccountError

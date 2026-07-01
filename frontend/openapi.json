@@ -5565,6 +5565,16 @@
               }
             ],
             "title": "Target Days"
+          },
+          "activity_persona": {
+            "type": "string",
+            "enum": [
+              "calm",
+              "normal",
+              "active"
+            ],
+            "title": "Activity Persona",
+            "default": "normal"
           }
         },
         "type": "object",
@@ -6219,6 +6229,22 @@
             ],
             "title": "Target Days"
           },
+          "activity_persona": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "calm",
+                  "normal",
+                  "active"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Activity Persona"
+          },
           "readiness": {
             "anyOf": [
               {
@@ -6379,25 +6405,6 @@
             "title": "Enforce Readiness",
             "default": true
           },
-          "quiet_hours_enabled": {
-            "type": "boolean",
-            "title": "Quiet Hours Enabled",
-            "default": false
-          },
-          "quiet_hours_start": {
-            "type": "integer",
-            "maximum": 23.0,
-            "minimum": 0.0,
-            "title": "Quiet Hours Start",
-            "default": 0
-          },
-          "quiet_hours_end": {
-            "type": "integer",
-            "maximum": 23.0,
-            "minimum": 0.0,
-            "title": "Quiet Hours End",
-            "default": 0
-          },
           "max_daily_actions": {
             "type": "integer",
             "minimum": 0.0,
@@ -6449,25 +6456,6 @@
             "type": "boolean",
             "title": "Enforce Readiness",
             "default": true
-          },
-          "quiet_hours_enabled": {
-            "type": "boolean",
-            "title": "Quiet Hours Enabled",
-            "default": false
-          },
-          "quiet_hours_start": {
-            "type": "integer",
-            "maximum": 23.0,
-            "minimum": 0.0,
-            "title": "Quiet Hours Start",
-            "default": 0
-          },
-          "quiet_hours_end": {
-            "type": "integer",
-            "maximum": 23.0,
-            "minimum": 0.0,
-            "title": "Quiet Hours End",
-            "default": 0
           },
           "max_daily_actions": {
             "type": "integer",

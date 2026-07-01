@@ -542,10 +542,16 @@ export function WarmingPage() {
           onClose={() => {
             setWarmDaysFor(null);
           }}
-          onConfirm={(days) => {
+          onConfirm={(days, persona) => {
             setBusyId(warmDaysFor.account_id);
             start.mutate(
-              { body: { account_id: warmDaysFor.account_id, target_days: days } },
+              {
+                body: {
+                  account_id: warmDaysFor.account_id,
+                  target_days: days,
+                  activity_persona: persona,
+                },
+              },
               {
                 onSettled: () => {
                   setBusyId(null);

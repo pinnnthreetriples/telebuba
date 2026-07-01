@@ -1270,6 +1270,10 @@ export type StartWarmingRequest = {
    * Target Days
    */
   target_days?: number | null;
+  /**
+   * Activity Persona
+   */
+  activity_persona?: 'calm' | 'normal' | 'active';
 };
 
 /**
@@ -1598,6 +1602,10 @@ export type WarmingAccountState = {
    * Target Days
    */
   target_days?: number | null;
+  /**
+   * Activity Persona
+   */
+  activity_persona?: 'calm' | 'normal' | 'active' | null;
   readiness?: WarmingReadiness | null;
   /**
    * Promoted To Nc
@@ -1704,18 +1712,6 @@ export type WarmingSettings = {
    */
   enforce_readiness?: boolean;
   /**
-   * Quiet Hours Enabled
-   */
-  quiet_hours_enabled?: boolean;
-  /**
-   * Quiet Hours Start
-   */
-  quiet_hours_start?: number;
-  /**
-   * Quiet Hours End
-   */
-  quiet_hours_end?: number;
-  /**
    * Max Daily Actions
    */
   max_daily_actions?: number;
@@ -1761,18 +1757,6 @@ export type WarmingSettingsUpdate = {
    * Enforce Readiness
    */
   enforce_readiness?: boolean;
-  /**
-   * Quiet Hours Enabled
-   */
-  quiet_hours_enabled?: boolean;
-  /**
-   * Quiet Hours Start
-   */
-  quiet_hours_start?: number;
-  /**
-   * Quiet Hours End
-   */
-  quiet_hours_end?: number;
   /**
    * Max Daily Actions
    */
