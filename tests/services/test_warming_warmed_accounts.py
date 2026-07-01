@@ -17,7 +17,7 @@ from core.db import (
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
 from schemas.warming import WarmingStateWrite
-from services.warming import list_warmed_accounts
+from services.warming import list_warmed_accounts, load_board
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -119,6 +119,13 @@ async def test_promote_to_neurocomment_appears_in_warmed_list_after_threshold() 
 
     result = await list_warmed_accounts(14)
     assert [a.account_id for a in result.accounts] == ["graduate"]
+
+    # Regression: a promoted account must not linger in the "ready to warm"
+    # kanban column just because its state also happens to be "idle" — the
+    # operator moved it to the warmed pool, it shouldn't show as available.
+    board = await load_board()
+    assert "graduate" not in {c.account_id for c in board.idle}
+    assert "graduate" not in {c.account_id for c in board.warming}
 
 
 @pytest.mark.asyncio
