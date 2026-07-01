@@ -321,6 +321,54 @@ test('toggling the captcha solver persists the campaign override', async () => {
   });
 });
 
+test('the captcha solver toggle reflects the persisted value after a real round trip', async () => {
+  // Unlike routeApi() (a static mock), this simulates a real backend: the POST
+  // actually updates the value the next GET /board returns.
+  let solverEnabled = true;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/solver') && request.method === 'POST') {
+      return request
+        .clone()
+        .json()
+        .then((body: { enabled: boolean }) => {
+          solverEnabled = body.enabled;
+          return new Response(null, { status: 204 });
+        });
+    }
+    if (url.pathname.endsWith('/board')) {
+      return Promise.resolve(jsonResponse({ ...BOARD, solver_enabled: solverEnabled }));
+    }
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  const sw = screen.getByRole('switch', { name: 'Решение капчи' });
+  expect(sw).toHaveAttribute('aria-checked', 'true');
+
+  await userEvent.click(sw);
+  await waitFor(() => {
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+  });
+
+  await userEvent.click(sw);
+  await waitFor(() => {
+    expect(sw).toHaveAttribute('aria-checked', 'true');
+  });
+});
+
 test('Решить retries a challenged pair', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

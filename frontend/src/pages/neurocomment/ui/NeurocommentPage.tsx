@@ -665,7 +665,7 @@ export function NeurocommentPage() {
           </div>
 
           {/* captcha solve + bot-check */}
-          <div className="overflow-hidden rounded-2xl border border-line bg-white">
+          <div className="rounded-2xl border border-line bg-white">
             <div className="flex items-center justify-between gap-[10px] px-[14px] py-3">
               <div className="flex min-w-0 items-center gap-[9px]">
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-primary-tint text-primary">
