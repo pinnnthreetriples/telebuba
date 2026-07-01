@@ -82,15 +82,25 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const photoInput = useRef<HTMLInputElement>(null);
   const musicInput = useRef<HTMLInputElement>(null);
 
-  const snapshot = useQuery(
-    accountProfileSnapshotQueryOptions({ path: { account_id: account.account_id } }),
-  );
+  const snapOpts = accountProfileSnapshotQueryOptions({
+    path: { account_id: account.account_id },
+  });
+  const snapshot = useQuery(snapOpts);
+  const [refreshing, setRefreshing] = useState(false);
   const photos = snapshot.data?.photos ?? [];
   const stories = snapshot.data?.stories ?? [];
   const music = snapshot.data?.music ?? [];
   const refresh = () => {
     void queryClient.invalidateQueries();
   };
+  // "Обновлено {только что | N мин назад}" — from the snapshot query's last fetch.
+  const syncMins = snapshot.dataUpdatedAt
+    ? Math.floor((Date.now() - snapshot.dataUpdatedAt) / 60000)
+    : 0;
+  const syncLabel =
+    !snapshot.dataUpdatedAt || syncMins < 1
+      ? t('accounts.profile.updatedJustNow')
+      : t('accounts.profile.updatedMinAgo', { n: syncMins });
 
   const [tab, setTab] = useState<Tab>('text');
   const [storyOpen, setStoryOpen] = useState(false);
@@ -101,13 +111,36 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [username, setUsername] = useState(account.username ?? '');
   const [bio, setBio] = useState(account.bio ?? '');
 
-  const initial = (account.first_name ?? account.phone ?? account.account_id)
-    .trim()
-    .charAt(0)
-    .toUpperCase();
+  // «Обновить»: force a live re-pull (bypasses the read cache), write it into the
+  // rendered snapshot, and reseed the header + text fields from the fresh profile.
+  const onRefresh = async () => {
+    setRefreshing(true);
+    try {
+      const fresh = await queryClient.fetchQuery(
+        accountProfileSnapshotQueryOptions({
+          path: { account_id: account.account_id },
+          query: { refresh: true },
+        }),
+      );
+      queryClient.setQueryData(snapOpts.queryKey, fresh);
+      if (fresh.first_name != null) {
+        setFirstName(fresh.first_name);
+        setLastName(fresh.last_name ?? '');
+        setUsername(fresh.username ?? '');
+        setBio(fresh.bio ?? '');
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  // Header reflects the live snapshot (falls back to the stored account row).
+  const liveFirst = snapshot.data?.first_name ?? account.first_name;
+  const liveLast = snapshot.data?.last_name ?? account.last_name;
+  const liveUser = snapshot.data?.username ?? account.username;
+  const initial = (liveFirst ?? account.phone ?? account.account_id).trim().charAt(0).toUpperCase();
   const fullName =
-    [account.first_name, account.last_name].filter(Boolean).join(' ') ||
-    (account.phone ?? account.account_id);
+    [liveFirst, liveLast].filter(Boolean).join(' ') || (account.phone ?? account.account_id);
 
   // Telegram requires a non-empty first name; the Save button gates on it.
   const onSave = () => {
@@ -166,9 +199,34 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             <div className="min-w-0 flex-1">
               <div className="truncate text-[16px] font-bold">{fullName}</div>
               <div className="truncate text-[12px] text-ink-subtle">
-                {account.username ? `@${account.username} · ` : ''}
+                {liveUser ? `@${liveUser} · ` : ''}
                 {account.phone ?? account.account_id}
               </div>
+            </div>
+            <div className="flex shrink-0 flex-col items-end gap-[5px]">
+              <button
+                type="button"
+                disabled={refreshing}
+                onClick={() => {
+                  void onRefresh();
+                }}
+                className="inline-flex items-center gap-[6px] rounded-full border border-line-input bg-white px-3 py-[6px] text-[12.5px] font-medium text-ink transition-colors hover:border-[#bfd6ff] hover:text-primary disabled:opacity-70"
+              >
+                <span className={`inline-flex ${refreshing ? 'tb-spin' : ''}`}>
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+                  </svg>
+                </span>
+                {t('accounts.profile.refresh')}
+              </button>
+              <span className="text-[11px] text-ink-subtle">{syncLabel}</span>
             </div>
             <button
               type="button"
@@ -434,7 +492,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               disabled={updateProfile.isPending || !firstName.trim()}
               className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${saved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
             >
-              {saved ? (
+              {updateProfile.isPending ? (
+                <span className="inline-flex items-center gap-[6px]">
+                  <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
+                  {t('accounts.profile.saving')}
+                </span>
+              ) : saved ? (
                 <span className="inline-flex items-center gap-[6px]">
                   <span className="tb-swapin inline-flex">
                     <svg

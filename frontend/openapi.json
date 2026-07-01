@@ -884,7 +884,7 @@
           "accounts"
         ],
         "summary": "Get Account Profile Snapshot",
-        "description": "Live profile (photos / stories / music) for the edit-profile modal.",
+        "description": "Live profile (name / bio / photos / stories / music) for the edit modal.\n\n``refresh=true`` (the modal's \u00ab\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c\u00bb button) bypasses the read cache and\nre-pulls from Telegram.",
         "operationId": "getAccountProfileSnapshot",
         "parameters": [
           {
@@ -894,6 +894,16 @@
             "schema": {
               "type": "string",
               "title": "Account Id"
+            }
+          },
+          {
+            "name": "refresh",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "boolean",
+              "default": false,
+              "title": "Refresh"
             }
           },
           {
@@ -3544,6 +3554,50 @@
               }
             ],
             "title": "Error"
+          },
+          "first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "First Name"
+          },
+          "last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Name"
+          },
+          "username": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Username"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
           },
           "avatar_data_uri": {
             "anyOf": [

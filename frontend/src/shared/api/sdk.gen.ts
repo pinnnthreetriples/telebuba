@@ -433,7 +433,10 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
 /**
  * Get Account Profile Snapshot
  *
- * Live profile (photos / stories / music) for the edit-profile modal.
+ * Live profile (name / bio / photos / stories / music) for the edit modal.
+ *
+ * ``refresh=true`` (the modal's «Обновить» button) bypasses the read cache and
+ * re-pulls from Telegram.
  */
 export const getAccountProfileSnapshot = <ThrowOnError extends boolean = false>(
   options: Options<GetAccountProfileSnapshotData, ThrowOnError>,

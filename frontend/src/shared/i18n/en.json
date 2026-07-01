@@ -188,7 +188,12 @@
       "dropTitle": "Upload a photo or video",
       "dropHint": "drag a file or click",
       "cancel": "Cancel",
-      "publish": "Publish"
+      "publish": "Publish",
+      "stUploading": "Uploading…",
+      "stDone": "Published",
+      "stError": "Error",
+      "retry": "Retry",
+      "removeFile": "Remove file"
     },
     "profile": {
       "close": "Close",
@@ -218,7 +223,11 @@
       "pickTrack": "Pick a track",
       "cancel": "Cancel",
       "save": "Save",
-      "saved": "Saved"
+      "saved": "Saved",
+      "saving": "Saving…",
+      "refresh": "Refresh",
+      "updatedJustNow": "Updated just now",
+      "updatedMinAgo": "Updated {{n}} min ago"
     },
     "addWizard": {
       "title": "Add account",

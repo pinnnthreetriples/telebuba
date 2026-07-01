@@ -73,6 +73,10 @@ async def account_profile_view(
     if snapshot.error is not None:
         return AccountProfileView(error=snapshot.error)
     return AccountProfileView(
+        first_name=snapshot.first_name,
+        last_name=snapshot.last_name,
+        username=snapshot.username,
+        bio=snapshot.bio,
         avatar_data_uri=_data_uri(snapshot.avatar_bytes),
         photos=[
             ProfilePhotoView(

@@ -62,3 +62,41 @@ test('picking media and publishing posts the story', async () => {
     expect(onPosted).toHaveBeenCalled();
   });
 });
+
+test('a failed publish surfaces the backend error reason on the row', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const req = input as Request;
+    if (req.url.endsWith('/accounts/acc-1/story') && req.method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ error: { code: 'bad_request', message: 'Proxy connection timed out' } }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+  });
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 's.jpg', { type: 'image/jpeg' })] },
+  });
+  await userEvent.click(screen.getByText('Опубликовать'));
+  // The red-icon tooltip carries the real reason (was a generic "Ошибка").
+  expect(await screen.findByText('Proxy connection timed out')).toBeInTheDocument();
+});
+
+test('a picked file shows a removable row', async () => {
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 's.jpg', { type: 'image/jpeg' })] },
+  });
+  expect(await screen.findByText('s.jpg')).toBeInTheDocument();
+  await userEvent.click(screen.getByLabelText('Убрать файл'));
+  await waitFor(() => {
+    expect(screen.queryByText('s.jpg')).not.toBeInTheDocument();
+  });
+});

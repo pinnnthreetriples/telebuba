@@ -139,3 +139,33 @@ test('music tab removes the current track and picks a new one', async () => {
     expect(fired('/accounts/acc-1/music')).toBe(true);
   });
 });
+
+test('the refresh button force-re-pulls the live profile and updates the header', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      // A forced refresh (the «Обновить» button) re-pulls fresh live text.
+      const live =
+        url.searchParams.get('refresh') === 'true'
+          ? { ...VIEW, first_name: 'Пётр', username: 'petr_tg' }
+          : VIEW;
+      return Promise.resolve(jsonResponse(live));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  // Initially the header shows the stored account row.
+  expect(await screen.findByText('Иван')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByText('Обновить'));
+
+  const forced = () =>
+    vi.mocked(fetch).mock.calls.some(([input]) => (input as Request).url.includes('refresh=true'));
+  await waitFor(() => {
+    expect(forced()).toBe(true);
+  });
+  // The header now reflects the freshly-pulled live profile.
+  await waitFor(() => {
+    expect(screen.getByText('Пётр')).toBeInTheDocument();
+  });
+});

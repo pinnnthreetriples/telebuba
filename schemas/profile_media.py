@@ -105,6 +105,12 @@ class AccountProfileView(BaseModel):
     """JSON-safe live profile for the edit-profile modal."""
 
     error: str | None = None
+    # Live profile text pulled from Telegram, so «Обновить» refreshes the header +
+    # Текст-tab fields (not just the media). ``None`` when the live fetch failed.
+    first_name: str | None = None
+    last_name: str | None = None
+    username: str | None = None
+    bio: str | None = None
     avatar_data_uri: str | None = None
     photos: list[ProfilePhotoView] = Field(default_factory=list)
     stories: list[ProfileStoryView] = Field(default_factory=list)
