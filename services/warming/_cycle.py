@@ -23,20 +23,22 @@ from core.logging import log_event
 from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel, SetOnline
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
-from services.warming._chat import _maybe_inter_account_chat
+from services.warming._chat import _run_chat_step
+from services.warming._stories import maybe_watch_stories
 from services.warming.pacing import (
     _HALT_STATUSES,
     _WAIT_STATUSES,
     _account_age_hours,
     _classify_flood,
     compute_intensity,
+    persona_reaction_probability,
 )
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from schemas.telegram_actions import ActionResult
-    from schemas.warming import WarmingChannel, WarmingIntensity, WarmingSettingsSecret
+    from schemas.warming import WarmingChannel, WarmingSettingsSecret
 
     # Live progress hook: the loop passes a callback that persists the named
     # step (set_online/join/read/react/send_dm) so the board rail can advance
@@ -138,6 +140,20 @@ class _ChannelTally:
     flooded: bool = False
     peer_flooded: bool = False
 
+    def merge_channel_pass(self, other: _ChannelTally) -> None:
+        """Fold a channel-loop pass into this cycle tally (counts add, flood/last-* overwrite)."""
+        self.joined += other.joined
+        self.reads += other.reads
+        self.reactions += other.reactions
+        self.failures += other.failures
+        self.attempts += other.attempts
+        self.flood_seconds = other.flood_seconds
+        self.flood_until = other.flood_until
+        self.last_failed_action = other.last_failed_action
+        self.last_failed_channel = other.last_failed_channel
+        self.flooded = other.flooded
+        self.peer_flooded = other.peer_flooded
+
 
 def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str) -> bool:
     """Fold a join result into the tally. Returns True if the cycle should stop."""
@@ -187,7 +203,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
     data: WarmingCycleRequest,
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
-    intensity: WarmingIntensity,
+    reaction_probability: float,
     attempts_so_far: int,
     on_step: _OnStep | None = None,
 ) -> _ChannelTally:
@@ -219,7 +235,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             account_id,
             channel.channel,
             reactions_enabled=secret.reactions_enabled,
-            reaction_probability=intensity.reaction_probability,
+            reaction_probability=reaction_probability,
             attempts_so_far=attempts_so_far + tally.attempts,
             remaining_actions=remaining_actions,
         )
@@ -291,7 +307,7 @@ async def _build_cycle_result(
     return result
 
 
-async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915
+async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
     on_step: _OnStep | None = None,
@@ -355,48 +371,25 @@ async def run_one_cycle(  # noqa: C901, PLR0912, PLR0915
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(channels, _seams.rng.randint(lower, upper))
         channel_tally = await _run_channel_loop(
-            data, chosen, secret, intensity, tally.attempts, on_step
+            data,
+            chosen,
+            secret,
+            persona_reaction_probability(data.activity_persona),
+            tally.attempts,
+            on_step,
         )
 
-        tally.joined += channel_tally.joined
-        tally.reads += channel_tally.reads
-        tally.reactions += channel_tally.reactions
-        tally.failures += channel_tally.failures
-        tally.attempts += channel_tally.attempts
-        tally.flood_seconds = channel_tally.flood_seconds
-        tally.flood_until = channel_tally.flood_until
-        tally.last_failed_action = channel_tally.last_failed_action
-        tally.last_failed_channel = channel_tally.last_failed_channel
-        tally.flooded = channel_tally.flooded
-        tally.peer_flooded = channel_tally.peer_flooded
+        tally.merge_channel_pass(channel_tally)
 
-        # П11: honour the loop's trust+readiness-aware dm_allowed when supplied;
-        # direct callers (data.dm_allowed is None) fall back to the age-only flag.
+        # One low-risk "glanced at stories" signal per session (every persona).
+        await maybe_watch_stories(account_id, chosen, tally, can_attempt=_can_attempt())
+
         dm_ok = data.dm_allowed if data.dm_allowed is not None else intensity.dm_allowed
-        if (
-            _can_attempt()
-            and not tally.flooded
-            and not tally.peer_flooded
-            and dm_ok
-            and secret.inter_account_chat
-            and secret.gemini_api_key
-        ):
-            chat_result = await _maybe_inter_account_chat(account_id, secret)
-            messages_sent = chat_result.messages_sent
-            if messages_sent:
-                await _emit_step(on_step, "send_dm")
-            tally.attempts += chat_result.attempted_actions
-            tally.failures += chat_result.failures
-            if chat_result.last_failed_action:
-                tally.last_failed_action = chat_result.last_failed_action
-            if chat_result.flood_result:
-                if chat_result.flood_result.status == "peer_flood":
-                    tally.peer_flooded = True
-                else:
-                    tally.flooded, tally.flood_seconds, tally.flood_until = _classify_flood(
-                        chat_result.flood_result
-                    )
-                tally.last_failed_action = chat_result.last_failed_action or "send_dm"
+        messages_sent = await _run_chat_step(
+            data, secret, tally, dm_allowed=dm_ok, can_attempt=_can_attempt()
+        )
+        if messages_sent:
+            await _emit_step(on_step, "send_dm")
     finally:
         # SetOnline(False) must run even if any of the inner steps raises so the
         # account does not stay online forever.

@@ -13,7 +13,11 @@ import time
 from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
-from telethon.tl.functions.stories import GetPeerStoriesRequest, GetPinnedStoriesRequest
+from telethon.tl.functions.stories import (
+    GetPeerStoriesRequest,
+    GetPinnedStoriesRequest,
+    ReadStoriesRequest,
+)
 from telethon.tl.types import InputPeerSelf, MessageMediaDocument, MessageMediaPhoto
 
 from schemas.telegram_profile_snapshot import (
@@ -26,7 +30,7 @@ from schemas.telegram_profile_snapshot import (
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
-    from schemas.telegram_actions import ListPinnedStories
+    from schemas.telegram_actions import ListPinnedStories, WatchPeerStories
 
 
 def _optional_str(value: object) -> str | None:
@@ -46,6 +50,25 @@ async def dispatch_list_pinned_stories(
     raw_stories = getattr(result, "stories", []) or []
     items = [await _story_thumb(client, story, is_pinned=True) for story in raw_stories]
     return TelegramPinnedStories(items=[item for item in items if item is not None])
+
+
+async def dispatch_watch_peer_stories(client: TelegramClient, action: WatchPeerStories) -> None:
+    """View a subscribed peer's active stories and mark them seen.
+
+    ``stories.getPeerStories`` returns ``stories.PeerStories`` whose actual
+    ``StoryItem`` list sits one level deeper at ``result.stories.stories``
+    (same double-nesting as ``dispatch_list_active_stories``). We mark
+    everything up to the newest id read; a peer with no active stories is a
+    silent no-op.
+    """
+    peer = await client.get_input_entity(action.peer)
+    result = await client(GetPeerStoriesRequest(peer=peer))
+    outer = getattr(result, "stories", None)
+    raw_stories = getattr(outer, "stories", []) or []
+    ids = [int(getattr(story, "id", 0) or 0) for story in raw_stories]
+    ids = [story_id for story_id in ids if story_id]
+    if ids:
+        await client(ReadStoriesRequest(peer=peer, max_id=max(ids)))
 
 
 async def dispatch_list_active_stories(client: TelegramClient) -> TelegramActiveStories:

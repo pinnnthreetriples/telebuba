@@ -6,6 +6,7 @@ from typing import Final, cast
 
 from core.db import fetch_account, fetch_warming_state, upsert_warming_state
 from schemas.warming import (
+    ActivityPersona,
     WarmingAccountState,
     WarmingPhase,
     WarmingState,
@@ -49,6 +50,7 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
     current_phase: WarmingPhase | None | _Sentinel = _SENTINEL,
     phase_entered_at: str | None | _Sentinel = _SENTINEL,
     target_days: int | None | _Sentinel = _SENTINEL,
+    activity_persona: ActivityPersona | None | _Sentinel = _SENTINEL,
 ) -> WarmingStateWriteResult:
     current = await fetch_warming_state(account_id)
     # P2.4: do NOT compute ``cycles + 1`` here — that's the lost-update read.
@@ -103,6 +105,10 @@ async def _set_state(  # noqa: PLR0913 - explicit state fields read clearer than
                 _resolve(phase_entered_at, "phase_entered_at"),
             ),
             target_days=cast("int | None", _resolve(target_days, "target_days")),
+            activity_persona=cast(
+                "ActivityPersona | None",
+                _resolve(activity_persona, "activity_persona"),
+            ),
         ),
     )
 

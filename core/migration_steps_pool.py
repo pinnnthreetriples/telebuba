@@ -1,9 +1,9 @@
-"""Proxy-pool migration body (#18) — split from ``core.migration_steps``.
+"""Overflow migration bodies — split from ``core.migration_steps`` for size.
 
 Kept in its own module so ``core.migration_steps`` stays under the file-size
-budget. Creates the shared ``proxies`` table + ``accounts.proxy_id`` FK,
-backfills the retired per-account ``account_proxies`` (collapsing identical
-endpoints into one shared proxy), then drops it. The generic SQLite helpers are
+budget. Holds the proxy-pool migration (#18 — the shared ``proxies`` table +
+``accounts.proxy_id`` FK, backfilled from the retired ``account_proxies``) and
+the warming ``activity_persona`` column (#21). The generic SQLite helpers are
 imported from ``core.migration_steps``.
 """
 
@@ -102,3 +102,16 @@ def _add_proxy_pool(connection: Connection) -> None:
     if _sqlite_table_exists(connection, "account_proxies"):
         _backfill_proxy_pool(connection)
         connection.exec_driver_sql("DROP TABLE account_proxies")
+
+
+def _add_warming_state_activity_persona(connection: Connection) -> None:
+    # Operator-chosen activity persona (the start modal, beside the day slider).
+    # DEFAULT 'normal' backfills existing rows to the balanced cadence; the reader
+    # maps any residual NULL up to "normal" too.
+    if not _sqlite_table_exists(connection, "warming_account_state"):
+        return
+    if "activity_persona" not in _sqlite_columns(connection, "warming_account_state"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state ADD COLUMN activity_persona VARCHAR "
+            "NOT NULL DEFAULT 'normal'",
+        )

@@ -44,14 +44,13 @@ from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import add_channels, list_channels, remove_channel
 from services.warming.pacing import (
     _in_quiet_hours,
-    _local_now,
     _proxy_snapshot,
-    _quiet_hours_end_at,
     _roll_daily,
     _seconds_until,
     _shift_to_active_hours,
     compute_intensity,
     evaluate_readiness,
+    persona_next_run_seconds,
 )
 from services.warming.settings_store import load_settings, save_settings
 
@@ -63,10 +62,8 @@ __all__ = [
     "_human_delay",
     "_in_quiet_hours",
     "_initial_delay_seconds",
-    "_local_now",
     "_loop_sleep_seconds",
     "_proxy_snapshot",
-    "_quiet_hours_end_at",
     "_roll_daily",
     "_sanitize_chat_text",
     "_seconds_until",
@@ -80,6 +77,7 @@ __all__ = [
     "list_warmed_accounts",
     "load_board",
     "load_settings",
+    "persona_next_run_seconds",
     "promote_to_neurocomment",
     "reconcile_warming_runtime",
     "remove_channel",

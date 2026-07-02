@@ -8,8 +8,11 @@ const MAX = 14;
 const PRESETS = [3, 7, 14];
 const TICKS = [...Array(MAX).keys()];
 
+type ActivityPersona = 'calm' | 'normal' | 'active';
+const PERSONAS: ActivityPersona[] = ['calm', 'normal', 'active'];
+
 // The design's "warm account" modal: a draggable day-length slider (1–14),
-// quick presets, and a @SpamBot pre-check.
+// quick presets, an activity persona (cadence), and a @SpamBot pre-check.
 export function WarmDaysModal({
   phone,
   onClose,
@@ -17,10 +20,11 @@ export function WarmDaysModal({
 }: {
   phone: string;
   onClose: () => void;
-  onConfirm: (days: number) => void;
+  onConfirm: (days: number, persona: ActivityPersona) => void;
 }) {
   const { t } = useTranslation();
   const [days, setDays] = useState(7);
+  const [persona, setPersona] = useState<ActivityPersona>('normal');
   const trackRef = useRef<HTMLDivElement>(null);
   const pct = ((days - MIN) / (MAX - MIN)) * 100;
 
@@ -147,11 +151,46 @@ export function WarmDaysModal({
           ))}
         </div>
 
+        <div className="mb-[8px] flex items-center gap-[6px] text-[12.5px] font-semibold">
+          {t('warming.persona.label')}
+          <span className="tb-tip inline-flex">
+            <button
+              type="button"
+              aria-label={t('warming.persona.label')}
+              className="inline-flex h-[16px] w-[16px] items-center justify-center rounded-full border border-line-input text-[10px] font-bold text-ink-subtle"
+            >
+              ?
+            </button>
+            <span className="tb-tip-pop">{t('warming.persona.tip')}</span>
+          </span>
+        </div>
+        <div className="mb-[22px] flex gap-[6px]">
+          {PERSONAS.map((p) => (
+            <button
+              key={p}
+              type="button"
+              onClick={() => {
+                setPersona(p);
+              }}
+              className={`flex-1 rounded-[10px] border px-2 py-[9px] text-center transition-colors ${
+                persona === p
+                  ? 'border-primary bg-primary-tint text-primary'
+                  : 'border-line-input bg-white text-ink-muted hover:bg-[#f7f6f4]'
+              }`}
+            >
+              <div className="text-[12.5px] font-semibold">{t(`warming.persona.${p}.name`)}</div>
+              <div className="mt-[2px] text-[11px] text-ink-subtle">
+                {t(`warming.persona.${p}.hint`)}
+              </div>
+            </button>
+          ))}
+        </div>
+
         <div className="flex justify-end gap-2">
           <button
             type="button"
             onClick={() => {
-              onConfirm(days);
+              onConfirm(days, persona);
               onClose();
             }}
             className="rounded-full bg-primary px-[22px] py-[9px] text-[13px] font-semibold text-white transition-colors hover:bg-[#0057db]"

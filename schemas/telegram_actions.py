@@ -227,6 +227,18 @@ class RemoveStory(BaseModel):
     story_id: int = Field(gt=0)
 
 
+class WatchPeerStories(BaseModel):
+    """View a subscribed peer's active stories and mark them seen.
+
+    A low-risk, very human warming signal: ``stories.getPeerStories`` on a
+    non-self peer, then ``stories.readStories`` up to the newest id. A no-op
+    (still ``ok``) when the peer has no active stories.
+    """
+
+    action_type: Literal["watch_peer_stories"] = "watch_peer_stories"
+    peer: str = Field(min_length=1)
+
+
 class ListProfileMusic(BaseModel):
     """Read-only: list the music shown on the account's profile.
 
@@ -278,7 +290,8 @@ TelegramAction = Annotated[
     | AddProfileMusic
     | RemoveProfileMusic
     | RemoveProfilePhoto
-    | RemoveStory,
+    | RemoveStory
+    | WatchPeerStories,
     Field(discriminator="action_type"),
 ]
 

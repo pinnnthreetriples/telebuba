@@ -32,7 +32,10 @@ from core.migration_steps import (
     _add_warming_user_controls,
     _rename_proxy_type_http_to_https,
 )
-from core.migration_steps_pool import _add_proxy_pool
+from core.migration_steps_pool import (
+    _add_proxy_pool,
+    _add_warming_state_activity_persona,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -65,6 +68,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (18, "add_proxy_pool", _add_proxy_pool),
     (19, "add_neurocomment_settings", _add_neurocomment_settings),
     (20, "add_warming_state_target_days", _add_warming_state_target_days),
+    (21, "add_warming_state_activity_persona", _add_warming_state_activity_persona),
 )
 
 

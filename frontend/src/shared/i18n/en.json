@@ -722,6 +722,13 @@
       "label_one": "day",
       "label_other": "days"
     },
+    "persona": {
+      "label": "User type",
+      "tip": "How often the account drops in and does something during the day. Always capped by the age-based safety limit — a young account stays calm even on \"Active\".",
+      "calm": { "name": "Calm", "hint": "2–4 visits/day" },
+      "normal": { "name": "Normal", "hint": "5–8 visits/day" },
+      "active": { "name": "Active", "hint": "10–14 visits/day" }
+    },
     "notReady": {
       "noProxy": "no proxy",
       "proxyFailed": "proxy not responding",

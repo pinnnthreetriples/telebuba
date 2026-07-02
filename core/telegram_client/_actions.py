@@ -25,6 +25,7 @@ from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._media import _dispatch_profile_media_action
 from core.telegram_client._pool import get_client
+from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._util import extract_invite_hash
 from schemas.telegram_actions import (
     ActionResult,
@@ -45,6 +46,7 @@ from schemas.telegram_actions import (
     SetOnline,
     SetProfilePhoto,
     UpdateProfile,
+    WatchPeerStories,
 )
 
 if TYPE_CHECKING:
@@ -222,6 +224,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
             await _dispatch_read_channel(client, action)
+        case WatchPeerStories():
+            await dispatch_watch_peer_stories(client, action)
         case ReactToPost():
             message_id = await _dispatch_react_to_post(client, action)
         case SendDirectMessage():
@@ -334,12 +338,14 @@ async def _dispatch_click_button(client: TelegramClient, action: ClickButton) ->
         await message.click(index)  # ty: ignore[unresolved-attribute]
 
 
-def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901
+def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C901, PLR0912
     """Compact summary of an action for log extras — no payload secrets."""
     extra: dict[str, object]
     match action:
         case JoinChannel() | JoinDiscussionGroup() | LeaveChannel() | ReadChannel() | ReactToPost():
             extra = {"channel": action.channel}
+        case WatchPeerStories():
+            extra = {"peer": action.peer}
         case PostComment():
             extra = {"chat_id": action.chat_id}
         case CommentOnPost():

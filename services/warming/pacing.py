@@ -1,8 +1,9 @@
 """Pure pacing helpers for the warming engine — no Telegram/Gemini I/O.
 
-Scheduling math (quiet hours, daily budget, next-run timing), human-like delays,
-the age→intensity ramp, FloodWait classification, and account-local-time helpers.
-Kept dependency-light so the engine and the board can both import them.
+Scheduling math (persona cadence, daily budget, next-run timing), human-like
+delays, the phase/trust safety ceiling, FloodWait classification, and
+account-local-time helpers. Kept dependency-light so the engine and the board
+can both import them.
 """
 
 from __future__ import annotations
@@ -14,9 +15,11 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from core.config import settings
 from core.db import fetch_account
 from core.phone_geo import timezone_for_phone
-from schemas.warming import WarmingIntensity, WarmingPhase, WarmingReadiness
+from schemas.warming import ActivityPersona, WarmingIntensity, WarmingPhase, WarmingReadiness
 
 if TYPE_CHECKING:
+    from random import Random
+
     from schemas.accounts import AccountRead
     from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import ActionResult
@@ -24,6 +27,11 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingStateRecord
 
 _SECONDS_PER_HOUR = 3600
+
+# Age assumed for an account with a missing/unparseable ``created_at`` — old
+# enough to skip the young-account throttle rather than freeze it at day-one
+# behaviour (replaces the retired age-ramp's ``ramp_full_age_hours``).
+_UNKNOWN_AGE_FALLBACK_HOURS = 192.0
 
 # Rate-limit families that carry a duration and mean "wait then retry".
 _WAIT_STATUSES: Final = frozenset({"flood_wait", "slow_mode_wait", "premium_wait"})
@@ -65,14 +73,6 @@ def _in_quiet_hours(now: datetime, start_hour: int, end_hour: int) -> bool:
     if start_hour < end_hour:
         return start_hour <= hour < end_hour
     return hour >= start_hour or hour < end_hour
-
-
-def _quiet_hours_end_at(now: datetime, end_hour: int) -> datetime:
-    """The next datetime at ``end_hour:00`` strictly after ``now`` (in ``now``'s tz)."""
-    candidate = now.replace(hour=end_hour, minute=0, second=0, microsecond=0)
-    if candidate <= now:
-        candidate += timedelta(days=1)
-    return candidate
 
 
 def _next_utc_midnight(now: datetime) -> datetime:
@@ -158,11 +158,11 @@ def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
     anomalous record never silently freezes an account at day-one behaviour.
     """
     if account is None:
-        return settings.warming.ramp_full_age_hours
+        return _UNKNOWN_AGE_FALLBACK_HOURS
     try:
         created = datetime.fromisoformat(account.created_at)
     except ValueError:
-        return settings.warming.ramp_full_age_hours
+        return _UNKNOWN_AGE_FALLBACK_HOURS
     if created.tzinfo is None:
         created = created.replace(tzinfo=UTC)
     return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
@@ -187,7 +187,7 @@ _PHASE_ORDER: tuple[WarmingPhase, ...] = (
 # Upper day bound of each phase (inclusive). The next phase starts at
 # ``bound + 1`` days. ``None`` = terminal phase (no next bound).
 _PHASE_DAY_BOUND: dict[WarmingPhase, int | None] = {
-    "intro": 2,
+    "intro": 1,
     "settling": 7,
     "warming": 14,
     "active": 29,
@@ -216,14 +216,88 @@ _TRUST_PHASE_CEILING: dict[str, WarmingPhase] = {
     "critical": "settling",
 }
 
-# Hard age floor: fresh accounts (< 72 hours) cannot exceed ``intro`` even with
-# a clean trust score and clean proxy. Sources unanimous: the first 72 h are
-# the highest-risk window regardless of other signals.
-_PHASE_HARD_FLOOR_AGE_HOURS = 72.0
+# Hard age floor: fresh accounts (< 24 hours) cannot exceed ``intro`` even with
+# a clean trust score and clean proxy — the first day is the highest-risk window
+# regardless of other signals. Shortened 72h→24h per the 2026-07-01 persona ADR
+# (the operator's explicit speed/risk trade); ``dm_min_age_hours`` (36h) is the
+# separate, deliberately-unchanged guard on the highest-risk action.
+_PHASE_HARD_FLOOR_AGE_HOURS = 24.0
 
 # Trust bands permitted to send DMs (audit П11). DM is the highest-risk action,
 # so ``at_risk``/``critical`` accounts are blocked even once old enough.
 _DM_ALLOWED_BANDS: Final = frozenset({"excellent", "good", "watch"})
+
+# Activity-persona presets — the operator's chosen *target* cadence (2026-07-01
+# ADR). Sessions/day (a range, drawn per next-run) plus per-session reaction and
+# inter-account DM probability. Lives here beside the phase table (its safety-
+# ceiling counterpart), same "documented tuning constants" rationale — effective
+# behaviour is always ``min(persona, phase/trust)``.
+_PERSONA_SESSIONS: dict[ActivityPersona, tuple[int, int]] = {
+    "calm": (2, 4),
+    "normal": (5, 8),
+    "active": (10, 14),
+}
+_PERSONA_REACTION_PROBABILITY: dict[ActivityPersona, float] = {
+    "calm": 0.15,
+    "normal": 0.40,
+    "active": 0.70,
+}
+_PERSONA_DM_PROBABILITY: dict[ActivityPersona, float] = {
+    "calm": 0.10,
+    "normal": 0.30,
+    "active": 0.55,
+}
+# Rough action count of one session (set_online + 1-3 read/react + maybe a DM/
+# story). Used to cap sessions/day by the phase daily budget: a young account
+# whose cap affords only K sessions runs K, not the persona's headline count.
+_EXPECTED_ACTIONS_PER_SESSION = 5
+
+
+def persona_reaction_probability(persona: ActivityPersona) -> float:
+    """Per-session probability the account reacts to a post it read."""
+    return _PERSONA_REACTION_PROBABILITY[persona]
+
+
+def persona_dm_probability(persona: ActivityPersona) -> float:
+    """Per-session probability the account starts an inter-account DM.
+
+    Layered on top of the age + trust + settings DM gate — the persona only
+    decides *how often* to chat once chatting is already allowed.
+    """
+    return _PERSONA_DM_PROBABILITY[persona]
+
+
+def _active_window_hours() -> float:
+    """Length of the account's daytime activity window, in hours (24 if disabled)."""
+    warm = settings.warming
+    if not warm.active_hours_enabled or warm.active_hours_start == warm.active_hours_end:
+        return 24.0
+    start, end = warm.active_hours_start, warm.active_hours_end
+    span = (end - start) if end > start else (24 - start + end)
+    return float(span)
+
+
+def persona_next_run_seconds(
+    persona: ActivityPersona,
+    daily_cap: int,
+    rng: Random,
+) -> float:
+    """Seconds until the next session, spreading the persona's sessions evenly.
+
+    The active window is split into ``effective_sessions`` equal gaps, where
+    ``effective_sessions = min(persona draw, sessions the phase cap affords)`` —
+    so the phase ceiling throttles the cadence for young accounts. The gap gets
+    ±``next_run_jitter_fraction`` so runs don't land on a rigid grid. No front-
+    loading: one gap is returned per finished cycle.
+    """
+    warm = settings.warming
+    low, high = _PERSONA_SESSIONS[persona]
+    draw = rng.randint(low, high)
+    affordable = max(1, daily_cap // _EXPECTED_ACTIONS_PER_SESSION) if daily_cap > 0 else draw
+    sessions = max(1, min(draw, affordable))
+    gap_hours = _active_window_hours() / sessions
+    jitter = 1.0 + rng.uniform(-warm.next_run_jitter_fraction, warm.next_run_jitter_fraction)
+    return max(0.0, gap_hours * jitter) * _SECONDS_PER_HOUR
 
 
 def _phase_from_age(age_hours: float) -> WarmingPhase:
@@ -285,14 +359,14 @@ def compute_intensity(
     age_hours: float,
     trust_band: str | None = None,
 ) -> WarmingIntensity:
-    """Map an account's age + trust band to its per-cycle intensity and cap.
+    """Map an account's age + trust band to its safety ceiling for one cycle.
 
-    Channels-per-cycle and reaction rate grow linearly from a quiet initial
-    floor to the configured full values over ``ramp_full_age_hours``; DM is
-    gated until ``dm_min_age_hours``. The lifecycle phase + daily cap are
-    derived from ``effective_phase(age, trust_band)``. With the legacy ramp
-    disabled, channels/reactions/DM still get full intensity, but the phase
-    machinery still applies the daily cap.
+    Returns the lifecycle phase + daily action cap (from
+    ``effective_phase(age, trust_band)``), the configured session size, and
+    whether DMs are permitted (age ≥ ``dm_min_age_hours`` AND the trust band
+    allows it). Per-session *frequency* (reactions/DM) is the persona's job, not
+    this ceiling's — see ``persona_reaction_probability`` /
+    ``persona_dm_probability``.
     """
     warm = settings.warming
     phase = effective_phase(age_hours, trust_band)
@@ -305,37 +379,14 @@ def compute_intensity(
         # 100%/"0 д", or a steady countdown to an unreachable promotion while the
         # account sits at the top of its ceiling phase. Hide the milestone.
         progress, days_to_next = None, None
-    daily_cap = _PHASE_DAILY_CAP[phase]
-    # П11: DM is gated by trust band (when known) on top of the age gate below.
+    # П11: DM is gated by trust band (when known) on top of the age gate.
     dm_band_ok = trust_band is None or trust_band in _DM_ALLOWED_BANDS
-    if not warm.ramp_enabled:
-        return WarmingIntensity(
-            channels_min=warm.channels_per_cycle_min,
-            channels_max=warm.channels_per_cycle_max,
-            reaction_probability=warm.reaction_probability,
-            dm_allowed=dm_band_ok,
-            daily_cap=daily_cap,
-            phase=phase,
-            progress_to_next=progress,
-            days_to_next_phase=days_to_next,
-        )
-    if warm.ramp_full_age_hours <= 0:
-        frac = 1.0
-    else:
-        frac = min(1.0, max(0.0, age_hours / warm.ramp_full_age_hours))
-    initial_channels = min(warm.ramp_initial_channels_max, warm.channels_per_cycle_max)
-    grown = round(frac * (warm.channels_per_cycle_max - initial_channels))
-    channels_max = max(1, initial_channels + grown)
-    channels_min = min(warm.channels_per_cycle_min, channels_max)
-    reaction_probability = warm.ramp_initial_reaction_probability + frac * (
-        warm.reaction_probability - warm.ramp_initial_reaction_probability
-    )
     return WarmingIntensity(
-        channels_min=channels_min,
-        channels_max=channels_max,
-        reaction_probability=min(1.0, max(0.0, reaction_probability)),
+        channels_min=warm.channels_per_cycle_min,
+        channels_max=warm.channels_per_cycle_max,
+        reaction_probability=warm.reaction_probability,
         dm_allowed=(age_hours >= warm.dm_min_age_hours) and dm_band_ok,
-        daily_cap=daily_cap,
+        daily_cap=_PHASE_DAILY_CAP[phase],
         phase=phase,
         progress_to_next=progress,
         days_to_next_phase=days_to_next,
@@ -346,21 +397,6 @@ async def _account_tz(account_id: str) -> str | None:
     """The account's IANA timezone (from its phone number), or ``None``."""
     account = await fetch_account(account_id)
     return timezone_for_phone(account.phone) if account else None
-
-
-async def _local_now(account_id: str, now: datetime) -> datetime:
-    """Return ``now`` in the account's local timezone (from its phone number).
-
-    Quiet hours are evaluated in the account's local time rather than UTC. Falls
-    back to ``now`` when the number has no resolvable timezone.
-    """
-    tz_name = await _account_tz(account_id)
-    if tz_name is None:
-        return now
-    try:
-        return now.astimezone(ZoneInfo(tz_name))
-    except ZoneInfoNotFoundError:
-        return now
 
 
 def _shift_to_active_hours(candidate: datetime, tz_name: str | None) -> datetime:

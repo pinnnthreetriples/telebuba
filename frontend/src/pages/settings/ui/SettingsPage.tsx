@@ -31,14 +31,6 @@ function neuroForm(s: NeurocommentSettings) {
   };
 }
 
-function quietHoursForm(s: WarmingSettings) {
-  return {
-    enabled: s.quiet_hours_enabled ?? false,
-    start: String(s.quiet_hours_start ?? 23),
-    end: String(s.quiet_hours_end ?? 8),
-  };
-}
-
 // The design's pill switch (track + sliding thumb), 18px of travel.
 function Switch({
   checked,
@@ -190,7 +182,6 @@ function SettingsForm({
     join_enabled: settings.join_enabled ?? true,
     inter_account_chat: settings.inter_account_chat ?? false,
   });
-  const [quietHours, setQuietHours] = useState(() => quietHoursForm(settings));
   const [justSaved, setJustSaved] = useState(false);
   const [saveFailed, setSaveFailed] = useState(false);
 
@@ -198,9 +189,6 @@ function SettingsForm({
   useEffect(() => {
     setNeuro(neuroForm(neuroSettings));
   }, [neuroSettings]);
-  useEffect(() => {
-    setQuietHours(quietHoursForm(settings));
-  }, [settings]);
 
   const pending = saveWarm.isPending || saveNeuro.isPending;
 
@@ -213,9 +201,6 @@ function SettingsForm({
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: settings.enforce_readiness ?? true,
-          quiet_hours_enabled: quietHours.enabled,
-          quiet_hours_start: Number(quietHours.start),
-          quiet_hours_end: Number(quietHours.end),
           max_daily_actions: 0,
           gemini_model: settings.gemini_model,
           gemini_api_key: geminiKey.trim() === '' ? null : geminiKey,
@@ -256,7 +241,6 @@ function SettingsForm({
       join_enabled: settings.join_enabled ?? true,
       inter_account_chat: settings.inter_account_chat ?? false,
     });
-    setQuietHours(quietHoursForm(settings));
   };
 
   return (
@@ -405,42 +389,6 @@ function SettingsForm({
             />
           </div>
         ))}
-
-        <div className="py-[13px]">
-          <div className="flex items-center justify-between gap-3">
-            <div>
-              <div className="text-[13px] font-medium">{t('settings.flag.quiet_hours.label')}</div>
-              <div className="mt-px text-[11.5px] text-ink-subtle">
-                {t('settings.flag.quiet_hours.desc')}
-              </div>
-            </div>
-            <Switch
-              checked={quietHours.enabled}
-              onChange={(v) => {
-                setQuietHours((q) => ({ ...q, enabled: v }));
-              }}
-              label={t('settings.flag.quiet_hours.label')}
-            />
-          </div>
-          {quietHours.enabled ? (
-            <div className="mt-[13px] [animation:fadeup_0.28s_ease]">
-              <RangeField
-                label={t('settings.quietHours.rangeLabel')}
-                from={quietHours.start}
-                to={quietHours.end}
-                onFrom={(v) => {
-                  setQuietHours((q) => ({ ...q, start: v }));
-                }}
-                onTo={(v) => {
-                  setQuietHours((q) => ({ ...q, end: v }));
-                }}
-              />
-              <div className="mt-[9px] text-[11px] leading-[1.4] text-ink-subtle">
-                {t('settings.quietHours.hint')}
-              </div>
-            </div>
-          ) : null}
-        </div>
       </Card>
 
       <div className="flex justify-end gap-2">

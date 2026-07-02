@@ -60,6 +60,7 @@ from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
 from services.warming import _loop, _runner, _runtime, _seams, _transitions
+from services.warming.pacing import persona_dm_probability, persona_reaction_probability
 from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
@@ -115,6 +116,10 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
         monkeypatch.setattr(settings.warming, field, 0.0)
     monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
     monkeypatch.setattr(settings.warming, "channels_per_cycle_max", 1)
+    # Deterministic probability rolls: the reaction + persona-DM gates always
+    # "pass" so tests exercise the real gates (reactions_enabled / dm_ok /
+    # pending / cap), not the RNG. Tests that need a roll to *fail* override this.
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)
     reset_logging_for_tests()
     setup_logging()
     warming._RUNTIME.clear()
@@ -226,8 +231,7 @@ async def test_cycle_reacts_when_enabled(monkeypatch: pytest.MonkeyPatch) -> Non
 async def test_cycle_emits_progress_steps(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
-    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
-    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)  # always react (persona roll passes)
     await _seed_channel()
     await _set_settings(chat=False, reactions=True, key="")
 
@@ -256,56 +260,97 @@ async def test_cycle_stops_on_flood_wait(monkeypatch: pytest.MonkeyPatch) -> Non
     assert "read_channel" not in recorder.types()
 
 
+@pytest.mark.asyncio
+async def test_cycle_watches_peer_stories(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Every persona glances at a subscribed peer's stories once per session.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "ok"
+    assert "watch_peer_stories" in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_story_view_when_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "story_view_enabled", False)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert "watch_peer_stories" not in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_story_view_peer_flood_stops_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    recorder.peer_flood_on.add("watch_peer_stories")
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert "watch_peer_stories" in recorder.types()
+    assert result.status == "peer_flood"
+    assert result.last_failed_action == "watch_peer_stories"
+
+
+@pytest.mark.asyncio
+async def test_cycle_story_view_flood_wait_stops_cycle(monkeypatch: pytest.MonkeyPatch) -> None:
+    recorder = _Recorder()
+    recorder.flood_on.add("watch_peer_stories")
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "flood_wait"
+    assert result.last_failed_action == "watch_peer_stories"
+
+
 # --------------------------------------------------------------------------- #
-# Age-based ramp
+# Intensity ceiling (phase + trust) and persona presets
 # --------------------------------------------------------------------------- #
 
 
-def _configure_ramp(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.warming, "ramp_enabled", True)
+def _configure_intensity(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
     monkeypatch.setattr(settings.warming, "channels_per_cycle_max", 3)
-    monkeypatch.setattr(settings.warming, "reaction_probability", 0.6)
-    monkeypatch.setattr(settings.warming, "ramp_initial_channels_max", 1)
-    monkeypatch.setattr(settings.warming, "ramp_initial_reaction_probability", 0.1)
-    monkeypatch.setattr(settings.warming, "ramp_full_age_hours", 192.0)
     monkeypatch.setattr(settings.warming, "dm_min_age_hours", 36.0)
 
 
-def test_compute_intensity_is_quiet_for_a_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
-    _configure_ramp(monkeypatch)
+def test_compute_intensity_ceiling_for_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The age-ramp is retired: channel range is the flat config, and a fresh
+    # account is throttled by the phase cap + the DM cold-start guard, not by a
+    # per-cycle ramp. Intro phase, cap 3, DM blocked under dm_min_age.
+    _configure_intensity(monkeypatch)
     fresh = warming.compute_intensity(0.0)
-    assert fresh.channels_max == 1
-    assert fresh.reaction_probability == pytest.approx(0.1)
+    assert fresh.channels_max == 3
+    assert fresh.phase == "intro"
+    assert fresh.daily_cap == 3
     assert fresh.dm_allowed is False
 
 
-def test_compute_intensity_reaches_full_intensity_when_aged(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    _configure_ramp(monkeypatch)
-    aged = warming.compute_intensity(500.0)
-    assert aged.channels_max == 3
-    assert aged.reaction_probability == pytest.approx(0.6)
-    assert aged.dm_allowed is True
-    # DM unlocks exactly at the cold-start threshold.
+def test_compute_intensity_dm_unlocks_at_min_age(monkeypatch: pytest.MonkeyPatch) -> None:
+    _configure_intensity(monkeypatch)
+    # DM unlocks exactly at the cold-start threshold; channel range stays flat.
     assert warming.compute_intensity(36.0).dm_allowed is True
     assert warming.compute_intensity(35.0).dm_allowed is False
-
-
-def test_compute_intensity_full_when_ramp_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
-    _configure_ramp(monkeypatch)
-    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
-    full = warming.compute_intensity(0.0)
-    assert full.channels_max == 3
-    assert full.reaction_probability == pytest.approx(0.6)
-    assert full.dm_allowed is True
+    assert warming.compute_intensity(500.0).channels_max == 3
 
 
 def test_compute_intensity_dm_gated_by_trust_band(monkeypatch: pytest.MonkeyPatch) -> None:
-    # DM permission now also depends on trust band, not age alone (audit П11):
-    # only excellent/good/watch may DM; at_risk/critical may not.
-    _configure_ramp(monkeypatch)
+    # DM permission depends on trust band, not age alone (audit П11): only
+    # excellent/good/watch may DM; at_risk/critical may not.
+    _configure_intensity(monkeypatch)
     assert warming.compute_intensity(500.0, trust_band="good").dm_allowed is True
     assert warming.compute_intensity(500.0, trust_band="watch").dm_allowed is True
     assert warming.compute_intensity(500.0, trust_band="at_risk").dm_allowed is False
@@ -314,6 +359,33 @@ def test_compute_intensity_dm_gated_by_trust_band(monkeypatch: pytest.MonkeyPatc
     assert warming.compute_intensity(0.0, trust_band="good").dm_allowed is False
     # No band passed → age-only, so direct callers (run_one_cycle) are unchanged.
     assert warming.compute_intensity(500.0).dm_allowed is True
+
+
+def test_persona_presets_scale_reaction_and_dm() -> None:
+    # Persona sets per-session frequency; calm < normal < active for both levers.
+    assert (
+        persona_reaction_probability("calm")
+        < persona_reaction_probability("normal")
+        < persona_reaction_probability("active")
+    )
+    assert (
+        persona_dm_probability("calm")
+        < persona_dm_probability("normal")
+        < persona_dm_probability("active")
+    )
+
+
+def test_persona_next_run_seconds_capped_by_phase_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A tiny daily cap (young account) forces one long gap regardless of the
+    # persona's headline sessions/day — the phase ceiling throttles cadence.
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "next_run_jitter_fraction", 0.0)
+    rng = random.Random(1)  # noqa: S311 - deterministic test rng
+    # intro cap 3 affords 0 sessions → floored to 1 → gap == the full 15-h window.
+    gap = warming.persona_next_run_seconds("active", 3, rng)
+    assert gap == pytest.approx(15 * 3600)
 
 
 @pytest.mark.asyncio
@@ -379,8 +451,6 @@ async def test_loop_iteration_quarantines_on_peer_flood(monkeypatch: pytest.Monk
 async def test_loop_iteration_persists_live_progress(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
-    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
-    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
     await _seed_channel()
     await _set_settings(chat=False, reactions=True, key="")
     await create_account(AccountCreate(account_id="acc-1"))
@@ -413,7 +483,6 @@ async def test_loop_iteration_survives_progress_write_failure(
     # cycle or park a healthy account in error — the hook is cosmetic, best-effort.
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
-    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
     await _seed_channel()
     await _set_settings(chat=False, reactions=False, key="")
     await create_account(AccountCreate(account_id="acc-1"))
@@ -445,7 +514,6 @@ async def test_loop_iteration_clears_stale_channel(monkeypatch: pytest.MonkeyPat
     # surface stale under a fresh active step.
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
-    monkeypatch.setattr(settings.warming, "ramp_enabled", False)
     await _seed_channel()
     # enforce_readiness off: this test is about stale-channel clearing, not the
     # П3 readiness gate (the bare account would otherwise be parked).
@@ -686,6 +754,28 @@ async def test_cycle_sends_inter_account_dm(monkeypatch: pytest.MonkeyPatch) -> 
     dm_actions = [a for _id, a in recorder.actions if a.action_type == "send_dm"]
     assert dm_actions
     assert dm_actions[0].user_id == 999
+
+
+@pytest.mark.asyncio
+async def test_cycle_skips_dm_when_persona_roll_fails(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Even with DM fully permitted (aged, paired, pending reply), a persona roll
+    # above the persona's DM probability skips the chat this session — the
+    # persona's frequency lever, on top of the age/trust/settings gate.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.99)  # above every persona DM prob
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    await record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(
+        WarmingCycleRequest(account_id="acc-1", activity_persona="calm"),
+    )
+
+    assert result.messages_sent == 0
+    assert "send_dm" not in recorder.types()
 
 
 @pytest.mark.asyncio
@@ -1748,68 +1838,6 @@ def test_in_quiet_hours_wrapping_midnight() -> None:
     assert not warming._in_quiet_hours(datetime(2026, 6, 12, 12, tzinfo=UTC), 23, 7)
 
 
-def test_quiet_hours_end_at_rolls_to_next_day() -> None:
-    end = warming._quiet_hours_end_at(datetime(2026, 6, 12, 23, 30, tzinfo=UTC), 7)
-    assert end == datetime(2026, 6, 13, 7, 0, tzinfo=UTC)
-
-
-def test_quiet_hours_end_at_same_day_when_ahead() -> None:
-    end = warming._quiet_hours_end_at(datetime(2026, 6, 12, 2, 0, tzinfo=UTC), 7)
-    assert end == datetime(2026, 6, 12, 7, 0, tzinfo=UTC)
-
-
-@pytest.mark.asyncio
-async def test_run_loop_iteration_parks_during_quiet_hours(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(_loop, "_in_quiet_hours", lambda *_args: True)
-    recorder = _Recorder()
-    monkeypatch.setattr(_seams, "execute", recorder.execute)
-    await _seed_channel()
-    await save_warming_settings(
-        inter_account_chat=False,
-        reactions_enabled=False,
-        quiet_hours_enabled=True,
-        gemini_api_key="",
-    )
-    await create_account(AccountCreate(account_id="acc-1"))
-
-    result = await warming.run_loop_iteration("acc-1")
-
-    assert result.status == "skipped"
-    assert result.detail == "quiet hours"
-    assert recorder.actions == []  # no Telegram I/O during quiet hours
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.state == "sleeping"
-    assert record.next_run_at is not None
-
-
-@pytest.mark.asyncio
-async def test_local_now_converts_to_account_timezone() -> None:
-    await create_account(AccountCreate(account_id="acc-tz"))
-    await update_account_from_session_check(
-        TelegramSessionCheckResult(
-            account_id="acc-tz",
-            session_path="acc-tz",
-            status="alive",
-            is_temporary=False,
-            phone="+12025550123",
-        ),
-    )
-    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
-    local = await warming._local_now("acc-tz", now)
-    assert str(local.tzinfo) == "America/New_York"
-    assert local.utcoffset() != now.utcoffset()
-
-
-@pytest.mark.asyncio
-async def test_local_now_falls_back_to_utc_without_phone() -> None:
-    await create_account(AccountCreate(account_id="acc-nophone"))
-    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
-    assert await warming._local_now("acc-nophone", now) == now
-
-
 # --------------------------------------------------------------------------- #
 # Human pacing
 # --------------------------------------------------------------------------- #
@@ -2064,21 +2092,15 @@ async def test_save_settings_persists_warming_controls() -> None:
             inter_account_chat=False,
             reactions_enabled=True,
             enforce_readiness=False,
-            quiet_hours_enabled=True,
-            quiet_hours_start=23,
-            quiet_hours_end=7,
             max_daily_actions=50,
         ),
     )
 
     assert masked.enforce_readiness is False
-    assert masked.quiet_hours_enabled is True
-    assert masked.quiet_hours_start == 23
-    assert masked.quiet_hours_end == 7
     assert masked.max_daily_actions == 50
 
     reloaded = await warming.load_settings()
-    assert reloaded.quiet_hours_start == 23
+    assert reloaded.enforce_readiness is False
     assert reloaded.max_daily_actions == 50
 
 
@@ -2131,16 +2153,18 @@ def test_loop_sleep_respects_future_next_run() -> None:
 
 
 def test_loop_sleep_falls_back_without_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.warming, "cycle_sleep_min_hours", 1.0)
-    monkeypatch.setattr(settings.warming, "cycle_sleep_max_hours", 1.0)
+    # No persisted schedule (shouldn't happen after run_loop_iteration writes one)
+    # → a persona-paced gap, not a crash. Assert it's a sane positive duration.
+    monkeypatch.setattr(settings.warming, "next_run_jitter_fraction", 0.0)
     value = warming._loop_sleep_seconds(None, datetime(2026, 6, 12, 0, 0, tzinfo=UTC))
-    assert value == pytest.approx(3600)
+    assert 0.0 < value <= 24 * 3600
 
 
 @pytest.mark.asyncio
 async def test_cycle_diagnostics_chat_failure(monkeypatch: pytest.MonkeyPatch) -> None:
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)  # persona DM roll always fires
     monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
     await _seed_two_warming_accounts()
     await _seed_channel()
@@ -3532,39 +3556,6 @@ async def test_daily_cap_park_shifts_into_active_hours(
 
 
 @pytest.mark.asyncio
-async def test_quarantine_recovery_defers_during_quiet_hours(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A quarantine re-probe must not fire @SpamBot inside quiet hours (#99)."""
-    probes: list[str] = []
-
-    async def fake_probe(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
-        probes.append(account_id)
-        return _verdict(account_id, "clean")
-
-    monkeypatch.setattr(_seams, "refresh_spam_status", fake_probe)
-    monkeypatch.setattr(_loop, "_in_quiet_hours", lambda *_args: True)
-    await save_warming_settings(
-        inter_account_chat=False,
-        reactions_enabled=False,
-        quiet_hours_enabled=True,
-        gemini_api_key="",
-    )
-    await create_account(AccountCreate(account_id="acc-1"))
-    await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="quarantine"))
-
-    result = await warming.run_loop_iteration("acc-1")
-
-    assert result.status == "skipped"
-    assert result.detail == "quiet hours"
-    assert probes == []  # no @SpamBot I/O during quiet hours
-    record = await fetch_warming_state("acc-1")
-    assert record is not None
-    assert record.state == "quarantine"
-    assert record.next_run_at is not None
-
-
-@pytest.mark.asyncio
 async def test_summary_ready_counts_only_startable_accounts() -> None:
     """«Готовы» must count startable (idle) accounts, not already-warming ones (#98)."""
     await _seed_ready_account("acc-idle")
@@ -3611,15 +3602,19 @@ async def test_flood_wait_without_duration_parks_well_into_the_future() -> None:
     _, next_run_dt, next_state = await _loop._calculate_next_run(
         "acc-1",
         WarmingCycleResult(account_id="acc-1", status="flood_wait", flood_wait_seconds=None),
+        "normal",
+        40,
     )
     assert next_state == "flood_wait"
-    floor = settings.warming.cycle_sleep_min_hours * 3600 - 5
+    floor = settings.warming.flood_wait_fallback_hours * 3600 - 5
     assert (next_run_dt - before).total_seconds() >= floor
 
     # A concrete duration (even tiny) is still honoured as Telegram instructed.
     _, soon_dt, _ = await _loop._calculate_next_run(
         "acc-1",
         WarmingCycleResult(account_id="acc-1", status="flood_wait", flood_wait_seconds=5),
+        "normal",
+        40,
     )
     assert (soon_dt - datetime.now(UTC)).total_seconds() < 60
 
@@ -3719,6 +3714,7 @@ async def test_phase_advanced_not_logged_when_finalize_cas_rejected(
         WarmingCycleResult(account_id="acc-1", status="ok"),
         365 * 24.0,  # huge age → phase would jump from the stale "intro"
         (0, today),
+        (0, datetime.now(UTC), "sleeping"),
         run_id="run-a",
     )
 
@@ -3752,6 +3748,7 @@ async def test_phase_advanced_logged_when_finalize_applies(
         WarmingCycleResult(account_id="acc-1", status="ok"),
         365 * 24.0,
         (0, today),
+        (0, datetime.now(UTC), "sleeping"),
         run_id="run-a",
     )
 
