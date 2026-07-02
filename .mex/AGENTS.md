@@ -25,16 +25,19 @@ telebuba/
 │   ├── deps.py             shared dependencies (Depends(get_current_user), pagination params)
 │   └── errors.py           error-envelope mapping ({error:{code,message,fields?}}, 422 remapped)
 ├── core/                   infrastructure gateways; only layer touching third-party SDKs
-│   ├── db.py               shared SQLite plumbing + compatibility re-exports
+│   ├── db.py               shared SQLite plumbing (engine/lifecycle/helpers) + compatibility re-exports
+│   ├── _schema_tables.py   SQLAlchemy MetaData + every Table definition (split from db.py for the size budget; re-exported via db.py)
 │   ├── migrations.py       versioned append-only migration registry + runner; apply_migrations() runs on engine init
 │   ├── migration_steps.py  migration step bodies (split from migrations.py for the file-size budget)
 │   ├── migration_steps_pool.py  overflow migration bodies split from migration_steps.py for the size budget (proxy pool #18, warming activity_persona #21)
+│   ├── migration_steps_neurocomment.py  neurocomment migration bodies (tables/runtime/settings/indexes/challenges/human_skipped) split from migration_steps.py; re-exported there
 │   ├── device_fingerprint.py  generates/reads immutable per-account device profile
 │   ├── phone_geo.py        phone number → geo lookup helper
 │   ├── proxy_check.py      connectivity check for proxy configs
 │   ├── tdata_import.py     converts tdata.zip to Telethon .session files (safe-extract)
 │   ├── repositories/       per-aggregate DB query modules
 │   │   ├── proxies.py         proxy-pool data layer (shared proxies + accounts.proxy_id assignment, capacity, connectivity-check persistence)
+│   │   ├── _accounts_delete.py  account cascade-delete (_delete_account/delete_account) split from accounts.py for the size budget; re-exported there
 │   │   ├── warming_joined.py  tracks channels an account already joined (join-dedup)
 │   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims, comment quota counts in _quota.py, challenge audit+cache in _challenges.py, operator-editable limits in _settings.py)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
@@ -45,8 +48,9 @@ telebuba/
 │   │   ├── _listener.py       standing post listener (subscribe_posts/stop_post_listener) for neurocomment
 │   │   ├── _auth.py           phone-code login RPCs (SendCode/SignIn/2FA) + log_out_session; the only place auth RPCs live
 │   │   └── _video.py          video/media actions
-│   ├── config.py           pydantic-settings, nested namespaces (incl. settings.api, settings.auth)
-│   ├── gemini.py           HTTP gateway for Gemini
+│   ├── config.py           pydantic-settings, nested namespaces (incl. settings.api, settings.auth); Settings aggregate + load_settings/settings
+│   ├── _config_domains.py  the largest settings namespaces (Warming/Gemini/Trust/Neurocomment) split from config.py for the size budget; re-exported via config.py
+│   ├── gemini.py           HTTP gateway for Gemini (shared AsyncClient + retry/429)
 │   ├── events.py           in-process pub/sub for live log events (SSE backbone); core/logging publishes each persisted row here
 │   ├── auth.py             password hashing + JWT encode/decode (only place tokens are minted/verified)
 │   └── logging.py          loguru + SQLite logs + optional Sentry
@@ -54,8 +58,8 @@ telebuba/
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile operations (incl. login.py: phone-code re-auth + logout/reset over the gateway auth RPCs; _login_state.py: in-memory TTL cache of pending code hashes)
 │   ├── proxies.py          proxy-pool business logic (add/list/assign/unassign/remove/check over the pool repo)
-│   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview)
-│   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng), settings_store.py (operator-editable limits/min-trust the engine reads at selection; config fallback)
+│   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview; pacing.py phase math split into _phases.py, _runtime.py stop/graduation split into _graduation.py — both for the size budget, re-exported)
+│   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam; generation+classification split into _generate.py for the size budget, re-exported), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng), settings_store.py (operator-editable limits/min-trust the engine reads at selection; config fallback)
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
 │   ├── logs.py             log query helpers for the Logs page
