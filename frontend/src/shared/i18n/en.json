@@ -597,7 +597,11 @@
       "completeTitle": "Warming complete",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
-      "helpTip": "1 cycle = 1 warming day"
+      "helpTip": "1 cycle = 1 warming day",
+      "cycleTip_one": "Cycle {{count}}",
+      "cycleTip_other": "Cycle {{count}}",
+      "dmAllowed": "DMs: allowed",
+      "dmClosed": "DMs: closed"
     },
     "actions": {
       "stopShort": "Stop"
@@ -639,9 +643,39 @@
     },
     "cfg": {
       "title": "Warming settings",
-      "globalHint": "Warming behaviour settings are shared by every account (including {{phone}}) and are edited on the Settings page.",
-      "close": "Close",
-      "openSettings": "Open settings"
+      "behaviorTitle": "Behaviour",
+      "limitsTitle": "Limits & safety",
+      "quietHours": "Quiet hours (sleep)",
+      "quietFrom": "From",
+      "quietTo": "To",
+      "quietNote": "Time zone is taken from the account locale. Not saved yet.",
+      "scopeOne": "This account only",
+      "scopeAll": "All in warming",
+      "scopeOneNote": "Per-account settings are not saved yet — settings apply to all accounts in warming.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "toggle": {
+        "reactions_enabled": {
+          "title": "Reactions",
+          "desc": "Accounts place reactions on posts in the warming channels."
+        },
+        "join_enabled": {
+          "title": "Join channels",
+          "desc": "Accounts subscribe to the warming channels on their own."
+        },
+        "inter_account_chat": {
+          "title": "Mutual chat",
+          "desc": "Warming accounts message each other for realistic activity."
+        },
+        "enforce_readiness": {
+          "title": "Check readiness",
+          "desc": "Block warming for accounts that fail the pre-start checks."
+        },
+        "local_time": {
+          "title": "Local time",
+          "desc": "Follow the account time zone for the quiet-hours window."
+        }
+      }
     },
     "days": {
       "title": "Warm up account",
@@ -651,6 +685,9 @@
       "start": "Start warming",
       "cancel": "Cancel",
       "spamCheck": "Spam check",
+      "spamChecking": "Checking…",
+      "spamClean": "Clean",
+      "spamLimited": "Limited",
       "spamTip": "via @SpamBot",
       "label_one": "day",
       "label_other": "days"

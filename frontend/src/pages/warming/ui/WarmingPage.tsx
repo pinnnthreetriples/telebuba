@@ -22,6 +22,10 @@ import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 // SSE drives live board updates; this poll is just the fallback safety net.
 const FALLBACK_POLL_MS = 30000;
 
+// The only queries this page reads (createQueryKey stamps _id on key[0]); a live
+// event refreshes just these, never the whole cache.
+const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmedAccounts', 'listWarmingChannels'];
+
 function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
 }
@@ -75,7 +79,12 @@ export function WarmingPage() {
   });
 
   const invalidate = () => {
-    void queryClient.invalidateQueries();
+    void queryClient.invalidateQueries({
+      predicate: (query) => {
+        const id = (query.queryKey[0] as { _id?: string } | undefined)?._id;
+        return id != null && WARMING_QUERY_IDS.includes(id);
+      },
+    });
   };
   // Live status: any runtime event refreshes the board (event-driven, not timed).
   useLogEventStream(invalidate);
@@ -241,11 +250,11 @@ export function WarmingPage() {
                       className="flex items-center gap-[10px] rounded-xl border border-line bg-white px-3 py-[11px]"
                     >
                       <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-[12px] font-semibold text-primary">
-                        {mono(account.account_id)}
+                        {mono(account.phone ?? account.label ?? account.account_id)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-[13px] font-semibold">
-                          {account.label ?? account.account_id}
+                          {account.phone ?? account.label ?? account.account_id}
                         </div>
                         <div className="mt-[2px] flex items-center gap-[6px]">
                           <svg
@@ -554,12 +563,14 @@ export function WarmingPage() {
           }}
           busyId={busyId}
           feedback={accountFeedback.feedback}
+          logLimit={data.card_log_limit}
         />
       </div>
 
       {warmDaysFor ? (
         <WarmDaysModal
-          phone={warmDaysFor.label ?? warmDaysFor.account_id}
+          accountId={warmDaysFor.account_id}
+          phone={warmDaysFor.phone ?? warmDaysFor.label ?? warmDaysFor.account_id}
           onClose={() => {
             setWarmDaysFor(null);
           }}
