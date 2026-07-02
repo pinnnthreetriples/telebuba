@@ -72,7 +72,14 @@ test('stepper navigates method → choice → manual/pool → back to step 1', a
   const next = screen.getByText('Далее');
   expect(next).toBeDisabled();
   await userEvent.click(screen.getByText('Файл .session'));
-  expect(next).toBeEnabled();
+  // Next stays disabled until an import actually succeeds.
+  expect(next).toBeDisabled();
+  fireEvent.change(fileInput(), {
+    target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
+  });
+  await waitFor(() => {
+    expect(next).toBeEnabled();
+  });
   await userEvent.click(next);
   expect(screen.getByText('Аккаунт добавлен. Назначьте прокси для работы.')).toBeInTheDocument();
 
@@ -150,13 +157,15 @@ test('manual proxy form creates and assigns on done', async () => {
     target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
   });
   await waitFor(() => {
-    expect(
-      vi.mocked(fetch).mock.calls.some(([i]) => (i as Request).url.includes('/import-session')),
-    ).toBe(true);
+    expect(screen.getByText('Далее')).toBeEnabled();
   });
   await userEvent.click(screen.getByText('Далее'));
   await userEvent.click(screen.getByText('Добавить прокси'));
   await userEvent.type(screen.getByLabelText('Хост'), '1.2.3.4');
+  await userEvent.type(screen.getByLabelText('Порт'), '1080');
+  await waitFor(() => {
+    expect(screen.getByText('Готово')).toBeEnabled();
+  });
   await userEvent.click(screen.getByText('Готово'));
   await waitFor(() => {
     const created = vi.mocked(fetch).mock.calls.some(([input]) => {
@@ -165,6 +174,24 @@ test('manual proxy form creates and assigns on done', async () => {
     });
     expect(created).toBe(true);
   });
+});
+
+test('a failed import shows the error state and keeps Next disabled', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-session') {
+      return Promise.reject(new Error('boom'));
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+  await userEvent.click(screen.getByText('Файл .session'));
+  fireEvent.change(fileInput(), {
+    target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
+  });
+  // The file card reports the failure instead of a premature "File ready".
+  expect(await screen.findByText('Не удалось импортировать')).toBeInTheDocument();
+  expect(screen.getByText('Далее')).toBeDisabled();
 });
 
 test('cancel on step 1 closes', async () => {
@@ -180,6 +207,12 @@ test('skip on the proxy choice closes', async () => {
   const onClose = vi.fn();
   renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
   await userEvent.click(screen.getByText('Файл .session'));
+  fireEvent.change(fileInput(), {
+    target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
+  });
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
   await userEvent.click(screen.getByText('Далее'));
   await userEvent.click(screen.getByText('Пропустить'));
   expect(onClose).toHaveBeenCalledTimes(1);

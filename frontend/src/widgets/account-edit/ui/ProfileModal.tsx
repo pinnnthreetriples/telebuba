@@ -1,6 +1,8 @@
+import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { z } from 'zod';
 
 import {
   accountProfileSnapshotQueryOptions,
@@ -17,9 +19,17 @@ import type {
   ProfilePhotoView,
   ProfileStoryView,
 } from '@/shared/api';
-import { ConfirmModal, Modal } from '@/shared/ui';
+import { ConfirmModal, FormField, Modal } from '@/shared/ui';
 
 import { AddStoryModal } from './AddStoryModal';
+
+// Telegram requires a non-empty first name; the rest are optional free text.
+const profileSchema = z.object({
+  first_name: z.string().trim().min(1, 'accounts.profile.errFirstName'),
+  last_name: z.string(),
+  username: z.string(),
+  bio: z.string(),
+});
 
 // The design's profile-edit modal: hero header, a 4-tab segmented header
 // (text / photo / stories / music), per-tab bodies, and a save→saved swap
@@ -114,10 +124,38 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
   const [confirmMusic, setConfirmMusic] = useState<ProfileMusicView | null>(null);
 
-  const [firstName, setFirstName] = useState(account.first_name ?? '');
-  const [lastName, setLastName] = useState(account.last_name ?? '');
-  const [username, setUsername] = useState(account.username ?? '');
-  const [bio, setBio] = useState(account.bio ?? '');
+  const form = useForm({
+    defaultValues: {
+      first_name: account.first_name ?? '',
+      last_name: account.last_name ?? '',
+      username: account.username ?? '',
+      bio: account.bio ?? '',
+    },
+    validators: { onChange: profileSchema, onMount: profileSchema },
+    onSubmit: ({ value }) => {
+      updateProfile.mutate(
+        {
+          body: {
+            account_id: account.account_id,
+            first_name: value.first_name.trim(),
+            last_name: value.last_name.trim() || null,
+            username: value.username.trim() || null,
+            bio: value.bio.trim() || null,
+          },
+        },
+        {
+          onSuccess: () => {
+            setSaved(true);
+            window.setTimeout(() => {
+              setSaved(false);
+            }, 1400);
+            void queryClient.invalidateQueries();
+          },
+        },
+      );
+    },
+  });
+  const canSave = useStore(form.store, (state) => state.canSubmit);
 
   // «Обновить»: force a live re-pull (bypasses the read cache), write it into the
   // rendered snapshot, and reseed the header + text fields from the fresh profile.
@@ -132,10 +170,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       );
       queryClient.setQueryData(snapOpts.queryKey, fresh);
       if (fresh.first_name != null) {
-        setFirstName(fresh.first_name);
-        setLastName(fresh.last_name ?? '');
-        setUsername(fresh.username ?? '');
-        setBio(fresh.bio ?? '');
+        form.setFieldValue('first_name', fresh.first_name);
+        form.setFieldValue('last_name', fresh.last_name ?? '');
+        form.setFieldValue('username', fresh.username ?? '');
+        form.setFieldValue('bio', fresh.bio ?? '');
       }
     } finally {
       setRefreshing(false);
@@ -149,31 +187,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const initial = (liveFirst ?? account.phone ?? account.account_id).trim().charAt(0).toUpperCase();
   const fullName =
     [liveFirst, liveLast].filter(Boolean).join(' ') || (account.phone ?? account.account_id);
-
-  // Telegram requires a non-empty first name; the Save button gates on it.
-  const onSave = () => {
-    if (!firstName.trim()) return;
-    updateProfile.mutate(
-      {
-        body: {
-          account_id: account.account_id,
-          first_name: firstName.trim(),
-          last_name: lastName.trim() || null,
-          username: username.trim() || null,
-          bio: bio.trim() || null,
-        },
-      },
-      {
-        onSuccess: () => {
-          setSaved(true);
-          window.setTimeout(() => {
-            setSaved(false);
-          }, 1400);
-          void queryClient.invalidateQueries();
-        },
-      },
-    );
-  };
 
   const onPhotoPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -267,51 +280,47 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             {tab === 'text' && (
               <div className="flex flex-col gap-[14px]">
                 <div className="grid grid-cols-2 gap-3">
-                  <label>
-                    <span className={LABEL}>{t('accounts.profile.firstName')}</span>
-                    <input
-                      value={firstName}
-                      onChange={(event) => {
-                        setFirstName(event.target.value);
-                      }}
-                      className={FIELD}
-                    />
-                  </label>
-                  <label>
-                    <span className={LABEL}>{t('accounts.profile.lastName')}</span>
-                    <input
-                      value={lastName}
-                      onChange={(event) => {
-                        setLastName(event.target.value);
-                      }}
-                      className={FIELD}
-                    />
-                  </label>
+                  <form.Field name="first_name">
+                    {(field) => <FormField field={field} label={t('accounts.profile.firstName')} />}
+                  </form.Field>
+                  <form.Field name="last_name">
+                    {(field) => <FormField field={field} label={t('accounts.profile.lastName')} />}
+                  </form.Field>
                 </div>
-                <label>
-                  <span className={LABEL}>{t('accounts.profile.username')}</span>
-                  <div className="relative flex items-center">
-                    <span className="absolute left-3 text-[13px] text-ink-subtle">@</span>
-                    <input
-                      value={username}
-                      onChange={(event) => {
-                        setUsername(event.target.value);
-                      }}
-                      className={`${FIELD} pl-[26px]`}
-                    />
-                  </div>
-                </label>
-                <label>
-                  <span className={LABEL}>{t('accounts.profile.bio')}</span>
-                  <textarea
-                    rows={3}
-                    value={bio}
-                    onChange={(event) => {
-                      setBio(event.target.value);
-                    }}
-                    className={`${FIELD} resize-none [font-family:inherit]`}
-                  />
-                </label>
+                <form.Field name="username">
+                  {(field) => (
+                    <label className="block">
+                      <span className={LABEL}>{t('accounts.profile.username')}</span>
+                      <div className="relative flex items-center">
+                        <span className="absolute left-3 text-[13px] text-ink-subtle">@</span>
+                        <input
+                          value={field.state.value}
+                          onChange={(event) => {
+                            field.handleChange(event.target.value);
+                          }}
+                          onBlur={field.handleBlur}
+                          className={`${FIELD} pl-[26px]`}
+                        />
+                      </div>
+                    </label>
+                  )}
+                </form.Field>
+                <form.Field name="bio">
+                  {(field) => (
+                    <label className="block">
+                      <span className={LABEL}>{t('accounts.profile.bio')}</span>
+                      <textarea
+                        rows={3}
+                        value={field.state.value}
+                        onChange={(event) => {
+                          field.handleChange(event.target.value);
+                        }}
+                        onBlur={field.handleBlur}
+                        className={`${FIELD} resize-none [font-family:inherit]`}
+                      />
+                    </label>
+                  )}
+                </form.Field>
               </div>
             )}
 
@@ -385,7 +394,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         ×
                       </button>
                       <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-center text-[9px] font-medium text-white">
-                        {t(`accounts.addStory.${story.privacy_preset}`)}
+                        {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
                       </span>
                     </div>
                   ))}
@@ -470,8 +479,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             </button>
             <button
               type="button"
-              onClick={onSave}
-              disabled={updateProfile.isPending || !firstName.trim()}
+              onClick={() => {
+                void form.handleSubmit();
+              }}
+              disabled={updateProfile.isPending || !canSave}
               className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${saved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
             >
               {updateProfile.isPending ? (

@@ -122,6 +122,41 @@ test('stories tab opens the add-story modal and removes a story', async () => {
   expect(screen.getByText('Новая сторис')).toBeInTheDocument();
 });
 
+test('a close_friends / unknown story renders a translated label, not the raw key', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(
+        jsonResponse({
+          ...VIEW,
+          stories: [
+            { story_id: 7, kind: 'image', privacy_preset: 'close_friends', is_pinned: false },
+            { story_id: 8, kind: 'image', privacy_preset: 'unknown', is_pinned: false },
+          ],
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сторис'));
+  expect(await screen.findByText('Близкие друзья')).toBeInTheDocument();
+  expect(screen.getByText('Неизвестно')).toBeInTheDocument();
+  // The raw snake-case key must never leak into the UI.
+  expect(screen.queryByText('accounts.addStory.close_friends')).not.toBeInTheDocument();
+});
+
+test('the save button is disabled when the first name is cleared (zod validation)', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  const firstName = screen.getByDisplayValue('Иван');
+  await userEvent.clear(firstName);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeDisabled();
+  });
+});
+
 test('music tab removes the current track and picks a new one', async () => {
   routeApi();
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);

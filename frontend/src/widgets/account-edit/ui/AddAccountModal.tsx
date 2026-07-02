@@ -35,6 +35,7 @@ export function AddAccountModal({
   const [fileName, setFileName] = useState<string | null>(null);
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
+  const [proxyValid, setProxyValid] = useState(false);
   // The id of the account imported in step 1, so step 2 can assign a proxy to it.
   const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
 
@@ -45,11 +46,16 @@ export function AddAccountModal({
   const pool = useQuery(proxyPoolQueryOptions());
   const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
 
+  const importing = importTdata.isPending || importSession.isPending;
+  const importFailed = importTdata.isError || importSession.isError;
+
   const onFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (!file) return;
     setFileName(file.name);
+    setCreatedAccountId(null);
     if (method === 'tdata') {
+      importSession.reset();
       importTdata.mutate(
         { body: { file } },
         {
@@ -60,6 +66,7 @@ export function AddAccountModal({
         },
       );
     } else {
+      importTdata.reset();
       importSession.mutate(
         { body: { file } },
         {
@@ -287,23 +294,56 @@ export function AddAccountModal({
                         </div>
                         <div className="min-w-0 flex-1">
                           <div className="truncate text-[12.5px] font-semibold">{fileName}</div>
-                          <div className="mt-px text-[11px] text-[#2e9e64]">
-                            {t('accounts.addWizard.fileReady')}
+                          <div
+                            className="mt-px text-[11px]"
+                            style={{
+                              color: importFailed
+                                ? '#c0473f'
+                                : createdAccountId
+                                  ? '#2e9e64'
+                                  : '#9a9893',
+                            }}
+                          >
+                            {importFailed
+                              ? t('accounts.addWizard.importError')
+                              : importing
+                                ? t('accounts.addWizard.importing')
+                                : createdAccountId
+                                  ? t('accounts.addWizard.imported')
+                                  : t('accounts.addWizard.fileReady')}
                           </div>
                         </div>
-                        <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
-                          <svg
-                            width="18"
-                            height="18"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <circle cx="12" cy="12" r="10" />
-                            <path d="m8 12 2.5 2.5L16 9" />
-                          </svg>
-                        </span>
+                        {importing ? (
+                          <span className="tb-spin m-[5px] inline-block h-[14px] w-[14px] rounded-full border-2 border-line-input border-t-primary" />
+                        ) : importFailed ? (
+                          <span className="m-[3px] inline-flex text-[#c0473f]">
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="m15 9-6 6M9 9l6 6" />
+                            </svg>
+                          </span>
+                        ) : createdAccountId ? (
+                          <span className="tb-pop m-[3px] inline-flex text-[#2e9e64]">
+                            <svg
+                              width="18"
+                              height="18"
+                              viewBox="0 0 24 24"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            >
+                              <circle cx="12" cy="12" r="10" />
+                              <path d="m8 12 2.5 2.5L16 9" />
+                            </svg>
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                   )}
@@ -320,7 +360,7 @@ export function AddAccountModal({
               </button>
               <button
                 type="button"
-                disabled={!method}
+                disabled={!createdAccountId}
                 onClick={() => {
                   setStep(2);
                   setProxyStep('choice');
@@ -447,7 +487,11 @@ export function AddAccountModal({
           </>
         ) : proxyStep === 'form' ? (
           <>
-            <ProxyForm value={proxyValue} onChange={setProxyValue} />
+            <ProxyForm
+              value={proxyValue}
+              onChange={setProxyValue}
+              onValidityChange={setProxyValid}
+            />
             <div className="mt-5 flex justify-between gap-2">
               <button
                 type="button"
@@ -461,7 +505,8 @@ export function AddAccountModal({
               <button
                 type="button"
                 onClick={createAndAssign}
-                className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white"
+                disabled={!proxyValid}
+                className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
               >
                 {t('accounts.addWizard.done')}
               </button>

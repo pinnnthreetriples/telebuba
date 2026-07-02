@@ -14,8 +14,9 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [value, setValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
+  const [valid, setValid] = useState(false);
   const create = useMutation(createProxyMutation());
-  const canAdd = value.host.trim() !== '' && value.port !== '' && !create.isPending;
+  const canAdd = valid && !create.isPending;
 
   const onAdd = () => {
     create.mutate(
@@ -51,7 +52,7 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
             ×
           </button>
         </div>
-        <ProxyForm value={value} onChange={setValue} />
+        <ProxyForm value={value} onChange={setValue} onValidityChange={setValid} />
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
