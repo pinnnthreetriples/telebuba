@@ -3,11 +3,10 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
-  accountDesignStatus,
   accountsQueryOptions,
+  accountStatsQueryOptions,
   checkAccountMutation,
   deleteAccountMutation,
-  type DesignStatus,
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
@@ -23,7 +22,7 @@ export function AccountsPage() {
   const [search, setSearch] = useState('');
   const [cursorStack, setCursorStack] = useState<(string | null)[]>([null]);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [editing, setEditing] = useState<AccountRead | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [proxyAdding, setProxyAdding] = useState(false);
@@ -33,6 +32,9 @@ export function AccountsPage() {
   const { data, isPending, isError } = useQuery(
     accountsQueryOptions({ query: { query: search, status: 'all', cursor, limit: PAGE_SIZE } }),
   );
+  // Fleet-wide status roll-up for the tiles — spans the whole table, so the
+  // counts stay correct across pagination and search (unlike counting items).
+  const { data: fleetStats } = useQuery(accountStatsQueryOptions());
 
   const invalidate = () => {
     void queryClient.invalidateQueries();
@@ -69,27 +71,30 @@ export function AccountsPage() {
     );
   };
   const items = data?.items ?? [];
-  const byDesign = (s: DesignStatus) =>
-    items.filter((a) => accountDesignStatus(a.status) === s).length;
   // The design's five stat tiles (accStats): total / active / idle / needs-code /
-  // problem, each with its own colour.
+  // problem, each with its own colour. Values come from the fleet-wide stats
+  // query, not the current page, so they hold across pagination and search.
   const stats: { label: string; value: number; cls: string }[] = [
-    { label: t('accounts.stats.total'), value: items.length, cls: 'text-ink' },
-    { label: t('accounts.stats.active'), value: byDesign('active'), cls: 'text-[#2e7d55]' },
-    { label: t('accounts.stats.idle'), value: byDesign('spam'), cls: 'text-[#9a7b22]' },
-    { label: t('accounts.stats.code'), value: byDesign('code'), cls: 'text-primary' },
-    { label: t('accounts.stats.problem'), value: byDesign('banned'), cls: 'text-danger' },
+    { label: t('accounts.stats.total'), value: fleetStats?.total ?? 0, cls: 'text-ink' },
+    { label: t('accounts.stats.active'), value: fleetStats?.active ?? 0, cls: 'text-[#2e7d55]' },
+    { label: t('accounts.stats.idle'), value: fleetStats?.idle ?? 0, cls: 'text-[#9a7b22]' },
+    { label: t('accounts.stats.code'), value: fleetStats?.needs_code ?? 0, cls: 'text-primary' },
+    { label: t('accounts.stats.problem'), value: fleetStats?.problem ?? 0, cls: 'text-danger' },
   ];
 
   const hasPrev = cursorStack.length > 1;
   const hasNext = Boolean(data?.next_cursor);
 
+  // Derive the edited row from the live list each render so it reflects the
+  // latest refetch (e.g. status flips from 'unauthorized' after a code login),
+  // rather than a stale snapshot captured at click time.
+  const editing = editingId ? (items.find((a) => a.account_id === editingId) ?? null) : null;
   if (editing) {
     return (
       <AccountEdit
         account={editing}
         onBack={() => {
-          setEditing(null);
+          setEditingId(null);
         }}
       />
     );
@@ -169,7 +174,9 @@ export function AccountsPage() {
             data={items}
             onCheck={onCheck}
             onDelete={onDelete}
-            onOpen={setEditing}
+            onOpen={(account) => {
+              setEditingId(account.account_id);
+            }}
             onProfile={setProfiling}
             busyId={busyId}
           />
