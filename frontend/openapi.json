@@ -3460,7 +3460,58 @@
           "neurocomment"
         ],
         "summary": "Stop",
+        "description": "Pause the runtime: unsubscribe but keep the remembered listener account.",
         "operationId": "stopNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentRuntimeStatus"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/listener/clear": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Clear Listener",
+        "description": "Remove the listener (\"\u0441\u043d\u044f\u0442\u044c \u0441\u043b\u0443\u0448\u0430\u0442\u0435\u043b\u044f\"): unsubscribe and forget the account.",
+        "operationId": "clearNeurocommentListener",
         "parameters": [
           {
             "name": "tb_session",
@@ -5250,7 +5301,7 @@
           "log_limit"
         ],
         "title": "NeurocommentRuntimeStatus",
-        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: the engine is\none fleet listener (not per-campaign), so the persisted listener account id\nbeing set means the engine is live. ``active_channels`` is the size of the\nwatch set across all active campaigns (what the listener actually watches).\n``log_limit`` is the operator-configured activity-log row cap the SPA reads\ninstead of hardcoding one (from ``settings.neurocomment.log_limit``)."
+        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: it reflects the\npersisted ``listener_running`` flag (the engine is actively subscribed), NOT\nmerely whether an account is remembered. ``listener_account_id`` is the\n*remembered* listener and is returned even when ``running`` is False \u2014 that is a\nPAUSED runtime, and the SPA keeps the listener strip visible (distinct from \"no\nlistener\", where the field is null). ``active_channels`` is the size of the\nwatch set across all active campaigns (populated only while running).\n``log_limit`` is the operator-configured activity-log row cap the SPA reads\ninstead of hardcoding one (from ``settings.neurocomment.log_limit``)."
       },
       "NeurocommentSettings": {
         "properties": {

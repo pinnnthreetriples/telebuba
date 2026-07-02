@@ -17,6 +17,7 @@ import {
   assignProxy,
   checkAccount,
   checkProxy,
+  clearNeurocommentListener,
   countCampaignChallengeOutcomes,
   createCampaign,
   createProxy,
@@ -97,6 +98,9 @@ import type {
   CheckProxyData,
   CheckProxyError,
   CheckProxyResponse,
+  ClearNeurocommentListenerData,
+  ClearNeurocommentListenerError,
+  ClearNeurocommentListenerResponse,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesError,
   CountCampaignChallengeOutcomesResponse,
@@ -1919,6 +1923,8 @@ export const startNeurocommentMutation = (
 
 /**
  * Stop
+ *
+ * Pause the runtime: unsubscribe but keep the remembered listener account.
  */
 export const stopNeurocommentMutation = (
   options?: Partial<Options<StopNeurocommentData>>,
@@ -1934,6 +1940,35 @@ export const stopNeurocommentMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Clear Listener
+ *
+ * Remove the listener ("снять слушателя"): unsubscribe and forget the account.
+ */
+export const clearNeurocommentListenerMutation = (
+  options?: Partial<Options<ClearNeurocommentListenerData>>,
+): UseMutationOptions<
+  ClearNeurocommentListenerResponse,
+  ClearNeurocommentListenerError,
+  Options<ClearNeurocommentListenerData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ClearNeurocommentListenerResponse,
+    ClearNeurocommentListenerError,
+    Options<ClearNeurocommentListenerData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await clearNeurocommentListener({
         ...options,
         ...fnOptions,
         throwOnError: true,

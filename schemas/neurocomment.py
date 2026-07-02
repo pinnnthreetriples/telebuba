@@ -354,10 +354,13 @@ class NeurocommentBoard(BaseModel):
 class NeurocommentRuntimeStatus(BaseModel):
     """Fleet-wide runtime state for the page's running indicator + live animation.
 
-    ``running`` is the single source of truth the UI animates on: the engine is
-    one fleet listener (not per-campaign), so the persisted listener account id
-    being set means the engine is live. ``active_channels`` is the size of the
-    watch set across all active campaigns (what the listener actually watches).
+    ``running`` is the single source of truth the UI animates on: it reflects the
+    persisted ``listener_running`` flag (the engine is actively subscribed), NOT
+    merely whether an account is remembered. ``listener_account_id`` is the
+    *remembered* listener and is returned even when ``running`` is False — that is a
+    PAUSED runtime, and the SPA keeps the listener strip visible (distinct from "no
+    listener", where the field is null). ``active_channels`` is the size of the
+    watch set across all active campaigns (populated only while running).
     ``log_limit`` is the operator-configured activity-log row cap the SPA reads
     instead of hardcoding one (from ``settings.neurocomment.log_limit``).
     """

@@ -35,6 +35,7 @@ from core.migration_steps import (
     _rename_proxy_type_http_to_https,
 )
 from core.migration_steps_pool import (
+    _add_neurocomment_listener_running,
     _add_proxy_pool,
     _add_warming_state_activity_persona,
 )
@@ -73,6 +74,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (21, "add_warming_state_activity_persona", _add_warming_state_activity_persona),
     (22, "add_users_token_version", _add_users_token_version),
     (23, "add_logs_indexes", _add_logs_indexes),
+    (24, "add_neurocomment_listener_running", _add_neurocomment_listener_running),
 )
 
 

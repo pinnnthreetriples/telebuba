@@ -21,6 +21,7 @@ _ALLOWED_TABLES = frozenset(
         "warming_settings",
         "neurocomment_campaigns",
         "neurocomment_readiness",
+        "neurocomment_runtime",
         "users",
     },
 )

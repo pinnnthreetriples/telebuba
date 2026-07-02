@@ -226,6 +226,28 @@ async def test_start_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_clear_listener_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST /listener/clear removes the listener and returns the (empty) runtime status."""
+    called = False
+
+    async def _clear() -> None:
+        nonlocal called
+        called = True
+
+    async def _status() -> NeurocommentRuntimeStatus:
+        return NeurocommentRuntimeStatus(running=False, listener_account_id=None, log_limit=50)
+
+    monkeypatch.setattr("services.neurocomment.clear_neurocomment_listener", _clear)
+    monkeypatch.setattr("services.neurocomment.neurocomment_runtime_status", _status)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/neurocomment/listener/clear")
+    assert resp.status_code == 200
+    assert called is True
+    assert resp.json()["running"] is False
+    assert resp.json()["listener_account_id"] is None
+
+
+@pytest.mark.asyncio
 async def test_skip_pair_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     seen: dict[str, str] = {}
 

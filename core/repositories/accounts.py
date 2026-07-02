@@ -321,12 +321,13 @@ def _delete_account(account_id: str) -> None:
                 _neurocomment_challenges.c.account_id == account_id,
             ),
         )
-        # If this account was the persisted listener, clear the pointer so
-        # reconcile_neurocomment_on_startup does not re-point at a ghost.
+        # If this account was the persisted listener, clear the pointer AND the
+        # run flag so reconcile_neurocomment_on_startup does not re-point at a
+        # ghost (and a paused-listener row can't resume onto a deleted account).
         connection.execute(
             update(_neurocomment_runtime)
             .where(_neurocomment_runtime.c.listener_account_id == account_id)
-            .values(listener_account_id=None, updated_at=_now_iso()),
+            .values(listener_account_id=None, listener_running=False, updated_at=_now_iso()),
         )
         connection.execute(
             delete(_warming_joined_channels).where(

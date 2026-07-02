@@ -29,6 +29,9 @@ import type {
   CheckProxyData,
   CheckProxyErrors,
   CheckProxyResponses,
+  ClearNeurocommentListenerData,
+  ClearNeurocommentListenerErrors,
+  ClearNeurocommentListenerResponses,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesErrors,
   CountCampaignChallengeOutcomesResponses,
@@ -1144,6 +1147,8 @@ export const startNeurocomment = <ThrowOnError extends boolean = false>(
 
 /**
  * Stop
+ *
+ * Pause the runtime: unsubscribe but keep the remembered listener account.
  */
 export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   options?: Options<StopNeurocommentData, ThrowOnError>,
@@ -1151,6 +1156,20 @@ export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
     { url: '/api/v1/neurocomment/stop', ...options },
   );
+
+/**
+ * Clear Listener
+ *
+ * Remove the listener ("снять слушателя"): unsubscribe and forget the account.
+ */
+export const clearNeurocommentListener = <ThrowOnError extends boolean = false>(
+  options?: Options<ClearNeurocommentListenerData, ThrowOnError>,
+) =>
+  (options?.client ?? client).post<
+    ClearNeurocommentListenerResponses,
+    ClearNeurocommentListenerErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/listener/clear', ...options });
 
 /**
  * Get Settings

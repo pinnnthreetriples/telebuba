@@ -10,11 +10,13 @@ from core.db import (
     configure_database,
     create_account,
     get_listener_account_id,
+    get_listener_running,
     insert_challenge,
     insert_device_fingerprint,
     list_accounts,
     list_challenged_channels,
     set_listener_account_id,
+    set_listener_running,
     update_account_from_session_check,
 )
 from core.repositories.accounts import _delete_account
@@ -159,14 +161,18 @@ async def test_delete_account_purges_neurocomment_challenges(tmp_path: Path) -> 
 async def test_delete_account_clears_listener_pointer_when_it_was_listener(
     tmp_path: Path,
 ) -> None:
-    """Audit #1: deleting the listener account clears the persisted pointer."""
+    """Audit #1: deleting the listener account clears the pointer AND the run flag."""
     configure_database(tmp_path / "telebuba.db")
     await create_account(AccountCreate(account_id="acc-listener"))
     await set_listener_account_id("acc-listener")
+    await set_listener_running(running=True)
 
     await asyncio.to_thread(_delete_account, "acc-listener")
 
     assert await get_listener_account_id() is None
+    # A paused-listener row must not resume onto a now-deleted account, so the run
+    # flag is cleared too (audit 2026-07-02).
+    assert await get_listener_running() is False
 
 
 @pytest.mark.asyncio

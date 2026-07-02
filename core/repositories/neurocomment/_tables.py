@@ -118,11 +118,16 @@ _neurocomment_challenges = Table(
 )
 # Single-row table holding the active listener account id so the engine can
 # re-point the listener at boot. ``id`` is pinned to 1 (migration #12).
+# ``listener_running`` (migration #24) splits "which account is the listener"
+# from "is the runtime actively subscribed": a paused runtime keeps its remembered
+# ``listener_account_id`` while ``listener_running`` is 0, so reload/reboot no
+# longer confuses pause with "снять слушателя" (remove).
 _neurocomment_runtime = Table(
     "neurocomment_runtime",
     _metadata,
     Column("id", Integer, primary_key=True),
     Column("listener_account_id", String, nullable=True),
+    Column("listener_running", Boolean, nullable=False, server_default="0"),
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_neurocomment_runtime_single_row"),
 )

@@ -21,9 +21,11 @@ from core.db import (
     create_account,
     create_campaign,
     get_listener_account_id,
+    get_listener_running,
     link_channel_to_campaign,
     mark_comment_posted,
     set_listener_account_id,
+    set_listener_running,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
@@ -112,6 +114,7 @@ async def test_runtime_status_running_counts_active_watch_channels() -> None:
     await link_channel_to_campaign(campaign.campaign_id, "@a")
     await link_channel_to_campaign(campaign.campaign_id, "@b")
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     status = await _runtime.neurocomment_runtime_status()
 
@@ -132,6 +135,7 @@ async def test_runtime_status_carries_log_limit_from_config(
     assert stopped.log_limit == 42
 
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
     running = await _runtime.neurocomment_runtime_status()
     assert running.running is True
     assert running.log_limit == 42
@@ -139,9 +143,10 @@ async def test_runtime_status_carries_log_limit_from_config(
 
 @pytest.mark.asyncio
 async def test_runtime_status_running_with_no_channels_reports_zero() -> None:
-    # A persisted listener with an empty watch set still reads as running (the
+    # A running listener with an empty watch set still reads as running (the
     # listener is up); the count is simply 0.
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     status = await _runtime.neurocomment_runtime_status()
 
@@ -301,6 +306,7 @@ async def test_start_persists_listener_then_reconciles(monkeypatch: pytest.Monke
     await _runtime.start_neurocomment("listener-1")
 
     assert await get_listener_account_id() == "listener-1"
+    assert await get_listener_running() is True
     assert spy.reconciled == ["listener-1"]
 
 
@@ -524,11 +530,15 @@ async def test_stop_shuts_down_persisted_listener_then_clears(
     spy = _ReconcileSpy()
     _patch_engine(monkeypatch, spy)
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     await _runtime.stop_neurocomment()
 
+    # PAUSE: unsubscribed + run flag cleared, but the listener is REMEMBERED so the
+    # SPA keeps the strip after a reload (this is what distinguishes pause from remove).
     assert spy.shut_down == ["listener-1"]
-    assert await get_listener_account_id() is None
+    assert await get_listener_account_id() == "listener-1"
+    assert await get_listener_running() is False
 
 
 @pytest.mark.asyncio
@@ -540,13 +550,58 @@ async def test_stop_with_no_listener_is_noop(monkeypatch: pytest.MonkeyPatch) ->
 
     assert spy.shut_down == []
     assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_clear_listener_wipes_id_and_run_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clearing the listener removes the account entirely (unlike pause, which keeps it)."""
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+
+    await _runtime.clear_neurocomment_listener()
+
+    assert spy.shut_down == ["listener-1"]
+    assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_clear_listener_with_none_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+
+    await _runtime.clear_neurocomment_listener()
+
+    assert spy.shut_down == []
+    assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_status_after_pause_keeps_remembered_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After pause the status shows the remembered listener with running False (audit fix)."""
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+
+    await _runtime.stop_neurocomment()
+    status = await _runtime.neurocomment_runtime_status()
+
+    assert status.running is False
+    assert status.listener_account_id == "listener-1"
 
 
 @pytest.mark.asyncio
 async def test_reconcile_if_running_gates_on_persisted_listener(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """reconcile_if_running re-points only when a listener is persisted (stopped == no-op, #2)."""
+    """reconcile_if_running re-points only when the runtime is running (gated on the flag)."""
     spy = _ReconcileSpy()
     monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", spy.reconcile)
 
@@ -554,8 +609,13 @@ async def test_reconcile_if_running_gates_on_persisted_listener(
     await _runtime.reconcile_if_running()
     assert spy.reconciled == []
 
-    # Running: a listener is persisted → reconcile that account.
+    # Paused: listener remembered but the run flag is off → still a no-op.
     await set_listener_account_id("listener-1")
+    await _runtime.reconcile_if_running()
+    assert spy.reconciled == []
+
+    # Running: the run flag is set → reconcile the remembered account.
+    await set_listener_running(running=True)
     await _runtime.reconcile_if_running()
     assert spy.reconciled == ["listener-1"]
 
@@ -567,6 +627,7 @@ async def test_reconcile_on_startup_resumes_persisted_listener(
     spy = _ReconcileSpy()
     _patch_engine(monkeypatch, spy)
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     await _runtime.reconcile_neurocomment_on_startup()
 
@@ -583,6 +644,28 @@ async def test_reconcile_on_startup_does_nothing_when_stopped(
     await _runtime.reconcile_neurocomment_on_startup()
 
     assert spy.reconciled == []
+
+
+@pytest.mark.asyncio
+async def test_reconcile_on_startup_does_not_resume_paused_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A remembered-but-paused listener must NOT auto-resume on boot (audit fix).
+
+    Pausing then rebooting leaves the account remembered with the run flag off;
+    reconcile-on-startup gates on the flag, so nothing is resubscribed.
+    """
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+    await _runtime.stop_neurocomment()  # pause: keeps id, clears the flag
+    spy.reconciled.clear()
+
+    await _runtime.reconcile_neurocomment_on_startup()
+
+    assert spy.reconciled == []
+    assert await get_listener_account_id() == "listener-1"
 
 
 @pytest.mark.asyncio

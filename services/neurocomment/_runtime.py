@@ -19,10 +19,12 @@ from core.config import settings
 from core.db import (
     fetch_active_campaign_for_channel,
     get_listener_account_id,
+    get_listener_running,
     list_active_watch_channels,
     list_campaigns,
     list_posted_comments_since,
     set_listener_account_id,
+    set_listener_running,
 )
 from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
@@ -137,6 +139,7 @@ async def start_neurocomment(
     if previous is not None and previous != listener_account_id:
         await stop_post_listener(previous)
     await set_listener_account_id(listener_account_id)
+    await set_listener_running(running=True)
     await reconcile_neurocomment_runtime(listener_account_id)
     _ensure_onboarding_running(on_progress)
 
@@ -168,10 +171,29 @@ async def _onboard_active_campaigns(on_progress: Callable[[str], None] | None) -
 
 
 async def stop_neurocomment() -> None:
-    """Stop the runtime for the persisted listener account and clear it.
+    """PAUSE the runtime: unsubscribe but KEEP the remembered listener account.
 
-    The persisted id is cleared even if shutdown raises, so "stop" reliably
-    stops: a fresh boot must never resume a listener the operator turned off.
+    The operator's play/pause button lands here. ``listener_running`` is cleared
+    even if shutdown raises, so a fresh boot never auto-resumes a paused listener
+    (``reconcile_neurocomment_on_startup`` gates on it). ``listener_account_id`` is
+    deliberately left intact so the strip survives a reload in the paused state —
+    that is what distinguishes pause from "снять слушателя" (see
+    :func:`clear_neurocomment_listener`).
+    """
+    listener_account_id = await get_listener_account_id()
+    try:
+        if listener_account_id is not None:
+            await shutdown_neurocomment_runtime(listener_account_id)
+    finally:
+        await set_listener_running(running=False)
+
+
+async def clear_neurocomment_listener() -> None:
+    """REMOVE the listener ("снять слушателя"): unsubscribe and forget the account.
+
+    Unlike :func:`stop_neurocomment` (pause), this clears ``listener_account_id`` as
+    well as ``listener_running`` so the strip reverts to the "выберите аккаунт"
+    placeholder. Both are cleared even if shutdown raises.
     """
     listener_account_id = await get_listener_account_id()
     try:
@@ -179,19 +201,29 @@ async def stop_neurocomment() -> None:
             await shutdown_neurocomment_runtime(listener_account_id)
     finally:
         await set_listener_account_id(None)
+        await set_listener_running(running=False)
 
 
 async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
-    """Fleet runtime state for the UI: is the engine listening, and over how many channels.
+    """Fleet runtime state for the UI: is the engine subscribed, and over how many channels.
 
-    Running == a listener account id is persisted (the one piece of runtime state
-    that survives a restart). The watch set is only read when running, so a stopped
-    engine costs a single scalar read.
+    ``running`` reflects the persisted ``listener_running`` flag (actively
+    subscribed), not merely whether an account is remembered. The remembered
+    ``listener_account_id`` is always returned when one is set, so a *paused*
+    runtime shows the listener strip with ``running=False`` — the SPA tells "paused
+    with a remembered listener" from "no listener" by that field being non-null.
+    The watch set is only read when running, so a paused/stopped engine costs two
+    scalar reads.
     """
     log_limit = settings.neurocomment.log_limit
     listener_account_id = await get_listener_account_id()
-    if listener_account_id is None:
-        return NeurocommentRuntimeStatus(running=False, log_limit=log_limit)
+    running = await get_listener_running()
+    if not running:
+        return NeurocommentRuntimeStatus(
+            running=False,
+            listener_account_id=listener_account_id,
+            log_limit=log_limit,
+        )
     channels = (await list_active_watch_channels()).channels
     return NeurocommentRuntimeStatus(
         running=True,
@@ -202,19 +234,29 @@ async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
 
 
 async def reconcile_if_running() -> None:
-    """Re-point the live listener at the current watch set — no-op when stopped.
+    """Re-point the live listener at the current watch set — no-op when not running.
 
     Called after a channel link/unlink so the running listener's subscription tracks
-    the DB immediately, instead of only at the next start/boot. When the runtime is
-    stopped (no listener persisted) there is nothing to reconcile.
+    the DB immediately, instead of only at the next start/boot. Gated on
+    ``listener_running`` so a *paused* runtime (id remembered, flag off) is not
+    silently resubscribed by a channel edit.
     """
+    if not await get_listener_running():
+        return
     listener_account_id = await get_listener_account_id()
     if listener_account_id is not None:
         await reconcile_neurocomment_runtime(listener_account_id)
 
 
 async def reconcile_neurocomment_on_startup() -> None:
-    """No-arg ``app.on_startup`` hook: resume the listener if one is persisted."""
+    """No-arg ``app.on_startup`` hook: resume the listener only if it was running.
+
+    A remembered-but-*paused* listener (``listener_account_id`` set,
+    ``listener_running`` False) stays paused across a reboot — resuming it would
+    silently re-enable a runtime the operator turned off (audit 2026-07-02).
+    """
+    if not await get_listener_running():
+        return
     listener_account_id = await get_listener_account_id()
     if listener_account_id is not None:
         await reconcile_neurocomment_runtime(listener_account_id)

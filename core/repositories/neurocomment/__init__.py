@@ -61,7 +61,9 @@ from core.repositories.neurocomment._quota import (
 )
 from core.repositories.neurocomment._runtime import (
     get_listener_account_id,
+    get_listener_running,
     set_listener_account_id,
+    set_listener_running,
 )
 from core.repositories.neurocomment._settings import (
     load_neurocomment_settings,
@@ -87,6 +89,7 @@ __all__ = [
     "fetch_linked_group",
     "fetch_readiness",
     "get_listener_account_id",
+    "get_listener_running",
     "insert_challenge",
     "link_channel_to_campaign",
     "list_active_watch_channels",
@@ -109,6 +112,7 @@ __all__ = [
     "save_neurocomment_settings",
     "set_campaign_status",
     "set_listener_account_id",
+    "set_listener_running",
     "update_campaign_prompt",
     "update_solver_enabled",
     "upsert_linked_group",

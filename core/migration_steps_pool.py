@@ -2,9 +2,10 @@
 
 Kept in its own module so ``core.migration_steps`` stays under the file-size
 budget. Holds the proxy-pool migration (#18 — the shared ``proxies`` table +
-``accounts.proxy_id`` FK, backfilled from the retired ``account_proxies``) and
-the warming ``activity_persona`` column (#21). The generic SQLite helpers are
-imported from ``core.migration_steps``.
+``accounts.proxy_id`` FK, backfilled from the retired ``account_proxies``), the
+warming ``activity_persona`` column (#21) and the neurocomment
+``listener_running`` flag (#24). The generic SQLite helpers are imported from
+``core.migration_steps``.
 """
 
 from __future__ import annotations
@@ -102,6 +103,21 @@ def _add_proxy_pool(connection: Connection) -> None:
     if _sqlite_table_exists(connection, "account_proxies"):
         _backfill_proxy_pool(connection)
         connection.exec_driver_sql("DROP TABLE account_proxies")
+
+
+def _add_neurocomment_listener_running(connection: Connection) -> None:
+    # audit 2026-07-02: split "which account is the listener" from "is the runtime
+    # subscribed". Without this, pause (the global stop) cleared listener_account_id,
+    # so a paused listener was indistinguishable from a removed one after a reload.
+    # DEFAULT 0 so a legacy row with a remembered listener_account_id boots PAUSED
+    # (never auto-resumes); create_all builds fresh DBs with the same server_default.
+    if not _sqlite_table_exists(connection, "neurocomment_runtime"):
+        return
+    if "listener_running" not in _sqlite_columns(connection, "neurocomment_runtime"):
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_runtime "
+            "ADD COLUMN listener_running INTEGER NOT NULL DEFAULT 0",
+        )
 
 
 def _add_warming_state_activity_persona(connection: Connection) -> None:

@@ -210,7 +210,19 @@ async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
 
 @router.post("/stop", response_model=NeurocommentRuntimeStatus, operation_id="stopNeurocomment")
 async def stop() -> NeurocommentRuntimeStatus:
+    """Pause the runtime: unsubscribe but keep the remembered listener account."""
     await nc_service.stop_neurocomment()
+    return await nc_service.neurocomment_runtime_status()
+
+
+@router.post(
+    "/listener/clear",
+    response_model=NeurocommentRuntimeStatus,
+    operation_id="clearNeurocommentListener",
+)
+async def clear_listener() -> NeurocommentRuntimeStatus:
+    """Remove the listener ("снять слушателя"): unsubscribe and forget the account."""
+    await nc_service.clear_neurocomment_listener()
     return await nc_service.neurocomment_runtime_status()
 
 
