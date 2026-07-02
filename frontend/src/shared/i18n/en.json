@@ -298,16 +298,15 @@
       "subtitle": "Access to the comment-generation model",
       "geminiKey": "Gemini API key",
       "keySet": "Key is set — leave blank to keep it",
-      "keyUnset": "No key set"
+      "keyUnset": "No key set",
+      "clearKey": "Clear key",
+      "keyCleared": "Key will be cleared on save",
+      "toggleVisibility": "Toggle key visibility"
     },
     "warmLimits": {
       "title": "Warming limits",
       "subtitle": "Actions per day per account",
-      "auto": "Auto-managed by phase and trust-score (shown for reference)",
-      "sub": "Subscriptions per day",
-      "read": "Post reads per day",
-      "react": "Reactions per day",
-      "pause": "Pause between steps (min)"
+      "engineNote": "Warming per-account activity is chosen automatically by the engine from each account's phase and trust-score — there are no fixed numeric limits to set here."
     },
     "neuroLimits": {
       "title": "Neurocomment limits",
@@ -315,7 +314,14 @@
       "cpd": "Comments per day per channel",
       "delay": "Reply delay (sec)",
       "parallel": "Comments per hour",
-      "trust": "Min. trust-score to run"
+      "trust": "Min. trust-score to run",
+      "delayFrom": "Reply delay, from (sec)",
+      "delayTo": "Reply delay, to (sec)",
+      "errCpd": "Enter a whole number from 1 to 100",
+      "errDelay": "Enter a whole number of seconds (0–3600)",
+      "errDelayOrder": "“To” must be at least “from”",
+      "errParallel": "Enter a whole number from 1 to 1000",
+      "errTrust": "Enter a whole number from 0 to 100"
     },
     "flag": {
       "reactions_enabled": {

@@ -1,17 +1,17 @@
+import { type ColumnDef } from '@tanstack/react-table';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { accountsQueryOptions } from '@/entities/account';
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
-import type { PageLogEntry } from '@/shared/api';
-import { formatLocalTime, useLogEventStream } from '@/shared/lib';
+import type { LogEntry, PageLogEntry } from '@/shared/api';
+import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
+import { eventLabel, formatLocalTime, useLogEventStream } from '@/shared/lib';
 
 const PAGE_SIZE = 50;
 const STATUS_FILTERS = ['all', 'success', 'warning', 'error'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
-
-const TH =
-  'px-4 py-[11px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
 
 export function LogsPage() {
   const { t } = useTranslation();
@@ -28,12 +28,27 @@ export function LogsPage() {
     }),
   );
 
+  // Account filter + column labels come from GET /accounts (a fixed id→label
+  // list), NOT the loaded log page — so every account is selectable even when it
+  // has no rows on the current page, and the column shows the phone, not the
+  // internal session-stem id.
+  const accountsData = useQuery(accountsQueryOptions());
+  const accountLabels = useMemo(() => {
+    const map = new Map<string, string>();
+    for (const acc of accountsData.data?.items ?? []) {
+      map.set(acc.account_id, acc.phone ?? acc.label ?? acc.account_id);
+    }
+    return map;
+  }, [accountsData.data]);
+  const resolveAccount = (id: string): string => accountLabels.get(id) ?? id;
+
   const items = data?.items ?? [];
   const hasPrev = cursorStack.length > 1;
   const hasNext = Boolean(data?.next_cursor);
 
   // Live tail: prepend each incoming row to the newest page's cache, in place,
-  // when it matches the active filter (no refetch).
+  // when it matches the active filter (no refetch). Key-scoped — only the newest
+  // logs page's cache entry is touched, never a blanket invalidate.
   useLogEventStream((entry) => {
     if (hasPrev) return;
     if (status !== 'all' && entry.status !== status) return;
@@ -52,12 +67,47 @@ export function LogsPage() {
     setCursorStack([null]);
   };
 
-  // Account options: derived from the loaded rows' account ids, plus an "all"
-  // option. Graceful when empty (just "all").
-  const accountIds = [
-    ...new Set(items.map((row) => row.account_id).filter((id): id is string => Boolean(id))),
-  ];
-  const accountLabel = account || t('logs.filter.account');
+  const accountLabel = account ? resolveAccount(account) : t('logs.filter.account');
+  const accountIds = [...accountLabels.keys()];
+
+  const columns = useMemo<ColumnDef<LogEntry>[]>(
+    () => [
+      {
+        id: 'time',
+        header: () => t('logs.col.time'),
+        cell: ({ row }) => formatLocalTime(row.original.created_at, { seconds: true }),
+        meta: {
+          className: 'w-[120px]',
+          cellClassName: 'font-mono text-[12px] text-ink-subtle',
+        } satisfies DataTableColumnMeta,
+      },
+      {
+        id: 'level',
+        header: () => t('logs.col.level'),
+        cell: ({ row }) => <LogStatusBadge status={row.original.status} />,
+        meta: { className: 'w-[110px]' } satisfies DataTableColumnMeta,
+      },
+      {
+        id: 'account',
+        header: () => t('logs.col.account'),
+        cell: ({ row }) =>
+          row.original.account_id ? resolveAccount(row.original.account_id) : '—',
+        meta: {
+          className: 'w-[150px]',
+          cellClassName: 'text-[12.5px] text-[#3a3a3a]',
+        } satisfies DataTableColumnMeta,
+      },
+      {
+        id: 'event',
+        header: () => t('logs.col.event'),
+        cell: ({ row }) => eventLabel(t, row.original.event),
+        meta: { cellClassName: 'text-[12.5px] text-[#3a3a3a]' } satisfies DataTableColumnMeta,
+      },
+    ],
+    // resolveAccount closes over accountLabels; re-derive columns when labels change.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [t, accountLabels],
+  );
 
   // Level-filter sliding indicator: measure the active pill and CSS-transition a
   // single capsule behind it (the GSAP #log-ind slide, like the nav indicator).
@@ -158,7 +208,7 @@ export function LogsPage() {
             </span>
           </button>
           <div
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-[5] rounded-[11px] border border-line bg-white shadow-[0_10px_28px_rgba(0,0,0,0.13)]${accountOpen ? ' open' : ''}`}
+            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-[5] max-h-[280px] overflow-y-auto rounded-[11px] border border-line bg-white shadow-[0_10px_28px_rgba(0,0,0,0.13)]${accountOpen ? ' open' : ''}`}
           >
             <div className="p-1">
               {['', ...accountIds].map((value) => {
@@ -172,7 +222,7 @@ export function LogsPage() {
                     }}
                     className="flex w-full items-center justify-between rounded-[7px] px-[10px] py-[8px] text-[13px] hover:bg-[#faf9f7]"
                   >
-                    {value || t('logs.filter.allAccounts')}
+                    {value ? resolveAccount(value) : t('logs.filter.allAccounts')}
                     {selected && (
                       <svg
                         width="14"
@@ -210,32 +260,7 @@ export function LogsPage() {
         <>
           <div className="overflow-hidden rounded-2xl border border-line bg-white">
             <div className="tb-scroll overflow-x-auto">
-              <table className="w-full min-w-[760px] border-collapse">
-                <thead>
-                  <tr className="bg-surface">
-                    <th className={`${TH} w-[120px]`}>{t('logs.col.time')}</th>
-                    <th className={`${TH} w-[110px]`}>{t('logs.col.level')}</th>
-                    <th className={`${TH} w-[150px]`}>{t('logs.col.account')}</th>
-                    <th className={TH}>{t('logs.col.event')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {items.map((row) => (
-                    <tr key={row.id} className="border-t border-[#f0eeeb]">
-                      <td className="px-4 py-[10px] font-mono text-[12px] text-ink-subtle">
-                        {formatLocalTime(row.created_at, { seconds: true })}
-                      </td>
-                      <td className="px-4 py-[10px]">
-                        <LogStatusBadge status={row.status} />
-                      </td>
-                      <td className="px-4 py-[10px] text-[12.5px] text-[#3a3a3a]">
-                        {row.account_id ?? '—'}
-                      </td>
-                      <td className="px-4 py-[10px] text-[12.5px] text-[#3a3a3a]">{row.event}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              <DataTable data={items} columns={columns} />
             </div>
           </div>
           <div className="mt-4 flex items-center justify-end gap-2">
