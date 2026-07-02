@@ -28,13 +28,6 @@ class DialogueMessage(BaseModel):
     replied: bool = False
 
 
-class DialogueOverview(BaseModel):
-    """Pairs and recent messages for the warming page's dialogue panel."""
-
-    pairs: list[DialoguePair] = Field(default_factory=list)
-    recent: list[DialogueMessage] = Field(default_factory=list)
-
-
 class DialoguePartnersResult(BaseModel):
     """Partners paired with one account — see :func:`services.dialogues.get_partners`."""
 

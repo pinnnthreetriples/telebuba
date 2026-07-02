@@ -1,4 +1,4 @@
-import { type ReactNode, useState } from 'react';
+import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
 
 // The design's collapsible accordion card: a header row (free-form content +
 // chevron) over a max-height-collapsing body. Used across the account-edit,
@@ -42,9 +42,27 @@ export function CollapsibleCard({
   children: ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const collapseRef = useRef<HTMLDivElement>(null);
+  // Drop the max-height cap once the open transition settles, so content is
+  // never clipped (the .tb-collapse `var(--mh)` cap is only for the animation).
+  const [settled, setSettled] = useState(defaultOpen);
   const toggle = () => {
+    setSettled(false);
     setOpen((value) => !value);
   };
+
+  // Drive the transition from the real content height so tall content (>600px)
+  // isn't cut by the CSS fallback cap.
+  useLayoutEffect(() => {
+    const el = collapseRef.current;
+    if (!el) return;
+    if (open) {
+      el.style.setProperty('--mh', `${String(el.scrollHeight)}px`);
+    } else {
+      el.style.removeProperty('--mh');
+    }
+  }, [open, children]);
+
   return (
     <div className={`overflow-hidden ${wrapperClassName}`}>
       <div className={`flex items-center gap-[10px] ${headerClassName}`}>
@@ -65,7 +83,13 @@ export function CollapsibleCard({
           <Chevron open={open} />
         </button>
       </div>
-      <div className={`tb-collapse ${open ? 'tb-open' : ''}`}>
+      <div
+        ref={collapseRef}
+        className={`tb-collapse ${open ? 'tb-open' : ''} ${open && settled ? 'tb-settled' : ''}`}
+        onTransitionEnd={(event) => {
+          if (event.propertyName === 'max-height' && open) setSettled(true);
+        }}
+      >
         <div className={bodyClassName}>{children}</div>
       </div>
     </div>

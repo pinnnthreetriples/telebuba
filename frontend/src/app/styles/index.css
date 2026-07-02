@@ -238,6 +238,10 @@
   border-radius: 6px;
 }
 
+.tb-row:hover {
+  background: #faf9f7;
+}
+
 .tb-collapse {
   overflow: hidden;
   max-height: 0;
@@ -249,6 +253,11 @@
 .tb-collapse.tb-open {
   max-height: var(--mh, 600px);
   opacity: 1;
+}
+/* After the open transition settles, drop the cap so content taller than the
+   measured height (added later, e.g. an expanding log) is never clipped. */
+.tb-collapse.tb-open.tb-settled {
+  max-height: none;
 }
 .tb-sw-thumb {
   transition: transform 0.18s ease;

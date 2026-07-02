@@ -15,6 +15,7 @@ package splits landed.
 from __future__ import annotations
 
 import ast
+import json
 import sys
 from pathlib import Path
 
@@ -101,18 +102,64 @@ def test_api_imports_only_allowlisted() -> None:
     assert violations == []
 
 
+def _parse_env_example() -> dict[str, str]:
+    """Parse ``.env.example`` into ``{KEY: raw_value}`` (comments/blanks skipped)."""
+    pairs: dict[str, str] = {}
+    for line in (_ROOT / ".env.example").read_text(encoding="utf-8").splitlines():
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or "=" not in stripped:
+            continue
+        key, _, value = stripped.partition("=")
+        pairs[key.strip()] = value.strip()
+    return pairs
+
+
+def _env_value_matches_default(raw: str, default: object) -> bool:
+    """Whether a raw ``.env.example`` string equals a field's in-code default.
+
+    Compares by type so the template's natural forms all pass: booleans as
+    ``true``/``false``, numbers by value (so a ``float`` default of ``30.0`` may be
+    written ``30``), lists as JSON, everything else as its ``str``.
+    """
+    if isinstance(default, bool):
+        return raw == ("true" if default else "false")
+    if isinstance(default, (int, float)):
+        try:
+            return float(raw) == float(default)
+        except ValueError:
+            return False
+    if isinstance(default, list):
+        try:
+            return json.loads(raw) == default
+        except json.JSONDecodeError:
+            return False
+    return raw == str(default)
+
+
 def test_env_example_covers_every_config_field() -> None:
-    """Every `core/config.py` field must have a `NAMESPACE__FIELD` key in .env.example."""
-    env_text = (_ROOT / ".env.example").read_text(encoding="utf-8")
+    """`.env.example` must mirror `core/config.py`: every field present AND at its default.
+
+    Guards two drifts: a new config field with no documented env key, and a template
+    value that no longer equals the in-code default (the file header promises the
+    shown values *are* the defaults). Defaults are read from the model fields, not the
+    live ``settings`` instance, so a developer's local ``.env`` never masks drift.
+    """
+    env = _parse_env_example()
     missing: list[str] = []
+    drifted: list[str] = []
     for namespace in Settings.model_fields:
-        nested = getattr(settings, namespace)
-        prefix = type(nested).model_config.get("env_prefix", "")
-        for field_name in type(nested).model_fields:
+        nested_type = type(getattr(settings, namespace))
+        prefix = nested_type.model_config.get("env_prefix", "")
+        for field_name, info in nested_type.model_fields.items():
             key = f"{prefix}{field_name.upper()}"
-            if f"{key}=" not in env_text:
+            if key not in env:
                 missing.append(key)
+                continue
+            default = info.get_default(call_default_factory=True)
+            if not _env_value_matches_default(env[key], default):
+                drifted.append(f"{key}: template={env[key]!r} != default={default!r}")
     assert missing == [], f".env.example is missing keys: {missing}"
+    assert drifted == [], f".env.example values drifted from config defaults: {drifted}"
 
 
 @pytest.mark.parametrize("layer", ["api", "core", "services", "schemas"])

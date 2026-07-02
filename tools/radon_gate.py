@@ -19,7 +19,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
 
 _MAX_COMPLEXITY = 20
-_PATHS = ("core", "schemas", "services", "main.py")
+_PATHS = ("api", "core", "schemas", "services", "main.py")
 
 
 def _iter_python_files(paths: tuple[str, ...]) -> Iterator[Path]:

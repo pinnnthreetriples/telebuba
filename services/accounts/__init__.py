@@ -28,7 +28,6 @@ from services.accounts._table import (
     account_stats,
     list_accounts_page,
     list_listener_accounts,
-    load_accounts_table,
 )
 from services.accounts.lifecycle import add_account, evaluate_account_geo, remove_account
 from services.accounts.login import (
@@ -76,7 +75,6 @@ __all__ = [
     "list_accounts",
     "list_accounts_page",
     "list_listener_accounts",
-    "load_accounts_table",
     "logout_account",
     "post_account_story",
     "remove_account",

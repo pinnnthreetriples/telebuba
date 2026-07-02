@@ -4,7 +4,7 @@ import { useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { logoutMutation, meQueryOptions } from '@/shared/auth';
-import { useLogEventStream, type SseStatus } from '@/shared/lib';
+import { queryClient, useLogEventStream, type SseStatus } from '@/shared/lib';
 
 const LINKS = [
   { to: '/', key: 'accounts' },
@@ -27,7 +27,7 @@ export function AppNav() {
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions());
   const logout = useMutation(logoutMutation());
-  const initials = (me.data?.username ?? '').slice(0, 2).toUpperCase() || 'ОП';
+  const initials = (me.data?.username ?? '').slice(0, 2).toUpperCase() || t('shell.avatarFallback');
   const [sseStatus, setSseStatus] = useState<SseStatus>('connecting');
   useLogEventStream(() => undefined, setSseStatus);
   const systemActive = sseStatus === 'open';
@@ -75,7 +75,7 @@ export function AppNav() {
           ))}
           <span
             aria-hidden
-            className="pointer-events-none absolute bottom-0 h-[2px] rounded-t bg-primary transition-[left,width] duration-[450ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
+            className="pointer-events-none absolute top-0 h-[2px] rounded-b-[2px] bg-primary transition-[left,width] duration-[450ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
             style={{ left: indicator.left, width: indicator.width }}
           />
         </nav>
@@ -109,6 +109,7 @@ export function AppNav() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
+            <span className="absolute right-[8px] top-[6px] h-[6px] w-[6px] rounded-full border-[1.5px] border-white bg-primary" />
           </button>
           <div className="relative">
             <button
@@ -145,6 +146,8 @@ export function AppNav() {
                         {},
                         {
                           onSuccess: () => {
+                            // Drop all authed data so it can't leak on back-nav.
+                            queryClient.clear();
                             void navigate({ to: '/login' });
                           },
                         },

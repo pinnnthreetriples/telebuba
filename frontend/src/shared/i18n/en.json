@@ -4,7 +4,6 @@
     "loading": "Loading…",
     "error": "Failed to load accounts",
     "empty": "No accounts",
-    "never": "never",
     "searchPlaceholder": "Search accounts…",
     "status": {
       "new": "New",
@@ -17,32 +16,16 @@
       "proxy_error": "Proxy error",
       "unknown_error": "Unknown error"
     },
-    "filter": {
-      "all": "All",
-      "alive": "Alive",
-      "new": "New",
-      "unauthorized": "Unauthorized",
-      "flood_wait": "Flood-wait"
-    },
     "table": {
-      "account": "Account",
       "status": "Status",
-      "telegram": "Telegram",
-      "country": "Country",
-      "lastChecked": "Checked",
       "phone": "Phone",
       "proxy": "Proxy",
       "device": "Device",
       "trust": "Trust",
-      "actions": "Actions",
-      "selectAll": "Select all",
-      "selectRow": "Select row"
+      "actions": "Actions"
     },
     "stats": {
       "total": "Total",
-      "alive": "Alive",
-      "attention": "Attention",
-      "errors": "Errors",
       "active": "Active",
       "idle": "Idle",
       "code": "Needs code",
@@ -134,7 +117,6 @@
       "add": "Account",
       "check": "Check",
       "delete": "Delete",
-      "importTdata": "Import tdata",
       "profile": "Edit profile"
     },
     "pagination": {
@@ -221,7 +203,6 @@
       "removeStoryBody": "The story will be removed from the profile. This cannot be undone.",
       "removeStoryConfirm": "Delete",
       "addStory": "Add",
-      "play": "Play",
       "trackTitle": "Track title",
       "trackArtist": "Artist",
       "removeMusic": "Remove track",
@@ -278,7 +259,10 @@
     "systemOffline": "Disconnected",
     "notifications": "Notifications",
     "account": "Account",
-    "logout": "Log out"
+    "logout": "Log out",
+    "avatarFallback": "OP",
+    "fatalError": "Something went wrong.",
+    "mutationError": "Something went wrong. Please try again."
   },
   "settings": {
     "title": "Settings",
@@ -353,7 +337,6 @@
     "col": {
       "time": "Time",
       "level": "Level",
-      "status": "Status",
       "account": "Account",
       "event": "Event"
     },
@@ -365,9 +348,6 @@
   "neurocomment": {
     "title": "Neurocomment",
     "runtime": {
-      "running": "Listening to {{count}} channels",
-      "stopped": "Stopped",
-      "listener": "Listener account",
       "start": "Start",
       "stop": "Stop"
     },
@@ -398,17 +378,8 @@
     },
     "campaigns": {
       "title": "Campaigns",
-      "select": "Select campaign",
       "none": "No campaigns",
-      "name": "Name",
-      "prompt": "Prompt (with the product mention)",
       "create": "+ Create campaign"
-    },
-    "setup": {
-      "channel": "Channel (link or @username)",
-      "linkChannel": "Link channel",
-      "assign": "Account",
-      "assignAccount": "Assign account"
     },
     "channels": {
       "title": "Campaign channels",
@@ -419,14 +390,11 @@
       "removeBody": "Campaign accounts will stop commenting in this channel.",
       "removeConfirm": "Remove"
     },
-    "accounts": {
-      "title": "Accounts",
-      "today": "Today: {{count}}"
-    },
     "channelStatus": {
       "ready": "Ready",
       "comments_off": "Comments off",
       "join_by_request": "Join by request",
+      "join_failed": "Join failed",
       "chat_restricted": "Chat restricted",
       "bot_challenge": "Bot challenge",
       "bot_challenge_backoff": "Challenge back-off",
@@ -528,7 +496,6 @@
       "neuroAccounts": {
         "title": "Accounts in neurocommenting",
         "sub": "{{count}} accounts · assign to the campaign or remove from work",
-        "unassigned": "Unassigned",
         "assign": "Add to campaign",
         "remove": "Remove from neurocommenting",
         "removeTitle": "Remove {{phone}} from neurocommenting?",
@@ -540,11 +507,9 @@
     }
   },
   "warming": {
-    "title": "Warming",
     "titleFull": "Account warming",
     "loading": "Loading…",
     "error": "Failed to load the warming board",
-    "summary": "Active: {{active}} of {{total}}",
     "counter": {
       "warming": "warming",
       "ready": "ready",
@@ -603,13 +568,9 @@
       "error": "Error"
     },
     "column": {
-      "idle": "Not warming",
-      "warming": "Warming",
       "empty": "Drop accounts here to start warming"
     },
     "card": {
-      "cycles": "Cycles: {{count}}",
-      "trust": "trust",
       "dayProgress": "{{days}} / 14 days",
       "actionsTip": "actions",
       "cfgTitle": "Warming settings",
@@ -622,13 +583,10 @@
       "helpTip": "1 cycle = 1 warming day"
     },
     "actions": {
-      "start": "Start",
-      "stop": "Stop",
       "stopShort": "Stop"
     },
     "channels": {
       "title": "Warming channels",
-      "placeholder": "Links or @usernames, comma-separated…",
       "add": "Add",
       "remove": "Remove",
       "hint": "Accounts read and react in these channels",
@@ -638,12 +596,6 @@
       "removeTitle": "Delete channel {{channel}}?",
       "removeBody": "Warming accounts will stop reading and reacting in this channel. This cannot be undone.",
       "removeConfirm": "Delete"
-    },
-    "settings": {
-      "title": "Warming settings",
-      "reactions_enabled": "Reactions",
-      "join_enabled": "Join channels",
-      "inter_account_chat": "Inter-account dialogues"
     },
     "warmStatus": {
       "active": "warming up",
@@ -689,9 +641,18 @@
     "persona": {
       "label": "User type",
       "tip": "How often the account drops in and does something during the day. Always capped by the age-based safety limit — a young account stays calm even on \"Active\".",
-      "calm": { "name": "Calm", "hint": "2–4 visits/day" },
-      "normal": { "name": "Normal", "hint": "5–8 visits/day" },
-      "active": { "name": "Active", "hint": "10–14 visits/day" }
+      "calm": {
+        "name": "Calm",
+        "hint": "2–4 visits/day"
+      },
+      "normal": {
+        "name": "Normal",
+        "hint": "5–8 visits/day"
+      },
+      "active": {
+        "name": "Active",
+        "hint": "10–14 visits/day"
+      }
     },
     "notReady": {
       "noProxy": "no proxy",

@@ -15,13 +15,12 @@ from core.config import settings
 from core.db import (
     list_accounts,
     list_dialogue_pairs,
-    list_recent_dialogue_messages,
     list_warming_states,
     replace_dialogue_pairs,
 )
 from core.logging import log_event
 from schemas.accounts import health_for_status
-from schemas.dialogues import DialogueOverview, DialoguePairsResult, DialoguePartnersResult
+from schemas.dialogues import DialoguePairsResult, DialoguePartnersResult
 from schemas.warming import is_warming
 
 if TYPE_CHECKING:
@@ -110,10 +109,3 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
         extra={"accounts": len(eligible), "pairs": len(new_pairs)},
     )
     return DialoguePairsResult(pairs=await list_dialogue_pairs())
-
-
-async def load_dialogue_overview(*, recent_limit: int = 20) -> DialogueOverview:
-    """Acquaintance pairs and the most recent messages, for the UI panel."""
-    pairs = await list_dialogue_pairs()
-    recent = await list_recent_dialogue_messages(recent_limit)
-    return DialogueOverview(pairs=pairs, recent=recent)

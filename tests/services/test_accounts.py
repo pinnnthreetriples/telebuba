@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import io
 import zipfile
-from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -20,10 +19,10 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
-    AccountFilter,
     AccountProfileUpdateRequest,
     AccountSessionFileImport,
     AccountStatus,
+    health_for_status,
 )
 from schemas.profile_media import (
     AccountProfileMusicUpload,
@@ -57,14 +56,12 @@ from services.accounts import (
     list_accounts,
     list_accounts_page,
     list_listener_accounts,
-    load_accounts_table,
     post_account_story,
     remove_account_profile_photo,
     remove_account_story,
     set_account_profile_photo,
     update_account_profile,
 )
-from services.accounts._table import _format_last_checked
 from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
@@ -87,48 +84,22 @@ def _isolate_runtime(
     reset_logging_for_tests()
 
 
-@pytest.mark.parametrize(
-    ("offset_seconds", "expected"),
-    [
-        (0, "0 сек назад"),
-        (45, "45 сек назад"),
-        (60, "1 мин назад"),
-        (90, "1 мин назад"),
-        (3_600, "1 ч назад"),
-        (3_600 * 5, "5 ч назад"),
-        (86_400, "1 дн назад"),
-        (86_400 * 7, "7 дн назад"),
-    ],
-)
-def test_format_last_checked_relative(offset_seconds: int, expected: str) -> None:
-    now = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
-    moment = now - timedelta(seconds=offset_seconds)
-    assert _format_last_checked(moment.isoformat(), now=now) == expected
-
-
-def test_format_last_checked_never_for_empty() -> None:
-    assert _format_last_checked(None) == "never"
-    assert _format_last_checked("") == "never"
-
-
-def test_format_last_checked_passes_through_garbage() -> None:
-    assert _format_last_checked("not-a-date") == "not-a-date"
-
-
 @pytest.mark.asyncio
-async def test_add_account_creates_fingerprint_and_table_row() -> None:
+async def test_add_account_creates_fingerprint_and_page_row() -> None:
     account = await add_account(
         AccountCreate(account_id="account-1", label="Main", session_name="session-1"),
     )
-    state = await load_accounts_table(AccountFilter())
+    page = await list_accounts_page()
+    stats = await account_stats()
 
     assert account.account_id == "account-1"
-    assert state.summary.total == 1
-    assert state.summary.never_checked == 1
-    assert state.rows[0].label == "Main"
-    assert state.rows[0].device != "-"
+    assert stats.total == 1
+    assert stats.needs_code == 1  # a never-checked account still needs a login code
+    row = page.items[0]
+    assert row.label == "Main"
+    assert row.device_model is not None
     # A freshly added account has not been checked yet -> warn (amber).
-    assert state.rows[0].health == "warn"
+    assert health_for_status(row.status) == "warn"
 
 
 @pytest.mark.asyncio
@@ -140,15 +111,16 @@ async def test_import_account_session_saves_file_and_creates_account() -> None:
             label="Real account",
         ),
     )
-    state = await load_accounts_table(AccountFilter())
+    page = await list_accounts_page()
 
     assert account.account_id == "real-account"
     assert account.session_name == "real-account"
     assert (
         settings.telegram.session_dir / "real-account.session"
     ).read_bytes() == b"sqlite session bytes"
-    assert state.rows[0].label == "Real account"
-    assert state.rows[0].session == "real-account"
+    row = page.items[0]
+    assert row.label == "Real account"
+    assert row.session_name == "real-account"
 
 
 @pytest.mark.asyncio
@@ -216,33 +188,33 @@ async def test_list_listener_accounts_keeps_only_live_sessions() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_accounts_table_filters_query_and_status() -> None:
+async def test_list_accounts_page_filters_query_and_status() -> None:
     await add_account(AccountCreate(account_id="one", label="Alpha"))
     await add_account(AccountCreate(account_id="two", label="Beta"))
 
-    query_state = await load_accounts_table(AccountFilter(query="alp"))
-    status_state = await load_accounts_table(AccountFilter(status="alive"))
+    query_page = await list_accounts_page(query="alp")
+    status_page = await list_accounts_page(status="alive")
 
-    assert [row.account_id for row in query_state.rows] == ["one"]
-    assert status_state.rows == []
-    assert status_state.summary.total == 2
+    assert [row.account_id for row in query_page.items] == ["one"]
+    assert status_page.items == []
+    # Stats stay fleet-wide regardless of the filtered page.
+    assert (await account_stats()).total == 2
 
 
 @pytest.mark.asyncio
-async def test_load_accounts_table_paginates_in_db() -> None:
-    """limit/offset must reach the DB — UI no longer loads everything to slice in Python."""
+async def test_list_accounts_page_paginates_by_cursor() -> None:
+    """limit/cursor must reach the DB — the UI never loads everything to slice in Python."""
     for ident in ("a", "b", "c", "d", "e"):
         await add_account(AccountCreate(account_id=ident, label=f"Label {ident}"))
 
-    page = await load_accounts_table(AccountFilter(limit=2, offset=0))
-    assert len(page.rows) == 2
-    # Summary still reflects the whole table.
-    assert page.summary.total == 5
+    page = await list_accounts_page(limit=2)
+    assert len(page.items) == 2
+    assert page.next_cursor is not None
 
-    next_page = await load_accounts_table(AccountFilter(limit=2, offset=2))
-    assert len(next_page.rows) == 2
-    assert {row.account_id for row in page.rows} & {
-        row.account_id for row in next_page.rows
+    next_page = await list_accounts_page(limit=2, cursor=page.next_cursor)
+    assert len(next_page.items) == 2
+    assert {row.account_id for row in page.items} & {
+        row.account_id for row in next_page.items
     } == set()
 
 
@@ -329,16 +301,16 @@ async def test_list_accounts_page_enriches_trust_and_spam() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_accounts_table_search_uses_db_filter() -> None:
+async def test_list_accounts_page_search_uses_db_filter() -> None:
     await add_account(AccountCreate(account_id="alpha", label="Alpha"))
     await add_account(AccountCreate(account_id="beta", label="Beta"))
     await add_account(AccountCreate(account_id="alphabet", label="Alphabet"))
 
-    state = await load_accounts_table(AccountFilter(query="alpha"))
-    ids = {row.account_id for row in state.rows}
+    page = await list_accounts_page(query="alpha")
+    ids = {row.account_id for row in page.items}
     assert ids == {"alpha", "alphabet"}
-    # Summary is still the whole table — search narrows rows, not totals.
-    assert state.summary.total == 3
+    # Stats stay the whole table — search narrows the page, not the totals.
+    assert (await account_stats()).total == 3
 
 
 @pytest.mark.asyncio
@@ -627,12 +599,13 @@ async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
 
     account = await check_account_session(AccountCheckRequest(account_id="account-2"))
-    state = await load_accounts_table(AccountFilter(status="alive"))
+    page = await list_accounts_page(status="alive")
 
     assert account.status == "alive"
-    assert state.summary.alive == 1
-    assert state.rows[0].telegram == "@checked"
-    assert state.rows[0].health == "ok"
+    assert (await account_stats()).active == 1
+    row = page.items[0]
+    assert row.username == "checked"
+    assert health_for_status(row.status) == "ok"
 
 
 @pytest.mark.asyncio
@@ -1002,10 +975,10 @@ async def test_health_taxonomy_matches_status(
     """Every AccountStatus maps to exactly one of ok / warn / fail."""
     await add_account(AccountCreate(account_id="acc-h"))
     if status == "new":
-        state = await load_accounts_table(AccountFilter())
-        assert state.rows[0].health == expected_health
+        page = await list_accounts_page()
+        assert health_for_status(page.items[0].status) == expected_health
         # Row carries the RAW status enum — the UI translates it to RU once.
-        assert state.rows[0].status == "new"
+        assert page.items[0].status == "new"
         return
 
     async def fake_check(_request: object) -> TelegramSessionCheckResult:
@@ -1018,13 +991,13 @@ async def test_health_taxonomy_matches_status(
 
     monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
     await check_account_session(AccountCheckRequest(account_id="acc-h"))
-    state = await load_accounts_table(AccountFilter())
-    assert state.rows[0].health == expected_health
+    page = await list_accounts_page()
+    assert health_for_status(page.items[0].status) == expected_health
     # Row carries the RAW status enum (e.g. "network_error"), not an English
     # label — the UI is the single translation point. Guards the regression
     # where the service emitted "Network"/"Proxy"/"Unknown" and the UI RU map
     # (keyed "Network error"/…) silently failed to translate them.
-    assert state.rows[0].status == status
+    assert page.items[0].status == status
 
 
 @pytest.mark.asyncio

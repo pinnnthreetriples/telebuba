@@ -5,6 +5,7 @@ import type { ReactElement, ReactNode } from 'react';
 import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
+import { queryClient } from '@/shared/lib';
 
 const navigate = vi.fn();
 vi.mock('@tanstack/react-router', () => ({
@@ -87,4 +88,22 @@ test('logs out from the avatar menu and redirects to login', async () => {
   await waitFor(() => {
     expect(navigate).toHaveBeenCalledWith({ to: '/login' });
   });
+});
+
+test('clears the query cache on logout so authed data cannot leak on back-nav', async () => {
+  navigate.mockClear();
+  const clearSpy = vi.spyOn(queryClient, 'clear');
+  routeApi();
+  renderWithClient(<AppNav />);
+  await waitFor(() => {
+    expect(screen.getByText('AD')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByLabelText('Аккаунт'));
+  await userEvent.click(screen.getByText('Выйти'));
+
+  await waitFor(() => {
+    expect(clearSpy).toHaveBeenCalled();
+  });
+  clearSpy.mockRestore();
 });

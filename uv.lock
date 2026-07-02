@@ -15,15 +15,6 @@ overrides = [
 ]
 
 [[package]]
-name = "aislop"
-version = "0.11.0"
-source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/9e/9d/e33db35618439361660fe3ad211cb80c610b177bd01d1588e6365fe9bd32/aislop-0.11.0.tar.gz", hash = "sha256:f0f71ba97f9fa11cfad8e977b1b40d25975e14c5ef005886be7065c5913db64e", size = 5952, upload-time = "2026-06-06T14:52:01.135Z" }
-wheels = [
-    { url = "https://files.pythonhosted.org/packages/c3/03/f8e4286b72a7d0381a73ea305f6563ba2706fd4ba2f01385f0178544da67/aislop-0.11.0-py3-none-any.whl", hash = "sha256:f05089bc5a009f1661bf2fd0e9a6c3d0969344d2fb36ef3bf1c64264295138b4", size = 5914, upload-time = "2026-06-06T14:52:00.042Z" },
-]
-
-[[package]]
 name = "annotated-doc"
 version = "0.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -2107,7 +2098,6 @@ dependencies = [
 
 [package.dev-dependencies]
 dev = [
-    { name = "aislop" },
     { name = "bandit" },
     { name = "deptry" },
     { name = "factory-boy" },
@@ -2151,7 +2141,6 @@ requires-dist = [
 
 [package.metadata.requires-dev]
 dev = [
-    { name = "aislop", specifier = ">=0.11.0" },
     { name = "bandit", specifier = ">=1.9.4" },
     { name = "deptry", specifier = ">=0.25.1" },
     { name = "factory-boy", specifier = ">=3.3.3" },

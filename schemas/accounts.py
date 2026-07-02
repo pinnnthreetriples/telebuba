@@ -87,14 +87,6 @@ class AccountList(BaseModel):
     accounts: list[AccountRead]
 
 
-class AccountFilter(BaseModel):
-    query: str = ""
-    status: AccountStatus | Literal["all"] = "all"
-    # Optional pagination. ``limit=None`` returns every match (legacy default).
-    limit: int | None = Field(default=None, ge=1)
-    offset: int = Field(default=0, ge=0)
-
-
 class AccountCheckRequest(BaseModel):
     account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
 
@@ -105,14 +97,6 @@ class AccountProfileUpdateRequest(BaseModel):
     last_name: str | None = None
     username: str | None = None
     bio: str | None = None
-
-
-class AccountSummary(BaseModel):
-    total: int
-    alive: int
-    permanent_issue: int
-    temporary_issue: int
-    never_checked: int
 
 
 class AccountStats(BaseModel):
@@ -154,36 +138,6 @@ def health_for_status(status: AccountStatus) -> AccountHealth:
     if status in _PERMANENT_STATUSES:
         return "fail"
     return "warn"
-
-
-class AccountTableRow(BaseModel):
-    account_id: str
-    label: str
-    status: str
-    health: AccountHealth
-    telegram: str
-    session: str
-    device: str
-    proxy: str
-    last_checked: str
-    first_name: str | None = None
-    last_name: str | None = None
-    username: str | None = None
-    bio: str | None = None
-    proxy_type: str | None = None
-    proxy_host: str | None = None
-    proxy_port: int | None = None
-    proxy_status: str | None = None
-    proxy_last_checked_at: str | None = None
-    proxy_last_error: str | None = None
-    proxy_exit_ip: str | None = None
-    proxy_country_code: str | None = None
-    proxy_country_name: str | None = None
-
-
-class AccountsTableState(BaseModel):
-    rows: list[AccountTableRow]
-    summary: AccountSummary
 
 
 class AccountProfileSnapshot(BaseModel):

@@ -11,6 +11,7 @@ const STATUS_COLOR: Record<ChannelStatus, { color: string; bg: string }> = {
   comments_off: { color: '#74726e', bg: '#eeedea' },
   throttled: { color: '#9a7b22', bg: '#fbf3e2' },
   join_by_request: { color: '#9a7b22', bg: '#fbf3e2' },
+  join_failed: { color: '#c0473f', bg: '#fbecec' },
   chat_restricted: { color: '#c0473f', bg: '#fbecec' },
   bot_challenge: { color: '#9a7b22', bg: '#fbf3e2' },
   bot_challenge_backoff: { color: '#9a7b22', bg: '#fbf3e2' },
