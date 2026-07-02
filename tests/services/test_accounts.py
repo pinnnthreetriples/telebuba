@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import io
+import zipfile
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -447,6 +449,114 @@ async def test_import_account_tdata_preflight_blocks_existing_account(
     # Pre-existing file is untouched, second tdata account did not land either.
     assert existing_session.read_bytes() == b"original"
     assert not (final_dir / "222.session").exists()
+
+
+def _tdata_zip_payload() -> bytes:
+    """A minimal tdata-shaped zip so ``_find_tdata_dir`` locates a tdata folder."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w") as zf:
+        zf.writestr("tdata/key_datas", b"x")
+    return buf.getvalue()
+
+
+def _fake_tdesktop_writing_sessions(*user_ids: int) -> object:
+    """Build a fake opentele2 ``TDesktop`` whose ``ToTelethon`` writes a .session.
+
+    Mirrors production: opentele2 writes the Telethon session file to the path
+    it is handed. Used to exercise the REAL ``convert_tdata_zip`` staging path
+    (no fake convert), so tests can prove staged files land in — and never
+    clobber — the live sessions dir.
+    """
+    from unittest.mock import MagicMock  # noqa: PLC0415 - test-local
+
+    accounts = []
+    for uid in user_ids:
+
+        async def _to_telethon(*, session: str, flag: object, _uid: int = uid) -> object:  # noqa: ARG001
+            from pathlib import Path  # noqa: PLC0415 - test-local, Path is TYPE_CHECKING-only here
+
+            Path(session).write_bytes(f"session-for-{_uid}".encode())
+            client = MagicMock()
+
+            async def _disconnect() -> None:
+                return None
+
+            client.disconnect = _disconnect
+            return client
+
+        acc = MagicMock()
+        acc.UserId = uid
+        acc.ToTelethon = _to_telethon
+        accounts.append(acc)
+    return MagicMock(accountsCount=len(accounts), accounts=accounts)
+
+
+@pytest.mark.asyncio
+async def test_import_account_tdata_lands_all_files_and_leaves_no_staging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A clean multi-account import lands every .session in the live dir; no leftovers.
+
+    Drives the real ``convert_tdata_zip`` (opentele2 mocked) so the staging →
+    preflight → move flow runs end-to-end.
+    """
+    fake_td = _fake_tdesktop_writing_sessions(111, 222)
+
+    async def fake_check(request: object) -> TelegramSessionCheckResult:
+        account_id = getattr(request, "account_id", "?")
+        return TelegramSessionCheckResult(
+            account_id=account_id,
+            session_path=f"sessions/{account_id}",
+            status="alive",
+            is_temporary=False,
+        )
+
+    monkeypatch.setattr("core.tdata_import.TDesktop", lambda **_kw: fake_td)
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
+
+    payload = _tdata_zip_payload()
+    result = await import_account_tdata(
+        TdataConvertRequest(filename="tdata.zip", content=payload, label="Pool"),
+    )
+
+    assert {a.account_id for a in result.accounts} == {"111", "222"}
+    final_dir = settings.telegram.session_dir
+    assert (final_dir / "111.session").read_bytes() == b"session-for-111"
+    assert (final_dir / "222.session").read_bytes() == b"session-for-222"
+    # No tdata_staging_* dir left beside the sessions dir.
+    leftovers = [p for p in final_dir.parent.iterdir() if p.name.startswith("tdata_staging_")]
+    assert leftovers == [], f"staging dir must be cleaned up, found {leftovers}"
+
+
+@pytest.mark.asyncio
+async def test_import_account_tdata_reimport_does_not_clobber_live_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-importing a user_id already registered must leave the live .session intact.
+
+    The audit bug: convert wrote directly into the live dir, overwriting the
+    existing credential BEFORE preflight, then preflight raised — losing the
+    original. With staging conversion, preflight blocks and the original stays.
+    """
+    await add_account(AccountCreate(account_id="111", label="existing"))
+    final_dir = settings.telegram.session_dir
+    final_dir.mkdir(parents=True, exist_ok=True)
+    live_session = final_dir / "111.session"
+    live_session.write_bytes(b"ORIGINAL-CREDENTIAL")
+
+    fake_td = _fake_tdesktop_writing_sessions(111)
+    monkeypatch.setattr("core.tdata_import.TDesktop", lambda **_kw: fake_td)
+
+    with pytest.raises(SessionAlreadyExistsError, match=r"111"):
+        await import_account_tdata(
+            TdataConvertRequest(filename="tdata.zip", content=_tdata_zip_payload()),
+        )
+
+    # The live credential is byte-for-byte untouched.
+    assert live_session.read_bytes() == b"ORIGINAL-CREDENTIAL"
+    # And no staging dir leaked.
+    leftovers = [p for p in final_dir.parent.iterdir() if p.name.startswith("tdata_staging_")]
+    assert leftovers == []
 
 
 @pytest.mark.asyncio

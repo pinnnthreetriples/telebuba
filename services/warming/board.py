@@ -68,8 +68,19 @@ def _warming_days_since(
 
     ``None`` when warming has never run on this account, so the card can hide
     the "в прогреве N дн" hint instead of showing a misleading zero.
+
+    A stopped/promoted account's count is frozen at ``stopped_at`` (the record's
+    ``state``/``stopped_at`` are forwarded) so the warmed card's "X/Y дней" stops
+    climbing past Y with wall-clock time.
     """
-    return warming_days_since(record.started_at if record else None, now)
+    if record is None:
+        return warming_days_since(None, now)
+    return warming_days_since(
+        record.started_at,
+        now,
+        stopped_at=record.stopped_at,
+        state=record.state,
+    )
 
 
 def _to_card(

@@ -53,6 +53,16 @@ class ApiSettings(BaseSettings):
     # Allowed CORS origins for the SPA (dev usually uses the Vite proxy, so this
     # stays empty; set the deployed frontend origin when serving cross-origin).
     cors_origins: list[str] = Field(default_factory=list)
+    # Send Access-Control-Allow-Credentials. When True, ``cors_origins`` must not
+    # be the ``"*"`` wildcard (a credentialed wildcard is a CORS hole — the
+    # validator below rejects the combo).
+    cors_allow_credentials: bool = True
+    # Reverse-proxy trust: when True, uvicorn's ProxyHeadersMiddleware rewrites
+    # ``request.client.host`` from X-Forwarded-For for connections originating
+    # from ``forwarded_allow_ips`` (comma-separated, or "*"). Off by default so a
+    # direct-exposed deploy never trusts a spoofable header. Never hand-parse XFF.
+    trust_proxy_headers: bool = False
+    forwarded_allow_ips: str = Field(default="127.0.0.1", min_length=1)
     # API path version segment (``/api/{version}``).
     version: str = Field(default="v1", min_length=1)
     # SSE live-event stream (``GET /api/v1/events``): keepalive comment cadence
@@ -60,6 +70,15 @@ class ApiSettings(BaseSettings):
     # (a slow client's queue fills → its live frames drop; the FE poll backstops).
     sse_keepalive_seconds: float = Field(default=15.0, gt=0)
     sse_max_queue: int = Field(default=1000, ge=1)
+
+    @model_validator(mode="after")
+    def _reject_credentialed_cors_wildcard(self) -> ApiSettings:
+        # A wildcard origin with credentials would let any site read authed
+        # responses; browsers forbid it and so do we (fail loud at startup).
+        if self.cors_allow_credentials and "*" in self.cors_origins:
+            msg = 'API__CORS_ORIGINS must not contain "*" when credentials are allowed'
+            raise ValueError(msg)
+        return self
 
 
 class AuthSettings(BaseSettings):
@@ -98,6 +117,20 @@ class DbSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="DB__", extra="ignore")
 
     path: Path = Path("telebuba.db")
+    # Connection pool sizing. Every DB call runs under asyncio.to_thread (default
+    # ThreadPoolExecutor up to min(32, cpu+4) workers), so the default QueuePool
+    # (5+10) is easily oversubscribed under bursty logging → checkout stalls /
+    # "database is locked". Size the pool to the executor's worst case instead.
+    pool_size: int = Field(default=10, ge=1)
+    max_overflow: int = Field(default=20, ge=0)
+    pool_timeout_seconds: float = Field(default=30.0, gt=0)
+    # Periodic maintenance: WAL checkpoint (TRUNCATE) always runs; the online
+    # backup (VACUUM INTO a timestamped file) is opt-in. telebuba.db is the sole
+    # datastore (incl. users/auth), so a backup guards against corruption/loss.
+    backup_enabled: bool = False
+    backup_interval_hours: float = Field(default=24.0, gt=0)
+    backup_dir: Path = Path("backups")
+    backup_keep: int = Field(default=7, ge=1)
 
 
 class ProxySettings(BaseSettings):
@@ -151,6 +184,10 @@ class ProfileMediaSettings(BaseSettings):
     # Max tracks pulled by the profile-music preview. Low cap keeps the TL
     # response light — the tab is a preview list, not a media library.
     music_preview_limit: int = Field(default=50, ge=1, le=200)
+    # Hard cap on each ffmpeg subprocess (encode / thumbnail / duration probe).
+    # A stalling or maliciously-crafted video would otherwise hang the request
+    # coroutine forever and orphan the process; on timeout we kill it and fail.
+    ffmpeg_timeout_seconds: float = Field(default=120.0, ge=1.0)
 
 
 class LoggingSettings(BaseSettings):
@@ -232,6 +269,10 @@ class WarmingSettings(BaseSettings):
     log_retention_days: float = Field(default=30.0, ge=0.0)
     dialogue_message_retention_days: float = Field(default=90.0, ge=0.0)
     sent_hash_retention_days: float = Field(default=14.0, ge=0.0)
+    # How often the retention sweep runs while the process is up (a background
+    # task alongside the per-account loops); a one-shot sweep at startup alone
+    # lets the append-only tables grow unbounded during long uptimes.
+    purge_interval_hours: float = Field(default=24.0, gt=0.0)
     # Inter-account dialogue pairing: how many partners each account gets, and
     # how often the acquaintance graph is reshuffled (imitates meeting people).
     dialogue_partners_min: int = Field(default=2, ge=1)
@@ -272,6 +313,13 @@ class GeminiSettings(BaseSettings):
     timeout_seconds: float = Field(default=30.0, ge=1.0)
     temperature: float = Field(default=0.9, ge=0.0, le=2.0)
     max_output_tokens: int = Field(default=120, ge=1, le=2048)
+    # Retry a transient failure (429 / 5xx / transport error) this many times
+    # before surfacing it; the shared client is reused across calls so a hot-path
+    # generate_text does not pay a fresh TLS handshake each time.
+    max_retries: int = Field(default=1, ge=0, le=5)
+    # Backoff slept between retries (seconds); kept short so the warming loop is
+    # not blocked long on a flapping upstream.
+    retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
 
 
 class TrustSettings(BaseSettings):

@@ -28,8 +28,11 @@ import asyncio
 import re
 import shutil
 import tempfile
+from contextlib import suppress
 from pathlib import Path
 from typing import Final
+
+from core.config import settings
 
 # Telegram story spec — see core.telegram.org/api/stories.
 _TARGET_WIDTH: Final[int] = 720
@@ -198,7 +201,7 @@ async def _run_ffmpeg(binary: str, args: list[str], *, failure_message: str) -> 
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr_bytes = await proc.communicate()
+    stderr_bytes = await _communicate_or_kill(proc, failure_message)
     stderr = stderr_bytes.decode("utf-8", errors="replace")
     if proc.returncode != 0:
         if "Invalid data found" in stderr or "moov atom not found" in stderr:
@@ -206,6 +209,27 @@ async def _run_ffmpeg(binary: str, args: list[str], *, failure_message: str) -> 
             raise StoryVideoNormalisationError(msg)
         raise StoryVideoNormalisationError(failure_message)
     return stderr
+
+
+async def _communicate_or_kill(
+    proc: asyncio.subprocess.Process,
+    failure_message: str,
+) -> bytes:
+    """Await ``proc.communicate()`` under the configured ffmpeg timeout.
+
+    On timeout the process is killed (and reaped) so a stalling video can't hang
+    the request coroutine forever or orphan the child, then the module's normal
+    failure path raises. Returns the captured stderr bytes on completion.
+    """
+    try:
+        async with asyncio.timeout(settings.profile_media.ffmpeg_timeout_seconds):
+            _, stderr_bytes = await proc.communicate()
+    except TimeoutError as exc:
+        proc.kill()
+        with suppress(ProcessLookupError):
+            await proc.wait()
+        raise StoryVideoNormalisationError(failure_message) from exc
+    return stderr_bytes
 
 
 async def _extract_duration_seconds(binary: str, path: Path) -> float:
@@ -222,7 +246,10 @@ async def _extract_duration_seconds(binary: str, path: Path) -> float:
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr_bytes = await proc.communicate()
+    stderr_bytes = await _communicate_or_kill(
+        proc,
+        "Длительность видео определить не удалось",
+    )
     stderr = stderr_bytes.decode("utf-8", errors="replace")
     match = _DURATION_RE.search(stderr)
     if match is None:

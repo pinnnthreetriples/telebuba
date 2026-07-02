@@ -21,6 +21,7 @@ _ALLOWED_TABLES = frozenset(
         "warming_settings",
         "neurocomment_campaigns",
         "neurocomment_readiness",
+        "users",
     },
 )
 
@@ -399,6 +400,18 @@ def _add_users_table(connection: Connection) -> None:
     )
 
 
+def _add_users_token_version(connection: Connection) -> None:
+    # Session revocation (audit #2): a per-user monotonic counter carried in the
+    # JWT ``ver`` claim. Logout bumps it, invalidating every outstanding token.
+    # DEFAULT 0 backfills existing rows to the initial version.
+    if not _sqlite_table_exists(connection, "users"):
+        return
+    if "token_version" not in _sqlite_columns(connection, "users"):
+        connection.exec_driver_sql(
+            "ALTER TABLE users ADD COLUMN token_version INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
     # Operator graduation flag set from the warming card; default 0 keeps existing
     # rows opt-in (NC overview shows them only after explicit promotion).
@@ -418,6 +431,23 @@ def _add_warming_state_target_days(connection: Connection) -> None:
         connection.exec_driver_sql(
             "ALTER TABLE warming_account_state ADD COLUMN target_days INTEGER",
         )
+
+
+def _add_logs_indexes(connection: Connection) -> None:
+    # audit #2: the logs table only had its autoincrement PK. The Logs page +
+    # per-card panels filter by account_id ordering id DESC, and the retention
+    # sweep filters created_at — both full-scanned the append-only table. Mirror
+    # of the Index(...) entries on core.db._logs so create_all'd fresh DBs match.
+    # On the app path create_all builds ``logs`` before migrations run; guard the
+    # table so a hand-built legacy DB without it is a no-op, not an error.
+    if not _sqlite_table_exists(connection, "logs"):
+        return
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_logs_account_id ON logs(account_id, id)",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_logs_created_at ON logs(created_at)",
+    )
 
 
 def _sqlite_table_exists(connection: Connection, table_name: str) -> bool:

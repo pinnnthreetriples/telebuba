@@ -49,5 +49,5 @@ async def get_current_user(
             detail="invalid session",
         )
     # Sliding TTL: re-issue the cookie on every authenticated request.
-    set_session_cookie(response, auth_service.issue_session_token(user.id))
+    set_session_cookie(response, await auth_service.issue_session_token(user.id))
     return user

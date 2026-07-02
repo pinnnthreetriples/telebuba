@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -8,11 +9,17 @@ from pydantic import ValidationError
 from core.db import (
     configure_database,
     create_account,
+    get_listener_account_id,
+    insert_challenge,
     insert_device_fingerprint,
     list_accounts,
+    list_challenged_channels,
+    set_listener_account_id,
     update_account_from_session_check,
 )
+from core.repositories.accounts import _delete_account
 from schemas.accounts import AccountCreate
+from schemas.challenge import ChallengeInsert
 from schemas.telegram_session import TelegramSessionCheckResult
 from tests.factories import DeviceFingerprintFactory
 
@@ -122,3 +129,54 @@ async def test_update_account_from_temporary_session_check_keeps_identity(tmp_pa
     assert updated.status == "network_error"
     assert updated.user_id == 456
     assert updated.username == "saved"
+
+
+@pytest.mark.asyncio
+async def test_delete_account_purges_neurocomment_challenges(tmp_path: Path) -> None:
+    """Audit #1: challenge rows must not outlive the account (channel stays 'challenged')."""
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-x"))
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h1",
+            account_id="acc-x",
+            channel="@chan",
+            raw_text="solve me",
+            button_labels=["A", "B"],
+            outcome="give_up",
+        ),
+    )
+    # Before delete the channel reads as challenged (a give_up row exists).
+    assert (await list_challenged_channels(["@chan"])).channels == ["@chan"]
+
+    await asyncio.to_thread(_delete_account, "acc-x")
+
+    # After delete no challenge row remains, so the board no longer flags it.
+    assert (await list_challenged_channels(["@chan"])).channels == []
+
+
+@pytest.mark.asyncio
+async def test_delete_account_clears_listener_pointer_when_it_was_listener(
+    tmp_path: Path,
+) -> None:
+    """Audit #1: deleting the listener account clears the persisted pointer."""
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-listener"))
+    await set_listener_account_id("acc-listener")
+
+    await asyncio.to_thread(_delete_account, "acc-listener")
+
+    assert await get_listener_account_id() is None
+
+
+@pytest.mark.asyncio
+async def test_delete_account_leaves_other_listener_pointer_intact(tmp_path: Path) -> None:
+    """Deleting a non-listener account must not disturb the pointer."""
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-listener"))
+    await create_account(AccountCreate(account_id="acc-other"))
+    await set_listener_account_id("acc-listener")
+
+    await asyncio.to_thread(_delete_account, "acc-other")
+
+    assert await get_listener_account_id() == "acc-listener"

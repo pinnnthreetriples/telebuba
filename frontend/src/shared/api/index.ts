@@ -241,6 +241,8 @@ export type {
   LogoutAccountResponse,
   LogoutAccountResponses,
   LogoutData,
+  LogoutError,
+  LogoutErrors,
   LogoutResponse,
   LogoutResponses,
   MusicRemoveRequest,

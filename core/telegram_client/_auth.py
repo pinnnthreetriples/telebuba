@@ -18,6 +18,7 @@ from anyio import Path
 from telethon import TelegramClient, errors
 
 from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
+from core.telegram_client._pool import evict_client
 from core.telegram_client._util import optional_str
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeChallenge, PhoneCodeRequest, PhoneCodeSubmit
@@ -83,6 +84,10 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
             is_temporary=True,
             flood_wait_seconds=exc.seconds,
         )
+    except Exception as exc:  # noqa: BLE001 - classify any other SDK/network failure for the UI.
+        # PhoneNumberBanned / AuthRestart / connect() ConnectionError etc. would
+        # otherwise escape raw; its siblings all classify, so match that contract.
+        return _error_result(profile, exc, status="unknown_error", is_temporary=True)
     finally:
         await client.disconnect()
 
@@ -123,6 +128,10 @@ async def log_out_session(
     finally:
         await client.disconnect()
     if wipe_session:
+        # Evict the pooled client first: on Windows it holds the ``.session``
+        # SQLite file open, so unlinking under a live handle raises
+        # PermissionError → the reset endpoint 500s.
+        await evict_client(request.account_id)
         await _remove_session_file(profile.session_path)
     return _status_result(profile, status="unauthorized", error_message=error_message)
 

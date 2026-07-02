@@ -101,7 +101,7 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
     `schemas`, `services`.
 - Adding a `filterwarnings` ignore requires a one-line justification comment naming the
   upstream library and why it cannot be fixed at the source. Blanket ignores are forbidden.
-- **Frontend** has its own test floor (Vitest ≥ 80% + Playwright smoke) — see `context/frontend.md`.
+- **Frontend** has its own test floor (Vitest ≥ 80%) — see `context/frontend.md`.
 
 ### 8. Async & Type Safety
 - All functions have type hints. `from __future__ import annotations` at the top of every Python file.

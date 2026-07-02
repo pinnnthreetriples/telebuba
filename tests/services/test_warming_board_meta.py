@@ -6,6 +6,7 @@ now reads the assigned pool proxy's type (or ``None`` when unassigned).
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
@@ -14,7 +15,9 @@ from core.config import settings
 from core.db import configure_database, create_account
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
+from schemas.warming import WarmingStateRecord
 from services.warming import load_board
+from services.warming.board import _warming_days_since
 from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
@@ -46,3 +49,19 @@ async def test_board_card_carries_assigned_proxy_type() -> None:
     assert cards["no-proxy"].proxy_type is None
     # phone mirrors the account record (None until a session check populates it).
     assert cards["with-proxy"].phone is None
+
+
+def test_warming_days_frozen_after_stop() -> None:
+    """A stopped record's card day-count is capped at ``stopped_at`` (not now)."""
+    started = datetime(2026, 1, 1, tzinfo=UTC)
+    stopped = started + timedelta(days=3)
+    now = started + timedelta(days=40)  # 37 days of wall-clock after the stop
+    record = WarmingStateRecord(
+        account_id="stopped",
+        state="idle",  # non-warming → the count must freeze at stopped_at
+        updated_at=stopped.isoformat(),
+        started_at=started.isoformat(),
+        stopped_at=stopped.isoformat(),
+    )
+
+    assert _warming_days_since(record, now) == 3

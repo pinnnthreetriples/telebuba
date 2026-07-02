@@ -10,6 +10,7 @@ hits the network and nothing actually waits. Mirrors
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -773,6 +774,31 @@ async def test_successful_comment_resolves_pending_challenge_to_solved(
 
 
 @pytest.mark.asyncio
+async def test_solved_comment_resets_the_challenge_failure_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ф2 #147: sporadic solver failures interleaved with successes must not accumulate
+    # to K. K=2 here: one failure, then a solved comment (resolves pending→solved and
+    # resets the window), then one more failure — the counter is back at 1, no trip.
+    monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 2)
+    await _make_campaign("@chan", "acc-1")
+    now = datetime.now(UTC)
+
+    _state.register_challenge_failure("@chan", now, min_failures=2, base_seconds=1, max_seconds=1)
+    await _seed_pending_challenge("acc-1", "@chan")
+    _patch_io(monkeypatch, comment=_CommentStub(status="ok"))
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+    assert _challenge_outcome("acc-1") == "solved"
+
+    # Post-reset, a single fresh failure is the 1st in a new window, not the 2nd.
+    tripped = _state.register_challenge_failure(
+        "@chan", now, min_failures=2, base_seconds=1, max_seconds=1
+    )
+    assert tripped is None
+    assert _state.is_channel_in_challenge_backoff("@chan", now) is False
+
+
+@pytest.mark.asyncio
 async def test_gate_error_resolves_pending_challenge_to_failed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -840,6 +866,25 @@ async def test_human_skipped_pair_is_not_selected(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
+async def test_human_skipped_pair_not_selected_even_if_ready(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Defense-in-depth: even a readiness row that is ready=1 AND human_skipped=1 (e.g. a
+    # stale re-enable) must never be selected — the engine honours the operator skip.
+    await _make_campaign("@chan", "acc-1")  # seeds ready=1
+    await mark_human_skipped("acc-1", "@chan")
+    # Re-assert ready=1 to simulate a re-enable that left human_skipped set.
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    comment = _CommentStub(status="ok")
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    assert comment.calls == []
+    assert await fetch_comment("@chan", 10) is None
+
+
+@pytest.mark.asyncio
 async def test_generic_post_failure_marks_failed_and_releases(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -877,6 +922,55 @@ async def test_unexpected_exception_is_swallowed(monkeypatch: pytest.MonkeyPatch
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
     assert comment.calls == []
+
+
+@pytest.mark.asyncio
+async def test_exception_after_claim_marks_failed_not_claimed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A raise after the claim was won (here: generation explodes) must leave the row
+    # failed, not stuck 'claimed' forever — otherwise the post is never commentable
+    # and quota is permanently consumed for the rolling window.
+    await _make_campaign("@chan", "acc-1")
+
+    async def boom(_request: object) -> GeminiResult:
+        msg = "generation exploded"
+        raise RuntimeError(msg)
+
+    comment = _CommentStub()
+    monkeypatch.setattr(_seams, "execute", comment.execute)
+    monkeypatch.setattr(_seams, "rng", _FixedRng())
+    monkeypatch.setattr(_seams, "generate_text", boom)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "failed"  # not 'claimed'
+
+
+@pytest.mark.asyncio
+async def test_cancelled_after_claim_marks_failed_and_reraises(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Shutdown mid-flight (CancelledError after the claim) must clean up the row and
+    # re-raise so the task actually cancels — a stuck 'claimed' row would leak.
+    await _make_campaign("@chan", "acc-1")
+
+    async def cancelled(_request: object) -> GeminiResult:
+        raise asyncio.CancelledError
+
+    comment = _CommentStub()
+    monkeypatch.setattr(_seams, "execute", comment.execute)
+    monkeypatch.setattr(_seams, "rng", _FixedRng())
+    monkeypatch.setattr(_seams, "generate_text", cancelled)
+
+    with pytest.raises(asyncio.CancelledError):
+        await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "failed"  # not 'claimed'
 
 
 @pytest.mark.asyncio

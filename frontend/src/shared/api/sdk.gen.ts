@@ -101,6 +101,7 @@ import type {
   LogoutAccountErrors,
   LogoutAccountResponses,
   LogoutData,
+  LogoutErrors,
   LogoutResponses,
   PostAccountStoryData,
   PostAccountStoryErrors,
@@ -221,7 +222,7 @@ export const login = <ThrowOnError extends boolean = false>(
 export const logout = <ThrowOnError extends boolean = false>(
   options?: Options<LogoutData, ThrowOnError>,
 ) =>
-  (options?.client ?? client).post<LogoutResponses, unknown, ThrowOnError>({
+  (options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
     url: '/api/v1/auth/logout',
     ...options,
   });

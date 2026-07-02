@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from core.config import AuthSettings, NeurocommentSettings
+from core.config import ApiSettings, AuthSettings, NeurocommentSettings
 
 
 def test_reply_delay_min_must_not_exceed_max() -> None:
@@ -30,3 +30,18 @@ def test_auth_secret_empty_is_allowed() -> None:
 def test_auth_secret_long_enough_is_accepted() -> None:
     secret = "x" * 32
     assert AuthSettings(secret=secret).secret == secret
+
+
+def test_cors_wildcard_with_credentials_is_rejected() -> None:
+    with pytest.raises(ValidationError):
+        ApiSettings(cors_origins=["*"], cors_allow_credentials=True)
+
+
+def test_cors_explicit_origins_with_credentials_is_accepted() -> None:
+    api = ApiSettings(cors_origins=["https://app.example"], cors_allow_credentials=True)
+    assert api.cors_origins == ["https://app.example"]
+
+
+def test_cors_wildcard_without_credentials_is_accepted() -> None:
+    api = ApiSettings(cors_origins=["*"], cors_allow_credentials=False)
+    assert api.cors_origins == ["*"]

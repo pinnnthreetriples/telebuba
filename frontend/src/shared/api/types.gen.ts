@@ -32,6 +32,7 @@ export type AccountChannelOnboarding = {
     | 'bot_challenge'
     | 'bot_challenge_backoff'
     | 'joining'
+    | 'human_skipped'
     | 'failed';
   /**
    * Reason
@@ -783,6 +784,7 @@ export type NeurocommentChannelRow = {
     | 'ready'
     | 'comments_off'
     | 'join_by_request'
+    | 'join_failed'
     | 'chat_restricted'
     | 'bot_challenge'
     | 'bot_challenge_backoff'
@@ -1862,6 +1864,15 @@ export type LogoutData = {
   query?: never;
   url: '/api/v1/auth/logout';
 };
+
+export type LogoutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
 
 export type LogoutResponses = {
   /**

@@ -38,6 +38,7 @@ from core.telegram_client._listener import (
 )
 from core.telegram_client._pool import (
     TelegramClientPoolError,
+    evict_client,
     get_client,
     shutdown_telegram_pool,
 )
@@ -57,6 +58,7 @@ __all__ = [
     "check_spam_status",
     "check_telegram_session",
     "create_telegram_client",
+    "evict_client",
     "execute",
     "execute_read",
     "execute_read_many",

@@ -130,6 +130,18 @@ def register_challenge_failure(
     return seconds
 
 
+def reset_challenge_failures(channel: str) -> None:
+    """Zero ``channel``'s failure window on a solved challenge.
+
+    ``register_challenge_failure`` counts *consecutive* failures, but only clears the
+    counter when it trips. Without this, sporadic failures spread across many
+    successes would accumulate to K and park a mostly-working channel — so a solved
+    outcome resets the window. The escalation memory (``_CHALLENGE_TRIPS``) is left
+    intact so a channel that keeps re-tripping still escalates.
+    """
+    _CHALLENGE_FAILED.pop(channel, None)
+
+
 def is_channel_in_challenge_backoff(channel: str, now: datetime) -> bool:
     """True while ``channel`` is parked by the challenge back-off (lazily evicts on expiry)."""
     until = _CHALLENGE_BACKOFF_UNTIL.get(channel)

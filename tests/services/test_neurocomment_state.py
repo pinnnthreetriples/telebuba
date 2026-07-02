@@ -65,6 +65,26 @@ def test_cooldown_is_capped_at_max() -> None:
     assert last == _MAX
 
 
+def test_reset_zeroes_the_failure_window() -> None:
+    # A solved challenge resets the K counter, so sporadic failures spread across many
+    # successes never accumulate to K and park a mostly-working channel.
+    assert _fail("@c", _NOW) is None  # 1 failure
+    _state.reset_challenge_failures("@c")
+    assert _fail("@c", _NOW) is None  # counter restarted at 1, not 2
+    _state.reset_challenge_failures("@c")
+    assert _fail("@c", _NOW) is None  # still 1, not 3
+    assert _state.is_channel_in_challenge_backoff("@c", _NOW) is False
+
+
+def test_k_consecutive_failures_still_trip_after_reset() -> None:
+    # A genuine run of K consecutive failures (no interleaved success) still trips.
+    _state.reset_challenge_failures("@c")  # reset on a clean channel is a no-op
+    _fail("@c", _NOW)
+    _fail("@c", _NOW)
+    assert _fail("@c", _NOW) == _BASE
+    assert _state.is_channel_in_challenge_backoff("@c", _NOW) is True
+
+
 def test_self_healing_when_cooldown_expires() -> None:
     for _ in range(3):
         _fail("@c", _NOW)

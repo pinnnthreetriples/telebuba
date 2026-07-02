@@ -41,8 +41,10 @@ def _isolate_runtime(
     reset_logging_for_tests()
     setup_logging()
     listener_mod._reset_for_tests()
+    listener_mod._CLIENTS.clear()
     yield
     listener_mod._reset_for_tests()
+    listener_mod._CLIENTS.clear()
 
 
 class FakeClient:
@@ -80,7 +82,15 @@ class FakeClient:
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    async def fake_get_client(_account_id: str) -> object:
+    """Fake ``get_client`` and mirror production's pool caching.
+
+    Production ``get_client`` stores the connected client in the pool's
+    ``_CLIENTS`` map; ``stop_post_listener`` now peeks that map instead of
+    forcing a fresh connect, so the fake caches the client the same way.
+    """
+
+    async def fake_get_client(account_id: str) -> object:
+        listener_mod._CLIENTS[account_id] = client  # ty: ignore[invalid-assignment]
         return client
 
     monkeypatch.setattr("core.telegram_client._listener.get_client", fake_get_client)
@@ -238,6 +248,87 @@ async def test_stop_post_listener_no_op_when_absent(monkeypatch: pytest.MonkeyPa
     await stop_post_listener("listener-never")
 
     assert client.removed == []
+
+
+@pytest.mark.asyncio
+async def test_stop_post_listener_without_cached_client_does_not_connect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Stopping a listener whose client is gone must NOT force a fresh connect.
+
+    Regression: the old stop path called ``get_client`` just to detach the
+    handler, so stopping a broken listener (or stopping during pool shutdown)
+    would connect a throwaway client or raise.
+    """
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    await subscribe_posts("listener-broken", ["@news"], on_post)
+    # Simulate the pooled client being gone (crash / shutdown): drop it from the
+    # pool cache, leaving only the registry entry.
+    listener_mod._CLIENTS.clear()
+
+    get_client_calls = {"n": 0}
+
+    async def exploding_get_client(_account_id: str) -> object:
+        get_client_calls["n"] += 1
+        msg = "get_client must not be called by stop_post_listener"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("core.telegram_client._listener.get_client", exploding_get_client)
+
+    # Must neither call get_client nor raise.
+    await stop_post_listener("listener-broken")
+
+    assert get_client_calls["n"] == 0
+    assert "listener-broken" not in listener_mod._HANDLERS
+
+
+@pytest.mark.asyncio
+async def test_pool_rebuild_reattaches_handler(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A rebuilt client (fresh, handler-less) must regain the NewMessage handler.
+
+    Drives the rebuild hook the listener registers into the pool: after
+    ``subscribe_posts`` the handler lives on the original client; when the pool
+    hands a fresh client to the hook, the same handler must be re-added.
+    """
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    await subscribe_posts("listener-rebuild", ["@news"], on_post)
+    original_handler, original_filter = client.handlers[0]
+
+    rebuilt = FakeClient()
+    await listener_mod._reattach_on_rebuild("listener-rebuild", rebuilt)  # ty: ignore[invalid-argument-type]
+
+    assert len(rebuilt.handlers) == 1, "the rebuilt client must regain the handler"
+    reattached_handler, reattached_filter = rebuilt.handlers[0]
+    assert reattached_handler is original_handler
+    assert reattached_filter is original_filter
+
+
+@pytest.mark.asyncio
+async def test_pool_rebuild_hook_noop_after_stop(monkeypatch: pytest.MonkeyPatch) -> None:
+    """After stop_post_listener a rebuild must not resurrect the dropped handler."""
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    await subscribe_posts("listener-gone", ["@news"], on_post)
+    await stop_post_listener("listener-gone")
+
+    rebuilt = FakeClient()
+    await listener_mod._reattach_on_rebuild("listener-gone", rebuilt)  # ty: ignore[invalid-argument-type]
+
+    assert rebuilt.handlers == [], "a stopped listener must not re-attach on rebuild"
 
 
 @pytest.mark.asyncio

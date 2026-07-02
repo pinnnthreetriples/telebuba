@@ -288,8 +288,10 @@ def _delete_account(account_id: str) -> None:
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
     from core.repositories.neurocomment._tables import (  # noqa: PLC0415
         _neurocomment_campaign_accounts,
+        _neurocomment_challenges,
         _neurocomment_comments,
         _neurocomment_readiness,
+        _neurocomment_runtime,
     )
 
     with _get_engine().begin() as connection:
@@ -309,6 +311,22 @@ def _delete_account(account_id: str) -> None:
             delete(_neurocomment_comments).where(
                 _neurocomment_comments.c.account_id == account_id,
             ),
+        )
+        # audit #1: neurocomment_challenges carries account_id but no FK, so
+        # orphan give-up/challenge rows would keep the channel flagged
+        # "challenged" on the board forever (count/list-by-outcome scan by
+        # channel). Purge the deleted account's rows in the same transaction.
+        connection.execute(
+            delete(_neurocomment_challenges).where(
+                _neurocomment_challenges.c.account_id == account_id,
+            ),
+        )
+        # If this account was the persisted listener, clear the pointer so
+        # reconcile_neurocomment_on_startup does not re-point at a ghost.
+        connection.execute(
+            update(_neurocomment_runtime)
+            .where(_neurocomment_runtime.c.listener_account_id == account_id)
+            .values(listener_account_id=None, updated_at=_now_iso()),
         )
         connection.execute(
             delete(_warming_joined_channels).where(

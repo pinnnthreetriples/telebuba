@@ -164,6 +164,7 @@ import type {
   LogoutAccountError,
   LogoutAccountResponse,
   LogoutData,
+  LogoutError,
   LogoutResponse,
   PostAccountStoryData,
   PostAccountStoryError,
@@ -269,8 +270,8 @@ export const loginMutation = (
  */
 export const logoutMutation = (
   options?: Partial<Options<LogoutData>>,
-): UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> => {
-  const mutationOptions: UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> = {
+): UseMutationOptions<LogoutResponse, LogoutError, Options<LogoutData>> => {
+  const mutationOptions: UseMutationOptions<LogoutResponse, LogoutError, Options<LogoutData>> = {
     mutationFn: async (fnOptions) => {
       const { data } = await logout({
         ...options,

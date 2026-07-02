@@ -59,6 +59,11 @@ _RUNTIME: dict[str, asyncio.Task[None]] = {}
 # and never freed — the dictionary is bounded by the number of accounts.
 _ACCOUNT_LOCKS: dict[str, asyncio.Lock] = {}
 
+# Single background retention sweep, started with the runtime and cancelled on
+# shutdown. A startup-only purge lets the append-only tables grow unbounded
+# during long uptimes; this reruns it every ``warming.purge_interval_hours``.
+_PURGE_TASK: asyncio.Task[None] | None = None
+
 
 class UnknownAccountError(ValueError):
     """Raised when start/stop is called for an account that does not exist."""
@@ -126,9 +131,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # request omits it. The loop auto-completes the account once warming
         # reaches this many days.
         target_days = (
-            data.target_days
-            or (existing.target_days if existing and existing.target_days else None)
-            or settings.neurocomment.warmed_min_days
+            existing.target_days
+            if existing is not None and existing.target_days and is_warming(existing.state)
+            else (data.target_days or settings.neurocomment.warmed_min_days)
         )
         # Persona mirrors started_at: a restart-while-warming keeps the original
         # cadence; a genuine (re)start from idle/stopped honours the new pick.
@@ -377,6 +382,27 @@ async def reconcile_warming_runtime() -> None:
         )
     await _refresh_dialogue_pairs()
     await purge_stale_history()
+    _start_purge_task()
+
+
+async def _purge_loop() -> None:  # pragma: no cover - long-running task body.
+    """Rerun the retention sweep every ``purge_interval_hours`` until cancelled.
+
+    ``purge_stale_history`` swallows its own errors, so a failing sweep never
+    breaks the cadence. Cancelled cleanly on shutdown like the per-account loops.
+    """
+    interval = settings.warming.purge_interval_hours * 3600
+    while True:
+        await asyncio.sleep(interval)
+        await purge_stale_history()
+
+
+def _start_purge_task() -> None:
+    """Spawn the periodic retention sweep if one is not already running."""
+    global _PURGE_TASK  # noqa: PLW0603 - single process-wide background task handle.
+    if _PURGE_TASK is not None and not _PURGE_TASK.done():
+        return
+    _PURGE_TASK = asyncio.create_task(_purge_loop())
 
 
 async def _refresh_dialogue_pairs() -> None:
@@ -392,6 +418,7 @@ async def _refresh_dialogue_pairs() -> None:
 
 async def shutdown_warming_runtime() -> None:
     """Cancel every running loop and wait briefly for graceful exits."""
+    await _stop_purge_task()
     if not _RUNTIME:
         return
     tasks = list(_RUNTIME.values())
@@ -406,3 +433,15 @@ async def shutdown_warming_runtime() -> None:
         )
     except TimeoutError:
         await log_event("WARNING", "warming_shutdown_timeout", extra={"count": len(tasks)})
+
+
+async def _stop_purge_task() -> None:
+    """Cancel and await the periodic retention sweep (no-op if not running)."""
+    global _PURGE_TASK  # noqa: PLW0603 - single process-wide background task handle.
+    task = _PURGE_TASK
+    _PURGE_TASK = None
+    if task is None or task.done():
+        return
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task

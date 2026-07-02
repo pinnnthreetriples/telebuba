@@ -149,6 +149,20 @@ async def _gate_target_reached(
     if days is None or days < record.target_days:
         return None
     if record.last_event == "warming_complete":
+        # Idempotent re-park: rewrite a fresh future ``next_run_at`` so the loop
+        # sleeps a positive interval instead of busy-spinning once the previously
+        # parked midnight has passed (``_seconds_until`` clamps a past time to 0).
+        # No re-log — completion was already announced on the first pass.
+        write = await _set_state(
+            account_id,
+            "sleeping",
+            last_event="warming_complete",
+            next_run_at=_next_utc_midnight(now).isoformat(),
+            heartbeat_at=now.isoformat(),
+            expected_run_id=run_id,
+        )
+        if run_id is not None and not write.applied:
+            return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="target reached")
     write = await _set_state(
         account_id,

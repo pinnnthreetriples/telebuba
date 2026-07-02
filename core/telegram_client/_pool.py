@@ -33,11 +33,17 @@ from core.telegram_client._client import create_telegram_client, prepare_telegra
 from schemas.device_fingerprint import TelegramClientRequest
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable, Callable
+
     from telethon import TelegramClient
+
+    _RebuildHook = Callable[[str, TelegramClient], Awaitable[None]]
 
 __all__ = [
     "TelegramClientPoolError",
+    "evict_client",
     "get_client",
+    "register_rebuild_hook",
     "shutdown_telegram_pool",
 ]
 
@@ -54,6 +60,23 @@ class TelegramClientPoolError(RuntimeError):
 _CLIENTS: dict[str, TelegramClient] = {}
 _CONNECT_LOCKS: dict[str, asyncio.Lock] = {}
 _SHUTTING_DOWN = False
+
+# Callbacks invoked after a fresh client is built for an account, so standing
+# subscriptions (the post listener) can re-register their handlers on the new
+# connection. ``_listener`` sets this at import time — the dependency points
+# core→core, never into services.
+_REBUILD_HOOKS: list[_RebuildHook] = []
+
+
+def register_rebuild_hook(hook: _RebuildHook) -> None:
+    """Register a callback fired with ``(account_id, client)`` after a rebuild.
+
+    Idempotent per callable so a re-import can't stack duplicate hooks. Used by
+    ``_listener`` to re-attach its ``NewMessage`` handler when the pool replaces
+    a dropped connection.
+    """
+    if hook not in _REBUILD_HOOKS:
+        _REBUILD_HOOKS.append(hook)
 
 
 def _connect_lock(account_id: str) -> asyncio.Lock:
@@ -116,7 +139,44 @@ async def get_client(account_id: str) -> TelegramClient:
                 raise TelegramClientPoolError(account_id, second_exc) from second_exc
 
         _CLIENTS[account_id] = client
-        return client
+    await _fire_rebuild_hooks(account_id, client)
+    return client
+
+
+async def _fire_rebuild_hooks(account_id: str, client: TelegramClient) -> None:
+    """Let standing subscriptions re-register on a freshly built client.
+
+    Runs outside the connect lock so a hook can safely re-enter the pool. A
+    hook fault is logged and swallowed — a listener that can't re-attach must
+    not break the borrower that triggered the rebuild.
+    """
+    for hook in _REBUILD_HOOKS:
+        try:
+            await hook(account_id, client)
+        except Exception as exc:  # noqa: BLE001 — a hook fault must not break get_client.
+            await log_event(
+                "WARNING",
+                "telegram_pool_rebuild_hook_failed",
+                account_id=account_id,
+                extra={"error_type": type(exc).__name__, "message": str(exc)},
+            )
+
+
+async def evict_client(account_id: str) -> None:
+    """Disconnect and drop the cached client for ``account_id``; no-op if absent.
+
+    Callers that are about to touch the account's ``.session`` file on disk
+    (logout/reset wipe, account removal) MUST evict first: on Windows the
+    pooled client keeps the ``.session`` SQLite file open, so an ``unlink``
+    would raise ``PermissionError`` while a handle is live. Safe when nothing
+    is cached and during shutdown (which disconnects everything anyway).
+    """
+    if _SHUTTING_DOWN:
+        return
+    async with _connect_lock(account_id):
+        client = _CLIENTS.pop(account_id, None)
+        if client is not None:
+            await _safe_disconnect(client)
 
 
 async def _build_and_connect(account_id: str) -> TelegramClient:

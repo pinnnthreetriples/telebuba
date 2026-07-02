@@ -13,6 +13,13 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1)
 
 
+class SessionClaims(BaseModel):
+    """Decoded session-JWT claims that the auth policy checks (sub + token version)."""
+
+    sub: str
+    ver: int
+
+
 class UserRead(BaseModel):
     id: str
     username: str
@@ -26,6 +33,8 @@ class UserRecord(BaseModel):
     username: str
     password_hash: str
     role: UserRole
+    # Session-revocation counter (JWT ``ver`` claim); bumped on logout.
+    token_version: int = 0
 
     def to_read(self) -> UserRead:
         return UserRead(id=self.id, username=self.username, role=self.role)

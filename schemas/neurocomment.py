@@ -241,6 +241,7 @@ OnboardingState = Literal[
     "bot_challenge",
     "bot_challenge_backoff",
     "joining",
+    "human_skipped",
     "failed",
 ]
 
@@ -273,6 +274,7 @@ ChannelStatus = Literal[
     "ready",
     "comments_off",
     "join_by_request",
+    "join_failed",
     "chat_restricted",
     "bot_challenge",
     "bot_challenge_backoff",

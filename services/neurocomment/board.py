@@ -200,7 +200,8 @@ def _channel_status(
     readiness; otherwise an account that's ready wins; then the joined-but-blocked
     failure modes — ``bot_challenge`` when a guardian-bot challenge row exists for
     the channel (#145), else ``chat_restricted`` (a Telegram-level write block) —
-    then the approval gate when not joined; ``throttled`` is the catch-all.
+    then, for a not-joined row, ``join_failed`` (onboarding's hard-failure sentinel)
+    vs ``join_by_request`` (approval gate); ``throttled`` is the catch-all.
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
@@ -210,6 +211,18 @@ def _channel_status(
         return "ready"
     if any(r.joined and not r.captcha_passed for r in rows):
         return "bot_challenge" if challenged else "chat_restricted"
+    return _not_joined_status(rows)
+
+
+def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
+    """Status for a channel none of whose accounts are joined-and-ready.
+
+    ``join_failed`` is onboarding's hard-failure sentinel (joined=False,
+    captcha_passed=True) — a terminal join failure that never self-resolves, distinct
+    from the approval gate ``join_by_request``; ``throttled`` is the catch-all.
+    """
+    if any(not r.joined and r.captcha_passed for r in rows):
+        return "join_failed"
     if any(not r.joined for r in rows):
         return "join_by_request"
     return "throttled"

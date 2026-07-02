@@ -11,7 +11,13 @@ import uuid
 from core import auth as core_auth
 from core.config import settings
 from core.logging import log_event
-from core.repositories.users import count_users, create_user, get_user_by_id, get_user_by_username
+from core.repositories.users import (
+    bump_token_version,
+    count_users,
+    create_user,
+    get_user_by_id,
+    get_user_by_username,
+)
 from schemas.auth import LoginRequest, UserRead, UserRecord
 
 # Verifying against a throwaway hash when the user does not exist equalizes login
@@ -30,15 +36,26 @@ async def authenticate(credentials: LoginRequest) -> UserRead | None:
 
 
 async def resolve_user(token: str) -> UserRead | None:
-    user_id = core_auth.decode_session_token(token)
-    if user_id is None:
+    claims = core_auth.decode_session_claims(token)
+    if claims is None:
         return None
+    record = await get_user_by_id(claims.sub)
+    if record is None or record.token_version != claims.ver:
+        # A stale ``ver`` means the token was revoked (logout bumped the counter).
+        return None
+    return record.to_read()
+
+
+async def issue_session_token(user_id: str) -> str:
+    """Mint a session token stamped with the user's current revocation version."""
     record = await get_user_by_id(user_id)
-    return None if record is None else record.to_read()
+    token_version = 0 if record is None else record.token_version
+    return core_auth.encode_session_token(user_id, token_version)
 
 
-def issue_session_token(user_id: str) -> str:
-    return core_auth.encode_session_token(user_id)
+async def revoke_sessions(user_id: str) -> None:
+    """Invalidate all of a user's outstanding tokens by bumping their version (logout)."""
+    await bump_token_version(user_id)
 
 
 async def seed_admin_if_empty() -> None:

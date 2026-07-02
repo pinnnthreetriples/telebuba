@@ -169,6 +169,29 @@ async def test_submit_phone_code_invalid_code(tmp_path: Path, monkeypatch) -> No
 
 
 @pytest.mark.asyncio
+async def test_submit_phone_code_classifies_unexpected_error(tmp_path: Path, monkeypatch) -> None:
+    """An unclassified sign-in failure (banned / AuthRestart / network) must not escape.
+
+    The siblings request_phone_code / log_out_session already classify any
+    Exception; submit_phone_code used to let PhoneNumberBanned / connect
+    ConnectionError propagate raw. It must instead return a typed, temporary
+    unknown_error result.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient(sign_in_error=ConnectionError("network went away"))
+    _patch_client(monkeypatch, tmp_path, client)
+
+    result = await submit_phone_code(
+        PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
+    )
+
+    assert result.status == "unknown_error"
+    assert result.is_temporary is True
+    assert result.error_type == "ConnectionError"
+    assert client.disconnected is True
+
+
+@pytest.mark.asyncio
 async def test_log_out_session_marks_unauthorized(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
     client = FakeAuthClient()
@@ -179,3 +202,60 @@ async def test_log_out_session_marks_unauthorized(tmp_path: Path, monkeypatch) -
     assert result.status == "unauthorized"
     assert client.logged_out is True
     assert client.disconnected is True
+
+
+@pytest.mark.asyncio
+async def test_log_out_session_evicts_pool_before_wiping_file(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Wiping the .session must evict the pooled client first (Windows unlink guard).
+
+    The pooled client keeps the ``.session`` SQLite handle open; unlinking under
+    a live handle raises PermissionError on Windows. Assert eviction happens
+    before the file removal, and only when wiping.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient()
+    _patch_client(monkeypatch, tmp_path, client)
+
+    order: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        order.append(f"evict:{account_id}")
+
+    async def fake_remove(session_path: str) -> None:  # noqa: ARG001 - path unused in the fake
+        order.append("remove")
+
+    monkeypatch.setattr("core.telegram_client._auth.evict_client", fake_evict)
+    monkeypatch.setattr("core.telegram_client._auth._remove_session_file", fake_remove)
+
+    result = await log_out_session(
+        TelegramClientRequest(account_id="acc", receive_updates=False),
+        wipe_session=True,
+    )
+
+    assert result.status == "unauthorized"
+    assert order == ["evict:acc", "remove"], "eviction must precede the .session unlink"
+
+
+@pytest.mark.asyncio
+async def test_log_out_session_no_wipe_does_not_evict(tmp_path: Path, monkeypatch) -> None:
+    """A plain logout (no wipe) leaves the file — no eviction, no removal."""
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient()
+    _patch_client(monkeypatch, tmp_path, client)
+
+    evicted: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        evicted.append(account_id)
+
+    monkeypatch.setattr("core.telegram_client._auth.evict_client", fake_evict)
+
+    await log_out_session(
+        TelegramClientRequest(account_id="acc", receive_updates=False),
+        wipe_session=False,
+    )
+
+    assert evicted == [], "no wipe → no eviction"

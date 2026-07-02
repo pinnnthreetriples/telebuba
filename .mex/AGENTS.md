@@ -11,7 +11,7 @@ Telegram account operations dashboard: account/session management, proxy/profile
 
 ## Stack
 **Backend:** Python 3.13 · FastAPI + uvicorn (single-worker) · SQLAlchemy/SQLite · Telethon · httpx · loguru+Sentry · pydantic-settings · uv · ruff · ty · pytest · hypothesis · bandit · pip-audit · semgrep · deptry · vulture · radon · aislop · pre-commit
-**Frontend (`frontend/`):** React + TypeScript (strict) · Vite · TanStack Router/Query/Table/Form · Tailwind + shadcn/ui · `@hey-api/openapi-ts` · react-i18next · Sentry React · Vitest + Playwright · Steiger boundary-lint (full law in `context/frontend.md`)
+**Frontend (`frontend/`):** React + TypeScript (strict) · Vite · TanStack Router/Query/Table/Form · Tailwind + shadcn/ui · `@hey-api/openapi-ts` · react-i18next · Sentry React · Vitest · Steiger boundary-lint (full law in `context/frontend.md`)
 
 ## File Map
 ```text
@@ -66,7 +66,7 @@ telebuba/
 ├── frontend/               React + TS (strict) + Vite SPA — Feature-Sliced Design (app/routes/pages/widgets/features/entities/shared); the only UI; full law in context/frontend.md
 │   ├── src/                FSD layers; shared/api holds the generated hey-api client + TanStack Query
 │   ├── tailwind.config.*   design tokens (single source of truth)
-│   └── package.json        FE deps + gate scripts (eslint/prettier/boundaries/tsc/vitest/playwright/gen-api)
+│   └── package.json        FE deps + gate scripts (eslint/prettier/boundaries/tsc/vitest/gen-api)
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```
 
@@ -81,7 +81,7 @@ routing summary describing the **split-stack target** (the 3 ADRs of 2026-06-28)
 4. **Logging Only** — no `print()`; all logging via `core/logging.py`.
 5. **Layer Isolation** — `api/` → `services`/`schemas`/`core.config`/`core.logging`/`fastapi`; `services/` → other `services/` + `core/` + `schemas/`; `core/` → `schemas/` + third-party; `schemas/` → `pydantic` + typing/stdlib only. Frontend is a separate tree reaching the backend only over `/api/v1`. Matrix in `context/architecture.md`.
 6. **Gateways** — DB only via `core/db.py` and `core/repositories/`; Telegram only via `core.telegram_client.execute(account_id, action)` with typed action schemas. `sqlalchemy` / `telethon` forbidden in `services/` and `api/`.
-7. **Test Coverage (strict)** — every endpoint/service change ships tests; warnings → errors; backend branch coverage ≥ 90%; frontend Vitest ≥ 80% + Playwright smoke; prefer `/tdd` skill.
+7. **Test Coverage (strict)** — every endpoint/service change ships tests; warnings → errors; backend branch coverage ≥ 90%; frontend Vitest ≥ 80%; prefer `/tdd` skill.
 8. **Async + Type Safety** — type hints everywhere; `from __future__ import annotations`; I/O is `async def`; `raise X(...) from e`.
 9. **Device Fingerprint Immutable** — one profile per account, created at registration, never mutated.
 10. **Configuration-Driven (backend)** — all limits/delays/proxies through `core/config.py`; nested namespaces (`settings.warming`, `settings.gemini`, `settings.api`, `settings.auth`, ...); no magic numbers.
@@ -99,7 +99,7 @@ Before adding files, follow `.mex/context/conventions.md` → **File Placement G
 - Pre-commit: `uv run pre-commit run --all-files`
 - Aislop on Windows: `uv run python -m aislop` if direct CLI invocation fails
 - Regenerate the API client: `uv run python -m tools.gen_api` (dumps OpenAPI → hey-api → prettier; CI drift-checks it)
-- Frontend (from `frontend/`): `npm install`; `npm run dev` (vite + `/api` proxy); `npm run gates` (eslint/prettier/boundaries/tsc/vitest); `npm run e2e` (Playwright)
+- Frontend (from `frontend/`): `npm install`; `npm run dev` (vite + `/api` proxy); `npm run gates` (eslint/prettier/boundaries/tsc/vitest)
 - Full toolchain — `context/setup.md`.
 
 ## Scaffold Growth

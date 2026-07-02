@@ -13,6 +13,7 @@ keep working.
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -28,6 +29,7 @@ from sqlalchemy import (
     Table,
     create_engine,
     event,
+    text,
 )
 
 from core.config import settings
@@ -35,7 +37,7 @@ from core.migrations import apply_migrations
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
     from sqlalchemy.engine import Engine
@@ -111,6 +113,11 @@ _logs = Table(
     Column("account_id", String, nullable=True),
     Column("event", String, nullable=False),
     Column("extra", String, nullable=False),
+    # The Logs page + per-card panels filter by account_id ordering id DESC, and
+    # the retention sweep filters created_at — both full-scan the (append-only,
+    # unbounded) table without these. Mirrored in migration #23 for existing DBs.
+    Index("ix_logs_account_id", "account_id", "id"),
+    Index("ix_logs_created_at", "created_at"),
 )
 _warming_channels = Table(
     "warming_channels",
@@ -201,6 +208,9 @@ _users = Table(
     # ``role`` exists from day one so RBAC can land without a migration; a single
     # role ("admin") is used until a second one is needed.
     Column("role", String, nullable=False),
+    # Monotonic session-revocation counter carried in the JWT ``ver`` claim;
+    # bumped on logout to invalidate every outstanding token (migration #22).
+    Column("token_version", Integer, nullable=False, server_default="0"),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
 )
@@ -235,6 +245,59 @@ def dispose_engine() -> None:
 atexit.register(dispose_engine)
 
 
+# --------------------------------------------------------------------------- #
+# Periodic SQLite maintenance — WAL checkpoint + optional online backup.
+# WAL never truncates on its own under a long-lived pool, and telebuba.db is the
+# sole datastore (incl. users/auth), so nothing otherwise guards against loss.
+# The clock is injectable so the backup filename is deterministic under test.
+# --------------------------------------------------------------------------- #
+_BACKUP_STEM = "telebuba"
+_BACKUP_SUFFIX = ".db"
+_BACKUP_TIMESTAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
+
+
+def _default_backup_clock() -> datetime:
+    return datetime.now(UTC)
+
+
+def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock) -> Path | None:
+    """Checkpoint the WAL and, when enabled, write + prune a timestamped backup.
+
+    Returns the backup file path when one was written, else ``None``. The
+    ``PRAGMA wal_checkpoint(TRUNCATE)`` always runs; the ``VACUUM INTO`` backup
+    is gated on ``settings.db.backup_enabled``.
+    """
+    engine = _get_engine()
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+        if not settings.db.backup_enabled:
+            return None
+        backup_dir = settings.db.backup_dir
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = clock().strftime(_BACKUP_TIMESTAMP_FORMAT)
+        target = backup_dir / f"{_BACKUP_STEM}-{stamp}{_BACKUP_SUFFIX}"
+        # VACUUM INTO copies a consistent snapshot without holding a long lock;
+        # the path is a bound parameter, never interpolated SQL.
+        connection.execute(text("VACUUM INTO :path"), {"path": str(target)})
+    _prune_backups(backup_dir)
+    return target
+
+
+def _prune_backups(backup_dir: Path) -> None:
+    backups = sorted(backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}"))
+    excess = len(backups) - settings.db.backup_keep
+    for stale in backups[:excess]:
+        stale.unlink(missing_ok=True)
+
+
+async def run_db_maintenance_loop() -> None:
+    """Run :func:`run_db_maintenance` on the configured interval until cancelled."""
+    interval_seconds = settings.db.backup_interval_hours * 3600.0
+    while True:
+        await asyncio.sleep(interval_seconds)
+        await asyncio.to_thread(run_db_maintenance)
+
+
 def _get_engine() -> Engine:
     if _state.engine is None:
         database_path = _state.database_path or settings.db.path
@@ -242,6 +305,9 @@ def _get_engine() -> Engine:
         engine = create_engine(
             f"sqlite:///{database_path}",
             connect_args={"check_same_thread": False},
+            pool_size=settings.db.pool_size,
+            max_overflow=settings.db.max_overflow,
+            pool_timeout=settings.db.pool_timeout_seconds,
             future=True,
         )
 

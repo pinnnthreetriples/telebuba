@@ -213,6 +213,24 @@ async def test_channel_status_join_by_request() -> None:
 
 
 @pytest.mark.asyncio
+async def test_channel_status_join_failed_is_distinct_from_join_by_request() -> None:
+    # A hard-failed join (invalid invite / banned) must NOT render as "awaiting
+    # approval". Onboarding persists a distinct signal (captcha_passed on an unjoined
+    # row) that the board maps to join_failed, leaving the approval-gate row untouched.
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    # The terminal-failure readiness shape onboarding writes for a hard fail.
+    await upsert_readiness("acc-1", "@chan", joined=False, captcha_passed=True, ready=False)
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "join_failed"
+
+
+@pytest.mark.asyncio
 async def test_channel_status_throttled_when_no_rows() -> None:
     # No readiness rows at all (no account joined) and comments are enabled →
     # nothing ready, no specific gate → throttled fallback.
@@ -224,6 +242,27 @@ async def test_channel_status_throttled_when_no_rows() -> None:
 
     assert board is not None
     assert board.channels[0].status == "throttled"
+
+
+@pytest.mark.asyncio
+async def test_card_readiness_scoped_to_this_campaigns_channels() -> None:
+    # An account in two campaigns must show only THIS campaign's (account, channel)
+    # readiness on its card — not the other campaign's channel chips.
+    acc = "acc-1"
+    await create_account(AccountCreate(account_id=acc))
+    this_campaign = await create_campaign(CampaignCreate(name="This", prompt="p"))
+    other_campaign = await create_campaign(CampaignCreate(name="Other", prompt="p"))
+    await assign_account_to_campaign(this_campaign.campaign_id, acc)
+    await assign_account_to_campaign(other_campaign.campaign_id, acc)
+    await link_channel_to_campaign(this_campaign.campaign_id, "@mine")
+    await link_channel_to_campaign(other_campaign.campaign_id, "@theirs")
+    await upsert_readiness(acc, "@mine", joined=True, captcha_passed=True, ready=True)
+    await upsert_readiness(acc, "@theirs", joined=True, captcha_passed=True, ready=True)
+
+    board = await load_neurocomment_board(this_campaign.campaign_id)
+
+    assert board is not None
+    assert [r.channel for r in board.accounts[0].readiness] == ["@mine"]
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,13 @@ from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 from core.config import settings
 from core.db import fetch_account
 from core.phone_geo import timezone_for_phone
-from schemas.warming import ActivityPersona, WarmingIntensity, WarmingPhase, WarmingReadiness
+from schemas.warming import (
+    ActivityPersona,
+    WarmingIntensity,
+    WarmingPhase,
+    WarmingReadiness,
+    is_warming,
+)
 
 if TYPE_CHECKING:
     from random import Random
@@ -24,7 +30,7 @@ if TYPE_CHECKING:
     from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import ActionResult
     from schemas.trust import TrustScore
-    from schemas.warming import WarmingStateRecord
+    from schemas.warming import WarmingState, WarmingStateRecord
 
 _SECONDS_PER_HOUR = 3600
 
@@ -134,11 +140,23 @@ def _classify_flood(result: ActionResult) -> tuple[bool, int | None, str | None]
     return True, seconds, until
 
 
-def warming_days_since(started_at: str | None, now: datetime) -> int | None:
+def warming_days_since(
+    started_at: str | None,
+    now: datetime,
+    *,
+    stopped_at: str | None = None,
+    state: WarmingState | None = None,
+) -> int | None:
     """Whole days since ``started_at`` (ISO-8601); ``None`` when never started.
 
     Shared by the board card (the "в прогреве N дн" hint) and the loop's
     target-reached gate (auto-complete once N ≥ the operator's chosen duration).
+
+    When ``state`` is supplied and is *not* a warming state (the account was
+    stopped/promoted), the interval is capped at ``stopped_at`` so the count is
+    frozen at the stop point rather than growing with wall-clock — otherwise a
+    warmed card's "X/Y days" X would climb past Y forever and erode the
+    ``min_days`` floor.
     """
     if not started_at:
         return None
@@ -148,7 +166,16 @@ def warming_days_since(started_at: str | None, now: datetime) -> int | None:
         return None
     if started.tzinfo is None:
         started = started.replace(tzinfo=UTC)
-    return max(0, int((now - started).total_seconds() / _SECONDS_PER_HOUR // 24))
+    upper = now
+    if state is not None and not is_warming(state) and stopped_at:
+        try:
+            stopped = datetime.fromisoformat(stopped_at)
+        except ValueError:
+            stopped = now
+        if stopped.tzinfo is None:
+            stopped = stopped.replace(tzinfo=UTC)
+        upper = min(now, stopped)
+    return max(0, int((upper - started).total_seconds() / _SECONDS_PER_HOUR // 24))
 
 
 def _account_age_hours(account: AccountRead | None, now: datetime) -> float:
@@ -342,16 +369,22 @@ def _phase_progress(
         return None, None
     idx = _PHASE_ORDER.index(phase)
     prev_bound = _PHASE_DAY_BOUND[_PHASE_ORDER[idx - 1]] if idx > 0 else None
-    phase_start_days = 0 if prev_bound is None else prev_bound + 1
+    # Match ``_phase_from_age``: phase P occupies ``(prev_bound, bound]`` in days
+    # (``intro`` starts at 0). The lower edge is exclusive, so the start day is
+    # ``prev_bound`` itself — not ``prev_bound + 1``, which zeroed progress for
+    # the whole first day of each phase and over-reported ``days_to_next`` by one.
+    phase_start_days = 0 if prev_bound is None else prev_bound
     days = age_hours / 24.0
-    span = max(1, bound - phase_start_days + 1)
+    span = max(1, bound - phase_start_days)
     raw_progress = min(1.0, max(0.0, (days - phase_start_days) / span))
     # Quantise to 1% — the progress bar's smallest visible step is far
     # coarser than the µs drift introduced by recomputing from ``datetime.now()``
     # every 4-second board poll. Without this the per-card signature would
     # flip on every tick and the DOM would rebuild for an idle account.
     progress = round(raw_progress, 2)
-    days_to_next = max(0, bound + 1 - int(days))
+    # The account stays in the phase while ``days <= bound`` (the flip is at
+    # ``days > bound``), so whole days remaining to the flip is ``bound - int(days)``.
+    days_to_next = max(0, bound - int(days))
     return progress, days_to_next
 
 

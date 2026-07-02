@@ -31,6 +31,7 @@ from core.config import settings
 from core.db import (
     fetch_active_campaign_for_channel,
     fetch_campaign,
+    fetch_readiness,
     list_campaign_accounts,
     list_campaign_channels,
     list_campaign_readiness,
@@ -101,7 +102,18 @@ async def _join_and_classify(
     A channel in challenge back-off (#147, K solver failures) is left alone — no
     join, no solver — until its cooldown expires; the board renders it
     ``bot_challenge_backoff`` from the in-memory back-off state.
+
+    An operator-skipped pair (#148) is also left alone: re-joining it would run the
+    solver and flip readiness back to ready, silently undoing the skip. The operator
+    un-skips via ``retry_pair`` (which clears the readiness row first).
     """
+    existing = await fetch_readiness(account_id, channel)
+    if existing is not None and existing.human_skipped:
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="human_skipped",
+        )
     if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
@@ -193,7 +205,12 @@ async def _classify_join(
             channel=channel,
             state="chat_restricted",
         )
-    await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
+    # Hard failure (invalid invite / banned / private): never joined and never will
+    # without operator action. Persist a signal distinct from the approval-gate row
+    # (which is also joined=False) so the board renders join_failed, not "awaiting
+    # approval": captcha_passed=True on an unjoined row is the sentinel (no other path
+    # produces that combination). ready stays False so the pair is never selected.
+    await upsert_readiness(account_id, channel, joined=False, captcha_passed=True, ready=False)
     return AccountChannelOnboarding(
         account_id=account_id,
         channel=channel,

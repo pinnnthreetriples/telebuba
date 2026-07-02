@@ -12,6 +12,8 @@ and the phase chip on the kanban card. They have to:
 
 from __future__ import annotations
 
+from datetime import UTC, datetime, timedelta
+
 import pytest
 
 from services.warming.pacing import (
@@ -21,6 +23,7 @@ from services.warming.pacing import (
     _phase_progress,
     compute_intensity,
     effective_phase,
+    warming_days_since,
 )
 
 # --- _phase_from_age ---------------------------------------------------------
@@ -89,19 +92,44 @@ def test_effective_phase_intro_never_promoted_by_high_trust() -> None:
 # --- _phase_progress ---------------------------------------------------------
 
 
-def test_phase_progress_start_of_phase_is_zero() -> None:
-    # 2 days = start of settling (intro now ends at day 1) — progress should be 0.0.
-    progress, days_to_next = _phase_progress("settling", 2 * 24.0)
-    assert progress == pytest.approx(0.0)
-    assert days_to_next == 6  # settling boundary is day 7 → 7+1-2 = 6 days
+def test_phase_progress_just_after_boundary_is_positive() -> None:
+    # Just past the day-1 boundary the account enters settling (``_phase_from_age``
+    # flips at ``days > bound``). Progress must be >0 there, not clamped to 0 for
+    # the whole first day. settling occupies (1, 7], so span = 6.
+    progress, days_to_next = _phase_progress("settling", 1.5 * 24.0)
+    assert progress is not None
+    # (1.5 - 1) / (7 - 1) ≈ 0.083 — small but strictly positive.
+    assert progress > 0.0
+    assert progress == pytest.approx(0.083, abs=0.01)
+    # Still settling until day 7 flips to warming → 7 - int(1.5) = 6 whole days.
+    assert days_to_next == 6
 
 
-def test_phase_progress_end_of_phase_approaches_one() -> None:
-    # 14 days = last day of warming. Span is days 8..14 = 7 days.
-    # (14 - 8) / 7 ≈ 0.857.
+def test_phase_progress_is_monotonic_across_phase() -> None:
+    # Progress rises monotonically from the phase's lower edge to its bound.
+    days = [1.01, 2.0, 4.0, 6.0, 7.0]  # settling: (1, 7]
+    values = [_phase_progress("settling", d * 24.0)[0] for d in days]
+    assert all(v is not None for v in values)
+    assert values == sorted(values)  # non-decreasing
+    assert values[-1] == pytest.approx(1.0)  # day 7 = top of settling
+
+
+def test_phase_progress_days_to_next_matches_flip_day() -> None:
+    # ``days_to_next`` must line up with ``_phase_from_age``'s actual flip. warming
+    # occupies (7, 14]; on day 8 the flip to active is 6 whole days away (at day 14).
+    _progress, days_to_next = _phase_progress("warming", 8 * 24.0)
+    assert days_to_next == 6
+    # Sanity: the phase is still warming right up to and including day 14, then flips.
+    assert _phase_from_age(14 * 24.0) == "warming"
+    assert _phase_from_age(14 * 24.0 + 1) == "active"
+
+
+def test_phase_progress_end_of_phase_reaches_one() -> None:
+    # 14 days = top of warming (its bound). Span is days (7, 14] = 7 days.
+    # (14 - 7) / 7 = 1.0.
     progress, days_to_next = _phase_progress("warming", 14 * 24.0)
-    assert progress == pytest.approx(0.857, abs=0.01)
-    assert days_to_next == 1
+    assert progress == pytest.approx(1.0)
+    assert days_to_next == 0  # the very next day flips to active
 
 
 def test_phase_progress_terminal_phase_is_none() -> None:
@@ -163,3 +191,37 @@ def test_compute_intensity_hides_progress_at_trust_ceiling_boundary() -> None:
     assert intensity.phase == "active"
     assert intensity.progress_to_next is None
     assert intensity.days_to_next_phase is None
+
+
+# --- warming_days_since caps at stopped_at once stopped -----------------------
+
+
+def test_warming_days_still_growing_while_warming() -> None:
+    # A live warming account keeps counting wall-clock (no cap applied).
+    started = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+    days = warming_days_since(started, datetime.now(UTC), stopped_at=None, state="active")
+    assert days == 5
+
+
+def test_warming_days_frozen_after_stop_regardless_of_now() -> None:
+    # A stopped/promoted account's warming_days is frozen at the stop point,
+    # not the live clock — otherwise the warmed card's "X/Y days" climbs past Y.
+    start = datetime(2026, 1, 1, tzinfo=UTC)
+    stopped = start + timedelta(days=4)
+    started_iso, stopped_iso = start.isoformat(), stopped.isoformat()
+
+    # 30 days after the stop, the count is still frozen at 4 (idle = not warming).
+    long_after = stopped + timedelta(days=30)
+    days = warming_days_since(started_iso, long_after, stopped_at=stopped_iso, state="idle")
+    assert days == 4
+
+    # ...and does not change as ``now`` advances further.
+    even_later = stopped + timedelta(days=100)
+    assert warming_days_since(started_iso, even_later, stopped_at=stopped_iso, state="idle") == 4
+
+
+def test_warming_days_no_cap_when_state_omitted() -> None:
+    # Back-compat: without ``state`` the old wall-clock behaviour is preserved
+    # (the board wrapper's legacy call site must keep working).
+    started = (datetime.now(UTC) - timedelta(days=6)).isoformat()
+    assert warming_days_since(started, datetime.now(UTC)) == 6

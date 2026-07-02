@@ -7,6 +7,7 @@ from services.auth.policy import (
     authenticate,
     issue_session_token,
     resolve_user,
+    revoke_sessions,
     seed_admin_if_empty,
 )
 
@@ -15,5 +16,6 @@ __all__ = [
     "check_login_rate_limit",
     "issue_session_token",
     "resolve_user",
+    "revoke_sessions",
     "seed_admin_if_empty",
 ]

@@ -136,7 +136,15 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         # Another worker already owns this post — idempotency, no duplicate.
         return
 
-    await _generate_and_post(event, campaign, account_id)
+    # The claim is won; from here any exit other than a delivered comment must release
+    # the claim, or the row stays 'claimed' forever (post never commentable, quota
+    # consumed for the window). A CancelledError on shutdown is cleaned up then re-raised
+    # so the task still cancels; other faults are handled by the outer listener guard.
+    try:
+        await _generate_and_post(event, campaign, account_id)
+    except BaseException:
+        await mark_comment_failed(event.channel, event.post_id)
+        raise
 
 
 class _SelectionPool(NamedTuple):
@@ -159,7 +167,9 @@ async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) ->
     ready_account_ids = frozenset(
         r.account_id
         for r in (await list_campaign_readiness(campaign_id)).readiness
-        if r.channel == channel and r.ready
+        # Honour the operator skip (#148) even if a stale re-enable left ready=1: a
+        # human-skipped pair is never selected.
+        if r.channel == channel and r.ready and not r.human_skipped
     )
     states = {rec.account_id: rec for rec in await list_warming_states()}
     spam = await list_spam_statuses()
@@ -282,15 +292,21 @@ async def _generate_and_post(
         )
         return
 
-    limits = await load_neuro_settings()
-    await asyncio.sleep(
-        _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
-    )
-
-    result = await _seams.execute(
-        account_id,
-        CommentOnPost(channel=event.channel, post_id=event.post_id, text=text),
-    )
+    # ``text`` is now reserved (the exact-hash claim). Any raise before ``_classify_post``
+    # releases it — a delayed/cancelled attempt must not leave the hash reserved, or a
+    # later regeneration of the same text is filtered as its own duplicate.
+    try:
+        limits = await load_neuro_settings()
+        await asyncio.sleep(
+            _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
+        )
+        result = await _seams.execute(
+            account_id,
+            CommentOnPost(channel=event.channel, post_id=event.post_id, text=text),
+        )
+    except BaseException:
+        await release_sent_text(text)
+        raise
     await _classify_post(event, account_id, text, result)
 
 
@@ -366,8 +382,11 @@ async def _classify_post(
             comment_text=text,
             comment_msg_id=result.message_id,
         )
-        # First comment confirms a solver click worked (no-op if no pending row).
-        await resolve_pending_outcome(account_id, event.channel, "solved")
+        # First comment confirms a solver click worked (no-op if no pending row). A
+        # solved outcome resets the channel's challenge-failure window (#147) so
+        # sporadic failures across many successes never accumulate to the trip count.
+        if await resolve_pending_outcome(account_id, event.channel, "solved"):
+            _state.reset_challenge_failures(event.channel)
         await log_event(
             "INFO",
             "neurocomment_posted",

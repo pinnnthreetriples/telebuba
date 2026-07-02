@@ -8,6 +8,7 @@ the public service module from growing past the size gate.
 from __future__ import annotations
 
 import shutil
+import tempfile
 from contextlib import suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -88,8 +89,36 @@ async def import_account_tdata(
     ``convert``, ``add_account``, and ``check_account_session`` are injected
     by the package ``__init__`` so tests can monkeypatch them at the public
     service boundary.
+
+    Conversion targets a private staging dir (never the live sessions dir), so a
+    re-import that collides with an existing credential can't overwrite it before
+    preflight runs. The staging dir sits beside the sessions dir (same volume →
+    the post-preflight move is a rename) and is wiped on both success and failure.
     """
-    result = await convert(data, settings.telegram.session_dir)
+    session_dir = settings.telegram.session_dir
+    session_dir.mkdir(parents=True, exist_ok=True)
+    staging_dir = Path(tempfile.mkdtemp(prefix="tdata_staging_", dir=str(session_dir.parent)))
+    try:
+        return await _run_tdata_import(
+            data,
+            staging_dir,
+            convert=convert,
+            add_account=add_account,
+            check_account_session=check_account_session,
+        )
+    finally:
+        shutil.rmtree(staging_dir, ignore_errors=True)
+
+
+async def _run_tdata_import(
+    data: TdataConvertRequest,
+    staging_dir: Path,
+    *,
+    convert: Any,  # noqa: ANN401 - DI seam mirrors import_account_tdata.
+    add_account: Any,  # noqa: ANN401
+    check_account_session: Any,  # noqa: ANN401
+) -> list[AccountRead]:
+    result = await convert(data, staging_dir)
     if result.status != "ok":
         msg = f"tdata import failed: {result.status}"
         if result.error:

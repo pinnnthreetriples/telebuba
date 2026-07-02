@@ -14,6 +14,7 @@ from typing import TYPE_CHECKING
 from core.migration_steps import (
     _add_account_bio,
     _add_account_proxy_geo,
+    _add_logs_indexes,
     _add_neurocomment_challenges,
     _add_neurocomment_comment_indexes,
     _add_neurocomment_runtime,
@@ -22,6 +23,7 @@ from core.migration_steps import (
     _add_readiness_human_skipped,
     _add_unique_session_name_index,
     _add_users_table,
+    _add_users_token_version,
     _add_warming_join_enabled,
     _add_warming_joined_channels,
     _add_warming_phase_columns,
@@ -69,6 +71,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (19, "add_neurocomment_settings", _add_neurocomment_settings),
     (20, "add_warming_state_target_days", _add_warming_state_target_days),
     (21, "add_warming_state_activity_persona", _add_warming_state_activity_persona),
+    (22, "add_users_token_version", _add_users_token_version),
+    (23, "add_logs_indexes", _add_logs_indexes),
 )
 
 
