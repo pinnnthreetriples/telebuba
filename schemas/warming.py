@@ -130,12 +130,13 @@ class WarmingSettingsUpdate(BaseModel):
 
 
 class WarmingIntensity(BaseModel):
-    """Effective per-cycle intensity for an account, derived from age + trust.
+    """The age + trust **safety ceiling** for an account's cycle.
 
-    Produced by the age-based ramp: a fresh account warms quietly (few channels,
-    low reaction rate, no DM) and grows to the configured full intensity. The
-    daily action cap and lifecycle phase are part of the same derivation —
-    one source of truth for "what is this account allowed to do today".
+    Derived from ``effective_phase(age, trust_band)``: the lifecycle phase, the
+    per-phase daily action cap, the session size (channels), and whether DMs are
+    allowed (age ≥ ``dm_min_age_hours`` AND trust band permits). Per-session
+    *frequency* (reactions/DM) is the persona's job, not this ceiling's — the
+    age-based ramp was retired in favour of ``activity_persona``.
     """
 
     channels_min: int = Field(ge=1)

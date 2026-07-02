@@ -672,29 +672,7 @@
       "title": "Warming settings",
       "globalHint": "Warming behaviour settings are shared by every account (including {{phone}}) and are edited on the Settings page.",
       "close": "Close",
-      "openSettings": "Open settings",
-      "behavior": "Behaviour",
-      "limits": "Limits & safety",
-      "scopeOne": "This one",
-      "scopeAll": "All warming",
-      "save": "Save",
-      "cancel": "Cancel",
-      "reactions": {
-        "title": "Place reactions",
-        "desc": "Likes and emoji on channel posts"
-      },
-      "join": {
-        "title": "Join channels",
-        "desc": "Automatically join recommended ones"
-      },
-      "chat": {
-        "title": "Inter-account chat",
-        "desc": "Simulate direct-message conversations"
-      },
-      "readiness": {
-        "title": "Pre-start check",
-        "desc": "Do not start without a session and proxy"
-      }
+      "openSettings": "Open settings"
     },
     "days": {
       "title": "Warm up account",
