@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
-from schemas.challenge import ChallengeRowList
+from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
     AccountChannelOnboarding,
     AssignAccountRequest,
@@ -21,6 +21,7 @@ from schemas.neurocomment import (
     NeurocommentSettings,
     NeurocommentSettingsUpdate,
     RetryPairRequest,
+    SetCampaignStatusRequest,
     SolverToggleRequest,
     StartNeurocommentRequest,
     UpdatePromptRequest,
@@ -144,6 +145,52 @@ async def list_campaign_challenges(
 ) -> ChallengeRowList:
     """Recent unsolved bot-challenges across the campaign's channels (captcha queue)."""
     return await nc_service.list_campaign_challenges(campaign_id, limit)
+
+
+@router.get(
+    "/campaigns/{campaign_id}/challenges/counts",
+    response_model=ChallengeOutcomeCounts,
+    operation_id="countCampaignChallengeOutcomes",
+)
+async def count_campaign_challenge_outcomes(
+    campaign_id: str,
+    since: Annotated[str, Query(min_length=1)],
+) -> ChallengeOutcomeCounts:
+    """Challenge-outcome counters (solved/failed/give_up/pending) across a campaign (#148)."""
+    return await nc_service.count_campaign_challenge_outcomes(campaign_id, since)
+
+
+@router.get(
+    "/channels/challenges",
+    response_model=ChallengeRowList,
+    operation_id="listChannelChallenges",
+)
+async def list_channel_challenges(
+    channel: Annotated[str, Query(min_length=1)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ChallengeRowList:
+    """Recent unsolved bot-challenges for one channel — the work-view drill-down (#148)."""
+    return await nc_service.list_channel_challenges(channel, limit)
+
+
+@router.post(
+    "/skip",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="skipNeurocommentPair",
+)
+async def skip_pair(body: RetryPairRequest) -> None:
+    """Operator "Skip channel for this account": the engine never selects the pair (#148)."""
+    await nc_service.skip_pair(body.account_id, body.channel)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/status",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="setCampaignStatus",
+)
+async def set_campaign_status(campaign_id: str, body: SetCampaignStatusRequest) -> None:
+    """Per-campaign run/pause: flip a campaign between active and paused (#148)."""
+    await nc_service.set_campaign_status(campaign_id, body.status)
 
 
 @router.get(

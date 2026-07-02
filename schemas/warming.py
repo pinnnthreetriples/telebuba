@@ -315,8 +315,9 @@ class WarmingAccountState(BaseModel):
     # literal) so the assignment in ``load_board`` type-checks.
     proxy_type: str | None = None
     # Lifecycle phase + display affordances, derived per card from age + trust.
+    # The SPA translates the ``phase`` enum itself (non-negotiable #12), so no
+    # pre-translated label crosses the wire.
     phase: WarmingPhase | None = None
-    phase_label: str | None = None
     daily_cap: int = Field(default=0, ge=0)
     progress_to_next: float | None = Field(default=None, ge=0.0, le=1.0)
     days_to_next_phase: int | None = Field(default=None, ge=0)
@@ -357,6 +358,10 @@ class WarmingBoardState(BaseModel):
     channel_count: int = Field(ge=0)
     active_count: int = Field(ge=0)
     summary: WarmingSummary = Field(default_factory=WarmingSummary)
+    # How many recent log rows the per-card activity panel shows (newest-first),
+    # from ``settings.warming.card_log_limit`` — the SPA reads it instead of a
+    # hardcoded 20.
+    card_log_limit: int = Field(default=30, ge=1)
 
 
 class WarmedAccount(BaseModel):

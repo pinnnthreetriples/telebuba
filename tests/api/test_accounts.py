@@ -234,6 +234,23 @@ async def test_delete_account_removes_it(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
+async def test_account_stats_endpoint_returns_fleet_counts(app: FastAPI) -> None:
+    """GET /accounts/stats serves fleet-wide tile counts (all "new" here)."""
+    for i in range(3):
+        await add_account(AccountCreate(account_id=f"acc-{i}", label=f"acc-{i}"))
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/stats")
+    assert resp.status_code == 200
+    body = resp.json()
+    assert body["total"] == 3
+    # Fresh accounts default to status "new" → the needs_code bucket.
+    assert body["needs_code"] == 3
+    assert body["active"] == 0
+    assert body["idle"] == 0
+    assert body["problem"] == 0
+
+
+@pytest.mark.asyncio
 async def test_import_tdata_accepts_multipart(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
@@ -354,6 +371,38 @@ async def test_post_story_accepts_multipart(
         )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_post_story_surfaces_video_error_code_not_russian(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A video-normalisation failure reaches the client as a stable code.
+
+    ``normalize_story_video_for_telegram`` raises ``StoryVideoNormalisationError``
+    whose ``str`` is a locale-neutral code; it flows through ``execute`` into the
+    service's ``ValueError`` and out via the 400 envelope. The wire must carry the
+    code, never the old Russian prose (non-negotiable #12).
+    """
+
+    async def _boom(upload: object) -> ActionResult:  # noqa: ARG001
+        msg = "story_video_invalid"
+        raise ValueError(msg)
+
+    monkeypatch.setattr("services.accounts.post_account_story", _boom)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story",
+            files={"file": ("s.mp4", b"vid", "video/mp4")},
+            data={"media_kind": "video", "privacy_preset": "contacts"},
+        )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["code"] == "bad_request"
+    # The stable code is emitted; no Cyrillic / Russian prose crosses the wire.
+    assert body["error"]["message"] == "story_video_invalid"
+    assert not any("Ѐ" <= ch <= "ӿ" for ch in body["error"]["message"])
 
 
 @pytest.mark.asyncio

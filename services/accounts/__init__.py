@@ -25,6 +25,7 @@ from __future__ import annotations
 from core.db import list_accounts
 from services.accounts._table import (
     InvalidCursorError,
+    account_stats,
     list_accounts_page,
     list_listener_accounts,
     load_accounts_table,
@@ -63,6 +64,7 @@ __all__ = [
     "PhoneLoginError",
     "SessionAlreadyExistsError",
     "account_profile_view",
+    "account_stats",
     "add_account",
     "add_account_profile_music",
     "check_account_session",

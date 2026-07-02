@@ -6,7 +6,7 @@ import asyncio
 from typing import TYPE_CHECKING
 from uuid import uuid4
 
-from sqlalchemy import delete, insert, select, update
+from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
@@ -76,13 +76,43 @@ async def fetch_campaign(campaign_id: str) -> NeurocommentCampaign | None:
     return await asyncio.to_thread(_fetch_campaign, campaign_id)
 
 
+def _active_channel_counts(connection: Connection) -> dict[str, int]:
+    """Per-campaign active-channel counts in one grouped query (no per-campaign loop)."""
+    statement = (
+        select(
+            _neurocomment_campaign_channels.c.campaign_id,
+            func.count().label("n"),
+        )
+        .where(_neurocomment_campaign_channels.c.active == 1)
+        .group_by(_neurocomment_campaign_channels.c.campaign_id)
+    )
+    return {str(cid): int(n) for cid, n in connection.execute(statement).all()}
+
+
+def _account_counts(connection: Connection) -> dict[str, int]:
+    """Per-campaign serving-account counts in one grouped query (no per-campaign loop)."""
+    statement = select(
+        _neurocomment_campaign_accounts.c.campaign_id,
+        func.count().label("n"),
+    ).group_by(_neurocomment_campaign_accounts.c.campaign_id)
+    return {str(cid): int(n) for cid, n in connection.execute(statement).all()}
+
+
 def _list_campaigns() -> CampaignList:
     statement = select(_neurocomment_campaigns).order_by(
         _neurocomment_campaigns.c.created_at.asc(),
     )
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
-    return CampaignList(campaigns=[_row_to_campaign(row) for row in rows])
+        channel_counts = _active_channel_counts(connection)
+        account_counts = _account_counts(connection)
+    campaigns = []
+    for row in rows:
+        campaign = _row_to_campaign(row)
+        campaign.channel_count = channel_counts.get(campaign.campaign_id, 0)
+        campaign.account_count = account_counts.get(campaign.campaign_id, 0)
+        campaigns.append(campaign)
+    return CampaignList(campaigns=campaigns)
 
 
 async def list_campaigns() -> CampaignList:
@@ -101,6 +131,20 @@ def _update_solver_enabled(campaign_id: str, value: bool | None) -> None:  # noq
 async def update_solver_enabled(campaign_id: str, value: bool | None) -> None:  # noqa: FBT001 - tri-state value
     """Set the per-campaign challenge-solver override (``None`` = follow the global flag)."""
     await asyncio.to_thread(_update_solver_enabled, campaign_id, value)
+
+
+def _set_campaign_status(campaign_id: str, status: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_campaigns)
+            .where(_neurocomment_campaigns.c.campaign_id == campaign_id)
+            .values(status=status, updated_at=_now_iso()),
+        )
+
+
+async def set_campaign_status(campaign_id: str, status: str) -> None:
+    """Set a campaign's lifecycle status (active/paused/archived) for per-campaign run/pause."""
+    await asyncio.to_thread(_set_campaign_status, campaign_id, status)
 
 
 def _update_campaign_prompt(campaign_id: str, prompt: str) -> None:

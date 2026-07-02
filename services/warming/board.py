@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Final
 
+from core.config import settings
 from core.db import (
     list_accounts,
     list_device_fingerprints,
@@ -24,7 +25,6 @@ from schemas.warming import (
     WarmingAccountState,
     WarmingBoardState,
     WarmingChannelList,
-    WarmingPhase,
     WarmingSettings,
     WarmingState,
     WarmingSummary,
@@ -43,21 +43,6 @@ from services.warming.settings_store import load_settings
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
     from schemas.warming import WarmingReadiness, WarmingStateRecord
-
-# Russian labels for the lifecycle phases shown on the kanban card.
-#
-# Wording rule: nouns/adjectives, never gerunds — the phase is a *stage of
-# maturity*, not an action. The state pill (`state="active"` → «Прогрев»)
-# already occupies the verb space; phase labels stay clearly different so
-# an idle account in the warming-age band doesn't look like it's "currently
-# being warmed".
-_PHASE_LABEL_RU: dict[WarmingPhase, str] = {
-    "intro": "🥚 Новый · 0-3 дн",
-    "settling": "🐣 Адаптация · 3-7 дн",
-    "warming": "🐥 Развитие · 8-14 дн",
-    "active": "🐤 Окрепший · 15-29 дн",
-    "warmed": "🦅 Зрелый · 30+ дн",
-}
 
 
 def _warming_days_since(
@@ -165,7 +150,6 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
         card.phone = account.phone
         card.proxy_type = account.proxy_type
         card.phase = intensity.phase
-        card.phase_label = _PHASE_LABEL_RU[intensity.phase]
         card.daily_cap = intensity.daily_cap
         card.progress_to_next = intensity.progress_to_next
         card.days_to_next_phase = intensity.days_to_next_phase
@@ -189,6 +173,7 @@ async def load_board() -> WarmingBoardState:
         channel_count=len(channels.channels),
         active_count=sum(1 for card in warming if card.state == "active"),
         summary=_build_summary([*idle, *warming]),
+        card_log_limit=settings.warming.card_log_limit,
     )
 
 

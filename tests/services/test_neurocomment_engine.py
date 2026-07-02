@@ -34,6 +34,7 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
+from core.repositories.neurocomment import set_campaign_status
 from schemas.accounts import AccountCreate, AccountList, AccountRead
 from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.gemini import GeminiResult
@@ -257,6 +258,28 @@ async def test_no_active_campaign_is_a_noop(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert comment.calls == []
     assert await fetch_comment("@unwatched", 1) is None
+
+
+@pytest.mark.asyncio
+async def test_paused_campaign_posts_are_not_commented(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A paused campaign's posts are skipped; flipping back to active resumes commenting (#6)."""
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub()
+    _patch_io(monkeypatch, comment=comment)
+
+    # Paused → the engine cannot resolve an active campaign for the channel → no-op.
+    await set_campaign_status(campaign_id, "paused")
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hello world"))
+    assert comment.calls == []
+    assert await fetch_comment("@chan", 1) is None
+
+    # Active again → commenting resumes.
+    await set_campaign_status(campaign_id, "active")
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hello world"))
+    assert [a.action_type for _, a in comment.calls] == ["comment_on_post"]
+    record = await fetch_comment("@chan", 2)
+    assert record is not None
+    assert record.status == "posted"
 
 
 # --------------------------------------------------------------------------- #

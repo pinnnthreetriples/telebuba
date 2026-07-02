@@ -84,8 +84,26 @@ class StartNeurocommentRequest(BaseModel):
     listener_account_id: str = Field(min_length=1)
 
 
+# The operator play/pause button toggles between the running and paused states;
+# ``archived`` is a separate retire action, not part of per-campaign run/pause.
+CampaignRunStatus = Literal["active", "paused"]
+
+
+class SetCampaignStatusRequest(BaseModel):
+    """Per-campaign run/pause: flip a campaign between ``active`` and ``paused`` (#148)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    status: CampaignRunStatus
+
+
 class NeurocommentCampaign(BaseModel):
-    """One row of ``neurocomment_campaigns``."""
+    """One row of ``neurocomment_campaigns``.
+
+    ``channel_count`` / ``account_count`` are populated on the campaigns-list payload
+    so every card (not just the selected one) can show real link counts; they are 0
+    on a bare row read (``fetch_campaign``).
+    """
 
     campaign_id: str = Field(min_length=1)
     name: str = Field(min_length=1)
@@ -95,6 +113,8 @@ class NeurocommentCampaign(BaseModel):
     updated_at: str = Field(min_length=1)
     # Per-campaign challenge-solver override (#148): None defers to the global flag.
     solver_enabled: bool | None = None
+    channel_count: int = Field(default=0, ge=0)
+    account_count: int = Field(default=0, ge=0)
 
 
 class CampaignList(BaseModel):
@@ -338,11 +358,14 @@ class NeurocommentRuntimeStatus(BaseModel):
     one fleet listener (not per-campaign), so the persisted listener account id
     being set means the engine is live. ``active_channels`` is the size of the
     watch set across all active campaigns (what the listener actually watches).
+    ``log_limit`` is the operator-configured activity-log row cap the SPA reads
+    instead of hardcoding one (from ``settings.neurocomment.log_limit``).
     """
 
     running: bool
     active_channels: int = 0
     listener_account_id: str | None = None
+    log_limit: int = Field(ge=1)
 
 
 class NeurocommentSettings(BaseModel):

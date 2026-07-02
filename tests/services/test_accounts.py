@@ -47,6 +47,7 @@ from schemas.telegram_actions import (
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
     SessionAlreadyExistsError,
+    account_stats,
     add_account,
     add_account_profile_music,
     check_account_session,
@@ -243,6 +244,56 @@ async def test_load_accounts_table_paginates_in_db() -> None:
     assert {row.account_id for row in page.rows} & {
         row.account_id for row in next_page.rows
     } == set()
+
+
+async def _set_status(account_id: str, status: AccountStatus) -> None:
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id=account_id,
+            session_path=f"sessions/{account_id}",
+            status=status,  # ty: ignore[invalid-argument-type] — SessionCheckStatus ⊇ used set
+            is_temporary=False,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_account_stats_counts_whole_fleet_across_pages() -> None:
+    """Stats span the entire table (one grouped query), not a single 20-row page.
+
+    Seeds >1 page of accounts across every design bucket and asserts the tile
+    counts are the fleet-wide totals, independent of pagination.
+    """
+    # 10 alive, 6 flood_wait (idle/spam), 5 unauthorized + 4 new (needs_code),
+    # 3 session_error + 2 account_error (problem) = 30 accounts (> one 20-row page).
+    plan: list[tuple[str, AccountStatus, int]] = [
+        ("alive", "alive", 10),
+        ("flood", "flood_wait", 6),
+        ("unauth", "unauthorized", 5),
+        ("new", "new", 4),
+        ("serr", "session_error", 3),
+        ("aerr", "account_error", 2),
+    ]
+    for prefix, status, count in plan:
+        for i in range(count):
+            ident = f"{prefix}-{i}"
+            await add_account(AccountCreate(account_id=ident, label=ident))
+            if status != "new":  # "new" is the create default; no flip needed.
+                await _set_status(ident, status)
+
+    stats = await account_stats()
+
+    assert stats.total == 30
+    assert stats.active == 10  # alive
+    assert stats.idle == 6  # flood_wait (spam-limited)
+    assert stats.needs_code == 9  # 5 unauthorized + 4 new
+    assert stats.problem == 5  # 3 session_error + 2 account_error
+
+    # Independence from pagination: a single page never sees the whole fleet.
+    first_page = await list_accounts_page(limit=20)
+    assert len(first_page.items) == 20
+    assert first_page.next_cursor is not None
+    assert stats.total > len(first_page.items)
 
 
 @pytest.mark.asyncio

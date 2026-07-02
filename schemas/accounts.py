@@ -115,6 +115,26 @@ class AccountSummary(BaseModel):
     never_checked: int
 
 
+class AccountStats(BaseModel):
+    """Fleet-wide status roll-up for the Accounts page stat tiles.
+
+    Counts span the whole ``accounts`` table (a single grouped SQL query), not
+    the currently-loaded page, so the tiles stay correct across pagination. The
+    buckets mirror the design's status vocabulary (``accountDesignStatus``):
+
+    - ``active``    — ``alive``.
+    - ``idle``      — ``flood_wait`` (spam-limited, the "idle" tile).
+    - ``needs_code`` — ``unauthorized`` / ``new`` (re-auth by login code).
+    - ``problem``   — every other non-alive status (banned / session / errors).
+    """
+
+    total: int = Field(default=0, ge=0)
+    active: int = Field(default=0, ge=0)
+    idle: int = Field(default=0, ge=0)
+    needs_code: int = Field(default=0, ge=0)
+    problem: int = Field(default=0, ge=0)
+
+
 AccountHealth = Literal["ok", "warn", "fail"]
 
 _PERMANENT_STATUSES: frozenset[AccountStatus] = frozenset(

@@ -22,6 +22,7 @@ from services.neurocomment._runtime import (
 from services.neurocomment.board import load_neurocomment_board
 from services.neurocomment.campaigns import (
     assign_account_to_campaign,
+    count_campaign_challenge_outcomes,
     count_challenge_outcomes,
     create_campaign,
     deactivate_channel,
@@ -37,6 +38,9 @@ from services.neurocomment.campaigns import (
     skip_pair,
     update_campaign_prompt,
 )
+from services.neurocomment.campaigns import (
+    set_status as set_campaign_status,
+)
 from services.neurocomment.challenge import retry_pair
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_account_channel, onboard_campaign
@@ -49,6 +53,7 @@ from services.neurocomment.settings_store import (
 
 __all__ = [
     "assign_account_to_campaign",
+    "count_campaign_challenge_outcomes",
     "count_challenge_outcomes",
     "create_campaign",
     "deactivate_channel",
@@ -71,6 +76,7 @@ __all__ = [
     "remove_account_from_campaign",
     "retry_pair",
     "save_neurocomment_settings",
+    "set_campaign_status",
     "set_solver_enabled",
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neurocomment_runtime",

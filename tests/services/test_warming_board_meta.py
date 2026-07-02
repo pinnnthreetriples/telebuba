@@ -65,3 +65,27 @@ def test_warming_days_frozen_after_stop() -> None:
     )
 
     assert _warming_days_since(record, now) == 3
+
+
+@pytest.mark.asyncio
+async def test_board_serves_card_log_limit_from_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The board payload carries ``card_log_limit`` from config (dead tunable revived)."""
+    monkeypatch.setattr(settings.warming, "card_log_limit", 42)
+    await create_account(AccountCreate(account_id="acc", label="Acc"))
+
+    board = await load_board()
+
+    assert board.card_log_limit == 42
+
+
+@pytest.mark.asyncio
+async def test_board_card_carries_phase_enum_not_label() -> None:
+    """The card exposes the ``phase`` enum (SPA translates it), no pre-translated label."""
+    await create_account(AccountCreate(account_id="acc", label="Acc"))
+
+    board = await load_board()
+    card = board.idle[0]
+
+    assert card.phase is not None  # e.g. "intro" — the locale-neutral enum
+    # The Russian ``phase_label`` field has been removed from the wire (#12).
+    assert not hasattr(card, "phase_label")

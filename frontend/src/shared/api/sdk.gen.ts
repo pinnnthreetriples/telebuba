@@ -8,6 +8,9 @@ import {
 } from './client';
 import { client } from './client.gen';
 import type {
+  AccountStatsData,
+  AccountStatsErrors,
+  AccountStatsResponses,
   AddAccountMusicData,
   AddAccountMusicErrors,
   AddAccountMusicResponses,
@@ -26,6 +29,9 @@ import type {
   CheckProxyData,
   CheckProxyErrors,
   CheckProxyResponses,
+  CountCampaignChallengeOutcomesData,
+  CountCampaignChallengeOutcomesErrors,
+  CountCampaignChallengeOutcomesResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
@@ -82,6 +88,9 @@ import type {
   ListCampaignsData,
   ListCampaignsErrors,
   ListCampaignsResponses,
+  ListChannelChallengesData,
+  ListChannelChallengesErrors,
+  ListChannelChallengesResponses,
   ListLogsData,
   ListLogsErrors,
   ListLogsResponses,
@@ -145,6 +154,12 @@ import type {
   SetCampaignSolverData,
   SetCampaignSolverErrors,
   SetCampaignSolverResponses,
+  SetCampaignStatusData,
+  SetCampaignStatusErrors,
+  SetCampaignStatusResponses,
+  SkipNeurocommentPairData,
+  SkipNeurocommentPairErrors,
+  SkipNeurocommentPairResponses,
   SpamCheckAccountData,
   SpamCheckAccountErrors,
   SpamCheckAccountResponses,
@@ -257,6 +272,19 @@ export const listAccounts = <ThrowOnError extends boolean = false>(
 ) =>
   (options?.client ?? client).get<ListAccountsResponses, ListAccountsErrors, ThrowOnError>({
     url: '/api/v1/accounts',
+    ...options,
+  });
+
+/**
+ * Account Stats
+ *
+ * Fleet-wide status counts for the Accounts page tiles (all pages, not one).
+ */
+export const accountStats = <ThrowOnError extends boolean = false>(
+  options?: Options<AccountStatsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<AccountStatsResponses, AccountStatsErrors, ThrowOnError>({
+    url: '/api/v1/accounts/stats',
     ...options,
   });
 
@@ -1012,6 +1040,76 @@ export const listCampaignChallenges = <ThrowOnError extends boolean = false>(
     ListCampaignChallengesErrors,
     ThrowOnError
   >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges', ...options });
+
+/**
+ * Count Campaign Challenge Outcomes
+ *
+ * Challenge-outcome counters (solved/failed/give_up/pending) across a campaign (#148).
+ */
+export const countCampaignChallengeOutcomes = <ThrowOnError extends boolean = false>(
+  options: Options<CountCampaignChallengeOutcomesData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    CountCampaignChallengeOutcomesResponses,
+    CountCampaignChallengeOutcomesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges/counts', ...options });
+
+/**
+ * List Channel Challenges
+ *
+ * Recent unsolved bot-challenges for one channel — the work-view drill-down (#148).
+ */
+export const listChannelChallenges = <ThrowOnError extends boolean = false>(
+  options: Options<ListChannelChallengesData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    ListChannelChallengesResponses,
+    ListChannelChallengesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/channels/challenges', ...options });
+
+/**
+ * Skip Pair
+ *
+ * Operator "Skip channel for this account": the engine never selects the pair (#148).
+ */
+export const skipNeurocommentPair = <ThrowOnError extends boolean = false>(
+  options: Options<SkipNeurocommentPairData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SkipNeurocommentPairResponses,
+    SkipNeurocommentPairErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/skip',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Campaign Status
+ *
+ * Per-campaign run/pause: flip a campaign between active and paused (#148).
+ */
+export const setCampaignStatus = <ThrowOnError extends boolean = false>(
+  options: Options<SetCampaignStatusData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetCampaignStatusResponses,
+    SetCampaignStatusErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/status',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * Get Runtime

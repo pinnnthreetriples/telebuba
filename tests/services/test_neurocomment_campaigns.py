@@ -32,8 +32,15 @@ if TYPE_CHECKING:
 
 
 @pytest.fixture(autouse=True)
-def _isolate_db(tmp_path: Path) -> None:
+def _isolate_db(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_database(tmp_path / "telebuba.db")
+
+    # By default the runtime is stopped, so a link/unlink must not touch the listener.
+    # Individual tests override this spy to assert reconcile is (or isn't) called.
+    async def _noop() -> None:
+        return None
+
+    monkeypatch.setattr(campaigns._runtime, "reconcile_if_running", _noop)
 
 
 @pytest.mark.asyncio
@@ -42,6 +49,76 @@ async def test_create_and_list_campaigns() -> None:
     assert created.name == "Promo"
     listed = await campaigns.list_campaigns()
     assert [c.campaign_id for c in listed.campaigns] == [created.campaign_id]
+
+
+@pytest.mark.asyncio
+async def test_list_campaigns_carries_per_campaign_channel_and_account_counts() -> None:
+    """Every listed campaign carries real channel/account counts (not just the selected one, #1)."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    await create_account(AccountCreate(account_id="acc-2", label="B", session_name="acc-2"))
+
+    a = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
+    b = await campaigns.create_campaign(CampaignCreate(name="B", prompt="p"))
+
+    # A: two channels, one account. B: one channel, two accounts.
+    await campaigns.link_channel(a.campaign_id, "@a1")
+    await campaigns.link_channel(a.campaign_id, "@a2")
+    await campaigns.assign_account_to_campaign(a.campaign_id, "acc-1")
+    await campaigns.link_channel(b.campaign_id, "@b1")
+    await campaigns.assign_account_to_campaign(b.campaign_id, "acc-1")
+    await campaigns.assign_account_to_campaign(b.campaign_id, "acc-2")
+
+    # A deactivated channel must not be counted.
+    await campaigns.deactivate_channel(a.campaign_id, "@a2")
+
+    by_id = {c.campaign_id: c for c in (await campaigns.list_campaigns()).campaigns}
+
+    assert by_id[a.campaign_id].channel_count == 1  # @a2 was deactivated
+    assert by_id[a.campaign_id].account_count == 1
+    assert by_id[b.campaign_id].channel_count == 1
+    assert by_id[b.campaign_id].account_count == 2
+
+
+@pytest.mark.asyncio
+async def test_link_channel_reconciles_only_when_running(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Linking a channel re-points a running listener; while stopped it does nothing (#2)."""
+    calls: list[str] = []
+
+    async def _reconcile() -> None:
+        calls.append("reconcile")
+
+    monkeypatch.setattr(campaigns._runtime, "reconcile_if_running", _reconcile)
+
+    campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@a")
+    await campaigns.deactivate_channel(campaign.campaign_id, "@a")
+
+    # Both mutations delegate the running/stopped decision to reconcile_if_running.
+    assert calls == ["reconcile", "reconcile"]
+
+
+@pytest.mark.asyncio
+async def test_set_status_persists_and_reconciles(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The status route's service persists the change and re-points a running listener (#6)."""
+    calls: list[str] = []
+
+    async def _reconcile() -> None:
+        calls.append("reconcile")
+
+    monkeypatch.setattr(campaigns._runtime, "reconcile_if_running", _reconcile)
+
+    campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
+    assert campaign.status == "active"
+
+    await campaigns.set_status(campaign.campaign_id, "paused")
+    listed = {c.campaign_id: c for c in (await campaigns.list_campaigns()).campaigns}
+    assert listed[campaign.campaign_id].status == "paused"
+
+    await campaigns.set_status(campaign.campaign_id, "active")
+    listed = {c.campaign_id: c for c in (await campaigns.list_campaigns()).campaigns}
+    assert listed[campaign.campaign_id].status == "active"
+
+    assert calls == ["reconcile", "reconcile"]
 
 
 @pytest.mark.asyncio

@@ -10,12 +10,14 @@ import {
 
 import { client } from '../client.gen';
 import {
+  accountStats,
   addAccountMusic,
   addWarmingChannels,
   assignCampaignAccount,
   assignProxy,
   checkAccount,
   checkProxy,
+  countCampaignChallengeOutcomes,
   createCampaign,
   createProxy,
   deleteAccount,
@@ -35,6 +37,7 @@ import {
   listAccounts,
   listCampaignChallenges,
   listCampaigns,
+  listChannelChallenges,
   listLogs,
   listProxies,
   listWarmedAccounts,
@@ -57,6 +60,8 @@ import {
   retryChallenge,
   setAccountPhoto,
   setCampaignSolver,
+  setCampaignStatus,
+  skipNeurocommentPair,
   spamCheckAccount,
   startNeurocomment,
   startWarming,
@@ -71,6 +76,9 @@ import {
   updateWarmingSettings,
 } from '../sdk.gen';
 import type {
+  AccountStatsData,
+  AccountStatsError,
+  AccountStatsResponse,
   AddAccountMusicData,
   AddAccountMusicError,
   AddAccountMusicResponse,
@@ -89,6 +97,9 @@ import type {
   CheckProxyData,
   CheckProxyError,
   CheckProxyResponse,
+  CountCampaignChallengeOutcomesData,
+  CountCampaignChallengeOutcomesError,
+  CountCampaignChallengeOutcomesResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
@@ -145,6 +156,9 @@ import type {
   ListCampaignsData,
   ListCampaignsError,
   ListCampaignsResponse,
+  ListChannelChallengesData,
+  ListChannelChallengesError,
+  ListChannelChallengesResponse,
   ListLogsData,
   ListLogsError,
   ListLogsResponse,
@@ -208,6 +222,12 @@ import type {
   SetCampaignSolverData,
   SetCampaignSolverError,
   SetCampaignSolverResponse,
+  SetCampaignStatusData,
+  SetCampaignStatusError,
+  SetCampaignStatusResponse,
+  SkipNeurocommentPairData,
+  SkipNeurocommentPairError,
+  SkipNeurocommentPairResponse,
   SpamCheckAccountData,
   SpamCheckAccountError,
   SpamCheckAccountResponse,
@@ -470,6 +490,33 @@ export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>)
       queryKey: listAccountsInfiniteQueryKey(options),
     },
   );
+
+export const accountStatsQueryKey = (options?: Options<AccountStatsData>) =>
+  createQueryKey('accountStats', options);
+
+/**
+ * Account Stats
+ *
+ * Fleet-wide status counts for the Accounts page tiles (all pages, not one).
+ */
+export const accountStatsOptions = (options?: Options<AccountStatsData>) =>
+  queryOptions<
+    AccountStatsResponse,
+    AccountStatsError,
+    AccountStatsResponse,
+    ReturnType<typeof accountStatsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await accountStats({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: accountStatsQueryKey(options),
+  });
 
 /**
  * Check Account
@@ -1702,6 +1749,121 @@ export const listCampaignChallengesOptions = (options: Options<ListCampaignChall
     },
     queryKey: listCampaignChallengesQueryKey(options),
   });
+
+export const countCampaignChallengeOutcomesQueryKey = (
+  options: Options<CountCampaignChallengeOutcomesData>,
+) => createQueryKey('countCampaignChallengeOutcomes', options);
+
+/**
+ * Count Campaign Challenge Outcomes
+ *
+ * Challenge-outcome counters (solved/failed/give_up/pending) across a campaign (#148).
+ */
+export const countCampaignChallengeOutcomesOptions = (
+  options: Options<CountCampaignChallengeOutcomesData>,
+) =>
+  queryOptions<
+    CountCampaignChallengeOutcomesResponse,
+    CountCampaignChallengeOutcomesError,
+    CountCampaignChallengeOutcomesResponse,
+    ReturnType<typeof countCampaignChallengeOutcomesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await countCampaignChallengeOutcomes({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: countCampaignChallengeOutcomesQueryKey(options),
+  });
+
+export const listChannelChallengesQueryKey = (options: Options<ListChannelChallengesData>) =>
+  createQueryKey('listChannelChallenges', options);
+
+/**
+ * List Channel Challenges
+ *
+ * Recent unsolved bot-challenges for one channel — the work-view drill-down (#148).
+ */
+export const listChannelChallengesOptions = (options: Options<ListChannelChallengesData>) =>
+  queryOptions<
+    ListChannelChallengesResponse,
+    ListChannelChallengesError,
+    ListChannelChallengesResponse,
+    ReturnType<typeof listChannelChallengesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChannelChallenges({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChannelChallengesQueryKey(options),
+  });
+
+/**
+ * Skip Pair
+ *
+ * Operator "Skip channel for this account": the engine never selects the pair (#148).
+ */
+export const skipNeurocommentPairMutation = (
+  options?: Partial<Options<SkipNeurocommentPairData>>,
+): UseMutationOptions<
+  SkipNeurocommentPairResponse,
+  SkipNeurocommentPairError,
+  Options<SkipNeurocommentPairData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SkipNeurocommentPairResponse,
+    SkipNeurocommentPairError,
+    Options<SkipNeurocommentPairData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await skipNeurocommentPair({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Campaign Status
+ *
+ * Per-campaign run/pause: flip a campaign between active and paused (#148).
+ */
+export const setCampaignStatusMutation = (
+  options?: Partial<Options<SetCampaignStatusData>>,
+): UseMutationOptions<
+  SetCampaignStatusResponse,
+  SetCampaignStatusError,
+  Options<SetCampaignStatusData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetCampaignStatusResponse,
+    SetCampaignStatusError,
+    Options<SetCampaignStatusData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setCampaignStatus({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 export const getNeurocommentRuntimeQueryKey = (options?: Options<GetNeurocommentRuntimeData>) =>
   createQueryKey('getNeurocommentRuntime', options);

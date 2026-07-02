@@ -15,6 +15,7 @@ from core.db import (
 from schemas.accounts import (
     AccountList,
     AccountsTableState,
+    AccountStats,
     AccountSummary,
     AccountTableRow,
     health_for_status,
@@ -27,6 +28,9 @@ if TYPE_CHECKING:
 
 _PERMANENT_ISSUES = {"unauthorized", "session_error", "account_error"}
 _TEMPORARY_ISSUES = {"flood_wait", "network_error", "proxy_error", "unknown_error"}
+# Design stat-tile buckets (mirror the SPA's accountDesignStatus). Everything not
+# listed here falls into "problem" — the banned/errored catch-all.
+_STATS_NEEDS_CODE = {"unauthorized", "new"}
 _SECONDS_PER_MINUTE = 60
 _SECONDS_PER_HOUR = 3600
 _SECONDS_PER_DAY = 86_400
@@ -132,6 +136,29 @@ async def list_listener_accounts() -> AccountList:
     accounts = await list_accounts()
     return AccountList(
         accounts=[a for a in accounts.accounts if health_for_status(a.status) == "ok"],
+    )
+
+
+async def account_stats() -> AccountStats:
+    """Fleet-wide status counts for the Accounts page tiles.
+
+    Counts the whole table in one grouped SQL query (``account_summary_counts``),
+    so the tiles are independent of which page the UI currently shows.
+    """
+    return _stats_from_counts(await account_summary_counts())
+
+
+def _stats_from_counts(counts: dict[str, int]) -> AccountStats:
+    return AccountStats(
+        total=sum(counts.values()),
+        active=counts.get("alive", 0),
+        idle=counts.get("flood_wait", 0),
+        needs_code=sum(counts.get(status, 0) for status in _STATS_NEEDS_CODE),
+        problem=sum(
+            count
+            for status, count in counts.items()
+            if status not in {"alive", "flood_wait"} and status not in _STATS_NEEDS_CODE
+        ),
     )
 
 

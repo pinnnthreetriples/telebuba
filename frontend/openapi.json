@@ -255,6 +255,56 @@
         }
       }
     },
+    "/api/v1/accounts/stats": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Account Stats",
+        "description": "Fleet-wide status counts for the Accounts page tiles (all pages, not one).",
+        "operationId": "accountStats",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountStats"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/check": {
       "post": {
         "tags": [
@@ -3040,6 +3090,262 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/challenges/counts": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Count Campaign Challenge Outcomes",
+        "description": "Challenge-outcome counters (solved/failed/give_up/pending) across a campaign (#148).",
+        "operationId": "countCampaignChallengeOutcomes",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Since"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeOutcomeCounts"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/channels/challenges": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "List Channel Challenges",
+        "description": "Recent unsolved bot-challenges for one channel \u2014 the work-view drill-down (#148).",
+        "operationId": "listChannelChallenges",
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "minLength": 1,
+              "title": "Channel"
+            }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 20,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChallengeRowList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/skip": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Skip Pair",
+        "description": "Operator \"Skip channel for this account\": the engine never selects the pair (#148).",
+        "operationId": "skipNeurocommentPair",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RetryPairRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/status": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Set Campaign Status",
+        "description": "Per-campaign run/pause: flip a campaign between active and paused (#148).",
+        "operationId": "setCampaignStatus",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetCampaignStatusRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/runtime": {
       "get": {
         "tags": [
@@ -4032,6 +4338,43 @@
         ],
         "title": "AccountRead"
       },
+      "AccountStats": {
+        "properties": {
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "default": 0
+          },
+          "active": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Active",
+            "default": 0
+          },
+          "idle": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Idle",
+            "default": 0
+          },
+          "needs_code": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Needs Code",
+            "default": 0
+          },
+          "problem": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Problem",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "AccountStats",
+        "description": "Fleet-wide status roll-up for the Accounts page stat tiles.\n\nCounts span the whole ``accounts`` table (a single grouped SQL query), not\nthe currently-loaded page, so the tiles stay correct across pagination. The\nbuckets mirror the design's status vocabulary (``accountDesignStatus``):\n\n- ``active``    \u2014 ``alive``.\n- ``idle``      \u2014 ``flood_wait`` (spam-limited, the \"idle\" tile).\n- ``needs_code`` \u2014 ``unauthorized`` / ``new`` (re-auth by login code).\n- ``problem``   \u2014 every other non-alive status (banned / session / errors)."
+      },
       "ActionResult": {
         "properties": {
           "status": {
@@ -4341,6 +4684,33 @@
         "type": "object",
         "title": "CampaignList",
         "description": "Wrapper so callers never receive a raw list (non-negotiable #2)."
+      },
+      "ChallengeOutcomeCounts": {
+        "properties": {
+          "solved": {
+            "type": "integer",
+            "title": "Solved",
+            "default": 0
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed",
+            "default": 0
+          },
+          "give_up": {
+            "type": "integer",
+            "title": "Give Up",
+            "default": 0
+          },
+          "pending": {
+            "type": "integer",
+            "title": "Pending",
+            "default": 0
+          }
+        },
+        "type": "object",
+        "title": "ChallengeOutcomeCounts",
+        "description": "The four header counters over the challenge audit table for a time window (#148)."
       },
       "ChallengeRow": {
         "properties": {
@@ -4780,6 +5150,18 @@
               }
             ],
             "title": "Solver Enabled"
+          },
+          "channel_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Channel Count",
+            "default": 0
+          },
+          "account_count": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Account Count",
+            "default": 0
           }
         },
         "type": "object",
@@ -4792,7 +5174,7 @@
           "updated_at"
         ],
         "title": "NeurocommentCampaign",
-        "description": "One row of ``neurocomment_campaigns``."
+        "description": "One row of ``neurocomment_campaigns``.\n\n``channel_count`` / ``account_count`` are populated on the campaigns-list payload\nso every card (not just the selected one) can show real link counts; they are 0\non a bare row read (``fetch_campaign``)."
       },
       "NeurocommentChannelRow": {
         "properties": {
@@ -4855,14 +5237,20 @@
               }
             ],
             "title": "Listener Account Id"
+          },
+          "log_limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Log Limit"
           }
         },
         "type": "object",
         "required": [
-          "running"
+          "running",
+          "log_limit"
         ],
         "title": "NeurocommentRuntimeStatus",
-        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: the engine is\none fleet listener (not per-campaign), so the persisted listener account id\nbeing set means the engine is live. ``active_channels`` is the size of the\nwatch set across all active campaigns (what the listener actually watches)."
+        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: the engine is\none fleet listener (not per-campaign), so the persisted listener account id\nbeing set means the engine is live. ``active_channels`` is the size of the\nwatch set across all active campaigns (what the listener actually watches).\n``log_limit`` is the operator-configured activity-log row cap the SPA reads\ninstead of hardcoding one (from ``settings.neurocomment.log_limit``)."
       },
       "NeurocommentSettings": {
         "properties": {
@@ -5557,6 +5945,25 @@
         "title": "RetryPairRequest",
         "description": "Operator retry of one (account, channel) challenge \u2014 the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb."
       },
+      "SetCampaignStatusRequest": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "active",
+              "paused"
+            ],
+            "title": "Status"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "SetCampaignStatusRequest",
+        "description": "Per-campaign run/pause: flip a campaign between ``active`` and ``paused`` (#148)."
+      },
       "SolverToggleRequest": {
         "properties": {
           "enabled": {
@@ -6247,17 +6654,6 @@
             ],
             "title": "Phase"
           },
-          "phase_label": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Phase Label"
-          },
           "daily_cap": {
             "type": "integer",
             "minimum": 0.0,
@@ -6389,6 +6785,12 @@
           },
           "summary": {
             "$ref": "#/components/schemas/WarmingSummary"
+          },
+          "card_log_limit": {
+            "type": "integer",
+            "minimum": 1.0,
+            "title": "Card Log Limit",
+            "default": 30
           }
         },
         "type": "object",
