@@ -675,8 +675,6 @@
       "openSettings": "Open settings",
       "behavior": "Behaviour",
       "limits": "Limits & safety",
-      "quietLabel": "Quiet hours (sleep)",
-      "quietHint": "Timezone is taken from the account locale",
       "scopeOne": "This one",
       "scopeAll": "All warming",
       "save": "Save",
