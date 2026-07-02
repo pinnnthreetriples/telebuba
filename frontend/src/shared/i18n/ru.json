@@ -363,6 +363,50 @@
       "next": "Вперёд"
     }
   },
+  "logEvent": {
+    "neurocomment_posted": "Комментарий опубликован",
+    "neurocomment_post_failed": "Ошибка публикации",
+    "neurocomment_post_skipped": "Пост пропущен",
+    "neurocomment_post_cooldown": "Пауза между комментариями",
+    "neurocomment_post_gated": "Комментарий отложен по лимиту",
+    "neurocomment_generation_exhausted": "Не удалось сгенерировать текст",
+    "neurocomment_no_account_available": "Нет доступного аккаунта",
+    "neurocomment_no_campaign": "Нет подходящей кампании",
+    "neurocomment_channel_cooled": "Канал на паузе",
+    "neurocomment_channel_backoff": "Пауза по каналу",
+    "neurocomment_challenge_backoff": "Пауза после капчи",
+    "neurocomment_pipeline_failed": "Сбой конвейера",
+    "neurocomment_onboard_resolve_failed": "Не удалось найти канал",
+    "neurocomment_onboard_retry_later": "Онбординг отложен",
+    "neurocomment_onboard_pair_failed": "Не удалось привязать аккаунт к каналу",
+    "neurocomment_onboard_spam_probe_failed": "Ошибка проверки на спам",
+    "neurocomment_listener_join_failed": "Слушатель не вступил в канал",
+    "neurocomment_runtime_reconciled": "Движок восстановлен",
+    "neurocomment_start_onboard_failed": "Ошибка запуска онбординга",
+    "neurocomment_sweep_failed": "Ошибка проверки удалённых комментариев",
+    "neurocomment_settings_saved": "Настройки сохранены",
+    "warming_started": "Прогрев запущен",
+    "warming_stopped": "Прогрев остановлен",
+    "warming_complete": "Прогрев завершён",
+    "warming_target_reached": "Цель прогрева достигнута",
+    "warming_cycle_completed": "Цикл прогрева завершён",
+    "warming_cycle_not_ready": "Цикл прогрева ещё не готов",
+    "warming_no_channels": "Нет каналов для прогрева",
+    "warming_subscribe": "Подписка на канал",
+    "warming_channels_added": "Каналы добавлены",
+    "warming_channel_removed": "Канал удалён",
+    "warming_channel_limit_reached": "Достигнут лимит каналов",
+    "warming_chat_filtered": "Сообщение отфильтровано",
+    "warming_chat_duplicate": "Дубликат сообщения",
+    "warming_dialogue_opened": "Диалог начат",
+    "warming_dialogue_reply": "Ответ в диалоге",
+    "warming_dialogue_faded": "Диалог завершён",
+    "warming_promoted_to_neurocomment": "Аккаунт передан в нейрокомментинг",
+    "warming_unpromoted_from_neurocomment": "Аккаунт возвращён из нейрокомментинга",
+    "warming_quarantine_recovered": "Аккаунт восстановлен после карантина",
+    "warming_quarantine_exhausted": "Карантин исчерпан",
+    "warming_settings_saved": "Настройки прогрева сохранены"
+  },
   "neurocomment": {
     "title": "Нейрокомментинг",
     "runtime": {
@@ -388,7 +432,8 @@
       "campaigns": "Кампаний",
       "channels": "Каналов",
       "accounts": "Аккаунтов",
-      "comments": "Комментариев"
+      "comments": "Комментариев",
+      "errors": "ошибок"
     },
     "log": {
       "title": "Лог событий",
@@ -431,6 +476,7 @@
       "resume": "Возобновить",
       "edit": "Изменить аккаунт",
       "remove": "Снять слушателя",
+      "actions": "Действия",
       "activeCampaigns": "активных кампаний"
     },
     "captcha": {
@@ -445,6 +491,7 @@
       "pause": "Поставить на паузу",
       "editPrompt": "Редактировать промт",
       "delete": "Удалить кампанию",
+      "actions": "Действия",
       "meta": "{{channels}} каналов · {{accounts}} аккаунтов",
       "status": {
         "active": "Активна",
@@ -514,6 +561,8 @@
       "neuroAccounts": {
         "title": "Аккаунты в нейрокомментинге",
         "sub": "{{count}} аккаунтов · назначьте в кампанию или уберите из работы",
+        "channelLabel": "Канал аккаунта",
+        "channelUnsupported": "не поддерживается",
         "assign": "Добавить в кампанию",
         "remove": "Убрать из нейрокомментинга",
         "removeTitle": "Убрать {{phone}} из нейрокомментинга?",

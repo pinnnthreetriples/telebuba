@@ -27,6 +27,8 @@ const CAMPAIGN = {
   status: 'active',
   created_at: 'now',
   updated_at: 'now',
+  channel_count: 3,
+  account_count: 5,
 };
 
 const BOARD = {
@@ -180,18 +182,16 @@ test('the gear in the board header opens the accounts modal', async () => {
   expect(screen.getByText('Готово')).toBeInTheDocument();
 });
 
-test('assigning an unpaired board account calls the assign endpoint and shows feedback', async () => {
+test('an idle account (loaded but not linked) can be assigned to the campaign', async () => {
+  // acc-1 is on the board (linked); acc-2 is loaded but NOT linked → idle. The
+  // modal must surface the idle account with an "assign" button (finding #1).
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const url = new URL(request.url);
     if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
       return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
     }
-    if (url.pathname.endsWith('/board')) {
-      return Promise.resolve(
-        jsonResponse({ ...BOARD, accounts: [{ ...BOARD.accounts[0]!, readiness: [] }] }),
-      );
-    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
     if (url.pathname === '/api/v1/neurocomment/runtime') {
       return Promise.resolve(
         jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
@@ -208,6 +208,13 @@ test('assigning an unpaired board account calls the assign endpoint and shows fe
               created_at: 'n',
               updated_at: 'n',
             },
+            {
+              account_id: 'acc-2',
+              label: '+79261119999',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
           ],
           next_cursor: null,
         }),
@@ -220,7 +227,10 @@ test('assigning an unpaired board account calls the assign endpoint and shows fe
     expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
   });
   await userEvent.click(screen.getByLabelText('Аккаунты в нейрокомментинге'));
-  await userEvent.click(screen.getByText('Добавить в кампанию'));
+  // The idle account row shows an assign button (only idle accounts get one).
+  const assign = screen.getByText('Добавить в кампанию');
+  expect(assign).toBeInTheDocument();
+  await userEvent.click(assign);
   await waitFor(() => {
     const assigned = vi
       .mocked(fetch)
@@ -291,15 +301,16 @@ test('listener pause/edit/remove actions fire their handlers', async () => {
   await userEvent.click(screen.getByTitle('Изменить аккаунт'));
   await userEvent.click(screen.getByText('Отмена'));
 
-  // Remove clears the local listener and stops the runtime again.
-  const stopCalls = () =>
-    vi
-      .mocked(fetch)
-      .mock.calls.filter(([input]) => (input as Request).url.endsWith('/neurocomment/stop')).length;
-  const before = stopCalls();
+  // Remove is distinct from pause: it clears the listener via the dedicated
+  // clear endpoint (finding #4), not /neurocomment/stop.
   await userEvent.click(screen.getByTitle('Снять слушателя'));
   await waitFor(() => {
-    expect(stopCalls()).toBeGreaterThan(before);
+    const cleared = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) =>
+        (input as Request).url.endsWith('/neurocomment/listener/clear'),
+      );
+    expect(cleared).toBe(true);
   });
 });
 
@@ -506,4 +517,205 @@ test('the create-campaign modal closes via cancel', async () => {
   await waitFor(() => {
     expect(screen.queryByText('Создать кампанию')).not.toBeInTheDocument();
   });
+});
+
+test('a campaign card shows its OWN channel/account counts, not the board totals', async () => {
+  // Finding #3: counts come from the campaign payload (3 / 5), not the board.
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('Promo').length).toBeGreaterThan(0);
+  });
+  expect(screen.getByText('3 каналов · 5 аккаунтов')).toBeInTheDocument();
+});
+
+test('per-campaign run/pause calls setCampaignStatus, not the global stop', async () => {
+  // Finding #2: an active campaign's pause button flips its status via the
+  // status endpoint; it must NOT hit /neurocomment/stop.
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('Promo').length).toBeGreaterThan(0);
+  });
+  // The active campaign card exposes a "pause" action (title from campaign.status).
+  await userEvent.click(screen.getAllByTitle('Поставить на паузу')[0]!);
+  await waitFor(() => {
+    const setStatus = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return request.url.endsWith('/campaigns/c1/status') && request.method === 'POST';
+    });
+    expect(setStatus).toBe(true);
+  });
+  const stopped = vi
+    .mocked(fetch)
+    .mock.calls.some(([input]) => (input as Request).url.endsWith('/neurocomment/stop'));
+  expect(stopped).toBe(false);
+});
+
+test('the campaign gear toggles the slide-out actions', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('Promo').length).toBeGreaterThan(0);
+  });
+  const gear = screen.getAllByLabelText('Действия')[0]!;
+  expect(gear).toHaveAttribute('aria-expanded', 'false');
+  await userEvent.click(gear);
+  expect(gear).toHaveAttribute('aria-expanded', 'true');
+});
+
+test('after pausing, the listener strip still shows the remembered account', async () => {
+  // Finding #4: runtime returns listener_account_id even when running is false,
+  // so the strip shows the paused listener rather than the "choose" dropdown.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: 'acc-1' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('На паузе')).toBeInTheDocument();
+  });
+  // Not the empty "choose an account" affordance.
+  expect(screen.queryByText('Выберите аккаунт…')).not.toBeInTheDocument();
+});
+
+test('the pipeline stats include the errors odometer', async () => {
+  routeApi();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  expect(screen.getByText('ошибок')).toBeInTheDocument();
+});
+
+test('the captcha queue shows the account phone, not the raw id', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              account_id: 'acc-1',
+              label: '+79261112233',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    if (url.pathname.endsWith('/challenges')) {
+      return Promise.resolve(
+        jsonResponse({
+          rows: [
+            {
+              account_id: 'acc-1',
+              channel: '@x',
+              raw_text: 'cap',
+              outcome: 'failed',
+              decided_at: '2026-06-30T12:00:00+00:00',
+            },
+          ],
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Пройти')).toBeInTheDocument();
+  });
+  // Phone from the accounts list, not the raw "acc-1" id.
+  expect(screen.getAllByText('+79261112233').length).toBeGreaterThan(0);
+  expect(screen.queryByText('acc-1')).not.toBeInTheDocument();
+});
+
+test('the neuro log localizes a known event code and falls back for an unknown one', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: 'now',
+              level: 'INFO',
+              status: 'success',
+              event: 'neurocomment_posted',
+            },
+            {
+              id: 2,
+              created_at: 'now',
+              level: 'INFO',
+              status: 'success',
+              event: 'some_unmapped_code',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Комментарий опубликован')).toBeInTheDocument();
+  });
+  // Unmapped code renders verbatim.
+  expect(screen.getByText('some_unmapped_code')).toBeInTheDocument();
+});
+
+test('the SSE callback invalidates only this page keys, not the whole cache', async () => {
+  routeApi();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const spy = vi.spyOn(queryClient, 'invalidateQueries');
+  render(<QueryClientProvider client={queryClient}>{<NeurocommentPage />}</QueryClientProvider>);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  spy.mockClear();
+  act(() => {
+    lastEventSource()?.emit({ id: 1, event: 'neurocomment_posted', status: 'success' });
+  });
+  await waitFor(() => {
+    expect(spy).toHaveBeenCalled();
+  });
+  // Every SSE-driven invalidation is scoped by a predicate (not a bare call).
+  expect(
+    spy.mock.calls.every(([arg]) => typeof arg === 'object' && arg !== null && 'predicate' in arg),
+  ).toBe(true);
 });

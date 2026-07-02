@@ -1,4 +1,5 @@
 export { cn } from './cn';
+export { eventLabel } from './eventLabel';
 export { formatLocalTime } from './formatTime';
 export { queryClient } from './query-client';
 export { useLogEventStream } from './useLogEventStream';

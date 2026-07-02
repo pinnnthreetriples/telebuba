@@ -362,6 +362,50 @@
       "next": "Next"
     }
   },
+  "logEvent": {
+    "neurocomment_posted": "Comment posted",
+    "neurocomment_post_failed": "Comment failed",
+    "neurocomment_post_skipped": "Post skipped",
+    "neurocomment_post_cooldown": "Cooldown between comments",
+    "neurocomment_post_gated": "Comment held by limit",
+    "neurocomment_generation_exhausted": "Text generation failed",
+    "neurocomment_no_account_available": "No account available",
+    "neurocomment_no_campaign": "No matching campaign",
+    "neurocomment_channel_cooled": "Channel on cooldown",
+    "neurocomment_channel_backoff": "Channel back-off",
+    "neurocomment_challenge_backoff": "Back-off after captcha",
+    "neurocomment_pipeline_failed": "Pipeline failed",
+    "neurocomment_onboard_resolve_failed": "Could not resolve channel",
+    "neurocomment_onboard_retry_later": "Onboarding deferred",
+    "neurocomment_onboard_pair_failed": "Could not pair account to channel",
+    "neurocomment_onboard_spam_probe_failed": "Spam probe failed",
+    "neurocomment_listener_join_failed": "Listener failed to join channel",
+    "neurocomment_runtime_reconciled": "Engine reconciled",
+    "neurocomment_start_onboard_failed": "Onboarding start failed",
+    "neurocomment_sweep_failed": "Deleted-comment sweep failed",
+    "neurocomment_settings_saved": "Settings saved",
+    "warming_started": "Warming started",
+    "warming_stopped": "Warming stopped",
+    "warming_complete": "Warming complete",
+    "warming_target_reached": "Warming target reached",
+    "warming_cycle_completed": "Warming cycle completed",
+    "warming_cycle_not_ready": "Warming cycle not ready",
+    "warming_no_channels": "No channels to warm",
+    "warming_subscribe": "Subscribed to channel",
+    "warming_channels_added": "Channels added",
+    "warming_channel_removed": "Channel removed",
+    "warming_channel_limit_reached": "Channel limit reached",
+    "warming_chat_filtered": "Message filtered",
+    "warming_chat_duplicate": "Duplicate message",
+    "warming_dialogue_opened": "Dialogue opened",
+    "warming_dialogue_reply": "Dialogue reply",
+    "warming_dialogue_faded": "Dialogue faded",
+    "warming_promoted_to_neurocomment": "Account promoted to neurocommenting",
+    "warming_unpromoted_from_neurocomment": "Account returned from neurocommenting",
+    "warming_quarantine_recovered": "Account recovered from quarantine",
+    "warming_quarantine_exhausted": "Quarantine exhausted",
+    "warming_settings_saved": "Warming settings saved"
+  },
   "neurocomment": {
     "title": "Neurocomment",
     "runtime": {
@@ -387,7 +431,8 @@
       "campaigns": "Campaigns",
       "channels": "Channels",
       "accounts": "Accounts",
-      "comments": "Comments"
+      "comments": "Comments",
+      "errors": "errors"
     },
     "log": {
       "title": "Event log",
@@ -430,6 +475,7 @@
       "resume": "Resume",
       "edit": "Change account",
       "remove": "Remove listener",
+      "actions": "Actions",
       "activeCampaigns": "active campaigns"
     },
     "captcha": {
@@ -444,6 +490,7 @@
       "pause": "Pause",
       "editPrompt": "Edit prompt",
       "delete": "Delete campaign",
+      "actions": "Actions",
       "meta": "{{channels}} channels · {{accounts}} accounts",
       "status": {
         "active": "Active",
@@ -513,6 +560,8 @@
       "neuroAccounts": {
         "title": "Accounts in neurocommenting",
         "sub": "{{count}} accounts · assign to the campaign or remove from work",
+        "channelLabel": "Account channel",
+        "channelUnsupported": "not supported",
         "assign": "Add to campaign",
         "remove": "Remove from neurocommenting",
         "removeTitle": "Remove {{phone}} from neurocommenting?",

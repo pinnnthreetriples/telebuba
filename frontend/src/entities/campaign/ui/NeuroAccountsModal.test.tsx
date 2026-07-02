@@ -10,6 +10,7 @@ const ACCOUNTS: NeuroAccountRow[] = [
   { account_id: 'a1', phone: '+79990000001', channel: '@crypto' },
   { account_id: 'a2', phone: '+79990000002', channel: null },
 ];
+const CHANNELS = ['@crypto', '@news'];
 
 test('assigns an idle account, confirms removal, and closes', async () => {
   const onClose = vi.fn();
@@ -18,14 +19,15 @@ test('assigns an idle account, confirms removal, and closes', async () => {
   render(
     <NeuroAccountsModal
       accounts={ACCOUNTS}
+      channels={CHANNELS}
       onClose={onClose}
       onPick={onPick}
       onRemove={onRemove}
     />,
   );
   expect(screen.getByText('Аккаунты в нейрокомментинге')).toBeInTheDocument();
-  // an already-assigned account shows its real channel as a static label,
-  // not an editable dropdown (there's no backend concept of picking one)
+  // an already-assigned account shows its channel in a dropdown of the
+  // campaign's channels
   expect(screen.getByText('@crypto')).toBeInTheDocument();
 
   // assign the idle account to the campaign
@@ -40,6 +42,26 @@ test('assigns an idle account, confirms removal, and closes', async () => {
 
   await userEvent.click(screen.getByText('Готово'));
   expect(onClose).toHaveBeenCalledTimes(1);
+});
+
+test('a linked account renders a disabled channel dropdown with an unsupported note', () => {
+  // Finding #12: the design shows a per-account channel dropdown, but the backend
+  // has no per-account→channel pin, so it is rendered disabled (no fake persistence).
+  render(
+    <NeuroAccountsModal
+      accounts={ACCOUNTS}
+      channels={CHANNELS}
+      onClose={vi.fn()}
+      onPick={vi.fn()}
+      onRemove={vi.fn()}
+    />,
+  );
+  const select = screen.getByLabelText('Канал аккаунта');
+  expect(select).toBeDisabled();
+  // lists the campaign's channels
+  const options = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+  expect(options).toEqual(['@crypto', '@news']);
+  expect(screen.getByText('не поддерживается')).toBeInTheDocument();
 });
 
 test('empty list shows the empty hint', () => {

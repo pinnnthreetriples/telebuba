@@ -11,11 +11,13 @@ export interface NeuroAccountRow {
 
 function AccountRow({
   account,
+  channels,
   onPick,
   onRemove,
   result,
 }: {
   account: NeuroAccountRow;
+  channels: string[];
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
   result?: 'ok' | 'err';
@@ -30,9 +32,29 @@ function AccountRow({
         {account.phone}
       </span>
       {account.channel !== null ? (
-        <span className="w-[180px] shrink-0 truncate rounded-[9px] border border-line-input bg-[#f6f5f2] px-[11px] py-[8px] text-[12.5px] text-ink-subtle">
-          {account.channel}
-        </span>
+        // Design gives each linked account a ~180px channel dropdown to redirect
+        // it to another campaign channel. The backend has NO per-account→channel
+        // pin, so the picker is rendered disabled with an inline unsupported note
+        // rather than faking persistence (auto cross-join owns the pairing).
+        <div className="flex w-[180px] shrink-0 flex-col gap-[3px]">
+          <select
+            disabled
+            value={account.channel}
+            aria-label={t('neurocomment.modal.neuroAccounts.channelLabel')}
+            className="w-full truncate rounded-[9px] border border-line-input bg-[#f6f5f2] px-[11px] py-[8px] text-[12.5px] text-ink-subtle disabled:cursor-not-allowed"
+          >
+            {(channels.includes(account.channel) ? channels : [account.channel, ...channels]).map(
+              (channel) => (
+                <option key={channel} value={channel}>
+                  {channel}
+                </option>
+              ),
+            )}
+          </select>
+          <span className="text-[10px] leading-none text-ink-subtle">
+            {t('neurocomment.modal.neuroAccounts.channelUnsupported')}
+          </span>
+        </div>
       ) : (
         <button
           type="button"
@@ -82,19 +104,22 @@ function AccountRow({
 }
 
 // Design modal: neuro-accounts (L1460-1495) — manage every account in
-// neurocommenting: assign an idle account to the campaign, or remove one.
-// Channel pairing itself is automatic (onboard_campaign cross-joins every
-// assigned account against the campaign's channels) — there is no backend
-// concept of pinning one account to one channel, so this only offers assign /
-// remove, not a per-channel picker.
+// neurocommenting: assign an idle account to the campaign, redirect a linked
+// account's channel, or remove one. Channel pairing itself is automatic
+// (onboard_campaign cross-joins every assigned account against the campaign's
+// channels) — there is no backend concept of pinning one account to one channel,
+// so the per-channel picker is rendered disabled (design parity) rather than
+// faking persistence; see the channelUnsupported note.
 export function NeuroAccountsModal({
   accounts,
+  channels = [],
   onClose,
   onPick,
   onRemove,
   feedback = {},
 }: {
   accounts: NeuroAccountRow[];
+  channels?: string[];
   onClose: () => void;
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
@@ -134,6 +159,7 @@ export function NeuroAccountsModal({
             <AccountRow
               key={account.account_id}
               account={account}
+              channels={channels}
               onPick={onPick}
               onRemove={onRemove}
               result={feedback[account.account_id]}
