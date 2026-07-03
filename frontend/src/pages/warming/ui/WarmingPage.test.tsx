@@ -103,11 +103,17 @@ test('disables warming for a not-ready account and shows the reason', async () =
   expect(blocked.getAttribute('title')).toBe('нет прокси');
 });
 
-test('shows real trust, flag and proxy type on a ready card', async () => {
+test('ready card: phone flag sits with the number, proxy flag with the proxy type', async () => {
   const board: WarmingBoardState = {
     ...BOARD,
     idle: [
-      { ...account('idle-2', 'idle'), trust_score: 73, phone_country: 'RU', proxy_type: 'https' },
+      {
+        ...account('idle-2', 'idle'),
+        trust_score: 73,
+        phone_country: 'RU',
+        proxy_country: 'ID',
+        proxy_type: 'https',
+      },
     ],
   };
   vi.mocked(fetch).mockImplementation((input) => {
@@ -115,12 +121,20 @@ test('shows real trust, flag and proxy type on a ready card', async () => {
     if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
     return Promise.resolve(jsonResponse({}));
   });
-  renderWithClient(<WarmingPage />);
+  const { container } = renderWithClient(<WarmingPage />);
   await waitFor(() => {
     expect(screen.getByText('idle-2')).toBeInTheDocument();
   });
   expect(screen.getByText('73')).toBeInTheDocument();
   expect(screen.getByText('HTTPS')).toBeInTheDocument();
+  // Two distinct flags: the phone country next to the number, the proxy exit
+  // country next to the proxy type (not both crammed by the proxy label).
+  const phoneFlag = container.querySelector('.fi-ru');
+  const proxyFlag = container.querySelector('.fi-id');
+  expect(phoneFlag).not.toBeNull();
+  expect(proxyFlag).not.toBeNull();
+  expect(phoneFlag?.parentElement?.textContent).toContain('idle-2');
+  expect(proxyFlag?.parentElement?.textContent).toContain('HTTPS');
 });
 
 test('shows graduated accounts and wires return-to-warming + navigate', async () => {

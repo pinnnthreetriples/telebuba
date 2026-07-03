@@ -237,6 +237,7 @@ export function WarmingPage() {
                   const trust = account.trust_score;
                   const tColor = trust != null ? trustColor(trust) : '#9a9893';
                   const cc = account.phone_country?.toLowerCase() ?? null;
+                  const pc = account.proxy_country?.toLowerCase() ?? null;
                   const ptype = account.proxy_type;
                   const ready = account.readiness?.ready ?? false;
                   const blockers = (account.readiness?.reasons ?? [])
@@ -254,8 +255,15 @@ export function WarmingPage() {
                         {mono(account.phone ?? account.label ?? account.account_id)}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <div className="truncate text-[13px] font-semibold">
-                          {account.phone ?? account.label ?? account.account_id}
+                        <div className="flex items-center gap-[5px]">
+                          <span className="truncate text-[13px] font-semibold">
+                            {account.phone ?? account.label ?? account.account_id}
+                          </span>
+                          {cc ? (
+                            <span
+                              className={`fi fi-${cc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                            />
+                          ) : null}
                         </div>
                         <div className="mt-[2px] flex items-center gap-[6px]">
                           <svg
@@ -275,18 +283,18 @@ export function WarmingPage() {
                           <span className="text-[11px] font-semibold" style={{ color: tColor }}>
                             {trust ?? '—'}
                           </span>
-                          {cc ? (
+                          {ptype ? (
                             <>
                               <span className="text-[11px] text-line-strong">·</span>
-                              <span
-                                className={`fi fi-${cc} h-[11px] w-[15px] rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                              />
+                              {pc ? (
+                                <span
+                                  className={`fi fi-${pc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                                />
+                              ) : null}
+                              <span className="text-[11px] text-[#9a9893]">
+                                {proxyTypeLabel(ptype)}
+                              </span>
                             </>
-                          ) : null}
-                          {ptype ? (
-                            <span className="text-[11px] text-[#9a9893]">
-                              {proxyTypeLabel(ptype)}
-                            </span>
                           ) : null}
                         </div>
                       </div>
