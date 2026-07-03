@@ -291,14 +291,44 @@ async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> s
     return None
 
 
+def _bare_emoji(emoji: str) -> str:
+    """Telegram's reaction emoticons omit the U+FE0F variation selector.
+
+    Our configured set may carry it (e.g. ``"❤️"``); strip it so comparisons and
+    the emoji we send line up with the channel's canonical form (``"❤"``).
+    """
+    return emoji.replace("\N{VARIATION SELECTOR-16}", "")
+
+
+def _pick_reaction(preferred: list[str], allowed: set[str] | None) -> str | None:
+    """Choose an emoticon to react with (bare form), or ``None`` to skip.
+
+    ``allowed is None`` → the channel accepts any emoji, so use our configured
+    set. Otherwise react with one of *our* emoji the channel permits; when none
+    overlap, fall back to any non-negative emoji the channel does permit so a
+    reaction still lands on restrictive channels (e.g. @durov). Returns ``None``
+    only when the channel offers no usable emoji at all.
+    """
+    if allowed is None:
+        pool = [_bare_emoji(e) for e in preferred]
+        return _rng.choice(pool) if pool else None
+    allowed_bare = {_bare_emoji(e) for e in allowed}
+    ours = [e for e in (_bare_emoji(p) for p in preferred) if e in allowed_bare]
+    if ours:
+        return _rng.choice(ours)
+    negatives = {_bare_emoji(e) for e in settings.warming.reaction_negative_emoji}
+    fallback = [e for e in allowed_bare if e not in negatives]
+    return _rng.choice(fallback) if fallback else None
+
+
 async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> int | None:
     """React to a random recent post with an emoji the channel actually permits.
 
     Picking blindly from the configured set trips ``ReactionInvalidError`` on
     channels that restrict reactions (e.g. @durov). We first read the channel's
-    allowed set and react only with an emoji from the intersection; when the
-    channel disables reactions or permits none of ours we skip (return ``None``)
-    instead of forcing an error.
+    allowed set and prefer one of our emoji from it; if none overlap we still
+    react with one of the channel's own (non-negative) emoji so a reaction lands.
+    Only a channel that permits nothing usable skips (returns ``None``).
     """
     messages = await client.get_messages(action.channel, limit=action.message_limit)
     candidates = [
@@ -309,11 +339,10 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     if not candidates:
         return None
     allowed = await _channel_reaction_whitelist(client, action.channel)
-    usable = action.reactions if allowed is None else [e for e in action.reactions if e in allowed]
-    if not usable:
+    emoji = _pick_reaction(action.reactions, allowed)
+    if emoji is None:
         return None
     message_id = _rng.choice(candidates)
-    emoji = _rng.choice(usable)
     peer = await client.get_input_entity(action.channel)
     await client(
         SendReactionRequest(

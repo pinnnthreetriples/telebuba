@@ -225,15 +225,58 @@ async def test_react_to_post_uses_only_channel_allowed_emoji(
 
 
 @pytest.mark.asyncio
-async def test_react_to_post_skips_when_none_of_ours_allowed(
+async def test_react_to_post_falls_back_to_channel_emoji_when_none_of_ours_allowed(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The channel permits only 😍, none of our set — skip without an error or send."""
+    """None of our set is allowed, but 😍 (non-negative) is — react with 😍 so it still lands."""
     captured: list[object] = []
     allowed = ChatReactionsSome(reactions=[ReactionEmoji(emoticon="😍")])
     _patch_client(monkeypatch, _react_fake_client(captured, allowed))
 
     result = await execute("acc-3d", ReactToPost(channel="@durov", reactions=["👍", "🔥"]))
+
+    assert result.status == "ok"
+    assert result.message_id == 11
+    sent = _sent_reactions(captured)
+    assert len(sent) == 1
+    reaction = sent[0].reaction
+    assert reaction is not None
+    first = reaction[0]
+    assert isinstance(first, ReactionEmoji)
+    assert first.emoticon == "😍"
+
+
+@pytest.mark.asyncio
+async def test_react_to_post_matches_heart_ignoring_variation_selector(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Config ❤️ (U+FE0F) matches Telegram's bare ❤ and is sent in the bare form."""
+    captured: list[object] = []
+    allowed = ChatReactionsSome(reactions=[ReactionEmoji(emoticon="❤")])
+    _patch_client(monkeypatch, _react_fake_client(captured, allowed))
+
+    result = await execute("acc-3f", ReactToPost(channel="@durov", reactions=["❤️", "👍"]))
+
+    assert result.status == "ok"
+    sent = _sent_reactions(captured)
+    assert len(sent) == 1
+    reaction = sent[0].reaction
+    assert reaction is not None
+    first = reaction[0]
+    assert isinstance(first, ReactionEmoji)
+    assert first.emoticon == "❤"
+
+
+@pytest.mark.asyncio
+async def test_react_to_post_skips_when_only_negative_reactions_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The channel permits only a blocklisted 👎 — skip rather than react negatively."""
+    captured: list[object] = []
+    allowed = ChatReactionsSome(reactions=[ReactionEmoji(emoticon="👎")])
+    _patch_client(monkeypatch, _react_fake_client(captured, allowed))
+
+    result = await execute("acc-3g", ReactToPost(channel="@durov", reactions=["👍", "🔥"]))
 
     assert result.status == "ok"
     assert result.message_id is None

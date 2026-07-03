@@ -89,6 +89,10 @@ class _Recorder:
         self.actions: list[tuple[str, TelegramAction]] = []
         self.flood_on: set[str] = set()
         self.peer_flood_on: set[str] = set()
+        # A landed reaction returns the reacted post's id; None models a skip
+        # (channel restricts reactions to emoji we can't use). The cycle counts a
+        # reaction only when a message_id comes back.
+        self.react_message_id: int | None = 1
 
     async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
         self.actions.append((account_id, action))
@@ -97,10 +101,12 @@ class _Recorder:
             status = "flood_wait"
         elif action.action_type in self.peer_flood_on:
             status = "peer_flood"
+        message_id = self.react_message_id if action.action_type == "react_to_post" else None
         return ActionResult(
             status=status,
             action_type=action.action_type,
             account_id=account_id,
+            message_id=message_id if status == "ok" else None,
         )
 
     def types(self) -> list[str]:
@@ -234,6 +240,23 @@ async def test_cycle_reacts_when_enabled(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert result.reactions_sent == 1
     assert "react_to_post" in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_does_not_count_skipped_reaction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A react that lands no reaction (message_id=None, e.g. restricted channel) isn't counted."""
+    recorder = _Recorder()
+    recorder.react_message_id = None  # dispatch attempted, but nothing landed
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "ok"
+    assert result.reactions_sent == 0
+    assert "react_to_post" in recorder.types()  # it did attempt
 
 
 @pytest.mark.asyncio

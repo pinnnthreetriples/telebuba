@@ -34,8 +34,17 @@ class WarmingSettings(BaseSettings):
     reaction_probability: float = Field(default=0.6, ge=0.0, le=1.0)
     read_message_limit: int = Field(default=15, ge=1, le=100)
     reaction_message_limit: int = Field(default=20, ge=1, le=100)
+    # Telegram's reaction emoticons omit the U+FE0F variation selector (bare "❤",
+    # not "❤️"); keep this set in that canonical form so it matches a channel's
+    # allowed set. The reactor also strips FE0F defensively before comparing.
     default_reactions: list[str] = Field(
-        default_factory=lambda: ["👍", "🔥", "❤️", "😁", "🎉", "👏", "🤔", "🙏"],
+        default_factory=lambda: ["👍", "🔥", "❤", "😁", "🎉", "👏", "🤔", "🙏"],
+    )
+    # Emoji never used as a warming reaction. When a restrictive channel permits
+    # none of ``default_reactions`` the reactor falls back to one of the channel's
+    # own allowed emoji so a reaction still lands — but never a negative one.
+    reaction_negative_emoji: list[str] = Field(
+        default_factory=lambda: ["👎", "💩", "🤮", "🤬", "😡", "🖕", "🤢"],
     )
     # Channel guardrails. Service layer enforces these limits.
     max_channels_total: int = Field(default=500, ge=1)
