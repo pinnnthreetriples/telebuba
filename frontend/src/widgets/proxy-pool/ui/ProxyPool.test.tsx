@@ -53,6 +53,10 @@ test('renders pool cards with usage', async () => {
     expect(screen.getByText('nl.example:1080')).toBeInTheDocument();
   });
   expect(screen.getByText('2 / 3')).toBeInTheDocument();
+  // The working status resolves to its label, not the raw i18n key (the key must
+  // match the ProxyStatus value `tcp_working`, not `working`).
+  expect(screen.getByText('Работает')).toBeInTheDocument();
+  expect(screen.queryByText(/proxyPool\.status/)).not.toBeInTheDocument();
 });
 
 test('warns clearly when a proxy check failed (flag gone, no silent card)', async () => {

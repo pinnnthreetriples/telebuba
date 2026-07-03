@@ -43,7 +43,7 @@
       "emptyBody": "Add a proxy to assign it to accounts — one proxy serves up to 3 accounts",
       "emptyAdd": "Add proxy",
       "status": {
-        "working": "Working",
+        "tcp_working": "Working",
         "failed": "Not working",
         "unknown": "Not checked"
       }
