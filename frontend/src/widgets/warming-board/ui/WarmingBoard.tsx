@@ -1,10 +1,10 @@
 import { useQuery } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
-import { formatLocalTime, type FeedbackResult } from '@/shared/lib';
+import { eventLabel, formatLocalTime, type FeedbackResult } from '@/shared/lib';
 import { FeedbackMark } from '@/shared/ui';
 
 import { WarmConfigModal } from './WarmConfigModal';
@@ -57,6 +57,36 @@ const LOG_COLOR: Record<LogEntry['status'], string> = {
 // Fallback only — the board serves the real limit from config (card_log_limit).
 const DEFAULT_CARD_LOG_LIMIT = 20;
 
+// Live countdown to the next cycle (``next_run_at``), shown beside the pause
+// activity so the operator sees how long the "natural" pause lasts. Renders
+// nothing once the target passes or when there is no scheduled next run.
+function PauseCountdown({ nextRunAt }: { nextRunAt: string }) {
+  const { t } = useTranslation();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => {
+      setNow(Date.now());
+    }, 1000);
+    return () => {
+      clearInterval(id);
+    };
+  }, []);
+  const target = new Date(nextRunAt).getTime();
+  if (Number.isNaN(target)) return null;
+  const totalSec = Math.round((target - now) / 1000);
+  if (totalSec <= 0) return null;
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const time = h > 0 ? `${String(h)}:${pad(m)}:${pad(s)}` : `${String(m)}:${pad(s)}`;
+  return (
+    <span className="ml-auto shrink-0 font-mono text-[11px] tabular-nums text-primary/70">
+      {t('warming.card.pauseCountdown', { time })}
+    </span>
+  );
+}
+
 function WarmingCard({
   account,
   onStop,
@@ -81,7 +111,13 @@ function WarmingCard({
     ...logsQueryOptions({ query: { account_id: account.account_id, limit: logLimit } }),
     enabled: open,
   });
+  // Client-side "clear": hide everything up to the click; new events still show.
+  const [clearedAt, setClearedAt] = useState<number | null>(null);
   const logLines = logQuery.data?.items ?? [];
+  const visibleLines =
+    clearedAt == null
+      ? logLines
+      : logLines.filter((line) => new Date(line.created_at).getTime() > clearedAt);
   const active = activeStage(account);
   // Real elapsed warming days vs the operator-chosen target (the start slider);
   // the card auto-flips to "complete" once the account reaches its own target.
@@ -299,6 +335,9 @@ function WarmingCard({
             <span className="tb-pulse text-[11.5px] font-semibold text-primary">
               {t(`warming.activity.${STAGES[active]}`)}
             </span>
+            {STAGES[active] === 'pause' && account.next_run_at ? (
+              <PauseCountdown nextRunAt={account.next_run_at} />
+            ) : null}
           </div>
 
           {/* activity log */}
@@ -326,21 +365,50 @@ function WarmingCard({
             </span>
           </button>
           {open ? (
-            <div className="term tb-scroll mt-[9px] max-h-[120px] overflow-y-auto rounded-[9px] bg-[#16161a] px-[11px] py-[10px] font-mono text-[10.5px] leading-[1.7]">
-              {logLines.length === 0 ? (
-                <div className="text-[#5c5c66]">
-                  {logQuery.isPending ? t('warming.card.logLoading') : t('warming.card.logEmpty')}
+            <div className="mt-[9px]">
+              {visibleLines.length > 0 ? (
+                <div className="mb-[5px] flex justify-end">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setClearedAt(Date.now());
+                    }}
+                    className="inline-flex items-center gap-[4px] rounded-full border border-line px-[8px] py-[2px] text-[10px] text-ink-muted transition-colors hover:border-[#cbd7ec] hover:text-primary"
+                  >
+                    <svg
+                      width="10"
+                      height="10"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.2"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                    >
+                      <path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6" />
+                    </svg>
+                    {t('warming.card.logClear')}
+                  </button>
                 </div>
-              ) : (
-                logLines.map((line) => (
-                  <div key={line.id} className="flex gap-2">
-                    <span className="shrink-0 text-[#5c5c66]">
-                      {formatLocalTime(line.created_at)}
-                    </span>
-                    <span style={{ color: LOG_COLOR[line.status] }}>{line.event}</span>
+              ) : null}
+              <div className="term tb-scroll max-h-[120px] overflow-y-auto rounded-[9px] bg-[#16161a] px-[11px] py-[10px] font-mono text-[10.5px] leading-[1.7]">
+                {visibleLines.length === 0 ? (
+                  <div className="text-[#5c5c66]">
+                    {logQuery.isPending ? t('warming.card.logLoading') : t('warming.card.logEmpty')}
                   </div>
-                ))
-              )}
+                ) : (
+                  visibleLines.map((line) => (
+                    <div key={line.id} className="flex gap-2">
+                      <span className="shrink-0 text-[#5c5c66]">
+                        {formatLocalTime(line.created_at)}
+                      </span>
+                      <span style={{ color: LOG_COLOR[line.status] }}>
+                        {eventLabel(t, line.event)}
+                      </span>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           ) : null}
         </>

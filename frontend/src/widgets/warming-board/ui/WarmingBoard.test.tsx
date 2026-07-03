@@ -198,10 +198,61 @@ test('expanding a card fetches that account real activity log', async () => {
   );
   await userEvent.click(screen.getAllByText('Лог активности')[0]!);
   await waitFor(() => {
-    expect(screen.getByText('warming_subscribe')).toBeInTheDocument();
+    // Event codes are localized on the client (not shown as raw snake_case).
+    expect(screen.getByText('Подписка на канал')).toBeInTheDocument();
   });
   const fetched = vi
     .mocked(fetch)
     .mock.calls.some(([input]) => (input as Request).url.includes('account_id=79051184490'));
   expect(fetched).toBe(true);
+});
+
+test('clear button hides the existing log lines', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: '2026-06-30T12:04:00+00:00',
+              level: 'INFO',
+              status: 'success',
+              account_id: '79051184490',
+              event: 'warming_subscribe',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(
+    <WarmingBoard warming={WARMING} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  await userEvent.click(screen.getAllByText('Лог активности')[0]!);
+  await waitFor(() => {
+    expect(screen.getByText('Подписка на канал')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('Очистить'));
+  await waitFor(() => {
+    expect(screen.queryByText('Подписка на канал')).not.toBeInTheDocument();
+  });
+});
+
+test('shows a live pause countdown for a sleeping account', () => {
+  const nextRunAt = new Date(Date.now() + 90_000).toISOString(); // ~1:30 ahead
+  const paused: WarmingAccountState = {
+    ...account('79161234567', 'sleeping'),
+    next_run_at: nextRunAt,
+  };
+  renderWithClient(
+    <WarmingBoard warming={[paused]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Пауза для естественности')).toBeInTheDocument();
+  // The remaining time to next_run_at is shown as mm:ss (RU "ещё M:SS").
+  expect(screen.getByText(/ещё 1:\d\d/)).toBeInTheDocument();
 });

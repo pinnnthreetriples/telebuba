@@ -2,12 +2,16 @@ import { expect, test } from 'vitest';
 
 import { formatLocalTime } from './formatTime';
 
-// toLocaleTimeString's hour cycle and AM/PM suffix depend on the runtime's
-// default locale (12-hour with "PM" on this CI's Linux/ICU vs. 24-hour on a
-// typical Windows dev box) — that's the point of "local time", so assert on
-// the segment count (hours:minutes[:seconds]) rather than an exact format.
+// The exact hours digits depend on the runtime's time zone ("local time"), so
+// assert on the segment count (hours:minutes[:seconds]). The clock is forced to
+// 24-hour (hour12:false), so there is never an AM/PM suffix regardless of locale.
 test('formats a valid ISO timestamp with hours and minutes by default', () => {
   expect(formatLocalTime('2026-07-01T14:00:00Z').split(':')).toHaveLength(2);
+});
+
+test('uses a 24-hour clock (no AM/PM suffix)', () => {
+  expect(formatLocalTime('2026-07-01T14:00:00Z')).not.toMatch(/[ap]m/i);
+  expect(formatLocalTime('2026-07-01T02:00:00Z')).not.toMatch(/[ap]m/i);
 });
 
 test('includes seconds when requested', () => {

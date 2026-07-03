@@ -7,8 +7,10 @@ from unittest.mock import MagicMock
 
 import pytest
 from telethon.tl.functions.account import UpdateStatusRequest
+from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.functions.stories import GetPeerStoriesRequest, ReadStoriesRequest
+from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, ReactionEmoji
 
 from core.config import settings
 from core.db import configure_database
@@ -172,6 +174,85 @@ async def test_react_to_post_no_messages_returns_ok_without_reaction(
     assert result.status == "ok"
     assert result.message_id is None
     assert captured == []
+
+
+def _react_fake_client(captured: list[object], available: object) -> object:
+    """A fake client whose channel exposes ``available`` reactions."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_messages(self, _channel: str, *, limit: int) -> list[object]:
+            assert limit > 0
+            return [MagicMock(id=11)]
+
+        async def get_input_entity(self, channel: str) -> str:
+            return f"peer:{channel}"
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, GetFullChannelRequest):
+                return MagicMock(full_chat=MagicMock(available_reactions=available))
+            return None
+
+    return FakeClient()
+
+
+def _sent_reactions(captured: list[object]) -> list[SendReactionRequest]:
+    return [req for req in captured if isinstance(req, SendReactionRequest)]
+
+
+@pytest.mark.asyncio
+async def test_react_to_post_uses_only_channel_allowed_emoji(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only 🔥 is allowed by the channel, so that's the reaction sent (not 👍)."""
+    captured: list[object] = []
+    allowed = ChatReactionsSome(reactions=[ReactionEmoji(emoticon="🔥")])
+    _patch_client(monkeypatch, _react_fake_client(captured, allowed))
+
+    result = await execute("acc-3c", ReactToPost(channel="@durov", reactions=["👍", "🔥"]))
+
+    assert result.status == "ok"
+    sent = _sent_reactions(captured)
+    assert len(sent) == 1
+    reaction = sent[0].reaction
+    assert reaction is not None
+    first = reaction[0]
+    assert isinstance(first, ReactionEmoji)
+    assert first.emoticon == "🔥"
+
+
+@pytest.mark.asyncio
+async def test_react_to_post_skips_when_none_of_ours_allowed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The channel permits only 😍, none of our set — skip without an error or send."""
+    captured: list[object] = []
+    allowed = ChatReactionsSome(reactions=[ReactionEmoji(emoticon="😍")])
+    _patch_client(monkeypatch, _react_fake_client(captured, allowed))
+
+    result = await execute("acc-3d", ReactToPost(channel="@durov", reactions=["👍", "🔥"]))
+
+    assert result.status == "ok"
+    assert result.message_id is None
+    assert _sent_reactions(captured) == []
+
+
+@pytest.mark.asyncio
+async def test_react_to_post_skips_when_reactions_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Reactions are off on the channel — skip cleanly, never SendReactionRequest."""
+    captured: list[object] = []
+    _patch_client(monkeypatch, _react_fake_client(captured, ChatReactionsNone()))
+
+    result = await execute("acc-3e", ReactToPost(channel="@durov", reactions=["👍", "🔥"]))
+
+    assert result.status == "ok"
+    assert result.message_id is None
+    assert _sent_reactions(captured) == []
 
 
 @pytest.mark.asyncio

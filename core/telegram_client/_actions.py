@@ -18,7 +18,7 @@ from telethon.tl.functions.channels import (
     LeaveChannelRequest,
 )
 from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
-from telethon.tl.types import ReactionEmoji
+from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, ReactionEmoji
 
 from core.config import settings
 from core.db import fetch_account
@@ -270,8 +270,36 @@ async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) ->
         await client.send_read_acknowledge(action.channel, max_id=max_id)
 
 
+async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> set[str] | None:
+    """Emoticons the channel permits as reactions.
+
+    ``None`` means "don't filter" — the channel allows all emoji (or the
+    availability couldn't be read, in which case we fall back to the caller's
+    default set rather than regress). An empty set means reactions are off or the
+    channel only permits emoji we don't use, so the caller should skip entirely.
+    """
+    try:
+        full = await client(GetFullChannelRequest(channel=channel))  # ty: ignore[invalid-argument-type]
+    except Exception:  # noqa: BLE001 - availability is best-effort; don't fail the react over it.
+        return None
+    available = getattr(getattr(full, "full_chat", None), "available_reactions", None)
+    if isinstance(available, ChatReactionsNone):
+        return set()
+    if isinstance(available, ChatReactionsSome):
+        return {r.emoticon for r in available.reactions if isinstance(r, ReactionEmoji)}
+    # ChatReactionsAll / unknown → any emoji is accepted, so don't narrow.
+    return None
+
+
 async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> int | None:
-    """React to a random recent post with a random candidate emoji."""
+    """React to a random recent post with an emoji the channel actually permits.
+
+    Picking blindly from the configured set trips ``ReactionInvalidError`` on
+    channels that restrict reactions (e.g. @durov). We first read the channel's
+    allowed set and react only with an emoji from the intersection; when the
+    channel disables reactions or permits none of ours we skip (return ``None``)
+    instead of forcing an error.
+    """
     messages = await client.get_messages(action.channel, limit=action.message_limit)
     candidates = [
         int(getattr(m, "id", 0))
@@ -280,8 +308,12 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     ]
     if not candidates:
         return None
+    allowed = await _channel_reaction_whitelist(client, action.channel)
+    usable = action.reactions if allowed is None else [e for e in action.reactions if e in allowed]
+    if not usable:
+        return None
     message_id = _rng.choice(candidates)
-    emoji = _rng.choice(action.reactions)
+    emoji = _rng.choice(usable)
     peer = await client.get_input_entity(action.channel)
     await client(
         SendReactionRequest(
