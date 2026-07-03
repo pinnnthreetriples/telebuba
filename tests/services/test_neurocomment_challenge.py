@@ -20,6 +20,7 @@ from core.db import (
     fetch_readiness,
     insert_challenge,
     link_channel_to_campaign,
+    save_warming_settings,
     update_solver_enabled,
     upsert_readiness,
 )
@@ -82,10 +83,17 @@ class _ExecuteStub:
         )
 
 
-def _wait(message: BotChallengeMessage | None) -> object:
+def _wait(*messages: BotChallengeMessage | None) -> object:
+    """Return each queued message on successive WaitForBotChallenge calls, then None.
+
+    The solver waits once for the initial challenge and again (a "re-check") after
+    each answer; an exhausted queue → None models "no re-challenge = answer passed".
+    """
+    queue = list(messages)
+
     async def execute_read(_account_id: str, action: TelegramReadAction) -> object:
         assert isinstance(action, WaitForBotChallenge)
-        return BotChallengeWaitResult(message=message)
+        return BotChallengeWaitResult(message=queue.pop(0) if queue else None)
 
     return execute_read
 
@@ -163,22 +171,68 @@ async def test_image_challenge_solved_via_vision(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
-async def test_image_challenge_low_confidence_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
-    # Below the confidence floor the solver gives up rather than mis-click a hard captcha.
+async def test_retry_on_re_challenge_then_solved(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Answer 1 is wrong → the bot re-challenges → we retry with the fresh challenge
+    # and the second answer passes (no more re-challenge). Solved after 2 attempts.
     gemini = _gemini(
-        GeminiResult(
-            status="ok",
-            text=_decision_text(action="click_button", button_index=0, confidence=0.5),
-        ),
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
     )
     execute = _ExecuteStub(ok=True)
-    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(has_photo=True, image_b64="aW1n")))
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(), _msg()))
     monkeypatch.setattr(_seams, "generate_text", gemini)
     monkeypatch.setattr(_seams, "execute", execute.execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
 
-    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "give_up"
-    assert execute.calls == []  # never dispatched below the floor
-    assert [r["outcome"] for r in _challenge_rows()] == ["give_up"]
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert len(execute.calls) == 2  # two answers dispatched (retry)
+    assert [r["outcome"] for r in _challenge_rows()] == ["pending"]
+
+
+@pytest.mark.asyncio
+async def test_gives_up_after_max_attempts(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The bot keeps re-challenging → we stop after challenge_max_attempts (2) and fail,
+    # rather than clicking forever (each wrong click risks a kick).
+    monkeypatch.setattr(settings.neurocomment, "challenge_max_attempts", 2)
+    gemini = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+    execute = _ExecuteStub(ok=True)
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(), _msg(), _msg()))
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", execute.execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "failed"
+    assert len(execute.calls) == 2  # exactly max_attempts dispatches, no more
+    assert [r["outcome"] for r in _challenge_rows()] == ["failed"]
+
+
+@pytest.mark.asyncio
+async def test_openai_provider_used_when_selected(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Operator selected ChatGPT + set the OpenAI key → the captcha decision goes to the
+    # OpenAI seam, not Gemini.
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        gemini_api_key=None,
+        openai_api_key="sk-test",
+        captcha_llm_provider="openai",
+    )
+    openai = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+    gemini = _gemini(GeminiResult(status="error"))
+    execute = _ExecuteStub(ok=True)
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
+    monkeypatch.setattr(_seams, "generate_text_openai", openai)
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", execute.execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert len(openai.calls) == 1  # routed to OpenAI
+    assert gemini.calls == []  # Gemini untouched
+    assert openai.calls[0].model == settings.openai.model
 
 
 @pytest.mark.asyncio

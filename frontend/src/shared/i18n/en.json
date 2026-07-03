@@ -300,13 +300,20 @@
     },
     "api": {
       "title": "API keys",
-      "subtitle": "Access to the comment-generation model",
+      "subtitle": "Access to the comment-generation and captcha models",
       "geminiKey": "Gemini API key",
+      "openaiKey": "OpenAI API key (captcha)",
       "keySet": "Key is set — leave blank to keep it",
       "keyUnset": "No key set",
       "clearKey": "Clear key",
       "keyCleared": "Key will be cleared on save",
       "toggleVisibility": "Toggle key visibility"
+    },
+    "captchaLlm": {
+      "title": "Captcha solver LLM",
+      "subtitle": "Which model reads and solves channel captchas",
+      "gemini": "Gemini",
+      "openai": "ChatGPT"
     },
     "warmLimits": {
       "title": "Warming limits",

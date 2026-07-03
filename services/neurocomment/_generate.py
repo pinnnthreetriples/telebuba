@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     list_posted_comments_for_channel_since,
+    load_warming_settings,
     mark_comment_failed,
     mark_comment_posted,
     resolve_pending_outcome,
@@ -102,8 +103,14 @@ async def _generate_acceptable(
     """
     nc = settings.neurocomment
     recent = await _recent_channel_comments(campaign.campaign_id, channel)
+    # Comment generation always uses Gemini; read the operator's key from the DB
+    # (falls back to .env) so a UI-set key takes effect without a restart.
+    secret = await load_warming_settings()
     for _ in range(nc.max_retries + 1):
-        generated = await _seams.generate_text(_build_request(campaign.prompt, post_text))
+        request = _build_request(
+            campaign.prompt, post_text, api_key=secret.gemini_api_key, model=secret.gemini_model
+        )
+        generated = await _seams.generate_text(request)
         if generated.status != "ok" or not generated.text:
             continue
         candidate = generated.text.strip()
@@ -130,16 +137,16 @@ async def _recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
     return [c.comment_text or "" for c in posted.comments]
 
 
-def _build_request(prompt: str, post_text: str) -> GeminiRequest:
+def _build_request(prompt: str, post_text: str, *, api_key: str, model: str) -> GeminiRequest:
     nc = settings.neurocomment
     instruction = (
         f"{prompt}\n\nReply to this post in at most {nc.comment_max_words} words, "
         f"as a natural reader comment. Post:\n{post_text}"
     )
     return GeminiRequest(
-        api_key=settings.gemini.api_key,
+        api_key=api_key,
         prompt=instruction,
-        model=settings.gemini.model,
+        model=model,
         temperature=settings.gemini.temperature,
         max_output_tokens=settings.gemini.max_output_tokens,
     )

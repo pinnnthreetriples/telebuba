@@ -29,6 +29,9 @@ def _mask_settings(secret: WarmingSettingsSecret) -> WarmingSettings:
         max_daily_actions=secret.max_daily_actions,
         has_gemini_key=bool(secret.gemini_api_key),
         gemini_model=secret.gemini_model,
+        has_openai_key=bool(secret.openai_api_key),
+        openai_model=secret.openai_model,
+        captcha_llm_provider=secret.captcha_llm_provider,
         updated_at=secret.updated_at,
     )
 
@@ -41,10 +44,8 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
     # ``clear_gemini_key`` wins over ``gemini_api_key``: the UI uses the flag
     # for an explicit "wipe the stored key" gesture; passing an empty string
     # also clears it; passing ``None`` (and no flag) preserves the existing key.
-    if data.clear_gemini_key:
-        api_key: str | None = ""
-    else:
-        api_key = data.gemini_api_key
+    api_key: str | None = "" if data.clear_gemini_key else data.gemini_api_key
+    openai_key: str | None = "" if data.clear_openai_key else data.openai_api_key
 
     secret = await save_warming_settings(
         inter_account_chat=data.inter_account_chat,
@@ -54,6 +55,9 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
         max_daily_actions=data.max_daily_actions,
         gemini_api_key=api_key,
         gemini_model=data.gemini_model,
+        openai_api_key=openai_key,
+        openai_model=data.openai_model,
+        captcha_llm_provider=data.captcha_llm_provider,
     )
     await log_event(
         "INFO",
@@ -66,6 +70,8 @@ async def save_settings(data: WarmingSettingsUpdate) -> WarmingSettings:
             "max_daily_actions": secret.max_daily_actions,
             "has_gemini_key": bool(secret.gemini_api_key),
             "gemini_model": secret.gemini_model,
+            "has_openai_key": bool(secret.openai_api_key),
+            "captcha_llm_provider": secret.captcha_llm_provider,
         },
     )
     return _mask_settings(secret)

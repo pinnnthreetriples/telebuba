@@ -244,6 +244,23 @@ def _add_users_token_version(connection: Connection) -> None:
         )
 
 
+def _add_warming_settings_llm_columns(connection: Connection) -> None:
+    # OpenAI captcha key/model + the operator's captcha-LLM provider choice.
+    # Nullable → legacy rows read the config/.env fallback until the operator saves.
+    # Guard the table so a hand-built legacy DB without it is a no-op, not an error.
+    if not _sqlite_table_exists(connection, "warming_settings"):
+        return
+    columns = _sqlite_columns(connection, "warming_settings")
+    if "openai_api_key" not in columns:
+        connection.exec_driver_sql("ALTER TABLE warming_settings ADD COLUMN openai_api_key VARCHAR")
+    if "openai_model" not in columns:
+        connection.exec_driver_sql("ALTER TABLE warming_settings ADD COLUMN openai_model VARCHAR")
+    if "captcha_llm_provider" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_settings ADD COLUMN captcha_llm_provider VARCHAR",
+        )
+
+
 def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
     # Operator graduation flag set from the warming card; default 0 keeps existing
     # rows opt-in (NC overview shows them only after explicit promotion).

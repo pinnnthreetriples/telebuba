@@ -1426,38 +1426,54 @@ async def test_sanitize_chat_text_returns_none_for_blank() -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_settings_ignores_gemini_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    """UI inputs for Gemini key/model are accepted for compat but never persisted."""
-    monkeypatch.setattr(settings.gemini, "api_key", "env-key")
-    monkeypatch.setattr(settings.gemini, "model", "gemini-from-env")
-
+async def test_save_settings_persists_gemini_key_and_model() -> None:
+    """A UI-typed Gemini key + model are persisted (has_gemini_key True, model stored)."""
     masked = await warming.save_settings(
         WarmingSettingsUpdate(
             inter_account_chat=False,
             reactions_enabled=False,
-            gemini_api_key="ignored",
-            gemini_model="ignored-model",
-            clear_gemini_key=True,
+            gemini_api_key="ui-key",
+            gemini_model="ui-model",
         ),
     )
-    # has_gemini_key reflects the env, not what the UI tried to save.
     assert masked.has_gemini_key is True
-    assert masked.gemini_model == "gemini-from-env"
+    assert masked.gemini_model == "ui-model"
 
 
 @pytest.mark.asyncio
-async def test_save_settings_model_is_env_managed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """gemini_model on save is ignored; the value comes from settings.gemini.model."""
-    monkeypatch.setattr(settings.gemini, "model", "gemini-2.5-pro-from-env")
+async def test_save_settings_clear_gemini_key_falls_back_to_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """clear_gemini_key wipes the stored key; the read then falls back to .env."""
+    monkeypatch.setattr(settings.gemini, "api_key", "env-key")
+    await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=False, reactions_enabled=False, gemini_api_key="ui-key"
+        ),
+    )
+    masked = await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=False, reactions_enabled=False, clear_gemini_key=True
+        ),
+    )
+    assert masked.has_gemini_key is True  # stored key cleared -> .env fallback present
 
+
+@pytest.mark.asyncio
+async def test_save_settings_persists_openai_key_and_captcha_provider() -> None:
+    """The OpenAI captcha key + provider choice persist and surface (masked) on read."""
     masked = await warming.save_settings(
         WarmingSettingsUpdate(
             inter_account_chat=False,
             reactions_enabled=False,
-            gemini_model="user-typed-other-name",
+            openai_api_key="sk-ui",
+            openai_model="gpt-4o",
+            captcha_llm_provider="openai",
         ),
     )
-    assert masked.gemini_model == "gemini-2.5-pro-from-env"
+    assert masked.has_openai_key is True
+    assert masked.openai_model == "gpt-4o"
+    assert masked.captcha_llm_provider == "openai"
 
 
 @pytest.mark.asyncio

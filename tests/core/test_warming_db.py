@@ -71,22 +71,28 @@ async def test_settings_default_row_is_created_on_first_read() -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_ignores_gemini_key_and_reads_from_env(
+async def test_gemini_key_persists_to_db_and_env_is_the_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The DB no longer stores Gemini credentials; load returns the env value."""
+    """A UI-typed key is stored in the DB; a blank column falls back to .env."""
     monkeypatch.setattr(settings.gemini, "api_key", "env-key")
 
     saved = await save_warming_settings(
         inter_account_chat=True,
         reactions_enabled=False,
-        gemini_api_key="ui-typed-this-but-it-must-be-ignored",
+        gemini_api_key="ui-typed-key",
     )
-
-    assert saved.gemini_api_key == "env-key"
-
+    assert saved.gemini_api_key == "ui-typed-key"  # persisted, not ignored
     reloaded = await load_warming_settings()
-    assert reloaded.gemini_api_key == "env-key"
+    assert reloaded.gemini_api_key == "ui-typed-key"
+
+    # Clearing it (empty string) falls back to the .env value on read.
+    cleared = await save_warming_settings(
+        inter_account_chat=True,
+        reactions_enabled=False,
+        gemini_api_key="",
+    )
+    assert cleared.gemini_api_key == "env-key"
 
 
 @pytest.mark.asyncio

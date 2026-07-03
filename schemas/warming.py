@@ -27,6 +27,9 @@ WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
 # ``WarmingPhase``. See the 2026-07-01 ADR in ``.mex/context/decisions.md``.
 ActivityPersona = Literal["calm", "normal", "active"]
 
+# Which LLM the captcha solver uses. Operator-chosen, stored on the settings row.
+CaptchaLlmProvider = Literal["gemini", "openai"]
+
 _ACTIVE_STATES: frozenset[WarmingState] = frozenset(
     {"active", "sleeping", "flood_wait", "quarantine", "error"},
 )
@@ -91,11 +94,15 @@ class WarmingSettings(BaseModel):
     max_daily_actions: int = Field(default=0, ge=0)
     has_gemini_key: bool = False
     gemini_model: str = Field(min_length=1)
+    # Captcha LLM: presence flag + model + provider choice (keys never surfaced).
+    has_openai_key: bool = False
+    openai_model: str = Field(default="gpt-4o", min_length=1)
+    captcha_llm_provider: CaptchaLlmProvider = "gemini"
     updated_at: str = Field(min_length=1)
 
 
 class WarmingSettingsSecret(BaseModel):
-    """Internal read model — carries the raw Gemini key for ``core`` gateways only."""
+    """Internal read model — carries the raw LLM keys for ``core`` gateways only."""
 
     inter_account_chat: bool
     reactions_enabled: bool
@@ -104,6 +111,9 @@ class WarmingSettingsSecret(BaseModel):
     max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str
     gemini_model: str = Field(min_length=1)
+    openai_api_key: str = ""
+    openai_model: str = Field(default="gpt-4o", min_length=1)
+    captcha_llm_provider: CaptchaLlmProvider = "gemini"
     updated_at: str = Field(min_length=1)
 
 
@@ -127,6 +137,12 @@ class WarmingSettingsUpdate(BaseModel):
     gemini_api_key: str | None = None
     gemini_model: str | None = None
     clear_gemini_key: bool = False
+    # Same keep/clear/replace semantics for the captcha OpenAI key + model, plus
+    # the provider selector (None keeps the stored value).
+    openai_api_key: str | None = None
+    openai_model: str | None = None
+    clear_openai_key: bool = False
+    captcha_llm_provider: CaptchaLlmProvider | None = None
 
 
 class WarmingIntensity(BaseModel):
