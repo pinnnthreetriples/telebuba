@@ -408,6 +408,11 @@ export function WarmingPage() {
           </CollapsibleCard>
 
           <CollapsibleCard
+            // Auto-expand once there are warmed accounts so a just-graduated
+            // account is visible where it landed (the key re-inits defaultOpen
+            // when the pool crosses empty↔non-empty).
+            key={warmed.length > 0 ? 'warmed-has' : 'warmed-none'}
+            defaultOpen={warmed.length > 0}
             label={t('warming.warmed.title')}
             header={
               <>
