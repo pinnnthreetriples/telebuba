@@ -17,7 +17,6 @@ from sqlalchemy import delete, insert, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.exc import IntegrityError
 
-from core.config import settings
 from core.db import (
     _accounts,
     _get_engine,
@@ -28,14 +27,20 @@ from core.db import (
     _warming_account_state,
     _warming_channels,
     _warming_joined_channels,
-    _warming_settings,
+)
+
+# The singleton ``warming_settings`` persistence lives in a sibling module for
+# the file-size budget; re-exported here (and thence by ``core.db``) so existing
+# call sites keep importing it from ``core.repositories.warming``.
+from core.repositories._warming_settings import (  # noqa: F401
+    load_warming_settings,
+    save_warming_settings,
 )
 from schemas.warming import (
     ActivityPersona,
     WarmingChannel,
     WarmingChannelList,
     WarmingPhase,
-    WarmingSettingsSecret,
     WarmingState,
     WarmingStateRecord,
     WarmingStateWrite,
@@ -44,8 +49,6 @@ from schemas.warming import (
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-
-_WARMING_SETTINGS_ID = 1
 
 
 def _row_to_warming_channel(mapping: Mapping[str, object]) -> WarmingChannel:
@@ -99,125 +102,6 @@ def _remove_warming_channel(channel: str) -> WarmingChannelList:
 
 async def remove_warming_channel(channel: str) -> WarmingChannelList:
     return await asyncio.to_thread(_remove_warming_channel, channel)
-
-
-def _bool_or(value: object, default: bool) -> bool:  # noqa: FBT001
-    return default if value is None else bool(value)
-
-
-def _int_or(value: object, default: int) -> int:
-    return default if value is None else int(cast("int | str", value))
-
-
-def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSettingsSecret:
-    # Columns added after the row was first created are nullable; a NULL means
-    # "never set", so fall back to the config default to preserve old behaviour.
-    # gemini_api_key + gemini_model are intentionally NOT read from the DB:
-    # secrets belong in .env. The DB column is kept for migration compatibility
-    # but is ignored on read so a rotated env value takes effect immediately.
-    warm = settings.warming
-    return WarmingSettingsSecret(
-        inter_account_chat=bool(mapping["inter_account_chat"]),
-        reactions_enabled=bool(mapping["reactions_enabled"]),
-        join_enabled=_bool_or(mapping.get("join_enabled"), default=True),
-        enforce_readiness=_bool_or(mapping.get("enforce_readiness"), warm.enforce_readiness),
-        max_daily_actions=_int_or(mapping.get("max_daily_actions"), warm.max_daily_actions),
-        gemini_api_key=settings.gemini.api_key,
-        gemini_model=settings.gemini.model,
-        updated_at=str(mapping["updated_at"]),
-    )
-
-
-def _default_warming_settings_values() -> dict[str, object]:
-    warm = settings.warming
-    return {
-        "id": _WARMING_SETTINGS_ID,
-        "inter_account_chat": 0,
-        "reactions_enabled": 1,
-        "join_enabled": 1,
-        "enforce_readiness": int(warm.enforce_readiness),
-        "max_daily_actions": warm.max_daily_actions,
-        "gemini_api_key": "",
-        "gemini_model": settings.gemini.model,
-        "updated_at": _now_iso(),
-    }
-
-
-def _load_warming_settings() -> WarmingSettingsSecret:
-    statement = select(_warming_settings).where(_warming_settings.c.id == _WARMING_SETTINGS_ID)
-    with _get_engine().begin() as connection:
-        row = connection.execute(statement).mappings().first()
-        if row is None:
-            values = _default_warming_settings_values()
-            connection.execute(insert(_warming_settings).values(**values))
-            return _row_to_warming_settings_secret(cast("Mapping[str, object]", values))
-    return _row_to_warming_settings_secret(cast("Mapping[str, object]", row))
-
-
-async def load_warming_settings() -> WarmingSettingsSecret:
-    """Return the singleton warming settings row, creating defaults on first read."""
-    return await asyncio.to_thread(_load_warming_settings)
-
-
-def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting reads clearer.
-    *,
-    inter_account_chat: bool,
-    reactions_enabled: bool,
-    join_enabled: bool = True,
-    enforce_readiness: bool = True,
-    max_daily_actions: int = 0,
-    gemini_api_key: str | None,
-    gemini_model: str | None = None,
-) -> WarmingSettingsSecret:
-    # gemini_api_key / gemini_model are no longer persisted to the DB —
-    # credentials belong in .env. Arguments are accepted for backward
-    # compatibility with callers (services + UI) but ignored on write.
-    del gemini_api_key, gemini_model
-    # Ensure the singleton row exists so the UPDATE below has something to hit.
-    _load_warming_settings()
-    values: dict[str, object] = {
-        "inter_account_chat": int(inter_account_chat),
-        "reactions_enabled": int(reactions_enabled),
-        "join_enabled": int(join_enabled),
-        "enforce_readiness": int(enforce_readiness),
-        "max_daily_actions": max_daily_actions,
-        "gemini_api_key": "",
-        "gemini_model": settings.gemini.model,
-        "updated_at": _now_iso(),
-    }
-    with _get_engine().begin() as connection:
-        connection.execute(
-            update(_warming_settings)
-            .where(_warming_settings.c.id == _WARMING_SETTINGS_ID)
-            .values(**values),
-        )
-    return _load_warming_settings()
-
-
-async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column list.
-    *,
-    inter_account_chat: bool,
-    reactions_enabled: bool,
-    join_enabled: bool = True,
-    enforce_readiness: bool = True,
-    max_daily_actions: int = 0,
-    gemini_api_key: str | None,
-    gemini_model: str | None = None,
-) -> WarmingSettingsSecret:
-    """Persist warming settings.
-
-    ``gemini_api_key`` and ``gemini_model`` are ignored (credentials belong in .env).
-    """
-    return await asyncio.to_thread(
-        _save_warming_settings,
-        inter_account_chat=inter_account_chat,
-        reactions_enabled=reactions_enabled,
-        join_enabled=join_enabled,
-        enforce_readiness=enforce_readiness,
-        max_daily_actions=max_daily_actions,
-        gemini_api_key=gemini_api_key,
-        gemini_model=gemini_model,
-    )
 
 
 def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateRecord:

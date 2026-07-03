@@ -62,8 +62,12 @@ def _payload(request: GeminiRequest) -> dict[str, object]:
         # returns JSON, so parse-fails are effectively impossible on our side.
         generation_config["responseSchema"] = request.response_schema_json
         generation_config["responseMimeType"] = "application/json"
+    parts: list[dict[str, object]] = [{"text": request.prompt}]
+    if request.image_b64 is not None:
+        # Multimodal: append the image as inline base64 data (Gemini `inlineData`).
+        parts.append({"inlineData": {"mimeType": request.image_mime, "data": request.image_b64}})
     return {
-        "contents": [{"role": "user", "parts": [{"text": request.prompt}]}],
+        "contents": [{"role": "user", "parts": parts}],
         "generationConfig": generation_config,
     }
 

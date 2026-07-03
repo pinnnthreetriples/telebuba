@@ -8,6 +8,8 @@ the ``Settings`` aggregate and the ``settings`` instance stay in ``core.config``
 
 from __future__ import annotations
 
+from typing import Literal
+
 from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -32,8 +34,17 @@ class WarmingSettings(BaseSettings):
     reaction_probability: float = Field(default=0.6, ge=0.0, le=1.0)
     read_message_limit: int = Field(default=15, ge=1, le=100)
     reaction_message_limit: int = Field(default=20, ge=1, le=100)
+    # Telegram's reaction emoticons omit the U+FE0F variation selector (bare "❤",
+    # not "❤️"); keep this set in that canonical form so it matches a channel's
+    # allowed set. The reactor also strips FE0F defensively before comparing.
     default_reactions: list[str] = Field(
-        default_factory=lambda: ["👍", "🔥", "❤️", "😁", "🎉", "👏", "🤔", "🙏"],
+        default_factory=lambda: ["👍", "🔥", "❤", "😁", "🎉", "👏", "🤔", "🙏"],
+    )
+    # Emoji never used as a warming reaction. When a restrictive channel permits
+    # none of ``default_reactions`` the reactor falls back to one of the channel's
+    # own allowed emoji so a reaction still lands — but never a negative one.
+    reaction_negative_emoji: list[str] = Field(
+        default_factory=lambda: ["👎", "💩", "🤮", "🤬", "😡", "🖕", "🤢"],
     )
     # Channel guardrails. Service layer enforces these limits.
     max_channels_total: int = Field(default=500, ge=1)
@@ -134,6 +145,27 @@ class GeminiSettings(BaseSettings):
     retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
 
 
+class OpenAISettings(BaseSettings):
+    """Alternative captcha-solver LLM (OpenAI/ChatGPT).
+
+    A separate key from Gemini, used only for challenge solving when the operator
+    selects the ``openai`` provider. GPT vision handles image captchas well, so
+    this is the recommended provider for the hardest challenges. The key is
+    operator-set in the DB (falls back to ``OPENAI__API_KEY`` in .env).
+    """
+
+    model_config = SettingsConfigDict(env_prefix="OPENAI__", extra="ignore")
+
+    api_key: str = ""
+    model: str = Field(default="gpt-4o")
+    base_url: str = Field(default="https://api.openai.com/v1")
+    timeout_seconds: float = Field(default=30.0, ge=1.0)
+    temperature: float = Field(default=0.0, ge=0.0, le=2.0)
+    max_output_tokens: int = Field(default=300, ge=1, le=2048)
+    max_retries: int = Field(default=1, ge=0, le=5)
+    retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
+
+
 class TrustSettings(BaseSettings):
     """Tunables for the internal account Trust Score (our own metric, 0-100)."""
 
@@ -207,19 +239,28 @@ class NeurocommentSettings(BaseSettings):
     # First back-off duration; doubles per consecutive trip, capped at the max.
     channel_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
     channel_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
-    # Ф2 challenge solver — global opt-in flag (default off; a per-campaign
-    # solver_enabled overrides it). The solver costs Gemini tokens and clicks in
-    # live chats, so it does not auto-activate on deploy (mirrors #132's pattern).
-    challenge_solver_enabled: bool = False
+    # Ф2 challenge solver — global default (a per-campaign solver_enabled overrides
+    # it). Default ON so captcha solving is autonomous out of the box; turn it off
+    # globally or per-campaign to fall back to the manual queue.
+    challenge_solver_enabled: bool = True
     # Window the onboarding solver waits for a guardian-bot challenge after joining.
     challenge_wait_timeout_seconds: float = Field(default=20.0, gt=0.0)
     # Hard cutoff on the Gemini decision call.
     challenge_gemini_timeout_seconds: float = Field(default=10.0, gt=0.0)
-    # Log-normal humanization pause before clicking, clamped to [min, max].
-    challenge_click_delay_min_seconds: float = Field(default=3.0, ge=0.0)
-    challenge_click_delay_max_seconds: float = Field(default=6.0, ge=0.0)
-    # Reserved for Phase-2 human-queue routing of low-confidence decisions.
-    challenge_min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    # Log-normal humanization pause before answering, clamped to [min, max]. Range
+    # widened to ~human solve times (8-40s): instant/uniform solves read as a bot.
+    challenge_click_delay_min_seconds: float = Field(default=8.0, ge=0.0)
+    challenge_click_delay_max_seconds: float = Field(default=40.0, ge=0.0)
+    # Default captcha-solver LLM (the operator overrides it via the DB setting).
+    # "openai" uses settings.openai + the OpenAI key; "gemini" uses the Gemini one.
+    challenge_llm_provider: Literal["gemini", "openai"] = "gemini"
+    # Attempts before giving up: on a wrong answer the guardian bot usually
+    # re-challenges, so we retry with the fresh challenge up to this many times
+    # (a wrong click can get the account kicked — do not retry forever).
+    challenge_max_attempts: int = Field(default=2, ge=1, le=5)
+    # Short window to watch for a re-challenge after answering — a new challenge
+    # means the previous answer was wrong (drives the retry); silence = passed.
+    challenge_recheck_timeout_seconds: float = Field(default=8.0, gt=0.0)
     # Ф2 #147 channel challenge back-off: K consecutive solver failures on a channel
     # trip an escalating cooldown that stops onboarding new accounts there.
     channel_challenge_backoff_min_failures: int = Field(default=3, ge=1)

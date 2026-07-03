@@ -89,11 +89,15 @@ class BotChallengeMessage(BaseModel):
     """A guardian-bot inline-button challenge addressed to our account.
 
     ``button_labels`` is the flat, row-order list of inline-button captions;
-    ``has_photo`` flags an image challenge (handled as ``give_up`` until vision
-    lands in Phase 2).
+    ``has_photo`` flags an image challenge, which the solver reads with Gemini
+    vision. ``image_b64`` carries the downloaded photo bytes (base64) for that
+    vision call; it is transient (never persisted in the audit row) and ``None``
+    when there is no photo or the download failed.
     """
 
     text: str = ""
     button_labels: list[str] = Field(default_factory=list)
     message_id: int
     has_photo: bool = False
+    image_b64: str | None = None
+    image_mime: str = Field(default="image/jpeg", min_length=1)

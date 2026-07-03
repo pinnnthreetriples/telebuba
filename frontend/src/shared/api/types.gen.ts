@@ -1904,6 +1904,18 @@ export type WarmingSettings = {
    */
   gemini_model: string;
   /**
+   * Has Openai Key
+   */
+  has_openai_key?: boolean;
+  /**
+   * Openai Model
+   */
+  openai_model?: string;
+  /**
+   * Captcha Llm Provider
+   */
+  captcha_llm_provider?: 'gemini' | 'openai';
+  /**
    * Updated At
    */
   updated_at: string;
@@ -1953,6 +1965,22 @@ export type WarmingSettingsUpdate = {
    * Clear Gemini Key
    */
   clear_gemini_key?: boolean;
+  /**
+   * Openai Api Key
+   */
+  openai_api_key?: string | null;
+  /**
+   * Openai Model
+   */
+  openai_model?: string | null;
+  /**
+   * Clear Openai Key
+   */
+  clear_openai_key?: boolean;
+  /**
+   * Captcha Llm Provider
+   */
+  captcha_llm_provider?: 'gemini' | 'openai' | null;
 };
 
 /**

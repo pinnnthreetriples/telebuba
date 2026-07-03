@@ -71,6 +71,95 @@ function Card({
   );
 }
 
+function EyeIcon({ off }: { off: boolean }) {
+  return off ? (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <path d="M1 1l22 22" />
+      <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.39-1.61" />
+    </svg>
+  ) : (
+    <svg
+      width="17"
+      height="17"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+    >
+      <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  );
+}
+
+// One masked API-key input (Gemini or OpenAI): password field + show/hide toggle
+// + a "clear stored key" affordance. Blank = keep; clear = wipe the stored key.
+function ApiKeyField({
+  label,
+  value,
+  show,
+  keySet,
+  placeholder,
+  toggleLabel,
+  clearLabel,
+  onChange,
+  onToggleShow,
+  onClear,
+}: {
+  label: string;
+  value: string;
+  show: boolean;
+  keySet: boolean;
+  placeholder: string;
+  toggleLabel: string;
+  clearLabel: string;
+  onChange: (value: string) => void;
+  onToggleShow: () => void;
+  onClear: () => void;
+}) {
+  return (
+    <label className="block">
+      <span className={FIELD_LABEL}>{label}</span>
+      <div className="flex gap-2">
+        <input
+          type={show ? 'text' : 'password'}
+          value={value}
+          onChange={(event) => {
+            onChange(event.target.value);
+          }}
+          placeholder={placeholder}
+          className={`${INPUT} flex-1 font-mono`}
+        />
+        <button
+          type="button"
+          aria-label={toggleLabel}
+          onClick={onToggleShow}
+          className="flex w-[42px] items-center justify-center rounded-[10px] border border-line-input bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
+        >
+          <EyeIcon off={show} />
+        </button>
+      </div>
+      {keySet && (
+        <button
+          type="button"
+          onClick={onClear}
+          className="mt-[9px] text-[12px] font-medium text-danger transition-colors hover:underline"
+        >
+          {clearLabel}
+        </button>
+      )}
+    </label>
+  );
+}
+
 function SettingsForm({
   settings,
   neuroSettings,
@@ -88,6 +177,12 @@ function SettingsForm({
   // Tracks a pending "clear the stored key" action (distinct from "leave blank to
   // keep"). Sends clear_gemini_key: true on the next save.
   const [clearKey, setClearKey] = useState(false);
+  const [openaiKey, setOpenaiKey] = useState('');
+  const [showOpenaiKey, setShowOpenaiKey] = useState(false);
+  const [clearOpenaiKey, setClearOpenaiKey] = useState(false);
+  const [provider, setProvider] = useState<'gemini' | 'openai'>(
+    settings.captcha_llm_provider ?? 'gemini',
+  );
   const [toggles, setToggles] = useState<Record<WarmingToggle, boolean>>({
     reactions_enabled: settings.reactions_enabled ?? true,
     join_enabled: settings.join_enabled ?? true,
@@ -114,12 +209,18 @@ function SettingsForm({
               // clear wins over a typed key; a typed key sets it; blank keeps it.
               gemini_api_key: clearKey ? null : geminiKey.trim() === '' ? null : geminiKey,
               clear_gemini_key: clearKey,
+              openai_api_key: clearOpenaiKey ? null : openaiKey.trim() === '' ? null : openaiKey,
+              clear_openai_key: clearOpenaiKey,
+              openai_model: settings.openai_model,
+              captcha_llm_provider: provider,
             },
           }),
           saveNeuro.mutateAsync({ body: neuroUpdateBody(value) }),
         ]);
         setGeminiKey('');
         setClearKey(false);
+        setOpenaiKey('');
+        setClearOpenaiKey(false);
         setJustSaved(true);
         window.setTimeout(() => {
           setJustSaved(false);
@@ -149,10 +250,14 @@ function SettingsForm({
   const pending = saveWarm.isPending || saveNeuro.isPending;
   // The stored key is present unless the operator just chose to clear it.
   const keySet = (settings.has_gemini_key ?? false) && !clearKey;
+  const openaiKeySet = (settings.has_openai_key ?? false) && !clearOpenaiKey;
 
   const onCancel = () => {
     setGeminiKey('');
     setClearKey(false);
+    setOpenaiKey('');
+    setClearOpenaiKey(false);
+    setProvider(settings.captcha_llm_provider ?? 'gemini');
     form.reset(neuroFormValue(neuroSettings));
     setToggles({
       reactions_enabled: settings.reactions_enabled ?? true,
@@ -169,74 +274,82 @@ function SettingsForm({
       }}
     >
       <Card title={t('settings.api.title')} subtitle={t('settings.api.subtitle')}>
-        <label className="block">
-          <span className={FIELD_LABEL}>{t('settings.api.geminiKey')}</span>
-          <div className="flex gap-2">
-            <input
-              type={showKey ? 'text' : 'password'}
-              value={geminiKey}
-              onChange={(event) => {
-                setGeminiKey(event.target.value);
-                if (clearKey) setClearKey(false);
-              }}
-              placeholder={
-                clearKey
-                  ? t('settings.api.keyCleared')
-                  : keySet
-                    ? t('settings.api.keySet')
-                    : t('settings.api.keyUnset')
-              }
-              className={`${INPUT} flex-1 font-mono`}
-            />
+        <div className="space-y-4">
+          <ApiKeyField
+            label={t('settings.api.geminiKey')}
+            value={geminiKey}
+            show={showKey}
+            keySet={keySet}
+            placeholder={
+              clearKey
+                ? t('settings.api.keyCleared')
+                : keySet
+                  ? t('settings.api.keySet')
+                  : t('settings.api.keyUnset')
+            }
+            toggleLabel={t('settings.api.toggleVisibility')}
+            clearLabel={t('settings.api.clearKey')}
+            onChange={(value) => {
+              setGeminiKey(value);
+              if (clearKey) setClearKey(false);
+            }}
+            onToggleShow={() => {
+              setShowKey((value) => !value);
+            }}
+            onClear={() => {
+              setClearKey(true);
+              setGeminiKey('');
+            }}
+          />
+          <ApiKeyField
+            label={t('settings.api.openaiKey')}
+            value={openaiKey}
+            show={showOpenaiKey}
+            keySet={openaiKeySet}
+            placeholder={
+              clearOpenaiKey
+                ? t('settings.api.keyCleared')
+                : openaiKeySet
+                  ? t('settings.api.keySet')
+                  : t('settings.api.keyUnset')
+            }
+            toggleLabel={t('settings.api.toggleVisibility')}
+            clearLabel={t('settings.api.clearKey')}
+            onChange={(value) => {
+              setOpenaiKey(value);
+              if (clearOpenaiKey) setClearOpenaiKey(false);
+            }}
+            onToggleShow={() => {
+              setShowOpenaiKey((value) => !value);
+            }}
+            onClear={() => {
+              setClearOpenaiKey(true);
+              setOpenaiKey('');
+            }}
+          />
+        </div>
+      </Card>
+
+      <Card title={t('settings.captchaLlm.title')} subtitle={t('settings.captchaLlm.subtitle')}>
+        <div className="flex gap-2">
+          {(['gemini', 'openai'] as const).map((option) => (
             <button
+              key={option}
               type="button"
-              aria-label={t('settings.api.toggleVisibility')}
+              aria-pressed={provider === option}
               onClick={() => {
-                setShowKey((value) => !value);
+                setProvider(option);
               }}
-              className="flex w-[42px] items-center justify-center rounded-[10px] border border-line-input bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
+              className={`flex-1 rounded-[10px] border px-3 py-[9px] text-[13px] font-medium transition-colors ${
+                provider === option
+                  ? 'border-primary bg-[#f2f6ff] text-primary'
+                  : 'border-line-input bg-white text-ink-muted hover:border-[#c8c6c2] hover:bg-[#f7f6f4]'
+              }`}
             >
-              {showKey ? (
-                <svg
-                  width="17"
-                  height="17"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-                  <path d="M1 1l22 22" />
-                  <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.39-1.61" />
-                </svg>
-              ) : (
-                <svg
-                  width="17"
-                  height="17"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth="1.8"
-                >
-                  <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
-                  <circle cx="12" cy="12" r="3" />
-                </svg>
-              )}
+              {t(`settings.captchaLlm.${option}`)}
             </button>
-          </div>
-          {keySet && (
-            <button
-              type="button"
-              onClick={() => {
-                setClearKey(true);
-                setGeminiKey('');
-              }}
-              className="mt-[9px] text-[12px] font-medium text-danger transition-colors hover:underline"
-            >
-              {t('settings.api.clearKey')}
-            </button>
-          )}
-        </label>
+          ))}
+        </div>
       </Card>
 
       <Card title={t('settings.warmLimits.title')} subtitle={t('settings.warmLimits.subtitle')}>

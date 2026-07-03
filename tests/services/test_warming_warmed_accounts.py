@@ -41,7 +41,8 @@ def _days_ago(days: int) -> str:
 
 
 @pytest.mark.asyncio
-async def test_list_warmed_accounts_keeps_only_threshold_and_above() -> None:
+async def test_list_warmed_accounts_includes_every_promoted_account() -> None:
+    """Graduation, not the day count, gates the warmed pool — below-target included."""
     await create_account(AccountCreate(account_id="old", label="Old"))
     await create_account(AccountCreate(account_id="young", label="Young"))
     await create_account(AccountCreate(account_id="fresh", label="Fresh"))  # never warmed
@@ -51,17 +52,15 @@ async def test_list_warmed_accounts_keeps_only_threshold_and_above() -> None:
     await upsert_warming_state(
         WarmingStateWrite(account_id="young", state="active", started_at=_days_ago(5)),
     )
-    # Promotion is the gate now — even an over-threshold account stays out until
-    # the operator graduates it. ``young`` is also promoted to prove the day
-    # floor still excludes it.
+    # Only the promoted ones appear (the un-promoted "fresh" stays out); the
+    # below-target "young" is included because the operator graduated it.
     await mark_promoted_to_nc("old")
     await mark_promoted_to_nc("young")
 
     result = await list_warmed_accounts(14)
 
-    assert [a.account_id for a in result.accounts] == ["old"]
+    assert [a.account_id for a in result.accounts] == ["old", "young"]
     assert result.accounts[0].label == "Old"
-    assert result.accounts[0].warming_days >= 14
 
 
 @pytest.mark.asyncio
@@ -81,6 +80,27 @@ async def test_list_warmed_accounts_sorted_newest_warmed_first() -> None:
 
     # Most-warmed first.
     assert [a.account_id for a in result.accounts] == ["a", "b"]
+
+
+@pytest.mark.asyncio
+async def test_below_target_graduation_lands_in_warmed_not_stranded() -> None:
+    """An explicit «в прогретые» before the day target still lands in «Прогреты».
+
+    It's the operator's call, not an accident — so the account shows in the
+    warmed pool (never in «Готовы», never invisible in no column at all).
+    """
+    await create_account(AccountCreate(account_id="grad", label="Grad"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="grad", state="idle", started_at=_days_ago(1)),
+    )
+    await mark_promoted_to_nc("grad")
+
+    # 1 day is below the 14-day target, but the graduation is honoured…
+    assert [a.account_id for a in (await list_warmed_accounts(14)).accounts] == ["grad"]
+    # …and it is NOT left in the ready/warming columns.
+    board = await load_board()
+    assert "grad" not in {c.account_id for c in board.idle}
+    assert "grad" not in {c.account_id for c in board.warming}
 
 
 @pytest.mark.asyncio

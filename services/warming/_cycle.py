@@ -117,7 +117,9 @@ async def _read_and_react(  # noqa: PLR0913
         attempts += 1
         if react_result.status in _HALT_STATUSES:
             return reads, reactions, react_result, failures, attempts
-        if react_result.status == "ok":
+        # A skipped react (channel permits no usable emoji) is status "ok" with no
+        # message_id — don't count it as a reaction the board never actually placed.
+        if react_result.status == "ok" and react_result.message_id is not None:
             reactions = 1
         elif react_result.status == "failed":
             failures += 1

@@ -19,7 +19,12 @@ from typing import TYPE_CHECKING, Literal
 from pydantic import ValidationError
 
 from core.config import settings
-from core.db import delete_readiness, insert_challenge, lookup_cached_decision
+from core.db import (
+    delete_readiness,
+    insert_challenge,
+    load_warming_settings,
+    lookup_cached_decision,
+)
 from schemas.challenge import BotChallengeMessage, ChallengeDecision, ChallengeInsert
 from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import (
@@ -69,21 +74,64 @@ def _build_prompt(message: BotChallengeMessage) -> str:
     )
 
 
-async def _gemini_decision(message: BotChallengeMessage) -> ChallengeDecision | None:
+def _build_vision_prompt(message: BotChallengeMessage) -> str:
+    """Prompt for an IMAGE captcha — the photo is attached as an inline image part."""
+    buttons = "\n".join(f"{i}: {label}" for i, label in enumerate(message.button_labels))
+    return (
+        "A guardian bot shows a new group member an IMAGE captcha (attached). "
+        "First describe what the image shows, then pick the single action that "
+        "passes it.\n\n"
+        f"Instruction text:\n{message.text or '(no text)'}\n\n"
+        f"Inline buttons (index: label):\n{buttons or '(none)'}\n\n"
+        "If it asks to type characters/a code shown in the image -> send_text with "
+        "the exact characters. If the answer is one of the inline buttons "
+        "('tap the X') -> click_button with that button_index. If it is a slider / "
+        "drag / jigsaw / rotate puzzle or needs pixel-precise manipulation -> "
+        "give_up. Set confidence honestly; reasoning <= 200 chars."
+    )
+
+
+async def _llm_decision(
+    message: BotChallengeMessage, *, use_image: bool = False
+) -> ChallengeDecision | None:
+    """Fresh LLM decision via the operator-selected provider (Gemini or OpenAI).
+
+    The provider + keys come from the settings row (DB, falling back to .env);
+    ``openai`` uses the OpenAI vision model when its key is set, else Gemini.
+    ``use_image`` attaches the captcha photo (vision) and swaps in the image
+    prompt — set only for a photo challenge; a photo with no downloaded image
+    gives up rather than sending a blank vision request. Returns ``None``
+    (→ give up) on misconfig / timeout / unparseable body.
+    """
+    if use_image and message.image_b64 is None:
+        return None
+    secret = await load_warming_settings()
+    use_openai = secret.captcha_llm_provider == "openai" and bool(secret.openai_api_key)
+    if use_openai:
+        api_key, model = secret.openai_api_key, secret.openai_model
+        temperature = settings.openai.temperature
+        max_output_tokens = settings.openai.max_output_tokens
+        generate = _seams.generate_text_openai
+    else:
+        api_key, model = secret.gemini_api_key, secret.gemini_model
+        temperature = settings.gemini.temperature
+        max_output_tokens = settings.gemini.max_output_tokens
+        generate = _seams.generate_text
     try:
-        # GeminiRequest build can raise ValidationError when no API key is
-        # configured — treat a misconfigured / timed-out Gemini as give_up rather
-        # than crash onboarding (the solver runs before any opt-in flag gate).
+        # GeminiRequest is the provider-neutral LLM contract; a build ValidationError
+        # (e.g. empty key) is treated as give_up rather than crashing onboarding.
         request = GeminiRequest(
-            api_key=settings.gemini.api_key,
-            prompt=_build_prompt(message),
-            model=settings.gemini.model,
-            temperature=settings.gemini.temperature,
-            max_output_tokens=settings.gemini.max_output_tokens,
+            api_key=api_key,
+            prompt=_build_vision_prompt(message) if use_image else _build_prompt(message),
+            model=model,
+            temperature=temperature,
+            max_output_tokens=max_output_tokens,
             response_schema_json=_DECISION_SCHEMA,
+            image_b64=message.image_b64 if use_image else None,
+            image_mime=message.image_mime,
         )
         result = await asyncio.wait_for(
-            _seams.generate_text(request),
+            generate(request),
             timeout=settings.neurocomment.challenge_gemini_timeout_seconds,
         )
     except (TimeoutError, ValidationError):
@@ -120,7 +168,7 @@ async def _decide(message: BotChallengeMessage) -> ChallengeDecision | None:
     cached = await lookup_cached_decision(_challenge_hash(message.text, message.button_labels))
     if cached is not None:
         return cached
-    return await _gemini_decision(message)
+    return await _llm_decision(message)
 
 
 def _human_delay_seconds() -> float:
@@ -194,45 +242,64 @@ async def _record(
     )
 
 
+async def _wait_for_challenge(
+    account_id: str, group_id: int, timeout_seconds: float
+) -> BotChallengeMessage | None:
+    """Wait up to ``timeout_seconds`` for a guardian-bot challenge, or ``None``."""
+    result = await _seams.execute_read(
+        account_id,
+        WaitForBotChallenge(chat_id=group_id, timeout_seconds=timeout_seconds),
+    )
+    return result.message if isinstance(result, BotChallengeWaitResult) else None
+
+
 async def solve_if_present(account_id: str, channel: str, group_id: int) -> ChallengeOutcome:
     """Detect + solve a guardian-bot challenge on a freshly-joined group.
+
+    Text/inline-button challenges take the cache→LLM text path; image captchas take
+    the LLM vision path (never cached — the picture varies). The provider (Gemini or
+    OpenAI) is the operator's per-settings choice.
+
+    On a wrong answer the guardian bot usually re-challenges; we retry with the new
+    challenge up to ``challenge_max_attempts`` times, then give up (a wrong click can
+    get the account kicked, so we never hammer). Detecting "was it wrong" = watch for
+    a fresh challenge within ``challenge_recheck_timeout_seconds`` of answering;
+    silence means it passed.
 
     Returns the pair's onboarding signal: ``no_challenge`` / ``solved`` →
     comment-able (``solved`` is optimistic — the audit row stays ``pending`` until
     the engine confirms on the first comment), ``give_up`` / ``failed`` →
     ``bot_challenge``.
     """
-    result = await _seams.execute_read(
-        account_id,
-        WaitForBotChallenge(
-            chat_id=group_id,
-            timeout_seconds=settings.neurocomment.challenge_wait_timeout_seconds,
-        ),
-    )
-    message = result.message if isinstance(result, BotChallengeWaitResult) else None
+    nc = settings.neurocomment
+    message = await _wait_for_challenge(account_id, group_id, nc.challenge_wait_timeout_seconds)
     if message is None:
         return "no_challenge"
-    if message.has_photo:
-        # Image captcha: vision deferred (Phase 2) → record + give up, no Gemini.
-        await _record(account_id, channel, message, outcome="give_up", decision=None)
-        return "give_up"
-    decision = await _decide(message)
-    if decision is None or decision.action == "give_up":
-        await _record(account_id, channel, message, outcome="give_up", decision=decision)
-        return "give_up"
-    await asyncio.sleep(_human_delay_seconds())
-    dispatched = await _dispatch(account_id, group_id, message, decision)
-    # ponytail: re-onboarding a pair before its first comment can leave the prior
-    # pending row orphaned (the engine resolves only the latest); harmless — pending
-    # rows feed neither board status nor cache. Add re-onboard dedup if it ever bites.
-    await _record(
-        account_id,
-        channel,
-        message,
-        outcome="pending" if dispatched else "failed",
-        decision=decision,
-    )
-    return "solved" if dispatched else "failed"
+    decision: ChallengeDecision | None = None
+    for _attempt in range(nc.challenge_max_attempts):
+        decision = await (
+            _llm_decision(message, use_image=True) if message.has_photo else _decide(message)
+        )
+        if decision is None or decision.action == "give_up":
+            await _record(account_id, channel, message, outcome="give_up", decision=decision)
+            return "give_up"
+        await asyncio.sleep(_human_delay_seconds())
+        if not await _dispatch(account_id, group_id, message, decision):
+            await _record(account_id, channel, message, outcome="failed", decision=decision)
+            return "failed"
+        # A fresh challenge means the answer was wrong → retry with it; silence = passed.
+        retry = await _wait_for_challenge(
+            account_id, group_id, nc.challenge_recheck_timeout_seconds
+        )
+        if retry is None:
+            # ponytail: a re-onboard before the first comment can orphan the prior
+            # pending row; harmless — pending rows feed neither board status nor cache.
+            await _record(account_id, channel, message, outcome="pending", decision=decision)
+            return "solved"
+        message = retry
+    # Out of attempts and still being re-challenged → give up (do not keep clicking).
+    await _record(account_id, channel, message, outcome="failed", decision=decision)
+    return "failed"
 
 
 async def retry_pair(account_id: str, channel: str) -> AccountChannelOnboarding:

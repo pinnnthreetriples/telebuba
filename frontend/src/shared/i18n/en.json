@@ -41,7 +41,12 @@
       "free_other": "{{count}} slots free",
       "emptyTitle": "Pool is empty",
       "emptyBody": "Add a proxy to assign it to accounts — one proxy serves up to 3 accounts",
-      "emptyAdd": "Add proxy"
+      "emptyAdd": "Add proxy",
+      "status": {
+        "tcp_working": "Working",
+        "failed": "Not working",
+        "unknown": "Not checked"
+      }
     },
     "edit": {
       "back": "Back to list",
@@ -295,13 +300,20 @@
     },
     "api": {
       "title": "API keys",
-      "subtitle": "Access to the comment-generation model",
+      "subtitle": "Access to the comment-generation and captcha models",
       "geminiKey": "Gemini API key",
+      "openaiKey": "OpenAI API key (captcha)",
       "keySet": "Key is set — leave blank to keep it",
       "keyUnset": "No key set",
       "clearKey": "Clear key",
       "keyCleared": "Key will be cleared on save",
       "toggleVisibility": "Toggle key visibility"
+    },
+    "captchaLlm": {
+      "title": "Captcha solver LLM",
+      "subtitle": "Which model reads and solves channel captchas",
+      "gemini": "Gemini",
+      "openai": "ChatGPT"
     },
     "warmLimits": {
       "title": "Warming limits",
@@ -410,7 +422,26 @@
     "warming_unpromoted_from_neurocomment": "Account returned from neurocommenting",
     "warming_quarantine_recovered": "Account recovered from quarantine",
     "warming_quarantine_exhausted": "Quarantine exhausted",
-    "warming_settings_saved": "Warming settings saved"
+    "warming_settings_saved": "Warming settings saved",
+    "warming_start_blocked": "Warming start blocked",
+    "warming_runtime_reconciled": "Warming reconciled",
+    "warming_unpromoted_on_restart": "Returned to warming on restart",
+    "phase_advanced": "Advanced to next phase",
+    "spam_status_refreshed": "Spam status refreshed",
+    "telegram_set_online": "Came online",
+    "telegram_read_channel": "Read channel",
+    "telegram_read_channel_failed": "Failed to read channel",
+    "telegram_watch_peer_stories": "Watched stories",
+    "telegram_react_to_post": "Reacted to post",
+    "telegram_react_to_post_failed": "Failed to react to post",
+    "telegram_join_channel": "Joined channel",
+    "telegram_join_channel_failed": "Failed to join channel",
+    "telegram_join_discussion_group": "Joined channel chat",
+    "telegram_post_story": "Posted story",
+    "telegram_post_story_failed": "Failed to post story",
+    "telegram_spam_status_probe_failed": "Spam-status probe failed",
+    "telegram_pool_connect_failed": "Telegram connection failed",
+    "telegram_pool_connect_retry": "Retrying Telegram connection"
   },
   "neurocomment": {
     "title": "Neurocomment",
@@ -645,11 +676,13 @@
     },
     "card": {
       "dayProgress": "{{days}} / 14 days",
-      "actionsTip": "actions",
+      "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
       "cfgTitle": "Warming settings",
       "logToggle": "Activity log",
       "logLoading": "Loading log…",
       "logEmpty": "No events yet",
+      "logClear": "Clear",
+      "pauseCountdown": "{{time}} left",
       "completeTitle": "Warming complete",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",

@@ -18,7 +18,7 @@ from telethon.tl.functions.channels import (
     LeaveChannelRequest,
 )
 from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
-from telethon.tl.types import ReactionEmoji
+from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, ReactionEmoji
 
 from core.config import settings
 from core.db import fetch_account
@@ -270,8 +270,66 @@ async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) ->
         await client.send_read_acknowledge(action.channel, max_id=max_id)
 
 
+async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> set[str] | None:
+    """Emoticons the channel permits as reactions.
+
+    ``None`` means "don't filter" — the channel allows all emoji (or the
+    availability couldn't be read, in which case we fall back to the caller's
+    default set rather than regress). An empty set means reactions are off or the
+    channel only permits emoji we don't use, so the caller should skip entirely.
+    """
+    try:
+        full = await client(GetFullChannelRequest(channel=channel))  # ty: ignore[invalid-argument-type]
+    except Exception:  # noqa: BLE001 - availability is best-effort; don't fail the react over it.
+        return None
+    available = getattr(getattr(full, "full_chat", None), "available_reactions", None)
+    if isinstance(available, ChatReactionsNone):
+        return set()
+    if isinstance(available, ChatReactionsSome):
+        return {r.emoticon for r in available.reactions if isinstance(r, ReactionEmoji)}
+    # ChatReactionsAll / unknown → any emoji is accepted, so don't narrow.
+    return None
+
+
+def _bare_emoji(emoji: str) -> str:
+    """Telegram's reaction emoticons omit the U+FE0F variation selector.
+
+    Our configured set may carry it (e.g. ``"❤️"``); strip it so comparisons and
+    the emoji we send line up with the channel's canonical form (``"❤"``).
+    """
+    return emoji.replace("\N{VARIATION SELECTOR-16}", "")
+
+
+def _pick_reaction(preferred: list[str], allowed: set[str] | None) -> str | None:
+    """Choose an emoticon to react with (bare form), or ``None`` to skip.
+
+    ``allowed is None`` → the channel accepts any emoji, so use our configured
+    set. Otherwise react with one of *our* emoji the channel permits; when none
+    overlap, fall back to any non-negative emoji the channel does permit so a
+    reaction still lands on restrictive channels (e.g. @durov). Returns ``None``
+    only when the channel offers no usable emoji at all.
+    """
+    if allowed is None:
+        pool = [_bare_emoji(e) for e in preferred]
+        return _rng.choice(pool) if pool else None
+    allowed_bare = {_bare_emoji(e) for e in allowed}
+    ours = [e for e in (_bare_emoji(p) for p in preferred) if e in allowed_bare]
+    if ours:
+        return _rng.choice(ours)
+    negatives = {_bare_emoji(e) for e in settings.warming.reaction_negative_emoji}
+    fallback = [e for e in allowed_bare if e not in negatives]
+    return _rng.choice(fallback) if fallback else None
+
+
 async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> int | None:
-    """React to a random recent post with a random candidate emoji."""
+    """React to a random recent post with an emoji the channel actually permits.
+
+    Picking blindly from the configured set trips ``ReactionInvalidError`` on
+    channels that restrict reactions (e.g. @durov). We first read the channel's
+    allowed set and prefer one of our emoji from it; if none overlap we still
+    react with one of the channel's own (non-negative) emoji so a reaction lands.
+    Only a channel that permits nothing usable skips (returns ``None``).
+    """
     messages = await client.get_messages(action.channel, limit=action.message_limit)
     candidates = [
         int(getattr(m, "id", 0))
@@ -280,8 +338,11 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     ]
     if not candidates:
         return None
+    allowed = await _channel_reaction_whitelist(client, action.channel)
+    emoji = _pick_reaction(action.reactions, allowed)
+    if emoji is None:
+        return None
     message_id = _rng.choice(candidates)
-    emoji = _rng.choice(action.reactions)
     peer = await client.get_input_entity(action.channel)
     await client(
         SendReactionRequest(

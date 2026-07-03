@@ -30,6 +30,7 @@ from core.config import settings
 from core.db import run_db_maintenance_loop
 from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
+from core.openai import close_openai_client
 from core.telegram_client import shutdown_telegram_pool
 from services.auth import seed_admin_if_empty
 from services.neurocomment import (
@@ -100,6 +101,7 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         with contextlib.suppress(asyncio.CancelledError):
             await maintenance_task
         await close_gemini_client()
+        await close_openai_client()
 
 
 def _safe_spa_file(path: str) -> Path | None:

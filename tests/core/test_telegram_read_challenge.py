@@ -8,9 +8,11 @@ false-negative > false-positive (a wrong click can get the account kicked).
 
 from __future__ import annotations
 
+import base64
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
+import pytest
 from telethon.tl.types import (
     KeyboardButtonCallback,
     KeyboardButtonRow,
@@ -21,7 +23,10 @@ from telethon.tl.types import (
     ReplyInlineMarkup,
 )
 
-from core.telegram_client._read_challenge import _extract_bot_challenge
+from core.telegram_client._read_challenge import (
+    _extract_bot_challenge,
+    download_challenge_image,
+)
 from schemas.challenge import BotChallengeMessage
 
 _MY_ID = 12345
@@ -122,3 +127,28 @@ def test_has_photo_flag_set_for_image_challenge() -> None:
     result = _extract(_msg(text=f"@{_MY_USERNAME}", media=photo))
     assert result is not None
     assert result.has_photo is True
+
+
+class _FakeDownloadClient:
+    """Stub Telethon client whose ``download_media`` returns preset bytes (or None)."""
+
+    def __init__(self, data: object) -> None:
+        self._data = data
+
+    async def download_media(self, _message: object, *, file: object) -> object:
+        assert file is bytes  # in-memory download, not a path
+        return self._data
+
+
+@pytest.mark.asyncio
+async def test_download_challenge_image_returns_base64() -> None:
+    client = _FakeDownloadClient(b"\x89PNG-bytes")
+    result = await download_challenge_image(client, object())  # ty: ignore[invalid-argument-type]
+    assert result == base64.b64encode(b"\x89PNG-bytes").decode("ascii")
+
+
+@pytest.mark.asyncio
+async def test_download_challenge_image_none_when_no_bytes() -> None:
+    # A media message that yields no bytes (e.g. download failed) → None, not a crash.
+    client = _FakeDownloadClient(None)
+    assert await download_challenge_image(client, object()) is None  # ty: ignore[invalid-argument-type]

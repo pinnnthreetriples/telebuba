@@ -89,6 +89,10 @@ class _Recorder:
         self.actions: list[tuple[str, TelegramAction]] = []
         self.flood_on: set[str] = set()
         self.peer_flood_on: set[str] = set()
+        # A landed reaction returns the reacted post's id; None models a skip
+        # (channel restricts reactions to emoji we can't use). The cycle counts a
+        # reaction only when a message_id comes back.
+        self.react_message_id: int | None = 1
 
     async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
         self.actions.append((account_id, action))
@@ -97,10 +101,12 @@ class _Recorder:
             status = "flood_wait"
         elif action.action_type in self.peer_flood_on:
             status = "peer_flood"
+        message_id = self.react_message_id if action.action_type == "react_to_post" else None
         return ActionResult(
             status=status,
             action_type=action.action_type,
             account_id=account_id,
+            message_id=message_id if status == "ok" else None,
         )
 
     def types(self) -> list[str]:
@@ -234,6 +240,23 @@ async def test_cycle_reacts_when_enabled(monkeypatch: pytest.MonkeyPatch) -> Non
 
     assert result.reactions_sent == 1
     assert "react_to_post" in recorder.types()
+
+
+@pytest.mark.asyncio
+async def test_cycle_does_not_count_skipped_reaction(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A react that lands no reaction (message_id=None, e.g. restricted channel) isn't counted."""
+    recorder = _Recorder()
+    recorder.react_message_id = None  # dispatch attempted, but nothing landed
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "ok"
+    assert result.reactions_sent == 0
+    assert "react_to_post" in recorder.types()  # it did attempt
 
 
 @pytest.mark.asyncio
@@ -1426,38 +1449,54 @@ async def test_sanitize_chat_text_returns_none_for_blank() -> None:
 
 
 @pytest.mark.asyncio
-async def test_save_settings_ignores_gemini_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
-    """UI inputs for Gemini key/model are accepted for compat but never persisted."""
-    monkeypatch.setattr(settings.gemini, "api_key", "env-key")
-    monkeypatch.setattr(settings.gemini, "model", "gemini-from-env")
-
+async def test_save_settings_persists_gemini_key_and_model() -> None:
+    """A UI-typed Gemini key + model are persisted (has_gemini_key True, model stored)."""
     masked = await warming.save_settings(
         WarmingSettingsUpdate(
             inter_account_chat=False,
             reactions_enabled=False,
-            gemini_api_key="ignored",
-            gemini_model="ignored-model",
-            clear_gemini_key=True,
+            gemini_api_key="ui-key",
+            gemini_model="ui-model",
         ),
     )
-    # has_gemini_key reflects the env, not what the UI tried to save.
     assert masked.has_gemini_key is True
-    assert masked.gemini_model == "gemini-from-env"
+    assert masked.gemini_model == "ui-model"
 
 
 @pytest.mark.asyncio
-async def test_save_settings_model_is_env_managed(monkeypatch: pytest.MonkeyPatch) -> None:
-    """gemini_model on save is ignored; the value comes from settings.gemini.model."""
-    monkeypatch.setattr(settings.gemini, "model", "gemini-2.5-pro-from-env")
+async def test_save_settings_clear_gemini_key_falls_back_to_env(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """clear_gemini_key wipes the stored key; the read then falls back to .env."""
+    monkeypatch.setattr(settings.gemini, "api_key", "env-key")
+    await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=False, reactions_enabled=False, gemini_api_key="ui-key"
+        ),
+    )
+    masked = await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=False, reactions_enabled=False, clear_gemini_key=True
+        ),
+    )
+    assert masked.has_gemini_key is True  # stored key cleared -> .env fallback present
 
+
+@pytest.mark.asyncio
+async def test_save_settings_persists_openai_key_and_captcha_provider() -> None:
+    """The OpenAI captcha key + provider choice persist and surface (masked) on read."""
     masked = await warming.save_settings(
         WarmingSettingsUpdate(
             inter_account_chat=False,
             reactions_enabled=False,
-            gemini_model="user-typed-other-name",
+            openai_api_key="sk-ui",
+            openai_model="gpt-4o",
+            captcha_llm_provider="openai",
         ),
     )
-    assert masked.gemini_model == "gemini-2.5-pro-from-env"
+    assert masked.has_openai_key is True
+    assert masked.openai_model == "gpt-4o"
+    assert masked.captcha_llm_provider == "openai"
 
 
 @pytest.mark.asyncio

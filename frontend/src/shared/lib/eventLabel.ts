@@ -50,6 +50,26 @@ const KNOWN_EVENTS = new Set<string>([
   'warming_quarantine_recovered',
   'warming_quarantine_exhausted',
   'warming_settings_saved',
+  'warming_start_blocked',
+  'warming_runtime_reconciled',
+  'warming_unpromoted_on_restart',
+  'phase_advanced',
+  'spam_status_refreshed',
+  // Telegram gateway actions the warming loop performs (shown in the card log).
+  'telegram_set_online',
+  'telegram_read_channel',
+  'telegram_read_channel_failed',
+  'telegram_watch_peer_stories',
+  'telegram_react_to_post',
+  'telegram_react_to_post_failed',
+  'telegram_join_channel',
+  'telegram_join_channel_failed',
+  'telegram_join_discussion_group',
+  'telegram_post_story',
+  'telegram_post_story_failed',
+  'telegram_spam_status_probe_failed',
+  'telegram_pool_connect_failed',
+  'telegram_pool_connect_retry',
 ]);
 
 /**

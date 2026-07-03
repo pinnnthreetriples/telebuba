@@ -38,6 +38,7 @@ telebuba/
 │   ├── repositories/       per-aggregate DB query modules
 │   │   ├── proxies.py         proxy-pool data layer (shared proxies + accounts.proxy_id assignment, capacity, connectivity-check persistence)
 │   │   ├── _accounts_delete.py  account cascade-delete (_delete_account/delete_account) split from accounts.py for the size budget; re-exported there
+│   │   ├── _warming_settings.py  warming_settings singleton persistence (secret read model + keep/clear/replace save + default-row seed) split from warming.py for the size budget; re-exported there
 │   │   ├── warming_joined.py  tracks channels an account already joined (join-dedup)
 │   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims, comment quota counts in _quota.py, challenge audit+cache in _challenges.py, operator-editable limits in _settings.py)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client

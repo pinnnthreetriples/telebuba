@@ -12,6 +12,7 @@ from __future__ import annotations
 import random
 
 from core.gemini import generate_text
+from core.openai import generate_text as generate_text_openai
 from core.telegram_client import execute, execute_read
 from services.spam_status import refresh_spam_status
 
@@ -19,4 +20,11 @@ from services.spam_status import refresh_spam_status
 # module-level ``random.*`` helpers. Behaviour is identical for our needs.
 rng = random.SystemRandom()
 
-__all__ = ["execute", "execute_read", "generate_text", "refresh_spam_status", "rng"]
+__all__ = [
+    "execute",
+    "execute_read",
+    "generate_text",
+    "generate_text_openai",
+    "refresh_spam_status",
+    "rng",
+]

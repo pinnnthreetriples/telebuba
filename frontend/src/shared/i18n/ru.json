@@ -42,7 +42,12 @@
       "free_many": "{{count}} слотов свободно",
       "emptyTitle": "Пул пуст",
       "emptyBody": "Добавьте прокси, чтобы назначать их аккаунтам — один прокси обслуживает до 3 аккаунтов",
-      "emptyAdd": "Добавить прокси"
+      "emptyAdd": "Добавить прокси",
+      "status": {
+        "tcp_working": "Работает",
+        "failed": "Не работает",
+        "unknown": "Не проверен"
+      }
     },
     "edit": {
       "back": "Назад к списку",
@@ -296,13 +301,20 @@
     },
     "api": {
       "title": "API-ключи",
-      "subtitle": "Доступ к модели генерации комментариев",
+      "subtitle": "Доступ к моделям генерации комментариев и решения капчи",
       "geminiKey": "Gemini API key",
+      "openaiKey": "OpenAI API key (капча)",
       "keySet": "Ключ задан — оставьте пустым, чтобы сохранить",
       "keyUnset": "Ключ не задан",
       "clearKey": "Очистить ключ",
       "keyCleared": "Ключ будет удалён при сохранении",
       "toggleVisibility": "Показать/скрыть ключ"
+    },
+    "captchaLlm": {
+      "title": "LLM для решения капчи",
+      "subtitle": "Какая модель читает и решает капчи в каналах",
+      "gemini": "Gemini",
+      "openai": "ChatGPT"
     },
     "warmLimits": {
       "title": "Лимиты прогрева",
@@ -411,7 +423,26 @@
     "warming_unpromoted_from_neurocomment": "Аккаунт возвращён из нейрокомментинга",
     "warming_quarantine_recovered": "Аккаунт восстановлен после карантина",
     "warming_quarantine_exhausted": "Карантин исчерпан",
-    "warming_settings_saved": "Настройки прогрева сохранены"
+    "warming_settings_saved": "Настройки прогрева сохранены",
+    "warming_start_blocked": "Запуск прогрева заблокирован",
+    "warming_runtime_reconciled": "Прогрев синхронизирован",
+    "warming_unpromoted_on_restart": "Возвращён в прогрев при перезапуске",
+    "phase_advanced": "Переход на следующую фазу",
+    "spam_status_refreshed": "Спам-статус обновлён",
+    "telegram_set_online": "Заход в сеть",
+    "telegram_read_channel": "Чтение канала",
+    "telegram_read_channel_failed": "Не удалось прочитать канал",
+    "telegram_watch_peer_stories": "Просмотр историй",
+    "telegram_react_to_post": "Реакция на пост",
+    "telegram_react_to_post_failed": "Не удалось поставить реакцию",
+    "telegram_join_channel": "Подписка на канал",
+    "telegram_join_channel_failed": "Не удалось подписаться на канал",
+    "telegram_join_discussion_group": "Вступление в чат канала",
+    "telegram_post_story": "Публикация истории",
+    "telegram_post_story_failed": "Не удалось опубликовать историю",
+    "telegram_spam_status_probe_failed": "Не удалось проверить спам-статус",
+    "telegram_pool_connect_failed": "Ошибка подключения к Telegram",
+    "telegram_pool_connect_retry": "Повторное подключение к Telegram"
   },
   "neurocomment": {
     "title": "Нейрокомментинг",
@@ -646,11 +677,13 @@
     },
     "card": {
       "dayProgress": "{{days}} / 14 дней",
-      "actionsTip": "действий",
+      "actionsTip": "Действия за сегодня из дневного лимита: онлайн, чтение, реакции, просмотр сторис, сообщения. Лимит зависит от фазы прогрева и растёт по мере взросления аккаунта. На пределе аккаунт засыпает до следующего дня, затем счётчик обнуляется.",
       "cfgTitle": "Настройки прогрева",
       "logToggle": "Лог активности",
       "logLoading": "Загрузка лога…",
       "logEmpty": "Событий пока нет",
+      "logClear": "Очистить",
+      "pauseCountdown": "ещё {{time}}",
       "completeTitle": "Прогрев завершён",
       "completeSub": "{{days}} · аккаунт готов",
       "finish": "Отправить в прогретые",

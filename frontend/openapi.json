@@ -7193,6 +7193,26 @@
             "minLength": 1,
             "title": "Gemini Model"
           },
+          "has_openai_key": {
+            "type": "boolean",
+            "title": "Has Openai Key",
+            "default": false
+          },
+          "openai_model": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Openai Model",
+            "default": "gpt-4o"
+          },
+          "captcha_llm_provider": {
+            "type": "string",
+            "enum": [
+              "gemini",
+              "openai"
+            ],
+            "title": "Captcha Llm Provider",
+            "default": "gemini"
+          },
           "updated_at": {
             "type": "string",
             "minLength": 1,
@@ -7261,6 +7281,48 @@
             "type": "boolean",
             "title": "Clear Gemini Key",
             "default": false
+          },
+          "openai_api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openai Api Key"
+          },
+          "openai_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Openai Model"
+          },
+          "clear_openai_key": {
+            "type": "boolean",
+            "title": "Clear Openai Key",
+            "default": false
+          },
+          "captcha_llm_provider": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "gemini",
+                  "openai"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Captcha Llm Provider"
           }
         },
         "additionalProperties": false,

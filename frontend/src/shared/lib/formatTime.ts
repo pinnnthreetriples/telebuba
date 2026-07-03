@@ -6,6 +6,8 @@ export function formatLocalTime(iso: string, options: { seconds?: boolean } = {}
   return date.toLocaleTimeString([], {
     hour: '2-digit',
     minute: '2-digit',
+    // 24-hour clock (no AM/PM) — matches the RU UI convention.
+    hour12: false,
     ...(options.seconds ? { second: '2-digit' } : {}),
   });
 }

@@ -14,6 +14,15 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+# Settings models live in a sibling module for the file-size budget; re-exported
+# here so ``from schemas.warming import WarmingSettings`` etc. keep working.
+from schemas._warming_settings import (  # noqa: F401, TC001 - runtime re-export, not type-only
+    CaptchaLlmProvider,
+    WarmingSettings,
+    WarmingSettingsSecret,
+    WarmingSettingsUpdate,
+)
+
 WarmingState = Literal["idle", "active", "sleeping", "flood_wait", "quarantine", "error"]
 WarmingHealth = Literal["idle", "ok", "warn", "fail"]
 
@@ -76,57 +85,6 @@ class AddChannelsRequest(BaseModel):
 
 class RemoveChannelRequest(BaseModel):
     channel: str = Field(min_length=1)
-
-
-class WarmingSettings(BaseModel):
-    """Masked, UI-facing warming settings — never carries the raw Gemini key."""
-
-    inter_account_chat: bool = False
-    reactions_enabled: bool = True
-    join_enabled: bool = True
-    enforce_readiness: bool = True
-    # Deprecated (audit П2): the fleet-wide override is retired — the engine uses
-    # the per-account auto cap (phase + trust) only. Kept so existing rows load;
-    # no longer read by the cycle or surfaced in the UI.
-    max_daily_actions: int = Field(default=0, ge=0)
-    has_gemini_key: bool = False
-    gemini_model: str = Field(min_length=1)
-    updated_at: str = Field(min_length=1)
-
-
-class WarmingSettingsSecret(BaseModel):
-    """Internal read model — carries the raw Gemini key for ``core`` gateways only."""
-
-    inter_account_chat: bool
-    reactions_enabled: bool
-    join_enabled: bool = True
-    enforce_readiness: bool = True
-    max_daily_actions: int = Field(default=0, ge=0)
-    gemini_api_key: str
-    gemini_model: str = Field(min_length=1)
-    updated_at: str = Field(min_length=1)
-
-
-class WarmingSettingsUpdate(BaseModel):
-    """Caller-supplied settings change from the UI.
-
-    ``gemini_api_key`` semantics: ``None`` leaves the stored key untouched, an
-    empty string clears it, any other value replaces it. Same applies to
-    ``gemini_model`` — ``None`` keeps current value, non-empty overrides.
-    An explicit ``clear_gemini_key`` flag is provided so the UI can clear the
-    stored key without ambiguity.
-    """
-
-    model_config = ConfigDict(extra="forbid")
-
-    inter_account_chat: bool = False
-    reactions_enabled: bool = True
-    join_enabled: bool = True
-    enforce_readiness: bool = True
-    max_daily_actions: int = Field(default=0, ge=0)
-    gemini_api_key: str | None = None
-    gemini_model: str | None = None
-    clear_gemini_key: bool = False
 
 
 class WarmingIntensity(BaseModel):

@@ -124,6 +124,9 @@ _warming_settings = Table(
     Column("max_daily_actions", Integer, nullable=True),
     Column("gemini_api_key", String, nullable=False),
     Column("gemini_model", String, nullable=False),
+    Column("openai_api_key", String, nullable=True),
+    Column("openai_model", String, nullable=True),
+    Column("captcha_llm_provider", String, nullable=True),
     Column("updated_at", String, nullable=False),
 )
 _warming_account_state = Table(

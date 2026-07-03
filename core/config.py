@@ -24,6 +24,7 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 from core._config_domains import (
     GeminiSettings,
     NeurocommentSettings,
+    OpenAISettings,
     TrustSettings,
     WarmingSettings,
 )
@@ -222,6 +223,7 @@ class Settings(BaseSettings):
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)
+    openai: OpenAISettings = Field(default_factory=OpenAISettings)
     trust: TrustSettings = Field(default_factory=TrustSettings)
     neurocomment: NeurocommentSettings = Field(default_factory=NeurocommentSettings)
 

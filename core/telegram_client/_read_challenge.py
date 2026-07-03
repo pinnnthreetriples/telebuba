@@ -10,6 +10,7 @@ can get the account kicked; a missed challenge is recoverable).
 from __future__ import annotations
 
 import asyncio
+import base64
 from typing import TYPE_CHECKING
 
 from telethon import events
@@ -91,6 +92,22 @@ def _extract_bot_challenge(
     )
 
 
+async def download_challenge_image(client: TelegramClient, message: object) -> str | None:
+    """Base64 of the challenge photo (fetched in-memory), or ``None`` if unavailable.
+
+    Uses Telethon's ``download_media(..., file=bytes)`` to get an in-memory
+    bytestring (no temp file) that the solver hands straight to Gemini vision.
+    A missing/undownloadable photo returns ``None`` so the solver gives up
+    cleanly rather than raising.
+    """
+    # Telethon idiom: passing the `bytes` type downloads in-memory (its stub types
+    # `file` too narrowly to admit it).
+    data = await client.download_media(message, file=bytes)  # ty: ignore[invalid-argument-type]
+    if not isinstance(data, (bytes, bytearray)):
+        return None
+    return base64.b64encode(bytes(data)).decode("ascii")
+
+
 async def dispatch_wait_for_bot_challenge(
     client: TelegramClient,
     action: WaitForBotChallenge,
@@ -121,6 +138,12 @@ async def dispatch_wait_for_bot_challenge(
             my_username=my_username,
         )
         if match is not None:
+            if match.has_photo:
+                # Fetch the captcha image so the solver can read it with Gemini
+                # vision; a failed download leaves image_b64 None → solver gives up.
+                image_b64 = await download_challenge_image(client, message)
+                if image_b64 is not None:
+                    match = match.model_copy(update={"image_b64": image_b64})
             future.set_result(match)
 
     # Resolve the group entity rather than trusting the bare linked_chat_id (no

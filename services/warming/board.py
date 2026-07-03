@@ -160,9 +160,10 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
 
 async def load_board() -> WarmingBoardState:
     cards, channels, masked = await _load_cards()
-    # A promoted account has been claimed by the neurocomment pool — it must
-    # not also linger in "ready to warm" just because stopping the loop
-    # happens to leave its state at "idle" (see list_warmed_accounts).
+    # A graduated account (promoted_to_nc) lives in the "Прогреты" pool
+    # (list_warmed_accounts), never in "ready to warm" — regardless of how many
+    # days it warmed. Its warmed card's «вернуть в прогрев» button un-promotes it
+    # back into idle. Buckets stay disjoint; a graduation is never stranded.
     idle = [card for card in cards if not is_warming(card.state) and not card.promoted_to_nc]
     warming = [card for card in cards if is_warming(card.state)]
     return WarmingBoardState(
@@ -180,19 +181,19 @@ async def load_board() -> WarmingBoardState:
 async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
     """Accounts the operator has graduated into the neurocomment pool.
 
-    Promotion is explicit: the warming card carries a «переместить в нейрокомментинг»
-    button that flips ``promoted_to_nc``. An account that has merely crossed
-    ``min_days`` of warming does NOT auto-appear here — the hand-off is a deliberate
-    operator action so partially-warmed accounts can't slip into commenting. The
-    ``min_days`` argument is kept as a sanity floor (so an accidental click on a
-    fresh account doesn't promote it), but the primary filter is the flag.
+    Graduation is an explicit operator action (the card's «в прогретые» /
+    «переместить в нейрокомментинг» button flips ``promoted_to_nc``), so *every*
+    promoted account appears here immediately — the day count is shown for
+    progress, not used to gate visibility (a below-target graduation is the
+    operator's call, not an accident). ``min_days`` only supplies the target
+    fallback for a card that never had one.
     """
     cards, _channels, _masked = await _load_cards()
     warmed = [
         WarmedAccount(
             account_id=card.account_id,
             label=card.label,
-            warming_days=card.warming_days,
+            warming_days=card.warming_days or 0,
             phone=card.phone,
             phone_country=card.phone_country,
             proxy_type=card.proxy_type,
@@ -200,7 +201,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
             target_days=card.target_days or min_days,
         )
         for card in cards
-        if card.promoted_to_nc and card.warming_days is not None and card.warming_days >= min_days
+        if card.promoted_to_nc
     ]
     warmed.sort(key=lambda a: a.warming_days, reverse=True)
     return WarmedAccountList(accounts=warmed)
