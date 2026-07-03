@@ -84,6 +84,28 @@ async def test_list_warmed_accounts_sorted_newest_warmed_first() -> None:
 
 
 @pytest.mark.asyncio
+async def test_promoted_below_floor_falls_back_to_ready_not_stranded() -> None:
+    """A promotion before the warmed floor must not strand the account.
+
+    Below the floor it is not in the warmed pool — so it must reappear in
+    «Готовы к прогреву» (idle) for the operator to re-warm, never invisible.
+    """
+    await create_account(AccountCreate(account_id="stranded", label="Stranded"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="stranded", state="idle", started_at=_days_ago(1)),
+    )
+    await mark_promoted_to_nc("stranded")
+
+    min_days = settings.neurocomment.warmed_min_days
+    # 1 day < the 14-day floor → not in the warmed pool…
+    assert (await list_warmed_accounts(min_days)).accounts == []
+    # …but recoverable from the ready column, never invisible.
+    board = await load_board()
+    assert "stranded" in {c.account_id for c in board.idle}
+    assert "stranded" not in {c.account_id for c in board.warming}
+
+
+@pytest.mark.asyncio
 async def test_list_warmed_accounts_empty_when_none_warmed() -> None:
     await create_account(AccountCreate(account_id="fresh", label="Fresh"))
     result = await list_warmed_accounts(14)

@@ -158,12 +158,24 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
     return cards, channels, masked
 
 
+def _is_warmed(card: WarmingAccountState, min_days: int) -> bool:
+    """Belongs in the neurocomment "warmed" pool: promoted AND past the day floor.
+
+    A promoted account *below* the floor is deliberately kept out of that pool
+    (``list_warmed_accounts``). It must therefore fall back to the idle "ready to
+    warm" column rather than vanish from both — otherwise a graduation before the
+    floor strands the account in no column at all.
+    """
+    return card.promoted_to_nc and card.warming_days is not None and card.warming_days >= min_days
+
+
 async def load_board() -> WarmingBoardState:
     cards, channels, masked = await _load_cards()
-    # A promoted account has been claimed by the neurocomment pool — it must
-    # not also linger in "ready to warm" just because stopping the loop
-    # happens to leave its state at "idle" (see list_warmed_accounts).
-    idle = [card for card in cards if not is_warming(card.state) and not card.promoted_to_nc]
+    # An account that has fully graduated (promoted AND past the warmed-day floor)
+    # lives in the neurocomment warmed pool, not "ready to warm". A promotion made
+    # before the floor stays recoverable here in idle (see _is_warmed).
+    min_days = settings.neurocomment.warmed_min_days
+    idle = [card for card in cards if not is_warming(card.state) and not _is_warmed(card, min_days)]
     warming = [card for card in cards if is_warming(card.state)]
     return WarmingBoardState(
         idle=idle,
@@ -192,7 +204,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
         WarmedAccount(
             account_id=card.account_id,
             label=card.label,
-            warming_days=card.warming_days,
+            warming_days=days,
             phone=card.phone,
             phone_country=card.phone_country,
             proxy_type=card.proxy_type,
@@ -200,7 +212,9 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
             target_days=card.target_days or min_days,
         )
         for card in cards
-        if card.promoted_to_nc and card.warming_days is not None and card.warming_days >= min_days
+        if _is_warmed(card, min_days)
+        # ``_is_warmed`` already guarantees this; the walrus narrows int|None → int.
+        if (days := card.warming_days) is not None
     ]
     warmed.sort(key=lambda a: a.warming_days, reverse=True)
     return WarmedAccountList(accounts=warmed)

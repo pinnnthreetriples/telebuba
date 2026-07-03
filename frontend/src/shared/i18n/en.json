@@ -41,7 +41,12 @@
       "free_other": "{{count}} slots free",
       "emptyTitle": "Pool is empty",
       "emptyBody": "Add a proxy to assign it to accounts — one proxy serves up to 3 accounts",
-      "emptyAdd": "Add proxy"
+      "emptyAdd": "Add proxy",
+      "status": {
+        "working": "Working",
+        "failed": "Not working",
+        "unknown": "Not checked"
+      }
     },
     "edit": {
       "back": "Back to list",

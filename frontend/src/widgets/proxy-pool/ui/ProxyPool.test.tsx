@@ -23,6 +23,9 @@ function jsonResponse(body: unknown, status = 200): Response {
 interface ProxyOverrides {
   used?: number;
   free?: number;
+  status?: 'unknown' | 'tcp_working' | 'failed';
+  country_code?: string | null;
+  last_error?: string | null;
 }
 
 function proxy(over: ProxyOverrides = {}) {
@@ -50,6 +53,21 @@ test('renders pool cards with usage', async () => {
     expect(screen.getByText('nl.example:1080')).toBeInTheDocument();
   });
   expect(screen.getByText('2 / 3')).toBeInTheDocument();
+});
+
+test('warns clearly when a proxy check failed (flag gone, no silent card)', async () => {
+  vi.mocked(fetch).mockResolvedValue(
+    jsonResponse({
+      proxies: [proxy({ status: 'failed', country_code: null, last_error: 'connect timeout' })],
+    }),
+  );
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+  await waitFor(() => {
+    expect(screen.getByText('nl.example:1080')).toBeInTheDocument();
+  });
+  // The dead proxy is called out in words, and the raw reason is on hover.
+  expect(screen.getByText('Не работает')).toBeInTheDocument();
+  expect(screen.getByTitle('connect timeout')).toBeInTheDocument();
 });
 
 test('shows the empty state and triggers add', async () => {

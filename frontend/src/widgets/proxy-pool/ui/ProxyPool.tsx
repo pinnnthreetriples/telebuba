@@ -12,6 +12,15 @@ import type { ProxyRead } from '@/shared/api';
 
 import { ProxyDeleteModal } from './ProxyDeleteModal';
 
+// Proxy connectivity status → dot/label colour (design status palette). A failed
+// check drops the geo flag, so this is the only cue the proxy is dead — surface
+// it explicitly instead of letting the flag silently vanish.
+const PROXY_STATUS_COLOR: Record<ProxyRead['status'], string> = {
+  tcp_working: '#12a150',
+  failed: '#c0473f',
+  unknown: '#9a9893',
+};
+
 // The design's proxy-pool card: one card per pool proxy with a usage bar
 // (used/capacity), or an empty-state when the pool has none. Both add buttons
 // open the add-proxy modal (owned by the page). Wired to the real /proxies pool.
@@ -168,16 +177,25 @@ function ProxyCard({
 }) {
   const { t } = useTranslation();
   const full = proxy.free <= 0;
+  const failed = proxy.status === 'failed';
+  const problem = full || failed;
+  const statusColor = PROXY_STATUS_COLOR[proxy.status];
   const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
-      className={`flex flex-col gap-[9px] rounded-[13px] border px-[14px] py-[13px] ${full ? 'border-[#f0d9d6] bg-[#fcf6f5]' : 'border-line bg-white'}`}
+      className={`flex flex-col gap-[9px] rounded-[13px] border px-[14px] py-[13px] ${problem ? 'border-[#f0d9d6] bg-[#fcf6f5]' : 'border-line bg-white'}`}
     >
       <div className="flex items-center gap-[9px]">
         {proxy.country_code ? (
           <span
             className={`fi fi-${proxy.country_code.toLowerCase()} h-4 w-[22px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
           />
+        ) : failed ? (
+          <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-[#fbecec] text-danger">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+              <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+            </svg>
+          </span>
         ) : (
           <span className="h-4 w-[22px] shrink-0 rounded-[3px] bg-[#e6e5e3]" />
         )}
@@ -185,8 +203,17 @@ function ProxyCard({
           <div className="truncate text-[12.5px] font-semibold">
             {proxy.host}:{proxy.port}
           </div>
-          <div className="mt-px text-[11px] text-ink-subtle">
-            {proxyTypeLabel(proxy.proxy_type)}
+          <div className="mt-px flex items-center gap-[5px] text-[11px] text-ink-subtle">
+            <span>{proxyTypeLabel(proxy.proxy_type)}</span>
+            <span className="text-line-strong">·</span>
+            <span
+              className="inline-flex items-center gap-[4px] font-medium"
+              style={{ color: statusColor }}
+              title={proxy.last_error ?? undefined}
+            >
+              <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: statusColor }} />
+              {t(`accounts.proxyPool.status.${proxy.status}`)}
+            </span>
           </div>
         </div>
         <button
