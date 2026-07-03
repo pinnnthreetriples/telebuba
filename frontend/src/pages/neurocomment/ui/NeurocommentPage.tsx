@@ -30,6 +30,7 @@ import {
   updateCampaignPromptMutation,
 } from '@/entities/campaign';
 import { logsQueryOptions } from '@/entities/log';
+import { warmedAccountsQueryOptions } from '@/entities/warming';
 import type { ChallengeRow, NeurocommentCampaign } from '@/shared/api';
 import { eventLabel, formatLocalTime, useLogEventStream, useTransientFeedback } from '@/shared/lib';
 import {
@@ -247,6 +248,13 @@ export function NeurocommentPage() {
 
   const campaigns = useQuery(campaignsQueryOptions());
   const accounts = useQuery(accountsQueryOptions());
+  // Only graduated accounts ("Прогреты" pool) are eligible for neurocommenting;
+  // the idle counter and the assignable candidates come from here, not the full
+  // account list.
+  const warmed = useQuery({
+    ...warmedAccountsQueryOptions(),
+    refetchInterval: FALLBACK_POLL_MS,
+  });
   const runtime = useQuery({
     ...neurocommentRuntimeQueryOptions(),
     refetchInterval: FALLBACK_POLL_MS,
@@ -297,6 +305,8 @@ export function NeurocommentPage() {
   const updatePrompt = useMutation(updateCampaignPromptMutation());
 
   const accountOptions = accounts.data?.items ?? [];
+  // The graduated pool — what neurocomment may actually put to work.
+  const warmedAccounts = warmed.data?.accounts ?? [];
   const running = runtime.data?.running ?? false;
   // The listener id survives reload/pause: it comes from the persisted runtime
   // status (returned even when paused) and only falls back to a fresh local pick.
@@ -313,8 +323,9 @@ export function NeurocommentPage() {
   const linkedIds = new Set(boardAccounts.map((a) => a.account_id));
 
   // Rows for the neuro-accounts modal: the campaign's linked accounts (with a
-  // channel-pin dropdown) PLUS every loaded account not yet linked (linked:
-  // false → shows the "assign" button so an idle account can actually be added).
+  // channel-pin dropdown) PLUS every graduated ("Прогреты") account not yet
+  // linked (linked: false → shows the "assign" button so an idle warmed account
+  // can actually be added).
   const neuroAccountRows = [
     ...boardAccounts.map((a) => ({
       account_id: a.account_id,
@@ -322,7 +333,7 @@ export function NeurocommentPage() {
       linked: true,
       pinned_channel: a.pinned_channel ?? null,
     })),
-    ...accountOptions
+    ...warmedAccounts
       .filter((a) => !linkedIds.has(a.account_id))
       .map((a) => ({
         account_id: a.account_id,
@@ -340,8 +351,10 @@ export function NeurocommentPage() {
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
 
-  // Accounts loaded on the page but not linked to the selected campaign's board.
-  const idleCount = accountOptions.filter((a) => !linkedIds.has(a.account_id)).length;
+  // Idle = graduated ("Прогреты") accounts not yet linked to the selected
+  // campaign's board. Only warmed accounts count — a still-warming or un-graduated
+  // account is not "idle neurocomment work".
+  const idleCount = warmedAccounts.filter((a) => !linkedIds.has(a.account_id)).length;
 
   const stats: { label: string; value: number; color: string }[] = [
     { label: t('neurocomment.stat.campaigns'), value: campaignList.length, color: '#0b0b0c' },

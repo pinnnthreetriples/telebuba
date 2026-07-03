@@ -130,6 +130,12 @@ function routeApiRunning() {
         }),
       );
     }
+    if (url.pathname === '/api/v1/warming/warmed') {
+      // acc-2 is graduated ("Прогреты") and unlinked → the idle account.
+      return Promise.resolve(
+        jsonResponse({ accounts: [{ account_id: 'acc-2', label: '+79261119999' }] }),
+      );
+    }
     return Promise.resolve(jsonResponse({}));
   });
 }
@@ -218,6 +224,12 @@ test('an idle account (loaded but not linked) can be assigned to the campaign', 
           ],
           next_cursor: null,
         }),
+      );
+    }
+    if (url.pathname === '/api/v1/warming/warmed') {
+      // acc-2 is graduated ("Прогреты") and unlinked → the idle account.
+      return Promise.resolve(
+        jsonResponse({ accounts: [{ account_id: 'acc-2', label: '+79261119999' }] }),
       );
     }
     return Promise.resolve(jsonResponse({}));
