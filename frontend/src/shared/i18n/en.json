@@ -568,7 +568,7 @@
         "title": "Accounts in neurocommenting",
         "sub": "{{count}} accounts · assign to the campaign or remove from work",
         "channelLabel": "Account channel",
-        "channelUnsupported": "not supported",
+        "allChannels": "All channels",
         "assign": "Add to campaign",
         "remove": "Remove from neurocommenting",
         "removeTitle": "Remove {{phone}} from neurocommenting?",

@@ -89,7 +89,11 @@ export function AppNav() {
           <span
             aria-hidden
             className="pointer-events-none absolute top-0 h-[2px] rounded-b-[2px] bg-primary transition-[left,width] duration-[450ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
-            style={{ left: indicator.left, width: indicator.width, opacity: indicator.width ? 1 : 0 }}
+            style={{
+              left: indicator.left,
+              width: indicator.width,
+              opacity: indicator.width ? 1 : 0,
+            }}
           />
         </nav>
 

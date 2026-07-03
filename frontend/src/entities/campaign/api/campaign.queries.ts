@@ -14,6 +14,7 @@ export {
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   retryChallengeMutation,
+  setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
   startNeurocommentMutation,

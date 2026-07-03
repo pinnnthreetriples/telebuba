@@ -22,6 +22,7 @@ import {
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   retryChallengeMutation,
+  setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
   startNeurocommentMutation,
@@ -292,6 +293,7 @@ export function NeurocommentPage() {
   const deleteCampaign = useMutation(deleteCampaignMutation());
   const removeChannel = useMutation(removeCampaignChannelMutation());
   const removeAccount = useMutation(removeCampaignAccountMutation());
+  const setAccountChannel = useMutation(setCampaignAccountChannelMutation());
   const updatePrompt = useMutation(updateCampaignPromptMutation());
 
   const accountOptions = accounts.data?.items ?? [];
@@ -311,20 +313,22 @@ export function NeurocommentPage() {
   const linkedIds = new Set(boardAccounts.map((a) => a.account_id));
 
   // Rows for the neuro-accounts modal: the campaign's linked accounts (with a
-  // channel) PLUS every loaded account not yet linked (channel === null → shows
-  // the "assign" button so an idle account can actually be added — finding #1).
+  // channel-pin dropdown) PLUS every loaded account not yet linked (linked:
+  // false → shows the "assign" button so an idle account can actually be added).
   const neuroAccountRows = [
     ...boardAccounts.map((a) => ({
       account_id: a.account_id,
       phone: a.label,
-      channel: a.readiness?.[0]?.channel ?? boardChannelNames[0] ?? '—',
+      linked: true,
+      pinned_channel: a.pinned_channel ?? null,
     })),
     ...accountOptions
       .filter((a) => !linkedIds.has(a.account_id))
       .map((a) => ({
         account_id: a.account_id,
         phone: a.label ?? a.account_id,
-        channel: null,
+        linked: false,
+        pinned_channel: null,
       })),
   ];
 
@@ -1248,6 +1252,22 @@ export function NeurocommentPage() {
             if (campaignId !== null) {
               removeAccount.mutate(
                 { path: { campaign_id: campaignId }, body: { account_id: accountId } },
+                {
+                  onSettled: (_data, error) => {
+                    accountFeedback.mark(accountId, !error);
+                    invalidate();
+                  },
+                },
+              );
+            }
+          }}
+          onChannelChange={(accountId, channel) => {
+            if (campaignId !== null) {
+              setAccountChannel.mutate(
+                {
+                  path: { campaign_id: campaignId, account_id: accountId },
+                  body: { channel },
+                },
                 {
                   onSettled: (_data, error) => {
                     accountFeedback.mark(accountId, !error);
