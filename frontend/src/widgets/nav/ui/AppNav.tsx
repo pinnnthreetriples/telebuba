@@ -39,17 +39,30 @@ export function AppNav() {
   useLayoutEffect(() => {
     const nav = navRef.current;
     if (!nav) return;
+    let raf = 0;
     const move = () => {
       const active = nav.querySelectorAll('a')[activeIdx];
-      if (active instanceof HTMLElement) {
-        setIndicator({ left: active.offsetLeft, width: active.offsetWidth });
+      if (!(active instanceof HTMLElement)) return;
+      const navRect = nav.getBoundingClientRect();
+      const rect = active.getBoundingClientRect();
+      // The link may not be laid out yet (width 0) right after a route change /
+      // before webfonts settle — retry next frame instead of committing a 0-width
+      // bar that would otherwise stick (leaving a missing/stray indicator).
+      if (rect.width === 0) {
+        raf = requestAnimationFrame(move);
+        return;
       }
+      setIndicator({ left: rect.left - navRect.left, width: rect.width });
     };
-    move();
+    raf = requestAnimationFrame(move);
     window.addEventListener('resize', move);
     void document.fonts?.ready.then(move); // reposition once webfonts settle widths
+    const ro = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(move) : null;
+    ro?.observe(nav);
     return () => {
+      cancelAnimationFrame(raf);
       window.removeEventListener('resize', move);
+      ro?.disconnect();
     };
   }, [activeIdx]);
 
@@ -76,7 +89,7 @@ export function AppNav() {
           <span
             aria-hidden
             className="pointer-events-none absolute top-0 h-[2px] rounded-b-[2px] bg-primary transition-[left,width] duration-[450ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)]"
-            style={{ left: indicator.left, width: indicator.width }}
+            style={{ left: indicator.left, width: indicator.width, opacity: indicator.width ? 1 : 0 }}
           />
         </nav>
 

@@ -475,6 +475,7 @@
     "listener": {
       "title": "Listener account",
       "choose": "Choose an account…",
+      "noAccounts": "No accounts available",
       "listening": "Listening",
       "paused": "Paused",
       "pause": "Pause",

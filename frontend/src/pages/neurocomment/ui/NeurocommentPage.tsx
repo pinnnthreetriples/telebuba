@@ -808,19 +808,25 @@ export function NeurocommentPage() {
                 <div
                   className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${listenerOpen ? 'open' : ''}`}
                 >
-                  {accountOptions.map((account) => (
-                    <button
-                      key={account.account_id}
-                      type="button"
-                      onClick={() => {
-                        setListener(account.account_id);
-                        setListenerOpen(false);
-                      }}
-                      className="flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff]"
-                    >
-                      <span className="font-medium">{account.label ?? account.account_id}</span>
-                    </button>
-                  ))}
+                  {accountOptions.length === 0 ? (
+                    <div className="px-[10px] py-2 text-[12.5px] text-ink-subtle">
+                      {t('neurocomment.listener.noAccounts')}
+                    </div>
+                  ) : (
+                    accountOptions.map((account) => (
+                      <button
+                        key={account.account_id}
+                        type="button"
+                        onClick={() => {
+                          setListener(account.account_id);
+                          setListenerOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff]"
+                      >
+                        <span className="font-medium">{account.label ?? account.account_id}</span>
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
