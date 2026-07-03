@@ -192,7 +192,14 @@ function ProxyCard({
           />
         ) : failed ? (
           <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-[#fbecec] text-danger">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4">
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+            >
               <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
             </svg>
           </span>
@@ -211,7 +218,10 @@ function ProxyCard({
               style={{ color: statusColor }}
               title={proxy.last_error ?? undefined}
             >
-              <span className="h-[5px] w-[5px] shrink-0 rounded-full" style={{ background: statusColor }} />
+              <span
+                className="h-[5px] w-[5px] shrink-0 rounded-full"
+                style={{ background: statusColor }}
+              />
               {t(`accounts.proxyPool.status.${proxy.status}`)}
             </span>
           </div>
