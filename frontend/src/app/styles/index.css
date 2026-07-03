@@ -181,6 +181,19 @@
 .tb-upbar {
   animation: upbar 1.7s ease-out forwards;
 }
+/* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
+   opacity keyframe, staggered so the wave reads as ongoing chatter. */
+.tb-typing-dot {
+  animation: dotspin 1.2s ease-in-out infinite;
+}
+/* Motion is decorative here; honour the user's reduced-motion preference for
+   the dialogue feed's enter animation and typing dots. */
+@media (prefers-reduced-motion: reduce) {
+  .tb-swapin,
+  .tb-typing-dot {
+    animation: none;
+  }
+}
 
 .tb-tip {
   position: relative;

@@ -17,6 +17,7 @@ import {
 import type { WarmingAccountState } from '@/shared/api';
 import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
 import { CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
+import { DialogueFeed } from '@/widgets/dialogue-feed';
 import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 
 // SSE drives live board updates; this poll is just the fallback safety net.
@@ -553,18 +554,21 @@ export function WarmingPage() {
           </CollapsibleCard>
         </div>
 
-        <WarmingBoard
-          warming={warming}
-          onStop={(id) => {
-            runOnAccount(stop, id);
-          }}
-          onPromote={(id) => {
-            runGraduation(promote, id);
-          }}
-          busyId={busyId}
-          feedback={accountFeedback.feedback}
-          logLimit={data.card_log_limit}
-        />
+        <div>
+          <WarmingBoard
+            warming={warming}
+            onStop={(id) => {
+              runOnAccount(stop, id);
+            }}
+            onPromote={(id) => {
+              runGraduation(promote, id);
+            }}
+            busyId={busyId}
+            feedback={accountFeedback.feedback}
+            logLimit={data.card_log_limit}
+          />
+          <DialogueFeed />
+        </div>
       </div>
 
       {warmDaysFor ? (

@@ -771,6 +771,11 @@
       "spamLimited": "spam-limited",
       "trustCritical": "critical trust",
       "session": "no active session (login needed)"
+    },
+    "dialogues": {
+      "title": "Account conversation",
+      "empty": "No conversation yet",
+      "typing": "typing…"
     }
   },
   "auth": {

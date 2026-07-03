@@ -9,6 +9,7 @@ export {
   warmedAccountsQueryOptions,
   warmingBoardQueryOptions,
   warmingChannelsQueryOptions,
+  warmingDialoguesQueryOptions,
   warmingSettingsQueryOptions,
 } from './api/warming.queries';
 export { WarmingStateBadge } from './ui/WarmingStateBadge';
