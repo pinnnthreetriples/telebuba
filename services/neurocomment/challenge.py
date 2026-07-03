@@ -69,18 +69,47 @@ def _build_prompt(message: BotChallengeMessage) -> str:
     )
 
 
-async def _gemini_decision(message: BotChallengeMessage) -> ChallengeDecision | None:
+def _build_vision_prompt(message: BotChallengeMessage) -> str:
+    """Prompt for an IMAGE captcha — the photo is attached as an inline image part."""
+    buttons = "\n".join(f"{i}: {label}" for i, label in enumerate(message.button_labels))
+    return (
+        "A guardian bot shows a new group member an IMAGE captcha (attached). "
+        "First describe what the image shows, then pick the single action that "
+        "passes it.\n\n"
+        f"Instruction text:\n{message.text or '(no text)'}\n\n"
+        f"Inline buttons (index: label):\n{buttons or '(none)'}\n\n"
+        "If it asks to type characters/a code shown in the image -> send_text with "
+        "the exact characters. If the answer is one of the inline buttons "
+        "('tap the X') -> click_button with that button_index. If it is a slider / "
+        "drag / jigsaw / rotate puzzle or needs pixel-precise manipulation -> "
+        "give_up. Set confidence honestly; reasoning <= 200 chars."
+    )
+
+
+async def _gemini_decision(
+    message: BotChallengeMessage, *, use_image: bool = False
+) -> ChallengeDecision | None:
+    """Fresh Gemini decision, optionally multimodal.
+
+    ``use_image`` attaches the captcha photo (vision) and swaps in the image
+    prompt - set only for a photo challenge; a photo with no downloaded image
+    gives up rather than sending a blank vision request.
+    """
+    if use_image and message.image_b64 is None:
+        return None
     try:
         # GeminiRequest build can raise ValidationError when no API key is
         # configured — treat a misconfigured / timed-out Gemini as give_up rather
         # than crash onboarding (the solver runs before any opt-in flag gate).
         request = GeminiRequest(
             api_key=settings.gemini.api_key,
-            prompt=_build_prompt(message),
+            prompt=_build_vision_prompt(message) if use_image else _build_prompt(message),
             model=settings.gemini.model,
             temperature=settings.gemini.temperature,
             max_output_tokens=settings.gemini.max_output_tokens,
             response_schema_json=_DECISION_SCHEMA,
+            image_b64=message.image_b64 if use_image else None,
+            image_mime=message.image_mime,
         )
         result = await asyncio.wait_for(
             _seams.generate_text(request),
@@ -194,8 +223,36 @@ async def _record(
     )
 
 
+async def _dispatch_and_record(
+    account_id: str,
+    channel: str,
+    group_id: int,
+    message: BotChallengeMessage,
+    decision: ChallengeDecision,
+) -> ChallengeOutcome:
+    """Humanize-pause, dispatch the answer, and write the audit row."""
+    await asyncio.sleep(_human_delay_seconds())
+    dispatched = await _dispatch(account_id, group_id, message, decision)
+    # ponytail: re-onboarding a pair before its first comment can leave the prior
+    # pending row orphaned (the engine resolves only the latest); harmless — pending
+    # rows feed neither board status nor cache. Add re-onboard dedup if it ever bites.
+    await _record(
+        account_id,
+        channel,
+        message,
+        outcome="pending" if dispatched else "failed",
+        decision=decision,
+    )
+    return "solved" if dispatched else "failed"
+
+
 async def solve_if_present(account_id: str, channel: str, group_id: int) -> ChallengeOutcome:
     """Detect + solve a guardian-bot challenge on a freshly-joined group.
+
+    Text/inline-button challenges take the cache→Gemini text path; image captchas
+    take Gemini vision (never cached — the picture varies) and are gated on the
+    confidence floor, so a shaky read on a hard type (grid/slider/jigsaw) gives up
+    instead of mis-clicking and getting the account kicked.
 
     Returns the pair's onboarding signal: ``no_challenge`` / ``solved`` →
     comment-able (``solved`` is optimistic — the audit row stays ``pending`` until
@@ -213,26 +270,18 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
     if message is None:
         return "no_challenge"
     if message.has_photo:
-        # Image captcha: vision deferred (Phase 2) → record + give up, no Gemini.
-        await _record(account_id, channel, message, outcome="give_up", decision=None)
-        return "give_up"
+        # Image captcha: vision decision, never cached (the picture varies).
+        decision = await _gemini_decision(message, use_image=True)
+        floor = settings.neurocomment.challenge_min_confidence
+        if decision is None or decision.action == "give_up" or decision.confidence < floor:
+            await _record(account_id, channel, message, outcome="give_up", decision=decision)
+            return "give_up"
+        return await _dispatch_and_record(account_id, channel, group_id, message, decision)
     decision = await _decide(message)
     if decision is None or decision.action == "give_up":
         await _record(account_id, channel, message, outcome="give_up", decision=decision)
         return "give_up"
-    await asyncio.sleep(_human_delay_seconds())
-    dispatched = await _dispatch(account_id, group_id, message, decision)
-    # ponytail: re-onboarding a pair before its first comment can leave the prior
-    # pending row orphaned (the engine resolves only the latest); harmless — pending
-    # rows feed neither board status nor cache. Add re-onboard dedup if it ever bites.
-    await _record(
-        account_id,
-        channel,
-        message,
-        outcome="pending" if dispatched else "failed",
-        decision=decision,
-    )
-    return "solved" if dispatched else "failed"
+    return await _dispatch_and_record(account_id, channel, group_id, message, decision)
 
 
 async def retry_pair(account_id: str, channel: str) -> AccountChannelOnboarding:

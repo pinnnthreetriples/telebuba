@@ -22,6 +22,11 @@ class GeminiRequest(BaseModel):
     # Optional JSON-Schema for server-side structured output (Gemini
     # ``responseSchema``); an opaque schema dict, not inter-layer domain data.
     response_schema_json: dict[str, object] | None = None
+    # Optional inline image (base64) for a multimodal request — e.g. an image
+    # captcha the vision model must read. ``image_mime`` is ignored when
+    # ``image_b64`` is None; the model must be vision-capable (gemini-2.5-flash is).
+    image_b64: str | None = None
+    image_mime: str = Field(default="image/jpeg", min_length=1)
 
 
 class GeminiResult(BaseModel):

@@ -112,6 +112,46 @@ async def test_no_response_schema_when_unset() -> None:
 
 
 @pytest.mark.asyncio
+async def test_image_added_as_inline_data_part() -> None:
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "{}"}]}}]},
+            ),
+        )
+        request = GeminiRequest(
+            api_key="k",
+            prompt="read the captcha",
+            model="gemini-2.5-flash",
+            temperature=0.0,
+            max_output_tokens=200,
+            image_b64="aW1n",
+            image_mime="image/png",
+        )
+        await generate_text(request)
+
+    parts = json.loads(route.calls.last.request.content)["contents"][0]["parts"]
+    assert parts[0] == {"text": "read the captcha"}
+    assert parts[1] == {"inlineData": {"mimeType": "image/png", "data": "aW1n"}}
+
+
+@pytest.mark.asyncio
+async def test_no_image_part_when_unset() -> None:
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+            ),
+        )
+        await generate_text(_request())
+
+    parts = json.loads(route.calls.last.request.content)["contents"][0]["parts"]
+    assert parts == [{"text": "say hi"}]
+
+
+@pytest.mark.asyncio
 async def test_generate_text_persistent_429_is_rate_limited(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

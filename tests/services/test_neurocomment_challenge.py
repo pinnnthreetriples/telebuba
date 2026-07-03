@@ -112,9 +112,13 @@ def _decision_text(**kw: object) -> str:
     return ChallengeDecision(**base).model_dump_json()  # ty: ignore[invalid-argument-type]
 
 
-def _msg(*, has_photo: bool = False) -> BotChallengeMessage:
+def _msg(*, has_photo: bool = False, image_b64: str | None = None) -> BotChallengeMessage:
     return BotChallengeMessage(
-        text="prove you are human", button_labels=["yes", "no"], message_id=7, has_photo=has_photo
+        text="prove you are human",
+        button_labels=["yes", "no"],
+        message_id=7,
+        has_photo=has_photo,
+        image_b64=image_b64,
     )
 
 
@@ -137,14 +141,89 @@ async def test_no_challenge_when_wait_times_out(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
-async def test_image_challenge_gives_up_without_gemini(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_image_challenge_solved_via_vision(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A photo challenge with a downloaded image → Gemini vision decides + we click.
+    gemini = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+    execute = _ExecuteStub(ok=True)
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(has_photo=True, image_b64="aW1n")))
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", execute.execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    outcome = await challenge.solve_if_present("acc-1", "@chan", 99)
+
+    assert outcome == "solved"
+    assert len(gemini.calls) == 1
+    # The captcha image is forwarded to Gemini as an inline image part.
+    assert gemini.calls[0].image_b64 == "aW1n"
+    assert isinstance(execute.calls[0], ClickButton)
+    assert [r["outcome"] for r in _challenge_rows()] == ["pending"]
+
+
+@pytest.mark.asyncio
+async def test_image_challenge_low_confidence_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Below the confidence floor the solver gives up rather than mis-click a hard captcha.
+    gemini = _gemini(
+        GeminiResult(
+            status="ok",
+            text=_decision_text(action="click_button", button_index=0, confidence=0.5),
+        ),
+    )
+    execute = _ExecuteStub(ok=True)
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(has_photo=True, image_b64="aW1n")))
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", execute.execute)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "give_up"
+    assert execute.calls == []  # never dispatched below the floor
+    assert [r["outcome"] for r in _challenge_rows()] == ["give_up"]
+
+
+@pytest.mark.asyncio
+async def test_image_challenge_no_image_gives_up_without_gemini(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # has_photo but the download failed (image_b64 None) → give up, no Gemini call.
     gemini = _gemini(GeminiResult(status="ok", text=_decision_text()))
-    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(has_photo=True)))
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg(has_photo=True, image_b64=None)))
     monkeypatch.setattr(_seams, "generate_text", gemini)
 
     assert await challenge.solve_if_present("acc-1", "@chan", 99) == "give_up"
     assert gemini.calls == []
     assert [r["outcome"] for r in _challenge_rows()] == ["give_up"]
+
+
+@pytest.mark.asyncio
+async def test_image_challenge_bypasses_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A cached solved decision exists for the same text+labels, but the image path
+    # must ignore the cache (the picture varies) and call Gemini vision fresh.
+    message = _msg(has_photo=True, image_b64="aW1n")
+    decision = ChallengeDecision(
+        action="click_button", button_index=0, confidence=0.9, reasoning="r"
+    )
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash=challenge._challenge_hash(message.text, message.button_labels),
+            account_id="other-acc",
+            channel="@other",
+            raw_text=message.text,
+            button_labels=message.button_labels,
+            outcome="solved",
+            decision_json=decision.model_dump_json(),
+        ),
+    )
+    gemini = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+    monkeypatch.setattr(_seams, "execute_read", _wait(message))
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", _ExecuteStub(ok=True).execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert len(gemini.calls) == 1  # vision path ignored the cache
 
 
 @pytest.mark.asyncio
