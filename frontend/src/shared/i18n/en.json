@@ -669,7 +669,7 @@
     },
     "card": {
       "dayProgress": "{{days}} / 14 days",
-      "actionsTip": "actions",
+      "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
       "cfgTitle": "Warming settings",
       "logToggle": "Activity log",
       "logLoading": "Loading log…",

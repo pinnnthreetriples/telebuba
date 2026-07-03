@@ -231,6 +231,13 @@
   border: 5px solid transparent;
   border-bottom-color: #16161a;
 }
+/* Wider, wrapping variant for tooltips that carry a full explanation
+   (e.g. the daily-actions counter) instead of a one-word label. */
+.tb-tip-pop--wide {
+  white-space: normal;
+  width: 240px;
+  text-align: center;
+}
 
 .tb-scroll::-webkit-scrollbar {
   width: 8px;

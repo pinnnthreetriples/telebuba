@@ -161,7 +161,7 @@ function WarmingCard({
                 <span className="cursor-help text-[10.5px] font-medium text-ink-subtle">
                   {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
                 </span>
-                <span className="tb-tip-pop">{t('warming.card.actionsTip')}</span>
+                <span className="tb-tip-pop tb-tip-pop--wide">{t('warming.card.actionsTip')}</span>
               </span>
             </div>
           </div>
