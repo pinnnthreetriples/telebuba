@@ -124,7 +124,6 @@ This is the FE counterpart to the backend's "config in `core/config.py`" rule �
 | Generated client | `@hey-api/openapi-ts` from `/api/v1` OpenAPI |
 | Error reporting | Sentry React |
 | Unit / component tests | Vitest + React Testing Library |
-| E2E smoke | Playwright (critical flows) |
 | Assets | self-hosted Inter + flag-icons — **zero CDN** |
 
 ## Gate set (CI + local)
@@ -139,13 +138,11 @@ check erode. All of these block a merge:
 - **Vitest** — unit/component tests, **coverage floor 80%** (generated client, shadcn
   primitives, and pure-presentational components excluded; logic — hooks/features/api — tested
   strictly).
-- **Playwright smoke** — critical flows (login, each screen loads, one happy-path action) as
-  the integration net.
 - **gen-api drift** — the committed generated client must match a fresh generation from the
   backend OpenAPI (shared with `ci.md`).
 
-80% UI coverage + E2E is the honest floor: 90% branch on presentational components is
-high-cost / low-signal; logic is tested strictly and flows are covered by Playwright.
+80% UI coverage is the honest floor: 90% branch on presentational components is
+high-cost / low-signal; logic is tested strictly.
 
 ## What does NOT belong here
 

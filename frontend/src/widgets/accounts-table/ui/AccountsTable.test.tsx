@@ -56,3 +56,22 @@ test('fires the row actions for the clicked account', async () => {
   expect(onCheck).toHaveBeenCalledWith('acc-1');
   expect(onDelete).toHaveBeenCalledWith('acc-1');
 });
+
+test('opens the clicked row and does not bubble action clicks to the row', async () => {
+  const onOpen = vi.fn();
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpen={onOpen}
+      busyId={null}
+    />,
+  );
+  await userEvent.click(screen.getByText('@mainuser'));
+  expect(onOpen).toHaveBeenCalledWith(ACCOUNTS[0]);
+  // an action button stops propagation → the row's onOpen must not double-fire
+  onOpen.mockClear();
+  await userEvent.click(screen.getAllByTitle('Проверить')[0]!);
+  expect(onOpen).not.toHaveBeenCalled();
+});

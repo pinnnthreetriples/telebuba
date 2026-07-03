@@ -43,10 +43,9 @@ Read `context/frontend.md` first. Key constraints:
 7. **i18n.** Add every string to `shared/i18n/ru.json` (+ `en.json` key) — no literal text in JSX.
 8. **Tokens.** Use Tailwind classes from `tailwind.config`; don't hardcode hex/px that
    duplicates a token. Use `shared/ui` (shadcn/Radix) primitives.
-9. **Test.** Vitest + RTL for logic (hooks/features); add a Playwright smoke step if it's a
-   critical flow. Keep ≥ 80% on logic (presentational/generated/shadcn excluded).
-10. **Run gates** (from `frontend/`): `npm run gates` (eslint/prettier/boundaries/tsc/vitest),
-    and `npm run e2e` if you touched a critical flow.
+9. **Test.** Vitest + RTL for logic (hooks/features). Keep ≥ 80% on logic
+   (presentational/generated/shadcn excluded).
+10. **Run gates** (from `frontend/`): `npm run gates` (eslint/prettier/boundaries/tsc/vitest).
 
 ## Gotchas
 
@@ -63,7 +62,6 @@ Read `context/frontend.md` first. Key constraints:
 - [ ] Data access only via `shared/api` / entity `api/` (TanStack Query over the generated client)
 - [ ] No literal user-facing strings — all via i18n; colors/spacing via tokens
 - [ ] `npm run gates` passes (boundary-lint + tsc-strict + eslint + vitest ≥ 80%)
-- [ ] Playwright smoke added/updated for a critical flow
 
 ## Reference implementation
 

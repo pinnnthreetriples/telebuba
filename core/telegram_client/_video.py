@@ -20,6 +20,11 @@ Tool choice (June 2026):
 The cropping strategy matches official Telegram clients (center-crop
 to 9:16, no blurred letterbox — that's a photo-only style). Output is
 720x1280 H.264 main / AAC stereo @ 30 fps, time-capped to 60 s.
+
+Failures raise :class:`StoryVideoNormalisationError` carrying a stable,
+locale-neutral ``code`` (never pre-translated prose, non-negotiable #12);
+the code flows through ``execute``'s ``ActionResult.error_message`` to the
+API error envelope, and the SPA translates it.
 """
 
 from __future__ import annotations
@@ -28,13 +33,26 @@ import asyncio
 import re
 import shutil
 import tempfile
+from contextlib import suppress
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
+
+from core.config import settings
 
 # Telegram story spec — see core.telegram.org/api/stories.
 _TARGET_WIDTH: Final[int] = 720
 _TARGET_HEIGHT: Final[int] = 1280
 _MAX_DURATION_SEC: Final[int] = 60
+
+# Stable, locale-neutral failure codes (non-negotiable #12). The SPA translates
+# these — no Russian prose crosses the wire. One code per distinct failure.
+StoryVideoErrorCode = Literal[
+    "story_video_invalid",
+    "story_video_thumb_failed",
+    "story_video_corrupt",
+    "story_video_duration_failed",
+    "story_video_ffmpeg_missing",
+]
 
 _FFMPEG_ENCODE_FILTER: Final[str] = (
     # Crop the largest 9:16 rectangle that fits inside the source, then scale
@@ -53,7 +71,16 @@ _DURATION_RE: Final[re.Pattern[str]] = re.compile(
 
 
 class StoryVideoNormalisationError(ValueError):
-    """Raised when ffmpeg can't produce a sendable story MP4."""
+    """Raised when ffmpeg can't produce a sendable story MP4.
+
+    Carries a stable, locale-neutral ``code`` — ``str(exc)`` is the code itself,
+    so it survives the ``execute`` → ``ActionResult.error_message`` → API
+    error-envelope path as a code (the SPA translates it), never Russian prose.
+    """
+
+    def __init__(self, code: StoryVideoErrorCode) -> None:
+        self.code: StoryVideoErrorCode = code
+        super().__init__(code)
 
 
 async def normalize_story_video_for_telegram(
@@ -71,10 +98,10 @@ async def normalize_story_video_for_telegram(
     with what was published while avoiding the H.264 generation loss that
     made freshly-uploaded story thumbs look soft inside the UI carousel.
 
-    Raises :class:`StoryVideoNormalisationError` (a ``ValueError``) with a
-    Russian-language message when ffmpeg is missing, the input is corrupt,
-    or the encode fails — the UI layer catches it via the existing
-    ``ValueError`` path and surfaces the message verbatim.
+    Raises :class:`StoryVideoNormalisationError` (a ``ValueError``) carrying a
+    stable ``code`` when ffmpeg is missing, the input is corrupt, or the encode
+    fails — the UI layer catches it via the existing ``ValueError`` path and
+    translates the code (non-negotiable #12).
     """
     ffmpeg_bin = _resolve_ffmpeg_binary()
     with tempfile.TemporaryDirectory() as tempdir:
@@ -86,12 +113,12 @@ async def normalize_story_video_for_telegram(
         await _run_ffmpeg(
             ffmpeg_bin,
             _encode_args(source_path, output_path),
-            failure_message="Видео не удалось обработать — попробуйте другой файл",
+            failure_code="story_video_invalid",
         )
         await _run_ffmpeg(
             ffmpeg_bin,
             _thumbnail_args(source_path, thumb_path),
-            failure_message="Превью видео извлечь не удалось",
+            failure_code="story_video_thumb_failed",
         )
         duration = await _extract_duration_seconds(ffmpeg_bin, output_path)
         return (
@@ -175,22 +202,22 @@ def _resolve_ffmpeg_binary() -> str:
     try:
         import imageio_ffmpeg  # noqa: PLC0415 — optional fallback path
     except ImportError as exc:
-        msg = "ffmpeg не установлен в системе — установите ffmpeg или зависимость imageio-ffmpeg"
-        raise StoryVideoNormalisationError(msg) from exc
+        code: StoryVideoErrorCode = "story_video_ffmpeg_missing"
+        raise StoryVideoNormalisationError(code) from exc
     bundled = imageio_ffmpeg.get_ffmpeg_exe()
     if not bundled:
-        msg = "ffmpeg не установлен в системе"
-        raise StoryVideoNormalisationError(msg)
+        code = "story_video_ffmpeg_missing"
+        raise StoryVideoNormalisationError(code)
     return bundled
 
 
-async def _run_ffmpeg(binary: str, args: list[str], *, failure_message: str) -> str:
+async def _run_ffmpeg(binary: str, args: list[str], *, failure_code: StoryVideoErrorCode) -> str:
     """Execute ffmpeg and return its stderr.
 
     ffmpeg writes informational output to stderr even on success — duration
-    parsing relies on that. A non-zero exit is translated into a Russian
-    ``StoryVideoNormalisationError`` so the UI message stays consistent
-    with the rest of the upload pipeline.
+    parsing relies on that. A non-zero exit is translated into a
+    ``StoryVideoNormalisationError`` carrying a stable code so the UI keeps a
+    locale-neutral contract with the rest of the upload pipeline.
     """
     proc = await asyncio.create_subprocess_exec(
         binary,
@@ -198,14 +225,35 @@ async def _run_ffmpeg(binary: str, args: list[str], *, failure_message: str) -> 
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr_bytes = await proc.communicate()
+    stderr_bytes = await _communicate_or_kill(proc, failure_code)
     stderr = stderr_bytes.decode("utf-8", errors="replace")
     if proc.returncode != 0:
         if "Invalid data found" in stderr or "moov atom not found" in stderr:
-            msg = "Видео повреждено или формат не поддерживается"
-            raise StoryVideoNormalisationError(msg)
-        raise StoryVideoNormalisationError(failure_message)
+            corrupt: StoryVideoErrorCode = "story_video_corrupt"
+            raise StoryVideoNormalisationError(corrupt)
+        raise StoryVideoNormalisationError(failure_code)
     return stderr
+
+
+async def _communicate_or_kill(
+    proc: asyncio.subprocess.Process,
+    failure_code: StoryVideoErrorCode,
+) -> bytes:
+    """Await ``proc.communicate()`` under the configured ffmpeg timeout.
+
+    On timeout the process is killed (and reaped) so a stalling video can't hang
+    the request coroutine forever or orphan the child, then the module's normal
+    failure path raises. Returns the captured stderr bytes on completion.
+    """
+    try:
+        async with asyncio.timeout(settings.profile_media.ffmpeg_timeout_seconds):
+            _, stderr_bytes = await proc.communicate()
+    except TimeoutError as exc:
+        proc.kill()
+        with suppress(ProcessLookupError):
+            await proc.wait()
+        raise StoryVideoNormalisationError(failure_code) from exc
+    return stderr_bytes
 
 
 async def _extract_duration_seconds(binary: str, path: Path) -> float:
@@ -222,7 +270,10 @@ async def _extract_duration_seconds(binary: str, path: Path) -> float:
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    _, stderr_bytes = await proc.communicate()
+    stderr_bytes = await _communicate_or_kill(
+        proc,
+        "story_video_duration_failed",
+    )
     stderr = stderr_bytes.decode("utf-8", errors="replace")
     match = _DURATION_RE.search(stderr)
     if match is None:

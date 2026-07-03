@@ -8,6 +8,7 @@ import pytest
 from sqlalchemy import create_engine
 
 from core.db import _get_engine, configure_database  # type: ignore[attr-defined]
+from core.migration_steps import _add_users_token_version
 from core.migrations import MIGRATIONS, _rename_proxy_type_http_to_https, apply_migrations
 
 if TYPE_CHECKING:
@@ -196,6 +197,129 @@ def test_proxy_pool_migration_collapses_and_drops_account_proxies(tmp_path: Path
     assert len(proxies) == 1  # both accounts shared one endpoint → one pool proxy
     assert len(assigned) == 1  # both point at it
     assert table_gone is None  # account_proxies dropped
+
+
+def test_token_version_migration_adds_column_defaulting_to_zero(tmp_path: Path) -> None:
+    """#22: a legacy ``users`` table (no token_version) gains it, defaulting to 0."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE users ("
+            "id VARCHAR PRIMARY KEY, username VARCHAR NOT NULL UNIQUE, "
+            "password_hash VARCHAR NOT NULL, role VARCHAR NOT NULL, "
+            "created_at VARCHAR NOT NULL, updated_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO users (id, username, password_hash, role, created_at, updated_at) "
+            "VALUES ('u-legacy', 'old', 'hash', 'admin', ?, ?)",
+            (now, now),
+        )
+        _add_users_token_version(connection)
+    with engine.connect() as connection:
+        version = connection.exec_driver_sql(
+            "SELECT token_version FROM users WHERE id = 'u-legacy'",
+        ).scalar()
+    engine.dispose()
+    assert int(version) == 0
+
+
+def test_logs_indexes_created_and_migration_idempotent() -> None:
+    """Audit #2: #23 creates both logs indexes; re-running the registry is clean."""
+    engine = _get_engine()
+    apply_migrations(engine)  # second pass must be a no-op, not raise.
+    with engine.connect() as connection:
+        index_names = {
+            str(row["name"])
+            for row in connection.exec_driver_sql("PRAGMA index_list(logs)").mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+        version_count = connection.exec_driver_sql(
+            "SELECT COUNT(*) FROM schema_version",
+        ).scalar_one()
+    assert {"ix_logs_account_id", "ix_logs_created_at"} <= index_names
+    assert 23 in versions
+    assert int(version_count) == len(MIGRATIONS)  # no duplicate stamping
+
+
+def test_logs_indexes_added_to_legacy_logs_table(tmp_path: Path) -> None:
+    """A legacy logs table with only its PK gains both indexes on migrate."""
+    from core.migration_steps import _add_logs_indexes  # noqa: PLC0415
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE logs ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, created_at VARCHAR NOT NULL, "
+            "level VARCHAR NOT NULL, status VARCHAR NOT NULL, account_id VARCHAR, "
+            "event VARCHAR NOT NULL, extra VARCHAR NOT NULL)",
+        )
+        _add_logs_indexes(connection)
+        # Idempotent at the body level too (IF NOT EXISTS).
+        _add_logs_indexes(connection)
+    with engine.connect() as connection:
+        index_names = {
+            str(row["name"])
+            for row in connection.exec_driver_sql("PRAGMA index_list(logs)").mappings()
+        }
+    engine.dispose()
+    assert {"ix_logs_account_id", "ix_logs_created_at"} <= index_names
+
+
+def test_campaign_account_channel_column_created_and_defaults_null() -> None:
+    """#25 adds the nullable ``channel`` pin column; a fresh assignment defaults NULL."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_campaign_accounts)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "channel" in columns
+    assert 25 in versions
+
+
+def test_campaign_account_channel_migration_idempotent_on_legacy_table(tmp_path: Path) -> None:
+    """A legacy account-link table (no ``channel``) gains it, defaulting NULL; re-run is clean."""
+    from core.migration_steps_neurocomment import _add_campaign_account_channel  # noqa: PLC0415
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_accounts ("
+            "campaign_id VARCHAR NOT NULL, account_id VARCHAR NOT NULL, "
+            "created_at VARCHAR NOT NULL, PRIMARY KEY (campaign_id, account_id))",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_accounts (campaign_id, account_id, created_at) "
+            "VALUES ('c1', 'acc-1', ?)",
+            (now,),
+        )
+        _add_campaign_account_channel(connection)
+        _add_campaign_account_channel(connection)  # idempotent — must not raise/duplicate.
+    with engine.connect() as connection:
+        channel = connection.exec_driver_sql(
+            "SELECT channel FROM neurocomment_campaign_accounts WHERE account_id = 'acc-1'",
+        ).scalar()
+    engine.dispose()
+    assert channel is None
+
+
+def test_campaign_account_channel_migration_skips_missing_table(tmp_path: Path) -> None:
+    """The #25 body is a no-op when the account-link table does not exist yet."""
+    from core.migration_steps_neurocomment import _add_campaign_account_channel  # noqa: PLC0415
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'empty.db'}", future=True)
+    with engine.begin() as connection:
+        _add_campaign_account_channel(connection)  # no table → returns, no raise.
+    engine.dispose()
 
 
 def test_append_only_versions_are_unique() -> None:

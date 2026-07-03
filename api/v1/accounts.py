@@ -20,6 +20,7 @@ from schemas.accounts import (
     AccountProfileUpdateRequest,
     AccountRead,
     AccountSessionFileImport,
+    AccountStats,
 )
 from schemas.api import Page
 from schemas.phone_login import PhoneCodeRequestResult, SubmitCodeRequest
@@ -64,6 +65,12 @@ async def list_accounts(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail="invalid pagination cursor",
         ) from exc
+
+
+@router.get("/accounts/stats", response_model=AccountStats, operation_id="accountStats")
+async def account_stats() -> AccountStats:
+    """Fleet-wide status counts for the Accounts page tiles (all pages, not one)."""
+    return await accounts.account_stats()
 
 
 @router.post("/accounts/check", response_model=AccountRead, operation_id="checkAccount")

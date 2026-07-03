@@ -22,10 +22,12 @@ from core.db import (
     fetch_readiness,
     link_channel_to_campaign,
     list_failed_for_channel,
+    mark_human_skipped,
     update_solver_enabled,
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
+from core.repositories.neurocomment import set_campaign_account_channel
 from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage
 from schemas.gemini import GeminiResult
@@ -401,6 +403,10 @@ async def test_generic_failure_is_failed_state(monkeypatch: pytest.MonkeyPatch) 
     readiness = await fetch_readiness("acc-1", "@boom")
     assert readiness is not None
     assert readiness.ready is False
+    # A hard failure persists a distinct signal (captcha_passed on an unjoined row)
+    # so the board renders join_failed, not join_by_request. It never joined.
+    assert readiness.joined is False
+    assert readiness.captcha_passed is True
 
 
 # --------------------------------------------------------------------------- #
@@ -438,6 +444,36 @@ async def test_campaign_iterates_pairs_with_jittered_delay(
     assert sleeps == [42.0, 42.0, 42.0]
     nc = settings.neurocomment
     assert all(nc.join_delay_min_seconds <= s <= nc.join_delay_max_seconds for s in sleeps)
+
+
+@pytest.mark.asyncio
+async def test_campaign_pinned_account_only_onboards_its_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pinned account joins ONLY its channel; an unpinned peer joins every channel."""
+    for acc in ("pinned", "free"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@one")
+    await link_channel_to_campaign(campaign.campaign_id, "@two")
+    await assign_account_to_campaign(campaign.campaign_id, "pinned")
+    await assign_account_to_campaign(campaign.campaign_id, "free")
+    await set_campaign_account_channel(campaign.campaign_id, "pinned", "@one")
+
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    # The pinned account never touched @two; the free account onboarded both.
+    joined = {(acc, getattr(action, "channel", "")) for acc, action in join.calls}
+    assert ("pinned", "@two") not in joined
+    assert ("pinned", "@one") in joined
+    assert {("free", "@one"), ("free", "@two")} <= joined
+    assert await fetch_readiness("pinned", "@two") is None
 
 
 @pytest.mark.asyncio
@@ -697,6 +733,35 @@ async def test_campaign_skips_resolve_read_when_all_pairs_already_ready(
     assert join.calls == []
     states = {(o.account_id, o.state) for o in result.outcomes}
     assert states == {("acc-1", "ready"), ("acc-2", "ready")}
+
+
+@pytest.mark.asyncio
+async def test_human_skipped_pair_is_not_re_enabled_by_onboarding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Ф2 #148: an operator skip must survive a Start/onboard cycle — the pair must not
+    # be re-joined nor have its readiness flipped back to ready.
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    # The pair was onboarded, then the operator skipped it.
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_human_skipped("acc-1", "@chan")
+
+    read = _ReadStub(linked_chat_id=4423, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.human_skipped is True
+    assert readiness.ready is False  # NOT re-enabled
+    assert all(account_id != "acc-1" for account_id, _ in join.calls)  # never re-joined
 
 
 @pytest.mark.asyncio

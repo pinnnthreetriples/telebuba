@@ -1,9 +1,14 @@
-"""Persisted neurocomment runtime state — the active listener account id (issue #119).
+"""Persisted neurocomment runtime state — the remembered listener + run flag.
 
-One scalar survives a restart so the engine's ``reconcile_neurocomment_runtime``
-can re-point the listener at boot. Stored in a single-row table
-(``neurocomment_runtime``, ``id`` pinned to 1), mirroring the warming-settings
-singleton pattern. ``None`` means the listener is stopped.
+Two scalars survive a restart in the single-row ``neurocomment_runtime`` table
+(``id`` pinned to 1, mirroring the warming-settings singleton):
+
+- ``listener_account_id`` — *which* account is the listener. ``None`` only when
+  the operator explicitly removes the listener ("снять слушателя").
+- ``listener_running`` — whether the runtime is *actively subscribed*. A paused
+  runtime keeps its remembered ``listener_account_id`` while this is ``False`` so
+  the strip survives a reload and ``reconcile_neurocomment_on_startup`` does not
+  auto-resume a listener the operator paused (audit 2026-07-02).
 """
 
 from __future__ import annotations
@@ -47,3 +52,33 @@ def _set_listener_account_id(account_id: str | None) -> None:
 async def set_listener_account_id(account_id: str | None) -> None:
     """Persist (or clear, with ``None``) the active listener account id."""
     await asyncio.to_thread(_set_listener_account_id, account_id)
+
+
+def _get_listener_running() -> bool:
+    statement = select(_neurocomment_runtime.c.listener_running).where(
+        _neurocomment_runtime.c.id == _RUNTIME_ROW_ID,
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).first()
+    return bool(row[0]) if row is not None else False
+
+
+async def get_listener_running() -> bool:
+    """Whether the runtime is actively subscribed (``False`` when paused/stopped)."""
+    return await asyncio.to_thread(_get_listener_running)
+
+
+def _set_listener_running(*, running: bool) -> None:
+    fields = {"listener_running": running, "updated_at": _now_iso()}
+    statement = (
+        sqlite_insert(_neurocomment_runtime)
+        .values(id=_RUNTIME_ROW_ID, **fields)
+        .on_conflict_do_update(index_elements=[_neurocomment_runtime.c.id], set_=fields)
+    )
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def set_listener_running(*, running: bool) -> None:
+    """Persist whether the runtime is actively subscribed (pause/resume flag)."""
+    await asyncio.to_thread(_set_listener_running, running=running)

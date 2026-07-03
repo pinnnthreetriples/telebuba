@@ -50,6 +50,14 @@ function routeSettings() {
   });
 }
 
+async function warmingPutBody(): Promise<Record<string, unknown>> {
+  const calls = vi.mocked(fetch).mock.calls.map(([i]) => i as Request);
+  const puts = calls.filter((r) => r.url.endsWith('/warming/settings') && r.method === 'PUT');
+  const put = puts[puts.length - 1];
+  if (!put) throw new Error('no warming PUT');
+  return JSON.parse(await put.clone().text());
+}
+
 test('saves both warming toggles and neuro limits, then confirms', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
@@ -101,23 +109,91 @@ test('a failed save shows the error state instead of silently doing nothing', as
   expect(await screen.findByText('Не удалось сохранить')).toBeInTheDocument();
 });
 
-test('warming limits are read-only; neuro limits edit and cancel resets', async () => {
+test('the warming-limits block is an engine-derived note, not editable fake constants', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+  // The informational note is present, and no invented constants (15/80/25) are
+  // rendered as data in disabled inputs.
+  expect(
+    screen.getByText(/подбирается движком автоматически/, { exact: false }),
+  ).toBeInTheDocument();
+  expect(screen.queryByLabelText('Подписок в день')).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('15')).not.toBeInTheDocument();
+  expect(screen.queryByDisplayValue('80')).not.toBeInTheDocument();
+});
+
+test('invalid neuro input is blocked with a field error, not silently sent', async () => {
   routeSettings();
   renderWithClient(<SettingsPage />);
   await waitFor(() => {
     expect(screen.getByText('Сохранить')).toBeInTheDocument();
   });
 
-  // warming limits are auto-managed → shown read-only
-  expect(screen.getByLabelText('Подписок в день')).toHaveAttribute('readonly');
+  const cpd = screen.getByLabelText('Комментариев в день на канал');
+  // Type then clear → a touched, empty (invalid) field. Empty used to be sent as
+  // 0 (a real limit of zero); now it is a validation error instead.
+  await userEvent.type(cpd, '9');
+  await userEvent.clear(cpd);
+  // the field-level error surfaces
+  expect(await screen.findByText('Введите целое число от 1 до 100')).toBeInTheDocument();
 
-  // neuro limits are editable
+  await userEvent.click(screen.getByText('Сохранить'));
+  // no neuro PUT is sent for the invalid form
+  await waitFor(() => {
+    const neuroPut = vi.mocked(fetch).mock.calls.some(([i]) => {
+      const r = i as Request;
+      return r.url.endsWith('/neurocomment/settings') && r.method === 'PUT';
+    });
+    expect(neuroPut).toBe(false);
+  });
+});
+
+test('cancel resets an edited neuro field back to the loaded value', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
   const cpd = screen.getByLabelText('Комментариев в день на канал');
   await userEvent.clear(cpd);
   await userEvent.type(cpd, '7');
   expect(cpd).toHaveValue('7');
 
   await userEvent.click(screen.getByText('Отмена'));
-  // cancel resets the neuro field back to the loaded value
   expect(screen.getByLabelText('Комментариев в день на канал')).toHaveValue('3');
+});
+
+test('the clear-key action sends clear_gemini_key: true', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByText('Очистить ключ'));
+  // the placeholder reflects the pending clear
+  expect(screen.getByPlaceholderText('Ключ будет удалён при сохранении')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    expect((await warmingPutBody()).clear_gemini_key).toBe(true);
+  });
+});
+
+test('by default the save sends clear_gemini_key: false (key preserved)', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    const body = await warmingPutBody();
+    expect(body.clear_gemini_key).toBe(false);
+    expect(body.gemini_api_key).toBeNull();
+  });
 });

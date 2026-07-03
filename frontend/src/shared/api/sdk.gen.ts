@@ -8,6 +8,9 @@ import {
 } from './client';
 import { client } from './client.gen';
 import type {
+  AccountStatsData,
+  AccountStatsErrors,
+  AccountStatsResponses,
   AddAccountMusicData,
   AddAccountMusicErrors,
   AddAccountMusicResponses,
@@ -26,6 +29,12 @@ import type {
   CheckProxyData,
   CheckProxyErrors,
   CheckProxyResponses,
+  ClearNeurocommentListenerData,
+  ClearNeurocommentListenerErrors,
+  ClearNeurocommentListenerResponses,
+  CountCampaignChallengeOutcomesData,
+  CountCampaignChallengeOutcomesErrors,
+  CountCampaignChallengeOutcomesResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
@@ -82,6 +91,9 @@ import type {
   ListCampaignsData,
   ListCampaignsErrors,
   ListCampaignsResponses,
+  ListChannelChallengesData,
+  ListChannelChallengesErrors,
+  ListChannelChallengesResponses,
   ListLogsData,
   ListLogsErrors,
   ListLogsResponses,
@@ -94,6 +106,9 @@ import type {
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
+  ListWarmingDialoguesData,
+  ListWarmingDialoguesErrors,
+  ListWarmingDialoguesResponses,
   LoginData,
   LoginErrors,
   LoginResponses,
@@ -101,6 +116,7 @@ import type {
   LogoutAccountErrors,
   LogoutAccountResponses,
   LogoutData,
+  LogoutErrors,
   LogoutResponses,
   PostAccountStoryData,
   PostAccountStoryErrors,
@@ -141,9 +157,18 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  SetCampaignAccountChannelData,
+  SetCampaignAccountChannelErrors,
+  SetCampaignAccountChannelResponses,
   SetCampaignSolverData,
   SetCampaignSolverErrors,
   SetCampaignSolverResponses,
+  SetCampaignStatusData,
+  SetCampaignStatusErrors,
+  SetCampaignStatusResponses,
+  SkipNeurocommentPairData,
+  SkipNeurocommentPairErrors,
+  SkipNeurocommentPairResponses,
   SpamCheckAccountData,
   SpamCheckAccountErrors,
   SpamCheckAccountResponses,
@@ -221,7 +246,7 @@ export const login = <ThrowOnError extends boolean = false>(
 export const logout = <ThrowOnError extends boolean = false>(
   options?: Options<LogoutData, ThrowOnError>,
 ) =>
-  (options?.client ?? client).post<LogoutResponses, unknown, ThrowOnError>({
+  (options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
     url: '/api/v1/auth/logout',
     ...options,
   });
@@ -256,6 +281,19 @@ export const listAccounts = <ThrowOnError extends boolean = false>(
 ) =>
   (options?.client ?? client).get<ListAccountsResponses, ListAccountsErrors, ThrowOnError>({
     url: '/api/v1/accounts',
+    ...options,
+  });
+
+/**
+ * Account Stats
+ *
+ * Fleet-wide status counts for the Accounts page tiles (all pages, not one).
+ */
+export const accountStats = <ThrowOnError extends boolean = false>(
+  options?: Options<AccountStatsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<AccountStatsResponses, AccountStatsErrors, ThrowOnError>({
+    url: '/api/v1/accounts/stats',
     ...options,
   });
 
@@ -808,6 +846,20 @@ export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Warming Dialogues
+ *
+ * Recent inter-account warming messages, newest first, for the live feed.
+ */
+export const listWarmingDialogues = <ThrowOnError extends boolean = false>(
+  options?: Options<ListWarmingDialoguesData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    ListWarmingDialoguesResponses,
+    ListWarmingDialoguesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/dialogues', ...options });
+
+/**
  * List Campaigns
  */
 export const listCampaigns = <ThrowOnError extends boolean = false>(
@@ -895,6 +947,30 @@ export const removeCampaignAccount = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Account Channel
+ *
+ * Pin a campaign account to one channel (``channel: null`` clears the pin).
+ *
+ * A pinned account comments only on that channel; an unpinned one serves all
+ * campaign channels. Returns the refreshed board so the SPA re-renders the card.
+ */
+export const setCampaignAccountChannel = <ThrowOnError extends boolean = false>(
+  options: Options<SetCampaignAccountChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetCampaignAccountChannelResponses,
+    SetCampaignAccountChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/{account_id}/channel',
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -1013,6 +1089,76 @@ export const listCampaignChallenges = <ThrowOnError extends boolean = false>(
   >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges', ...options });
 
 /**
+ * Count Campaign Challenge Outcomes
+ *
+ * Challenge-outcome counters (solved/failed/give_up/pending) across a campaign (#148).
+ */
+export const countCampaignChallengeOutcomes = <ThrowOnError extends boolean = false>(
+  options: Options<CountCampaignChallengeOutcomesData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    CountCampaignChallengeOutcomesResponses,
+    CountCampaignChallengeOutcomesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges/counts', ...options });
+
+/**
+ * List Channel Challenges
+ *
+ * Recent unsolved bot-challenges for one channel — the work-view drill-down (#148).
+ */
+export const listChannelChallenges = <ThrowOnError extends boolean = false>(
+  options: Options<ListChannelChallengesData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    ListChannelChallengesResponses,
+    ListChannelChallengesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/channels/challenges', ...options });
+
+/**
+ * Skip Pair
+ *
+ * Operator "Skip channel for this account": the engine never selects the pair (#148).
+ */
+export const skipNeurocommentPair = <ThrowOnError extends boolean = false>(
+  options: Options<SkipNeurocommentPairData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SkipNeurocommentPairResponses,
+    SkipNeurocommentPairErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/skip',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Campaign Status
+ *
+ * Per-campaign run/pause: flip a campaign between active and paused (#148).
+ */
+export const setCampaignStatus = <ThrowOnError extends boolean = false>(
+  options: Options<SetCampaignStatusData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetCampaignStatusResponses,
+    SetCampaignStatusErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/status',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
  * Get Runtime
  */
 export const getNeurocommentRuntime = <ThrowOnError extends boolean = false>(
@@ -1045,6 +1191,8 @@ export const startNeurocomment = <ThrowOnError extends boolean = false>(
 
 /**
  * Stop
+ *
+ * Pause the runtime: unsubscribe but keep the remembered listener account.
  */
 export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   options?: Options<StopNeurocommentData, ThrowOnError>,
@@ -1052,6 +1200,20 @@ export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
     { url: '/api/v1/neurocomment/stop', ...options },
   );
+
+/**
+ * Clear Listener
+ *
+ * Remove the listener ("снять слушателя"): unsubscribe and forget the account.
+ */
+export const clearNeurocommentListener = <ThrowOnError extends boolean = false>(
+  options?: Options<ClearNeurocommentListenerData, ThrowOnError>,
+) =>
+  (options?.client ?? client).post<
+    ClearNeurocommentListenerResponses,
+    ClearNeurocommentListenerErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/listener/clear', ...options });
 
 /**
  * Get Settings

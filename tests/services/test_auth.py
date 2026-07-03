@@ -56,7 +56,7 @@ async def test_authenticate_rejects_unknown_user() -> None:
 @pytest.mark.asyncio
 async def test_resolve_user_round_trips_a_session_token() -> None:
     await _seed_user()
-    token = auth_service.issue_session_token("u1")
+    token = await auth_service.issue_session_token("u1")
     resolved = await auth_service.resolve_user(token)
     assert resolved is not None
     assert resolved.id == "u1"
@@ -65,6 +65,20 @@ async def test_resolve_user_round_trips_a_session_token() -> None:
 @pytest.mark.asyncio
 async def test_resolve_user_rejects_a_bad_token() -> None:
     assert await auth_service.resolve_user("garbage") is None
+
+
+@pytest.mark.asyncio
+async def test_revoke_sessions_invalidates_outstanding_tokens() -> None:
+    await _seed_user()
+    token = await auth_service.issue_session_token("u1")
+    assert await auth_service.resolve_user(token) is not None
+    # Logout bumps the user's token_version; the old token's ``ver`` no longer
+    # matches, so it must be rejected even though it has not expired.
+    await auth_service.revoke_sessions("u1")
+    assert await auth_service.resolve_user(token) is None
+    # A freshly minted token (post-bump version) is accepted again.
+    fresh = await auth_service.issue_session_token("u1")
+    assert await auth_service.resolve_user(fresh) is not None
 
 
 @pytest.mark.asyncio
@@ -104,3 +118,18 @@ def test_rate_limiter_blocks_after_the_max(monkeypatch: pytest.MonkeyPatch) -> N
     assert auth_service.check_login_rate_limit("ip-a", 1.2) is False
     # A later attempt outside the window is allowed again.
     assert auth_service.check_login_rate_limit("ip-a", 500.0) is True
+
+
+def test_rate_limiter_evicts_stale_buckets(monkeypatch: pytest.MonkeyPatch) -> None:
+    from services.auth import _ratelimit  # noqa: PLC0415 - reach the process-global dict.
+
+    _ratelimit._attempts.clear()
+    monkeypatch.setattr(settings.auth, "login_rate_limit_max_attempts", 5)
+    monkeypatch.setattr(settings.auth, "login_rate_limit_window_seconds", 100.0)
+    # A one-shot client (ip-a) never comes back; a later client (ip-b) hits the
+    # limiter well after ip-a's window has elapsed. ip-a's fully-expired bucket
+    # must be evicted, not retained forever (memory leak). Only ip-b remains.
+    assert auth_service.check_login_rate_limit("ip-a", 1.0) is True
+    assert auth_service.check_login_rate_limit("ip-b", 1_000.0) is True
+    assert set(_ratelimit._attempts) == {"ip-b"}
+    _ratelimit._attempts.clear()

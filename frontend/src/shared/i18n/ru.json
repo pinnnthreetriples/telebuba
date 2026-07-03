@@ -4,7 +4,6 @@
     "loading": "Загрузка…",
     "error": "Не удалось загрузить аккаунты",
     "empty": "Аккаунтов нет",
-    "never": "никогда",
     "searchPlaceholder": "Поиск по аккаунтам…",
     "status": {
       "new": "Новый",
@@ -17,32 +16,16 @@
       "proxy_error": "Ошибка прокси",
       "unknown_error": "Неизвестная ошибка"
     },
-    "filter": {
-      "all": "Все",
-      "alive": "Активные",
-      "new": "Новые",
-      "unauthorized": "Не авторизованы",
-      "flood_wait": "Flood-wait"
-    },
     "table": {
-      "account": "Аккаунт",
       "status": "Статус",
-      "telegram": "Telegram",
-      "country": "Страна",
-      "lastChecked": "Проверен",
       "phone": "Телефон",
       "proxy": "Прокси",
       "device": "Устройство",
       "trust": "Trust",
-      "actions": "Действия",
-      "selectAll": "Выбрать все",
-      "selectRow": "Выбрать строку"
+      "actions": "Действия"
     },
     "stats": {
       "total": "Всего",
-      "alive": "Активные",
-      "attention": "Внимание",
-      "errors": "Ошибки",
       "active": "Активны",
       "idle": "Простаивают",
       "code": "Нужен код",
@@ -66,6 +49,7 @@
       "trust": "Trust",
       "session": "Сессия",
       "sessionOk": "Сессия активна",
+      "sessionInactive": "Сессия неактивна · нужен повторный вход",
       "logout": "Выйти из аккаунта",
       "loginByCode": "Вход по коду",
       "smsCode": "Код из SMS",
@@ -77,6 +61,11 @@
       "proxy": "Прокси",
       "proxyRequired": "Подключение для аккаунта · обязательно",
       "proxyOk": "Подключён",
+      "proxyNone": "Прокси не назначен",
+      "proxyFailed": "Последняя проверка не прошла",
+      "proxyReachable": "Прокси доступен",
+      "proxyDetach": "Отвязать прокси",
+      "proxyDetachErr": "Не удалось отвязать прокси",
       "fromPool": "Из пула",
       "manual": "Вручную",
       "host": "Host",
@@ -135,7 +124,6 @@
       "add": "Аккаунт",
       "check": "Проверить",
       "delete": "Удалить",
-      "importTdata": "Импорт tdata",
       "profile": "Редактировать профиль"
     },
     "pagination": {
@@ -166,8 +154,11 @@
       "detect": "Определить",
       "detected": "Определить",
       "checking": "Проверяем соединение…",
-      "resultOk": "Нидерланды · 24 мс",
-      "resultErr": "Прокси не отвечает"
+      "resultOk": "Прокси доступен",
+      "resultErr": "Прокси не отвечает",
+      "errHost": "Укажите хост",
+      "errPort": "Порт должен быть числом",
+      "errPortRange": "Порт должен быть от 1 до 65535"
     },
     "proxyAdd": {
       "title": "Добавить прокси",
@@ -181,7 +172,11 @@
       "audience": "Кто увидит",
       "contacts": "Контакты",
       "closeFriends": "Близкие друзья",
+      "close_friends": "Близкие друзья",
       "public": "Публично",
+      "unknown": "Неизвестно",
+      "sizeMb": "{{n}} МБ",
+      "sizeKb": "{{n}} КБ",
       "caption": "Подпись к сторис",
       "captionPlaceholder": "Введите подпись…",
       "noForward": "Запретить пересылку сторис",
@@ -208,6 +203,7 @@
       "lastName": "Фамилия",
       "username": "Юзернейм",
       "bio": "Описание (bio)",
+      "errFirstName": "Укажите имя",
       "photoHint": "Текущая фотография и история · перетащите для замены",
       "removePhoto": "Удалить фото",
       "removePhotoTitle": "Удалить фото?",
@@ -222,7 +218,6 @@
       "removeStoryBody": "Сторис будет удалена из профиля. Это действие необратимо.",
       "removeStoryConfirm": "Удалить",
       "addStory": "Добавить",
-      "play": "Воспроизвести",
       "trackTitle": "Название трека",
       "trackArtist": "Исполнитель",
       "removeMusic": "Убрать трек",
@@ -253,6 +248,9 @@
       "dropDescSession": "перетащите .session или нажмите",
       "browse": "Обзор",
       "fileReady": "Файл готов",
+      "importing": "Импортируем…",
+      "imported": "Аккаунт импортирован",
+      "importError": "Не удалось импортировать",
       "cancel": "Отмена",
       "next": "Далее",
       "back": "Назад",
@@ -279,7 +277,10 @@
     "systemOffline": "Нет соединения",
     "notifications": "Уведомления",
     "account": "Аккаунт",
-    "logout": "Выйти"
+    "logout": "Выйти",
+    "avatarFallback": "ОП",
+    "fatalError": "Что-то пошло не так.",
+    "mutationError": "Что-то пошло не так. Попробуйте ещё раз."
   },
   "settings": {
     "title": "Настройки",
@@ -298,16 +299,15 @@
       "subtitle": "Доступ к модели генерации комментариев",
       "geminiKey": "Gemini API key",
       "keySet": "Ключ задан — оставьте пустым, чтобы сохранить",
-      "keyUnset": "Ключ не задан"
+      "keyUnset": "Ключ не задан",
+      "clearKey": "Очистить ключ",
+      "keyCleared": "Ключ будет удалён при сохранении",
+      "toggleVisibility": "Показать/скрыть ключ"
     },
     "warmLimits": {
       "title": "Лимиты прогрева",
       "subtitle": "Действия в сутки на один аккаунт",
-      "auto": "Рассчитываются автоматически по фазе и trust-score (значения для справки)",
-      "sub": "Подписок в день",
-      "read": "Чтений постов в день",
-      "react": "Реакций в день",
-      "pause": "Пауза между шагами (мин)"
+      "engineNote": "Активность прогрева на аккаунт подбирается движком автоматически по фазе и trust-score аккаунта — фиксированных числовых лимитов здесь нет."
     },
     "neuroLimits": {
       "title": "Лимиты нейрокомментинга",
@@ -315,7 +315,14 @@
       "cpd": "Комментариев в день на канал",
       "delay": "Задержка ответа (сек)",
       "parallel": "Комментариев в час",
-      "trust": "Мин. trust-score для работы"
+      "trust": "Мин. trust-score для работы",
+      "delayFrom": "Задержка ответа, от (сек)",
+      "delayTo": "Задержка ответа, до (сек)",
+      "errCpd": "Введите целое число от 1 до 100",
+      "errDelay": "Введите целое число секунд (0–3600)",
+      "errDelayOrder": "«До» должно быть не меньше «от»",
+      "errParallel": "Введите целое число от 1 до 1000",
+      "errTrust": "Введите целое число от 0 до 100"
     },
     "flag": {
       "reactions_enabled": {
@@ -354,7 +361,6 @@
     "col": {
       "time": "Время",
       "level": "Уровень",
-      "status": "Статус",
       "account": "Аккаунт",
       "event": "Событие"
     },
@@ -363,12 +369,53 @@
       "next": "Вперёд"
     }
   },
+  "logEvent": {
+    "neurocomment_posted": "Комментарий опубликован",
+    "neurocomment_post_failed": "Ошибка публикации",
+    "neurocomment_post_skipped": "Пост пропущен",
+    "neurocomment_post_cooldown": "Пауза между комментариями",
+    "neurocomment_post_gated": "Комментарий отложен по лимиту",
+    "neurocomment_generation_exhausted": "Не удалось сгенерировать текст",
+    "neurocomment_no_account_available": "Нет доступного аккаунта",
+    "neurocomment_no_campaign": "Нет подходящей кампании",
+    "neurocomment_channel_cooled": "Канал на паузе",
+    "neurocomment_channel_backoff": "Пауза по каналу",
+    "neurocomment_challenge_backoff": "Пауза после капчи",
+    "neurocomment_pipeline_failed": "Сбой конвейера",
+    "neurocomment_onboard_resolve_failed": "Не удалось найти канал",
+    "neurocomment_onboard_retry_later": "Онбординг отложен",
+    "neurocomment_onboard_pair_failed": "Не удалось привязать аккаунт к каналу",
+    "neurocomment_onboard_spam_probe_failed": "Ошибка проверки на спам",
+    "neurocomment_listener_join_failed": "Слушатель не вступил в канал",
+    "neurocomment_runtime_reconciled": "Движок восстановлен",
+    "neurocomment_start_onboard_failed": "Ошибка запуска онбординга",
+    "neurocomment_sweep_failed": "Ошибка проверки удалённых комментариев",
+    "neurocomment_settings_saved": "Настройки сохранены",
+    "warming_started": "Прогрев запущен",
+    "warming_stopped": "Прогрев остановлен",
+    "warming_complete": "Прогрев завершён",
+    "warming_target_reached": "Цель прогрева достигнута",
+    "warming_cycle_completed": "Цикл прогрева завершён",
+    "warming_cycle_not_ready": "Цикл прогрева ещё не готов",
+    "warming_no_channels": "Нет каналов для прогрева",
+    "warming_subscribe": "Подписка на канал",
+    "warming_channels_added": "Каналы добавлены",
+    "warming_channel_removed": "Канал удалён",
+    "warming_channel_limit_reached": "Достигнут лимит каналов",
+    "warming_chat_filtered": "Сообщение отфильтровано",
+    "warming_chat_duplicate": "Дубликат сообщения",
+    "warming_dialogue_opened": "Диалог начат",
+    "warming_dialogue_reply": "Ответ в диалоге",
+    "warming_dialogue_faded": "Диалог завершён",
+    "warming_promoted_to_neurocomment": "Аккаунт передан в нейрокомментинг",
+    "warming_unpromoted_from_neurocomment": "Аккаунт возвращён из нейрокомментинга",
+    "warming_quarantine_recovered": "Аккаунт восстановлен после карантина",
+    "warming_quarantine_exhausted": "Карантин исчерпан",
+    "warming_settings_saved": "Настройки прогрева сохранены"
+  },
   "neurocomment": {
     "title": "Нейрокомментинг",
     "runtime": {
-      "running": "Слушаю каналов: {{count}}",
-      "stopped": "Остановлен",
-      "listener": "Аккаунт-слушатель",
       "start": "Запустить",
       "stop": "Остановить"
     },
@@ -391,7 +438,8 @@
       "campaigns": "Кампаний",
       "channels": "Каналов",
       "accounts": "Аккаунтов",
-      "comments": "Комментариев"
+      "comments": "Комментариев",
+      "errors": "ошибок"
     },
     "log": {
       "title": "Лог событий",
@@ -399,17 +447,8 @@
     },
     "campaigns": {
       "title": "Кампании",
-      "select": "Выбрать кампанию",
       "none": "Нет кампаний",
-      "name": "Название",
-      "prompt": "Промпт (с упоминанием продукта)",
       "create": "+ Создать кампанию"
-    },
-    "setup": {
-      "channel": "Канал (ссылка или @юзернейм)",
-      "linkChannel": "Привязать канал",
-      "assign": "Аккаунт",
-      "assignAccount": "Назначить аккаунт"
     },
     "channels": {
       "title": "Каналы кампании",
@@ -420,14 +459,11 @@
       "removeBody": "Аккаунты кампании перестанут комментировать в этом канале.",
       "removeConfirm": "Убрать"
     },
-    "accounts": {
-      "title": "Аккаунты",
-      "today": "Сегодня: {{count}}"
-    },
     "channelStatus": {
       "ready": "Готов",
       "comments_off": "Комментарии выкл.",
       "join_by_request": "Вступление по заявке",
+      "join_failed": "Не удалось вступить",
       "chat_restricted": "Чат ограничен",
       "bot_challenge": "Капча бота",
       "bot_challenge_backoff": "Пауза после капчи",
@@ -440,12 +476,14 @@
     "listener": {
       "title": "Аккаунт-слушатель",
       "choose": "Выберите аккаунт…",
+      "noAccounts": "Нет доступных аккаунтов",
       "listening": "Слушает",
       "paused": "На паузе",
       "pause": "Поставить на паузу",
       "resume": "Возобновить",
       "edit": "Изменить аккаунт",
       "remove": "Снять слушателя",
+      "actions": "Действия",
       "activeCampaigns": "активных кампаний"
     },
     "captcha": {
@@ -460,6 +498,7 @@
       "pause": "Поставить на паузу",
       "editPrompt": "Редактировать промт",
       "delete": "Удалить кампанию",
+      "actions": "Действия",
       "meta": "{{channels}} каналов · {{accounts}} аккаунтов",
       "status": {
         "active": "Активна",
@@ -529,7 +568,8 @@
       "neuroAccounts": {
         "title": "Аккаунты в нейрокомментинге",
         "sub": "{{count}} аккаунтов · назначьте в кампанию или уберите из работы",
-        "unassigned": "Не назначен",
+        "channelLabel": "Канал аккаунта",
+        "allChannels": "Все каналы",
         "assign": "Добавить в кампанию",
         "remove": "Убрать из нейрокомментинга",
         "removeTitle": "Убрать {{phone}} из нейрокомментинга?",
@@ -541,11 +581,9 @@
     }
   },
   "warming": {
-    "title": "Прогрев",
     "titleFull": "Прогрев аккаунтов",
     "loading": "Загрузка…",
     "error": "Не удалось загрузить доску прогрева",
-    "summary": "Активных: {{active}} из {{total}}",
     "counter": {
       "warming": "в прогреве",
       "ready": "готовы",
@@ -604,13 +642,9 @@
       "error": "Ошибка"
     },
     "column": {
-      "idle": "Не в прогреве",
-      "warming": "В прогреве",
       "empty": "Перенесите аккаунты сюда, чтобы запустить прогрев"
     },
     "card": {
-      "cycles": "Циклов: {{count}}",
-      "trust": "доверие",
       "dayProgress": "{{days}} / 14 дней",
       "actionsTip": "действий",
       "cfgTitle": "Настройки прогрева",
@@ -620,16 +654,18 @@
       "completeTitle": "Прогрев завершён",
       "completeSub": "{{days}} · аккаунт готов",
       "finish": "Отправить в прогретые",
-      "helpTip": "1 цикл = 1 день прогрева"
+      "helpTip": "1 цикл = 1 день прогрева",
+      "cycleTip_one": "Цикл {{count}}",
+      "cycleTip_few": "Цикл {{count}}",
+      "cycleTip_many": "Цикл {{count}}",
+      "dmAllowed": "ЛС: разрешены",
+      "dmClosed": "ЛС: закрыты"
     },
     "actions": {
-      "start": "Запустить",
-      "stop": "Остановить",
       "stopShort": "Стоп"
     },
     "channels": {
       "title": "Каналы прогрева",
-      "placeholder": "Ссылки или @юзернеймы, через запятую…",
       "add": "Добавить",
       "remove": "Удалить",
       "hint": "Аккаунты читают и ставят реакции в этих каналах",
@@ -639,12 +675,6 @@
       "removeTitle": "Удалить канал {{channel}}?",
       "removeBody": "Аккаунты прогрева перестанут читать и реагировать в этом канале. Это действие необратимо.",
       "removeConfirm": "Удалить"
-    },
-    "settings": {
-      "title": "Настройки прогрева",
-      "reactions_enabled": "Реакции",
-      "join_enabled": "Вступать в каналы",
-      "inter_account_chat": "Диалоги между аккаунтами"
     },
     "warmStatus": {
       "active": "прогревается",
@@ -671,9 +701,39 @@
     },
     "cfg": {
       "title": "Настройки прогрева",
-      "globalHint": "Настройки поведения прогрева общие для всех аккаунтов (включая {{phone}}) и редактируются на странице «Настройки».",
-      "close": "Закрыть",
-      "openSettings": "Открыть настройки"
+      "behaviorTitle": "Поведение",
+      "limitsTitle": "Лимиты и безопасность",
+      "quietHours": "Тихие часы (сон)",
+      "quietFrom": "С",
+      "quietTo": "До",
+      "quietNote": "Часовой пояс берётся из локали аккаунта. Пока не сохраняется.",
+      "scopeOne": "Только этот",
+      "scopeAll": "Все в прогреве",
+      "scopeOneNote": "Настройки для отдельного аккаунта пока не сохраняются — настройки применяются ко всем аккаунтам в прогреве.",
+      "save": "Сохранить",
+      "cancel": "Отмена",
+      "toggle": {
+        "reactions_enabled": {
+          "title": "Реакции",
+          "desc": "Аккаунты ставят реакции на посты в каналах прогрева."
+        },
+        "join_enabled": {
+          "title": "Вступать в каналы",
+          "desc": "Аккаунты самостоятельно подписываются на каналы прогрева."
+        },
+        "inter_account_chat": {
+          "title": "Взаимный чат",
+          "desc": "Аккаунты прогрева переписываются между собой для естественной активности."
+        },
+        "enforce_readiness": {
+          "title": "Проверять готовность",
+          "desc": "Не запускать прогрев для аккаунтов, не прошедших проверки перед стартом."
+        },
+        "local_time": {
+          "title": "Локальное время",
+          "desc": "Использовать часовой пояс аккаунта для окна тихих часов."
+        }
+      }
     },
     "days": {
       "title": "Прогрев аккаунта",
@@ -683,6 +743,9 @@
       "start": "Запустить прогрев",
       "cancel": "Отмена",
       "spamCheck": "Спам-чек",
+      "spamChecking": "Проверка…",
+      "spamClean": "Чисто",
+      "spamLimited": "Ограничен",
       "spamTip": "на @SpamBot",
       "label_one": "день",
       "label_few": "дня",
@@ -691,9 +754,18 @@
     "persona": {
       "label": "Тип пользователя",
       "tip": "Как часто аккаунт заходит и что-то делает в течение дня. Всегда ограничено безопасным лимитом по возрасту аккаунта — молодой аккаунт остаётся спокойным, даже если выбрать «Активный».",
-      "calm": { "name": "Спокойный", "hint": "2–4 захода в день" },
-      "normal": { "name": "Обычный", "hint": "5–8 заходов в день" },
-      "active": { "name": "Активный", "hint": "10–14 заходов в день" }
+      "calm": {
+        "name": "Спокойный",
+        "hint": "2–4 захода в день"
+      },
+      "normal": {
+        "name": "Обычный",
+        "hint": "5–8 заходов в день"
+      },
+      "active": {
+        "name": "Активный",
+        "hint": "10–14 заходов в день"
+      }
     },
     "notReady": {
       "noProxy": "нет прокси",
@@ -702,6 +774,11 @@
       "spamLimited": "спам-лимит",
       "trustCritical": "критический trust",
       "session": "нет активной сессии (нужен вход)"
+    },
+    "dialogues": {
+      "title": "Переписка аккаунтов",
+      "empty": "Пока нет переписки",
+      "typing": "печатает…"
     }
   },
   "auth": {

@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useState } from 'react';
+import { type ColumnDef } from '@tanstack/react-table';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { accountsQueryOptions } from '@/entities/account';
@@ -9,6 +10,7 @@ import {
   CampaignDeleteModal,
   CampaignPromptModal,
   campaignsQueryOptions,
+  clearNeurocommentListenerMutation,
   createCampaignMutation,
   CreateCampaignModal,
   deleteCampaignMutation,
@@ -20,15 +22,23 @@ import {
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   retryChallengeMutation,
+  setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
+  setCampaignStatusMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateCampaignPromptMutation,
 } from '@/entities/campaign';
 import { logsQueryOptions } from '@/entities/log';
-import type { NeurocommentCampaign } from '@/shared/api';
-import { formatLocalTime, useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { CollapsibleCard, ConfirmModal, FeedbackMark } from '@/shared/ui';
+import type { ChallengeRow, NeurocommentCampaign } from '@/shared/api';
+import { eventLabel, formatLocalTime, useLogEventStream, useTransientFeedback } from '@/shared/lib';
+import {
+  CollapsibleCard,
+  ConfirmModal,
+  DataTable,
+  type DataTableColumnMeta,
+  FeedbackMark,
+} from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 // SSE drives live runtime/board updates; this poll is just the fallback net.
@@ -94,18 +104,22 @@ function Odometer({ value, color }: { value: number; color: string }) {
   );
 }
 
-// Slide-in action layer: the surface translates left on hover to reveal the
-// pinned action buttons (the design's lsnSnap/campSnap GSAP, done with CSS).
+// Slide-in action layer: the surface translates left to reveal the pinned action
+// buttons (the design's lsnSnap/campSnap GSAP, done with CSS). Reveals on hover
+// AND when `open` is true — a gear button drives `open` so the actions are
+// reachable on touch/keyboard, not hover-only (finding #6).
 function SurfHover({
   actions,
   surface,
   shift,
   surfaceId,
+  open = false,
 }: {
   actions: React.ReactNode;
   surface: React.ReactNode;
   shift: number;
   surfaceId?: string;
+  open?: boolean;
 }) {
   return (
     <div className="group relative overflow-hidden rounded-[11px]">
@@ -114,7 +128,7 @@ function SurfHover({
       </div>
       <div
         id={surfaceId}
-        className="relative rounded-[11px] transition-transform duration-[440ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] [will-change:transform] group-hover:-translate-x-[var(--shift)]"
+        className={`relative rounded-[11px] transition-transform duration-[440ms] [transition-timing-function:cubic-bezier(.16,1,.3,1)] [will-change:transform] group-hover:-translate-x-[var(--shift)] ${open ? '-translate-x-[var(--shift)]' : ''}`}
         style={{ ['--shift' as string]: `${String(shift)}px` }}
       >
         {surface}
@@ -123,17 +137,101 @@ function SurfHover({
   );
 }
 
+// The captcha queue on the shared DataTable (finding #10): one row per unsolved
+// bot-challenge. The account cell resolves the raw account_id to its phone/label
+// (finding #8); the action cell retries the pair.
+function CaptchaQueue({
+  rows,
+  accountLabel,
+  onSolve,
+}: {
+  rows: ChallengeRow[];
+  accountLabel: (accountId: string) => string;
+  onSolve: (item: ChallengeRow) => void;
+}) {
+  const { t } = useTranslation();
+  const columns = useMemo<ColumnDef<ChallengeRow>[]>(
+    () => [
+      {
+        id: 'account',
+        header: t('neurocomment.board.col.account'),
+        cell: ({ row }) => (
+          <div className="flex min-w-0 items-center gap-[9px]">
+            <span className="tb-livedot h-[7px] w-[7px] shrink-0 rounded-full bg-[#e0a82e]" />
+            <div className="min-w-0">
+              <div className="truncate text-[12.5px] font-semibold text-ink">
+                {accountLabel(row.original.account_id)}
+              </div>
+              <div className="text-[10.5px] text-ink-subtle">
+                {row.original.channel} ·{' '}
+                {formatLocalTime(row.original.decided_at, { seconds: true })}
+              </div>
+            </div>
+          </div>
+        ),
+      },
+      {
+        id: 'action',
+        header: '',
+        cell: ({ row }) => (
+          <button
+            type="button"
+            onClick={() => {
+              onSolve(row.original);
+            }}
+            className="shrink-0 rounded-full bg-ink px-[13px] py-[6px] text-[11.5px] font-medium text-white"
+          >
+            {t('neurocomment.captcha.solve')}
+          </button>
+        ),
+        meta: { cellClassName: 'text-right' } satisfies DataTableColumnMeta,
+      },
+    ],
+    [t, accountLabel, onSolve],
+  );
+
+  return (
+    <div className="tb-scroll overflow-x-auto">
+      <DataTable data={rows} columns={columns} />
+    </div>
+  );
+}
+
+// The query-key `_id`s this page owns. The shared SSE stream fires on every log
+// row across the whole app, so the page only refetches its own queries instead
+// of blowing away the entire cache (accounts, warming, settings, …).
+const NEURO_QUERY_IDS = new Set([
+  'listCampaigns',
+  'getNeurocommentBoard',
+  'getNeurocommentRuntime',
+  'listAccounts',
+  'listCampaignChallenges',
+  'listLogs',
+]);
+
 export function NeurocommentPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const invalidate = () => {
     void queryClient.invalidateQueries();
   };
-  useLogEventStream(invalidate);
+  // SSE-driven refresh: narrowed to this page's query keys (finding #11).
+  const invalidateNeuro = () => {
+    void queryClient.invalidateQueries({
+      predicate: (query) => {
+        const id = (query.queryKey[0] as { _id?: string } | undefined)?._id;
+        return id !== undefined && NEURO_QUERY_IDS.has(id);
+      },
+    });
+  };
+  useLogEventStream(invalidateNeuro);
 
   const [selected, setSelected] = useState<string | null>(null);
   const [listener, setListener] = useState('');
   const [listenerOpen, setListenerOpen] = useState(false);
+  // Gear-driven action-row reveals (click fallback for hover; finding #6).
+  const [listenerActionsOpen, setListenerActionsOpen] = useState(false);
+  const [openCampaignActions, setOpenCampaignActions] = useState<string | null>(null);
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
   const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
@@ -189,26 +287,61 @@ export function NeurocommentPage() {
   const start = useMutation(startNeurocommentMutation());
   const stop = useMutation(stopNeurocommentMutation());
   const setSolver = useMutation(setCampaignSolverMutation());
+  const setStatus = useMutation(setCampaignStatusMutation());
+  const clearListener = useMutation(clearNeurocommentListenerMutation());
   const retry = useMutation(retryChallengeMutation());
   const deleteCampaign = useMutation(deleteCampaignMutation());
   const removeChannel = useMutation(removeCampaignChannelMutation());
   const removeAccount = useMutation(removeCampaignAccountMutation());
+  const setAccountChannel = useMutation(setCampaignAccountChannelMutation());
   const updatePrompt = useMutation(updateCampaignPromptMutation());
 
   const accountOptions = accounts.data?.items ?? [];
   const running = runtime.data?.running ?? false;
+  // The listener id survives reload/pause: it comes from the persisted runtime
+  // status (returned even when paused) and only falls back to a fresh local pick.
   const listenerId = runtime.data?.listener_account_id ?? listener;
   const boardAccounts = board.data?.accounts ?? [];
   const boardChannels = board.data?.channels ?? [];
+  const boardChannelNames = boardChannels.map((c) => c.channel);
+
+  // Account label lookup so the captcha queue shows the phone, not the raw id.
+  const accountLabel = (accountId: string): string =>
+    accountOptions.find((a) => a.account_id === accountId)?.label ?? accountId;
+
+  // Ids already on the selected campaign's board (linked accounts).
+  const linkedIds = new Set(boardAccounts.map((a) => a.account_id));
+
+  // Rows for the neuro-accounts modal: the campaign's linked accounts (with a
+  // channel-pin dropdown) PLUS every loaded account not yet linked (linked:
+  // false → shows the "assign" button so an idle account can actually be added).
+  const neuroAccountRows = [
+    ...boardAccounts.map((a) => ({
+      account_id: a.account_id,
+      phone: a.label,
+      linked: true,
+      pinned_channel: a.pinned_channel ?? null,
+    })),
+    ...accountOptions
+      .filter((a) => !linkedIds.has(a.account_id))
+      .map((a) => ({
+        account_id: a.account_id,
+        phone: a.label ?? a.account_id,
+        linked: false,
+        pinned_channel: null,
+      })),
+  ];
+
+  // Errors stat: error-level rows in today's loaded neuro activity log.
+  const errorCount = logLines.filter((line) => line.status === 'error').length;
 
   // Decorative pipeline position: a mid-flight look while running, idle when off.
   const activeCell = running ? 2 : -1;
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
 
-  // ponytail: no idle/work split on the neurocomment read model yet; treat
-  // accounts not yet linked to any board channel as idle (design-first).
-  const idleCount = Math.max(accountOptions.length - boardAccounts.length, 0);
+  // Accounts loaded on the page but not linked to the selected campaign's board.
+  const idleCount = accountOptions.filter((a) => !linkedIds.has(a.account_id)).length;
 
   const stats: { label: string; value: number; color: string }[] = [
     { label: t('neurocomment.stat.campaigns'), value: campaignList.length, color: '#0b0b0c' },
@@ -223,14 +356,34 @@ export function NeurocommentPage() {
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),
       color: '#12a150',
     },
+    // The design's red "ошибок" odometer (#E5372A): today's error-level events.
+    { label: t('neurocomment.stat.errors'), value: errorCount, color: '#e5372a' },
   ];
 
+  // GLOBAL listener start/stop (the whole engine). Kept distinct from the
+  // per-campaign run/pause below.
   const toggleRuntime = () => {
     if (running) {
       stop.mutate({}, { onSettled: invalidate });
     } else if (listenerId) {
       start.mutate({ body: { listener_account_id: listenerId } }, { onSettled: invalidate });
     }
+  };
+
+  // Per-campaign run/pause (finding #2): flips campaign.status via setCampaignStatus.
+  // The engine skips paused campaigns; this never touches the global engine.
+  const toggleCampaignStatus = (campaign: NeurocommentCampaign) => {
+    const next = campaign.status === 'active' ? 'paused' : 'active';
+    setStatus.mutate(
+      { path: { campaign_id: campaign.campaign_id }, body: { status: next } },
+      { onSettled: invalidate },
+    );
+  };
+
+  // Remove the listener entirely (finding #4) — distinct from pausing (stop).
+  const removeListener = () => {
+    setListener('');
+    clearListener.mutate({}, { onSettled: invalidate });
   };
 
   const addChannel = () => {
@@ -376,7 +529,7 @@ export function NeurocommentPage() {
               </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-px overflow-hidden rounded-xl border border-[#e4ecfa] bg-[#e4ecfa]">
+            <div className="grid grid-cols-5 gap-px overflow-hidden rounded-xl border border-[#e4ecfa] bg-[#e4ecfa]">
               {stats.map((stat) => (
                 <div key={stat.label} className="bg-white px-4 py-[14px]">
                   <Odometer value={stat.value} color={stat.color} />
@@ -421,7 +574,9 @@ export function NeurocommentPage() {
                     <span className="shrink-0 text-[#5c5c66]">
                       {formatLocalTime(line.created_at, { seconds: true })}
                     </span>
-                    <span style={{ color: NEURO_LOG_COLOR[line.status] }}>{line.event}</span>
+                    <span style={{ color: NEURO_LOG_COLOR[line.status] }}>
+                      {eventLabel(t, line.event)}
+                    </span>
                   </div>
                 ))
               )}
@@ -507,6 +662,7 @@ export function NeurocommentPage() {
                 <SurfHover
                   shift={144}
                   surfaceId="lsn-surf"
+                  open={listenerActionsOpen}
                   actions={
                     <>
                       <button
@@ -554,8 +710,8 @@ export function NeurocommentPage() {
                         type="button"
                         title={t('neurocomment.listener.remove')}
                         onClick={() => {
-                          setListener('');
-                          stop.mutate({}, { onSettled: invalidate });
+                          setListenerActionsOpen(false);
+                          removeListener();
                         }}
                         className="flex w-12 items-center justify-center border-none bg-transparent text-danger"
                       >
@@ -601,7 +757,17 @@ export function NeurocommentPage() {
                           {campaignList.filter((c) => c.status === 'active').length}
                         </span>
                       </div>
-                      <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border border-line bg-white text-ink-subtle">
+                      <button
+                        type="button"
+                        title={t('neurocomment.listener.actions')}
+                        aria-label={t('neurocomment.listener.actions')}
+                        aria-expanded={listenerActionsOpen}
+                        onClick={(event) => {
+                          event.stopPropagation();
+                          setListenerActionsOpen((v) => !v);
+                        }}
+                        className="flex h-6 w-6 shrink-0 items-center justify-center rounded-[7px] border border-line bg-white text-ink-subtle transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
+                      >
                         <svg
                           width="13"
                           height="13"
@@ -613,7 +779,7 @@ export function NeurocommentPage() {
                           <circle cx="12" cy="12" r="3" />
                           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
                         </svg>
-                      </span>
+                      </button>
                     </div>
                   }
                 />
@@ -646,19 +812,25 @@ export function NeurocommentPage() {
                 <div
                   className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${listenerOpen ? 'open' : ''}`}
                 >
-                  {accountOptions.map((account) => (
-                    <button
-                      key={account.account_id}
-                      type="button"
-                      onClick={() => {
-                        setListener(account.account_id);
-                        setListenerOpen(false);
-                      }}
-                      className="flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff]"
-                    >
-                      <span className="font-medium">{account.label ?? account.account_id}</span>
-                    </button>
-                  ))}
+                  {accountOptions.length === 0 ? (
+                    <div className="px-[10px] py-2 text-[12.5px] text-ink-subtle">
+                      {t('neurocomment.listener.noAccounts')}
+                    </div>
+                  ) : (
+                    accountOptions.map((account) => (
+                      <button
+                        key={account.account_id}
+                        type="button"
+                        onClick={() => {
+                          setListener(account.account_id);
+                          setListenerOpen(false);
+                        }}
+                        className="flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff]"
+                      >
+                        <span className="font-medium">{account.label ?? account.account_id}</span>
+                      </button>
+                    ))
+                  )}
                 </div>
               </div>
             )}
@@ -746,38 +918,16 @@ export function NeurocommentPage() {
                     {t('neurocomment.captcha.pending', { count: captchaQueue.length })}
                   </span>
                 </div>
-                <div className="flex flex-col gap-[7px]">
-                  {captchaQueue.map((item, index) => (
-                    <div
-                      key={`${item.account_id}-${item.channel}-${String(index)}`}
-                      className="flex items-center justify-between gap-[10px] rounded-[11px] border border-[#efe5cc] bg-[#fcfaf4] py-2 pl-[11px] pr-2"
-                    >
-                      <div className="flex min-w-0 items-center gap-[9px]">
-                        <span className="tb-livedot h-[7px] w-[7px] shrink-0 rounded-full bg-[#e0a82e]" />
-                        <div className="min-w-0">
-                          <div className="truncate text-[12.5px] font-semibold text-ink">
-                            {item.account_id}
-                          </div>
-                          <div className="text-[10.5px] text-ink-subtle">
-                            {item.channel} · {formatLocalTime(item.decided_at, { seconds: true })}
-                          </div>
-                        </div>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          retry.mutate(
-                            { body: { account_id: item.account_id, channel: item.channel } },
-                            { onSettled: invalidate },
-                          );
-                        }}
-                        className="shrink-0 rounded-full bg-ink px-[13px] py-[6px] text-[11.5px] font-medium text-white"
-                      >
-                        {t('neurocomment.captcha.solve')}
-                      </button>
-                    </div>
-                  ))}
-                </div>
+                <CaptchaQueue
+                  rows={captchaQueue}
+                  accountLabel={accountLabel}
+                  onSolve={(item) => {
+                    retry.mutate(
+                      { body: { account_id: item.account_id, channel: item.channel } },
+                      { onSettled: invalidate },
+                    );
+                  }}
+                />
               </div>
             ) : null}
           </div>
@@ -795,13 +945,16 @@ export function NeurocommentPage() {
             <div className="flex flex-col gap-2">
               {campaignList.map((campaign) => {
                 const isSelected = campaign.campaign_id === campaignId;
-                const isRunning = running && isSelected;
+                // Per-campaign run state comes from the campaign's own status,
+                // not the global engine (finding #2).
+                const isRunning = campaign.status === 'active';
                 const color = STATUS_COLOR[campaign.status];
                 return (
                   <SurfHover
                     key={campaign.campaign_id}
                     shift={156}
                     surfaceId={`camp-surf-${campaign.campaign_id}`}
+                    open={openCampaignActions === campaign.campaign_id}
                     actions={
                       <>
                         <button
@@ -811,7 +964,9 @@ export function NeurocommentPage() {
                               ? t('neurocomment.campaign.pause')
                               : t('neurocomment.campaign.run')
                           }
-                          onClick={toggleRuntime}
+                          onClick={() => {
+                            toggleCampaignStatus(campaign);
+                          }}
                           className={`flex w-[52px] items-center justify-center border-none bg-transparent ${isRunning ? 'text-[#c47d12]' : 'text-success'}`}
                         >
                           {isRunning ? (
@@ -829,6 +984,10 @@ export function NeurocommentPage() {
                           type="button"
                           title={t('neurocomment.campaign.editPrompt')}
                           onClick={() => {
+                            // Select the campaign too, so the board query (and
+                            // thus the prompt modal's account list) reflects THIS
+                            // campaign, not whichever was selected (finding #5).
+                            setSelected(campaign.campaign_id);
                             setPromptFor(campaign);
                           }}
                           className="flex w-[52px] items-center justify-center border-none bg-transparent text-primary"
@@ -882,10 +1041,8 @@ export function NeurocommentPage() {
                             </div>
                             <div className="text-[11px] text-ink-muted">
                               {t('neurocomment.campaign.meta', {
-                                channels:
-                                  campaign.campaign_id === campaignId ? boardChannels.length : 0,
-                                accounts:
-                                  campaign.campaign_id === campaignId ? boardAccounts.length : 0,
+                                channels: campaign.channel_count ?? 0,
+                                accounts: campaign.account_count ?? 0,
                               })}
                             </div>
                           </div>
@@ -900,6 +1057,31 @@ export function NeurocommentPage() {
                               />
                               {t(`neurocomment.campaign.status.${campaign.status}`)}
                             </span>
+                            <button
+                              type="button"
+                              title={t('neurocomment.campaign.actions')}
+                              aria-label={t('neurocomment.campaign.actions')}
+                              aria-expanded={openCampaignActions === campaign.campaign_id}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setOpenCampaignActions((current) =>
+                                  current === campaign.campaign_id ? null : campaign.campaign_id,
+                                );
+                              }}
+                              className="flex h-6 w-6 items-center justify-center rounded-[7px] border border-line bg-white text-ink-subtle transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
+                            >
+                              <svg
+                                width="13"
+                                height="13"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
+                              </svg>
+                            </button>
                           </div>
                         </div>
                       </div>
@@ -1047,11 +1229,8 @@ export function NeurocommentPage() {
 
       {showAccounts ? (
         <NeuroAccountsModal
-          accounts={boardAccounts.map((a) => ({
-            account_id: a.account_id,
-            phone: a.label,
-            channel: a.readiness?.[0]?.channel ?? null,
-          }))}
+          accounts={neuroAccountRows}
+          channels={boardChannelNames}
           feedback={accountFeedback.feedback}
           onClose={() => {
             setShowAccounts(false);
@@ -1073,6 +1252,22 @@ export function NeurocommentPage() {
             if (campaignId !== null) {
               removeAccount.mutate(
                 { path: { campaign_id: campaignId }, body: { account_id: accountId } },
+                {
+                  onSettled: (_data, error) => {
+                    accountFeedback.mark(accountId, !error);
+                    invalidate();
+                  },
+                },
+              );
+            }
+          }}
+          onChannelChange={(accountId, channel) => {
+            if (campaignId !== null) {
+              setAccountChannel.mutate(
+                {
+                  path: { campaign_id: campaignId, account_id: accountId },
+                  body: { channel },
+                },
                 {
                   onSettled: (_data, error) => {
                     accountFeedback.mark(accountId, !error);
@@ -1146,12 +1341,20 @@ export function NeurocommentPage() {
         <CampaignPromptModal
           campaignName={promptFor.name}
           initialPrompt={promptFor.prompt}
-          accounts={boardAccounts.map((a) => ({
-            account_id: a.account_id,
-            phone: a.label,
-            channel: a.readiness?.[0]?.channel ?? '—',
-            initials: initials(a.label),
-          }))}
+          // Only surface board accounts once the board query reflects promptFor's
+          // own campaign; otherwise show none rather than another campaign's
+          // accounts (finding #5). Opening the prompt selects the campaign, so
+          // this settles after the board refetch.
+          accounts={
+            promptFor.campaign_id === campaignId
+              ? boardAccounts.map((a) => ({
+                  account_id: a.account_id,
+                  phone: a.label,
+                  channel: a.readiness?.[0]?.channel ?? '—',
+                  initials: initials(a.label),
+                }))
+              : []
+          }
           onClose={() => {
             setPromptFor(null);
           }}

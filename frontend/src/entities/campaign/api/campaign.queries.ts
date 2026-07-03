@@ -2,6 +2,7 @@
 // only via shared/api).
 export {
   assignCampaignAccountMutation,
+  clearNeurocommentListenerMutation,
   createCampaignMutation,
   deleteCampaignMutation,
   getNeurocommentBoardOptions as neurocommentBoardQueryOptions,
@@ -13,7 +14,9 @@ export {
   removeCampaignAccountMutation,
   removeCampaignChannelMutation,
   retryChallengeMutation,
+  setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
+  setCampaignStatusMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateCampaignPromptMutation,

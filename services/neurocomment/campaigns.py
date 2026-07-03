@@ -12,8 +12,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core import db
+from core.repositories.neurocomment import (
+    set_campaign_account_channel,
+    set_campaign_status,
+)
 from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import ChannelLinkOutcome
+from services.neurocomment import _runtime
+from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
     from schemas.challenge import ChallengeOutcomeCounts
@@ -22,6 +28,8 @@ if TYPE_CHECKING:
         CampaignChannelList,
         CampaignCreate,
         CampaignList,
+        CampaignRunStatus,
+        NeurocommentBoard,
         NeurocommentCampaign,
     )
 
@@ -52,12 +60,16 @@ async def link_channel(campaign_id: str, channel: str) -> ChannelLinkOutcome:
         await db.link_channel_to_campaign(campaign_id, channel)
     except db.ChannelAlreadyAssignedError:
         return ChannelLinkOutcome(status="already_assigned", channel=channel)
+    # A running listener must pick up the new channel now, not at the next restart.
+    await _runtime.reconcile_if_running()
     return ChannelLinkOutcome(status="linked", channel=channel)
 
 
 async def deactivate_channel(campaign_id: str, channel: str) -> None:
     """Free a channel from a campaign so its slot can move to another campaign."""
     await db.deactivate_channel(campaign_id, channel)
+    # Drop the un-linked channel from a running listener's subscription immediately.
+    await _runtime.reconcile_if_running()
 
 
 async def list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
@@ -103,6 +115,21 @@ async def count_challenge_outcomes(channels: list[str], since: str) -> Challenge
     return await db.count_by_outcome(channels, since)
 
 
+async def count_campaign_challenge_outcomes(
+    campaign_id: str,
+    since: str,
+) -> ChallengeOutcomeCounts:
+    """Challenge-outcome counters for a campaign's active channels since ``since`` (#148).
+
+    Resolves the campaign's active channels here (business logic) so the route stays a
+    thin validate → call → serialize; delegates the grouped count to the repository.
+    """
+    channels = [
+        link.channel for link in (await db.list_campaign_channels(campaign_id)).links if link.active
+    ]
+    return await db.count_by_outcome(channels, since)
+
+
 async def set_solver_enabled(campaign_id: str, value: bool | None) -> None:  # noqa: FBT001 - tri-state value
     """Per-campaign solver switch: ``None`` follows the global flag, else force on/off (#148)."""
     await db.update_solver_enabled(campaign_id, value)
@@ -113,9 +140,36 @@ async def update_campaign_prompt(campaign_id: str, prompt: str) -> None:
     await db.update_campaign_prompt(campaign_id, prompt)
 
 
+async def set_status(campaign_id: str, status: CampaignRunStatus) -> None:
+    """Per-campaign run/pause: persist the status and re-point a running listener.
+
+    A paused campaign's channels leave the active watch set, so the engine both
+    skips its posts (``fetch_active_campaign_for_channel`` filters ``status='active'``)
+    and, once reconciled, stops watching them; resuming brings them back.
+    """
+    await set_campaign_status(campaign_id, status)
+    await _runtime.reconcile_if_running()
+
+
 async def skip_pair(account_id: str, channel: str) -> None:
     """Operator "Skip channel for this account": the engine never selects the pair (#148)."""
     await db.mark_human_skipped(account_id, channel)
+
+
+async def pin_account_channel(
+    campaign_id: str,
+    account_id: str,
+    channel: str | None,
+) -> NeurocommentBoard | None:
+    """Pin a campaign account to one channel (``None`` clears the pin); return the board.
+
+    Raises ``ChannelNotInCampaignError`` when the target is not an active channel of
+    the campaign, so the route can map it to a 400 instead of leaking a repo internal.
+    Onboarding after a pin change is operator-driven (Start), matching the existing
+    solver-toggle behaviour; selection immediately honours the new pin on the next post.
+    """
+    await set_campaign_account_channel(campaign_id, account_id, channel)
+    return await load_neurocomment_board(campaign_id)
 
 
 async def delete_campaign(campaign_id: str) -> None:

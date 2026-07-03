@@ -14,6 +14,7 @@ from core.db import (
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from core.phone_geo import evaluate_geo
+from core.telegram_client import evict_client
 from schemas.geo import GeoMatch
 
 if TYPE_CHECKING:
@@ -69,6 +70,9 @@ async def remove_account(account_id: str) -> None:
                 account_id=account_id,
                 extra={"error_type": type(exc).__name__, "message": str(exc)},
             )
+        # Disconnect the pooled client so it stops holding the account's
+        # ``.session`` handle open (Windows can't unlink a live handle).
+        await evict_client(account_id)
         await delete_account(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 

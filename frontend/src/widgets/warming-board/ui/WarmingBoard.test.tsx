@@ -112,6 +112,64 @@ test('shows a success or error mark from the feedback map', () => {
   expect(document.querySelector('.text-danger svg')).toBeInTheDocument();
 });
 
+test('renders the phone as the card id when present', () => {
+  const withPhone: WarmingAccountState = {
+    ...account('a1', 'active'),
+    label: 'Label A',
+    phone: '+79215532011',
+  };
+  renderWithClient(
+    <WarmingBoard warming={[withPhone]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('+79215532011')).toBeInTheDocument();
+  expect(screen.queryByText('Label A')).not.toBeInTheDocument();
+});
+
+test('the "?" tooltip shows the ЛС (DM) line from dm_allowed', () => {
+  const allowed: WarmingAccountState = { ...account('a1', 'active'), dm_allowed: true };
+  const closed: WarmingAccountState = { ...account('a2', 'active'), dm_allowed: false };
+  renderWithClient(
+    <WarmingBoard warming={[allowed, closed]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('ЛС: разрешены')).toBeInTheDocument();
+  expect(screen.getByText('ЛС: закрыты')).toBeInTheDocument();
+});
+
+test('the actions counter reflects daily_actions / daily_cap', () => {
+  const acc: WarmingAccountState = {
+    ...account('a1', 'active'),
+    daily_actions: 6,
+    daily_cap: 18,
+  };
+  renderWithClient(
+    <WarmingBoard warming={[acc]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  // Uses the served cap, not the old hardcoded /10.
+  expect(screen.getByText('6/18')).toBeInTheDocument();
+});
+
+test('the per-card log request uses the served card_log_limit', async () => {
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(jsonResponse({ items: [], next_cursor: null })),
+  );
+  renderWithClient(
+    <WarmingBoard
+      warming={[account('79051184490', 'active')]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+      logLimit={7}
+    />,
+  );
+  await userEvent.click(screen.getByText('Лог активности'));
+  await waitFor(() => {
+    const used = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('limit=7'));
+    expect(used).toBe(true);
+  });
+});
+
 test('expanding a card fetches that account real activity log', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

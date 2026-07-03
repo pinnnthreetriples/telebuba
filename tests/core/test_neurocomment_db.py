@@ -49,6 +49,10 @@ from core.db import (  # type: ignore[attr-defined]
     upsert_linked_group,
     upsert_readiness,
 )
+from core.repositories.neurocomment import (
+    ChannelNotInCampaignError,
+    set_campaign_account_channel,
+)
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.neurocomment import CampaignCreate
@@ -471,6 +475,47 @@ async def test_account_serves_many_campaigns() -> None:
     assert [link.account_id for link in in_a.links] == ["acc-1"]
     in_b = await list_campaign_accounts(b.campaign_id)
     assert [link.campaign_id for link in in_b.links] == [b.campaign_id]
+
+
+@pytest.mark.asyncio
+async def test_new_assignment_has_null_channel_pin() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    links = (await list_campaign_accounts(campaign.campaign_id)).links
+    assert [link.channel for link in links] == [None]  # NULL = all channels
+
+
+@pytest.mark.asyncio
+async def test_set_campaign_account_channel_persists_and_clears() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@news")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    await set_campaign_account_channel(campaign.campaign_id, "acc-1", "@news")
+    pinned = (await list_campaign_accounts(campaign.campaign_id)).links
+    assert [link.channel for link in pinned] == ["@news"]
+
+    await set_campaign_account_channel(campaign.campaign_id, "acc-1", None)  # clear the pin
+    cleared = (await list_campaign_accounts(campaign.campaign_id)).links
+    assert [link.channel for link in cleared] == [None]
+
+
+@pytest.mark.asyncio
+async def test_set_campaign_account_channel_rejects_foreign_channel() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@news")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    # Pinning to a channel that is not an active link of this campaign is rejected,
+    # and the stored pin is left untouched.
+    with pytest.raises(ChannelNotInCampaignError):
+        await set_campaign_account_channel(campaign.campaign_id, "acc-1", "@other")
+    links = (await list_campaign_accounts(campaign.campaign_id)).links
+    assert [link.channel for link in links] == [None]
 
 
 @pytest.mark.asyncio

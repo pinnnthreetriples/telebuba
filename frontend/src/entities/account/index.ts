@@ -1,4 +1,8 @@
-export { accountProfileSnapshotQueryOptions, accountsQueryOptions } from './api/accounts.queries';
+export {
+  accountProfileSnapshotQueryOptions,
+  accountsQueryOptions,
+  accountStatsQueryOptions,
+} from './api/accounts.queries';
 export {
   addAccountMusicMutation,
   checkAccountMutation,

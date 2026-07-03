@@ -20,8 +20,12 @@ from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client import TelegramClientPoolError
 from core.telegram_client._pool import (
+    _CLIENTS,
+    _REBUILD_HOOKS,
     _reset_for_tests,
+    evict_client,
     get_client,
+    register_rebuild_hook,
     shutdown_telegram_pool,
 )
 
@@ -201,3 +205,95 @@ async def test_get_client_recovers_after_single_transient_failure(
     client = await get_client("acc-flaky")
 
     assert client.is_connected(), "second attempt must succeed and return a live client"
+
+
+@pytest.mark.asyncio
+async def test_evict_client_disconnects_and_drops_from_pool(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """evict_client must disconnect the cached client and remove it from the pool.
+
+    Regression for the Windows reset/logout 500: the pooled client keeps the
+    ``.session`` SQLite file open, so it has to be evicted before the file is
+    unlinked — the wipe must not run while a live handle exists.
+    """
+    built = _install_fake_factory(monkeypatch)
+    client = await get_client("acc-evict")
+    assert "acc-evict" in _CLIENTS
+
+    await evict_client("acc-evict")
+
+    assert built[0].disconnect_calls == 1, "the cached client must be disconnected"
+    assert "acc-evict" not in _CLIENTS, "the pool must no longer hold the client"
+    assert built == [client], "no rebuild — eviction must not create a new client"
+
+
+@pytest.mark.asyncio
+async def test_evict_client_is_noop_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    _install_fake_factory(monkeypatch)
+    # No prior get_client — nothing cached. Must not raise or build anything.
+    await evict_client("never-borrowed")
+    assert "never-borrowed" not in _CLIENTS
+
+
+@pytest.mark.asyncio
+async def test_evict_precedes_session_file_removal(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """After eviction the handle is released, so unlinking the .session succeeds.
+
+    Simulates the reset ordering: evict the pooled client (asserted disconnect)
+    and only then remove the session file — verifying eviction happens first.
+    """
+    built = _install_fake_factory(monkeypatch)
+    await get_client("acc-order")
+    session_file = tmp_path / "acc-order.session"
+    session_file.write_bytes(b"auth-key")
+
+    order: list[str] = []
+    original_disconnect = built[0].disconnect
+
+    def tracked_disconnect() -> None:
+        order.append("disconnect")
+        original_disconnect()
+
+    built[0].disconnect = tracked_disconnect  # ty: ignore[invalid-assignment]
+
+    await evict_client("acc-order")
+    session_file.unlink()
+    order.append("unlink")
+
+    assert order == ["disconnect", "unlink"], "eviction must precede the file removal"
+    assert not session_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_rebuild_fires_registered_hook_with_new_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pool rebuild must invoke rebuild hooks with the freshly built client.
+
+    This is the seam the post listener uses to re-attach its NewMessage handler
+    when the pool replaces a dropped connection.
+    """
+    built = _install_fake_factory(monkeypatch)
+    seen: list[tuple[str, object]] = []
+
+    async def hook(account_id: str, client: object) -> None:
+        seen.append((account_id, client))
+
+    register_rebuild_hook(hook)
+    try:
+        first = await get_client("acc-hook")
+        # First build fires the hook once.
+        assert seen == [("acc-hook", first)]
+
+        # Force a rebuild: cached client reports disconnected.
+        built[0]._connected = False
+        second = await get_client("acc-hook")
+
+        assert second is not first, "a rebuild must produce a new client"
+        assert seen[-1] == ("acc-hook", second), "the hook must see the rebuilt client"
+    finally:
+        _REBUILD_HOOKS.remove(hook)

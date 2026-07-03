@@ -9,7 +9,9 @@ tests patch one place. NiceGUI wiring (#119) delegates here.
 
 from __future__ import annotations
 
+from core.repositories.neurocomment import ChannelNotInCampaignError
 from services.neurocomment._runtime import (
+    clear_neurocomment_listener,
     neurocomment_runtime_status,
     on_post,
     reconcile_neurocomment_on_startup,
@@ -22,6 +24,7 @@ from services.neurocomment._runtime import (
 from services.neurocomment.board import load_neurocomment_board
 from services.neurocomment.campaigns import (
     assign_account_to_campaign,
+    count_campaign_challenge_outcomes,
     count_challenge_outcomes,
     create_campaign,
     deactivate_channel,
@@ -32,10 +35,14 @@ from services.neurocomment.campaigns import (
     list_campaign_channels,
     list_campaigns,
     list_channel_challenges,
+    pin_account_channel,
     remove_account_from_campaign,
     set_solver_enabled,
     skip_pair,
     update_campaign_prompt,
+)
+from services.neurocomment.campaigns import (
+    set_status as set_campaign_status,
 )
 from services.neurocomment.challenge import retry_pair
 from services.neurocomment.engine import handle_new_post
@@ -48,7 +55,10 @@ from services.neurocomment.settings_store import (
 )
 
 __all__ = [
+    "ChannelNotInCampaignError",
     "assign_account_to_campaign",
+    "clear_neurocomment_listener",
+    "count_campaign_challenge_outcomes",
     "count_challenge_outcomes",
     "create_campaign",
     "deactivate_channel",
@@ -66,11 +76,13 @@ __all__ = [
     "on_post",
     "onboard_account_channel",
     "onboard_campaign",
+    "pin_account_channel",
     "reconcile_neurocomment_on_startup",
     "reconcile_neurocomment_runtime",
     "remove_account_from_campaign",
     "retry_pair",
     "save_neurocomment_settings",
+    "set_campaign_status",
     "set_solver_enabled",
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neurocomment_runtime",

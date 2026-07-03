@@ -10,9 +10,11 @@ SQLite DB.
 
 from __future__ import annotations
 
+import asyncio
+import contextlib
 import subprocess  # nosec B404 — read-only git rev-parse, no user input.
 from contextlib import asynccontextmanager
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
 
 import uvicorn
@@ -25,6 +27,8 @@ if TYPE_CHECKING:
 
 from api import create_app
 from core.config import settings
+from core.db import run_db_maintenance_loop
+from core.gemini import close_gemini_client
 from core.logging import log_event, setup_logging
 from core.telegram_client import shutdown_telegram_pool
 from services.auth import seed_admin_if_empty
@@ -80,6 +84,10 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
     setup_logging()
     await _log_app_started()
     await seed_admin_if_empty()
+    # DB is initialised by the seed above; start the periodic SQLite maintenance
+    # (WAL checkpoint + optional backup) alongside — separate from the warming /
+    # neurocomment / pool lifecycle, so their start/stop order is untouched.
+    maintenance_task = asyncio.create_task(run_db_maintenance_loop())
     await reconcile_warming_runtime()
     await reconcile_neurocomment_on_startup()
     try:
@@ -88,6 +96,34 @@ async def lifespan(_app: FastAPI) -> AsyncIterator[None]:
         await shutdown_warming_runtime()
         await shutdown_neurocomment_on_shutdown()
         await shutdown_telegram_pool()
+        maintenance_task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await maintenance_task
+        await close_gemini_client()
+
+
+def _safe_spa_file(path: str) -> Path | None:
+    """Resolve ``path`` to a real file inside ``frontend/dist``, or ``None``.
+
+    Guards the SPA catch-all against path traversal: an attacker requesting
+    ``../../.env`` (or a backslash/encoded/absolute variant) must never escape
+    ``frontend/dist`` and serve ``.env`` / ``telebuba.db`` / ``sessions/*``.
+    Rejects any ``..`` segment and absolute inputs up front, then requires the
+    resolved candidate to stay under the resolved dist root. On any failure the
+    caller falls back to serving ``index.html`` (SPA fallback), never the file.
+    """
+    if not path:
+        return None
+    # Normalise separators so a Windows-style ``..\\..`` is caught too, then
+    # reject any parent-dir segment or an absolute path before touching disk.
+    parts = path.replace("\\", "/").split("/")
+    if ".." in parts or PurePosixPath(path).is_absolute() or Path(path).is_absolute():
+        return None
+    root = _FRONTEND_DIST.resolve()
+    candidate = (root / path).resolve()
+    if not candidate.is_relative_to(root) or not candidate.is_file():
+        return None
+    return candidate
 
 
 def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
@@ -107,9 +143,9 @@ def _mount_frontend(app: FastAPI) -> None:  # pragma: no cover
     async def _spa(path: str) -> FileResponse:
         if path.startswith("api/"):
             raise HTTPException(status_code=404, detail="not found")
-        candidate = _FRONTEND_DIST / path
-        if path and candidate.is_file():
-            return FileResponse(candidate)
+        safe = _safe_spa_file(path)
+        if safe is not None:
+            return FileResponse(safe)
         return FileResponse(_FRONTEND_DIST / "index.html")
 
 
@@ -124,6 +160,12 @@ def main() -> None:  # pragma: no cover
         port=settings.api.port,
         workers=1,
         reload=False,
+        # Trust X-Forwarded-For only from configured upstreams so
+        # ``request.client.host`` (the rate-limiter key) reflects the real client
+        # behind a reverse proxy. Off by default — never trust a spoofable header
+        # on a direct-exposed deploy.
+        proxy_headers=settings.api.trust_proxy_headers,
+        forwarded_allow_ips=settings.api.forwarded_allow_ips,
     )
 
 

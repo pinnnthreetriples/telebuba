@@ -240,6 +240,62 @@ test('the delete-account action confirms, deletes, and returns to the list', asy
   });
 });
 
+test('an unauthorized account shows the non-active session state (not a green "active")', () => {
+  renderWithClient(
+    <AccountEdit account={{ ...ACCOUNT, status: 'unauthorized' }} onBack={vi.fn()} />,
+  );
+  // The session row now reflects the real state, not a hardcoded "active".
+  expect(screen.queryByText('Сессия активна')).not.toBeInTheDocument();
+  expect(screen.getByText('Сессия неактивна · нужен повторный вход')).toBeInTheDocument();
+});
+
+test('a proxyless account shows the unassigned state and no detach control', () => {
+  renderWithClient(<AccountEdit account={{ ...ACCOUNT, proxy_id: undefined }} onBack={vi.fn()} />);
+  expect(screen.getByText('Прокси не назначен')).toBeInTheDocument();
+  expect(screen.queryByText('Отвязать прокси')).not.toBeInTheDocument();
+});
+
+test('a proxy check renders the real returned fields, not a fabricated "12ms"', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname.endsWith('/check')) {
+      return Promise.resolve(
+        jsonResponse({ status: 'tcp_working', country_code: 'de', exit_ip: '5.6.7.8' }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Прокси'));
+  await userEvent.click(screen.getByText('Из пула'));
+  await userEvent.click(screen.getAllByText('Проверить')[0]!);
+  // Real country + exit IP surface; the invented latency is gone.
+  await screen.findByText('DE · 5.6.7.8');
+  expect(screen.queryByText(/12ms/)).not.toBeInTheDocument();
+});
+
+test('the detach-proxy control unassigns the account and refreshes', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/proxies/unassign') {
+      return Promise.resolve(jsonResponse({}));
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Прокси'));
+  await userEvent.click(screen.getByText('Отвязать прокси'));
+  await waitFor(() => {
+    const unassigned = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      return (
+        new URL(request.url).pathname === '/api/v1/proxies/unassign' && request.method === 'POST'
+      );
+    });
+    expect(unassigned).toBe(true);
+  });
+});
+
 test('the @SpamBot check fires the real spam-check endpoint', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

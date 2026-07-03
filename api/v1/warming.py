@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, HTTPException
+from typing import Annotated
+
+from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
 from core.config import settings
+from schemas.dialogues import DialogueFeed
 from schemas.warming import (
     AddChannelsRequest,
     PromoteRequest,
@@ -19,6 +22,7 @@ from schemas.warming import (
     WarmingSettings,
     WarmingSettingsUpdate,
 )
+from services import dialogues as dialogues_service
 from services import warming as warming_service
 
 router = APIRouter(prefix="/warming", tags=["warming"])
@@ -99,3 +103,11 @@ async def get_warming_settings() -> WarmingSettings:
 @router.put("/settings", response_model=WarmingSettings, operation_id="updateWarmingSettings")
 async def update_warming_settings(body: WarmingSettingsUpdate) -> WarmingSettings:
     return await warming_service.save_settings(body)
+
+
+@router.get("/dialogues", response_model=DialogueFeed, operation_id="listWarmingDialogues")
+async def list_warming_dialogues(
+    limit: Annotated[int, Query(ge=1, le=100)] = 30,
+) -> DialogueFeed:
+    """Recent inter-account warming messages, newest first, for the live feed."""
+    return await dialogues_service.load_dialogue_overview(recent_limit=limit)

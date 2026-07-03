@@ -181,6 +181,19 @@
 .tb-upbar {
   animation: upbar 1.7s ease-out forwards;
 }
+/* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
+   opacity keyframe, staggered so the wave reads as ongoing chatter. */
+.tb-typing-dot {
+  animation: dotspin 1.2s ease-in-out infinite;
+}
+/* Motion is decorative here; honour the user's reduced-motion preference for
+   the dialogue feed's enter animation and typing dots. */
+@media (prefers-reduced-motion: reduce) {
+  .tb-swapin,
+  .tb-typing-dot {
+    animation: none;
+  }
+}
 
 .tb-tip {
   position: relative;
@@ -238,6 +251,10 @@
   border-radius: 6px;
 }
 
+.tb-row:hover {
+  background: #faf9f7;
+}
+
 .tb-collapse {
   overflow: hidden;
   max-height: 0;
@@ -249,6 +266,11 @@
 .tb-collapse.tb-open {
   max-height: var(--mh, 600px);
   opacity: 1;
+}
+/* After the open transition settles, drop the cap so content taller than the
+   measured height (added later, e.g. an expanding log) is never clipped. */
+.tb-collapse.tb-open.tb-settled {
+  max-height: none;
 }
 .tb-sw-thumb {
   transition: transform 0.18s ease;

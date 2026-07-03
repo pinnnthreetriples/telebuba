@@ -6,22 +6,35 @@ import { ConfirmModal, FeedbackMark, Modal } from '@/shared/ui';
 export interface NeuroAccountRow {
   account_id: string;
   phone: string;
-  channel: string | null;
+  linked: boolean;
+  pinned_channel: string | null;
 }
+
+// Empty <option> value is the "all channels" sentinel (unpin → channel: null).
+const ALL_CHANNELS = '';
 
 function AccountRow({
   account,
+  channels,
   onPick,
   onRemove,
+  onChannelChange,
   result,
 }: {
   account: NeuroAccountRow;
+  channels: string[];
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
+  onChannelChange: (accountId: string, channel: string | null) => void;
   result?: 'ok' | 'err';
 }) {
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState(false);
+
+  // A linked account may be pinned to one campaign channel or left on all of
+  // them; an unknown pin (e.g. a channel since removed) is still surfaced.
+  const pin = account.pinned_channel;
+  const options = pin !== null && !channels.includes(pin) ? [pin, ...channels] : channels;
 
   return (
     <div className="flex items-center gap-[10px] border-b border-[#f4f2ef] py-[11px]">
@@ -29,10 +42,27 @@ function AccountRow({
       <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
         {account.phone}
       </span>
-      {account.channel !== null ? (
-        <span className="w-[180px] shrink-0 truncate rounded-[9px] border border-line-input bg-[#f6f5f2] px-[11px] py-[8px] text-[12.5px] text-ink-subtle">
-          {account.channel}
-        </span>
+      {account.linked ? (
+        // Design gives each linked account a ~180px channel dropdown to redirect
+        // it to another campaign channel; "Все каналы" clears the pin.
+        <select
+          value={pin ?? ALL_CHANNELS}
+          aria-label={t('neurocomment.modal.neuroAccounts.channelLabel')}
+          onChange={(e) => {
+            onChannelChange(
+              account.account_id,
+              e.target.value === ALL_CHANNELS ? null : e.target.value,
+            );
+          }}
+          className="w-[180px] shrink-0 truncate rounded-[9px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink"
+        >
+          <option value={ALL_CHANNELS}>{t('neurocomment.modal.neuroAccounts.allChannels')}</option>
+          {options.map((channel) => (
+            <option key={channel} value={channel}>
+              {channel}
+            </option>
+          ))}
+        </select>
       ) : (
         <button
           type="button"
@@ -82,22 +112,23 @@ function AccountRow({
 }
 
 // Design modal: neuro-accounts (L1460-1495) — manage every account in
-// neurocommenting: assign an idle account to the campaign, or remove one.
-// Channel pairing itself is automatic (onboard_campaign cross-joins every
-// assigned account against the campaign's channels) — there is no backend
-// concept of pinning one account to one channel, so this only offers assign /
-// remove, not a per-channel picker.
+// neurocommenting: assign an idle account to the campaign, pin a linked account
+// to one campaign channel (or "Все каналы" to comment on all), or remove one.
 export function NeuroAccountsModal({
   accounts,
+  channels = [],
   onClose,
   onPick,
   onRemove,
+  onChannelChange,
   feedback = {},
 }: {
   accounts: NeuroAccountRow[];
+  channels?: string[];
   onClose: () => void;
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
+  onChannelChange: (accountId: string, channel: string | null) => void;
   feedback?: Record<string, 'ok' | 'err'>;
 }) {
   const { t } = useTranslation();
@@ -134,8 +165,10 @@ export function NeuroAccountsModal({
             <AccountRow
               key={account.account_id}
               account={account}
+              channels={channels}
               onPick={onPick}
               onRemove={onRemove}
+              onChannelChange={onChannelChange}
               result={feedback[account.account_id]}
             />
           ))

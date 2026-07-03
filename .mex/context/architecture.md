@@ -88,7 +88,7 @@ telebuba/
 ├── frontend/                     React + TS (strict) + Vite SPA — Feature-Sliced Design (see context/frontend.md)
 │   ├── src/app|routes|pages|widgets|features|entities|shared
 │   ├── tailwind.config.*         design tokens (single source of truth)
-│   └── package.json              FE deps + gate scripts (lint/boundaries/tsc/vitest/playwright/gen-api)
+│   └── package.json              FE deps + gate scripts (lint/boundaries/tsc/vitest/gen-api)
 └── tests/                        mirrors source tree; pytest + property tests + architecture tests
 ```
 

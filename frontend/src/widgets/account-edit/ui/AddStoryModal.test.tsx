@@ -88,6 +88,15 @@ test('a failed publish surfaces the backend error reason on the row', async () =
   expect(await screen.findByText('Proxy connection timed out')).toBeInTheDocument();
 });
 
+test('the picked-file size uses localized units, not hardcoded RU', async () => {
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  // ~2 MB file → the localized "МБ" unit (default RU locale).
+  const big = new File([new Uint8Array(2_200_000)], 'clip.mp4', { type: 'video/mp4' });
+  fireEvent.change(input, { target: { files: [big] } });
+  expect(await screen.findByText(/МБ$/)).toBeInTheDocument();
+});
+
 test('a picked file shows a removable row', async () => {
   renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
   const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;

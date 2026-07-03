@@ -40,12 +40,11 @@ Dependabot (`.github/dependabot.yml`) opens weekly PRs for GitHub Actions update
 | `semgrep-full` (3 rulesets) | — | — | ✓ | security-audit + OWASP top 10 + python |
 | `extended-hypothesis` | — | — | ✓ | 2000 examples per property |
 | `frontend` (lint/boundaries/tsc/vitest) | ✓ | ✓ | — | ESLint + Prettier + Steiger boundary-lint + `tsc --strict` + Vitest (≥ 80%) over `frontend/` |
-| `frontend-e2e` (Playwright smoke) | ✓ | ✓ | — | critical flows (login, each screen loads, one happy-path action) |
 | `gen-api-drift` | ✓ | ✓ | — | regenerate the hey-api client from the backend OpenAPI; fail if it differs from the committed client |
 
 Frontend jobs run on changes under `frontend/` (and `gen-api-drift` whenever the API surface
 or the generated client changes). The Python and frontend job sets are independent — a backend
-change need not run Playwright, and vice versa.
+change need not run the frontend jobs, and vice versa.
 
 ## Quality gates (deptry / vulture / radon / aislop)
 

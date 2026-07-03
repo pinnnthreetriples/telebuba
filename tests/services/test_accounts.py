@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+import io
+import zipfile
 from typing import TYPE_CHECKING
 
 import pytest
@@ -18,10 +19,10 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
-    AccountFilter,
     AccountProfileUpdateRequest,
     AccountSessionFileImport,
     AccountStatus,
+    health_for_status,
 )
 from schemas.profile_media import (
     AccountProfileMusicUpload,
@@ -45,6 +46,7 @@ from schemas.telegram_actions import (
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
     SessionAlreadyExistsError,
+    account_stats,
     add_account,
     add_account_profile_music,
     check_account_session,
@@ -54,14 +56,12 @@ from services.accounts import (
     list_accounts,
     list_accounts_page,
     list_listener_accounts,
-    load_accounts_table,
     post_account_story,
     remove_account_profile_photo,
     remove_account_story,
     set_account_profile_photo,
     update_account_profile,
 )
-from services.accounts._table import _format_last_checked
 from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
@@ -84,48 +84,22 @@ def _isolate_runtime(
     reset_logging_for_tests()
 
 
-@pytest.mark.parametrize(
-    ("offset_seconds", "expected"),
-    [
-        (0, "0 сек назад"),
-        (45, "45 сек назад"),
-        (60, "1 мин назад"),
-        (90, "1 мин назад"),
-        (3_600, "1 ч назад"),
-        (3_600 * 5, "5 ч назад"),
-        (86_400, "1 дн назад"),
-        (86_400 * 7, "7 дн назад"),
-    ],
-)
-def test_format_last_checked_relative(offset_seconds: int, expected: str) -> None:
-    now = datetime(2026, 6, 11, 12, 0, 0, tzinfo=UTC)
-    moment = now - timedelta(seconds=offset_seconds)
-    assert _format_last_checked(moment.isoformat(), now=now) == expected
-
-
-def test_format_last_checked_never_for_empty() -> None:
-    assert _format_last_checked(None) == "never"
-    assert _format_last_checked("") == "never"
-
-
-def test_format_last_checked_passes_through_garbage() -> None:
-    assert _format_last_checked("not-a-date") == "not-a-date"
-
-
 @pytest.mark.asyncio
-async def test_add_account_creates_fingerprint_and_table_row() -> None:
+async def test_add_account_creates_fingerprint_and_page_row() -> None:
     account = await add_account(
         AccountCreate(account_id="account-1", label="Main", session_name="session-1"),
     )
-    state = await load_accounts_table(AccountFilter())
+    page = await list_accounts_page()
+    stats = await account_stats()
 
     assert account.account_id == "account-1"
-    assert state.summary.total == 1
-    assert state.summary.never_checked == 1
-    assert state.rows[0].label == "Main"
-    assert state.rows[0].device != "-"
+    assert stats.total == 1
+    assert stats.needs_code == 1  # a never-checked account still needs a login code
+    row = page.items[0]
+    assert row.label == "Main"
+    assert row.device_model is not None
     # A freshly added account has not been checked yet -> warn (amber).
-    assert state.rows[0].health == "warn"
+    assert health_for_status(row.status) == "warn"
 
 
 @pytest.mark.asyncio
@@ -137,15 +111,16 @@ async def test_import_account_session_saves_file_and_creates_account() -> None:
             label="Real account",
         ),
     )
-    state = await load_accounts_table(AccountFilter())
+    page = await list_accounts_page()
 
     assert account.account_id == "real-account"
     assert account.session_name == "real-account"
     assert (
         settings.telegram.session_dir / "real-account.session"
     ).read_bytes() == b"sqlite session bytes"
-    assert state.rows[0].label == "Real account"
-    assert state.rows[0].session == "real-account"
+    row = page.items[0]
+    assert row.label == "Real account"
+    assert row.session_name == "real-account"
 
 
 @pytest.mark.asyncio
@@ -213,34 +188,84 @@ async def test_list_listener_accounts_keeps_only_live_sessions() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_accounts_table_filters_query_and_status() -> None:
+async def test_list_accounts_page_filters_query_and_status() -> None:
     await add_account(AccountCreate(account_id="one", label="Alpha"))
     await add_account(AccountCreate(account_id="two", label="Beta"))
 
-    query_state = await load_accounts_table(AccountFilter(query="alp"))
-    status_state = await load_accounts_table(AccountFilter(status="alive"))
+    query_page = await list_accounts_page(query="alp")
+    status_page = await list_accounts_page(status="alive")
 
-    assert [row.account_id for row in query_state.rows] == ["one"]
-    assert status_state.rows == []
-    assert status_state.summary.total == 2
+    assert [row.account_id for row in query_page.items] == ["one"]
+    assert status_page.items == []
+    # Stats stay fleet-wide regardless of the filtered page.
+    assert (await account_stats()).total == 2
 
 
 @pytest.mark.asyncio
-async def test_load_accounts_table_paginates_in_db() -> None:
-    """limit/offset must reach the DB — UI no longer loads everything to slice in Python."""
+async def test_list_accounts_page_paginates_by_cursor() -> None:
+    """limit/cursor must reach the DB — the UI never loads everything to slice in Python."""
     for ident in ("a", "b", "c", "d", "e"):
         await add_account(AccountCreate(account_id=ident, label=f"Label {ident}"))
 
-    page = await load_accounts_table(AccountFilter(limit=2, offset=0))
-    assert len(page.rows) == 2
-    # Summary still reflects the whole table.
-    assert page.summary.total == 5
+    page = await list_accounts_page(limit=2)
+    assert len(page.items) == 2
+    assert page.next_cursor is not None
 
-    next_page = await load_accounts_table(AccountFilter(limit=2, offset=2))
-    assert len(next_page.rows) == 2
-    assert {row.account_id for row in page.rows} & {
-        row.account_id for row in next_page.rows
+    next_page = await list_accounts_page(limit=2, cursor=page.next_cursor)
+    assert len(next_page.items) == 2
+    assert {row.account_id for row in page.items} & {
+        row.account_id for row in next_page.items
     } == set()
+
+
+async def _set_status(account_id: str, status: AccountStatus) -> None:
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id=account_id,
+            session_path=f"sessions/{account_id}",
+            status=status,  # ty: ignore[invalid-argument-type] — SessionCheckStatus ⊇ used set
+            is_temporary=False,
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_account_stats_counts_whole_fleet_across_pages() -> None:
+    """Stats span the entire table (one grouped query), not a single 20-row page.
+
+    Seeds >1 page of accounts across every design bucket and asserts the tile
+    counts are the fleet-wide totals, independent of pagination.
+    """
+    # 10 alive, 6 flood_wait (idle/spam), 5 unauthorized + 4 new (needs_code),
+    # 3 session_error + 2 account_error (problem) = 30 accounts (> one 20-row page).
+    plan: list[tuple[str, AccountStatus, int]] = [
+        ("alive", "alive", 10),
+        ("flood", "flood_wait", 6),
+        ("unauth", "unauthorized", 5),
+        ("new", "new", 4),
+        ("serr", "session_error", 3),
+        ("aerr", "account_error", 2),
+    ]
+    for prefix, status, count in plan:
+        for i in range(count):
+            ident = f"{prefix}-{i}"
+            await add_account(AccountCreate(account_id=ident, label=ident))
+            if status != "new":  # "new" is the create default; no flip needed.
+                await _set_status(ident, status)
+
+    stats = await account_stats()
+
+    assert stats.total == 30
+    assert stats.active == 10  # alive
+    assert stats.idle == 6  # flood_wait (spam-limited)
+    assert stats.needs_code == 9  # 5 unauthorized + 4 new
+    assert stats.problem == 5  # 3 session_error + 2 account_error
+
+    # Independence from pagination: a single page never sees the whole fleet.
+    first_page = await list_accounts_page(limit=20)
+    assert len(first_page.items) == 20
+    assert first_page.next_cursor is not None
+    assert stats.total > len(first_page.items)
 
 
 @pytest.mark.asyncio
@@ -276,16 +301,16 @@ async def test_list_accounts_page_enriches_trust_and_spam() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_accounts_table_search_uses_db_filter() -> None:
+async def test_list_accounts_page_search_uses_db_filter() -> None:
     await add_account(AccountCreate(account_id="alpha", label="Alpha"))
     await add_account(AccountCreate(account_id="beta", label="Beta"))
     await add_account(AccountCreate(account_id="alphabet", label="Alphabet"))
 
-    state = await load_accounts_table(AccountFilter(query="alpha"))
-    ids = {row.account_id for row in state.rows}
+    page = await list_accounts_page(query="alpha")
+    ids = {row.account_id for row in page.items}
     assert ids == {"alpha", "alphabet"}
-    # Summary is still the whole table — search narrows rows, not totals.
-    assert state.summary.total == 3
+    # Stats stay the whole table — search narrows the page, not the totals.
+    assert (await account_stats()).total == 3
 
 
 @pytest.mark.asyncio
@@ -449,6 +474,114 @@ async def test_import_account_tdata_preflight_blocks_existing_account(
     assert not (final_dir / "222.session").exists()
 
 
+def _tdata_zip_payload() -> bytes:
+    """A minimal tdata-shaped zip so ``_find_tdata_dir`` locates a tdata folder."""
+    buf = io.BytesIO()
+    with zipfile.ZipFile(buf, mode="w") as zf:
+        zf.writestr("tdata/key_datas", b"x")
+    return buf.getvalue()
+
+
+def _fake_tdesktop_writing_sessions(*user_ids: int) -> object:
+    """Build a fake opentele2 ``TDesktop`` whose ``ToTelethon`` writes a .session.
+
+    Mirrors production: opentele2 writes the Telethon session file to the path
+    it is handed. Used to exercise the REAL ``convert_tdata_zip`` staging path
+    (no fake convert), so tests can prove staged files land in — and never
+    clobber — the live sessions dir.
+    """
+    from unittest.mock import MagicMock  # noqa: PLC0415 - test-local
+
+    accounts = []
+    for uid in user_ids:
+
+        async def _to_telethon(*, session: str, flag: object, _uid: int = uid) -> object:  # noqa: ARG001
+            from pathlib import Path  # noqa: PLC0415 - test-local, Path is TYPE_CHECKING-only here
+
+            Path(session).write_bytes(f"session-for-{_uid}".encode())
+            client = MagicMock()
+
+            async def _disconnect() -> None:
+                return None
+
+            client.disconnect = _disconnect
+            return client
+
+        acc = MagicMock()
+        acc.UserId = uid
+        acc.ToTelethon = _to_telethon
+        accounts.append(acc)
+    return MagicMock(accountsCount=len(accounts), accounts=accounts)
+
+
+@pytest.mark.asyncio
+async def test_import_account_tdata_lands_all_files_and_leaves_no_staging(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A clean multi-account import lands every .session in the live dir; no leftovers.
+
+    Drives the real ``convert_tdata_zip`` (opentele2 mocked) so the staging →
+    preflight → move flow runs end-to-end.
+    """
+    fake_td = _fake_tdesktop_writing_sessions(111, 222)
+
+    async def fake_check(request: object) -> TelegramSessionCheckResult:
+        account_id = getattr(request, "account_id", "?")
+        return TelegramSessionCheckResult(
+            account_id=account_id,
+            session_path=f"sessions/{account_id}",
+            status="alive",
+            is_temporary=False,
+        )
+
+    monkeypatch.setattr("core.tdata_import.TDesktop", lambda **_kw: fake_td)
+    monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
+
+    payload = _tdata_zip_payload()
+    result = await import_account_tdata(
+        TdataConvertRequest(filename="tdata.zip", content=payload, label="Pool"),
+    )
+
+    assert {a.account_id for a in result.accounts} == {"111", "222"}
+    final_dir = settings.telegram.session_dir
+    assert (final_dir / "111.session").read_bytes() == b"session-for-111"
+    assert (final_dir / "222.session").read_bytes() == b"session-for-222"
+    # No tdata_staging_* dir left beside the sessions dir.
+    leftovers = [p for p in final_dir.parent.iterdir() if p.name.startswith("tdata_staging_")]
+    assert leftovers == [], f"staging dir must be cleaned up, found {leftovers}"
+
+
+@pytest.mark.asyncio
+async def test_import_account_tdata_reimport_does_not_clobber_live_session(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-importing a user_id already registered must leave the live .session intact.
+
+    The audit bug: convert wrote directly into the live dir, overwriting the
+    existing credential BEFORE preflight, then preflight raised — losing the
+    original. With staging conversion, preflight blocks and the original stays.
+    """
+    await add_account(AccountCreate(account_id="111", label="existing"))
+    final_dir = settings.telegram.session_dir
+    final_dir.mkdir(parents=True, exist_ok=True)
+    live_session = final_dir / "111.session"
+    live_session.write_bytes(b"ORIGINAL-CREDENTIAL")
+
+    fake_td = _fake_tdesktop_writing_sessions(111)
+    monkeypatch.setattr("core.tdata_import.TDesktop", lambda **_kw: fake_td)
+
+    with pytest.raises(SessionAlreadyExistsError, match=r"111"):
+        await import_account_tdata(
+            TdataConvertRequest(filename="tdata.zip", content=_tdata_zip_payload()),
+        )
+
+    # The live credential is byte-for-byte untouched.
+    assert live_session.read_bytes() == b"ORIGINAL-CREDENTIAL"
+    # And no staging dir leaked.
+    leftovers = [p for p in final_dir.parent.iterdir() if p.name.startswith("tdata_staging_")]
+    assert leftovers == []
+
+
 @pytest.mark.asyncio
 async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPatch) -> None:
     await add_account(AccountCreate(account_id="account-2"))
@@ -466,12 +599,13 @@ async def test_check_account_session_updates_status(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
 
     account = await check_account_session(AccountCheckRequest(account_id="account-2"))
-    state = await load_accounts_table(AccountFilter(status="alive"))
+    page = await list_accounts_page(status="alive")
 
     assert account.status == "alive"
-    assert state.summary.alive == 1
-    assert state.rows[0].telegram == "@checked"
-    assert state.rows[0].health == "ok"
+    assert (await account_stats()).active == 1
+    row = page.items[0]
+    assert row.username == "checked"
+    assert health_for_status(row.status) == "ok"
 
 
 @pytest.mark.asyncio
@@ -841,10 +975,10 @@ async def test_health_taxonomy_matches_status(
     """Every AccountStatus maps to exactly one of ok / warn / fail."""
     await add_account(AccountCreate(account_id="acc-h"))
     if status == "new":
-        state = await load_accounts_table(AccountFilter())
-        assert state.rows[0].health == expected_health
+        page = await list_accounts_page()
+        assert health_for_status(page.items[0].status) == expected_health
         # Row carries the RAW status enum — the UI translates it to RU once.
-        assert state.rows[0].status == "new"
+        assert page.items[0].status == "new"
         return
 
     async def fake_check(_request: object) -> TelegramSessionCheckResult:
@@ -857,13 +991,13 @@ async def test_health_taxonomy_matches_status(
 
     monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
     await check_account_session(AccountCheckRequest(account_id="acc-h"))
-    state = await load_accounts_table(AccountFilter())
-    assert state.rows[0].health == expected_health
+    page = await list_accounts_page()
+    assert health_for_status(page.items[0].status) == expected_health
     # Row carries the RAW status enum (e.g. "network_error"), not an English
     # label — the UI is the single translation point. Guards the regression
     # where the service emitted "Network"/"Proxy"/"Unknown" and the UI RU map
     # (keyed "Network error"/…) silently failed to translate them.
-    assert state.rows[0].status == status
+    assert page.items[0].status == status
 
 
 @pytest.mark.asyncio

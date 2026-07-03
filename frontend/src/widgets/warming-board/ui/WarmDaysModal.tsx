@@ -1,6 +1,8 @@
+import { useMutation } from '@tanstack/react-query';
 import { useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { spamCheckAccountMutation } from '@/entities/account';
 import { Modal } from '@/shared/ui';
 
 const MIN = 1;
@@ -11,13 +13,17 @@ const TICKS = [...Array(MAX).keys()];
 type ActivityPersona = 'calm' | 'normal' | 'active';
 const PERSONAS: ActivityPersona[] = ['calm', 'normal', 'active'];
 
+type SpamState = 'idle' | 'loading' | 'clean' | 'limited';
+
 // The design's "warm account" modal: a draggable day-length slider (1–14),
-// quick presets, an activity persona (cadence), and a @SpamBot pre-check.
+// quick presets, an activity persona (cadence), and a real @SpamBot pre-check.
 export function WarmDaysModal({
+  accountId,
   phone,
   onClose,
   onConfirm,
 }: {
+  accountId: string;
   phone: string;
   onClose: () => void;
   onConfirm: (days: number, persona: ActivityPersona) => void;
@@ -25,8 +31,26 @@ export function WarmDaysModal({
   const { t } = useTranslation();
   const [days, setDays] = useState(7);
   const [persona, setPersona] = useState<ActivityPersona>('normal');
+  const [spam, setSpam] = useState<SpamState>('idle');
+  const spamMutation = useMutation(spamCheckAccountMutation());
   const trackRef = useRef<HTMLDivElement>(null);
   const pct = ((days - MIN) / (MAX - MIN)) * 100;
+
+  // Real @SpamBot probe against this account; the result is shown on the pill.
+  const runSpamCheck = () => {
+    setSpam('loading');
+    spamMutation.mutate(
+      { path: { account_id: accountId } },
+      {
+        onSuccess: (verdict) => {
+          setSpam(verdict.status === 'clean' ? 'clean' : 'limited');
+        },
+        onError: () => {
+          setSpam('limited');
+        },
+      },
+    );
+  };
 
   const setFromClientX = (clientX: number) => {
     const el = trackRef.current;
@@ -57,7 +81,15 @@ export function WarmDaysModal({
           <span className="tb-tip inline-flex shrink-0">
             <button
               type="button"
-              className="inline-flex items-center gap-[6px] rounded-full border border-line-input bg-white px-[11px] py-[6px] text-[12px] font-medium text-ink-muted"
+              disabled={spam === 'loading'}
+              onClick={runSpamCheck}
+              className={`inline-flex items-center gap-[6px] rounded-full border bg-white px-[11px] py-[6px] text-[12px] font-medium disabled:opacity-60 ${
+                spam === 'clean'
+                  ? 'border-success text-success'
+                  : spam === 'limited'
+                    ? 'border-danger text-danger'
+                    : 'border-line-input text-ink-muted'
+              }`}
             >
               <svg
                 width="14"
@@ -72,7 +104,13 @@ export function WarmDaysModal({
                 <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z" />
                 <path d="m9 12 2 2 4-4" />
               </svg>
-              {t('warming.days.spamCheck')}
+              {spam === 'loading'
+                ? t('warming.days.spamChecking')
+                : spam === 'clean'
+                  ? t('warming.days.spamClean')
+                  : spam === 'limited'
+                    ? t('warming.days.spamLimited')
+                    : t('warming.days.spamCheck')}
             </button>
             <span className="tb-tip-pop">{t('warming.days.spamTip')}</span>
           </span>

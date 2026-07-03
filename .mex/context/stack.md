@@ -62,7 +62,7 @@ covers the backend; the frontend stack lives in `context/frontend.md`.
 
 React + TypeScript (strict) + Vite; TanStack Router/Query/Table/Form; Tailwind + shadcn/ui
 (Radix); `@hey-api/openapi-ts` generated client; react-i18next + `Intl`; Sentry React;
-Vitest + RTL + Playwright; Steiger / eslint-plugin-boundaries for FSD enforcement; self-hosted
+Vitest + RTL; Steiger / eslint-plugin-boundaries for FSD enforcement; self-hosted
 Inter + flag-icons (zero CDN).
 
 ## Logging stack
@@ -97,7 +97,7 @@ Full logging architecture: `context/logging.md`.
 | `respx` | HTTP mocking for tests. |
 | `factory-boy` | Test factories. |
 
-The frontend has its own toolchain (ESLint/Prettier/tsc/Vitest/Playwright/Steiger) run from
+The frontend has its own toolchain (ESLint/Prettier/tsc/Vitest/Steiger) run from
 `frontend/package.json` — see `context/ci.md` for the CI jobs.
 
 ## Deliberately NOT Used

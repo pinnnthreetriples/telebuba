@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING, cast
 
-from sqlalchemy import func, insert, select
+from sqlalchemy import func, insert, select, update
 
 from core.db import _get_engine, _now_iso, _users
 from schemas.auth import UserRecord, UserRole
@@ -21,6 +21,7 @@ def _to_record(row: Row[tuple[object, ...]]) -> UserRecord:
         username=str(mapping["username"]),
         password_hash=str(mapping["password_hash"]),
         role=cast("UserRole", str(mapping["role"])),
+        token_version=int(mapping["token_version"]),
     )
 
 
@@ -31,6 +32,7 @@ def _create_user(record: UserRecord) -> None:
         username=record.username,
         password_hash=record.password_hash,
         role=record.role,
+        token_version=record.token_version,
         created_at=now,
         updated_at=now,
     )
@@ -40,6 +42,21 @@ def _create_user(record: UserRecord) -> None:
 
 async def create_user(record: UserRecord) -> None:
     await asyncio.to_thread(_create_user, record)
+
+
+def _bump_token_version(user_id: str) -> None:
+    statement = (
+        update(_users)
+        .where(_users.c.id == user_id)
+        .values(token_version=_users.c.token_version + 1, updated_at=_now_iso())
+    )
+    with _get_engine().begin() as connection:
+        connection.execute(statement)
+
+
+async def bump_token_version(user_id: str) -> None:
+    """Invalidate every outstanding session token for a user (logout)."""
+    await asyncio.to_thread(_bump_token_version, user_id)
 
 
 def _get_user_by_username(username: str) -> UserRecord | None:

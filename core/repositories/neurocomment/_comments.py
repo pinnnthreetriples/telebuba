@@ -11,6 +11,7 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import (
     _neurocomment_campaign_accounts,
+    _neurocomment_campaign_channels,
     _neurocomment_comments,
     _neurocomment_linked_groups,
     _neurocomment_readiness,
@@ -315,13 +316,20 @@ async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | Non
 
 
 def _list_campaign_readiness(campaign_id: str) -> ReadinessList:
-    # Readiness is per-(account, channel); scope to the campaign's accounts so
-    # the board reads every pair in one query instead of N per-card fetches.
+    # Readiness is per-(account, channel); scope to the campaign's accounts AND its
+    # channels so the board reads every pair in one query instead of N per-card
+    # fetches. Scoping by channels too keeps an account shared across campaigns from
+    # leaking the other campaign's (account, channel) rows onto this card.
     accounts = select(_neurocomment_campaign_accounts.c.account_id).where(
         _neurocomment_campaign_accounts.c.campaign_id == campaign_id,
     )
+    channels = select(_neurocomment_campaign_channels.c.channel).where(
+        (_neurocomment_campaign_channels.c.campaign_id == campaign_id)
+        & (_neurocomment_campaign_channels.c.active == 1),
+    )
     statement = select(_neurocomment_readiness).where(
-        _neurocomment_readiness.c.account_id.in_(accounts),
+        _neurocomment_readiness.c.account_id.in_(accounts)
+        & _neurocomment_readiness.c.channel.in_(channels),
     )
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()

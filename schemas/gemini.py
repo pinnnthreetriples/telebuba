@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
-GeminiStatus = Literal["ok", "error"]
+GeminiStatus = Literal["ok", "error", "rate_limited"]
 
 
 class GeminiRequest(BaseModel):

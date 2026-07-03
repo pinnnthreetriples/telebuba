@@ -19,10 +19,14 @@ const PRIVACY: Record<Audience, 'contacts' | 'close_friends' | 'public'> = {
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 
-function fileSize(file: File | null): string {
+function fileSize(
+  file: File | null,
+  t: (key: string, opts: Record<string, unknown>) => string,
+): string {
   if (!file) return '';
-  if (file.size >= 1_048_576) return `${(file.size / 1_048_576).toFixed(1)} МБ`;
-  return `${Math.max(1, Math.round(file.size / 1024))} КБ`;
+  if (file.size >= 1_048_576)
+    return t('accounts.addStory.sizeMb', { n: (file.size / 1_048_576).toFixed(1) });
+  return t('accounts.addStory.sizeKb', { n: Math.max(1, Math.round(file.size / 1024)) });
 }
 
 // Pull the reason out of the /api/v1 error envelope ({error:{code,message}}) the
@@ -52,7 +56,7 @@ export function AddStoryModal({
   const done = post.isSuccess;
   const failed = post.isError;
 
-  let metaText = fileSize(file);
+  let metaText = fileSize(file, t);
   let metaColor = '#9a9893';
   if (failed) {
     metaText = t('accounts.addStory.stError');

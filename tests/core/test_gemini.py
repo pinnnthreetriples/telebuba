@@ -3,15 +3,28 @@
 from __future__ import annotations
 
 import json
+from typing import TYPE_CHECKING
 
 import httpx
 import pytest
+import pytest_asyncio
 import respx
 
-from core.gemini import generate_text
+from core.config import settings
+from core.gemini import _get_client, close_gemini_client, generate_text
 from schemas.gemini import GeminiRequest
 
+if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
 _ENDPOINT = r".*generateContent.*"
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _close_shared_client() -> AsyncIterator[None]:
+    """The gateway reuses a module-level client; close it between tests."""
+    yield
+    await close_gemini_client()
 
 
 def _request() -> GeminiRequest:
@@ -99,14 +112,66 @@ async def test_no_response_schema_when_unset() -> None:
 
 
 @pytest.mark.asyncio
-async def test_generate_text_non_200_is_error() -> None:
+async def test_generate_text_persistent_429_is_rate_limited(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit #5: a persistent 429 surfaces distinctly, not flattened to a generic error."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 1)
+    monkeypatch.setattr(settings.gemini, "retry_backoff_seconds", 0.0)
     with respx.mock:
-        respx.post(url__regex=_ENDPOINT).mock(return_value=httpx.Response(429, text="rate limited"))
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(429, text="rate limited"),
+        )
 
         result = await generate_text(_request())
 
-    assert result.status == "error"
+    assert result.status == "rate_limited"
     assert "429" in (result.error or "")
+    assert route.call_count == 2  # original + one retry
+
+
+@pytest.mark.asyncio
+async def test_generate_text_retries_429_then_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit #5: a 429 followed by a 200 succeeds after one retry."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 1)
+    monkeypatch.setattr(settings.gemini, "retry_backoff_seconds", 0.0)
+    responses = [
+        httpx.Response(429, text="slow down"),
+        httpx.Response(200, json={"candidates": [{"content": {"parts": [{"text": "hi"}]}}]}),
+    ]
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(side_effect=responses)
+
+        result = await generate_text(_request())
+
+    assert result.status == "ok"
+    assert result.text == "hi"
+    assert route.call_count == 2
+
+
+@pytest.mark.asyncio
+async def test_generate_text_shared_client_reused_and_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Audit #5: the AsyncClient is reused across calls and closed by close_gemini_client."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 0)
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+            ),
+        )
+        await generate_text(_request())
+        first_client = _get_client()
+        await generate_text(_request())
+        assert _get_client() is first_client  # not rebuilt per call
+
+    await close_gemini_client()
+    assert first_client.is_closed
+    assert _get_client() is not first_client  # lazily rebuilt after close
 
 
 @pytest.mark.asyncio

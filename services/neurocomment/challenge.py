@@ -91,9 +91,28 @@ async def _gemini_decision(message: BotChallengeMessage) -> ChallengeDecision | 
     if result.status != "ok" or result.text is None:
         return None
     try:
-        return ChallengeDecision.model_validate_json(result.text)
+        decision = ChallengeDecision.model_validate_json(result.text)
     except ValidationError:
         return None
+    return _canonicalize_index(decision, message)
+
+
+def _canonicalize_index(
+    decision: ChallengeDecision, message: BotChallengeMessage
+) -> ChallengeDecision:
+    """Re-base a fresh ``click_button`` index to the sorted-label order (the cache order).
+
+    Gemini's ``button_index`` is positional in the message it saw; persisting/replaying
+    it relative to ``sorted(labels)`` makes a cached decision order-robust — a later
+    instance sharing the label set clicks the same label regardless of layout order.
+    """
+    if decision.action != "click_button" or decision.button_index is None:
+        return decision
+    labels = message.button_labels
+    if not 0 <= decision.button_index < len(labels):
+        return decision
+    canonical = sorted(labels).index(labels[decision.button_index])
+    return decision.model_copy(update={"button_index": canonical})
 
 
 async def _decide(message: BotChallengeMessage) -> ChallengeDecision | None:
@@ -116,6 +135,20 @@ def _human_delay_seconds() -> float:
     return min(hi, lo + fraction * (hi - lo))
 
 
+def _cached_label(decision: ChallengeDecision, button_labels: list[str]) -> str | None:
+    """The label a cached ``click_button`` decision selected, keyed off the hash order.
+
+    A cached decision's ``button_index`` is stored relative to ``sorted(labels)`` (the
+    same order the cache key uses), so it stays correct across shuffled layouts that
+    share the same label *set*. ``None`` when the index is out of range (defensive).
+    """
+    index = decision.button_index
+    ordered = sorted(button_labels)
+    if index is None or not 0 <= index < len(ordered):
+        return None
+    return ordered[index]
+
+
 async def _dispatch(
     account_id: str,
     group_id: int,
@@ -123,10 +156,16 @@ async def _dispatch(
     decision: ChallengeDecision,
 ) -> bool:
     if decision.action == "click_button":
+        # Replay by LABEL, not the raw positional index: the cached index points into
+        # the sorted-label order, so re-derive the label and let the gateway match it
+        # on the current (possibly reordered) layout. Fall back to the index if the
+        # label can't be resolved (out-of-range on a mismatched cache).
+        label = _cached_label(decision, message.button_labels)
         action: ClickButton | PostComment = ClickButton(
             chat_id=group_id,
             message_id=message.message_id,
-            button_index=decision.button_index,
+            button_index=decision.button_index if label is None else None,
+            button_text=label,
         )
     else:  # send_text (give_up is handled before dispatch)
         action = PostComment(chat_id=group_id, text=decision.text or "")

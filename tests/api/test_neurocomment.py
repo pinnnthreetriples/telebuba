@@ -7,7 +7,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
-from schemas.challenge import ChallengeRow, ChallengeRowList
+from schemas.challenge import ChallengeOutcomeCounts, ChallengeRow, ChallengeRowList
 from schemas.neurocomment import (
     AccountChannelOnboarding,
     CampaignList,
@@ -17,6 +17,7 @@ from schemas.neurocomment import (
     NeurocommentRuntimeStatus,
     NeurocommentSettings,
 )
+from services.neurocomment import ChannelNotInCampaignError
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -153,6 +154,81 @@ async def test_board_missing_is_404(app: FastAPI, monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
+async def test_set_account_channel_returns_board(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def _fake(campaign_id: str, account_id: str, channel: str | None) -> NeurocommentBoard:
+        seen.update(campaign_id=campaign_id, account_id=account_id, channel=channel)
+        return NeurocommentBoard(campaign_id=campaign_id, campaign_name="Promo", status="active")
+
+    monkeypatch.setattr("services.neurocomment.pin_account_channel", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/accounts/acc-1/channel",
+            json={"channel": "@news"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["campaign_name"] == "Promo"
+    assert seen == {"campaign_id": "c1", "account_id": "acc-1", "channel": "@news"}
+
+
+@pytest.mark.asyncio
+async def test_set_account_channel_null_clears_pin(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def _fake(campaign_id: str, account_id: str, channel: str | None) -> NeurocommentBoard:  # noqa: ARG001
+        seen["channel"] = channel
+        return NeurocommentBoard(campaign_id=campaign_id, campaign_name="Promo", status="active")
+
+    monkeypatch.setattr("services.neurocomment.pin_account_channel", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/accounts/acc-1/channel",
+            json={"channel": None},
+        )
+    assert resp.status_code == 200
+    assert seen == {"channel": None}
+
+
+@pytest.mark.asyncio
+async def test_set_account_channel_foreign_channel_is_400(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _boom(campaign_id: str, account_id: str, channel: str | None) -> NeurocommentBoard:  # noqa: ARG001
+        raise ChannelNotInCampaignError
+
+    monkeypatch.setattr("services.neurocomment.pin_account_channel", _boom)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/accounts/acc-1/channel",
+            json={"channel": "@other"},
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.asyncio
+async def test_set_account_channel_missing_campaign_is_404(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _none(campaign_id: str, account_id: str, channel: str | None) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.neurocomment.pin_account_channel", _none)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/ghost/accounts/acc-1/channel",
+            json={"channel": None},
+        )
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
 async def test_link_channel(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake(campaign_id: str, channel: str) -> ChannelLinkOutcome:  # noqa: ARG001
         return ChannelLinkOutcome(status="linked", channel=channel)
@@ -209,6 +285,7 @@ async def test_start_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> N
             running=True,
             active_channels=2,
             listener_account_id="acc-1",
+            log_limit=50,
         )
 
     monkeypatch.setattr("services.neurocomment.start_neurocomment", _start)
@@ -220,6 +297,131 @@ async def test_start_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> N
         )
     assert resp.status_code == 200
     assert resp.json()["running"] is True
+    # The activity-log row cap is served from config, not hardcoded in the SPA (#7).
+    assert resp.json()["log_limit"] == 50
+
+
+@pytest.mark.asyncio
+async def test_clear_listener_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    """POST /listener/clear removes the listener and returns the (empty) runtime status."""
+    called = False
+
+    async def _clear() -> None:
+        nonlocal called
+        called = True
+
+    async def _status() -> NeurocommentRuntimeStatus:
+        return NeurocommentRuntimeStatus(running=False, listener_account_id=None, log_limit=50)
+
+    monkeypatch.setattr("services.neurocomment.clear_neurocomment_listener", _clear)
+    monkeypatch.setattr("services.neurocomment.neurocomment_runtime_status", _status)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/neurocomment/listener/clear")
+    assert resp.status_code == 200
+    assert called is True
+    assert resp.json()["running"] is False
+    assert resp.json()["listener_account_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_skip_pair_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, str] = {}
+
+    async def _fake(account_id: str, channel: str) -> None:
+        seen["account_id"] = account_id
+        seen["channel"] = channel
+
+    monkeypatch.setattr("services.neurocomment.skip_pair", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/skip",
+            json={"account_id": "acc-1", "channel": "@news"},
+        )
+    assert resp.status_code == 204
+    assert seen == {"account_id": "acc-1", "channel": "@news"}
+
+
+@pytest.mark.asyncio
+async def test_list_channel_challenges(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(channel: str, limit: int) -> ChallengeRowList:  # noqa: ARG001
+        return ChallengeRowList(
+            rows=[
+                ChallengeRow(
+                    account_id="acc-1",
+                    channel=channel,
+                    raw_text="captcha",
+                    outcome="failed",
+                    decided_at="2026-06-30T12:00:00+00:00",
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("services.neurocomment.list_channel_challenges", _fake)
+    async with _client(app) as client:
+        resp = await client.get(
+            "/api/v1/neurocomment/channels/challenges",
+            params={"channel": "@news"},
+        )
+    assert resp.status_code == 200
+    assert [r["channel"] for r in resp.json()["rows"]] == ["@news"]
+
+
+@pytest.mark.asyncio
+async def test_count_campaign_challenge_outcomes(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seen: dict[str, str] = {}
+
+    async def _fake(campaign_id: str, since: str) -> ChallengeOutcomeCounts:
+        seen["campaign_id"] = campaign_id
+        seen["since"] = since
+        return ChallengeOutcomeCounts(solved=3, failed=1, give_up=0, pending=2)
+
+    monkeypatch.setattr("services.neurocomment.count_campaign_challenge_outcomes", _fake)
+    async with _client(app) as client:
+        resp = await client.get(
+            "/api/v1/neurocomment/campaigns/c1/challenges/counts",
+            params={"since": "2026-06-30T00:00:00+00:00"},
+        )
+    assert resp.status_code == 200
+    assert resp.json() == {"solved": 3, "failed": 1, "give_up": 0, "pending": 2}
+    assert seen == {"campaign_id": "c1", "since": "2026-06-30T00:00:00+00:00"}
+
+
+@pytest.mark.asyncio
+async def test_set_campaign_status_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, str] = {}
+
+    async def _fake(campaign_id: str, status: str) -> None:
+        seen["campaign_id"] = campaign_id
+        seen["status"] = status
+
+    monkeypatch.setattr("services.neurocomment.set_campaign_status", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/status",
+            json={"status": "paused"},
+        )
+    assert resp.status_code == 204
+    assert seen == {"campaign_id": "c1", "status": "paused"}
+
+
+@pytest.mark.asyncio
+async def test_set_campaign_status_rejects_bad_status(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(campaign_id: str, status: str) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.neurocomment.set_campaign_status", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/status",
+            json={"status": "archived"},  # not a run/pause status
+        )
+    assert resp.status_code == 422
 
 
 @pytest.mark.asyncio

@@ -32,6 +32,7 @@ export type AccountChannelOnboarding = {
     | 'bot_challenge'
     | 'bot_challenge_backoff'
     | 'joining'
+    | 'human_skipped'
     | 'failed';
   /**
    * Reason
@@ -295,6 +296,43 @@ export type AccountRead = {
 };
 
 /**
+ * AccountStats
+ *
+ * Fleet-wide status roll-up for the Accounts page stat tiles.
+ *
+ * Counts span the whole ``accounts`` table (a single grouped SQL query), not
+ * the currently-loaded page, so the tiles stay correct across pagination. The
+ * buckets mirror the design's status vocabulary (``accountDesignStatus``):
+ *
+ * - ``active``    — ``alive``.
+ * - ``idle``      — ``flood_wait`` (spam-limited, the "idle" tile).
+ * - ``needs_code`` — ``unauthorized`` / ``new`` (re-auth by login code).
+ * - ``problem``   — every other non-alive status (banned / session / errors).
+ */
+export type AccountStats = {
+  /**
+   * Total
+   */
+  total?: number;
+  /**
+   * Active
+   */
+  active?: number;
+  /**
+   * Idle
+   */
+  idle?: number;
+  /**
+   * Needs Code
+   */
+  needs_code?: number;
+  /**
+   * Problem
+   */
+  problem?: number;
+};
+
+/**
  * ActionResult
  *
  * Outcome of one ``execute`` call.
@@ -473,6 +511,30 @@ export type CampaignList = {
 };
 
 /**
+ * ChallengeOutcomeCounts
+ *
+ * The four header counters over the challenge audit table for a time window (#148).
+ */
+export type ChallengeOutcomeCounts = {
+  /**
+   * Solved
+   */
+  solved?: number;
+  /**
+   * Failed
+   */
+  failed?: number;
+  /**
+   * Give Up
+   */
+  give_up?: number;
+  /**
+   * Pending
+   */
+  pending?: number;
+};
+
+/**
  * ChallengeRow
  *
  * One persisted challenge audit row, as the operator drill-down reads it.
@@ -538,6 +600,58 @@ export type ChannelLinkOutcome = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * DialogueFeed
+ *
+ * Recent inter-account messages, newest first — the live conversation feed.
+ */
+export type DialogueFeed = {
+  /**
+   * Messages
+   */
+  messages?: Array<DialogueFeedMessage>;
+};
+
+/**
+ * DialogueFeedMessage
+ *
+ * One dialogue message with both accounts resolved to display labels.
+ *
+ * Locale-neutral (#12): ``from_label``/``to_label`` are the account's own
+ * phone / label / id strings, never translated UI text; ``created_at`` is the
+ * stored ISO-8601 timestamp. The SPA owns any presentation.
+ */
+export type DialogueFeedMessage = {
+  /**
+   * From Account
+   */
+  from_account: string;
+  /**
+   * From Label
+   */
+  from_label: string;
+  /**
+   * To Account
+   */
+  to_account: string;
+  /**
+   * To Label
+   */
+  to_label: string;
+  /**
+   * Text
+   */
+  text: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Replied
+   */
+  replied?: boolean;
 };
 
 /**
@@ -693,6 +807,10 @@ export type NeurocommentAccountCard = {
    */
   last_comment_text?: string | null;
   /**
+   * Pinned Channel
+   */
+  pinned_channel?: string | null;
+  /**
    * Readiness
    */
   readiness?: Array<AccountChannelReadiness>;
@@ -734,6 +852,10 @@ export type NeurocommentBoard = {
  * NeurocommentCampaign
  *
  * One row of ``neurocomment_campaigns``.
+ *
+ * ``channel_count`` / ``account_count`` are populated on the campaigns-list payload
+ * so every card (not just the selected one) can show real link counts; they are 0
+ * on a bare row read (``fetch_campaign``).
  */
 export type NeurocommentCampaign = {
   /**
@@ -764,6 +886,14 @@ export type NeurocommentCampaign = {
    * Solver Enabled
    */
   solver_enabled?: boolean | null;
+  /**
+   * Channel Count
+   */
+  channel_count?: number;
+  /**
+   * Account Count
+   */
+  account_count?: number;
 };
 
 /**
@@ -783,6 +913,7 @@ export type NeurocommentChannelRow = {
     | 'ready'
     | 'comments_off'
     | 'join_by_request'
+    | 'join_failed'
     | 'chat_restricted'
     | 'bot_challenge'
     | 'bot_challenge_backoff'
@@ -802,10 +933,15 @@ export type NeurocommentChannelRow = {
  *
  * Fleet-wide runtime state for the page's running indicator + live animation.
  *
- * ``running`` is the single source of truth the UI animates on: the engine is
- * one fleet listener (not per-campaign), so the persisted listener account id
- * being set means the engine is live. ``active_channels`` is the size of the
- * watch set across all active campaigns (what the listener actually watches).
+ * ``running`` is the single source of truth the UI animates on: it reflects the
+ * persisted ``listener_running`` flag (the engine is actively subscribed), NOT
+ * merely whether an account is remembered. ``listener_account_id`` is the
+ * *remembered* listener and is returned even when ``running`` is False — that is a
+ * PAUSED runtime, and the SPA keeps the listener strip visible (distinct from "no
+ * listener", where the field is null). ``active_channels`` is the size of the
+ * watch set across all active campaigns (populated only while running).
+ * ``log_limit`` is the operator-configured activity-log row cap the SPA reads
+ * instead of hardcoding one (from ``settings.neurocomment.log_limit``).
  */
 export type NeurocommentRuntimeStatus = {
   /**
@@ -820,6 +956,10 @@ export type NeurocommentRuntimeStatus = {
    * Listener Account Id
    */
   listener_account_id?: string | null;
+  /**
+   * Log Limit
+   */
+  log_limit: number;
 };
 
 /**
@@ -1227,6 +1367,30 @@ export type RetryPairRequest = {
 };
 
 /**
+ * SetAccountChannelRequest
+ *
+ * Pin a campaign account to one channel; ``null`` clears the pin (all channels).
+ */
+export type SetAccountChannelRequest = {
+  /**
+   * Channel
+   */
+  channel?: string | null;
+};
+
+/**
+ * SetCampaignStatusRequest
+ *
+ * Per-campaign run/pause: flip a campaign between ``active`` and ``paused`` (#148).
+ */
+export type SetCampaignStatusRequest = {
+  /**
+   * Status
+   */
+  status: 'active' | 'paused';
+};
+
+/**
  * SolverToggleRequest
  *
  * Turn the per-campaign challenge (captcha) solver on/off.
@@ -1595,10 +1759,6 @@ export type WarmingAccountState = {
    */
   phase?: 'intro' | 'settling' | 'warming' | 'active' | 'warmed' | null;
   /**
-   * Phase Label
-   */
-  phase_label?: string | null;
-  /**
    * Daily Cap
    */
   daily_cap?: number;
@@ -1654,6 +1814,10 @@ export type WarmingBoardState = {
    */
   active_count: number;
   summary?: WarmingSummary;
+  /**
+   * Card Log Limit
+   */
+  card_log_limit?: number;
 };
 
 /**
@@ -1863,6 +2027,15 @@ export type LogoutData = {
   url: '/api/v1/auth/logout';
 };
 
+export type LogoutErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type LogoutError = LogoutErrors[keyof LogoutErrors];
+
 export type LogoutResponses = {
   /**
    * Successful Response
@@ -1954,6 +2127,31 @@ export type ListAccountsResponses = {
 };
 
 export type ListAccountsResponse = ListAccountsResponses[keyof ListAccountsResponses];
+
+export type AccountStatsData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/stats';
+};
+
+export type AccountStatsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AccountStatsError = AccountStatsErrors[keyof AccountStatsErrors];
+
+export type AccountStatsResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountStats;
+};
+
+export type AccountStatsResponse = AccountStatsResponses[keyof AccountStatsResponses];
 
 export type CheckAccountData = {
   body: AccountCheckRequest;
@@ -2933,6 +3131,38 @@ export type UpdateWarmingSettingsResponses = {
 export type UpdateWarmingSettingsResponse =
   UpdateWarmingSettingsResponses[keyof UpdateWarmingSettingsResponses];
 
+export type ListWarmingDialoguesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/warming/dialogues';
+};
+
+export type ListWarmingDialoguesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListWarmingDialoguesError =
+  ListWarmingDialoguesErrors[keyof ListWarmingDialoguesErrors];
+
+export type ListWarmingDialoguesResponses = {
+  /**
+   * Successful Response
+   */
+  200: DialogueFeed;
+};
+
+export type ListWarmingDialoguesResponse =
+  ListWarmingDialoguesResponses[keyof ListWarmingDialoguesResponses];
+
 export type ListCampaignsData = {
   body?: never;
   path?: never;
@@ -3109,6 +3339,42 @@ export type RemoveCampaignAccountResponses = {
 
 export type RemoveCampaignAccountResponse =
   RemoveCampaignAccountResponses[keyof RemoveCampaignAccountResponses];
+
+export type SetCampaignAccountChannelData = {
+  body: SetAccountChannelRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/{account_id}/channel';
+};
+
+export type SetCampaignAccountChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetCampaignAccountChannelError =
+  SetCampaignAccountChannelErrors[keyof SetCampaignAccountChannelErrors];
+
+export type SetCampaignAccountChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentBoard;
+};
+
+export type SetCampaignAccountChannelResponse =
+  SetCampaignAccountChannelResponses[keyof SetCampaignAccountChannelResponses];
 
 export type DeleteCampaignData = {
   body?: never;
@@ -3297,6 +3563,137 @@ export type ListCampaignChallengesResponses = {
 export type ListCampaignChallengesResponse =
   ListCampaignChallengesResponses[keyof ListCampaignChallengesResponses];
 
+export type CountCampaignChallengeOutcomesData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query: {
+    /**
+     * Since
+     */
+    since: string;
+  };
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/challenges/counts';
+};
+
+export type CountCampaignChallengeOutcomesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CountCampaignChallengeOutcomesError =
+  CountCampaignChallengeOutcomesErrors[keyof CountCampaignChallengeOutcomesErrors];
+
+export type CountCampaignChallengeOutcomesResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChallengeOutcomeCounts;
+};
+
+export type CountCampaignChallengeOutcomesResponse =
+  CountCampaignChallengeOutcomesResponses[keyof CountCampaignChallengeOutcomesResponses];
+
+export type ListChannelChallengesData = {
+  body?: never;
+  path?: never;
+  query: {
+    /**
+     * Channel
+     */
+    channel: string;
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/neurocomment/channels/challenges';
+};
+
+export type ListChannelChallengesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListChannelChallengesError =
+  ListChannelChallengesErrors[keyof ListChannelChallengesErrors];
+
+export type ListChannelChallengesResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChallengeRowList;
+};
+
+export type ListChannelChallengesResponse =
+  ListChannelChallengesResponses[keyof ListChannelChallengesResponses];
+
+export type SkipNeurocommentPairData = {
+  body: RetryPairRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/skip';
+};
+
+export type SkipNeurocommentPairErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SkipNeurocommentPairError =
+  SkipNeurocommentPairErrors[keyof SkipNeurocommentPairErrors];
+
+export type SkipNeurocommentPairResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type SkipNeurocommentPairResponse =
+  SkipNeurocommentPairResponses[keyof SkipNeurocommentPairResponses];
+
+export type SetCampaignStatusData = {
+  body: SetCampaignStatusRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/status';
+};
+
+export type SetCampaignStatusErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetCampaignStatusError = SetCampaignStatusErrors[keyof SetCampaignStatusErrors];
+
+export type SetCampaignStatusResponses = {
+  /**
+   * Successful Response
+   */
+  204: void;
+};
+
+export type SetCampaignStatusResponse =
+  SetCampaignStatusResponses[keyof SetCampaignStatusResponses];
+
 export type GetNeurocommentRuntimeData = {
   body?: never;
   path?: never;
@@ -3374,6 +3771,33 @@ export type StopNeurocommentResponses = {
 };
 
 export type StopNeurocommentResponse = StopNeurocommentResponses[keyof StopNeurocommentResponses];
+
+export type ClearNeurocommentListenerData = {
+  body?: never;
+  path?: never;
+  query?: never;
+  url: '/api/v1/neurocomment/listener/clear';
+};
+
+export type ClearNeurocommentListenerErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ClearNeurocommentListenerError =
+  ClearNeurocommentListenerErrors[keyof ClearNeurocommentListenerErrors];
+
+export type ClearNeurocommentListenerResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentRuntimeStatus;
+};
+
+export type ClearNeurocommentListenerResponse =
+  ClearNeurocommentListenerResponses[keyof ClearNeurocommentListenerResponses];
 
 export type GetNeurocommentSettingsData = {
   body?: never;

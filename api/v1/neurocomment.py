@@ -7,7 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
-from schemas.challenge import ChallengeRowList
+from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
     AccountChannelOnboarding,
     AssignAccountRequest,
@@ -21,6 +21,8 @@ from schemas.neurocomment import (
     NeurocommentSettings,
     NeurocommentSettingsUpdate,
     RetryPairRequest,
+    SetAccountChannelRequest,
+    SetCampaignStatusRequest,
     SolverToggleRequest,
     StartNeurocommentRequest,
     UpdatePromptRequest,
@@ -77,6 +79,33 @@ async def assign_account(campaign_id: str, body: AssignAccountRequest) -> None:
 )
 async def remove_account(campaign_id: str, body: AssignAccountRequest) -> None:
     await nc_service.remove_account_from_campaign(campaign_id, body.account_id)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/accounts/{account_id}/channel",
+    response_model=NeurocommentBoard,
+    operation_id="setCampaignAccountChannel",
+)
+async def set_account_channel(
+    campaign_id: str,
+    account_id: str,
+    body: SetAccountChannelRequest,
+) -> NeurocommentBoard:
+    """Pin a campaign account to one channel (``channel: null`` clears the pin).
+
+    A pinned account comments only on that channel; an unpinned one serves all
+    campaign channels. Returns the refreshed board so the SPA re-renders the card.
+    """
+    try:
+        board = await nc_service.pin_account_channel(campaign_id, account_id, body.channel)
+    except nc_service.ChannelNotInCampaignError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="channel is not active in this campaign",
+        ) from exc
+    if board is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
+    return board
 
 
 @router.delete(
@@ -147,6 +176,52 @@ async def list_campaign_challenges(
 
 
 @router.get(
+    "/campaigns/{campaign_id}/challenges/counts",
+    response_model=ChallengeOutcomeCounts,
+    operation_id="countCampaignChallengeOutcomes",
+)
+async def count_campaign_challenge_outcomes(
+    campaign_id: str,
+    since: Annotated[str, Query(min_length=1)],
+) -> ChallengeOutcomeCounts:
+    """Challenge-outcome counters (solved/failed/give_up/pending) across a campaign (#148)."""
+    return await nc_service.count_campaign_challenge_outcomes(campaign_id, since)
+
+
+@router.get(
+    "/channels/challenges",
+    response_model=ChallengeRowList,
+    operation_id="listChannelChallenges",
+)
+async def list_channel_challenges(
+    channel: Annotated[str, Query(min_length=1)],
+    limit: Annotated[int, Query(ge=1, le=100)] = 20,
+) -> ChallengeRowList:
+    """Recent unsolved bot-challenges for one channel — the work-view drill-down (#148)."""
+    return await nc_service.list_channel_challenges(channel, limit)
+
+
+@router.post(
+    "/skip",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="skipNeurocommentPair",
+)
+async def skip_pair(body: RetryPairRequest) -> None:
+    """Operator "Skip channel for this account": the engine never selects the pair (#148)."""
+    await nc_service.skip_pair(body.account_id, body.channel)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/status",
+    status_code=http_status.HTTP_204_NO_CONTENT,
+    operation_id="setCampaignStatus",
+)
+async def set_campaign_status(campaign_id: str, body: SetCampaignStatusRequest) -> None:
+    """Per-campaign run/pause: flip a campaign between active and paused (#148)."""
+    await nc_service.set_campaign_status(campaign_id, body.status)
+
+
+@router.get(
     "/runtime",
     response_model=NeurocommentRuntimeStatus,
     operation_id="getNeurocommentRuntime",
@@ -163,7 +238,19 @@ async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
 
 @router.post("/stop", response_model=NeurocommentRuntimeStatus, operation_id="stopNeurocomment")
 async def stop() -> NeurocommentRuntimeStatus:
+    """Pause the runtime: unsubscribe but keep the remembered listener account."""
     await nc_service.stop_neurocomment()
+    return await nc_service.neurocomment_runtime_status()
+
+
+@router.post(
+    "/listener/clear",
+    response_model=NeurocommentRuntimeStatus,
+    operation_id="clearNeurocommentListener",
+)
+async def clear_listener() -> NeurocommentRuntimeStatus:
+    """Remove the listener ("снять слушателя"): unsubscribe and forget the account."""
+    await nc_service.clear_neurocomment_listener()
     return await nc_service.neurocomment_runtime_status()
 
 

@@ -20,11 +20,13 @@ from typing import TYPE_CHECKING
 from telethon import events
 
 from core.logging import log_event
-from core.telegram_client._pool import get_client
+from core.telegram_client._pool import _CLIENTS, get_client, register_rebuild_hook
 from schemas.telegram_actions import NewPostEvent
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
+
+    from telethon import TelegramClient
 
     _EventHandler = Callable[[events.NewMessage.Event], Awaitable[None]]
 
@@ -38,6 +40,29 @@ __all__ = [
 # ponytail: single-process registry. One app instance owns the listener account;
 # a multi-process deployment would need this state in shared storage instead.
 _HANDLERS: dict[str, _EventHandler] = {}
+# The channel-filter each handler was registered with, so a pool rebuild can
+# re-attach the same subscription on the replacement client.
+_FILTERS: dict[str, object] = {}
+
+
+async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
+    """Pool rebuild hook: re-register this account's handler on the new client.
+
+    The pool builds a fresh, handler-less client whenever the cached one drops
+    its connection. Without this the standing subscription would silently stop
+    firing until the next boot-time reconcile. Keyed off ``_HANDLERS`` so a
+    stopped listener (already popped) is never resurrected.
+    """
+    handler = _HANDLERS.get(account_id)
+    event_filter = _FILTERS.get(account_id)
+    if handler is None or event_filter is None:
+        return
+    # ``_FILTERS`` stores the ``events.NewMessage`` instance as ``object``; the
+    # stub types the param as ``EventBuilder``.
+    client.add_event_handler(handler, event_filter)  # ty: ignore[invalid-argument-type]
+
+
+register_rebuild_hook(_reattach_on_rebuild)
 
 
 async def subscribe_posts(
@@ -78,8 +103,10 @@ async def subscribe_posts(
         return
 
     handler = _make_handler(channel_by_peer_id, on_post)
-    client.add_event_handler(handler, events.NewMessage(chats=resolved))
+    event_filter = events.NewMessage(chats=resolved)
+    client.add_event_handler(handler, event_filter)
     _HANDLERS[account_id] = handler
+    _FILTERS[account_id] = event_filter
 
 
 async def update_post_subscription(
@@ -92,11 +119,22 @@ async def update_post_subscription(
 
 
 async def stop_post_listener(account_id: str) -> None:
-    """Remove the account's handler and clear its state; no-op if none."""
+    """Remove the account's handler and clear its state; no-op if none.
+
+    The handler is popped from ``_HANDLERS`` first, so a concurrent pool
+    rebuild (whose hook reads ``_HANDLERS``) can no longer re-add it. We only
+    detach from an *already cached* client — never call ``get_client``, which
+    would force a fresh connect just to drop a handler (and could raise while
+    the pool is shutting down). If nothing is cached, dropping the registry
+    entry is enough: a future rebuild won't carry the handler.
+    """
     handler = _HANDLERS.pop(account_id, None)
+    _FILTERS.pop(account_id, None)
     if handler is None:
         return
-    client = await get_client(account_id)
+    client = _CLIENTS.get(account_id)
+    if client is None:
+        return
     # Telethon accepts the EventBuilder *class* here to drop all NewMessage
     # handlers; its stub only types the instance form.
     client.remove_event_handler(handler, events.NewMessage)  # ty: ignore[invalid-argument-type]
@@ -134,3 +172,4 @@ def _make_handler(
 def _reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
     _HANDLERS.clear()
+    _FILTERS.clear()

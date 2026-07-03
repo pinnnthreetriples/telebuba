@@ -13,197 +13,42 @@ keep working.
 
 from __future__ import annotations
 
+import asyncio
 import atexit
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import (
-    BigInteger,
-    Column,
-    ForeignKey,
-    Index,
-    Integer,
-    MetaData,
-    String,
-    Table,
     create_engine,
     event,
+    text,
 )
 
+# Schema (MetaData + every table) lives in a sibling module for the file-size
+# budget; imported back here so ``from core.db import _accounts`` etc. and the
+# repositories that read these table objects keep working unchanged.
+from core._schema_tables import (  # noqa: F401 - re-exported for existing import sites.
+    _account_spam_status,
+    _accounts,
+    _device_fingerprints,
+    _logs,
+    _metadata,
+    _proxies,
+    _users,
+    _warming_account_state,
+    _warming_channels,
+    _warming_joined_channels,
+    _warming_settings,
+)
 from core.config import settings
 from core.migrations import apply_migrations
 from schemas.device_fingerprint import DeviceFingerprint, DevicePlatform
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
     from pathlib import Path
 
     from sqlalchemy.engine import Engine
-
-
-_metadata = MetaData()
-_device_fingerprints = Table(
-    "device_fingerprints",
-    _metadata,
-    Column("account_id", String, primary_key=True),
-    Column("platform", String, nullable=False),
-    Column("device_model", String, nullable=False),
-    Column("system_version", String, nullable=False),
-    Column("app_version", String, nullable=False),
-    Column("lang_code", String, nullable=False),
-    Column("system_lang_code", String, nullable=False),
-)
-_accounts = Table(
-    "accounts",
-    _metadata,
-    Column("account_id", String, primary_key=True),
-    Column("label", String, nullable=True),
-    Column("session_name", String, nullable=True),
-    Column("status", String, nullable=False),
-    Column("user_id", BigInteger, nullable=True),
-    Column("phone", String, nullable=True),
-    Column("username", String, nullable=True),
-    Column("first_name", String, nullable=True),
-    Column("last_name", String, nullable=True),
-    Column("bio", String, nullable=True),
-    Column("last_checked_at", String, nullable=True),
-    Column("created_at", String, nullable=False),
-    Column("updated_at", String, nullable=False),
-    # Proxy pool: the one pool proxy this account uses (nullable = unassigned →
-    # "—" in the UI). Many accounts → one proxy; SET NULL on proxy delete is
-    # done in the repo (SQLite needs the constraint declared at create time).
-    Column("proxy_id", String, ForeignKey("proxies.id"), nullable=True),
-    # F5: two accounts pointing at the same .session file would race on the
-    # same Telethon SQLite session DB. SQLite treats NULLs as distinct in a
-    # UNIQUE index, so accounts without a custom session_name still coexist.
-    Index("ix_accounts_session_name_unique", "session_name", unique=True),
-)
-_proxies = Table(
-    "proxies",
-    _metadata,
-    Column("id", String, primary_key=True),
-    Column("proxy_type", String, nullable=False),
-    Column("host", String, nullable=False),
-    Column("port", Integer, nullable=False),
-    Column("username", String, nullable=True),
-    Column("password", String, nullable=True),
-    Column("status", String, nullable=False),
-    Column("last_checked_at", String, nullable=True),
-    Column("last_error", String, nullable=True),
-    Column("exit_ip", String, nullable=True),
-    Column("country_code", String, nullable=True),
-    Column("country_name", String, nullable=True),
-    Column("asn", String, nullable=True),
-    Column("is_datacenter", Integer, nullable=True),
-    Column("created_at", String, nullable=False),
-    Column("updated_at", String, nullable=False),
-    # One pool entry per endpoint — adding the same host:port:type twice is a
-    # no-op upsert, never a duplicate card.
-    Index("ix_proxies_identity", "host", "port", "proxy_type", unique=True),
-)
-_logs = Table(
-    "logs",
-    _metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("created_at", String, nullable=False),
-    Column("level", String, nullable=False),
-    Column("status", String, nullable=False),
-    Column("account_id", String, nullable=True),
-    Column("event", String, nullable=False),
-    Column("extra", String, nullable=False),
-)
-_warming_channels = Table(
-    "warming_channels",
-    _metadata,
-    Column("id", Integer, primary_key=True, autoincrement=True),
-    Column("channel", String, nullable=False, unique=True),
-    Column("label", String, nullable=True),
-    Column("created_at", String, nullable=False),
-)
-_warming_joined_channels = Table(
-    "warming_joined_channels",
-    _metadata,
-    Column("account_id", String, primary_key=True),
-    Column("channel", String, primary_key=True),
-    Column("created_at", String, nullable=False),
-)
-_warming_settings = Table(
-    "warming_settings",
-    _metadata,
-    Column("id", Integer, primary_key=True),
-    Column("inter_account_chat", Integer, nullable=False),
-    Column("reactions_enabled", Integer, nullable=False),
-    Column("join_enabled", Integer, nullable=True),
-    Column("enforce_readiness", Integer, nullable=True),
-    Column("quiet_hours_enabled", Integer, nullable=True),
-    Column("quiet_hours_start", Integer, nullable=True),
-    Column("quiet_hours_end", Integer, nullable=True),
-    Column("max_daily_actions", Integer, nullable=True),
-    Column("gemini_api_key", String, nullable=False),
-    Column("gemini_model", String, nullable=False),
-    Column("updated_at", String, nullable=False),
-)
-_warming_account_state = Table(
-    "warming_account_state",
-    _metadata,
-    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
-    Column("state", String, nullable=False),
-    Column("cycles_completed", Integer, nullable=False),
-    Column("last_event", String, nullable=True),
-    Column("last_cycle_at", String, nullable=True),
-    Column("next_run_at", String, nullable=True),
-    Column("updated_at", String, nullable=False),
-    Column("last_error", String, nullable=True),
-    Column("last_action", String, nullable=True),
-    Column("last_channel", String, nullable=True),
-    Column("heartbeat_at", String, nullable=True),
-    Column("started_at", String, nullable=True),
-    Column("stopped_at", String, nullable=True),
-    Column("flood_wait_seconds", Integer, nullable=True),
-    Column("flood_wait_until", String, nullable=True),
-    Column("proxy_snapshot", String, nullable=True),
-    Column("daily_actions", Integer, nullable=True),
-    Column("daily_count_date", String, nullable=True),
-    Column("quarantine_count", Integer, nullable=True),
-    # P1.2: see schemas.warming.WarmingStateRecord.run_id.
-    Column("run_id", String, nullable=True),
-    # Lifecycle phase persisted between cycles — the previous-phase snapshot
-    # the loop diffs against to detect transitions and fire ``phase_advanced``.
-    Column("current_phase", String, nullable=True),
-    Column("phase_entered_at", String, nullable=True),
-    # Operator-set: account has been manually promoted out of warming into the
-    # neurocomment pool. The neurocomment page's warmed-account overview reads
-    # this so accounts only appear there after an explicit graduation, not on
-    # crossing ``warmed_min_days`` alone. Default 0 keeps existing rows opt-in.
-    Column("promoted_to_nc", Integer, nullable=False, server_default="0"),
-    # Operator-chosen warming duration (days) from the start modal's slider; the
-    # loop auto-completes the account once warming reaches it. NULL = no pick →
-    # the board falls back to ``settings.neurocomment.warmed_min_days``.
-    Column("target_days", Integer, nullable=True),
-    # Operator-chosen activity persona from the start modal. server_default keeps
-    # existing/inserted rows on the balanced cadence; the reader maps NULL → normal.
-    Column("activity_persona", String, nullable=False, server_default="normal"),
-)
-_account_spam_status = Table(
-    "account_spam_status",
-    _metadata,
-    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
-    Column("status", String, nullable=False),
-    Column("detail", String, nullable=True),
-    Column("checked_at", String, nullable=False),
-)
-_users = Table(
-    "users",
-    _metadata,
-    Column("id", String, primary_key=True),
-    Column("username", String, nullable=False, unique=True),
-    Column("password_hash", String, nullable=False),
-    # ``role`` exists from day one so RBAC can land without a migration; a single
-    # role ("admin") is used until a second one is needed.
-    Column("role", String, nullable=False),
-    Column("created_at", String, nullable=False),
-    Column("updated_at", String, nullable=False),
-)
 
 
 class _DatabaseState:
@@ -235,6 +80,59 @@ def dispose_engine() -> None:
 atexit.register(dispose_engine)
 
 
+# --------------------------------------------------------------------------- #
+# Periodic SQLite maintenance — WAL checkpoint + optional online backup.
+# WAL never truncates on its own under a long-lived pool, and telebuba.db is the
+# sole datastore (incl. users/auth), so nothing otherwise guards against loss.
+# The clock is injectable so the backup filename is deterministic under test.
+# --------------------------------------------------------------------------- #
+_BACKUP_STEM = "telebuba"
+_BACKUP_SUFFIX = ".db"
+_BACKUP_TIMESTAMP_FORMAT = "%Y%m%dT%H%M%S%fZ"
+
+
+def _default_backup_clock() -> datetime:
+    return datetime.now(UTC)
+
+
+def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock) -> Path | None:
+    """Checkpoint the WAL and, when enabled, write + prune a timestamped backup.
+
+    Returns the backup file path when one was written, else ``None``. The
+    ``PRAGMA wal_checkpoint(TRUNCATE)`` always runs; the ``VACUUM INTO`` backup
+    is gated on ``settings.db.backup_enabled``.
+    """
+    engine = _get_engine()
+    with engine.connect() as connection:
+        connection.exec_driver_sql("PRAGMA wal_checkpoint(TRUNCATE)")
+        if not settings.db.backup_enabled:
+            return None
+        backup_dir = settings.db.backup_dir
+        backup_dir.mkdir(parents=True, exist_ok=True)
+        stamp = clock().strftime(_BACKUP_TIMESTAMP_FORMAT)
+        target = backup_dir / f"{_BACKUP_STEM}-{stamp}{_BACKUP_SUFFIX}"
+        # VACUUM INTO copies a consistent snapshot without holding a long lock;
+        # the path is a bound parameter, never interpolated SQL.
+        connection.execute(text("VACUUM INTO :path"), {"path": str(target)})
+    _prune_backups(backup_dir)
+    return target
+
+
+def _prune_backups(backup_dir: Path) -> None:
+    backups = sorted(backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}"))
+    excess = len(backups) - settings.db.backup_keep
+    for stale in backups[:excess]:
+        stale.unlink(missing_ok=True)
+
+
+async def run_db_maintenance_loop() -> None:
+    """Run :func:`run_db_maintenance` on the configured interval until cancelled."""
+    interval_seconds = settings.db.backup_interval_hours * 3600.0
+    while True:
+        await asyncio.sleep(interval_seconds)
+        await asyncio.to_thread(run_db_maintenance)
+
+
 def _get_engine() -> Engine:
     if _state.engine is None:
         database_path = _state.database_path or settings.db.path
@@ -242,6 +140,9 @@ def _get_engine() -> Engine:
         engine = create_engine(
             f"sqlite:///{database_path}",
             connect_args={"check_same_thread": False},
+            pool_size=settings.db.pool_size,
+            max_overflow=settings.db.max_overflow,
+            pool_timeout=settings.db.pool_timeout_seconds,
             future=True,
         )
 
@@ -369,6 +270,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     fetch_linked_group,
     fetch_readiness,
     get_listener_account_id,
+    get_listener_running,
     insert_challenge,
     link_channel_to_campaign,
     list_active_watch_channels,
@@ -390,6 +292,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     resolve_pending_outcome,
     save_neurocomment_settings,
     set_listener_account_id,
+    set_listener_running,
     update_campaign_prompt,
     update_solver_enabled,
     upsert_linked_group,

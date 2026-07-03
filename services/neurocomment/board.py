@@ -59,6 +59,7 @@ class _AccountSignals(NamedTuple):
     record: WarmingStateRecord | None
     spam: SpamStatusVerdict | None
     fingerprint: DeviceFingerprint | None
+    pinned_channel: str | None  # channel pin, or None when the account serves all
 
 
 async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
@@ -67,7 +68,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     if campaign is None:
         return None
 
-    account_ids = [link.account_id for link in (await list_campaign_accounts(campaign_id)).links]
+    account_links = (await list_campaign_accounts(campaign_id)).links
+    account_ids = [link.account_id for link in account_links]
+    pins = {link.account_id: link.channel for link in account_links}
     channels = [link.channel for link in (await list_campaign_channels(campaign_id)).links]
 
     accounts = {acc.account_id: acc for acc in (await list_accounts()).accounts}
@@ -91,6 +94,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
                 record=records.get(account_id),
                 spam=spam_by_account.get(account_id),
                 fingerprint=fingerprints.get(account_id),
+                pinned_channel=pins.get(account_id),
             ),
             readiness=[r for r in readiness if r.account_id == account_id],
             posted=[c for c in posted if c.account_id == account_id],
@@ -129,7 +133,7 @@ def _build_card(
     now: datetime,
 ) -> NeurocommentAccountCard:
     nc = settings.neurocomment
-    account, record, spam, fingerprint = signals
+    account, record, spam, fingerprint, pinned_channel = signals
     trust = account_trust_score_from(
         account=account,
         record=record,
@@ -153,6 +157,7 @@ def _build_card(
         comments_today=len(posted),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
+        pinned_channel=pinned_channel,
         readiness=[
             AccountChannelReadiness(
                 channel=r.channel,
@@ -200,7 +205,8 @@ def _channel_status(
     readiness; otherwise an account that's ready wins; then the joined-but-blocked
     failure modes — ``bot_challenge`` when a guardian-bot challenge row exists for
     the channel (#145), else ``chat_restricted`` (a Telegram-level write block) —
-    then the approval gate when not joined; ``throttled`` is the catch-all.
+    then, for a not-joined row, ``join_failed`` (onboarding's hard-failure sentinel)
+    vs ``join_by_request`` (approval gate); ``throttled`` is the catch-all.
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
@@ -210,6 +216,18 @@ def _channel_status(
         return "ready"
     if any(r.joined and not r.captcha_passed for r in rows):
         return "bot_challenge" if challenged else "chat_restricted"
+    return _not_joined_status(rows)
+
+
+def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
+    """Status for a channel none of whose accounts are joined-and-ready.
+
+    ``join_failed`` is onboarding's hard-failure sentinel (joined=False,
+    captcha_passed=True) — a terminal join failure that never self-resolves, distinct
+    from the approval gate ``join_by_request``; ``throttled`` is the catch-all.
+    """
+    if any(not r.joined and r.captcha_passed for r in rows):
+        return "join_failed"
     if any(not r.joined for r in rows):
         return "join_by_request"
     return "throttled"

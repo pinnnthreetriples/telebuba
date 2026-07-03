@@ -1,5 +1,4 @@
 import type { Config } from 'tailwindcss';
-import animate from 'tailwindcss-animate';
 
 // Design tokens — the single source of truth for the SPA's palette/typography,
 // extracted from the design file in web/ (the dc design system) before web/ is
@@ -26,5 +25,5 @@ export default {
       borderRadius: { lg: '12px', md: '8px', sm: '6px' },
     },
   },
-  plugins: [animate],
+  plugins: [],
 } satisfies Config;

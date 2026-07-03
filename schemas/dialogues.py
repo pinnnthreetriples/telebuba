@@ -28,11 +28,27 @@ class DialogueMessage(BaseModel):
     replied: bool = False
 
 
-class DialogueOverview(BaseModel):
-    """Pairs and recent messages for the warming page's dialogue panel."""
+class DialogueFeedMessage(BaseModel):
+    """One dialogue message with both accounts resolved to display labels.
 
-    pairs: list[DialoguePair] = Field(default_factory=list)
-    recent: list[DialogueMessage] = Field(default_factory=list)
+    Locale-neutral (#12): ``from_label``/``to_label`` are the account's own
+    phone / label / id strings, never translated UI text; ``created_at`` is the
+    stored ISO-8601 timestamp. The SPA owns any presentation.
+    """
+
+    from_account: str = Field(min_length=1)
+    from_label: str = Field(min_length=1)
+    to_account: str = Field(min_length=1)
+    to_label: str = Field(min_length=1)
+    text: str = Field(min_length=1)
+    created_at: str = Field(min_length=1)
+    replied: bool = False
+
+
+class DialogueFeed(BaseModel):
+    """Recent inter-account messages, newest first — the live conversation feed."""
+
+    messages: list[DialogueFeedMessage] = Field(default_factory=list)
 
 
 class DialoguePartnersResult(BaseModel):

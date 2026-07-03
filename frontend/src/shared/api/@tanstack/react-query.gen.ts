@@ -10,12 +10,15 @@ import {
 
 import { client } from '../client.gen';
 import {
+  accountStats,
   addAccountMusic,
   addWarmingChannels,
   assignCampaignAccount,
   assignProxy,
   checkAccount,
   checkProxy,
+  clearNeurocommentListener,
+  countCampaignChallengeOutcomes,
   createCampaign,
   createProxy,
   deleteAccount,
@@ -35,10 +38,12 @@ import {
   listAccounts,
   listCampaignChallenges,
   listCampaigns,
+  listChannelChallenges,
   listLogs,
   listProxies,
   listWarmedAccounts,
   listWarmingChannels,
+  listWarmingDialogues,
   login,
   logout,
   logoutAccount,
@@ -56,7 +61,10 @@ import {
   resetAccountSession,
   retryChallenge,
   setAccountPhoto,
+  setCampaignAccountChannel,
   setCampaignSolver,
+  setCampaignStatus,
+  skipNeurocommentPair,
   spamCheckAccount,
   startNeurocomment,
   startWarming,
@@ -71,6 +79,9 @@ import {
   updateWarmingSettings,
 } from '../sdk.gen';
 import type {
+  AccountStatsData,
+  AccountStatsError,
+  AccountStatsResponse,
   AddAccountMusicData,
   AddAccountMusicError,
   AddAccountMusicResponse,
@@ -89,6 +100,12 @@ import type {
   CheckProxyData,
   CheckProxyError,
   CheckProxyResponse,
+  ClearNeurocommentListenerData,
+  ClearNeurocommentListenerError,
+  ClearNeurocommentListenerResponse,
+  CountCampaignChallengeOutcomesData,
+  CountCampaignChallengeOutcomesError,
+  CountCampaignChallengeOutcomesResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
@@ -145,6 +162,9 @@ import type {
   ListCampaignsData,
   ListCampaignsError,
   ListCampaignsResponse,
+  ListChannelChallengesData,
+  ListChannelChallengesError,
+  ListChannelChallengesResponse,
   ListLogsData,
   ListLogsError,
   ListLogsResponse,
@@ -157,6 +177,9 @@ import type {
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
+  ListWarmingDialoguesData,
+  ListWarmingDialoguesError,
+  ListWarmingDialoguesResponse,
   LoginData,
   LoginError,
   LoginResponse,
@@ -164,6 +187,7 @@ import type {
   LogoutAccountError,
   LogoutAccountResponse,
   LogoutData,
+  LogoutError,
   LogoutResponse,
   PostAccountStoryData,
   PostAccountStoryError,
@@ -204,9 +228,18 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  SetCampaignAccountChannelData,
+  SetCampaignAccountChannelError,
+  SetCampaignAccountChannelResponse,
   SetCampaignSolverData,
   SetCampaignSolverError,
   SetCampaignSolverResponse,
+  SetCampaignStatusData,
+  SetCampaignStatusError,
+  SetCampaignStatusResponse,
+  SkipNeurocommentPairData,
+  SkipNeurocommentPairError,
+  SkipNeurocommentPairResponse,
   SpamCheckAccountData,
   SpamCheckAccountError,
   SpamCheckAccountResponse,
@@ -269,8 +302,8 @@ export const loginMutation = (
  */
 export const logoutMutation = (
   options?: Partial<Options<LogoutData>>,
-): UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> => {
-  const mutationOptions: UseMutationOptions<LogoutResponse, DefaultError, Options<LogoutData>> = {
+): UseMutationOptions<LogoutResponse, LogoutError, Options<LogoutData>> => {
+  const mutationOptions: UseMutationOptions<LogoutResponse, LogoutError, Options<LogoutData>> = {
     mutationFn: async (fnOptions) => {
       const { data } = await logout({
         ...options,
@@ -469,6 +502,33 @@ export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>)
       queryKey: listAccountsInfiniteQueryKey(options),
     },
   );
+
+export const accountStatsQueryKey = (options?: Options<AccountStatsData>) =>
+  createQueryKey('accountStats', options);
+
+/**
+ * Account Stats
+ *
+ * Fleet-wide status counts for the Accounts page tiles (all pages, not one).
+ */
+export const accountStatsOptions = (options?: Options<AccountStatsData>) =>
+  queryOptions<
+    AccountStatsResponse,
+    AccountStatsError,
+    AccountStatsResponse,
+    ReturnType<typeof accountStatsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await accountStats({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: accountStatsQueryKey(options),
+  });
 
 /**
  * Check Account
@@ -1381,6 +1441,33 @@ export const updateWarmingSettingsMutation = (
   return mutationOptions;
 };
 
+export const listWarmingDialoguesQueryKey = (options?: Options<ListWarmingDialoguesData>) =>
+  createQueryKey('listWarmingDialogues', options);
+
+/**
+ * List Warming Dialogues
+ *
+ * Recent inter-account warming messages, newest first, for the live feed.
+ */
+export const listWarmingDialoguesOptions = (options?: Options<ListWarmingDialoguesData>) =>
+  queryOptions<
+    ListWarmingDialoguesResponse,
+    ListWarmingDialoguesError,
+    ListWarmingDialoguesResponse,
+    ReturnType<typeof listWarmingDialoguesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmingDialogues({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmingDialoguesQueryKey(options),
+  });
+
 export const listCampaignsQueryKey = (options?: Options<ListCampaignsData>) =>
   createQueryKey('listCampaigns', options);
 
@@ -1525,6 +1612,38 @@ export const removeCampaignAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await removeCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Channel
+ *
+ * Pin a campaign account to one channel (``channel: null`` clears the pin).
+ *
+ * A pinned account comments only on that channel; an unpinned one serves all
+ * campaign channels. Returns the refreshed board so the SPA re-renders the card.
+ */
+export const setCampaignAccountChannelMutation = (
+  options?: Partial<Options<SetCampaignAccountChannelData>>,
+): UseMutationOptions<
+  SetCampaignAccountChannelResponse,
+  SetCampaignAccountChannelError,
+  Options<SetCampaignAccountChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetCampaignAccountChannelResponse,
+    SetCampaignAccountChannelError,
+    Options<SetCampaignAccountChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setCampaignAccountChannel({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -1702,6 +1821,121 @@ export const listCampaignChallengesOptions = (options: Options<ListCampaignChall
     queryKey: listCampaignChallengesQueryKey(options),
   });
 
+export const countCampaignChallengeOutcomesQueryKey = (
+  options: Options<CountCampaignChallengeOutcomesData>,
+) => createQueryKey('countCampaignChallengeOutcomes', options);
+
+/**
+ * Count Campaign Challenge Outcomes
+ *
+ * Challenge-outcome counters (solved/failed/give_up/pending) across a campaign (#148).
+ */
+export const countCampaignChallengeOutcomesOptions = (
+  options: Options<CountCampaignChallengeOutcomesData>,
+) =>
+  queryOptions<
+    CountCampaignChallengeOutcomesResponse,
+    CountCampaignChallengeOutcomesError,
+    CountCampaignChallengeOutcomesResponse,
+    ReturnType<typeof countCampaignChallengeOutcomesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await countCampaignChallengeOutcomes({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: countCampaignChallengeOutcomesQueryKey(options),
+  });
+
+export const listChannelChallengesQueryKey = (options: Options<ListChannelChallengesData>) =>
+  createQueryKey('listChannelChallenges', options);
+
+/**
+ * List Channel Challenges
+ *
+ * Recent unsolved bot-challenges for one channel — the work-view drill-down (#148).
+ */
+export const listChannelChallengesOptions = (options: Options<ListChannelChallengesData>) =>
+  queryOptions<
+    ListChannelChallengesResponse,
+    ListChannelChallengesError,
+    ListChannelChallengesResponse,
+    ReturnType<typeof listChannelChallengesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listChannelChallenges({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listChannelChallengesQueryKey(options),
+  });
+
+/**
+ * Skip Pair
+ *
+ * Operator "Skip channel for this account": the engine never selects the pair (#148).
+ */
+export const skipNeurocommentPairMutation = (
+  options?: Partial<Options<SkipNeurocommentPairData>>,
+): UseMutationOptions<
+  SkipNeurocommentPairResponse,
+  SkipNeurocommentPairError,
+  Options<SkipNeurocommentPairData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SkipNeurocommentPairResponse,
+    SkipNeurocommentPairError,
+    Options<SkipNeurocommentPairData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await skipNeurocommentPair({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Campaign Status
+ *
+ * Per-campaign run/pause: flip a campaign between active and paused (#148).
+ */
+export const setCampaignStatusMutation = (
+  options?: Partial<Options<SetCampaignStatusData>>,
+): UseMutationOptions<
+  SetCampaignStatusResponse,
+  SetCampaignStatusError,
+  Options<SetCampaignStatusData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetCampaignStatusResponse,
+    SetCampaignStatusError,
+    Options<SetCampaignStatusData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setCampaignStatus({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
 export const getNeurocommentRuntimeQueryKey = (options?: Options<GetNeurocommentRuntimeData>) =>
   createQueryKey('getNeurocommentRuntime', options);
 
@@ -1756,6 +1990,8 @@ export const startNeurocommentMutation = (
 
 /**
  * Stop
+ *
+ * Pause the runtime: unsubscribe but keep the remembered listener account.
  */
 export const stopNeurocommentMutation = (
   options?: Partial<Options<StopNeurocommentData>>,
@@ -1771,6 +2007,35 @@ export const stopNeurocommentMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await stopNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Clear Listener
+ *
+ * Remove the listener ("снять слушателя"): unsubscribe and forget the account.
+ */
+export const clearNeurocommentListenerMutation = (
+  options?: Partial<Options<ClearNeurocommentListenerData>>,
+): UseMutationOptions<
+  ClearNeurocommentListenerResponse,
+  ClearNeurocommentListenerError,
+  Options<ClearNeurocommentListenerData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ClearNeurocommentListenerResponse,
+    ClearNeurocommentListenerError,
+    Options<ClearNeurocommentListenerData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await clearNeurocommentListener({
         ...options,
         ...fnOptions,
         throwOnError: true,

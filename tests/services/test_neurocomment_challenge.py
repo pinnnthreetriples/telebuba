@@ -150,9 +150,10 @@ async def test_image_challenge_gives_up_without_gemini(monkeypatch: pytest.Monke
 @pytest.mark.asyncio
 async def test_cache_hit_skips_gemini_and_clicks(monkeypatch: pytest.MonkeyPatch) -> None:
     message = _msg()
-    # Seed a solved row with a click decision under the same hash.
+    # Seed a solved row with a click decision under the same hash. The stored index is
+    # relative to the sorted-label order (["no", "yes"]), so index 0 selects "no".
     decision = ChallengeDecision(
-        action="click_button", button_index=1, confidence=0.9, reasoning="r"
+        action="click_button", button_index=0, confidence=0.9, reasoning="r"
     )
     await insert_challenge(
         ChallengeInsert(
@@ -177,7 +178,51 @@ async def test_cache_hit_skips_gemini_and_clicks(monkeypatch: pytest.MonkeyPatch
     assert outcome == "solved"
     assert gemini.calls == []  # cross-account cache reuse
     assert isinstance(execute.calls[0], ClickButton)
-    assert execute.calls[0].button_index == 1
+    # Replayed by label (order-robust), not the raw positional index.
+    assert execute.calls[0].button_text == "no"
+
+
+@pytest.mark.asyncio
+async def test_cache_hit_clicks_correct_label_on_reordered_buttons(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A cached solved decision selected the "no" label. Decisions are stored relative
+    # to the sorted-label order (["no", "yes"] here), so "no" is canonical index 0.
+    # Applied to a message reordered as ["no", "yes"] (positional index 0 is "no") vs
+    # ["yes", "no"], the solver must click "no" by label, not replay a raw position.
+    original = BotChallengeMessage(
+        text="prove you are human", button_labels=["yes", "no"], message_id=7
+    )
+    decision = ChallengeDecision(
+        action="click_button", button_index=0, confidence=0.9, reasoning="r"
+    )
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash=challenge._challenge_hash(original.text, original.button_labels),
+            account_id="other-acc",
+            channel="@other",
+            raw_text=original.text,
+            button_labels=original.button_labels,
+            outcome="solved",
+            decision_json=decision.model_dump_json(),
+        ),
+    )
+    reordered = BotChallengeMessage(
+        text="prove you are human", button_labels=["no", "yes"], message_id=8
+    )
+    execute = _ExecuteStub(ok=True)
+    monkeypatch.setattr(_seams, "execute_read", _wait(reordered))
+    monkeypatch.setattr(_seams, "generate_text", _gemini(GeminiResult(status="error")))
+    monkeypatch.setattr(_seams, "execute", execute.execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    outcome = await challenge.solve_if_present("acc-1", "@chan", 99)
+
+    assert outcome == "solved"
+    click = execute.calls[0]
+    assert isinstance(click, ClickButton)
+    # "no" is index 0 in the reordered layout — not the cached positional index 1.
+    assert click.button_text == "no"
 
 
 @pytest.mark.asyncio

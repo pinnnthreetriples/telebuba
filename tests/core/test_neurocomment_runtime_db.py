@@ -11,7 +11,9 @@ from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     configure_database,
     get_listener_account_id,
+    get_listener_running,
     set_listener_account_id,
+    set_listener_running,
 )
 
 if TYPE_CHECKING:
@@ -60,3 +62,35 @@ async def test_clear_listener_id() -> None:
     await set_listener_account_id("acc-1")
     await set_listener_account_id(None)
     assert await get_listener_account_id() is None
+
+
+def test_listener_running_migration_stamped_and_column_present() -> None:
+    # Migration #24 splits the run flag from the remembered listener id.
+    engine = _get_engine()
+    columns = {col["name"] for col in inspect(engine).get_columns("neurocomment_runtime")}
+    assert "listener_running" in columns
+    with engine.connect() as connection:
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert 24 in versions
+
+
+@pytest.mark.asyncio
+async def test_listener_running_defaults_to_false() -> None:
+    # DEFAULT 0: a fresh DB (and a legacy row backfilled by #24) boots not-running.
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_set_listener_running_persists_independently_of_id() -> None:
+    # The two scalars are orthogonal: setting the run flag leaves the id untouched,
+    # and clearing it (pause) keeps the remembered id.
+    await set_listener_account_id("acc-1")
+    await set_listener_running(running=True)
+    assert await get_listener_running() is True
+    assert await get_listener_account_id() == "acc-1"
+
+    await set_listener_running(running=False)
+    assert await get_listener_running() is False
+    assert await get_listener_account_id() == "acc-1"

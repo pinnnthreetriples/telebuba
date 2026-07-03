@@ -21,7 +21,12 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.accounts import health_for_status
-from schemas.dialogues import DialogueOverview, DialoguePairsResult, DialoguePartnersResult
+from schemas.dialogues import (
+    DialogueFeed,
+    DialogueFeedMessage,
+    DialoguePairsResult,
+    DialoguePartnersResult,
+)
 from schemas.warming import is_warming
 
 if TYPE_CHECKING:
@@ -112,8 +117,33 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
     return DialoguePairsResult(pairs=await list_dialogue_pairs())
 
 
-async def load_dialogue_overview(*, recent_limit: int = 20) -> DialogueOverview:
-    """Acquaintance pairs and the most recent messages, for the UI panel."""
-    pairs = await list_dialogue_pairs()
-    recent = await list_recent_dialogue_messages(recent_limit)
-    return DialogueOverview(pairs=pairs, recent=recent)
+async def load_dialogue_overview(*, recent_limit: int = 30) -> DialogueFeed:
+    """Recent inter-account messages with both sides resolved to a display label.
+
+    The label is the account's phone (fallback: label, fallback: bare id) so the
+    feed stays locale-neutral (#12). Accounts are read in a single pass and
+    indexed, so resolving both ends of every message is O(1), never N+1.
+    """
+    messages = await list_recent_dialogue_messages(recent_limit)
+    labels = {
+        account.account_id: account.phone or account.label or account.account_id
+        for account in (await list_accounts()).accounts
+    }
+
+    def _label(account_id: str) -> str:
+        return labels.get(account_id, account_id)
+
+    return DialogueFeed(
+        messages=[
+            DialogueFeedMessage(
+                from_account=message.from_account,
+                from_label=_label(message.from_account),
+                to_account=message.to_account,
+                to_label=_label(message.to_account),
+                text=message.text,
+                created_at=message.created_at,
+                replied=message.replied,
+            )
+            for message in messages
+        ],
+    )

@@ -21,9 +21,11 @@ from core.db import (
     create_account,
     create_campaign,
     get_listener_account_id,
+    get_listener_running,
     link_channel_to_campaign,
     mark_comment_posted,
     set_listener_account_id,
+    set_listener_running,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
@@ -112,6 +114,7 @@ async def test_runtime_status_running_counts_active_watch_channels() -> None:
     await link_channel_to_campaign(campaign.campaign_id, "@a")
     await link_channel_to_campaign(campaign.campaign_id, "@b")
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     status = await _runtime.neurocomment_runtime_status()
 
@@ -121,10 +124,29 @@ async def test_runtime_status_running_counts_active_watch_channels() -> None:
 
 
 @pytest.mark.asyncio
+async def test_runtime_status_carries_log_limit_from_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The activity-log row cap is served from config so the SPA stops hardcoding it (#7)."""
+    monkeypatch.setattr(settings.neurocomment, "log_limit", 42)
+
+    stopped = await _runtime.neurocomment_runtime_status()
+    assert stopped.running is False
+    assert stopped.log_limit == 42
+
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+    running = await _runtime.neurocomment_runtime_status()
+    assert running.running is True
+    assert running.log_limit == 42
+
+
+@pytest.mark.asyncio
 async def test_runtime_status_running_with_no_channels_reports_zero() -> None:
-    # A persisted listener with an empty watch set still reads as running (the
+    # A running listener with an empty watch set still reads as running (the
     # listener is up); the count is simply 0.
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     status = await _runtime.neurocomment_runtime_status()
 
@@ -284,56 +306,114 @@ async def test_start_persists_listener_then_reconciles(monkeypatch: pytest.Monke
     await _runtime.start_neurocomment("listener-1")
 
     assert await get_listener_account_id() == "listener-1"
+    assert await get_listener_running() is True
     assert spy.reconciled == ["listener-1"]
 
 
+async def _drain_onboarding() -> None:
+    """Await the background onboarding task Start scheduled (if any), then clear it."""
+    task = _runtime._ONBOARD_TASK
+    if task is not None:
+        await task
+
+
 @pytest.mark.asyncio
-async def test_start_runs_onboarding_for_each_active_campaign_before_reconcile(
+async def test_start_returns_promptly_and_schedules_background_onboarding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One Start click does the full setup: onboard all active campaigns then point the listener.
+    """Start persists+reconciles and returns without awaiting onboarding (#4).
 
-    Closes the failure mode where comments did not flow until the operator
-    re-pressed Onboarding after Start.
+    The POST no longer blocks on minutes of jittered join/challenge sleeps; onboarding
+    runs as a tracked background task. Progress is observable over the SSE log stream.
     """
     active_a = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     active_b = await create_campaign(CampaignCreate(name="B", prompt="p", status="active"))
     paused = await create_campaign(CampaignCreate(name="C", prompt="p", status="paused"))
     spy = _ReconcileSpy()
     _patch_engine(monkeypatch, spy)
-    order: list[str] = []
+    onboard_started = asyncio.Event()
+    release = asyncio.Event()
+    onboarded: list[str] = []
 
-    async def fake_onboard(campaign_id: str, **_kwargs: object) -> object:
-        order.append(f"onboard:{campaign_id}")
+    async def slow_onboard(campaign_id: str, **_kwargs: object) -> object:
+        onboard_started.set()
+        await release.wait()  # block so Start would time out if it awaited us
+        onboarded.append(campaign_id)
         return None
 
-    async def fake_reconcile(account_id: str) -> None:
-        order.append(f"reconcile:{account_id}")
-        spy.reconciled.append(account_id)
+    monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
 
-    monkeypatch.setattr(_runtime, "onboard_campaign", fake_onboard)
-    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", fake_reconcile)
+    # Start returns promptly even though onboarding blocks.
+    await asyncio.wait_for(_runtime.start_neurocomment("listener-1"), timeout=0.5)
 
-    await _runtime.start_neurocomment("listener-1")
-
-    # Both active campaigns were onboarded BEFORE the listener was pointed at them,
-    # and the paused campaign was left alone.
-    onboarded = {step.removeprefix("onboard:") for step in order if step.startswith("onboard:")}
-    assert onboarded == {active_a.campaign_id, active_b.campaign_id}
-    assert paused.campaign_id not in onboarded
-    assert order[-1] == "reconcile:listener-1"
+    # Listener persisted + reconciled synchronously; onboarding scheduled, not awaited.
     assert await get_listener_account_id() == "listener-1"
+    assert spy.reconciled == ["listener-1"]
+    assert _runtime._ONBOARD_TASK is not None
+    await asyncio.wait_for(onboard_started.wait(), timeout=0.5)
+    assert onboarded == []  # still blocked → Start did not wait for it
+
+    # Let it finish: both active campaigns onboarded, the paused one skipped.
+    release.set()
+    await _drain_onboarding()
+    assert set(onboarded) == {active_a.campaign_id, active_b.campaign_id}
+    assert paused.campaign_id not in onboarded
+
+
+@pytest.mark.asyncio
+async def test_start_stops_previous_listener_when_account_changes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Starting with account B after A must stop A's listener, or both get every post (#3)."""
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
+    reconcile = _ReconcileSpy()
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", reconcile.reconcile)
+
+    async def _noop_onboard(_campaign_id: str, **_kwargs: object) -> object:
+        return None
+
+    monkeypatch.setattr(_runtime, "onboard_campaign", _noop_onboard)
+
+    await set_listener_account_id("acc-A")
+    await _runtime.start_neurocomment("acc-B")
+    await _drain_onboarding()
+
+    # The previous account's per-account subscription is torn down before B is wired.
+    assert spy.stopped == ["acc-A"]
+    assert reconcile.reconciled == ["acc-B"]
+    assert await get_listener_account_id() == "acc-B"
+
+
+@pytest.mark.asyncio
+async def test_start_same_account_does_not_stop_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-Start on the same account must not tear down its own subscription (#3)."""
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", _ReconcileSpy().reconcile)
+
+    async def _noop_onboard(_campaign_id: str, **_kwargs: object) -> object:
+        return None
+
+    monkeypatch.setattr(_runtime, "onboard_campaign", _noop_onboard)
+
+    await set_listener_account_id("acc-A")
+    await _runtime.start_neurocomment("acc-A")
+    await _drain_onboarding()
+
+    assert spy.stopped == []
 
 
 @pytest.mark.asyncio
 async def test_start_continues_to_next_campaign_when_one_onboard_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """One campaign's onboarding raise must not blackhole Start.
+    """One campaign's background onboarding raise must not blackhole the others.
 
-    The listener still gets persisted and reconcile still fires, so the runtime
-    is up even if one campaign needs operator follow-up. Bug 1: a transient
-    SQLite/onboarding error previously aborted the whole Start.
+    The listener still gets persisted and reconcile still fires (synchronously in
+    Start), and the remaining campaigns still onboard.
     """
     a = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     b = await create_campaign(CampaignCreate(name="B", prompt="p", status="active"))
@@ -351,9 +431,8 @@ async def test_start_continues_to_next_campaign_when_one_onboard_raises(
     monkeypatch.setattr(_runtime, "onboard_campaign", fake_onboard)
 
     await _runtime.start_neurocomment("listener-1")
+    await _drain_onboarding()
 
-    # Both campaigns were attempted (the raise didn't short-circuit the loop),
-    # the listener was still persisted, and reconcile still fired.
     assert set(onboarded) == {a.campaign_id, b.campaign_id}
     assert await get_listener_account_id() == "listener-1"
     assert spy.reconciled == ["listener-1"]
@@ -363,7 +442,7 @@ async def test_start_continues_to_next_campaign_when_one_onboard_raises(
 async def test_start_passes_on_progress_through_to_onboard(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Bug 13: start_neurocomment accepts and forwards on_progress to onboard_campaign."""
+    """start_neurocomment forwards on_progress to the background onboard_campaign."""
     await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     spy = _ReconcileSpy()
     _patch_engine(monkeypatch, spy)
@@ -380,8 +459,68 @@ async def test_start_passes_on_progress_through_to_onboard(
         sentinel.append(msg)
 
     await _runtime.start_neurocomment("listener-1", on_progress=on_progress)
+    await _drain_onboarding()
 
     assert seen == [on_progress]
+
+
+@pytest.mark.asyncio
+async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two rapid Starts must not run onboarding twice concurrently (#4)."""
+    await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    _patch_engine(monkeypatch, _ReconcileSpy())
+    release = asyncio.Event()
+    runs = 0
+
+    async def slow_onboard(_campaign_id: str, **_kwargs: object) -> object:
+        nonlocal runs
+        runs += 1
+        await release.wait()
+        return None
+
+    monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
+
+    await _runtime.start_neurocomment("listener-1")
+    first_task = _runtime._ONBOARD_TASK
+    await asyncio.sleep(0)  # let the first onboarding task start + block
+    # Second Start while the first onboarding is still in flight reuses it.
+    await _runtime.start_neurocomment("listener-1")
+    assert _runtime._ONBOARD_TASK is first_task
+
+    release.set()
+    await _drain_onboarding()
+    assert runs == 1  # onboarding ran once, not twice
+
+
+@pytest.mark.asyncio
+async def test_shutdown_cancels_background_onboarding(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Shutdown cancels the in-flight onboarding task cleanly (#4)."""
+    await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    # Patch only reconcile (Start uses it); keep the REAL shutdown so _stop_onboarding runs.
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", _ReconcileSpy().reconcile)
+    _patch_listener(monkeypatch, _ListenerSpy())
+    started = asyncio.Event()
+    cancelled = asyncio.Event()
+
+    async def never_ending(_campaign_id: str, **_kwargs: object) -> object:
+        started.set()
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+
+    monkeypatch.setattr(_runtime, "onboard_campaign", never_ending)
+
+    await _runtime.start_neurocomment("listener-1")
+    await asyncio.wait_for(started.wait(), timeout=0.5)
+
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+    assert cancelled.is_set()
+    assert _runtime._ONBOARD_TASK is None
 
 
 @pytest.mark.asyncio
@@ -391,11 +530,15 @@ async def test_stop_shuts_down_persisted_listener_then_clears(
     spy = _ReconcileSpy()
     _patch_engine(monkeypatch, spy)
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     await _runtime.stop_neurocomment()
 
+    # PAUSE: unsubscribed + run flag cleared, but the listener is REMEMBERED so the
+    # SPA keeps the strip after a reload (this is what distinguishes pause from remove).
     assert spy.shut_down == ["listener-1"]
-    assert await get_listener_account_id() is None
+    assert await get_listener_account_id() == "listener-1"
+    assert await get_listener_running() is False
 
 
 @pytest.mark.asyncio
@@ -407,6 +550,74 @@ async def test_stop_with_no_listener_is_noop(monkeypatch: pytest.MonkeyPatch) ->
 
     assert spy.shut_down == []
     assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_clear_listener_wipes_id_and_run_flag(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Clearing the listener removes the account entirely (unlike pause, which keeps it)."""
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+
+    await _runtime.clear_neurocomment_listener()
+
+    assert spy.shut_down == ["listener-1"]
+    assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_clear_listener_with_none_is_noop(monkeypatch: pytest.MonkeyPatch) -> None:
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+
+    await _runtime.clear_neurocomment_listener()
+
+    assert spy.shut_down == []
+    assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_status_after_pause_keeps_remembered_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After pause the status shows the remembered listener with running False (audit fix)."""
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+
+    await _runtime.stop_neurocomment()
+    status = await _runtime.neurocomment_runtime_status()
+
+    assert status.running is False
+    assert status.listener_account_id == "listener-1"
+
+
+@pytest.mark.asyncio
+async def test_reconcile_if_running_gates_on_persisted_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """reconcile_if_running re-points only when the runtime is running (gated on the flag)."""
+    spy = _ReconcileSpy()
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", spy.reconcile)
+
+    # Stopped: no listener persisted → no-op.
+    await _runtime.reconcile_if_running()
+    assert spy.reconciled == []
+
+    # Paused: listener remembered but the run flag is off → still a no-op.
+    await set_listener_account_id("listener-1")
+    await _runtime.reconcile_if_running()
+    assert spy.reconciled == []
+
+    # Running: the run flag is set → reconcile the remembered account.
+    await set_listener_running(running=True)
+    await _runtime.reconcile_if_running()
+    assert spy.reconciled == ["listener-1"]
 
 
 @pytest.mark.asyncio
@@ -416,6 +627,7 @@ async def test_reconcile_on_startup_resumes_persisted_listener(
     spy = _ReconcileSpy()
     _patch_engine(monkeypatch, spy)
     await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
 
     await _runtime.reconcile_neurocomment_on_startup()
 
@@ -432,6 +644,28 @@ async def test_reconcile_on_startup_does_nothing_when_stopped(
     await _runtime.reconcile_neurocomment_on_startup()
 
     assert spy.reconciled == []
+
+
+@pytest.mark.asyncio
+async def test_reconcile_on_startup_does_not_resume_paused_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A remembered-but-paused listener must NOT auto-resume on boot (audit fix).
+
+    Pausing then rebooting leaves the account remembered with the run flag off;
+    reconcile-on-startup gates on the flag, so nothing is resubscribed.
+    """
+    spy = _ReconcileSpy()
+    _patch_engine(monkeypatch, spy)
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+    await _runtime.stop_neurocomment()  # pause: keeps id, clears the flag
+    spy.reconciled.clear()
+
+    await _runtime.reconcile_neurocomment_on_startup()
+
+    assert spy.reconciled == []
+    assert await get_listener_account_id() == "listener-1"
 
 
 @pytest.mark.asyncio

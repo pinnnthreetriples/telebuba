@@ -244,8 +244,8 @@ def _list_recent_dialogue_messages(limit: int) -> list[DialogueMessage]:
     return [_row_to_message(cast("Mapping[str, object]", row)) for row in rows]
 
 
-async def list_recent_dialogue_messages(limit: int = 20) -> list[DialogueMessage]:
-    """Return the most recent dialogue messages, newest first (for the UI)."""
+async def list_recent_dialogue_messages(limit: int = 30) -> list[DialogueMessage]:
+    """Return the most recent dialogue messages, newest first (for the UI feed)."""
     return await asyncio.to_thread(_list_recent_dialogue_messages, limit)
 
 

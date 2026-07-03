@@ -11,7 +11,7 @@ Telegram account operations dashboard: account/session management, proxy/profile
 
 ## Stack
 **Backend:** Python 3.13 · FastAPI + uvicorn (single-worker) · SQLAlchemy/SQLite · Telethon · httpx · loguru+Sentry · pydantic-settings · uv · ruff · ty · pytest · hypothesis · bandit · pip-audit · semgrep · deptry · vulture · radon · aislop · pre-commit
-**Frontend (`frontend/`):** React + TypeScript (strict) · Vite · TanStack Router/Query/Table/Form · Tailwind + shadcn/ui · `@hey-api/openapi-ts` · react-i18next · Sentry React · Vitest + Playwright · Steiger boundary-lint (full law in `context/frontend.md`)
+**Frontend (`frontend/`):** React + TypeScript (strict) · Vite · TanStack Router/Query/Table/Form · Tailwind + shadcn/ui · `@hey-api/openapi-ts` · react-i18next · Sentry React · Vitest · Steiger boundary-lint (full law in `context/frontend.md`)
 
 ## File Map
 ```text
@@ -25,16 +25,19 @@ telebuba/
 │   ├── deps.py             shared dependencies (Depends(get_current_user), pagination params)
 │   └── errors.py           error-envelope mapping ({error:{code,message,fields?}}, 422 remapped)
 ├── core/                   infrastructure gateways; only layer touching third-party SDKs
-│   ├── db.py               shared SQLite plumbing + compatibility re-exports
+│   ├── db.py               shared SQLite plumbing (engine/lifecycle/helpers) + compatibility re-exports
+│   ├── _schema_tables.py   SQLAlchemy MetaData + every Table definition (split from db.py for the size budget; re-exported via db.py)
 │   ├── migrations.py       versioned append-only migration registry + runner; apply_migrations() runs on engine init
 │   ├── migration_steps.py  migration step bodies (split from migrations.py for the file-size budget)
 │   ├── migration_steps_pool.py  overflow migration bodies split from migration_steps.py for the size budget (proxy pool #18, warming activity_persona #21)
+│   ├── migration_steps_neurocomment.py  neurocomment migration bodies (tables/runtime/settings/indexes/challenges/human_skipped) split from migration_steps.py; re-exported there
 │   ├── device_fingerprint.py  generates/reads immutable per-account device profile
 │   ├── phone_geo.py        phone number → geo lookup helper
 │   ├── proxy_check.py      connectivity check for proxy configs
 │   ├── tdata_import.py     converts tdata.zip to Telethon .session files (safe-extract)
 │   ├── repositories/       per-aggregate DB query modules
 │   │   ├── proxies.py         proxy-pool data layer (shared proxies + accounts.proxy_id assignment, capacity, connectivity-check persistence)
+│   │   ├── _accounts_delete.py  account cascade-delete (_delete_account/delete_account) split from accounts.py for the size budget; re-exported there
 │   │   ├── warming_joined.py  tracks channels an account already joined (join-dedup)
 │   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims, comment quota counts in _quota.py, challenge audit+cache in _challenges.py, operator-editable limits in _settings.py)
 │   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
@@ -45,8 +48,9 @@ telebuba/
 │   │   ├── _listener.py       standing post listener (subscribe_posts/stop_post_listener) for neurocomment
 │   │   ├── _auth.py           phone-code login RPCs (SendCode/SignIn/2FA) + log_out_session; the only place auth RPCs live
 │   │   └── _video.py          video/media actions
-│   ├── config.py           pydantic-settings, nested namespaces (incl. settings.api, settings.auth)
-│   ├── gemini.py           HTTP gateway for Gemini
+│   ├── config.py           pydantic-settings, nested namespaces (incl. settings.api, settings.auth); Settings aggregate + load_settings/settings
+│   ├── _config_domains.py  the largest settings namespaces (Warming/Gemini/Trust/Neurocomment) split from config.py for the size budget; re-exported via config.py
+│   ├── gemini.py           HTTP gateway for Gemini (shared AsyncClient + retry/429)
 │   ├── events.py           in-process pub/sub for live log events (SSE backbone); core/logging publishes each persisted row here
 │   ├── auth.py             password hashing + JWT encode/decode (only place tokens are minted/verified)
 │   └── logging.py          loguru + SQLite logs + optional Sentry
@@ -54,8 +58,8 @@ telebuba/
 ├── services/               business logic; UI-agnostic; no SDK imports
 │   ├── accounts/           account/session/profile operations (incl. login.py: phone-code re-auth + logout/reset over the gateway auth RPCs; _login_state.py: in-memory TTL cache of pending code hashes)
 │   ├── proxies.py          proxy-pool business logic (add/list/assign/unassign/remove/check over the pool repo)
-│   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview)
-│   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng), settings_store.py (operator-editable limits/min-trust the engine reads at selection; config fallback)
+│   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview; pacing.py phase math split into _phases.py, _runtime.py stop/graduation split into _graduation.py — both for the size budget, re-exported)
+│   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam; generation+classification split into _generate.py for the size budget, re-exported), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng), settings_store.py (operator-editable limits/min-trust the engine reads at selection; config fallback)
 │   ├── content.py          content generation orchestration
 │   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
 │   ├── logs.py             log query helpers for the Logs page
@@ -66,7 +70,7 @@ telebuba/
 ├── frontend/               React + TS (strict) + Vite SPA — Feature-Sliced Design (app/routes/pages/widgets/features/entities/shared); the only UI; full law in context/frontend.md
 │   ├── src/                FSD layers; shared/api holds the generated hey-api client + TanStack Query
 │   ├── tailwind.config.*   design tokens (single source of truth)
-│   └── package.json        FE deps + gate scripts (eslint/prettier/boundaries/tsc/vitest/playwright/gen-api)
+│   └── package.json        FE deps + gate scripts (eslint/prettier/boundaries/tsc/vitest/gen-api)
 └── tests/                  mirrors source tree; includes architecture/property tests
 ```
 
@@ -81,7 +85,7 @@ routing summary describing the **split-stack target** (the 3 ADRs of 2026-06-28)
 4. **Logging Only** — no `print()`; all logging via `core/logging.py`.
 5. **Layer Isolation** — `api/` → `services`/`schemas`/`core.config`/`core.logging`/`fastapi`; `services/` → other `services/` + `core/` + `schemas/`; `core/` → `schemas/` + third-party; `schemas/` → `pydantic` + typing/stdlib only. Frontend is a separate tree reaching the backend only over `/api/v1`. Matrix in `context/architecture.md`.
 6. **Gateways** — DB only via `core/db.py` and `core/repositories/`; Telegram only via `core.telegram_client.execute(account_id, action)` with typed action schemas. `sqlalchemy` / `telethon` forbidden in `services/` and `api/`.
-7. **Test Coverage (strict)** — every endpoint/service change ships tests; warnings → errors; backend branch coverage ≥ 90%; frontend Vitest ≥ 80% + Playwright smoke; prefer `/tdd` skill.
+7. **Test Coverage (strict)** — every endpoint/service change ships tests; warnings → errors; backend branch coverage ≥ 90%; frontend Vitest ≥ 80%; prefer `/tdd` skill.
 8. **Async + Type Safety** — type hints everywhere; `from __future__ import annotations`; I/O is `async def`; `raise X(...) from e`.
 9. **Device Fingerprint Immutable** — one profile per account, created at registration, never mutated.
 10. **Configuration-Driven (backend)** — all limits/delays/proxies through `core/config.py`; nested namespaces (`settings.warming`, `settings.gemini`, `settings.api`, `settings.auth`, ...); no magic numbers.
@@ -99,7 +103,7 @@ Before adding files, follow `.mex/context/conventions.md` → **File Placement G
 - Pre-commit: `uv run pre-commit run --all-files`
 - Aislop on Windows: `uv run python -m aislop` if direct CLI invocation fails
 - Regenerate the API client: `uv run python -m tools.gen_api` (dumps OpenAPI → hey-api → prettier; CI drift-checks it)
-- Frontend (from `frontend/`): `npm install`; `npm run dev` (vite + `/api` proxy); `npm run gates` (eslint/prettier/boundaries/tsc/vitest); `npm run e2e` (Playwright)
+- Frontend (from `frontend/`): `npm install`; `npm run dev` (vite + `/api` proxy); `npm run gates` (eslint/prettier/boundaries/tsc/vitest)
 - Full toolchain — `context/setup.md`.
 
 ## Scaffold Growth

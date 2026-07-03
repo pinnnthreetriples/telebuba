@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { type ColumnDef } from '@tanstack/react-table';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChannelStatusBadge } from '@/entities/campaign';
@@ -6,6 +7,7 @@ import type {
   NeurocommentBoard as NeurocommentBoardData,
   NeurocommentChannelRow,
 } from '@/shared/api';
+import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
 
 interface BoardRow {
   account: string;
@@ -35,7 +37,8 @@ function deriveRows(board: NeurocommentBoardData, placeholder: string): BoardRow
 }
 
 // The design's "Доска работ" card: a collapsible header (account count pill,
-// freshness, gear→neuro-accounts modal, chevron) over a 4-column work table.
+// freshness, gear→neuro-accounts modal, chevron) over the shared DataTable with
+// the design's 4 work columns (account / channel / comment / status).
 export function NeurocommentBoard({
   board,
   accountsCount,
@@ -48,6 +51,42 @@ export function NeurocommentBoard({
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const rows = deriveRows(board, t('neurocomment.board.commentPlaceholder'));
+
+  const columns = useMemo<ColumnDef<BoardRow>[]>(
+    () => [
+      {
+        accessorKey: 'account',
+        header: t('neurocomment.board.col.account'),
+        cell: (info) => info.getValue<string>(),
+        meta: {
+          cellClassName: 'whitespace-nowrap text-[12.5px] font-medium',
+        } satisfies DataTableColumnMeta,
+      },
+      {
+        accessorKey: 'channel',
+        header: t('neurocomment.board.col.channel'),
+        cell: (info) => info.getValue<string>(),
+        meta: {
+          cellClassName: 'whitespace-nowrap text-[12.5px] text-primary',
+        } satisfies DataTableColumnMeta,
+      },
+      {
+        accessorKey: 'text',
+        header: t('neurocomment.board.col.comment'),
+        cell: (info) => info.getValue<string>(),
+        meta: {
+          cellClassName:
+            'max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap text-[12.5px] text-[#5c5c5c]',
+        } satisfies DataTableColumnMeta,
+      },
+      {
+        accessorKey: 'status',
+        header: t('neurocomment.board.col.status'),
+        cell: (info) => <ChannelStatusBadge status={info.getValue<BoardRow['status']>()} />,
+      },
+    ],
+    [t],
+  );
 
   return (
     <div className="overflow-hidden rounded-2xl border border-line bg-white">
@@ -108,45 +147,13 @@ export function NeurocommentBoard({
       </div>
       <div className={`tb-collapse ${open ? 'tb-open' : ''}`}>
         <div className="tb-scroll overflow-x-auto">
-          <table className="w-full min-w-[560px] border-collapse">
-            <thead>
-              <tr className="bg-[#faf9f7]">
-                {(['account', 'channel', 'comment', 'status'] as const).map((key) => (
-                  <th
-                    key={key}
-                    className="px-4 py-[10px] text-left text-[11px] font-medium uppercase tracking-[.04em] text-[#9a9893]"
-                  >
-                    {t(`neurocomment.board.col.${key}`)}
-                  </th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((row, index) => (
-                <tr key={`${row.account}-${String(index)}`} className="border-t border-[#f0eeeb]">
-                  <td className="whitespace-nowrap px-4 py-[11px] text-[12.5px] font-medium">
-                    {row.account}
-                  </td>
-                  <td className="whitespace-nowrap px-4 py-[11px] text-[12.5px] text-primary">
-                    {row.channel}
-                  </td>
-                  <td className="max-w-[240px] overflow-hidden text-ellipsis whitespace-nowrap px-4 py-[11px] text-[12.5px] text-[#5c5c5c]">
-                    {row.text}
-                  </td>
-                  <td className="px-4 py-[11px]">
-                    <ChannelStatusBadge status={row.status} />
-                  </td>
-                </tr>
-              ))}
-              {rows.length === 0 ? (
-                <tr className="border-t border-[#f0eeeb]">
-                  <td colSpan={4} className="px-4 py-8 text-center text-[12.5px] text-ink-subtle">
-                    {t('neurocomment.board.empty')}
-                  </td>
-                </tr>
-              ) : null}
-            </tbody>
-          </table>
+          {rows.length > 0 ? (
+            <DataTable data={rows} columns={columns} />
+          ) : (
+            <div className="px-4 py-8 text-center text-[12.5px] text-ink-subtle">
+              {t('neurocomment.board.empty')}
+            </div>
+          )}
         </div>
       </div>
     </div>

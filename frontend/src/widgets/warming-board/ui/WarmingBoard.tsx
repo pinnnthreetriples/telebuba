@@ -16,6 +16,7 @@ interface WarmingBoardProps {
   onPromote: (accountId: string) => void;
   busyId: string | null;
   feedback?: Record<string, FeedbackResult>;
+  logLimit?: number;
 }
 
 type WarmingState = WarmingAccountState['state'];
@@ -53,7 +54,8 @@ const LOG_COLOR: Record<LogEntry['status'], string> = {
   warning: '#E0B341',
   error: '#E5736B',
 };
-const CARD_LOG_LIMIT = 20;
+// Fallback only — the board serves the real limit from config (card_log_limit).
+const DEFAULT_CARD_LOG_LIMIT = 20;
 
 function WarmingCard({
   account,
@@ -61,12 +63,14 @@ function WarmingCard({
   onPromote,
   busy,
   result,
+  logLimit,
 }: {
   account: WarmingAccountState;
   onStop: (id: string) => void;
   onPromote: (id: string) => void;
   busy: boolean;
   result?: FeedbackResult;
+  logLimit: number;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -74,7 +78,7 @@ function WarmingCard({
   const [cfgOpen, setCfgOpen] = useState(false);
   // Real per-account activity log, fetched only while the terminal is expanded.
   const logQuery = useQuery({
-    ...logsQueryOptions({ query: { account_id: account.account_id, limit: CARD_LOG_LIMIT } }),
+    ...logsQueryOptions({ query: { account_id: account.account_id, limit: logLimit } }),
     enabled: open,
   });
   const logLines = logQuery.data?.items ?? [];
@@ -90,7 +94,11 @@ function WarmingCard({
     target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
   const connectorPct = (active / (STAGES.length - 1)) * 100;
   const status = WARM_STATUS[account.state];
-  const actions = Math.min(account.cycles_completed ?? 0, 10);
+  // Real daily-actions / cap counter (design: "X/N действий"); guard a 0/absent cap.
+  const dailyActions = account.daily_actions ?? 0;
+  const dailyCap = account.daily_cap && account.daily_cap > 0 ? account.daily_cap : null;
+  const actions = dailyCap ? Math.min(dailyActions, dailyCap) : dailyActions;
+  const primaryId = account.phone ?? account.label ?? account.account_id;
 
   return (
     <div className="rounded-[14px] border border-[#e4ecfa] bg-[#f7faff] px-[17px] py-4">
@@ -98,10 +106,10 @@ function WarmingCard({
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-[9px]">
           <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#e8f0ff] text-[11px] font-semibold text-[#0066ff]">
-            {mono(account.label ?? account.account_id)}
+            {mono(primaryId)}
           </div>
           <div>
-            <div className="text-[13px] font-semibold">{account.label ?? account.account_id}</div>
+            <div className="text-[13px] font-semibold">{primaryId}</div>
             <div className="mt-[2px] flex items-center gap-[6px]">
               <span
                 className="inline-flex items-center gap-1 rounded-full px-[7px] py-px text-[10.5px] font-semibold"
@@ -115,7 +123,7 @@ function WarmingCard({
               </span>
               <span className="tb-tip inline-flex items-center">
                 <span className="cursor-help text-[10.5px] font-medium text-ink-subtle">
-                  {actions}/10
+                  {dailyCap ? `${String(actions)}/${String(dailyCap)}` : String(actions)}
                 </span>
                 <span className="tb-tip-pop">{t('warming.card.actionsTip')}</span>
               </span>
@@ -127,7 +135,13 @@ function WarmingCard({
             <span className="inline-flex h-[18px] w-[18px] cursor-help items-center justify-center rounded-full border border-[#cbd7ec] bg-white text-[11px] font-bold text-[#7a8aa6]">
               ?
             </span>
-            <span className="tb-tip-pop">{t('warming.card.helpTip')}</span>
+            <span className="tb-tip-pop">
+              {t('warming.card.cycleTip', { count: account.cycles_completed ?? 0 })}
+              <br />
+              <span style={{ color: account.dm_allowed ? '#5FD08A' : '#F08C84' }}>
+                {t(account.dm_allowed ? 'warming.card.dmAllowed' : 'warming.card.dmClosed')}
+              </span>
+            </span>
           </span>
           <button
             type="button"
@@ -169,7 +183,7 @@ function WarmingCard({
 
       {stopOpen ? (
         <WarmStopModal
-          phone={account.label ?? account.account_id}
+          phone={primaryId}
           onClose={() => {
             setStopOpen(false);
           }}
@@ -183,7 +197,7 @@ function WarmingCard({
       ) : null}
       {cfgOpen ? (
         <WarmConfigModal
-          phone={account.label ?? account.account_id}
+          phone={primaryId}
           onClose={() => {
             setCfgOpen(false);
           }}
@@ -398,6 +412,7 @@ export function WarmingBoard({
   onPromote,
   busyId,
   feedback = {},
+  logLimit = DEFAULT_CARD_LOG_LIMIT,
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
@@ -436,6 +451,7 @@ export function WarmingBoard({
             onPromote={onPromote}
             busy={busyId === account.account_id}
             result={feedback[account.account_id]}
+            logLimit={logLimit}
           />
         ))}
         {warming.length === 0 ? (

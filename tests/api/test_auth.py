@@ -123,6 +123,25 @@ async def test_logout_clears_the_session() -> None:
 
 
 @pytest.mark.asyncio
+async def test_logout_revokes_a_stolen_token() -> None:
+    # A token captured before logout must stop working afterwards (the logout
+    # bumps token_version, so the stateless JWT no longer resolves).
+    await _seed_admin()
+    async with _client(_raw_app()) as client:
+        login = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "admin", "password": "pw"},
+        )
+        stolen = login.cookies[settings.auth.cookie_name]
+        await client.post("/api/v1/auth/logout")
+        # Replay the captured cookie on a fresh client (no logout cookie clear).
+        async with _client(_raw_app()) as attacker:
+            attacker.cookies.set(settings.auth.cookie_name, stolen)
+            me = await attacker.get("/api/v1/auth/me")
+    assert me.status_code == 401
+
+
+@pytest.mark.asyncio
 async def test_protected_endpoint_rejects_anonymous_requests() -> None:
     async with _client(_raw_app()) as client:
         resp = await client.get("/api/v1/accounts")

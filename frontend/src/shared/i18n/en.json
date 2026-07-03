@@ -4,7 +4,6 @@
     "loading": "Loading…",
     "error": "Failed to load accounts",
     "empty": "No accounts",
-    "never": "never",
     "searchPlaceholder": "Search accounts…",
     "status": {
       "new": "New",
@@ -17,32 +16,16 @@
       "proxy_error": "Proxy error",
       "unknown_error": "Unknown error"
     },
-    "filter": {
-      "all": "All",
-      "alive": "Alive",
-      "new": "New",
-      "unauthorized": "Unauthorized",
-      "flood_wait": "Flood-wait"
-    },
     "table": {
-      "account": "Account",
       "status": "Status",
-      "telegram": "Telegram",
-      "country": "Country",
-      "lastChecked": "Checked",
       "phone": "Phone",
       "proxy": "Proxy",
       "device": "Device",
       "trust": "Trust",
-      "actions": "Actions",
-      "selectAll": "Select all",
-      "selectRow": "Select row"
+      "actions": "Actions"
     },
     "stats": {
       "total": "Total",
-      "alive": "Alive",
-      "attention": "Attention",
-      "errors": "Errors",
       "active": "Active",
       "idle": "Idle",
       "code": "Needs code",
@@ -65,6 +48,7 @@
       "trust": "Trust",
       "session": "Session",
       "sessionOk": "Session active",
+      "sessionInactive": "Session inactive · re-login required",
       "logout": "Log out of account",
       "loginByCode": "Code login",
       "smsCode": "SMS code",
@@ -76,6 +60,11 @@
       "proxy": "Proxy",
       "proxyRequired": "Account connection · required",
       "proxyOk": "Connected",
+      "proxyNone": "No proxy assigned",
+      "proxyFailed": "Last check failed",
+      "proxyReachable": "Proxy is reachable",
+      "proxyDetach": "Detach proxy",
+      "proxyDetachErr": "Could not detach the proxy",
       "fromPool": "From pool",
       "manual": "Manual",
       "host": "Host",
@@ -134,7 +123,6 @@
       "add": "Account",
       "check": "Check",
       "delete": "Delete",
-      "importTdata": "Import tdata",
       "profile": "Edit profile"
     },
     "pagination": {
@@ -165,8 +153,11 @@
       "detect": "Detect",
       "detected": "Detect",
       "checking": "Checking connection…",
-      "resultOk": "Netherlands · 24 ms",
-      "resultErr": "Proxy not responding"
+      "resultOk": "Proxy is reachable",
+      "resultErr": "Proxy not responding",
+      "errHost": "Enter a host",
+      "errPort": "Port must be a number",
+      "errPortRange": "Port must be between 1 and 65535"
     },
     "proxyAdd": {
       "title": "Add proxy",
@@ -180,7 +171,11 @@
       "audience": "Who can see",
       "contacts": "Contacts",
       "closeFriends": "Close friends",
+      "close_friends": "Close friends",
       "public": "Public",
+      "unknown": "Unknown",
+      "sizeMb": "{{n}} MB",
+      "sizeKb": "{{n}} KB",
       "caption": "Story caption",
       "captionPlaceholder": "Enter a caption…",
       "noForward": "Disable story forwarding",
@@ -207,6 +202,7 @@
       "lastName": "Last name",
       "username": "Username",
       "bio": "Bio",
+      "errFirstName": "Enter a first name",
       "photoHint": "Current photo and history · drag to replace",
       "removePhoto": "Remove photo",
       "removePhotoTitle": "Remove photo?",
@@ -221,7 +217,6 @@
       "removeStoryBody": "The story will be removed from the profile. This cannot be undone.",
       "removeStoryConfirm": "Delete",
       "addStory": "Add",
-      "play": "Play",
       "trackTitle": "Track title",
       "trackArtist": "Artist",
       "removeMusic": "Remove track",
@@ -252,6 +247,9 @@
       "dropDescSession": "drag .session or click",
       "browse": "Browse",
       "fileReady": "File ready",
+      "importing": "Importing…",
+      "imported": "Account imported",
+      "importError": "Import failed",
       "cancel": "Cancel",
       "next": "Next",
       "back": "Back",
@@ -278,7 +276,10 @@
     "systemOffline": "Disconnected",
     "notifications": "Notifications",
     "account": "Account",
-    "logout": "Log out"
+    "logout": "Log out",
+    "avatarFallback": "OP",
+    "fatalError": "Something went wrong.",
+    "mutationError": "Something went wrong. Please try again."
   },
   "settings": {
     "title": "Settings",
@@ -297,16 +298,15 @@
       "subtitle": "Access to the comment-generation model",
       "geminiKey": "Gemini API key",
       "keySet": "Key is set — leave blank to keep it",
-      "keyUnset": "No key set"
+      "keyUnset": "No key set",
+      "clearKey": "Clear key",
+      "keyCleared": "Key will be cleared on save",
+      "toggleVisibility": "Toggle key visibility"
     },
     "warmLimits": {
       "title": "Warming limits",
       "subtitle": "Actions per day per account",
-      "auto": "Auto-managed by phase and trust-score (shown for reference)",
-      "sub": "Subscriptions per day",
-      "read": "Post reads per day",
-      "react": "Reactions per day",
-      "pause": "Pause between steps (min)"
+      "engineNote": "Warming per-account activity is chosen automatically by the engine from each account's phase and trust-score — there are no fixed numeric limits to set here."
     },
     "neuroLimits": {
       "title": "Neurocomment limits",
@@ -314,7 +314,14 @@
       "cpd": "Comments per day per channel",
       "delay": "Reply delay (sec)",
       "parallel": "Comments per hour",
-      "trust": "Min. trust-score to run"
+      "trust": "Min. trust-score to run",
+      "delayFrom": "Reply delay, from (sec)",
+      "delayTo": "Reply delay, to (sec)",
+      "errCpd": "Enter a whole number from 1 to 100",
+      "errDelay": "Enter a whole number of seconds (0–3600)",
+      "errDelayOrder": "“To” must be at least “from”",
+      "errParallel": "Enter a whole number from 1 to 1000",
+      "errTrust": "Enter a whole number from 0 to 100"
     },
     "flag": {
       "reactions_enabled": {
@@ -353,7 +360,6 @@
     "col": {
       "time": "Time",
       "level": "Level",
-      "status": "Status",
       "account": "Account",
       "event": "Event"
     },
@@ -362,12 +368,53 @@
       "next": "Next"
     }
   },
+  "logEvent": {
+    "neurocomment_posted": "Comment posted",
+    "neurocomment_post_failed": "Comment failed",
+    "neurocomment_post_skipped": "Post skipped",
+    "neurocomment_post_cooldown": "Cooldown between comments",
+    "neurocomment_post_gated": "Comment held by limit",
+    "neurocomment_generation_exhausted": "Text generation failed",
+    "neurocomment_no_account_available": "No account available",
+    "neurocomment_no_campaign": "No matching campaign",
+    "neurocomment_channel_cooled": "Channel on cooldown",
+    "neurocomment_channel_backoff": "Channel back-off",
+    "neurocomment_challenge_backoff": "Back-off after captcha",
+    "neurocomment_pipeline_failed": "Pipeline failed",
+    "neurocomment_onboard_resolve_failed": "Could not resolve channel",
+    "neurocomment_onboard_retry_later": "Onboarding deferred",
+    "neurocomment_onboard_pair_failed": "Could not pair account to channel",
+    "neurocomment_onboard_spam_probe_failed": "Spam probe failed",
+    "neurocomment_listener_join_failed": "Listener failed to join channel",
+    "neurocomment_runtime_reconciled": "Engine reconciled",
+    "neurocomment_start_onboard_failed": "Onboarding start failed",
+    "neurocomment_sweep_failed": "Deleted-comment sweep failed",
+    "neurocomment_settings_saved": "Settings saved",
+    "warming_started": "Warming started",
+    "warming_stopped": "Warming stopped",
+    "warming_complete": "Warming complete",
+    "warming_target_reached": "Warming target reached",
+    "warming_cycle_completed": "Warming cycle completed",
+    "warming_cycle_not_ready": "Warming cycle not ready",
+    "warming_no_channels": "No channels to warm",
+    "warming_subscribe": "Subscribed to channel",
+    "warming_channels_added": "Channels added",
+    "warming_channel_removed": "Channel removed",
+    "warming_channel_limit_reached": "Channel limit reached",
+    "warming_chat_filtered": "Message filtered",
+    "warming_chat_duplicate": "Duplicate message",
+    "warming_dialogue_opened": "Dialogue opened",
+    "warming_dialogue_reply": "Dialogue reply",
+    "warming_dialogue_faded": "Dialogue faded",
+    "warming_promoted_to_neurocomment": "Account promoted to neurocommenting",
+    "warming_unpromoted_from_neurocomment": "Account returned from neurocommenting",
+    "warming_quarantine_recovered": "Account recovered from quarantine",
+    "warming_quarantine_exhausted": "Quarantine exhausted",
+    "warming_settings_saved": "Warming settings saved"
+  },
   "neurocomment": {
     "title": "Neurocomment",
     "runtime": {
-      "running": "Listening to {{count}} channels",
-      "stopped": "Stopped",
-      "listener": "Listener account",
       "start": "Start",
       "stop": "Stop"
     },
@@ -390,7 +437,8 @@
       "campaigns": "Campaigns",
       "channels": "Channels",
       "accounts": "Accounts",
-      "comments": "Comments"
+      "comments": "Comments",
+      "errors": "errors"
     },
     "log": {
       "title": "Event log",
@@ -398,17 +446,8 @@
     },
     "campaigns": {
       "title": "Campaigns",
-      "select": "Select campaign",
       "none": "No campaigns",
-      "name": "Name",
-      "prompt": "Prompt (with the product mention)",
       "create": "+ Create campaign"
-    },
-    "setup": {
-      "channel": "Channel (link or @username)",
-      "linkChannel": "Link channel",
-      "assign": "Account",
-      "assignAccount": "Assign account"
     },
     "channels": {
       "title": "Campaign channels",
@@ -419,14 +458,11 @@
       "removeBody": "Campaign accounts will stop commenting in this channel.",
       "removeConfirm": "Remove"
     },
-    "accounts": {
-      "title": "Accounts",
-      "today": "Today: {{count}}"
-    },
     "channelStatus": {
       "ready": "Ready",
       "comments_off": "Comments off",
       "join_by_request": "Join by request",
+      "join_failed": "Join failed",
       "chat_restricted": "Chat restricted",
       "bot_challenge": "Bot challenge",
       "bot_challenge_backoff": "Challenge back-off",
@@ -439,12 +475,14 @@
     "listener": {
       "title": "Listener account",
       "choose": "Choose an account…",
+      "noAccounts": "No accounts available",
       "listening": "Listening",
       "paused": "Paused",
       "pause": "Pause",
       "resume": "Resume",
       "edit": "Change account",
       "remove": "Remove listener",
+      "actions": "Actions",
       "activeCampaigns": "active campaigns"
     },
     "captcha": {
@@ -459,6 +497,7 @@
       "pause": "Pause",
       "editPrompt": "Edit prompt",
       "delete": "Delete campaign",
+      "actions": "Actions",
       "meta": "{{channels}} channels · {{accounts}} accounts",
       "status": {
         "active": "Active",
@@ -528,7 +567,8 @@
       "neuroAccounts": {
         "title": "Accounts in neurocommenting",
         "sub": "{{count}} accounts · assign to the campaign or remove from work",
-        "unassigned": "Unassigned",
+        "channelLabel": "Account channel",
+        "allChannels": "All channels",
         "assign": "Add to campaign",
         "remove": "Remove from neurocommenting",
         "removeTitle": "Remove {{phone}} from neurocommenting?",
@@ -540,11 +580,9 @@
     }
   },
   "warming": {
-    "title": "Warming",
     "titleFull": "Account warming",
     "loading": "Loading…",
     "error": "Failed to load the warming board",
-    "summary": "Active: {{active}} of {{total}}",
     "counter": {
       "warming": "warming",
       "ready": "ready",
@@ -603,13 +641,9 @@
       "error": "Error"
     },
     "column": {
-      "idle": "Not warming",
-      "warming": "Warming",
       "empty": "Drop accounts here to start warming"
     },
     "card": {
-      "cycles": "Cycles: {{count}}",
-      "trust": "trust",
       "dayProgress": "{{days}} / 14 days",
       "actionsTip": "actions",
       "cfgTitle": "Warming settings",
@@ -619,16 +653,17 @@
       "completeTitle": "Warming complete",
       "completeSub": "{{days}} · account ready",
       "finish": "Send to warmed",
-      "helpTip": "1 cycle = 1 warming day"
+      "helpTip": "1 cycle = 1 warming day",
+      "cycleTip_one": "Cycle {{count}}",
+      "cycleTip_other": "Cycle {{count}}",
+      "dmAllowed": "DMs: allowed",
+      "dmClosed": "DMs: closed"
     },
     "actions": {
-      "start": "Start",
-      "stop": "Stop",
       "stopShort": "Stop"
     },
     "channels": {
       "title": "Warming channels",
-      "placeholder": "Links or @usernames, comma-separated…",
       "add": "Add",
       "remove": "Remove",
       "hint": "Accounts read and react in these channels",
@@ -638,12 +673,6 @@
       "removeTitle": "Delete channel {{channel}}?",
       "removeBody": "Warming accounts will stop reading and reacting in this channel. This cannot be undone.",
       "removeConfirm": "Delete"
-    },
-    "settings": {
-      "title": "Warming settings",
-      "reactions_enabled": "Reactions",
-      "join_enabled": "Join channels",
-      "inter_account_chat": "Inter-account dialogues"
     },
     "warmStatus": {
       "active": "warming up",
@@ -670,9 +699,39 @@
     },
     "cfg": {
       "title": "Warming settings",
-      "globalHint": "Warming behaviour settings are shared by every account (including {{phone}}) and are edited on the Settings page.",
-      "close": "Close",
-      "openSettings": "Open settings"
+      "behaviorTitle": "Behaviour",
+      "limitsTitle": "Limits & safety",
+      "quietHours": "Quiet hours (sleep)",
+      "quietFrom": "From",
+      "quietTo": "To",
+      "quietNote": "Time zone is taken from the account locale. Not saved yet.",
+      "scopeOne": "This account only",
+      "scopeAll": "All in warming",
+      "scopeOneNote": "Per-account settings are not saved yet — settings apply to all accounts in warming.",
+      "save": "Save",
+      "cancel": "Cancel",
+      "toggle": {
+        "reactions_enabled": {
+          "title": "Reactions",
+          "desc": "Accounts place reactions on posts in the warming channels."
+        },
+        "join_enabled": {
+          "title": "Join channels",
+          "desc": "Accounts subscribe to the warming channels on their own."
+        },
+        "inter_account_chat": {
+          "title": "Mutual chat",
+          "desc": "Warming accounts message each other for realistic activity."
+        },
+        "enforce_readiness": {
+          "title": "Check readiness",
+          "desc": "Block warming for accounts that fail the pre-start checks."
+        },
+        "local_time": {
+          "title": "Local time",
+          "desc": "Follow the account time zone for the quiet-hours window."
+        }
+      }
     },
     "days": {
       "title": "Warm up account",
@@ -682,6 +741,9 @@
       "start": "Start warming",
       "cancel": "Cancel",
       "spamCheck": "Spam check",
+      "spamChecking": "Checking…",
+      "spamClean": "Clean",
+      "spamLimited": "Limited",
       "spamTip": "via @SpamBot",
       "label_one": "day",
       "label_other": "days"
@@ -689,9 +751,18 @@
     "persona": {
       "label": "User type",
       "tip": "How often the account drops in and does something during the day. Always capped by the age-based safety limit — a young account stays calm even on \"Active\".",
-      "calm": { "name": "Calm", "hint": "2–4 visits/day" },
-      "normal": { "name": "Normal", "hint": "5–8 visits/day" },
-      "active": { "name": "Active", "hint": "10–14 visits/day" }
+      "calm": {
+        "name": "Calm",
+        "hint": "2–4 visits/day"
+      },
+      "normal": {
+        "name": "Normal",
+        "hint": "5–8 visits/day"
+      },
+      "active": {
+        "name": "Active",
+        "hint": "10–14 visits/day"
+      }
     },
     "notReady": {
       "noProxy": "no proxy",
@@ -700,6 +771,11 @@
       "spamLimited": "spam-limited",
       "trustCritical": "critical trust",
       "session": "no active session (login needed)"
+    },
+    "dialogues": {
+      "title": "Account conversation",
+      "empty": "No conversation yet",
+      "typing": "typing…"
     }
   },
   "auth": {

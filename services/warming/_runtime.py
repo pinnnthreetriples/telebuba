@@ -24,7 +24,6 @@ from core.db import (
     list_warming_channels,
     list_warming_states,
     load_warming_settings,
-    mark_promoted_to_nc,
     unmark_promoted_to_nc,
 )
 from core.logging import log_event
@@ -45,7 +44,6 @@ from services.warming.pacing import (
 if TYPE_CHECKING:
     from schemas.warming import (
         StartWarmingRequest,
-        StopWarmingRequest,
         WarmingAccountState,
     )
 
@@ -58,6 +56,11 @@ _RUNTIME: dict[str, asyncio.Task[None]] = {}
 # leaving the DB and ``_RUNTIME`` in mismatched states. Locks are created lazily
 # and never freed — the dictionary is bounded by the number of accounts.
 _ACCOUNT_LOCKS: dict[str, asyncio.Lock] = {}
+
+# Single background retention sweep, started with the runtime and cancelled on
+# shutdown. A startup-only purge lets the append-only tables grow unbounded
+# during long uptimes; this reruns it every ``warming.purge_interval_hours``.
+_PURGE_TASK: asyncio.Task[None] | None = None
 
 
 class UnknownAccountError(ValueError):
@@ -126,9 +129,9 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         # request omits it. The loop auto-completes the account once warming
         # reaches this many days.
         target_days = (
-            data.target_days
-            or (existing.target_days if existing and existing.target_days else None)
-            or settings.neurocomment.warmed_min_days
+            existing.target_days
+            if existing is not None and existing.target_days and is_warming(existing.state)
+            else (data.target_days or settings.neurocomment.warmed_min_days)
         )
         # Persona mirrors started_at: a restart-while-warming keeps the original
         # cadence; a genuine (re)start from idle/stopped honours the new pick.
@@ -185,91 +188,6 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         )
     await log_event("INFO", "warming_started", account_id=data.account_id)
     return await _current_card(data.account_id)
-
-
-async def _stop_warming_locked(account_id: str) -> None:
-    """Inner stop, run with ``_account_lock(account_id)`` already held.
-
-    Extracted so service-level operations that need to compose stop with
-    other state mutations (e.g. ``remove_account``) can hold the lock across
-    both steps. See P2.2.
-    """
-    task = _RUNTIME.pop(account_id, None)
-    if task is not None and not task.done():
-        task.cancel()
-        try:
-            await asyncio.wait_for(
-                asyncio.shield(task),
-                timeout=settings.warming.stop_cancel_timeout_seconds,
-            )
-        except (TimeoutError, asyncio.CancelledError):
-            # Either we timed out or the cancel propagated correctly —
-            # in both cases the task is no longer ours to await.
-            pass
-        except Exception as exc:  # noqa: BLE001 - log+continue; stop must not fail.
-            await log_event(
-                "WARNING",
-                "warming_stop_task_error",
-                account_id=account_id,
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
-            )
-    account = await fetch_account(account_id)
-    if account is not None:
-        # Round-4 P1.1: clear run_id when stopping so the row carries no live
-        # generation. A stale loop's CAS write that targets the previous
-        # run_id therefore cannot match (its WHERE turns the UPDATE into a
-        # no-op). Belt; the CAS-rejects-idle clause in _upsert_warming_state
-        # is the suspenders.
-        await _set_state(
-            account_id,
-            "idle",
-            last_event="stopped",
-            stopped_at=_now_iso(),
-            run_id=None,
-        )
-
-
-async def stop_warming(data: StopWarmingRequest) -> WarmingAccountState:
-    """Cancel an account's loop task and return it to the idle column.
-
-    Awaits the task with a timeout so callers get back a settled state — a UI
-    poll that re-reads the board will see a real ``idle`` row, not a still-
-    running shadow loop. Stopping a ghost account (no row in ``accounts``) is
-    a no-op for the DB — only the in-memory task is cleaned up.
-    """
-    async with _account_lock(data.account_id):
-        await _stop_warming_locked(data.account_id)
-    await log_event("INFO", "warming_stopped", account_id=data.account_id)
-    await _refresh_dialogue_pairs()
-    return await _current_card(data.account_id)
-
-
-async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
-    """Graduate an account: stop its warming loop and flag it for the neurocomment pool.
-
-    Two-step operation under one lock so we don't race a freshly-restarted loop:
-    cancel any running task, then persist ``promoted_to_nc=True``. The card the
-    caller re-renders shows the account in idle with the flag set, and the
-    neurocomment warmed-account overview will pick it up on the next poll.
-    """
-    async with _account_lock(account_id):
-        await _stop_warming_locked(account_id)
-        await mark_promoted_to_nc(account_id)
-    await log_event("INFO", "warming_promoted_to_neurocomment", account_id=account_id)
-    await _refresh_dialogue_pairs()
-    return await _current_card(account_id)
-
-
-async def unmark_neurocomment(account_id: str) -> WarmingAccountState:
-    """Reverse a graduation: clear ``promoted_to_nc`` (Group C un-promote button).
-
-    Held under the per-account lock for symmetry with ``promote_to_neurocomment``
-    so a concurrent re-promote / restart does not race the flip.
-    """
-    async with _account_lock(account_id):
-        await unmark_promoted_to_nc(account_id)
-    await log_event("INFO", "warming_unpromoted_from_neurocomment", account_id=account_id)
-    return await _current_card(account_id)
 
 
 def account_lock(account_id: str) -> asyncio.Lock:
@@ -377,6 +295,27 @@ async def reconcile_warming_runtime() -> None:
         )
     await _refresh_dialogue_pairs()
     await purge_stale_history()
+    _start_purge_task()
+
+
+async def _purge_loop() -> None:  # pragma: no cover - long-running task body.
+    """Rerun the retention sweep every ``purge_interval_hours`` until cancelled.
+
+    ``purge_stale_history`` swallows its own errors, so a failing sweep never
+    breaks the cadence. Cancelled cleanly on shutdown like the per-account loops.
+    """
+    interval = settings.warming.purge_interval_hours * 3600
+    while True:
+        await asyncio.sleep(interval)
+        await purge_stale_history()
+
+
+def _start_purge_task() -> None:
+    """Spawn the periodic retention sweep if one is not already running."""
+    global _PURGE_TASK  # noqa: PLW0603 - single process-wide background task handle.
+    if _PURGE_TASK is not None and not _PURGE_TASK.done():
+        return
+    _PURGE_TASK = asyncio.create_task(_purge_loop())
 
 
 async def _refresh_dialogue_pairs() -> None:
@@ -392,6 +331,7 @@ async def _refresh_dialogue_pairs() -> None:
 
 async def shutdown_warming_runtime() -> None:
     """Cancel every running loop and wait briefly for graceful exits."""
+    await _stop_purge_task()
     if not _RUNTIME:
         return
     tasks = list(_RUNTIME.values())
@@ -406,3 +346,28 @@ async def shutdown_warming_runtime() -> None:
         )
     except TimeoutError:
         await log_event("WARNING", "warming_shutdown_timeout", extra={"count": len(tasks)})
+
+
+async def _stop_purge_task() -> None:
+    """Cancel and await the periodic retention sweep (no-op if not running)."""
+    global _PURGE_TASK  # noqa: PLW0603 - single process-wide background task handle.
+    task = _PURGE_TASK
+    _PURGE_TASK = None
+    if task is None or task.done():
+        return
+    task.cancel()
+    with suppress(asyncio.CancelledError):
+        await task
+
+
+# The stop/graduation lifecycle lives in ``_graduation`` (file-size budget). It
+# imports this module for the shared ``_RUNTIME`` / locks / ``_refresh_dialogue_pairs``
+# seam, so the import lands at the bottom — after those are defined — to avoid a
+# circular-import cycle. Re-exported so ``services.warming._runtime.<name>`` (and
+# the package root) keep resolving these, and tests keep patching seams here.
+from services.warming._graduation import (  # noqa: E402, F401 - re-export after globals are defined.
+    _stop_warming_locked,
+    promote_to_neurocomment,
+    stop_warming,
+    unmark_neurocomment,
+)

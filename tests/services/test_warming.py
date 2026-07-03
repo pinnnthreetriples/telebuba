@@ -60,7 +60,11 @@ from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
 from services.warming import _loop, _runner, _runtime, _seams, _transitions
-from services.warming.pacing import persona_dm_probability, persona_reaction_probability
+from services.warming.pacing import (
+    _seconds_until,
+    persona_dm_probability,
+    persona_reaction_probability,
+)
 from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
@@ -130,6 +134,11 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     yield
     warming._RUNTIME.clear()
     warming._ACCOUNT_LOCKS.clear()
+    # Abandon the periodic purge task (reconcile starts one) like the per-account
+    # loops above, so it doesn't leak across tests.
+    if _runtime._PURGE_TASK is not None:
+        _runtime._PURGE_TASK.cancel()
+        _runtime._PURGE_TASK = None
     reset_logging_for_tests()
 
 
@@ -930,6 +939,57 @@ async def test_start_warming_defaults_target_to_config(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_restart_while_warming_keeps_original_target_days(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A restart while the account is still warming must keep the ORIGINAL pick
+    # (mirrors the persona rule). Honouring a smaller target here would complete
+    # a still-anchored account on its next iteration.
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    old_start = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1", state="sleeping", started_at=old_start, target_days=14
+        ),
+    )
+
+    # Operator restarts with a *different* target while it is still warming.
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1", target_days=3))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.target_days == 14  # original kept, not the new 3
+
+
+@pytest.mark.asyncio
+async def test_genuine_restart_honours_new_target_days(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A genuine (re)start from idle honours the new value (started_at is re-stamped).
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    old_start = (datetime.now(UTC) - timedelta(days=2)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="idle",
+            started_at=old_start,
+            stopped_at=(datetime.now(UTC) - timedelta(days=1)).isoformat(),
+            target_days=14,
+        ),
+    )
+
+    await warming.start_warming(StartWarmingRequest(account_id="acc-1", target_days=3))
+
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.target_days == 3  # new value honoured on a genuine restart
+
+
+@pytest.mark.asyncio
 async def test_loop_auto_completes_at_target_days(monkeypatch: pytest.MonkeyPatch) -> None:
     # Once warming has run for the operator-chosen target, the loop parks the
     # account complete (no further cycle) instead of warming on indefinitely.
@@ -1022,6 +1082,43 @@ async def test_target_gate_bails_on_stale_run(monkeypatch: pytest.MonkeyPatch) -
 
     assert result is not None
     assert result.detail == "stale run"
+
+
+@pytest.mark.asyncio
+async def test_target_complete_reparks_future_next_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Regression: the idempotent target-reached branch must rewrite a fresh future
+    # ``next_run_at``. Without it, once the first parked midnight passes the loop
+    # busy-spins (``_loop_sleep_seconds`` clamps a past time to 0 and sleeps 0s).
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_ready_account("acc-1")
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    old_start = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+    # Seed a row already flagged complete, with a next_run_at in the PAST (the
+    # midnight the first pass parked has since elapsed) — the busy-spin trigger.
+    stale_next = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="sleeping",
+            started_at=old_start,
+            target_days=3,
+            last_event="warming_complete",
+            next_run_at=stale_next,
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.status == "skipped"
+    assert result.detail == "target reached"
+    assert recorder.actions == []  # still no cycle work
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.next_run_at is not None
+    # The re-parked schedule must be in the future, so the loop sleeps a positive
+    # interval instead of tight-spinning with asyncio.sleep(0).
+    assert _seconds_until(record.next_run_at, datetime.now(UTC)) > 0.0
 
 
 @pytest.mark.asyncio
@@ -1561,6 +1658,60 @@ async def test_shutdown_warming_runtime_cancels_all(monkeypatch: pytest.MonkeyPa
     await warming.shutdown_warming_runtime()
 
     assert warming._RUNTIME == {}
+
+
+@pytest.mark.asyncio
+async def test_periodic_purge_task_reruns_purge(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The background sweep must rerun retention on its interval, not only at
+    # startup — otherwise the append-only tables grow unbounded during uptime.
+    fired = asyncio.Event()
+
+    async def fake_purge() -> None:
+        fired.set()
+
+    monkeypatch.setattr(_runtime, "purge_stale_history", fake_purge)
+    # Tiny interval so the first sleep elapses immediately.
+    monkeypatch.setattr(settings.warming, "purge_interval_hours", 0.0000001)
+
+    _runtime._start_purge_task()
+    try:
+        await asyncio.wait_for(fired.wait(), timeout=1.0)
+    finally:
+        await _runtime._stop_purge_task()
+
+    assert fired.is_set()
+
+
+@pytest.mark.asyncio
+async def test_shutdown_cancels_periodic_purge_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The purge task is cancelled and awaited cleanly on shutdown (no leak).
+    async def fake_purge() -> None:
+        return None
+
+    monkeypatch.setattr(_runtime, "purge_stale_history", fake_purge)
+    _runtime._start_purge_task()
+    task = _runtime._PURGE_TASK
+    assert task is not None
+    assert not task.done()
+
+    await warming.shutdown_warming_runtime()
+
+    assert _runtime._PURGE_TASK is None
+    assert task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_reconcile_starts_periodic_purge_task(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Reconcile (the lifespan entrypoint) must spin up the background sweep.
+    async def fake_purge() -> None:
+        return None
+
+    monkeypatch.setattr(_runtime, "purge_stale_history", fake_purge)
+
+    await warming.reconcile_warming_runtime()
+
+    assert _runtime._PURGE_TASK is not None
+    assert not _runtime._PURGE_TASK.done()
 
 
 @pytest.mark.asyncio

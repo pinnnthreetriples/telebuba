@@ -35,12 +35,18 @@ async def login(body: LoginRequest, request: Request, response: Response) -> Use
             status_code=http_status.HTTP_401_UNAUTHORIZED,
             detail="invalid credentials",
         )
-    set_session_cookie(response, auth_service.issue_session_token(user.id))
+    set_session_cookie(response, await auth_service.issue_session_token(user.id))
     return user
 
 
 @router.post("/logout", status_code=http_status.HTTP_204_NO_CONTENT, operation_id="logout")
-async def logout(response: Response) -> None:
+async def logout(
+    response: Response,
+    user: Annotated[UserRead, Depends(get_current_user)],
+) -> None:
+    # Bump the user's token version so the stateless JWT dies server-side, not
+    # just in this browser — a stolen copy of the cookie stops resolving too.
+    await auth_service.revoke_sessions(user.id)
     clear_session_cookie(response)
 
 
