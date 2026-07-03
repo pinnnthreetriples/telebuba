@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from schemas.dialogues import DialogueFeed, DialogueFeedMessage
 from schemas.warming import (
     StartWarmingRequest,
     WarmedAccount,
@@ -207,3 +208,54 @@ async def test_unpromote_clears_flag(app: FastAPI, monkeypatch: pytest.MonkeyPat
         resp = await client.post("/api/v1/warming/unpromote", json={"account_id": "acc-1"})
     assert resp.status_code == 200
     assert resp.json()["promoted_to_nc"] is False
+
+
+@pytest.mark.asyncio
+async def test_dialogues_returns_labeled_feed(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _fake(*, recent_limit: int) -> DialogueFeed:  # noqa: ARG001
+        return DialogueFeed(
+            messages=[
+                DialogueFeedMessage(
+                    from_account="b",
+                    from_label="+15550002222",
+                    to_account="a",
+                    to_label="+15550001111",
+                    text="hi back",
+                    created_at="2026-07-02T00:00:01+00:00",
+                    replied=False,
+                ),
+            ],
+        )
+
+    monkeypatch.setattr("services.dialogues.load_dialogue_overview", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/warming/dialogues")
+    assert resp.status_code == 200
+    message = resp.json()["messages"][0]
+    assert message["from_label"] == "+15550002222"
+    assert message["to_label"] == "+15550001111"
+    assert message["text"] == "hi back"
+
+
+@pytest.mark.asyncio
+async def test_dialogues_forwards_limit(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: dict[str, object] = {}
+
+    async def _fake(*, recent_limit: int) -> DialogueFeed:
+        seen["recent_limit"] = recent_limit
+        return DialogueFeed()
+
+    monkeypatch.setattr("services.dialogues.load_dialogue_overview", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/warming/dialogues", params={"limit": 5})
+    assert resp.status_code == 200
+    assert seen["recent_limit"] == 5
+
+
+@pytest.mark.asyncio
+async def test_dialogues_rejects_out_of_range_limit(app: FastAPI) -> None:
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/warming/dialogues", params={"limit": 999})
+    assert resp.status_code == 422

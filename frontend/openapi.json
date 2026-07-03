@@ -2367,6 +2367,68 @@
         }
       }
     },
+    "/api/v1/warming/dialogues": {
+      "get": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "List Warming Dialogues",
+        "description": "Recent inter-account warming messages, newest first, for the live feed.",
+        "operationId": "listWarmingDialogues",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer",
+              "maximum": 100,
+              "minimum": 1,
+              "default": 30,
+              "title": "Limit"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DialogueFeed"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns": {
       "get": {
         "tags": [
@@ -2707,6 +2769,84 @@
         "responses": {
           "204": {
             "description": "Successful Response"
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/accounts/{account_id}/channel": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Set Account Channel",
+        "description": "Pin a campaign account to one channel (``channel: null`` clears the pin).\n\nA pinned account comments only on that channel; an unpinned one serves all\ncampaign channels. Returns the refreshed board so the SPA re-renders the card.",
+        "operationId": "setCampaignAccountChannel",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetAccountChannelRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/NeurocommentBoard"
+                }
+              }
+            }
           },
           "422": {
             "description": "Validation Error",
@@ -4857,6 +4997,70 @@
         "title": "ChannelLinkOutcome",
         "description": "Result of attaching a channel to a campaign.\n\n``already_assigned`` means the channel is the active target of another campaign\n(the repository's uniqueness guard). The service returns this instead of letting\n``ChannelAlreadyAssignedError`` reach the UI, so features never catch internals (#2)."
       },
+      "DialogueFeed": {
+        "properties": {
+          "messages": {
+            "items": {
+              "$ref": "#/components/schemas/DialogueFeedMessage"
+            },
+            "type": "array",
+            "title": "Messages"
+          }
+        },
+        "type": "object",
+        "title": "DialogueFeed",
+        "description": "Recent inter-account messages, newest first \u2014 the live conversation feed."
+      },
+      "DialogueFeedMessage": {
+        "properties": {
+          "from_account": {
+            "type": "string",
+            "minLength": 1,
+            "title": "From Account"
+          },
+          "from_label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "From Label"
+          },
+          "to_account": {
+            "type": "string",
+            "minLength": 1,
+            "title": "To Account"
+          },
+          "to_label": {
+            "type": "string",
+            "minLength": 1,
+            "title": "To Label"
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Text"
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Created At"
+          },
+          "replied": {
+            "type": "boolean",
+            "title": "Replied",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "from_account",
+          "from_label",
+          "to_account",
+          "to_label",
+          "text",
+          "created_at"
+        ],
+        "title": "DialogueFeedMessage",
+        "description": "One dialogue message with both accounts resolved to display labels.\n\nLocale-neutral (#12): ``from_label``/``to_label`` are the account's own\nphone / label / id strings, never translated UI text; ``created_at`` is the\nstored ISO-8601 timestamp. The SPA owns any presentation."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -5076,6 +5280,17 @@
               }
             ],
             "title": "Last Comment Text"
+          },
+          "pinned_channel": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pinned Channel"
           },
           "readiness": {
             "items": {
@@ -5995,6 +6210,26 @@
         ],
         "title": "RetryPairRequest",
         "description": "Operator retry of one (account, channel) challenge \u2014 the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb."
+      },
+      "SetAccountChannelRequest": {
+        "properties": {
+          "channel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Channel"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "SetAccountChannelRequest",
+        "description": "Pin a campaign account to one channel; ``null`` clears the pin (all channels)."
       },
       "SetCampaignStatusRequest": {
         "properties": {

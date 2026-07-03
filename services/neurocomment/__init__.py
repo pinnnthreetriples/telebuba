@@ -9,6 +9,7 @@ tests patch one place. NiceGUI wiring (#119) delegates here.
 
 from __future__ import annotations
 
+from core.repositories.neurocomment import ChannelNotInCampaignError
 from services.neurocomment._runtime import (
     clear_neurocomment_listener,
     neurocomment_runtime_status,
@@ -34,6 +35,7 @@ from services.neurocomment.campaigns import (
     list_campaign_channels,
     list_campaigns,
     list_channel_challenges,
+    pin_account_channel,
     remove_account_from_campaign,
     set_solver_enabled,
     skip_pair,
@@ -53,6 +55,7 @@ from services.neurocomment.settings_store import (
 )
 
 __all__ = [
+    "ChannelNotInCampaignError",
     "assign_account_to_campaign",
     "clear_neurocomment_listener",
     "count_campaign_challenge_outcomes",
@@ -73,6 +76,7 @@ __all__ = [
     "on_post",
     "onboard_account_channel",
     "onboard_campaign",
+    "pin_account_channel",
     "reconcile_neurocomment_on_startup",
     "reconcile_neurocomment_runtime",
     "remove_account_from_campaign",

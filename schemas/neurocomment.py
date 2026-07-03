@@ -97,6 +97,14 @@ class SetCampaignStatusRequest(BaseModel):
     status: CampaignRunStatus
 
 
+class SetAccountChannelRequest(BaseModel):
+    """Pin a campaign account to one channel; ``null`` clears the pin (all channels)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    channel: str | None = Field(default=None, min_length=1)
+
+
 class NeurocommentCampaign(BaseModel):
     """One row of ``neurocomment_campaigns``.
 
@@ -163,11 +171,17 @@ class ChannelList(BaseModel):
 
 
 class CampaignAccountLink(BaseModel):
-    """One row of ``neurocomment_campaign_accounts`` — an account serving a campaign."""
+    """One row of ``neurocomment_campaign_accounts`` — an account serving a campaign.
+
+    ``channel`` pins the account to a single campaign channel: when set, the account
+    onboards + comments ONLY on that channel; ``None`` (the default) keeps the
+    all-channels behaviour.
+    """
 
     campaign_id: str = Field(min_length=1)
     account_id: str = Field(min_length=1)
     created_at: str = Field(min_length=1)
+    channel: str | None = None
 
 
 class CampaignAccountList(BaseModel):
@@ -328,6 +342,8 @@ class NeurocommentAccountCard(BaseModel):
     # Text of the most recent posted comment (None until the account comments, or
     # when the stored row has no text). Surfaces the real comment in the board.
     last_comment_text: str | None = None
+    # Channel this account is pinned to (comments only there); None = all channels.
+    pinned_channel: str | None = None
     readiness: list[AccountChannelReadiness] = Field(default_factory=list)
 
 

@@ -34,7 +34,10 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
-from core.repositories.neurocomment import set_campaign_status
+from core.repositories.neurocomment import (
+    set_campaign_account_channel,
+    set_campaign_status,
+)
 from schemas.accounts import AccountCreate, AccountList, AccountRead
 from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.gemini import GeminiResult
@@ -247,6 +250,53 @@ async def test_filtered_events_never_claim_or_post(
 
     assert comment.calls == []
     assert await fetch_comment("@chan", event.post_id) is None
+
+
+@pytest.mark.asyncio
+async def test_pinned_account_not_selected_for_other_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An account pinned to @a is never selected for a post in @b, even though ready there."""
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="mention X"))
+    for channel in ("@a", "@b"):
+        await link_channel_to_campaign(campaign.campaign_id, channel)
+    await create_account(AccountCreate(account_id="acc-1", label="a", session_name="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    # Ready on BOTH channels, but pinned to @a.
+    await upsert_readiness("acc-1", "@a", joined=True, captcha_passed=True, ready=True)
+    await upsert_readiness("acc-1", "@b", joined=True, captcha_passed=True, ready=True)
+    await set_campaign_account_channel(campaign.campaign_id, "acc-1", "@a")
+
+    comment = _CommentStub()
+    _patch_io(monkeypatch, comment=comment)
+
+    # Post in @b → the only account is pinned to @a → no selection, no comment.
+    await engine.handle_new_post(NewPostEvent(channel="@b", post_id=1, text="hello world"))
+    assert comment.calls == []
+    assert await fetch_comment("@b", 1) is None
+
+    # Post in @a → the pinned account IS eligible and comments.
+    await engine.handle_new_post(NewPostEvent(channel="@a", post_id=2, text="hello world"))
+    assert [a.action_type for _, a in comment.calls] == ["comment_on_post"]
+
+
+@pytest.mark.asyncio
+async def test_unpinned_account_eligible_for_every_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unpinned account (channel NULL) still comments on any campaign channel."""
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="mention X"))
+    for channel in ("@a", "@b"):
+        await link_channel_to_campaign(campaign.campaign_id, channel)
+    await create_account(AccountCreate(account_id="acc-1", label="a", session_name="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")  # no pin
+    await upsert_readiness("acc-1", "@b", joined=True, captcha_passed=True, ready=True)
+
+    comment = _CommentStub()
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@b", post_id=1, text="hello world"))
+    assert [a.action_type for _, a in comment.calls] == ["comment_on_post"]
 
 
 @pytest.mark.asyncio

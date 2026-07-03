@@ -60,6 +60,9 @@ _neurocomment_campaign_accounts = Table(
     ),
     Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
     Column("created_at", String, nullable=False),
+    # Optional per-account channel pin (migration #25): NULL = all campaign channels
+    # (current behaviour); a channel handle restricts the account to that one channel.
+    Column("channel", String, nullable=True),
 )
 _neurocomment_linked_groups = Table(
     "neurocomment_linked_groups",

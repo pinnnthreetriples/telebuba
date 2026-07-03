@@ -106,6 +106,9 @@ import type {
   ListWarmingChannelsData,
   ListWarmingChannelsErrors,
   ListWarmingChannelsResponses,
+  ListWarmingDialoguesData,
+  ListWarmingDialoguesErrors,
+  ListWarmingDialoguesResponses,
   LoginData,
   LoginErrors,
   LoginResponses,
@@ -154,6 +157,9 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoResponses,
+  SetCampaignAccountChannelData,
+  SetCampaignAccountChannelErrors,
+  SetCampaignAccountChannelResponses,
   SetCampaignSolverData,
   SetCampaignSolverErrors,
   SetCampaignSolverResponses,
@@ -840,6 +846,20 @@ export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * List Warming Dialogues
+ *
+ * Recent inter-account warming messages, newest first, for the live feed.
+ */
+export const listWarmingDialogues = <ThrowOnError extends boolean = false>(
+  options?: Options<ListWarmingDialoguesData, ThrowOnError>,
+) =>
+  (options?.client ?? client).get<
+    ListWarmingDialoguesResponses,
+    ListWarmingDialoguesErrors,
+    ThrowOnError
+  >({ url: '/api/v1/warming/dialogues', ...options });
+
+/**
  * List Campaigns
  */
 export const listCampaigns = <ThrowOnError extends boolean = false>(
@@ -927,6 +947,30 @@ export const removeCampaignAccount = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Account Channel
+ *
+ * Pin a campaign account to one channel (``channel: null`` clears the pin).
+ *
+ * A pinned account comments only on that channel; an unpinned one serves all
+ * campaign channels. Returns the refreshed board so the SPA re-renders the card.
+ */
+export const setCampaignAccountChannel = <ThrowOnError extends boolean = false>(
+  options: Options<SetCampaignAccountChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetCampaignAccountChannelResponses,
+    SetCampaignAccountChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/{account_id}/channel',
     ...options,
     headers: {
       'Content-Type': 'application/json',

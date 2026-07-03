@@ -80,6 +80,37 @@ async def test_list_campaigns_carries_per_campaign_channel_and_account_counts() 
 
 
 @pytest.mark.asyncio
+async def test_pin_account_channel_persists_and_returns_board() -> None:
+    """Pinning returns the refreshed board carrying the account's pin; clearing resets it."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@news")
+    await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    board = await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", "@news")
+    assert board is not None
+    assert {c.account_id: c.pinned_channel for c in board.accounts} == {"acc-1": "@news"}
+
+    cleared = await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", None)
+    assert cleared is not None
+    assert {c.account_id: c.pinned_channel for c in cleared.accounts} == {"acc-1": None}
+
+
+@pytest.mark.asyncio
+async def test_pin_account_channel_rejects_foreign_channel() -> None:
+    """Pinning to a channel outside the campaign raises ``ChannelNotInCampaignError``."""
+    from services.neurocomment import ChannelNotInCampaignError  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@news")
+    await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    with pytest.raises(ChannelNotInCampaignError):
+        await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", "@other")
+
+
+@pytest.mark.asyncio
 async def test_link_channel_reconciles_only_when_running(monkeypatch: pytest.MonkeyPatch) -> None:
     """Linking a channel re-points a running listener; while stopped it does nothing (#2)."""
     calls: list[str] = []

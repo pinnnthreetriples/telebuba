@@ -59,6 +59,7 @@ class _AccountSignals(NamedTuple):
     record: WarmingStateRecord | None
     spam: SpamStatusVerdict | None
     fingerprint: DeviceFingerprint | None
+    pinned_channel: str | None  # channel pin, or None when the account serves all
 
 
 async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
@@ -67,7 +68,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     if campaign is None:
         return None
 
-    account_ids = [link.account_id for link in (await list_campaign_accounts(campaign_id)).links]
+    account_links = (await list_campaign_accounts(campaign_id)).links
+    account_ids = [link.account_id for link in account_links]
+    pins = {link.account_id: link.channel for link in account_links}
     channels = [link.channel for link in (await list_campaign_channels(campaign_id)).links]
 
     accounts = {acc.account_id: acc for acc in (await list_accounts()).accounts}
@@ -91,6 +94,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
                 record=records.get(account_id),
                 spam=spam_by_account.get(account_id),
                 fingerprint=fingerprints.get(account_id),
+                pinned_channel=pins.get(account_id),
             ),
             readiness=[r for r in readiness if r.account_id == account_id],
             posted=[c for c in posted if c.account_id == account_id],
@@ -129,7 +133,7 @@ def _build_card(
     now: datetime,
 ) -> NeurocommentAccountCard:
     nc = settings.neurocomment
-    account, record, spam, fingerprint = signals
+    account, record, spam, fingerprint, pinned_channel = signals
     trust = account_trust_score_from(
         account=account,
         record=record,
@@ -153,6 +157,7 @@ def _build_card(
         comments_today=len(posted),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
+        pinned_channel=pinned_channel,
         readiness=[
             AccountChannelReadiness(
                 channel=r.channel,

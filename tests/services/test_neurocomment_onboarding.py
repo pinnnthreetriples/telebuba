@@ -27,6 +27,7 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
+from core.repositories.neurocomment import set_campaign_account_channel
 from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage
 from schemas.gemini import GeminiResult
@@ -443,6 +444,36 @@ async def test_campaign_iterates_pairs_with_jittered_delay(
     assert sleeps == [42.0, 42.0, 42.0]
     nc = settings.neurocomment
     assert all(nc.join_delay_min_seconds <= s <= nc.join_delay_max_seconds for s in sleeps)
+
+
+@pytest.mark.asyncio
+async def test_campaign_pinned_account_only_onboards_its_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pinned account joins ONLY its channel; an unpinned peer joins every channel."""
+    for acc in ("pinned", "free"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@one")
+    await link_channel_to_campaign(campaign.campaign_id, "@two")
+    await assign_account_to_campaign(campaign.campaign_id, "pinned")
+    await assign_account_to_campaign(campaign.campaign_id, "free")
+    await set_campaign_account_channel(campaign.campaign_id, "pinned", "@one")
+
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    # The pinned account never touched @two; the free account onboarded both.
+    joined = {(acc, getattr(action, "channel", "")) for acc, action in join.calls}
+    assert ("pinned", "@two") not in joined
+    assert ("pinned", "@one") in joined
+    assert {("free", "@one"), ("free", "@two")} <= joined
+    assert await fetch_readiness("pinned", "@two") is None
 
 
 @pytest.mark.asyncio

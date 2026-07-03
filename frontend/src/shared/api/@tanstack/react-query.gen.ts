@@ -43,6 +43,7 @@ import {
   listProxies,
   listWarmedAccounts,
   listWarmingChannels,
+  listWarmingDialogues,
   login,
   logout,
   logoutAccount,
@@ -60,6 +61,7 @@ import {
   resetAccountSession,
   retryChallenge,
   setAccountPhoto,
+  setCampaignAccountChannel,
   setCampaignSolver,
   setCampaignStatus,
   skipNeurocommentPair,
@@ -175,6 +177,9 @@ import type {
   ListWarmingChannelsData,
   ListWarmingChannelsError,
   ListWarmingChannelsResponse,
+  ListWarmingDialoguesData,
+  ListWarmingDialoguesError,
+  ListWarmingDialoguesResponse,
   LoginData,
   LoginError,
   LoginResponse,
@@ -223,6 +228,9 @@ import type {
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoResponse,
+  SetCampaignAccountChannelData,
+  SetCampaignAccountChannelError,
+  SetCampaignAccountChannelResponse,
   SetCampaignSolverData,
   SetCampaignSolverError,
   SetCampaignSolverResponse,
@@ -1433,6 +1441,33 @@ export const updateWarmingSettingsMutation = (
   return mutationOptions;
 };
 
+export const listWarmingDialoguesQueryKey = (options?: Options<ListWarmingDialoguesData>) =>
+  createQueryKey('listWarmingDialogues', options);
+
+/**
+ * List Warming Dialogues
+ *
+ * Recent inter-account warming messages, newest first, for the live feed.
+ */
+export const listWarmingDialoguesOptions = (options?: Options<ListWarmingDialoguesData>) =>
+  queryOptions<
+    ListWarmingDialoguesResponse,
+    ListWarmingDialoguesError,
+    ListWarmingDialoguesResponse,
+    ReturnType<typeof listWarmingDialoguesQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listWarmingDialogues({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listWarmingDialoguesQueryKey(options),
+  });
+
 export const listCampaignsQueryKey = (options?: Options<ListCampaignsData>) =>
   createQueryKey('listCampaigns', options);
 
@@ -1577,6 +1612,38 @@ export const removeCampaignAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await removeCampaignAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Channel
+ *
+ * Pin a campaign account to one channel (``channel: null`` clears the pin).
+ *
+ * A pinned account comments only on that channel; an unpinned one serves all
+ * campaign channels. Returns the refreshed board so the SPA re-renders the card.
+ */
+export const setCampaignAccountChannelMutation = (
+  options?: Partial<Options<SetCampaignAccountChannelData>>,
+): UseMutationOptions<
+  SetCampaignAccountChannelResponse,
+  SetCampaignAccountChannelError,
+  Options<SetCampaignAccountChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetCampaignAccountChannelResponse,
+    SetCampaignAccountChannelError,
+    Options<SetCampaignAccountChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setCampaignAccountChannel({
         ...options,
         ...fnOptions,
         throwOnError: true,

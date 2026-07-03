@@ -270,7 +270,11 @@ async def onboard_campaign(
         return CampaignOnboardingResult(campaign_id=campaign_id)
 
     channels = (await list_campaign_channels(campaign_id)).links
-    accounts = [link.account_id for link in (await list_campaign_accounts(campaign_id)).links]
+    account_links = (await list_campaign_accounts(campaign_id)).links
+    accounts = [link.account_id for link in account_links]
+    # A pinned account (link.channel set) onboards ONLY against its channel; an
+    # unpinned account (None) keeps the all-channels behaviour (accounts_for).
+    pins = {link.account_id: link.channel for link in account_links}
     solver_enabled = _effective_solver_enabled(campaign.solver_enabled)
 
     # Pairs already onboarded (joined + ready + captcha-passed, not operator-skipped)
@@ -304,6 +308,7 @@ async def onboard_campaign(
         solver_enabled=solver_enabled,
         on_progress=on_progress,
         report=report,
+        pins=pins,
     )
     joined_once = False
     for channel_link in channels:

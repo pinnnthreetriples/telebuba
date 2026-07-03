@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.migration_steps import _sqlite_columns
+from core.migration_steps import _sqlite_columns, _sqlite_table_exists
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
@@ -184,4 +184,23 @@ def _add_readiness_human_skipped(connection: Connection) -> None:
         connection.exec_driver_sql(
             "ALTER TABLE neurocomment_readiness "
             "ADD COLUMN human_skipped INTEGER NOT NULL DEFAULT 0",
+        )
+
+
+def _add_campaign_account_channel(connection: Connection) -> None:
+    # #25: optional per-account channel pin. NULL = all campaign channels (current
+    # behaviour); a channel handle restricts the account to that one channel. The
+    # account-link table is outside migration_steps._ALLOWED_TABLES, so the column
+    # probe is inlined (a hard-coded table name, never user input) rather than routed
+    # through _sqlite_columns.
+    if not _sqlite_table_exists(connection, "neurocomment_campaign_accounts"):
+        return
+    rows = (
+        connection.exec_driver_sql("PRAGMA table_info(neurocomment_campaign_accounts)")
+        .mappings()
+        .all()
+    )
+    if "channel" not in {str(row["name"]) for row in rows}:
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_campaign_accounts ADD COLUMN channel VARCHAR",
         )

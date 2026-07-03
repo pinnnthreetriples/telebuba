@@ -36,6 +36,10 @@ class OnboardContext:
     Packs the otherwise-many parameters (accounts, already_ready set, outcomes
     accumulator, solver flag, progress callbacks) into one value so the helpers
     stay under the PLR0913 argument-count limit.
+
+    ``pins`` maps each account to its channel pin (``None`` = all channels). A
+    pinned account is onboarded only against its channel — ``accounts_for`` filters
+    the per-channel account list.
     """
 
     accounts: list[str]
@@ -44,13 +48,23 @@ class OnboardContext:
     solver_enabled: bool
     on_progress: Callable[[str], None] | None
     report: Callable[[str], None]
+    pins: dict[str, str | None] = dataclasses.field(default_factory=dict)
+
+    def accounts_for(self, channel: str) -> list[str]:
+        """Accounts eligible for ``channel``: unpinned, or pinned to this channel."""
+        return [
+            account_id
+            for account_id in self.accounts
+            if self.pins.get(account_id) in (None, channel)
+        ]
 
 
 async def onboard_channel(channel: str, ctx: OnboardContext, *, joined_once: bool) -> bool:
-    """Onboard every account on one channel; return the updated ``joined_once`` flag.
+    """Onboard every eligible account on one channel; return the updated flag.
 
-    Compute the "remaining" account list = accounts NOT already ready for THIS
-    channel. If every pair is ready, skip the Telegram resolve entirely (anti-ban
+    Only accounts unpinned or pinned to this channel are onboarded (``accounts_for``).
+    Compute the "remaining" account list = eligible accounts NOT already ready for
+    THIS channel. If every pair is ready, skip the Telegram resolve entirely (anti-ban
     + a fully-prepared channel costs zero reads). A transient resolve failure here
     would otherwise clobber the already-ready pairs with "failed" outcomes (Bug 3).
     """
@@ -59,12 +73,13 @@ async def onboard_channel(channel: str, ctx: OnboardContext, *, joined_once: boo
     # cycle).
     from services.neurocomment import onboarding  # noqa: PLC0415
 
-    remaining = [acc for acc in ctx.accounts if (acc, channel) not in ctx.already_ready]
+    eligible = ctx.accounts_for(channel)
+    remaining = [acc for acc in eligible if (acc, channel) not in ctx.already_ready]
     if not remaining:
         ctx.report(f"Канал {channel}: все пары уже готовы — пропуск.")
         ctx.outcomes.extend(
             AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
-            for account_id in ctx.accounts
+            for account_id in eligible
         )
         return joined_once
     ctx.report(f"Разрешение группы обсуждения для {channel}...")
@@ -74,11 +89,11 @@ async def onboard_channel(channel: str, ctx: OnboardContext, *, joined_once: boo
     if group_id is None:
         ctx.outcomes.extend(
             AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
-            for account_id in ctx.accounts
+            for account_id in eligible
             if (account_id, channel) in ctx.already_ready
         )
         return joined_once
-    for account_id in ctx.accounts:
+    for account_id in eligible:
         joined_once = await _onboard_pair(
             account_id, channel, group_id, ctx, joined_once=joined_once
         )

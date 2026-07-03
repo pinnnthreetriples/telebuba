@@ -27,6 +27,7 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
+from core.repositories.neurocomment import set_campaign_account_channel
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.neurocomment import CampaignCreate
@@ -81,6 +82,24 @@ async def test_board_basic_shape() -> None:
     assert board.channels[0].status == "ready"
     assert board.channels[0].ready_accounts == 1
     assert board.channels[0].total_accounts == 1
+
+
+@pytest.mark.asyncio
+async def test_card_carries_pinned_channel_and_null_when_unpinned() -> None:
+    """A pinned account's card reports its channel; an unpinned one reports None."""
+    campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
+    await create_account(AccountCreate(account_id="pinned", label="Pinned"))
+    await create_account(AccountCreate(account_id="free", label="Free"))
+    await assign_account_to_campaign(campaign.campaign_id, "pinned")
+    await assign_account_to_campaign(campaign.campaign_id, "free")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await set_campaign_account_channel(campaign.campaign_id, "pinned", "@chan")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    pins = {card.account_id: card.pinned_channel for card in board.accounts}
+    assert pins == {"pinned": "@chan", "free": None}
 
 
 @pytest.mark.asyncio

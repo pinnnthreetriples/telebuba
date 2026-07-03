@@ -268,6 +268,60 @@ def test_logs_indexes_added_to_legacy_logs_table(tmp_path: Path) -> None:
     assert {"ix_logs_account_id", "ix_logs_created_at"} <= index_names
 
 
+def test_campaign_account_channel_column_created_and_defaults_null() -> None:
+    """#25 adds the nullable ``channel`` pin column; a fresh assignment defaults NULL."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_campaign_accounts)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "channel" in columns
+    assert 25 in versions
+
+
+def test_campaign_account_channel_migration_idempotent_on_legacy_table(tmp_path: Path) -> None:
+    """A legacy account-link table (no ``channel``) gains it, defaulting NULL; re-run is clean."""
+    from core.migration_steps_neurocomment import _add_campaign_account_channel  # noqa: PLC0415
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_accounts ("
+            "campaign_id VARCHAR NOT NULL, account_id VARCHAR NOT NULL, "
+            "created_at VARCHAR NOT NULL, PRIMARY KEY (campaign_id, account_id))",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_accounts (campaign_id, account_id, created_at) "
+            "VALUES ('c1', 'acc-1', ?)",
+            (now,),
+        )
+        _add_campaign_account_channel(connection)
+        _add_campaign_account_channel(connection)  # idempotent — must not raise/duplicate.
+    with engine.connect() as connection:
+        channel = connection.exec_driver_sql(
+            "SELECT channel FROM neurocomment_campaign_accounts WHERE account_id = 'acc-1'",
+        ).scalar()
+    engine.dispose()
+    assert channel is None
+
+
+def test_campaign_account_channel_migration_skips_missing_table(tmp_path: Path) -> None:
+    """The #25 body is a no-op when the account-link table does not exist yet."""
+    from core.migration_steps_neurocomment import _add_campaign_account_channel  # noqa: PLC0415
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'empty.db'}", future=True)
+    with engine.begin() as connection:
+        _add_campaign_account_channel(connection)  # no table → returns, no raise.
+    engine.dispose()
+
+
 def test_append_only_versions_are_unique() -> None:
     """Two migrations sharing the same version would silently mask each other."""
     versions = [v for v, _name, _fn in MIGRATIONS]

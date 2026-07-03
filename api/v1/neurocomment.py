@@ -21,6 +21,7 @@ from schemas.neurocomment import (
     NeurocommentSettings,
     NeurocommentSettingsUpdate,
     RetryPairRequest,
+    SetAccountChannelRequest,
     SetCampaignStatusRequest,
     SolverToggleRequest,
     StartNeurocommentRequest,
@@ -78,6 +79,33 @@ async def assign_account(campaign_id: str, body: AssignAccountRequest) -> None:
 )
 async def remove_account(campaign_id: str, body: AssignAccountRequest) -> None:
     await nc_service.remove_account_from_campaign(campaign_id, body.account_id)
+
+
+@router.post(
+    "/campaigns/{campaign_id}/accounts/{account_id}/channel",
+    response_model=NeurocommentBoard,
+    operation_id="setCampaignAccountChannel",
+)
+async def set_account_channel(
+    campaign_id: str,
+    account_id: str,
+    body: SetAccountChannelRequest,
+) -> NeurocommentBoard:
+    """Pin a campaign account to one channel (``channel: null`` clears the pin).
+
+    A pinned account comments only on that channel; an unpinned one serves all
+    campaign channels. Returns the refreshed board so the SPA re-renders the card.
+    """
+    try:
+        board = await nc_service.pin_account_channel(campaign_id, account_id, body.channel)
+    except nc_service.ChannelNotInCampaignError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="channel is not active in this campaign",
+        ) from exc
+    if board is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
+    return board
 
 
 @router.delete(

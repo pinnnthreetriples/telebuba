@@ -13,6 +13,7 @@ from __future__ import annotations
 
 from core.repositories.neurocomment._campaigns import (
     ChannelAlreadyAssignedError,
+    ChannelNotInCampaignError,
     assign_account_to_campaign,
     create_campaign,
     deactivate_channel,
@@ -25,6 +26,7 @@ from core.repositories.neurocomment._campaigns import (
     list_campaign_channels,
     list_campaigns,
     remove_account_from_campaign,
+    set_campaign_account_channel,
     set_campaign_status,
     update_campaign_prompt,
     update_solver_enabled,
@@ -72,6 +74,7 @@ from core.repositories.neurocomment._settings import (
 
 __all__ = [
     "ChannelAlreadyAssignedError",
+    "ChannelNotInCampaignError",
     "assign_account_to_campaign",
     "claim_comment",
     "count_account_channel_comments_since",
@@ -110,6 +113,7 @@ __all__ = [
     "remove_account_from_campaign",
     "resolve_pending_outcome",
     "save_neurocomment_settings",
+    "set_campaign_account_channel",
     "set_campaign_status",
     "set_listener_account_id",
     "set_listener_running",

@@ -182,8 +182,12 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> str |
     cache and never re-probed here: probing @SpamBot per post is itself a ban
     signal, so warming/onboarding own spam freshness.
     """
+    # A pinned account (link.channel set) is eligible only for its channel; an
+    # unpinned account (None) is eligible for every channel of the campaign.
     account_ids = [
-        link.account_id for link in (await list_campaign_accounts(campaign.campaign_id)).links
+        link.account_id
+        for link in (await list_campaign_accounts(campaign.campaign_id)).links
+        if link.channel in (None, channel)
     ]
     if not account_ids:
         return None

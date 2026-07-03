@@ -291,6 +291,49 @@ async def remove_account_from_campaign(campaign_id: str, account_id: str) -> Non
     await asyncio.to_thread(_remove_account_from_campaign, campaign_id, account_id)
 
 
+class ChannelNotInCampaignError(RuntimeError):
+    """A pin target is not an active channel of the campaign."""
+
+
+def _channel_is_active_in_campaign(connection: Connection, campaign_id: str, channel: str) -> bool:
+    statement = select(_neurocomment_campaign_channels.c.id).where(
+        (_neurocomment_campaign_channels.c.campaign_id == campaign_id)
+        & (_neurocomment_campaign_channels.c.channel == channel)
+        & (_neurocomment_campaign_channels.c.active == 1),
+    )
+    return connection.execute(statement).first() is not None
+
+
+def _set_campaign_account_channel(campaign_id: str, account_id: str, channel: str | None) -> None:
+    with _get_engine().begin() as connection:
+        if channel is not None and not _channel_is_active_in_campaign(
+            connection, campaign_id, channel
+        ):
+            msg = f"Channel {channel!r} is not active in campaign {campaign_id!r}"
+            raise ChannelNotInCampaignError(msg)
+        connection.execute(
+            update(_neurocomment_campaign_accounts)
+            .where(
+                (_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
+                & (_neurocomment_campaign_accounts.c.account_id == account_id),
+            )
+            .values(channel=channel),
+        )
+
+
+async def set_campaign_account_channel(
+    campaign_id: str,
+    account_id: str,
+    channel: str | None,
+) -> None:
+    """Pin a campaign account to one channel; ``None`` clears the pin (all channels).
+
+    Raises ``ChannelNotInCampaignError`` when pinning to a channel that is not an
+    active link of the campaign.
+    """
+    await asyncio.to_thread(_set_campaign_account_channel, campaign_id, account_id, channel)
+
+
 def _list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
     statement = (
         select(_neurocomment_campaign_accounts)

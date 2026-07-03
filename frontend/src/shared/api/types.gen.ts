@@ -603,6 +603,58 @@ export type ChannelLinkOutcome = {
 };
 
 /**
+ * DialogueFeed
+ *
+ * Recent inter-account messages, newest first — the live conversation feed.
+ */
+export type DialogueFeed = {
+  /**
+   * Messages
+   */
+  messages?: Array<DialogueFeedMessage>;
+};
+
+/**
+ * DialogueFeedMessage
+ *
+ * One dialogue message with both accounts resolved to display labels.
+ *
+ * Locale-neutral (#12): ``from_label``/``to_label`` are the account's own
+ * phone / label / id strings, never translated UI text; ``created_at`` is the
+ * stored ISO-8601 timestamp. The SPA owns any presentation.
+ */
+export type DialogueFeedMessage = {
+  /**
+   * From Account
+   */
+  from_account: string;
+  /**
+   * From Label
+   */
+  from_label: string;
+  /**
+   * To Account
+   */
+  to_account: string;
+  /**
+   * To Label
+   */
+  to_label: string;
+  /**
+   * Text
+   */
+  text: string;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Replied
+   */
+  replied?: boolean;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -754,6 +806,10 @@ export type NeurocommentAccountCard = {
    * Last Comment Text
    */
   last_comment_text?: string | null;
+  /**
+   * Pinned Channel
+   */
+  pinned_channel?: string | null;
   /**
    * Readiness
    */
@@ -1308,6 +1364,18 @@ export type RetryPairRequest = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * SetAccountChannelRequest
+ *
+ * Pin a campaign account to one channel; ``null`` clears the pin (all channels).
+ */
+export type SetAccountChannelRequest = {
+  /**
+   * Channel
+   */
+  channel?: string | null;
 };
 
 /**
@@ -3063,6 +3131,38 @@ export type UpdateWarmingSettingsResponses = {
 export type UpdateWarmingSettingsResponse =
   UpdateWarmingSettingsResponses[keyof UpdateWarmingSettingsResponses];
 
+export type ListWarmingDialoguesData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/warming/dialogues';
+};
+
+export type ListWarmingDialoguesErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListWarmingDialoguesError =
+  ListWarmingDialoguesErrors[keyof ListWarmingDialoguesErrors];
+
+export type ListWarmingDialoguesResponses = {
+  /**
+   * Successful Response
+   */
+  200: DialogueFeed;
+};
+
+export type ListWarmingDialoguesResponse =
+  ListWarmingDialoguesResponses[keyof ListWarmingDialoguesResponses];
+
 export type ListCampaignsData = {
   body?: never;
   path?: never;
@@ -3239,6 +3339,42 @@ export type RemoveCampaignAccountResponses = {
 
 export type RemoveCampaignAccountResponse =
   RemoveCampaignAccountResponses[keyof RemoveCampaignAccountResponses];
+
+export type SetCampaignAccountChannelData = {
+  body: SetAccountChannelRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/accounts/{account_id}/channel';
+};
+
+export type SetCampaignAccountChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetCampaignAccountChannelError =
+  SetCampaignAccountChannelErrors[keyof SetCampaignAccountChannelErrors];
+
+export type SetCampaignAccountChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: NeurocommentBoard;
+};
+
+export type SetCampaignAccountChannelResponse =
+  SetCampaignAccountChannelResponses[keyof SetCampaignAccountChannelResponses];
 
 export type DeleteCampaignData = {
   body?: never;

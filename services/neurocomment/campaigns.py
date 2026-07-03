@@ -12,10 +12,14 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from core import db
-from core.repositories.neurocomment import set_campaign_status
+from core.repositories.neurocomment import (
+    set_campaign_account_channel,
+    set_campaign_status,
+)
 from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import ChannelLinkOutcome
 from services.neurocomment import _runtime
+from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
     from schemas.challenge import ChallengeOutcomeCounts
@@ -25,6 +29,7 @@ if TYPE_CHECKING:
         CampaignCreate,
         CampaignList,
         CampaignRunStatus,
+        NeurocommentBoard,
         NeurocommentCampaign,
     )
 
@@ -149,6 +154,22 @@ async def set_status(campaign_id: str, status: CampaignRunStatus) -> None:
 async def skip_pair(account_id: str, channel: str) -> None:
     """Operator "Skip channel for this account": the engine never selects the pair (#148)."""
     await db.mark_human_skipped(account_id, channel)
+
+
+async def pin_account_channel(
+    campaign_id: str,
+    account_id: str,
+    channel: str | None,
+) -> NeurocommentBoard | None:
+    """Pin a campaign account to one channel (``None`` clears the pin); return the board.
+
+    Raises ``ChannelNotInCampaignError`` when the target is not an active channel of
+    the campaign, so the route can map it to a 400 instead of leaking a repo internal.
+    Onboarding after a pin change is operator-driven (Start), matching the existing
+    solver-toggle behaviour; selection immediately honours the new pin on the next post.
+    """
+    await set_campaign_account_channel(campaign_id, account_id, channel)
+    return await load_neurocomment_board(campaign_id)
 
 
 async def delete_campaign(campaign_id: str) -> None:

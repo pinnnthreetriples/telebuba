@@ -34,6 +34,7 @@ from core.migration_steps import (
     _add_warming_user_controls,
     _rename_proxy_type_http_to_https,
 )
+from core.migration_steps_neurocomment import _add_campaign_account_channel
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
     _add_proxy_pool,
@@ -75,6 +76,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (22, "add_users_token_version", _add_users_token_version),
     (23, "add_logs_indexes", _add_logs_indexes),
     (24, "add_neurocomment_listener_running", _add_neurocomment_listener_running),
+    (25, "add_campaign_account_channel", _add_campaign_account_channel),
 )
 
 

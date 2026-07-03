@@ -237,6 +237,18 @@ async def count_pair_messages_since(key: str, since_iso: str) -> int:
     return await asyncio.to_thread(_count_pair_messages_since, key, since_iso)
 
 
+def _list_recent_dialogue_messages(limit: int) -> list[DialogueMessage]:
+    statement = select(dialogue_messages).order_by(dialogue_messages.c.id.desc()).limit(limit)
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return [_row_to_message(cast("Mapping[str, object]", row)) for row in rows]
+
+
+async def list_recent_dialogue_messages(limit: int = 30) -> list[DialogueMessage]:
+    """Return the most recent dialogue messages, newest first (for the UI feed)."""
+    return await asyncio.to_thread(_list_recent_dialogue_messages, limit)
+
+
 def _purge_dialogue_messages_older_than(cutoff_iso: str) -> int:
     # Only purge already-replied messages — unreplied ones may still owe an
     # answer even if old, and dropping them would break ongoing conversations.
