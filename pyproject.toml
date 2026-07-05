@@ -51,6 +51,10 @@ dev = [
 # upstream chain catches up.
 # ============================================================================
 [tool.uv]
+# Supply-chain cooldown: wait 7 days before resolving newly published package
+# versions, so fresh malicious/broken releases age out before they can land in
+# uv.lock (semgrep uv-missing-dependency-cooldown).
+exclude-newer = "7 days"
 # Override transitive deps when upstream upper-pins a vulnerable version.
 # Each entry must reference a CVE / advisory and be revisited when the
 # upstream chain catches up.
@@ -233,13 +237,14 @@ pytest_add_cli_args_test_selection = ["tests"]
 mutate_only_covered_lines = true
 # mutmut copies source into a `mutants/` dir and runs pytest from INSIDE it, so
 # everything the suite needs must be copied in too, or collection fails there:
-#   - core/, features/ — imported by the tests (e.g. services tests use core.db)
-#     but NOT in source_paths, so copied verbatim (present, never mutated);
+#   - api/, core/, main.py — imported by the tests (tests/api uses api.create_app,
+#     test_main_spa imports main) but NOT in source_paths, so copied verbatim
+#     (present, never mutated);
 #   - tests/, the root conftest.py, pyproject.toml (pytest config), and the
 #     .env.example that tests/test_architecture.py reads.
 # Without this, pytest hits ModuleNotFoundError / collects zero tests inside
 # mutants/ and mutmut aborts before testing a single mutant.
-also_copy = ["core", "tests", "conftest.py", "pyproject.toml", ".env.example"]
+also_copy = ["api", "core", "main.py", "tests", "conftest.py", "pyproject.toml", ".env.example"]
 # Drop the project addopts for the per-mutant runs: the strict --cov /
 # --cov-fail-under=90 gates would make every partial run exit non-zero and
 # corrupt mutmut's kill/survive signal. asyncio_mode / filterwarnings live in
