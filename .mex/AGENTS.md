@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Always-loaded project anchor. Read first. Project identity, stack, file map, non-negotiables, commands, pointer to ROUTER.md.
-last_updated: 2026-06-28
+last_updated: 2026-07-06
 ---
 
 # Telebuba
@@ -16,68 +16,18 @@ Telegram account operations dashboard: account/session management, proxy/profile
 ## File Map
 ```text
 telebuba/
-├── main.py                 FastAPI/uvicorn composition root: lifespan (start/stop warming+neurocomment runtimes) + /api/v1 routers + StaticFiles mount of frontend/dist (catch-all → index.html); single-worker
-├── pyproject.toml          uv project + strict test/lint/security gates
-├── .env                    local secrets — gitignored
-├── .env.example            committed template; must mirror core/config.py
-├── api/                    UI-thin top layer (replaces features/): /api/v1 routes — validate → call service → serialize; imports only services/schemas/core.config/core.logging/fastapi
-│   ├── v1/                 versioned routers, one per domain (accounts/proxies/warming/neurocomment/logs/settings/auth) + events.py (SSE live-event stream, text/event-stream; hidden from OpenAPI)
-│   ├── deps.py             shared dependencies (Depends(get_current_user), pagination params)
-│   └── errors.py           error-envelope mapping ({error:{code,message,fields?}}, 422 remapped)
-├── core/                   infrastructure gateways; only layer touching third-party SDKs
-│   ├── db.py               shared SQLite plumbing (engine/lifecycle/helpers) + compatibility re-exports
-│   ├── _schema_tables.py   SQLAlchemy MetaData + every Table definition (split from db.py for the size budget; re-exported via db.py)
-│   ├── migrations.py       versioned append-only migration registry + runner; apply_migrations() runs on engine init
-│   ├── migration_steps.py  migration step bodies (split from migrations.py for the file-size budget)
-│   ├── migration_steps_pool.py  overflow migration bodies split from migration_steps.py for the size budget (proxy pool #18, warming activity_persona #21)
-│   ├── migration_steps_neurocomment.py  neurocomment migration bodies (tables/runtime/settings/indexes/challenges/human_skipped) split from migration_steps.py; re-exported there
-│   ├── device_fingerprint.py  generates/reads immutable per-account device profile
-│   ├── phone_geo.py        phone number → geo lookup helper
-│   ├── proxy_check.py      connectivity check for proxy configs
-│   ├── tdata_import.py     converts tdata.zip to Telethon .session files (safe-extract)
-│   ├── repositories/       per-aggregate DB query modules
-│   │   ├── proxies.py         proxy-pool data layer (shared proxies + accounts.proxy_id assignment, capacity, connectivity-check persistence)
-│   │   ├── _accounts_delete.py  account cascade-delete (_delete_account/delete_account) split from accounts.py for the size budget; re-exported there
-│   │   ├── _warming_settings.py  warming_settings singleton persistence (secret read model + keep/clear/replace save + default-row seed) split from warming.py for the size budget; re-exported there
-│   │   ├── warming_joined.py  tracks channels an account already joined (join-dedup)
-│   │   └── neurocomment/      neurocomment data layer (campaigns, channel/account links, linked-group cache, readiness, comment claims, comment quota counts in _quota.py, challenge audit+cache in _challenges.py, operator-editable limits in _settings.py)
-│   ├── telegram_client/    Telethon gateway package; public API re-exported from core.telegram_client
-│   │   ├── _pool.py           client pool management
-│   │   ├── _read.py           message reading actions (incl. CheckMessagesAlive deletion probe)
-│   │   ├── _read_stories.py   story reading actions (self-story snapshot + WatchPeerStories view-and-mark-seen for warming)
-│   │   ├── _read_challenge.py WaitForBotChallenge match predicate + NewMessage wait shell (neurocomment solver)
-│   │   ├── _listener.py       standing post listener (subscribe_posts/stop_post_listener) for neurocomment
-│   │   ├── _auth.py           phone-code login RPCs (SendCode/SignIn/2FA) + log_out_session; the only place auth RPCs live
-│   │   └── _video.py          video/media actions
-│   ├── config.py           pydantic-settings, nested namespaces (incl. settings.api, settings.auth); Settings aggregate + load_settings/settings
-│   ├── _config_domains.py  the largest settings namespaces (Warming/Gemini/Trust/Neurocomment) split from config.py for the size budget; re-exported via config.py
-│   ├── gemini.py           HTTP gateway for Gemini (shared AsyncClient + retry/429)
-│   ├── events.py           in-process pub/sub for live log events (SSE backbone); core/logging publishes each persisted row here
-│   ├── auth.py             password hashing + JWT encode/decode (only place tokens are minted/verified)
-│   └── logging.py          loguru + SQLite logs + optional Sentry
-├── schemas/                Pydantic models; shared types, no behavior, no I/O (incl. api.py: error envelope + generic Page[T]; challenge.py: bot-challenge message + audit-row models)
-├── services/               business logic; UI-agnostic; no SDK imports
-│   ├── accounts/           account/session/profile operations (incl. login.py: phone-code re-auth + logout/reset over the gateway auth RPCs; _login_state.py: in-memory TTL cache of pending code hashes)
-│   ├── proxies.py          proxy-pool business logic (add/list/assign/unassign/remove/check over the pool repo)
-│   ├── warming/            runtime workflow domain package (board.py also exposes list_warmed_accounts for the neurocomment overview; pacing.py phase math split into _phases.py, _runtime.py stop/graduation split into _graduation.py — both for the size budget, re-exported)
-│   ├── neurocomment/       campaign comment automation: campaigns.py (page→repo setup seam: create/list/link/assign; link_channel returns a typed outcome), onboarding.py (pre-join+readiness + one-shot spam probe), engine.py (on-post pipeline handle_new_post; bulk in-memory account selection, cached spam; generation+classification split into _generate.py for the size budget, re-exported), _runtime.py (listener wiring + per-post task ownership + periodic deletion sweep + start/stop/reconcile-on-startup entrypoints + neurocomment_runtime_status read model for the UI running indicator), board.py (work-view read model, bulk-loaded; bot_challenge derived from the challenge audit table), challenge.py (proactive challenge solver — WaitForBotChallenge → cache/Gemini decision → click; audit row), _filters.py (pure post-filter: which posts to comment on), _state.py (transient per-account cooldowns + escalating channel deletion & challenge back-off), _seams.py (execute/generate_text/refresh_spam_status/rng), settings_store.py (operator-editable limits/min-trust the engine reads at selection; config fallback)
-│   ├── content.py          content generation orchestration
-│   ├── dialogues.py        dialogue partner matching + pair assignment (DialoguePartnersResult/DialoguePairsResult)
-│   ├── logs.py             log query helpers for the Logs page
-│   ├── events.py           live-event seam: re-exports core.events.subscribe for the api/ SSE endpoint (api → services → core)
-│   ├── spam_status.py      account spam/ban signal helpers
-│   ├── auth/               auth policy (verify credentials, issue/slide session) over core/auth.py + users repo
-│   └── trust.py            trust-score calculation from stored signals
-├── frontend/               React + TS (strict) + Vite SPA — Feature-Sliced Design (app/routes/pages/widgets/features/entities/shared); the only UI; full law in context/frontend.md
-│   ├── src/                FSD layers; shared/api holds the generated hey-api client + TanStack Query
-│   ├── tailwind.config.*   design tokens (single source of truth)
-│   └── package.json        FE deps + gate scripts (eslint/prettier/boundaries/tsc/vitest/gen-api)
-└── tests/                  mirrors source tree; includes architecture/property tests
+├── main.py        FastAPI/uvicorn composition root: lifespan (warming+neurocomment runtimes), /api/v1 routers, StaticFiles → frontend/dist; single-worker
+├── api/           UI-thin top layer: v1/ routers (one per domain + SSE events.py), deps.py, errors.py (error envelope {error:{code,message,fields?}})
+├── core/          infrastructure gateways — the ONLY layer touching third-party SDKs: db.py+_schema_tables.py, migrations*+migration_steps*, config.py+_config_domains.py, repositories/ (per-aggregate DB queries), telegram_client/ (Telethon gateway: execute + typed actions), gemini.py, openai.py, auth.py (JWT), events.py (SSE pub/sub), logging.py, device_fingerprint.py, phone_geo.py, proxy_check.py, tdata_import.py
+├── schemas/       Pydantic models; shared types, no behavior, no I/O (api.py: error envelope + Page[T])
+├── services/      business logic; UI-agnostic; no SDK imports — accounts/, warming/, neurocomment/, auth/, proxies.py, content.py, dialogues.py, logs.py, events.py, spam_status.py, trust.py
+├── frontend/      React+TS (strict) + Vite SPA, Feature-Sliced Design; generated hey-api client in src/shared/api; design tokens in tailwind.config; full law in context/frontend.md
+├── tests/         mirrors the source tree; architecture/property tests
+└── pyproject.toml uv project + strict gates · .env (gitignored) · .env.example (must mirror core/config.py)
 ```
 
-For the live implementation state, read `state/active.md`. This anchor is only the stable
-routing summary describing the **split-stack target** (the 3 ADRs of 2026-06-28); `api/` and
-`frontend/` are built out across slices #164–#174.
+For the live implementation state, read `state/active.md`. Per-module detail lives in the code
+and in the `context/` files (architecture/services/warming/neurocomment).
 
 ## Non-Negotiables (one-line each — full text in `context/conventions.md`; frontend law in `context/frontend.md`)
 1. **API Layer is UI-thin (`api/`)** — `/api/v1` routes only validate → call a service → serialize; no business logic, no DB/Telegram access. `api/` imports **only** `services`/`schemas`/`core.config`/`core.logging`/`fastapi`.
@@ -102,7 +52,7 @@ Before adding files, follow `.mex/context/conventions.md` → **File Placement G
 - Lint / format: `uv run ruff check .` / `uv run ruff format .`
 - Types: `uv run ty check .`
 - Pre-commit: `uv run pre-commit run --all-files`
-- Aislop on Windows: `uv run python -m aislop` if direct CLI invocation fails
+- Aislop gate: `uv run python tools/aislop_gate.py` (aislop is an npm tool; `python -m aislop` does not work)
 - Regenerate the API client: `uv run python -m tools.gen_api` (dumps OpenAPI → hey-api → prettier; CI drift-checks it)
 - Frontend (from `frontend/`): `npm install`; `npm run dev` (vite + `/api` proxy); `npm run gates` (eslint/prettier/boundaries/tsc/vitest)
 - Full toolchain — `context/setup.md`.
@@ -113,7 +63,7 @@ After meaningful work, run GROW (full text in `ROUTER.md` Behavioural Contract):
 
 ### Memory hygiene
 1. **GROW before every PR** — update `state/active.md` and bump `last_updated` *before* opening the PR, not after merge.
-2. **New module = new File Map line** — adding any new Python module under `api/`, `core/`, `services/`, or their subpackages means adding it to the File Map above in the same change.
+2. **New top-level package = new File Map line** — the map stays at directory level; per-module detail belongs to `context/` files and the code itself.
 3. **`.serena/` is deprecated** — do not use it; `.mex/` is the single source of truth. If Serena regenerates files there, delete them or add a deprecation header.
 4. **One skill, one source** — edit `.claude/skills/` first, then sync to `.agents/skills/`.
 
@@ -130,23 +80,7 @@ Project-local skills in `.claude/skills/` (matt-pocock). Full triggers in `conte
 - `/to-issues` — split a plan into independently-grabbable board items → `Backlog`.
 
 ## Session Start
-At the start of every new coding session, run from project root:
-
-```
-npx mex-agent check --quiet
-```
-
-If drift errors are reported, run before coding:
-
-```
-npx mex-agent sync --dry-run
-```
-
-Fix the flagged `.mex/` files, then proceed. For a full codebase brief (first session or after major changes):
-
-```
-npx mex-agent init
-```
+Before a coding task: `npx mex-agent check --quiet`; on drift errors, `npx mex-agent sync --dry-run` and fix the flagged `.mex/` files before coding. Full codebase brief (first session / after major changes): `npx mex-agent init`.
 
 ## Navigation
-Read `ROUTER.md` at session start before any task. ROUTER drives every other context file from the routing table. Shell-command policy → `context/rtk.md`. Skills → `context/skills.md`. CI policy → `context/ci.md`.
+Consult `ROUTER.md` when entering an unfamiliar area or before cross-layer work — it routes to every context file. Shell-command policy → `context/rtk.md`. Skills → `context/skills.md`. CI policy → `context/ci.md`.
