@@ -94,8 +94,25 @@ jobs:
       - name: Sync dependencies
         run: uv sync --frozen
 
+      - name: Free runner disk space
+        # The mutant sweep needs more scratch space than the stock ubuntu-latest
+        # image leaves free (~14 GB): the 2026-07-05 dispatch run died mid-sweep
+        # with "No space left on device" (runner killed, logs lost). Dropping the
+        # unused Android SDK and .NET toolchains frees ~20 GB in seconds.
+        run: |
+          sudo rm -rf /usr/local/lib/android /usr/share/dotnet /opt/ghc
+          df -h /
+
       - name: Run mutmut
         run: uv run mutmut run
+
+      # If the sweep fails again, show where the disk went — the runner dies too
+      # hard to upload step logs, so this is the only signal that survives.
+      - name: Disk usage diagnostics
+        if: failure()
+        run: |
+          df -h /
+          sudo du -h -d 2 /tmp "$GITHUB_WORKSPACE" 2>/dev/null | sort -rh | head -25
 
       # Always surface the kill/survive breakdown — a bare `mutmut run` leaves no
       # visible signal, so surviving mutants (the whole point) went unseen.
