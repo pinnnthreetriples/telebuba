@@ -15,7 +15,7 @@ edges:
     condition: when the service drives Telegram via typed actions
   - target: patterns/add-api-endpoint.md
     condition: when an /api/v1 endpoint is going to call this service
-last_updated: 2026-06-28
+last_updated: 2026-07-06
 ---
 
 # Add a Service
@@ -24,7 +24,7 @@ last_updated: 2026-06-28
 
 Read `context/services.md` for the layer definition. Hard rules:
 - Small domain: `services/<domain>.py`. Large domain: `services/<domain>/` package.
-- Pure business logic. No `nicegui`, no `sqlalchemy`, no `telethon`, no raw provider HTTP imports.
+- Pure business logic. No `fastapi`, no `sqlalchemy`, no `telethon`, no raw provider HTTP imports.
 - All I/O goes through `core/` adapters.
 - Public cross-layer functions take and return Pydantic models from `schemas/` or `None`.
 
@@ -47,16 +47,16 @@ Read `context/services.md` for the layer definition. Hard rules:
 
 ## Gotchas
 
-- Do not put NiceGUI notifications inside a service. The service returns a result; the feature renders it.
-- Do not import from `features/`. Pull shared behavior into services/core/schemas.
-- Sync I/O blocks the NiceGUI event loop. Use `await`; for unavoidable sync work, `asyncio.to_thread`.
+- Do not put HTTP concerns (status codes, response envelopes) inside a service. The service returns a typed result; `api/` serializes it.
+- Do not import from `api/`. Pull shared behavior into services/core/schemas.
+- Sync I/O blocks the single-worker event loop. Use `await`; for unavoidable sync work, `asyncio.to_thread`.
 - A service package root that grows past simple API re-export/orchestration is a smell — split by subdomain.
 - Do not add raw list/dict returns for convenience; create a response schema.
 
 ## Verify
 
 - [ ] Service domain is in `services/<domain>.py` or `services/<domain>/`
-- [ ] No `nicegui` / `sqlalchemy` / `telethon` / raw `httpx` imports in the service
+- [ ] No `fastapi` / `sqlalchemy` / `telethon` / raw `httpx` imports in the service
 - [ ] Public cross-layer functions are async when they perform I/O and take/return Pydantic models
 - [ ] Telegram actions go through `core.telegram_client.execute(account_id, action)` with a typed action schema
 - [ ] Config used as `settings.<namespace>.<field>`
