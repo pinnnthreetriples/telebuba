@@ -6,6 +6,10 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[options]
+exclude-newer = "2026-06-28T23:04:35.0635623Z"
+exclude-newer-span = "P7D"
+
 [manifest]
 overrides = [
     { name = "msgpack", specifier = ">=1.2.1" },
