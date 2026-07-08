@@ -52,6 +52,7 @@ from core.repositories.neurocomment._comments import (
     mark_comment_failed,
     mark_comment_posted,
     mark_human_skipped,
+    reclaim_stale_claims,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -110,6 +111,7 @@ __all__ = [
     "mark_comment_failed",
     "mark_comment_posted",
     "mark_human_skipped",
+    "reclaim_stale_claims",
     "remove_account_from_campaign",
     "resolve_pending_outcome",
     "save_neurocomment_settings",

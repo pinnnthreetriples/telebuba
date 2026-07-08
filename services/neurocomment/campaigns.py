@@ -110,11 +110,6 @@ async def list_campaign_challenges(campaign_id: str, limit: int) -> ChallengeRow
     return ChallengeRowList(rows=merged.rows[:limit])
 
 
-async def count_challenge_outcomes(channels: list[str], since: str) -> ChallengeOutcomeCounts:
-    """Header counters: challenge outcomes across a campaign's channels in a window (#148)."""
-    return await db.count_by_outcome(channels, since)
-
-
 async def count_campaign_challenge_outcomes(
     campaign_id: str,
     since: str,

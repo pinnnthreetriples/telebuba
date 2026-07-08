@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import re
 from typing import TYPE_CHECKING, Literal
 
 from pydantic import ValidationError
@@ -33,7 +34,7 @@ from schemas.telegram_actions import (
     PostComment,
     WaitForBotChallenge,
 )
-from services.content import normalize_text
+from services.content import has_link, is_acceptable, normalize_text
 from services.neurocomment import _seams
 
 if TYPE_CHECKING:
@@ -56,9 +57,15 @@ _DECISION_SCHEMA: dict[str, object] = {
 }
 
 
-def _challenge_hash(text: str, button_labels: list[str]) -> str:
-    """Stable global cache key: normalized text joined with sorted button labels."""
+def _challenge_hash(text: str, button_labels: list[str], *, has_photo: bool = False) -> str:
+    """Stable global cache key: normalized text joined with sorted button labels.
+
+    Photo challenges are namespaced so an image outcome can never be reused by a
+    same-text/labels TEXT challenge (the picture varies — vision is never cached).
+    """
     payload = normalize_text(text) + "|" + "|".join(sorted(button_labels))
+    if has_photo:
+        payload = "photo|" + payload
     return hashlib.sha256(payload.encode("utf-8")).hexdigest()
 
 
@@ -142,6 +149,10 @@ async def _llm_decision(
         decision = ChallengeDecision.model_validate_json(result.text)
     except ValidationError:
         return None
+    # M4: a fresh low-confidence guess is not worth a risky action → give up (None
+    # reuses the give_up contract). Cached decisions skip this — they were already vetted.
+    if decision.confidence < settings.neurocomment.challenge_min_confidence:
+        return None
     return _canonicalize_index(decision, message)
 
 
@@ -197,6 +208,27 @@ def _cached_label(decision: ChallengeDecision, button_labels: list[str]) -> str 
     return ordered[index]
 
 
+def _is_dangerous_label(label: str) -> bool:
+    """True when a button label looks like a phishing/payment trap we must not click."""
+    if has_link(label):
+        return True
+    return any(
+        re.search(pattern, label, re.IGNORECASE)
+        for pattern in settings.neurocomment.challenge_button_denylist_patterns
+    )
+
+
+def _action_allowed(decision: ChallengeDecision, message: BotChallengeMessage) -> bool:
+    """Screen the concrete action before dispatch (C1 clicks, C2 typed answers)."""
+    if decision.action == "send_text":  # C2: same outbound gate as the comment path
+        text = decision.text or ""
+        return is_acceptable(text) and len(text.split()) <= settings.neurocomment.comment_max_words
+    label = _cached_label(decision, message.button_labels)  # C1: screen the label we'd click
+    if label is None:
+        return True
+    return not _is_dangerous_label(label)
+
+
 async def _dispatch(
     account_id: str,
     group_id: int,
@@ -231,7 +263,9 @@ async def _record(
 ) -> None:
     await insert_challenge(
         ChallengeInsert(
-            challenge_hash=_challenge_hash(message.text, message.button_labels),
+            challenge_hash=_challenge_hash(
+                message.text, message.button_labels, has_photo=message.has_photo
+            ),
             account_id=account_id,
             channel=channel,
             raw_text=message.text,
@@ -280,7 +314,11 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
         decision = await (
             _llm_decision(message, use_image=True) if message.has_photo else _decide(message)
         )
-        if decision is None or decision.action == "give_up":
+        if (
+            decision is None
+            or decision.action == "give_up"
+            or not _action_allowed(decision, message)
+        ):
             await _record(account_id, channel, message, outcome="give_up", decision=decision)
             return "give_up"
         await asyncio.sleep(_human_delay_seconds())

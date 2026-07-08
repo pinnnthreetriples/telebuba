@@ -300,6 +300,10 @@ class CampaignOnboardingResult(BaseModel):
     outcomes: list[AccountChannelOnboarding] = Field(default_factory=list)
 
 
+# The onboarding-progress schemas (``OnboardingProgressCode`` / ``OnboardingProgressEvent``)
+# live in ``schemas.neurocomment_progress`` (file-size cap); they import ``OnboardingState``
+# from here, so this module must not import them back.
+
 # --------------------------------------------------------------------------- #
 # Board read model (issue #119) — bulk-built UI state, no per-card DB queries.
 # --------------------------------------------------------------------------- #

@@ -9,17 +9,19 @@ warming runtime tests' approach to task tracking + shutdown.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
 from core.config import settings
 from core.db import (
+    _get_engine,
     claim_comment,
     configure_database,
     create_account,
     create_campaign,
+    fetch_comment,
     get_listener_account_id,
     get_listener_running,
     link_channel_to_campaign,
@@ -43,6 +45,8 @@ from services.neurocomment import _runtime, _state
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
     from pathlib import Path
+
+    from schemas.neurocomment_progress import OnboardingProgressEvent
 
 
 @pytest.fixture(autouse=True)
@@ -235,6 +239,47 @@ async def test_on_post_spawns_task_and_returns_without_blocking(
     release.set()
     await asyncio.sleep(0)  # let the task finish + discard itself
     await asyncio.sleep(0)
+
+
+@pytest.mark.asyncio
+async def test_on_post_drops_when_at_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """At the concurrency cap, further posts are dropped (not spawned) — flood protection (L4)."""
+    monkeypatch.setattr(settings.neurocomment, "max_concurrent_post_tasks", 2)
+    release = asyncio.Event()
+
+    async def blocking_handle(_event: NewPostEvent) -> None:
+        await release.wait()
+
+    monkeypatch.setattr(_runtime, "handle_new_post", blocking_handle)
+
+    for post_id in range(5):
+        await _runtime.on_post(NewPostEvent(channel="@a", post_id=post_id, text="hi"))
+
+    # Only the first two spawned; the remaining three were dropped at capacity.
+    assert len(_runtime._TASKS) == 2
+
+    release.set()
+    await asyncio.gather(*list(_runtime._TASKS), return_exceptions=True)
+
+
+@pytest.mark.asyncio
+async def test_on_post_accepts_up_to_capacity(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Posts up to the cap all spawn — the bound never drops below capacity (L4)."""
+    monkeypatch.setattr(settings.neurocomment, "max_concurrent_post_tasks", 3)
+    release = asyncio.Event()
+
+    async def blocking_handle(_event: NewPostEvent) -> None:
+        await release.wait()
+
+    monkeypatch.setattr(_runtime, "handle_new_post", blocking_handle)
+
+    for post_id in range(3):
+        await _runtime.on_post(NewPostEvent(channel="@a", post_id=post_id, text="hi"))
+
+    assert len(_runtime._TASKS) == 3
+
+    release.set()
+    await asyncio.gather(*list(_runtime._TASKS), return_exceptions=True)
 
 
 @pytest.mark.asyncio
@@ -453,10 +498,10 @@ async def test_start_passes_on_progress_through_to_onboard(
         return None
 
     monkeypatch.setattr(_runtime, "onboard_campaign", fake_onboard)
-    sentinel: list[str] = []
+    sentinel: list[object] = []
 
-    def on_progress(msg: str) -> None:
-        sentinel.append(msg)
+    def on_progress(event: OnboardingProgressEvent) -> None:
+        sentinel.append(event)
 
     await _runtime.start_neurocomment("listener-1", on_progress=on_progress)
     await _drain_onboarding()
@@ -666,6 +711,33 @@ async def test_reconcile_on_startup_does_not_resume_paused_listener(
 
     assert spy.reconciled == []
     assert await get_listener_account_id() == "listener-1"
+
+
+@pytest.mark.asyncio
+async def test_startup_reclaims_stale_claims_even_when_not_running() -> None:
+    """A crash-orphaned 'claimed' row is failed on boot even for a paused/stopped runtime.
+
+    Reclaim runs before the running-gate, so a listener that boots not-running still
+    frees claims stuck since before the cutoff (else the post_id is un-claimable forever).
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await create_account(AccountCreate(account_id="acc-1", label="acc-1", session_name="acc-1"))
+    assert await claim_comment("@a", 1, campaign.campaign_id, "acc-1") is True
+    # Stuck since well before the reclaim cutoff.
+    stale = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_comments SET created_at = ? WHERE post_id = 1",
+            (stale,),
+        )
+    assert await get_listener_running() is False  # runtime is not running
+
+    await _runtime.reconcile_neurocomment_on_startup()
+
+    row = await fetch_comment("@a", 1)
+    assert row is not None
+    assert row.status == "failed"
 
 
 @pytest.mark.asyncio
