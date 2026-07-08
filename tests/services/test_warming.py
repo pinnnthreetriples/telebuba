@@ -49,6 +49,7 @@ from schemas.warming import (
     RemoveChannelRequest,
     StartWarmingRequest,
     StopWarmingRequest,
+    WarmingChannel,
     WarmingCycleRequest,
     WarmingCycleResult,
     WarmingSettingsUpdate,
@@ -59,7 +60,7 @@ from schemas.warming import (
 from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
-from services.warming import _loop, _runner, _runtime, _seams, _transitions
+from services.warming import _cycle, _loop, _runner, _runtime, _seams, _transitions
 from services.warming.pacing import (
     _seconds_until,
     persona_dm_probability,
@@ -346,6 +347,73 @@ async def test_cycle_story_view_flood_wait_stops_cycle(monkeypatch: pytest.Monke
 
     assert result.status == "flood_wait"
     assert result.last_failed_action == "watch_peer_stories"
+
+
+# --------------------------------------------------------------------------- #
+# Per-account channel affinity (global-pool de-correlation)
+# --------------------------------------------------------------------------- #
+
+
+def _affinity_pool(size: int) -> list[WarmingChannel]:
+    return [
+        WarmingChannel(channel=f"chan_{i}", created_at="2026-01-01T00:00:00+00:00")
+        for i in range(size)
+    ]
+
+
+def test_channel_affinity_is_stable_per_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A human's interests don't reshuffle each session: the same account + pool
+    # yields the same affinity subset across cycles (a process-stable seed).
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.5)
+    pool = _affinity_pool(10)
+
+    first = _cycle._account_channel_affinity("acc-1", pool)
+    second = _cycle._account_channel_affinity("acc-1", pool)
+
+    assert [c.channel for c in first] == [c.channel for c in second]
+
+
+def test_channel_affinity_differs_between_accounts(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Two accounts carve different slices of the shared pool → their join/read
+    # graphs de-correlate (partial overlap is fine, identical subsets are the tell).
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.5)
+    pool = _affinity_pool(10)
+
+    subsets = {
+        frozenset(c.channel for c in _cycle._account_channel_affinity(f"acc-{i}", pool))
+        for i in range(6)
+    }
+
+    assert all(len(s) == 5 for s in subsets)
+    assert len(subsets) > 1  # not every account landed on the same 5 channels
+
+
+def test_channel_affinity_whole_pool_when_small(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A pool no larger than one cycle's floor has nothing to subdivide → the whole
+    # pool is the affinity, so tiny-pool behaviour is unchanged (no regression).
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 2)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.5)
+
+    for size in (1, 2):
+        pool = _affinity_pool(size)
+        affinity = _cycle._account_channel_affinity("acc-1", pool)
+        assert {c.channel for c in affinity} == {c.channel for c in pool}
+
+
+def test_channel_affinity_ratio_controls_size(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The config ratio sets the slice size: a bigger ratio → a bigger interest set.
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    pool = _affinity_pool(20)
+
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.25)
+    small = _cycle._account_channel_affinity("acc-1", pool)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.75)
+    large = _cycle._account_channel_affinity("acc-1", pool)
+
+    assert len(small) == 5
+    assert len(large) == 15
 
 
 # --------------------------------------------------------------------------- #
@@ -932,6 +1000,12 @@ async def _fake_loop(_account_id: str, *, run_id: str | None = None) -> None:  #
     await asyncio.sleep(3600)
 
 
+async def _no_initial_delay(*_args: object, **_kwargs: object) -> float:
+    # ``_initial_delay_seconds`` is now async (it fetches the account tz), so a
+    # patch that suppresses the startup wait must be awaitable too.
+    return 0.0
+
+
 @pytest.mark.asyncio
 async def test_start_warming_persists_chosen_target_days(monkeypatch: pytest.MonkeyPatch) -> None:
     # The day slider's value reaches the warming-state row (was silently dropped).
@@ -1421,6 +1495,58 @@ async def test_cycle_propagates_flood_wait_seconds(monkeypatch: pytest.MonkeyPat
     assert result.status == "flood_wait"
     assert result.flood_wait_seconds == 42
     assert result.flood_wait_until is not None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wait_status", ["slow_mode_wait", "premium_wait"])
+async def test_cycle_treats_wait_family_status_as_flood(
+    monkeypatch: pytest.MonkeyPatch, wait_status: str
+) -> None:
+    # FIX #5B: slow_mode_wait / premium_wait were never emitted by any warming
+    # test, leaving _WAIT_STATUSES membership unpinned. A join returning either
+    # must halt the cycle as a wait (cooldown scheduled) — not "ok", not a plain
+    # failure.
+    recorder = _StatusRecorder()
+    recorder.status_by_type = {"join_channel": wait_status}
+    recorder.flood_seconds_by_type = {"join_channel": 300}
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 300
+    assert result.flood_wait_until is not None
+    assert "read_channel" not in recorder.types()  # cycle halted at the join
+
+
+@pytest.mark.asyncio
+async def test_cycle_dm_slow_mode_wait_folds_into_flood(monkeypatch: pytest.MonkeyPatch) -> None:
+    # FIX #5A: the DM send path now checks _HALT_STATUSES (was a hardcoded status
+    # tuple), so a slow_mode_wait on send_dm is treated as a wait — flood_result
+    # set, cycle status flood_wait, no message counted — not a plain failure.
+    recorder = _StatusRecorder()
+    recorder.status_by_type = {"send_dm": "slow_mode_wait"}
+    recorder.flood_seconds_by_type = {"send_dm": 300}
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "dm_min_age_hours", 0.0)
+
+    async def fake_generate(_request: object) -> GeminiResult:
+        return GeminiResult(status="ok", text="hi there")
+
+    monkeypatch.setattr(_seams, "generate_text", fake_generate)
+    await _seed_channel()
+    await _set_settings(chat=True, reactions=False, key="gemini-key")
+    await _seed_two_warming_accounts()
+    await record_dialogue_message("acc-2", "acc-1", "привет!", replied=False)
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 300
+    assert result.messages_sent == 0
+    assert result.last_failed_action == "send_dm"
 
 
 @pytest.mark.asyncio
@@ -2048,10 +2174,11 @@ def test_shift_to_active_hours_moves_night_into_window(monkeypatch: pytest.Monke
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 0)  # exact snap
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(night, None).hour == 8
+    assert warming._shift_to_active_hours(night, None, _seams.rng).hour == 8
     day = datetime(2026, 6, 12, 14, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(day, None) == day
+    assert warming._shift_to_active_hours(day, None, _seams.rng) == day
 
 
 def test_shift_to_active_hours_uses_account_timezone(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2060,7 +2187,7 @@ def test_shift_to_active_hours_uses_account_timezone(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
     # 03:00 UTC is the middle of the night in New York → shifted into the window.
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    shifted = warming._shift_to_active_hours(night, "America/New_York")
+    shifted = warming._shift_to_active_hours(night, "America/New_York", _seams.rng)
     local = shifted.astimezone(ZoneInfo("America/New_York"))
     assert 8 <= local.hour < 23
 
@@ -2069,15 +2196,54 @@ def test_shift_to_active_hours_bad_timezone_falls_back(monkeypatch: pytest.Monke
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 0)  # exact snap
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(night, "Not/AZone").hour == 8
+    assert warming._shift_to_active_hours(night, "Not/AZone", _seams.rng).hour == 8
 
 
 def test_shift_to_active_hours_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.warming, "active_hours_start", 0)
     monkeypatch.setattr(settings.warming, "active_hours_end", 0)
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(night, None) == night
+    assert warming._shift_to_active_hours(night, None, _seams.rng) == night
+
+
+def test_shift_to_active_hours_randomizes_within_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    # FIX #1: a night resume must NOT land on the same wall-clock second for every
+    # account — the snapped morning time gets a randomised in-window offset.
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 120)
+    # The autouse fixture pins rng.random()→0.0 for deterministic gates, which
+    # would collapse uniform() to the low bound; restore a live draw for the spread.
+    monkeypatch.setattr(_seams.rng, "random", random.random)
+    night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
+    first = warming._shift_to_active_hours(night, None, _seams.rng)
+    second = warming._shift_to_active_hours(night, None, _seams.rng)
+    assert first != second  # independent draws de-correlate accounts
+    # ...but both stay inside [start, start + spread) = [08:00, 10:00).
+    for shifted in (first, second):
+        assert 8 <= shifted.hour < 10
+
+
+@pytest.mark.parametrize("day", [(2026, 3, 8), (2026, 11, 1)])
+def test_shift_to_active_hours_survives_dst(
+    day: tuple[int, int, int], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # DST spring-forward (2026-03-08) and fall-back (2026-11-01) in New York: a
+    # night snap must not crash on a non-existent/ambiguous wall-clock hour and
+    # must land in the active window in the future.
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    tz = ZoneInfo("America/New_York")
+    year, month, dom = day
+    night = datetime(year, month, dom, 4, 0, tzinfo=tz).astimezone(UTC)  # 04:00 local, night
+    result = warming._shift_to_active_hours(night, "America/New_York", _seams.rng)
+    local = result.astimezone(tz)
+    assert 8 <= local.hour < 23
+    assert result > night
 
 
 # --------------------------------------------------------------------------- #
@@ -2314,7 +2480,8 @@ def test_seconds_until_invalid_and_naive() -> None:
     assert warming._seconds_until("2026-06-12T00:01:00", now) == pytest.approx(60)
 
 
-def test_initial_delay_respects_future_next_run() -> None:
+@pytest.mark.asyncio
+async def test_initial_delay_respects_future_next_run() -> None:
     now = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
     record = WarmingStateRecord(
         account_id="a",
@@ -2322,13 +2489,46 @@ def test_initial_delay_respects_future_next_run() -> None:
         updated_at="t",
         next_run_at=(now + timedelta(seconds=3600)).isoformat(),
     )
-    assert warming._initial_delay_seconds(record, now) == pytest.approx(3600)
+    assert await warming._initial_delay_seconds("a", record, now) == pytest.approx(3600)
 
 
-def test_initial_delay_uses_jitter_without_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.warming, "startup_jitter_max_seconds", 4.0)
-    value = warming._initial_delay_seconds(None, datetime(2026, 6, 12, 0, 0, tzinfo=UTC))
-    assert 0.0 <= value <= 4.0
+@pytest.mark.asyncio
+async def test_initial_delay_cold_start_shifts_into_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    # FIX #10: a cold start (no schedule) at 03:00 local must not fire in the
+    # middle of the night — it is routed through the active-hours window.
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+
+    async def fake_tz(_account_id: str) -> str:
+        return "Europe/Istanbul"  # UTC+3, no DST
+
+    monkeypatch.setattr(_runner, "_account_tz", fake_tz)
+    now = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)  # 03:00 Istanbul → night
+    delay = await warming._initial_delay_seconds("acc-1", None, now)
+    first_run = (now + timedelta(seconds=delay)).astimezone(ZoneInfo("Europe/Istanbul"))
+    assert 8 <= first_run.hour < 23
+
+
+@pytest.mark.asyncio
+async def test_initial_delay_cold_start_spreads_over_hours(monkeypatch: pytest.MonkeyPatch) -> None:
+    # FIX #10: cold-start delays vary across accounts and can exceed the old ~8s
+    # startup jitter (spread over cold_start_spread_hours). Active hours off so the
+    # spread itself is under test, not the window snap.
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
+    monkeypatch.setattr(settings.warming, "cold_start_spread_hours", 4.0)
+    # Restore a live rng.random() (the fixture pins it to 0.0, which would collapse
+    # the cold-start uniform() spread to a single value).
+    monkeypatch.setattr(_seams.rng, "random", random.random)
+
+    async def fake_tz(_account_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(_runner, "_account_tz", fake_tz)
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    delays = {await warming._initial_delay_seconds("acc-1", None, now) for _ in range(20)}
+    assert len(delays) > 1  # independent draws, not a synchronized burst
+    assert max(delays) > 8.0  # spread over hours, not the old few-second jitter
 
 
 def test_loop_sleep_respects_future_next_run() -> None:
@@ -2960,7 +3160,7 @@ async def test_warming_loop_exits_when_state_becomes_idle_after_iteration(
 
     monkeypatch.setattr(_runner, "run_loop_iteration", fake_iteration)
     monkeypatch.setattr(_runner, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
-    monkeypatch.setattr(_runner, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_initial_delay_seconds", _no_initial_delay)
 
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(WarmingStateWrite(account_id="acc-1", state="active"))
@@ -3625,7 +3825,7 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
         WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
     )
 
-    monkeypatch.setattr(_runner, "_initial_delay_seconds", lambda *_args, **_kwargs: 0.0)
+    monkeypatch.setattr(_runner, "_initial_delay_seconds", _no_initial_delay)
     monkeypatch.setattr(_runner, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
 
     async def crash_after_replacing_generation(
@@ -3724,6 +3924,7 @@ async def test_daily_cap_park_shifts_into_active_hours(
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 0)  # exact snap
 
     async def fake_tz(_account_id: str) -> str:
         return "Europe/Istanbul"  # UTC+3, no DST
@@ -3786,8 +3987,13 @@ async def test_lone_set_online_failure_sleeps_not_errors(
 
 
 @pytest.mark.asyncio
-async def test_flood_wait_without_duration_parks_well_into_the_future() -> None:
+async def test_flood_wait_without_duration_parks_well_into_the_future(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """An unknown flood duration must cool down, not collapse to a 0s retry (#100)."""
+    # Isolate the cool-down math from the active-hours shift (FIX #8 now routes
+    # flood_wait through it too — covered separately below).
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
     before = datetime.now(UTC)
     _, next_run_dt, next_state = await _loop._calculate_next_run(
         "acc-1",
@@ -3807,6 +4013,80 @@ async def test_flood_wait_without_duration_parks_well_into_the_future() -> None:
         40,
     )
     assert (soon_dt - datetime.now(UTC)).total_seconds() < 60
+
+
+@pytest.mark.asyncio
+async def test_flood_wait_applies_human_margin(monkeypatch: pytest.MonkeyPatch) -> None:
+    """FIX #8: a timed FloodWait resumes strictly after the raw duration (human margin)."""
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", False)  # isolate the margin
+    monkeypatch.setattr(settings.warming, "flood_wait_margin_fraction", 0.2)
+    monkeypatch.setattr(_seams.rng, "uniform", lambda _a, b: b)  # deterministic max margin
+    before = datetime.now(UTC)
+    _, next_run_dt, next_state = await _loop._calculate_next_run(
+        "acc-1",
+        WarmingCycleResult(account_id="acc-1", status="flood_wait", flood_wait_seconds=100),
+        "normal",
+        40,
+    )
+    assert next_state == "flood_wait"
+    # 100s inflated by the 1 + 0.2 margin → strictly beyond the raw wait.
+    assert (next_run_dt - before).total_seconds() > 100
+
+
+@pytest.mark.asyncio
+async def test_flood_wait_expiry_defers_into_active_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    """FIX #8: a flood_wait expiring at night is deferred into the morning window."""
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 0)  # exact snap
+    monkeypatch.setattr(settings.warming, "flood_wait_margin_fraction", 0.0)  # exact duration
+    before = datetime.now(UTC)
+    # Duration chosen so the wait expires at 03:00 UTC (night). No account row →
+    # _account_tz resolves to None, so the window is interpreted in UTC.
+    target_night = (before + timedelta(days=1)).replace(hour=3, minute=0, second=0, microsecond=0)
+    flood_seconds = int((target_night - before).total_seconds())
+    _, next_run_dt, next_state = await _loop._calculate_next_run(
+        "acc-flood",
+        WarmingCycleResult(
+            account_id="acc-flood", status="flood_wait", flood_wait_seconds=flood_seconds
+        ),
+        "normal",
+        40,
+    )
+    assert next_state == "flood_wait"
+    # 03:00 night → deferred to 08:00 (the active-window start), still in the future.
+    assert next_run_dt.astimezone(UTC).hour == 8
+    assert next_run_dt > before
+
+
+@pytest.mark.asyncio
+async def test_cycle_cancellation_still_sets_offline(monkeypatch: pytest.MonkeyPatch) -> None:
+    # FIX #11a: cancelling a cycle mid-flight must propagate CancelledError AND
+    # still run the finally: _set_offline cleanup (SetOnline(False)) so a killed
+    # account is not left showing "online" forever.
+    inside_join = asyncio.Event()
+    offline_sent = asyncio.Event()
+
+    async def blocking_execute(account_id: str, action: TelegramAction) -> ActionResult:
+        if action.action_type == "join_channel":
+            inside_join.set()
+            await asyncio.Event().wait()  # block forever → the test cancels here
+        if action.action_type == "set_online" and getattr(action, "online", None) is False:
+            offline_sent.set()
+        return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+
+    monkeypatch.setattr(_seams, "execute", blocking_execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    task = asyncio.create_task(warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1")))
+    await asyncio.wait_for(inside_join.wait(), timeout=1.0)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    assert offline_sent.is_set()  # the finally cleanup dispatched SetOnline(False)
 
 
 @pytest.mark.asyncio

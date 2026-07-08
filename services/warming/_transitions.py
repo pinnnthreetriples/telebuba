@@ -205,6 +205,8 @@ async def _calculate_next_run(
             if result.flood_wait_seconds is not None
             else warm.flood_wait_fallback_hours * _SECONDS_PER_HOUR
         )
+        # Human margin: real users don't retry on the exact second a limit lifts.
+        sleep_seconds *= 1 + _seams.rng.uniform(0, warm.flood_wait_margin_fraction)
         next_state = "flood_wait"
     elif result.status == "failed":
         sleep_seconds = persona_next_run_seconds(persona, daily_cap, _seams.rng)
@@ -230,8 +232,11 @@ async def _calculate_next_run(
         next_state = "sleeping"
 
     next_run_dt = datetime.now(UTC) + timedelta(seconds=sleep_seconds)
-    if result.status not in {"peer_flood", "flood_wait"}:
-        next_run_dt = _shift_to_active_hours(next_run_dt, await _account_tz(account_id))
+    # peer_flood goes through the quarantine path, so it keeps its raw cooldown;
+    # a flood_wait that expires at night is now deferred into the morning window
+    # too (a resume at 04:00 is more suspicious than the wait itself).
+    if result.status != "peer_flood":
+        next_run_dt = _shift_to_active_hours(next_run_dt, await _account_tz(account_id), _seams.rng)
 
     return actions_done, next_run_dt, next_state
 

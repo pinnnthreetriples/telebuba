@@ -170,6 +170,7 @@ async def _gate_daily_limit(
     next_run = _shift_to_active_hours(
         _next_utc_midnight(now),
         await _account_tz(account_id),
+        _seams.rng,
     ).isoformat()
     write = await _set_state(
         account_id,

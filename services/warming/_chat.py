@@ -28,7 +28,7 @@ from schemas.telegram_actions import ActionResult, SendDirectMessage
 from services.content import is_acceptable, release_sent_text, try_reserve_sent
 from services.dialogues import get_partners
 from services.warming import _seams
-from services.warming.pacing import _classify_flood, persona_dm_probability
+from services.warming.pacing import _HALT_STATUSES, _classify_flood, persona_dm_probability
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -231,7 +231,7 @@ async def _reply_to_partner(  # noqa: PLR0911
     # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
 
-    if result.status in ("flood_wait", "peer_flood", "slow_mode_wait", "premium_wait"):
+    if result.status in _HALT_STATUSES:
         await mark_message_unreplied(incoming.id)
         # P2.6: drop the reservation so the next retry of an identical reply
         # isn't shadowed for the entire dedup window.
@@ -302,7 +302,7 @@ async def _open_with_partner(
     # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
     result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
 
-    if result.status in ("flood_wait", "peer_flood", "slow_mode_wait", "premium_wait"):
+    if result.status in _HALT_STATUSES:
         # P2.6: drop the reservation so the next opener retry isn't shadowed.
         await release_sent_text(text)
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
