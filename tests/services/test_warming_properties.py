@@ -187,16 +187,20 @@ _SHIFT_RNG = random.Random(0)  # noqa: S311 - non-crypto jitter in a test
     # Hypothesis requires naive bounds for st.datetimes; we attach UTC below.
     naive=st.datetimes(min_value=datetime(2020, 1, 1), max_value=datetime(2035, 1, 1)),  # noqa: DTZ001
     tz_name=st.sampled_from(_IANA_TZS),
+    account_id=st.text(min_size=1, max_size=16),
 )
-def test_shift_result_lands_in_active_window(naive: datetime, tz_name: str) -> None:
+def test_shift_result_lands_in_active_window(
+    naive: datetime, tz_name: str, account_id: str
+) -> None:
     """A shifted next-run never precedes the candidate and lands inside the window.
 
     Shifting is enabled by the config default (08:00–23:00), so any candidate is
-    either already in-window (returned as-is) or snapped forward into
-    ``[start, start + spread)`` — in both cases the account-local hour is in-window.
+    either already in-window (returned as-is) or snapped forward to the account's
+    chronotype offset — clamped to the window width, so for any account the
+    local hour lands in-window.
     """
     candidate = naive.replace(tzinfo=UTC)
-    result = _shift_to_active_hours(candidate, tz_name, _SHIFT_RNG)
+    result = _shift_to_active_hours(candidate, tz_name, _SHIFT_RNG, account_id)
     warm = settings.warming
     assert result >= candidate  # shifting only ever defers, never brings a run forward
     local_hour = result.astimezone(ZoneInfo(tz_name)).hour

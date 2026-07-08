@@ -19,6 +19,7 @@ from schemas.warming import (
     WarmingReadiness,
     is_warming,
 )
+from services.warming._fleet import _stable_fraction
 
 # The phase/persona safety-ceiling math lives in ``_phases`` (file-size budget);
 # re-exported here so callers keep importing every name from ``pacing``. Seams
@@ -194,15 +195,44 @@ async def _account_tz(account_id: str) -> str | None:
     return timezone_for_phone(account.phone) if account else None
 
 
-def _shift_to_active_hours(candidate: datetime, tz_name: str | None, rng: Random) -> datetime:
+def _morning_offset_seconds(account_id: str, rng: Random) -> float:
+    """Seconds past ``active_hours_start`` for this account's snapped resume.
+
+    A persistent per-account "chronotype" (a stable hashed offset inside the
+    morning band) plus a soft triangular daily wobble, so each account wakes near
+    the same local time day-to-day while the fleet's wake times form a smooth hump
+    instead of the hard-edged ``uniform(0, spread)`` rectangle that clustered every
+    account into one window. The stable base is the *average of two* independent
+    hashes (a Bates draw ≈ triangular): that gives a humped fleet distribution
+    centred mid-band — not a flat plateau — and keeps low-base accounts off the
+    exact ``HH:00:00`` boundary. The band is clamped to the active-window width so
+    ``start + offset`` never lands past ``active_hours_end`` even under an extreme
+    ``active_hours_start_spread_minutes`` (audit #203).
+    """
+    warm = settings.warming
+    spread = min(float(warm.active_hours_start_spread_minutes), _active_window_hours() * 60.0)
+    if spread <= 0:
+        return 0.0
+    base = (
+        _stable_fraction(f"chronotype:{account_id}") + _stable_fraction(f"chrono2:{account_id}")
+    ) / 2
+    chronotype = base * spread
+    jitter = rng.triangular(-warm.chronotype_jitter_minutes, warm.chronotype_jitter_minutes, 0.0)
+    return min(spread, max(0.0, chronotype + jitter)) * 60.0
+
+
+def _shift_to_active_hours(
+    candidate: datetime, tz_name: str | None, rng: Random, account_id: str
+) -> datetime:
     """Move a next-run time into the account's active local window if it's outside.
 
     Keeps activity clustered in waking hours (account's phone timezone) instead
     of firing uniformly through the night. A ``start == end`` window disables it.
 
-    A shifted resume lands at a random point in ``[start, start + spread)`` rather
-    than exactly ``HH:00:00`` — an unseeded ``rng`` per call de-correlates accounts
-    so a fleet that parked overnight does not all wake on the same wall-clock second.
+    A shifted resume lands at the account's stable morning ``chronotype`` (plus a
+    small daily wobble) rather than exactly ``HH:00:00`` — see
+    :func:`_morning_offset_seconds` — so a fleet that parked overnight neither all
+    wakes on the same wall-clock second nor fills a flat rectangle.
     """
     warm = settings.warming
     if not warm.active_hours_enabled or warm.active_hours_start == warm.active_hours_end:
@@ -219,5 +249,5 @@ def _shift_to_active_hours(candidate: datetime, tz_name: str | None, rng: Random
     target = local.replace(hour=warm.active_hours_start, minute=0, second=0, microsecond=0)
     if target <= local:
         target += timedelta(days=1)
-    target += timedelta(seconds=rng.uniform(0, warm.active_hours_start_spread_minutes * 60))
+    target += timedelta(seconds=_morning_offset_seconds(account_id, rng))
     return target.astimezone(UTC)

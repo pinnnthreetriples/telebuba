@@ -7,7 +7,6 @@
 from __future__ import annotations
 
 import asyncio
-import hashlib
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
@@ -25,6 +24,7 @@ from schemas.telegram_actions import JoinChannel, ReactToPost, ReadChannel, SetO
 from schemas.warming import WarmingCycleRequest, WarmingCycleResult
 from services.warming import _seams
 from services.warming._chat import _run_chat_step
+from services.warming._fleet import _account_channel_affinity, _affinity_epoch, _maybe_explore
 from services.warming._stories import maybe_watch_stories
 from services.warming.pacing import (
     _HALT_STATUSES,
@@ -310,30 +310,6 @@ async def _build_cycle_result(
     return result
 
 
-def _account_channel_affinity(
-    account_id: str, channels: list[WarmingChannel]
-) -> list[WarmingChannel]:
-    """A stable per-account interest subset of the global channel pool.
-
-    The pool is shared by every account, so sampling each cycle straight from it
-    makes N accounts overlap almost entirely on which channels they join/read/
-    react to — a correlated-subscription-graph tell. Humans instead follow a
-    fixed set of interests, so we carve a deterministic per-account slice and let
-    each cycle sample from *that*. Ranking uses a hashlib digest of
-    ``account:channel`` rather than the builtin ``hash`` (which is salted per
-    process, so it would reshuffle every account's affinity on restart). Pools no
-    larger than one cycle's floor stay whole — there is nothing to subdivide.
-    """
-    warm = settings.warming
-    if len(channels) <= warm.channels_per_cycle_min:
-        return channels
-    k = min(len(channels), max(1, round(len(channels) * warm.channel_affinity_ratio)))
-    return sorted(
-        channels,
-        key=lambda c: hashlib.sha256(f"{account_id}:{c.channel}".encode()).hexdigest(),
-    )[:k]
-
-
 async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
@@ -394,10 +370,13 @@ async def run_one_cycle(
         await _emit_step(on_step, "set_online")
         await _human_pause(warm.typing_min_seconds, warm.typing_max_seconds)
 
-        affinity = _account_channel_affinity(account_id, channels)
+        affinity = _account_channel_affinity(
+            account_id, channels, _affinity_epoch(datetime.now(UTC))
+        )
         upper = min(intensity.channels_max, len(affinity))
         lower = min(intensity.channels_min, upper)
         chosen = _seams.rng.sample(affinity, _seams.rng.randint(lower, upper))
+        chosen = _maybe_explore(chosen, channels, affinity, account_id, _seams.rng)
         channel_tally = await _run_channel_loop(
             data,
             chosen,

@@ -60,7 +60,7 @@ from schemas.warming import (
 from services import warming
 from services.content import register_sent
 from services.dialogues import assign_pairs
-from services.warming import _cycle, _loop, _runner, _runtime, _seams, _transitions
+from services.warming import _fleet, _loop, _runner, _runtime, _seams, _transitions
 from services.warming.pacing import (
     _seconds_until,
     persona_dm_probability,
@@ -127,6 +127,10 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
         monkeypatch.setattr(settings.warming, field, 0.0)
     monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
     monkeypatch.setattr(settings.warming, "channels_per_cycle_max", 1)
+    # Off-affinity exploration is a per-cycle RNG gate; neutralise it so a cycle
+    # acts on its affinity slice deterministically (the dedicated tests re-enable
+    # it). Without this the pinned rng.random→0.0 would fire exploration every cycle.
+    monkeypatch.setattr(settings.warming, "channel_exploration_probability", 0.0)
     # Deterministic probability rolls: the reaction + persona-DM gates always
     # "pass" so tests exercise the real gates (reactions_enabled / dm_ok /
     # pending / cap), not the RNG. Tests that need a roll to *fail* override this.
@@ -368,8 +372,8 @@ def test_channel_affinity_is_stable_per_account(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.5)
     pool = _affinity_pool(10)
 
-    first = _cycle._account_channel_affinity("acc-1", pool)
-    second = _cycle._account_channel_affinity("acc-1", pool)
+    first = _fleet._account_channel_affinity("acc-1", pool)
+    second = _fleet._account_channel_affinity("acc-1", pool)
 
     assert [c.channel for c in first] == [c.channel for c in second]
 
@@ -382,7 +386,7 @@ def test_channel_affinity_differs_between_accounts(monkeypatch: pytest.MonkeyPat
     pool = _affinity_pool(10)
 
     subsets = {
-        frozenset(c.channel for c in _cycle._account_channel_affinity(f"acc-{i}", pool))
+        frozenset(c.channel for c in _fleet._account_channel_affinity(f"acc-{i}", pool))
         for i in range(6)
     }
 
@@ -398,7 +402,7 @@ def test_channel_affinity_whole_pool_when_small(monkeypatch: pytest.MonkeyPatch)
 
     for size in (1, 2):
         pool = _affinity_pool(size)
-        affinity = _cycle._account_channel_affinity("acc-1", pool)
+        affinity = _fleet._account_channel_affinity("acc-1", pool)
         assert {c.channel for c in affinity} == {c.channel for c in pool}
 
 
@@ -408,12 +412,142 @@ def test_channel_affinity_ratio_controls_size(monkeypatch: pytest.MonkeyPatch) -
     pool = _affinity_pool(20)
 
     monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.25)
-    small = _cycle._account_channel_affinity("acc-1", pool)
+    small = _fleet._account_channel_affinity("acc-1", pool)
     monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.75)
-    large = _cycle._account_channel_affinity("acc-1", pool)
+    large = _fleet._account_channel_affinity("acc-1", pool)
 
     assert len(small) == 5
     assert len(large) == 15
+
+
+def test_channel_affinity_honors_min_under_low_ratio(monkeypatch: pytest.MonkeyPatch) -> None:
+    # #203 P3.6: a low ratio must never carve a subset too small to draw a cycle's
+    # floor — round(20*0.05)=1 but channels_per_cycle_min=3 raises it to 3.
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 3)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.05)
+    pool = _affinity_pool(20)
+
+    assert len(_fleet._account_channel_affinity("acc-1", pool)) == 3
+
+
+def test_channel_affinity_frozen_when_churn_strength_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    # churn_strength=0 → the interest subset is identical across every epoch.
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.25)
+    monkeypatch.setattr(settings.warming, "channel_affinity_churn_strength", 0.0)
+    pool = _affinity_pool(20)
+
+    sets = {
+        frozenset(c.channel for c in _fleet._account_channel_affinity("acc-1", pool, epoch))
+        for epoch in range(6)
+    }
+
+    assert len(sets) == 1  # frozen across epochs
+    assert len(next(iter(sets))) == 5
+
+
+def test_channel_affinity_churns_slowly_over_epochs(monkeypatch: pytest.MonkeyPatch) -> None:
+    # #203: with churn on, membership drifts across epochs (union > one slice) but
+    # slowly — adjacent epochs still share most of the set, not a wholesale swap.
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.25)
+    monkeypatch.setattr(settings.warming, "channel_affinity_churn_strength", 0.15)
+    pool = _affinity_pool(40)
+
+    sets = [
+        frozenset(c.channel for c in _fleet._account_channel_affinity("acc-1", pool, epoch))
+        for epoch in range(30)
+    ]
+
+    assert all(len(s) == 10 for s in sets)  # size preserved every epoch
+    assert len(frozenset().union(*sets)) > 10  # membership drifts over time
+    assert all(len(sets[i] & sets[i + 1]) >= 5 for i in range(len(sets) - 1))  # ...gradually
+
+
+def test_channel_affinity_churn_strength_controls_drift(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A gentle strength keeps more of the previous epoch's set than a violent one.
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.25)
+    pool = _affinity_pool(40)
+
+    def subset(strength: float, epoch: int) -> frozenset[str]:
+        monkeypatch.setattr(settings.warming, "channel_affinity_churn_strength", strength)
+        return frozenset(c.channel for c in _fleet._account_channel_affinity("acc-1", pool, epoch))
+
+    base = subset(0.1, 0)
+    gentle = subset(0.1, 1)
+    violent = subset(0.9, 1)
+
+    assert len(base) == len(gentle) == len(violent) == 10
+    assert len(base & gentle) >= len(base & violent)
+
+
+def test_maybe_explore_swaps_in_off_affinity_channel(monkeypatch: pytest.MonkeyPatch) -> None:
+    # #203: with the exploration roll passing, one chosen channel is replaced by a
+    # channel from outside the affinity set (count preserved).
+    monkeypatch.setattr(settings.warming, "channel_exploration_probability", 1.0)
+    pool = _affinity_pool(6)
+    affinity = pool[:3]
+    chosen = pool[:2]
+
+    result = _fleet._maybe_explore(chosen, pool, affinity, "acc-1", _seams.rng)
+
+    off_names = {c.channel for c in pool[3:]}
+    assert len(result) == len(chosen)
+    assert any(c.channel in off_names for c in result)  # a fresh interest crept in
+    # the swapped-in channel is the account's stable top off-affinity pick, not a
+    # uniform shared draw — so its permanent join stays de-correlated across the fleet.
+    expected = min(pool[3:], key=lambda c: _fleet._stable_fraction(f"aff:acc-1:{c.channel}"))
+    assert any(c.channel == expected.channel for c in result)
+
+
+def test_maybe_explore_pick_is_decorrelated_across_fleet(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # #203: different accounts explore *different* off-affinity channels (each its
+    # own stable top secondary interest), so the permanent joins exploration
+    # triggers don't drift the fleet toward one shared membership graph.
+    monkeypatch.setattr(settings.warming, "channel_exploration_probability", 1.0)
+    pool = _affinity_pool(30)
+    affinity = pool[:5]
+    affinity_names = {a.channel for a in affinity}
+    picks = {
+        next(
+            c.channel
+            for c in _fleet._maybe_explore(pool[:2], pool, affinity, f"acc-{i}", _seams.rng)
+            if c.channel not in affinity_names
+        )
+        for i in range(12)
+    }
+
+    assert len(picks) > 1  # not every account lands on the same off-affinity channel
+
+
+def test_maybe_explore_noop_when_probability_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Probability 0 (fixture pins rng.random→0.0, and 0.0 >= 0.0) → chosen is left
+    # exactly as-is.
+    monkeypatch.setattr(settings.warming, "channel_exploration_probability", 0.0)
+    pool = _affinity_pool(6)
+
+    assert _fleet._maybe_explore(pool[:2], pool, pool[:3], "acc-1", _seams.rng) == pool[:2]
+
+
+def test_maybe_explore_noop_when_no_off_affinity(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Whole pool is the affinity (nothing outside) → exploration can't swap even
+    # when the roll fires; an empty chosen list is likewise left untouched.
+    monkeypatch.setattr(settings.warming, "channel_exploration_probability", 1.0)
+    pool = _affinity_pool(3)
+
+    assert _fleet._maybe_explore(pool, pool, pool, "acc-1", _seams.rng) == pool
+    assert _fleet._maybe_explore([], pool, pool, "acc-1", _seams.rng) == []
+
+
+def test_is_quiet_day_false_on_unparseable_date(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A malformed daily_count_date must not raise — treat it as an active day.
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 1.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 1.0)
+
+    assert _fleet._is_quiet_day("acc-1", "not-a-date") is False
 
 
 # --------------------------------------------------------------------------- #
@@ -2176,9 +2310,9 @@ def test_shift_to_active_hours_moves_night_into_window(monkeypatch: pytest.Monke
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
     monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 0)  # exact snap
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(night, None, _seams.rng).hour == 8
+    assert warming._shift_to_active_hours(night, None, _seams.rng, "acc-1").hour == 8
     day = datetime(2026, 6, 12, 14, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(day, None, _seams.rng) == day
+    assert warming._shift_to_active_hours(day, None, _seams.rng, "acc-1") == day
 
 
 def test_shift_to_active_hours_uses_account_timezone(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -2187,7 +2321,7 @@ def test_shift_to_active_hours_uses_account_timezone(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
     # 03:00 UTC is the middle of the night in New York → shifted into the window.
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    shifted = warming._shift_to_active_hours(night, "America/New_York", _seams.rng)
+    shifted = warming._shift_to_active_hours(night, "America/New_York", _seams.rng, "acc-1")
     local = shifted.astimezone(ZoneInfo("America/New_York"))
     assert 8 <= local.hour < 23
 
@@ -2198,33 +2332,74 @@ def test_shift_to_active_hours_bad_timezone_falls_back(monkeypatch: pytest.Monke
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
     monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 0)  # exact snap
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(night, "Not/AZone", _seams.rng).hour == 8
+    assert warming._shift_to_active_hours(night, "Not/AZone", _seams.rng, "acc-1").hour == 8
 
 
 def test_shift_to_active_hours_disabled(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.warming, "active_hours_start", 0)
     monkeypatch.setattr(settings.warming, "active_hours_end", 0)
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    assert warming._shift_to_active_hours(night, None, _seams.rng) == night
+    assert warming._shift_to_active_hours(night, None, _seams.rng, "acc-1") == night
 
 
-def test_shift_to_active_hours_randomizes_within_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    # FIX #1: a night resume must NOT land on the same wall-clock second for every
-    # account — the snapped morning time gets a randomised in-window offset.
+def test_shift_to_active_hours_chronotype_stable_but_fleet_varied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # #203: the morning offset is a *stable per-account chronotype* — the same
+    # account snaps to the same wall-clock minute day after day (jitter pinned
+    # off), while different accounts spread across the band, so the fleet doesn't
+    # cluster on one second nor drift day-to-day.
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
     monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 120)
-    # The autouse fixture pins rng.random()→0.0 for deterministic gates, which
-    # would collapse uniform() to the low bound; restore a live draw for the spread.
+    monkeypatch.setattr(settings.warming, "chronotype_jitter_minutes", 0.0)  # isolate the base
+    day1 = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
+    day2 = datetime(2026, 6, 13, 3, 0, tzinfo=UTC)
+    first = warming._shift_to_active_hours(day1, None, _seams.rng, "acc-1")
+    second = warming._shift_to_active_hours(day2, None, _seams.rng, "acc-1")
+    assert first.time() == second.time()  # same account, day-to-day consistent
+    fleet = {
+        warming._shift_to_active_hours(day1, None, _seams.rng, f"acc-{i}").time() for i in range(8)
+    }
+    assert len(fleet) > 1  # accounts don't all wake on the same wall-clock second
+    for offset_time in fleet:
+        assert 8 <= offset_time.hour < 10  # inside [08:00, 10:00) = [start, start + spread)
+
+
+def test_shift_to_active_hours_daily_jitter_wobbles_the_base(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # With a non-zero jitter the same account's snapped time wobbles a little from
+    # day to day (a soft draw, not the frozen chronotype base).
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 120)
+    monkeypatch.setattr(settings.warming, "chronotype_jitter_minutes", 20.0)
+    # Restore a live rng.random() (the fixture pins it to 0.0, collapsing the
+    # triangular jitter to a single value).
     monkeypatch.setattr(_seams.rng, "random", random.random)
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
-    first = warming._shift_to_active_hours(night, None, _seams.rng)
-    second = warming._shift_to_active_hours(night, None, _seams.rng)
-    assert first != second  # independent draws de-correlate accounts
-    # ...but both stay inside [start, start + spread) = [08:00, 10:00).
-    for shifted in (first, second):
-        assert 8 <= shifted.hour < 10
+    draws = {warming._shift_to_active_hours(night, None, _seams.rng, "acc-1") for _ in range(20)}
+    assert len(draws) > 1  # daily wobble around the stable base
+    for shifted in draws:
+        assert 8 <= shifted.hour < 11  # base (≤10:00) ± 20min jitter stays in-band
+
+
+def test_morning_offset_clamped_to_window_width(monkeypatch: pytest.MonkeyPatch) -> None:
+    # #203 P3: an extreme spread must not push a resume past active_hours_end —
+    # the offset is clamped to the window width. Window 08:00–10:00 (2h = 120min),
+    # spread 600min → clamped to 120, so the snap never exceeds 10:00.
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 10)
+    monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 600)
+    monkeypatch.setattr(settings.warming, "chronotype_jitter_minutes", 0.0)
+    night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
+    for i in range(12):
+        shifted = warming._shift_to_active_hours(night, None, _seams.rng, f"acc-{i}")
+        assert night.replace(hour=8) <= shifted <= night.replace(hour=10)
 
 
 @pytest.mark.parametrize("day", [(2026, 3, 8), (2026, 11, 1)])
@@ -2240,7 +2415,7 @@ def test_shift_to_active_hours_survives_dst(
     tz = ZoneInfo("America/New_York")
     year, month, dom = day
     night = datetime(year, month, dom, 4, 0, tzinfo=tz).astimezone(UTC)  # 04:00 local, night
-    result = warming._shift_to_active_hours(night, "America/New_York", _seams.rng)
+    result = warming._shift_to_active_hours(night, "America/New_York", _seams.rng, "acc-1")
     local = result.astimezone(tz)
     assert 8 <= local.hour < 23
     assert result > night
@@ -2529,6 +2704,26 @@ async def test_initial_delay_cold_start_spreads_over_hours(monkeypatch: pytest.M
     delays = {await warming._initial_delay_seconds("acc-1", None, now) for _ in range(20)}
     assert len(delays) > 1  # independent draws, not a synchronized burst
     assert max(delays) > 8.0  # spread over hours, not the old few-second jitter
+
+
+@pytest.mark.asyncio
+async def test_initial_delay_cold_start_spans_full_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    # #203: the widened default cold-start spread (~24h) fans a bulk overnight
+    # import across the whole day, not the first morning. Active hours off so the
+    # raw spread is under test, not the window snap.
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
+    monkeypatch.setattr(_seams.rng, "random", random.random)  # live draw over the span
+
+    async def fake_tz(_account_id: str) -> None:
+        return None
+
+    monkeypatch.setattr(_runner, "_account_tz", fake_tz)
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    span = settings.warming.cold_start_spread_hours * 3600
+    delays = [await warming._initial_delay_seconds("acc-1", None, now) for _ in range(50)]
+
+    assert max(delays) > 12 * 3600  # reaches well past the old few-hour window
+    assert all(0 <= d <= span for d in delays)
 
 
 def test_loop_sleep_respects_future_next_run() -> None:
@@ -4274,6 +4469,94 @@ async def test_daily_gate_allows_one_cycle_for_a_cap_of_one() -> None:
     parked = await _loop._gate_daily_limit("acc-1", 1, (1, today), now, run_id=None)
     assert parked is not None
     assert parked.detail == "daily limit"
+
+
+# _SAT / _MON: 2026-06-13 is a Saturday, 2026-06-15 the following Monday.
+_SAT = "2026-06-13"
+_MON = "2026-06-15"
+
+
+def test_is_quiet_day_stable_per_account_and_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    # #203: the quiet-day verdict is decided once per calendar day (stable), and
+    # the fleet doesn't all rest on the same day.
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.5)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.5)
+
+    assert _fleet._is_quiet_day("acc-1", _MON) == _fleet._is_quiet_day("acc-1", _MON)
+    verdicts = {_fleet._is_quiet_day(f"acc-{i}", _MON) for i in range(20)}
+    assert verdicts == {True, False}  # some accounts rest, some don't
+
+
+def test_is_quiet_day_weekend_biased(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Weekday prob 0, weekend prob 1 → never quiet on a weekday, always on a weekend.
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 1.0)
+
+    assert _fleet._is_quiet_day("acc-1", _MON) is False
+    assert _fleet._is_quiet_day("acc-1", _SAT) is True
+
+
+def test_is_quiet_day_disabled_when_probability_zero(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
+
+    assert _fleet._is_quiet_day("acc-1", _MON) is False
+    assert _fleet._is_quiet_day("acc-1", _SAT) is False
+
+
+@pytest.mark.asyncio
+async def test_gate_quiet_day_parks_until_tomorrow(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A quiet day parks the account in sleeping until the next day (like the daily
+    # cap gate), so the loop resumes and re-evaluates for the fresh calendar day.
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 1.0)
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
+    await create_account(AccountCreate(account_id="acc-1"))
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)  # Monday
+
+    result = await _loop._gate_quiet_day("acc-1", (0, _MON), now, run_id=None)
+
+    assert result is not None
+    assert result.detail == "quiet day"
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.state == "sleeping"
+    assert record.last_event == "quiet_day"
+    assert record.next_run_at is not None
+    assert datetime.fromisoformat(record.next_run_at) >= _loop._next_utc_midnight(now)
+
+
+@pytest.mark.asyncio
+async def test_gate_quiet_day_passes_through_on_active_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
+    await create_account(AccountCreate(account_id="acc-1"))
+    now = datetime(2026, 6, 15, 12, 0, tzinfo=UTC)
+
+    assert await _loop._gate_quiet_day("acc-1", (0, _MON), now, run_id=None) is None
+
+
+@pytest.mark.asyncio
+async def test_run_loop_iteration_skips_on_quiet_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The loop honours a quiet day: no cycle runs and the account parks as quiet.
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 1.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 1.0)
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    ran: list[int] = []
+
+    async def fake_cycle(*_args: object, **_kwargs: object) -> WarmingCycleResult:
+        ran.append(1)
+        return WarmingCycleResult(account_id="acc-1", status="ok")
+
+    monkeypatch.setattr(_loop, "run_one_cycle", fake_cycle)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.detail == "quiet day"
+    assert ran == []  # the cycle never ran
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.last_event == "quiet_day"
 
 
 @pytest.mark.asyncio

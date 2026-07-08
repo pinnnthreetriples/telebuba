@@ -236,7 +236,9 @@ async def _calculate_next_run(
     # a flood_wait that expires at night is now deferred into the morning window
     # too (a resume at 04:00 is more suspicious than the wait itself).
     if result.status != "peer_flood":
-        next_run_dt = _shift_to_active_hours(next_run_dt, await _account_tz(account_id), _seams.rng)
+        next_run_dt = _shift_to_active_hours(
+            next_run_dt, await _account_tz(account_id), _seams.rng, account_id
+        )
 
     return actions_done, next_run_dt, next_state
 
