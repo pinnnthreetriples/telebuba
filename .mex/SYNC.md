@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-06-20
+last_updated: 2026-07-06
 ---
 
 # Sync — Realign This Scaffold

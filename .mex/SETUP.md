@@ -1,12 +1,12 @@
 ---
-last_updated: 2026-06-20
+last_updated: 2026-07-06
 ---
 
 # Setup — Populate This Scaffold
 
 This file contains the prompts to populate the scaffold. It is NOT the dev environment setup — for that, see `context/setup.md` after population.
 
-This scaffold is currently empty. Follow the steps below to populate it for your project.
+**This scaffold is already populated** — the prompts below are kept only as the reference template for re-population.
 
 ## Recommended: Use setup.sh
 

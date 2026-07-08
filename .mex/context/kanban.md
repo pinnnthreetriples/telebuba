@@ -17,7 +17,7 @@ edges:
     condition: when picking a task — load coding rules before starting
   - target: patterns/INDEX.md
     condition: when starting work on a board item — check for a matching pattern first
-last_updated: 2026-06-19
+last_updated: 2026-07-06
 ---
 
 # Kanban Workflow

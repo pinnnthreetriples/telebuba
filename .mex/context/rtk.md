@@ -11,7 +11,7 @@ edges:
     condition: when listing developer commands
   - target: state/active.md
     condition: when a known issue mentions rtk hook unavailability
-last_updated: 2026-06-19
+last_updated: 2026-07-06
 ---
 
 # RTK (Rust Token Killer)

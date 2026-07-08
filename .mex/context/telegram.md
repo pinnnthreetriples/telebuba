@@ -19,7 +19,7 @@ edges:
     condition: when the Telegram call is part of the runtime workflow
   - target: patterns/add-telegram-task.md
     condition: when adding any new Telethon-using action
-last_updated: 2026-06-20
+last_updated: 2026-07-06
 ---
 
 # Telegram (Telethon) Integration
@@ -29,7 +29,7 @@ last_updated: 2026-06-20
 - All Telethon client construction, session checks, and action dispatch live in `core/telegram_client/`.
 - The public API is re-exported from `core.telegram_client` so callers import from `core.telegram_client`, not private submodules.
 - Only `core/` may import `telethon`.
-- Services and features never call raw client methods directly. They build a typed action and pass it to the executor: `await core.telegram_client.execute(account_id, action)`.
+- Services (and `api/`) never call raw client methods directly. They build a typed action and pass it to the executor: `await core.telegram_client.execute(account_id, action)`.
 - Inputs and outputs of `execute` are Pydantic models from `schemas/telegram_actions.py`; no raw Telethon objects leak up.
 
 ## Gateway package layout
