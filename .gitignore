@@ -60,5 +60,7 @@ htmlcov/
 # Per-machine Claude Code skill bundles (installed by the skills manager)
 .claude/skills/
 skills-lock.json
+# Per-machine dev-server launch config (created by the preview/run tooling)
+.claude/launch.json
 
 .tmp_backups/
