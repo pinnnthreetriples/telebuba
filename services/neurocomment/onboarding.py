@@ -40,6 +40,7 @@ from core.db import (
 )
 from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, CampaignOnboardingResult
+from schemas.neurocomment_progress import OnboardingProgressEvent
 from schemas.telegram_actions import (
     ActionResult,
     GetLinkedDiscussionGroup,
@@ -255,7 +256,7 @@ async def _solve_and_record(
 async def onboard_campaign(
     campaign_id: str,
     *,
-    on_progress: Callable[[str], None] | None = None,
+    on_progress: Callable[[OnboardingProgressEvent], None] | None = None,
 ) -> CampaignOnboardingResult:
     """Onboard every (account, channel) pair of a campaign with paced joins.
 
@@ -290,11 +291,17 @@ async def onboard_campaign(
         if r.ready and r.joined and r.captcha_passed and not r.human_skipped
     }
 
-    def report(msg: str) -> None:
+    def report(event: OnboardingProgressEvent) -> None:
         if on_progress:
-            on_progress(msg)
+            on_progress(event)
 
-    report(f"Запуск онбординга для {len(accounts)} аккаунтов и {len(channels)} каналов...")
+    report(
+        OnboardingProgressEvent(
+            code="onboarding_started",
+            account_count=len(accounts),
+            channel_count=len(channels),
+        )
+    )
 
     # Establish each serving account's spam verdict up front. Selection reads this
     # from cache and never re-probes @SpamBot per post (anti-ban), so a verdict must
@@ -314,7 +321,13 @@ async def onboard_campaign(
     for channel_link in channels:
         joined_once = await onboard_channel(channel_link.channel, ctx, joined_once=joined_once)
     ready_count = sum(1 for o in ctx.outcomes if o.state == "ready")
-    report(f"Онбординг завершен. Готово пар: {ready_count} из {len(ctx.outcomes)}.")
+    report(
+        OnboardingProgressEvent(
+            code="onboarding_finished",
+            ready_count=ready_count,
+            total_count=len(ctx.outcomes),
+        )
+    )
     return CampaignOnboardingResult(campaign_id=campaign_id, outcomes=ctx.outcomes)
 
 
@@ -322,7 +335,7 @@ async def _resolve_group_for_join(
     accounts: list[str],
     channel: str,
     outcomes: list[AccountChannelOnboarding],
-    report: Callable[[str], None] | None = None,
+    report: Callable[[OnboardingProgressEvent], None] | None = None,
 ) -> int | None:
     """Resolve+cache the channel's group once; record per-account skips, return its id.
 
@@ -336,7 +349,7 @@ async def _resolve_group_for_join(
     linked = await _safe_resolve(accounts[0], channel)
     if linked is None:
         if report:
-            report(f"Ошибка: не удалось разрешить группу для {channel}")
+            report(OnboardingProgressEvent(code="channel_resolve_failed", channel=channel))
         outcomes.extend(
             AccountChannelOnboarding(
                 account_id=account_id, channel=channel, state="failed", reason="resolve_failed"
@@ -346,10 +359,10 @@ async def _resolve_group_for_join(
         return None
     if linked.comments_enabled and linked.linked_chat_id is not None:
         if report:
-            report(f"Группа обсуждения для {channel} успешно разрешена")
+            report(OnboardingProgressEvent(code="channel_resolved", channel=channel))
         return linked.linked_chat_id
     if report:
-        report(f"Канал {channel} отключил комментарии или не имеет группы обсуждения")
+        report(OnboardingProgressEvent(code="channel_comments_off", channel=channel))
     outcomes.extend(
         AccountChannelOnboarding(account_id=account_id, channel=channel, state="comments_off")
         for account_id in accounts
@@ -392,7 +405,7 @@ async def _join_pair_safely(
 
 async def _probe_account_spam(
     accounts: list[str],
-    report: Callable[[str], None] | None = None,
+    report: Callable[[OnboardingProgressEvent], None] | None = None,
 ) -> None:
     """Probe each serving account's spam status once at onboarding (off the post path).
 
@@ -402,7 +415,7 @@ async def _probe_account_spam(
     """
     for account_id in accounts:
         if report:
-            report(f"Проверка спам-статуса аккаунта {account_id}...")
+            report(OnboardingProgressEvent(code="spam_probe_started", account_id=account_id))
         try:
             await _seams.refresh_spam_status(account_id, force=False)
         except Exception as exc:  # noqa: BLE001 - a spam probe must never abort onboarding
@@ -413,4 +426,4 @@ async def _probe_account_spam(
                 extra={"error_type": type(exc).__name__},
             )
             if report:
-                report(f"Предупреждение: не удалось проверить спам-статус для {account_id}")
+                report(OnboardingProgressEvent(code="spam_probe_failed", account_id=account_id))

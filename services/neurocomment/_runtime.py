@@ -10,39 +10,38 @@ the tasks are tracked so shutdown can cancel them. Mirrors
 from __future__ import annotations
 
 import asyncio
-from collections import defaultdict
 from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import (
-    fetch_active_campaign_for_channel,
     get_listener_account_id,
     get_listener_running,
     list_active_watch_channels,
     list_campaigns,
-    list_posted_comments_since,
+    reclaim_stale_claims,
     set_listener_account_id,
     set_listener_running,
 )
 from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
 from schemas.neurocomment import NeurocommentRuntimeStatus
-from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult, JoinChannel
-from services.neurocomment import _seams, _state
+from schemas.telegram_actions import JoinChannel
+from services.neurocomment import _seams
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_campaign
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from schemas.neurocomment import CommentRecord
+    from schemas.neurocomment_progress import OnboardingProgressEvent
     from schemas.telegram_actions import NewPostEvent
 
 # In-flight on-post tasks, tracked so shutdown can cancel them.
-# ponytail: single-process, in-memory. Unbounded per-event tasks — bound with a
-# semaphore here if post volume ever grows large.
+# ponytail: single-process, in-memory. Bounded by
+# ``settings.neurocomment.max_concurrent_post_tasks`` — posts arriving above the cap
+# are dropped (logged) rather than spawning unbounded tasks under a flood.
 _TASKS: set[asyncio.Task[None]] = set()
 
 # The single periodic deletion sweep (#131), tracked so reconcile/shutdown can
@@ -56,7 +55,19 @@ _ONBOARD_TASK: asyncio.Task[None] | None = None
 
 
 async def on_post(event: NewPostEvent) -> None:
-    """Listener callback: spawn the pipeline task and return at once (non-blocking)."""
+    """Listener callback: spawn the pipeline task and return at once (non-blocking).
+
+    Bounded: at capacity the post is dropped (logged), so a flood cannot spawn
+    unbounded tasks. The len-check → create_task → add sequence stays await-free so
+    it is atomic on the single event loop (no interleaving grows ``_TASKS`` past the cap).
+    """
+    if len(_TASKS) >= settings.neurocomment.max_concurrent_post_tasks:
+        await log_event(
+            "WARNING",
+            "neurocomment_post_dropped_overloaded",
+            extra={"channel": event.channel, "in_flight": len(_TASKS)},
+        )
+        return
     task = asyncio.create_task(handle_new_post(event))
     _TASKS.add(task)
     task.add_done_callback(_TASKS.discard)
@@ -119,7 +130,7 @@ async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
 async def start_neurocomment(
     listener_account_id: str,
     *,
-    on_progress: Callable[[str], None] | None = None,
+    on_progress: Callable[[OnboardingProgressEvent], None] | None = None,
 ) -> None:
     """Point the runtime at ``listener_account_id`` promptly; onboard in the background.
 
@@ -144,7 +155,9 @@ async def start_neurocomment(
     _ensure_onboarding_running(on_progress)
 
 
-def _ensure_onboarding_running(on_progress: Callable[[str], None] | None) -> None:
+def _ensure_onboarding_running(
+    on_progress: Callable[[OnboardingProgressEvent], None] | None,
+) -> None:
     """Spawn the background campaign-onboarding task unless one is already in flight."""
     global _ONBOARD_TASK  # noqa: PLW0603 - single module-level onboarding-task handle
     if _ONBOARD_TASK is not None and not _ONBOARD_TASK.done():
@@ -152,7 +165,9 @@ def _ensure_onboarding_running(on_progress: Callable[[str], None] | None) -> Non
     _ONBOARD_TASK = asyncio.create_task(_onboard_active_campaigns(on_progress))
 
 
-async def _onboard_active_campaigns(on_progress: Callable[[str], None] | None) -> None:
+async def _onboard_active_campaigns(
+    on_progress: Callable[[OnboardingProgressEvent], None] | None,
+) -> None:
     """Onboard every active campaign (background). One campaign's failure is isolated."""
     for campaign in (await list_campaigns()).campaigns:
         if campaign.status != "active":
@@ -254,12 +269,27 @@ async def reconcile_neurocomment_on_startup() -> None:
     A remembered-but-*paused* listener (``listener_account_id`` set,
     ``listener_running`` False) stays paused across a reboot — resuming it would
     silently re-enable a runtime the operator turned off (audit 2026-07-02).
+
+    Stale claims are reclaimed unconditionally first: a crash mid-post leaves rows
+    stuck ``claimed`` forever (the post_id is then permanently un-claimable), and
+    that must be cleaned up even for a runtime that boots paused.
     """
+    await _reclaim_stale_claims_on_startup()
     if not await get_listener_running():
         return
     listener_account_id = await get_listener_account_id()
     if listener_account_id is not None:
         await reconcile_neurocomment_runtime(listener_account_id)
+
+
+async def _reclaim_stale_claims_on_startup() -> None:
+    """Mark claims stuck 'claimed' since before the reclaim cutoff as 'failed'."""
+    cutoff = (
+        datetime.now(UTC) - timedelta(seconds=settings.neurocomment.stale_claim_reclaim_seconds)
+    ).isoformat()
+    reclaimed = await reclaim_stale_claims(cutoff)
+    if reclaimed:
+        await log_event("INFO", "neurocomment_stale_claims_reclaimed", extra={"count": reclaimed})
 
 
 async def shutdown_neurocomment_on_shutdown() -> None:
@@ -308,94 +338,6 @@ async def _stop_onboarding() -> None:
         )
 
 
-async def _sweep_loop() -> None:
-    """Re-read recent comments on an interval; back off channels with mass deletions.
-
-    The lone non-event loop in the runtime. A sweep fault is logged and the loop
-    keeps going — it must never die (mirrors the listener-safe on-post pipeline).
-    """
-    interval = settings.neurocomment.deletion_sweep_interval_seconds
-    while True:
-        await asyncio.sleep(interval)
-        try:
-            await _sweep_once()
-        except Exception as exc:  # noqa: BLE001 - a sweep fault must never kill the loop.
-            await log_event(
-                "WARNING",
-                "neurocomment_sweep_failed",
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
-            )
-
-
-async def _sweep_once() -> None:
-    """One deletion pass: per active channel, count vanished comments → back off."""
-    now = datetime.now(UTC)
-    since_iso = (
-        now - timedelta(hours=settings.neurocomment.deletion_sweep_lookback_hours)
-    ).isoformat()
-    # Group watched channels by active campaign so each campaign's recent comments
-    # are read once, then bucketed back per channel for the deletion check.
-    by_campaign: dict[str, list[str]] = defaultdict(list)
-    for channel in (await list_active_watch_channels()).channels:
-        campaign = await fetch_active_campaign_for_channel(channel)
-        if campaign is not None:
-            by_campaign[campaign.campaign_id].append(channel)
-    for campaign_id, channels in by_campaign.items():
-        comments = (await list_posted_comments_since(campaign_id, since_iso)).comments
-        buckets: dict[str, list[CommentRecord]] = defaultdict(list)
-        for comment in comments:
-            buckets[comment.channel].append(comment)
-        for channel in channels:
-            await _sweep_channel(channel, buckets.get(channel, []), now)
-
-
-async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datetime) -> None:
-    """Re-read one channel's recent comments; trip its back-off if too many are gone."""
-    if _state.channel_in_backoff(channel, now):
-        # Already cooled — skip the read and don't re-escalate. The same vanished
-        # comments stay in the lookback window for hours, so re-counting them every
-        # sweep would walk the back-off to its cap from a single deletion episode;
-        # escalation must advance only after a cooldown lapses and deletions persist.
-        return
-    msg_ids = [c.comment_msg_id for c in comments if c.comment_msg_id is not None]
-    if not msg_ids:
-        return
-    nc = settings.neurocomment
-    # ponytail: reads as one comment-author (a group member). If that account was
-    # later kicked, get_messages may report all ids gone (false trip) or raise (handled
-    # below); add a reader quorum / membership check only if the canary shows false trips.
-    reader = comments[0].account_id
-    try:
-        result = await _seams.execute_read(
-            reader,
-            CheckMessagesAlive(channel=channel, message_ids=msg_ids),
-        )
-    except Exception as exc:  # noqa: BLE001 - one channel's read must not abort the sweep.
-        await log_event(
-            "WARNING",
-            "neurocomment_sweep_read_failed",
-            account_id=reader,
-            extra={"channel": channel, "error_type": type(exc).__name__},
-        )
-        return
-    if not isinstance(result, CheckMessagesAliveResult):  # pragma: no cover - typed gateway
-        return
-    missing = len(result.missing_ids)
-    if missing < nc.channel_backoff_min_deletions:
-        return
-    seconds = _state.trip_channel_backoff(
-        channel,
-        now,
-        base_seconds=nc.channel_backoff_base_seconds,
-        max_seconds=nc.channel_backoff_max_seconds,
-    )
-    await log_event(
-        "WARNING",
-        "neurocomment_channel_backoff",
-        extra={"channel": channel, "missing": missing, "cooldown_seconds": seconds},
-    )
-
-
 def reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
     global _SWEEP_TASK, _ONBOARD_TASK  # noqa: PLW0603 - single module-level task handles
@@ -406,3 +348,14 @@ def reset_for_tests() -> None:
     if _ONBOARD_TASK is not None:
         _ONBOARD_TASK.cancel()
         _ONBOARD_TASK = None
+
+
+# The deletion sweep's work lives in ``_sweep`` (file-size cap); the task handle and
+# its start/stop stay above (this module's lifecycle owns reconcile/shutdown). Re-
+# exported so ``_ensure_sweep_running`` finds ``_sweep_loop`` and ``_runtime._sweep_*``
+# still resolves for tests.
+from services.neurocomment._sweep import (  # noqa: E402, F401 - re-export after the module body.
+    _sweep_channel,
+    _sweep_loop,
+    _sweep_once,
+)

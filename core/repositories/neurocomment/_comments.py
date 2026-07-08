@@ -315,6 +315,24 @@ async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | Non
     return await asyncio.to_thread(_mark_comment, channel, post_id, status="failed")
 
 
+def _reclaim_stale_claims(cutoff_iso: str) -> int:
+    with _get_engine().begin() as connection:
+        result = connection.execute(
+            update(_neurocomment_comments)
+            .where(
+                (_neurocomment_comments.c.status == "claimed")
+                & (_neurocomment_comments.c.created_at < cutoff_iso),
+            )
+            .values(status="failed", updated_at=_now_iso()),
+        )
+    return result.rowcount
+
+
+async def reclaim_stale_claims(cutoff_iso: str) -> int:
+    """Release claims stuck 'claimed' since before cutoff_iso (mark 'failed'); returns count."""
+    return await asyncio.to_thread(_reclaim_stale_claims, cutoff_iso)
+
+
 def _list_campaign_readiness(campaign_id: str) -> ReadinessList:
     # Readiness is per-(account, channel); scope to the campaign's accounts AND its
     # channels so the board reads every pair in one query instead of N per-card

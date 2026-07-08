@@ -229,6 +229,10 @@ class NeurocommentSettings(BaseSettings):
     link_only_max_word_chars: int = Field(default=10, ge=0)
     # Grace period to await in-flight on-post tasks on shutdown before cancelling.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
+    # L4: cap on concurrently in-flight on-post handler tasks (excess dropped under flood).
+    max_concurrent_post_tasks: int = Field(default=50, ge=1)
+    # L3: startup reclaim of claims stuck 'claimed' older than this.
+    stale_claim_reclaim_seconds: float = Field(default=900.0, gt=0.0)
     # Ф2 deletion-sweep → escalating channel back-off.
     # How often the periodic sweep re-reads recent comments (0 disables the sweep).
     deletion_sweep_interval_seconds: float = Field(default=1800.0, ge=0.0)
@@ -261,6 +265,43 @@ class NeurocommentSettings(BaseSettings):
     # Short window to watch for a re-challenge after answering — a new challenge
     # means the previous answer was wrong (drives the retry); silence = passed.
     challenge_recheck_timeout_seconds: float = Field(default=8.0, gt=0.0)
+    # M4: min Gemini confidence for the solver to act; below → give_up.
+    challenge_min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    # C1: case-insensitive REGEX fragments; the solver refuses to click a button whose label
+    # matches any.
+    challenge_button_denylist_patterns: list[str] = Field(
+        default_factory=lambda: [
+            "pay\\b",
+            "payment",
+            "оплат",
+            "плат",
+            "donat",
+            "withdraw",
+            "deposit",
+            "wallet",
+            "кошел",
+            "bank",
+            "card",
+            "карт",
+            "admin",
+            "админ",
+            "\\bvote\\b",
+            "голос",
+            "log ?in",
+            "sign ?in",
+            "войти",
+            "вход",
+            "password",
+            "пароль",
+            "invite",
+            "claim",
+            "airdrop",
+            "bonus",
+            "crypto",
+            "authoriz",
+            "authoris",
+        ]
+    )
     # Ф2 #147 channel challenge back-off: K consecutive solver failures on a channel
     # trip an escalating cooldown that stops onboarding new accounts there.
     channel_challenge_backoff_min_failures: int = Field(default=3, ge=1)

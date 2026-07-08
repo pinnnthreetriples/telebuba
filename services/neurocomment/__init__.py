@@ -25,7 +25,6 @@ from services.neurocomment.board import load_neurocomment_board
 from services.neurocomment.campaigns import (
     assign_account_to_campaign,
     count_campaign_challenge_outcomes,
-    count_challenge_outcomes,
     create_campaign,
     deactivate_channel,
     delete_campaign,
@@ -59,7 +58,6 @@ __all__ = [
     "assign_account_to_campaign",
     "clear_neurocomment_listener",
     "count_campaign_challenge_outcomes",
-    "count_challenge_outcomes",
     "create_campaign",
     "deactivate_channel",
     "delete_campaign",

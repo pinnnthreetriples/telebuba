@@ -18,7 +18,7 @@ tests patch ``engine.<name>``. The reply delay uses ``asyncio.sleep`` (patched).
 
 from __future__ import annotations
 
-import asyncio  # noqa: F401 - re-exported so tests can patch engine.asyncio.sleep (used by _generate).
+import asyncio  # also re-exported so tests can patch engine.asyncio.sleep (used by _generate).
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -49,6 +49,21 @@ if TYPE_CHECKING:
     from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import NewPostEvent
     from schemas.warming import WarmingStateRecord
+
+
+# One lock per account serialises its [re-read quota → claim] section so a burst of
+# concurrent events for the same account can't each read an under-cap count and all
+# claim (the bulk select->claim gap is otherwise racy — see _under_quota). Single
+# loop + single worker, so a plain dict needs no lock to grow (asyncio.Lock binds to
+# the running loop; tests clear this between cases).
+_ACCOUNT_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _account_lock(account_id: str) -> asyncio.Lock:
+    lock = _ACCOUNT_LOCKS.get(account_id)
+    if lock is None:
+        lock = _ACCOUNT_LOCKS[account_id] = asyncio.Lock()
+    return lock
 
 
 async def handle_new_post(event: NewPostEvent) -> None:
@@ -109,7 +124,20 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         )
         return
 
-    won = await claim_comment(event.channel, event.post_id, campaign.campaign_id, account_id)
+    async with _account_lock(account_id):
+        # H1: re-verify the chosen account with fresh counts under its own lock (a
+        # concurrent burst may have claimed since selection), then claim — both inside
+        # the lock so a serialized sibling sees the prior claim's row and can't stack
+        # past the cap. ponytail: if the re-check finds the account now over-cap we drop
+        # the post rather than re-selecting another (rare burst edge; not worth a loop).
+        if not await _account_under_quota(account_id, event.channel):
+            await log_event(
+                "INFO",
+                "neurocomment_no_account_available",
+                extra={"channel": event.channel, "post_id": event.post_id},
+            )
+            return
+        won = await claim_comment(event.channel, event.post_id, campaign.campaign_id, account_id)
     if not won:
         # Another worker already owns this post — idempotency, no duplicate.
         return
@@ -245,16 +273,41 @@ def _is_healthy(
     return health.ready
 
 
-def _under_quota(account_id: str, pool: _SelectionPool) -> bool:
+def _quota_ok(
+    account_id: str,
+    limits: NeurocommentSettings,
+    hourly: dict[str, int],
+    daily: dict[str, int],
+) -> bool:
     # Quota counts in-flight claims AND delivered comments (status in claimed/posted),
     # so a burst arriving inside one account's reply-delay window can't stack past the
     # cap — each claim consumes quota the moment it is won.
-    # ponytail: a sub-millisecond race still exists in the select->claim gap; a
-    # per-account asyncio.Lock would close it fully if it ever bites.
-    day_cap = pool.limits.max_comments_per_channel_per_day
-    over_hour = pool.hourly_counts.get(account_id, 0) >= pool.limits.max_comments_per_hour
-    over_day = day_cap > 0 and pool.daily_counts.get(account_id, 0) >= day_cap
+    day_cap = limits.max_comments_per_channel_per_day
+    over_hour = hourly.get(account_id, 0) >= limits.max_comments_per_hour
+    over_day = day_cap > 0 and daily.get(account_id, 0) >= day_cap
     return not (over_hour or over_day)
+
+
+def _under_quota(account_id: str, pool: _SelectionPool) -> bool:
+    return _quota_ok(account_id, pool.limits, pool.hourly_counts, pool.daily_counts)
+
+
+async def _account_under_quota(account_id: str, channel: str) -> bool:
+    """Fresh single-account quota re-read, run under the account lock before the claim."""
+    limits = await load_neuro_settings()
+    now = datetime.now(UTC)
+    hour_ago = (now - timedelta(hours=1)).isoformat()
+    hourly = {
+        c.account_id: c.count for c in (await count_comments_per_account_since(hour_ago)).counts
+    }
+    daily: dict[str, int] = {}
+    if limits.max_comments_per_channel_per_day > 0:
+        day_ago = (now - timedelta(days=1)).isoformat()
+        daily = {
+            c.account_id: c.count
+            for c in (await count_channel_comments_per_account_since(channel, day_ago)).counts
+        }
+    return _quota_ok(account_id, limits, hourly, daily)
 
 
 # The generation + outcome-classification back half lives in ``_generate`` (file-

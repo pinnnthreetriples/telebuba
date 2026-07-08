@@ -42,6 +42,7 @@ from core.db import (  # type: ignore[attr-defined]
     mark_comment_failed,
     mark_comment_posted,
     mark_human_skipped,
+    reclaim_stale_claims,
     remove_account_from_campaign,
     resolve_pending_outcome,
     update_campaign_prompt,
@@ -633,6 +634,63 @@ async def test_mark_comment_does_not_override_a_terminal_status() -> None:
     assert result is not None
     assert result.status == "posted"
     assert result.comment_text == "nice"
+
+
+async def _backdate_created_at(post_id: int, when: datetime) -> None:
+    """Test-only: rewrite one comment's created_at (mirrors the board test's idiom)."""
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_comments SET created_at = ? WHERE post_id = ?",
+            (when.isoformat(), post_id),
+        )
+
+
+@pytest.mark.asyncio
+async def test_reclaim_stale_claims_marks_old_claimed_as_failed() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    assert await claim_comment("@chan", 1, campaign.campaign_id, "acc-1") is True
+    # A claim stuck since before the cutoff (a crash mid-post left it 'claimed').
+    await _backdate_created_at(1, datetime.now(UTC) - timedelta(hours=1))
+
+    reclaimed = await reclaim_stale_claims(datetime.now(UTC).isoformat())
+
+    assert reclaimed == 1
+    row = await fetch_comment("@chan", 1)
+    assert row is not None
+    assert row.status == "failed"
+
+
+@pytest.mark.asyncio
+async def test_reclaim_stale_claims_leaves_fresh_claim_untouched() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    assert await claim_comment("@chan", 1, campaign.campaign_id, "acc-1") is True
+
+    # Cutoff an hour in the past — a just-created claim is newer, so it is left alone.
+    reclaimed = await reclaim_stale_claims((datetime.now(UTC) - timedelta(hours=1)).isoformat())
+
+    assert reclaimed == 0
+    row = await fetch_comment("@chan", 1)
+    assert row is not None
+    assert row.status == "claimed"
+
+
+@pytest.mark.asyncio
+async def test_reclaim_stale_claims_leaves_posted_untouched() -> None:
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    assert await claim_comment("@chan", 1, campaign.campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 1, comment_text="nice", comment_msg_id=5)
+    # Old, but terminal (posted) — the reclaim only touches rows still 'claimed'.
+    await _backdate_created_at(1, datetime.now(UTC) - timedelta(hours=1))
+
+    reclaimed = await reclaim_stale_claims(datetime.now(UTC).isoformat())
+
+    assert reclaimed == 0
+    row = await fetch_comment("@chan", 1)
+    assert row is not None
+    assert row.status == "posted"
 
 
 # --------------------------------------------------------------------------- #

@@ -8,7 +8,7 @@ network, no jitter and no waiting. Mirrors ``tests/services/test_warming.py``.
 from __future__ import annotations
 
 from datetime import UTC, datetime
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, get_args
 
 import pytest
 
@@ -32,6 +32,7 @@ from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage
 from schemas.gemini import GeminiResult
 from schemas.neurocomment import CampaignCreate
+from schemas.neurocomment_progress import OnboardingProgressCode, OnboardingProgressEvent
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import (
     ActionResult,
@@ -684,10 +685,10 @@ async def test_campaign_onboarding_progress_callback(monkeypatch: pytest.MonkeyP
     await link_channel_to_campaign(campaign.campaign_id, "@chan")
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
 
-    progress_messages: list[str] = []
+    progress_events: list[OnboardingProgressEvent] = []
 
-    def on_progress(msg: str) -> None:
-        progress_messages.append(msg)
+    def on_progress(event: OnboardingProgressEvent) -> None:
+        progress_events.append(event)
 
     read = _ReadStub(linked_chat_id=500, comments_enabled=True)
     join = _JoinStub()
@@ -697,13 +698,43 @@ async def test_campaign_onboarding_progress_callback(monkeypatch: pytest.MonkeyP
 
     await neurocomment.onboard_campaign(campaign.campaign_id, on_progress=on_progress)
 
-    assert len(progress_messages) > 0
-    assert any("Запуск онбординга" in msg for msg in progress_messages)
-    assert any("Проверка спам-статуса" in msg for msg in progress_messages)
-    assert any("Разрешение группы обсуждения" in msg for msg in progress_messages)
-    assert any("вступление в группу" in msg for msg in progress_messages)
-    assert any("Результат для acc-1" in msg for msg in progress_messages)
-    assert any("Онбординг завершен" in msg for msg in progress_messages)
+    codes = {e.code for e in progress_events}
+    assert {
+        "onboarding_started",
+        "spam_probe_started",
+        "channel_resolving",
+        "pair_joining",
+        "pair_result",
+        "onboarding_finished",
+    } <= codes
+    started = next(e for e in progress_events if e.code == "onboarding_started")
+    assert started.account_count == 1
+    assert started.channel_count == 1
+    result = next(e for e in progress_events if e.code == "pair_result")
+    assert result.account_id == "acc-1"
+    assert result.state is not None
+
+
+@pytest.mark.asyncio
+async def test_progress_events_are_locale_neutral(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#12 guard: onboarding emits structured codes, never pre-translated human text."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    events: list[OnboardingProgressEvent] = []
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", _JoinStub().execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id, on_progress=events.append)
+
+    valid = set(get_args(OnboardingProgressCode))
+    assert events
+    assert all(isinstance(e, OnboardingProgressEvent) for e in events)
+    assert all(e.code in valid for e in events)
 
 
 @pytest.mark.asyncio

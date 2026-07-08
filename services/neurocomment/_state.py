@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 
 # (account_id, channel) -> earliest UTC time it may comment again. channel=None is
@@ -20,6 +21,10 @@ _COOLDOWN_UNTIL: dict[tuple[str, str | None], datetime] = {}
 # channel-scoped, in-memory only (recomputed each sweep, self-healing on restart).
 _CHANNEL_TRIPS: dict[str, int] = {}  # consecutive trips this process (escalation memory)
 _CHANNEL_COOLDOWN_UNTIL: dict[str, datetime] = {}  # earliest UTC time to comment again
+# Comment ids already counted toward a channel's deletion back-off, so the same
+# vanished comments (they linger in the lookback window for hours) are never
+# re-counted across cooldowns — that would walk one deletion episode to the cap.
+_CHANNEL_COUNTED_DELETED: dict[str, set[int]] = {}
 
 # Challenge back-off (#147), keyed by channel — K consecutive solver failures
 # (pending → failed) trip an escalating cooldown that stops onboarding new accounts
@@ -99,6 +104,41 @@ def channel_in_backoff(channel: str, now: datetime) -> bool:
     return False
 
 
+@dataclass(frozen=True)
+class ChannelDeletionScan:
+    """One channel's deletion-sweep result, threaded into ``register_channel_deletions``."""
+
+    window_ids: set[int]  # comment ids currently in the lookback window
+    missing_ids: set[int]  # of those, the ones found vanished
+
+
+def register_channel_deletions(  # noqa: PLR0913 - pure state fn; scan + trip knobs
+    channel: str,
+    now: datetime,
+    scan: ChannelDeletionScan,
+    *,
+    min_deletions: int,
+    base_seconds: float,
+    max_seconds: float,
+) -> float | None:
+    """Count only *newly* vanished comments toward the back-off; trip once per episode.
+
+    The vanished comments linger in the sweep's lookback window for hours, so a naive
+    re-count each cooldown would walk one deletion episode to the cap. Ids already
+    counted are remembered (pruned to the current window) and excluded, so escalation
+    advances only when *genuinely new* comments vanish. Returns the cooldown seconds
+    when this call trips the back-off (so the caller logs once), else ``None``.
+    """
+    counted = _CHANNEL_COUNTED_DELETED.get(channel, set()) & scan.window_ids  # prune aged-out ids
+    new_missing = scan.missing_ids - counted
+    _CHANNEL_COUNTED_DELETED[channel] = counted | scan.missing_ids
+    if len(new_missing) < min_deletions:
+        if not new_missing:
+            _CHANNEL_TRIPS.pop(channel, None)  # clean window → let escalation decay
+        return None
+    return trip_channel_backoff(channel, now, base_seconds=base_seconds, max_seconds=max_seconds)
+
+
 def register_challenge_failure(
     channel: str,
     now: datetime,
@@ -158,6 +198,7 @@ def reset_for_tests() -> None:
     _COOLDOWN_UNTIL.clear()
     _CHANNEL_TRIPS.clear()
     _CHANNEL_COOLDOWN_UNTIL.clear()
+    _CHANNEL_COUNTED_DELETED.clear()
     _CHALLENGE_FAILED.clear()
     _CHALLENGE_TRIPS.clear()
     _CHALLENGE_BACKOFF_UNTIL.clear()
