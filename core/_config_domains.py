@@ -35,17 +35,32 @@ class WarmingSettings(BaseSettings):
     startup_jitter_max_seconds: float = Field(default=8.0, ge=0.0)
     # Cold-start spread: a fresh account (no persisted schedule) picks its first
     # run uniformly across this many hours instead of a few seconds, so a bulk
-    # onboarding of N accounts does not all fire at once (then it's shifted into
-    # the active-hours window like any other next-run).
-    cold_start_spread_hours: float = Field(default=4.0, ge=0.0)
+    # overnight onboarding of N accounts neither all fires at once nor collapses
+    # into the next morning window. Spanning ~a full day means the candidates that
+    # already fall in the active window stay spread across it; only the night ones
+    # snap forward, so the fleet's first runs fan out across the whole window.
+    cold_start_spread_hours: float = Field(default=24.0, ge=0.0)
     channels_per_cycle_min: int = Field(default=1, ge=1)
     channels_per_cycle_max: int = Field(default=3, ge=1)
     # Fraction of the global channel pool that forms one account's *stable*
     # interest subset. Each cycle samples its channels from this fixed per-account
     # slice (seeded off the account id) instead of the whole shared pool, so the
     # fleet's subscription graphs de-correlate — humans follow a fixed set of
-    # interests, not a fresh random set each session.
-    channel_affinity_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
+    # interests, not a fresh random set each session. Lowered 0.5→0.25 (audit
+    # #203): at 0.5 two accounts still shared ~a third of their subsets, and small
+    # pools collapsed to near-identical slices.
+    channel_affinity_ratio: float = Field(default=0.25, ge=0.0, le=1.0)
+    # Slow membership churn of the affinity subset: it is re-scored every this-many
+    # days (an "epoch") so a human's followed set drifts over time instead of being
+    # frozen forever. ``churn_strength`` (0=frozen, 1=fully reshuffled each epoch)
+    # is kept small so only channels near the cutoff swap — gradual drift, not a
+    # wholesale interest change on epoch boundaries.
+    channel_affinity_churn_days: int = Field(default=14, ge=1)
+    channel_affinity_churn_strength: float = Field(default=0.2, ge=0.0, le=1.0)
+    # Per-cycle chance an account samples one channel from *outside* its affinity
+    # set (a human occasionally checks something new), so the interest graph isn't
+    # a perfectly closed set and cross-account overlap stays noisy.
+    channel_exploration_probability: float = Field(default=0.1, ge=0.0, le=1.0)
     reaction_probability: float = Field(default=0.6, ge=0.0, le=1.0)
     read_message_limit: int = Field(default=15, ge=1, le=100)
     reaction_message_limit: int = Field(default=20, ge=1, le=100)
@@ -137,10 +152,30 @@ class WarmingSettings(BaseSettings):
     active_hours_enabled: bool = True
     active_hours_start: int = Field(default=8, ge=0, le=23)
     active_hours_end: int = Field(default=23, ge=0, le=23)
-    # Randomised offset into the morning window: a resume snapped to the active
-    # window lands at a uniform point in [start, start + this) rather than exactly
-    # HH:00:00, so accounts don't all wake on the same wall-clock second.
-    active_hours_start_spread_minutes: int = Field(default=120, ge=0)
+    # Width (minutes) of the morning band a snapped resume can land in. Each
+    # account has a *stable* offset inside it (its "chronotype", hashed from the
+    # account id) so it wakes near the same local time daily; a soft triangular
+    # daily draw of ``chronotype_jitter_minutes`` wobbles that base. The offset is
+    # clamped to the active-window width so a resume never lands past its end
+    # (audit #203). Widened 120→240: a 2h band still read as a rectangle at fleet
+    # scale.
+    active_hours_start_spread_minutes: int = Field(default=240, ge=0)
+    # Soft daily wobble (± minutes, triangular) around an account's stable morning
+    # chronotype — a person wakes near the same time each day but never on the
+    # exact minute. 0 pins every resume to the account's fixed chronotype offset.
+    chronotype_jitter_minutes: float = Field(default=25.0, ge=0.0)
+    # Per-deployment salt mixed into every fleet-de-correlation hash (chronotype,
+    # channel affinity, quiet-day). Two operators warming the same account pool
+    # with different salts derive independent schedules/interests, so one
+    # deployment's leaked pattern doesn't fingerprint another. Empty = unsalted.
+    fleet_hash_salt: str = ""
+    # Quiet days: chance an account rests for a whole calendar day, decided *once*
+    # per day from a stable account+date hash (weekend-biased). 0 disables. The
+    # per-session version was removed in #202 for compounding into too much idle
+    # time; per-calendar-day is the "done right" form — weekends higher because
+    # real activity genuinely dips then.
+    quiet_day_weekday_probability: float = Field(default=0.05, ge=0.0, le=1.0)
+    quiet_day_weekend_probability: float = Field(default=0.15, ge=0.0, le=1.0)
     # How many of an account's most recent log rows the expandable per-card
     # activity panel on the warming board shows (newest-first).
     card_log_limit: int = Field(default=30, ge=1, le=200)

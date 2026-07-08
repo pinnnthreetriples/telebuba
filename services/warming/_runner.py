@@ -80,7 +80,9 @@ async def _initial_delay_seconds(
             0.0, settings.warming.cold_start_spread_hours * _SECONDS_PER_HOUR
         ),
     )
-    candidate = _shift_to_active_hours(candidate, await _account_tz(account_id), _seams.rng)
+    candidate = _shift_to_active_hours(
+        candidate, await _account_tz(account_id), _seams.rng, account_id
+    )
     return _seconds_until(candidate.isoformat(), now)
 
 
