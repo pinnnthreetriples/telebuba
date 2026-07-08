@@ -9,7 +9,7 @@ the generation guard are only used by it (the helpers are also unit-tested).
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -19,7 +19,14 @@ from schemas.warming import is_warming
 from services.warming import _seams
 from services.warming._loop import run_loop_iteration
 from services.warming._state import _set_state
-from services.warming.pacing import _now_iso, _seconds_until, persona_next_run_seconds
+from services.warming.pacing import (
+    _SECONDS_PER_HOUR,
+    _account_tz,
+    _now_iso,
+    _seconds_until,
+    _shift_to_active_hours,
+    persona_next_run_seconds,
+)
 
 if TYPE_CHECKING:
     from schemas.warming import WarmingStateRecord
@@ -53,15 +60,28 @@ def _loop_sleep_seconds(record: WarmingStateRecord | None, now: datetime) -> flo
     return persona_next_run_seconds(persona, 0, _seams.rng)
 
 
-def _initial_delay_seconds(record: WarmingStateRecord | None, now: datetime) -> float:
+async def _initial_delay_seconds(
+    account_id: str,
+    record: WarmingStateRecord | None,
+    now: datetime,
+) -> float:
     """Delay before the first cycle after (re)starting a loop.
 
     Honours a persisted future ``next_run_at`` so a restart resumes the existing
-    schedule; a fresh account (no schedule yet) only waits a short startup jitter.
+    schedule. A cold-started account (no schedule yet) picks its first run at a
+    random point across ``cold_start_spread_hours`` and then routes it through the
+    active-hours window — so a bulk onboarding of N accounts neither all fires at
+    once nor kicks off in the middle of the night.
     """
     if record is not None and record.next_run_at is not None:
         return _seconds_until(record.next_run_at, now)
-    return _seams.rng.uniform(0.0, settings.warming.startup_jitter_max_seconds)
+    candidate = now + timedelta(
+        seconds=_seams.rng.uniform(
+            0.0, settings.warming.cold_start_spread_hours * _SECONDS_PER_HOUR
+        ),
+    )
+    candidate = _shift_to_active_hours(candidate, await _account_tz(account_id), _seams.rng)
+    return _seconds_until(candidate.isoformat(), now)
 
 
 async def _warming_loop(
@@ -88,7 +108,7 @@ async def _warming_loop(
         record = await fetch_warming_state(account_id)
         if not _is_live_generation(record, run_id):
             return
-        await asyncio.sleep(_initial_delay_seconds(record, datetime.now(UTC)))
+        await asyncio.sleep(await _initial_delay_seconds(account_id, record, datetime.now(UTC)))
         while True:
             record = await fetch_warming_state(account_id)
             if not _is_live_generation(record, run_id):

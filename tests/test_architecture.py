@@ -119,7 +119,8 @@ def _env_value_matches_default(raw: str, default: object) -> bool:
 
     Compares by type so the template's natural forms all pass: booleans as
     ``true``/``false``, numbers by value (so a ``float`` default of ``30.0`` may be
-    written ``30``), lists as JSON, everything else as its ``str``.
+    written ``30``), lists/dicts as JSON (tuples normalise to JSON arrays),
+    everything else as its ``str``.
     """
     if isinstance(default, bool):
         return raw == ("true" if default else "false")
@@ -128,10 +129,12 @@ def _env_value_matches_default(raw: str, default: object) -> bool:
             return float(raw) == float(default)
         except ValueError:
             return False
-    if isinstance(default, list):
+    if isinstance(default, (list, dict)):
         try:
-            return json.loads(raw) == default
-        except json.JSONDecodeError:
+            # json.dumps then loads normalises the default to JSON-native types
+            # (tuples → arrays) so a dict of tuples compares equal to its template.
+            return json.loads(raw) == json.loads(json.dumps(default))
+        except (json.JSONDecodeError, TypeError):
             return False
     return raw == str(default)
 

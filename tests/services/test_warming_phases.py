@@ -16,8 +16,8 @@ from datetime import UTC, datetime, timedelta
 
 import pytest
 
+from core.config import settings
 from services.warming.pacing import (
-    _PHASE_DAILY_CAP,
     _phase_cap_by_trust,
     _phase_from_age,
     _phase_progress,
@@ -142,23 +142,36 @@ def test_phase_progress_terminal_phase_is_none() -> None:
 
 
 def test_compute_intensity_assigns_correct_daily_cap_by_phase() -> None:
-    # 60-day-old account with clean trust → warmed → cap from _PHASE_DAILY_CAP.
+    # 60-day-old account with clean trust → warmed → cap from phase_daily_cap.
     intensity = compute_intensity(60 * 24.0, trust_band="excellent")
     assert intensity.phase == "warmed"
-    assert intensity.daily_cap == _PHASE_DAILY_CAP["warmed"]
+    assert intensity.daily_cap == settings.warming.phase_daily_cap["warmed"]
 
 
 def test_compute_intensity_trust_gate_lowers_cap() -> None:
     # Same 60-day-old account but critical trust → capped at settling.
     intensity = compute_intensity(60 * 24.0, trust_band="critical")
     assert intensity.phase == "settling"
-    assert intensity.daily_cap == _PHASE_DAILY_CAP["settling"]
+    assert intensity.daily_cap == settings.warming.phase_daily_cap["settling"]
 
 
 def test_compute_intensity_intro_for_fresh_account() -> None:
     intensity = compute_intensity(1.0, trust_band="excellent")
     assert intensity.phase == "intro"
-    assert intensity.daily_cap == _PHASE_DAILY_CAP["intro"]
+    assert intensity.daily_cap == settings.warming.phase_daily_cap["intro"]
+
+
+def test_compute_intensity_daily_cap_is_config_driven(monkeypatch: pytest.MonkeyPatch) -> None:
+    # FIX #6: the per-phase cap now lives in settings.warming, not a hardcoded
+    # module constant — overriding it must flow through to compute_intensity.
+    monkeypatch.setattr(
+        settings.warming,
+        "phase_daily_cap",
+        {"intro": 3, "settling": 10, "warming": 20, "active": 40, "warmed": 999},
+    )
+    intensity = compute_intensity(60 * 24.0, trust_band="excellent")
+    assert intensity.phase == "warmed"
+    assert intensity.daily_cap == 999
 
 
 def test_compute_intensity_terminal_phase_has_no_next() -> None:

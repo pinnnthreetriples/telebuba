@@ -28,9 +28,24 @@ class WarmingSettings(BaseSettings):
     # Fallback sleep when Telegram signals a FloodWait with no duration attached
     # (a full cool-down rather than an immediate retry of the just-flooded account).
     flood_wait_fallback_hours: float = Field(default=24.0, ge=0.0)
+    # Human margin added on top of a timed FloodWait before resuming: real users
+    # don't retry on the exact second a limit lifts. Multiplies the wait by
+    # 1 + uniform(0, this).
+    flood_wait_margin_fraction: float = Field(default=0.1, ge=0.0)
     startup_jitter_max_seconds: float = Field(default=8.0, ge=0.0)
+    # Cold-start spread: a fresh account (no persisted schedule) picks its first
+    # run uniformly across this many hours instead of a few seconds, so a bulk
+    # onboarding of N accounts does not all fire at once (then it's shifted into
+    # the active-hours window like any other next-run).
+    cold_start_spread_hours: float = Field(default=4.0, ge=0.0)
     channels_per_cycle_min: int = Field(default=1, ge=1)
     channels_per_cycle_max: int = Field(default=3, ge=1)
+    # Fraction of the global channel pool that forms one account's *stable*
+    # interest subset. Each cycle samples its channels from this fixed per-account
+    # slice (seeded off the account id) instead of the whole shared pool, so the
+    # fleet's subscription graphs de-correlate — humans follow a fixed set of
+    # interests, not a fresh random set each session.
+    channel_affinity_ratio: float = Field(default=0.5, ge=0.0, le=1.0)
     reaction_probability: float = Field(default=0.6, ge=0.0, le=1.0)
     read_message_limit: int = Field(default=15, ge=1, le=100)
     reaction_message_limit: int = Field(default=20, ge=1, le=100)
@@ -122,9 +137,60 @@ class WarmingSettings(BaseSettings):
     active_hours_enabled: bool = True
     active_hours_start: int = Field(default=8, ge=0, le=23)
     active_hours_end: int = Field(default=23, ge=0, le=23)
+    # Randomised offset into the morning window: a resume snapped to the active
+    # window lands at a uniform point in [start, start + this) rather than exactly
+    # HH:00:00, so accounts don't all wake on the same wall-clock second.
+    active_hours_start_spread_minutes: int = Field(default=120, ge=0)
     # How many of an account's most recent log rows the expandable per-card
     # activity panel on the warming board shows (newest-first).
     card_log_limit: int = Field(default=30, ge=1, le=200)
+    # Lifecycle-phase + activity-persona safety tables, relocated from module
+    # constants in services/warming/_phases.py so every tunable is config-driven
+    # (non-negotiables #3/#10). Effective behaviour is always
+    # ``min(persona, phase/trust)``; absolute numbers carry ±30% source
+    # uncertainty, hence they live here for tuning.
+    #
+    # Age assumed for an account with a missing/unparseable ``created_at`` — old
+    # enough to skip the young-account throttle rather than freeze it at day one.
+    unknown_age_fallback_hours: float = Field(default=192.0, ge=0.0)
+    # Fresh accounts (< this many hours) cannot exceed ``intro`` even with a clean
+    # trust score — the first day is the highest-risk window.
+    phase_hard_floor_age_hours: float = Field(default=24.0, ge=0.0)
+    # Rough action count of one session; caps sessions/day by the phase budget.
+    expected_actions_per_session: int = Field(default=5, ge=1)
+    # Upper day bound of each phase (inclusive); the next phase starts at bound+1.
+    # ``null`` = terminal phase (no next bound).
+    phase_day_bound: dict[str, int | None] = Field(
+        default_factory=lambda: {
+            "intro": 1,
+            "settling": 7,
+            "warming": 14,
+            "active": 29,
+            "warmed": None,
+        },
+    )
+    # Daily action cap by phase (80 = CRMChat ceiling for accounts ≥2-3 months).
+    phase_daily_cap: dict[str, int] = Field(
+        default_factory=lambda: {
+            "intro": 3,
+            "settling": 10,
+            "warming": 20,
+            "active": 40,
+            "warmed": 80,
+        },
+    )
+    # Activity-persona presets — the operator's chosen *target* cadence: sessions/
+    # day (a range, drawn per next-run) plus per-session reaction and inter-account
+    # DM probability. calm < normal < active for every lever.
+    persona_sessions: dict[str, tuple[int, int]] = Field(
+        default_factory=lambda: {"calm": (2, 4), "normal": (5, 8), "active": (10, 14)},
+    )
+    persona_reaction_probability: dict[str, float] = Field(
+        default_factory=lambda: {"calm": 0.15, "normal": 0.40, "active": 0.70},
+    )
+    persona_dm_probability: dict[str, float] = Field(
+        default_factory=lambda: {"calm": 0.10, "normal": 0.30, "active": 0.55},
+    )
 
 
 class GeminiSettings(BaseSettings):

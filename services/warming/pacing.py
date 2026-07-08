@@ -25,17 +25,9 @@ from schemas.warming import (
 # that patch ``services.warming.pacing.<name>`` still resolve through these.
 from services.warming._phases import (  # noqa: F401 - re-exported for the pacing public API.
     _DM_ALLOWED_BANDS,
-    _EXPECTED_ACTIONS_PER_SESSION,
-    _PERSONA_DM_PROBABILITY,
-    _PERSONA_REACTION_PROBABILITY,
-    _PERSONA_SESSIONS,
-    _PHASE_DAILY_CAP,
-    _PHASE_DAY_BOUND,
-    _PHASE_HARD_FLOOR_AGE_HOURS,
     _PHASE_ORDER,
     _SECONDS_PER_HOUR,
     _TRUST_PHASE_CEILING,
-    _UNKNOWN_AGE_FALLBACK_HOURS,
     _account_age_hours,
     _active_window_hours,
     _phase_cap_by_trust,
@@ -49,6 +41,8 @@ from services.warming._phases import (  # noqa: F401 - re-exported for the pacin
 )
 
 if TYPE_CHECKING:
+    from random import Random
+
     from schemas.accounts import AccountRead
     from schemas.spam_status import SpamStatusVerdict
     from schemas.telegram_actions import ActionResult
@@ -200,11 +194,15 @@ async def _account_tz(account_id: str) -> str | None:
     return timezone_for_phone(account.phone) if account else None
 
 
-def _shift_to_active_hours(candidate: datetime, tz_name: str | None) -> datetime:
+def _shift_to_active_hours(candidate: datetime, tz_name: str | None, rng: Random) -> datetime:
     """Move a next-run time into the account's active local window if it's outside.
 
     Keeps activity clustered in waking hours (account's phone timezone) instead
     of firing uniformly through the night. A ``start == end`` window disables it.
+
+    A shifted resume lands at a random point in ``[start, start + spread)`` rather
+    than exactly ``HH:00:00`` — an unseeded ``rng`` per call de-correlates accounts
+    so a fleet that parked overnight does not all wake on the same wall-clock second.
     """
     warm = settings.warming
     if not warm.active_hours_enabled or warm.active_hours_start == warm.active_hours_end:
@@ -221,4 +219,5 @@ def _shift_to_active_hours(candidate: datetime, tz_name: str | None) -> datetime
     target = local.replace(hour=warm.active_hours_start, minute=0, second=0, microsecond=0)
     if target <= local:
         target += timedelta(days=1)
+    target += timedelta(seconds=rng.uniform(0, warm.active_hours_start_spread_minutes * 60))
     return target.astimezone(UTC)
