@@ -142,14 +142,6 @@ async def _generate_acceptable(
     nc = settings.neurocomment
     recent = await _recent_channel_comments(campaign.campaign_id, channel)
     now = datetime.now(UTC)
-    # In-flight (reserved-but-unposted) comments on this channel, so two accounts can't
-    # both slip a near-duplicate past the posted-only check inside each other's delay
-    # window. Empty when the semantic gate is off — preserving the off-switch below.
-    inflight = (
-        _inflight_texts(channel, now, nc.semantic_dedup_window_hours)
-        if nc.semantic_dedup_threshold > 0
-        else []
-    )
     # Comment generation always uses Gemini; read the operator's key from the DB
     # (falls back to .env) so a UI-set key takes effect without a restart.
     secret = await load_warming_settings()
@@ -165,9 +157,18 @@ async def _generate_acceptable(
             continue
         if not await try_reserve_sent(candidate):
             continue
-        # ponytail: `recent`/`inflight` are [] when semantic dedup is off (see
-        # _recent_channel_comments / the guard above), so this any() is the off-switch;
-        # don't also guard the threshold here.
+        # In-flight (reserved-but-unposted) comments on this channel, read LIVE here —
+        # after the multi-second generate await, not at function entry — so a rival on
+        # another account that reserved a near-duplicate during that await is now visible.
+        # An entry-time snapshot froze a stale (often empty) view both racers passed,
+        # letting them post near-identical comments inside each other's delay window.
+        # Empty when the semantic gate is off (preserving the off-switch); `recent` is
+        # likewise [] then, so the any() below is the off-switch — don't re-guard here.
+        inflight = (
+            _inflight_texts(channel, now, nc.semantic_dedup_window_hours)
+            if nc.semantic_dedup_threshold > 0
+            else []
+        )
         if any(
             similarity(candidate, prev) >= nc.semantic_dedup_threshold
             for prev in (*recent, *inflight)
