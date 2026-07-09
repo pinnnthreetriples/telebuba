@@ -45,6 +45,7 @@ logger = logging.getLogger(__name__)
 MAX_UNCOMPRESSED_BYTES = 500 * 1024 * 1024  # 500 MiB total uncompressed payload
 MAX_FILE_COUNT = 50_000  # max entries in the zip
 MAX_PATH_DEPTH = 32  # nested directory depth cap
+_EXTRACT_CHUNK_BYTES = 1024 * 1024  # stream members out in 1 MiB chunks
 
 _POSIX_CREATE_SYSTEM = 3
 _POSIX_MODE_MASK = 0o170000
@@ -104,16 +105,33 @@ def _safe_extract_zip(
         infos = zf.infolist()
         if len(infos) > MAX_FILE_COUNT:
             return "too_many_files"
-        total = 0
+        # Reject every unsafe entry before writing anything.
         for info in infos:
             if _is_unsafe_entry(info.filename):
                 return "unsafe_path"
             if _is_symlink_entry(info):
                 return "symlinks_not_allowed"
-            total += info.file_size
-            if total > MAX_UNCOMPRESSED_BYTES:
-                return "zip_too_large"
-        zf.extractall(dest)
+        # Stream each member out ourselves, counting the bytes actually written
+        # rather than trusting the zip's declared ``file_size``: a crafted archive
+        # can understate that to slip past the cap while ``extractall`` would still
+        # write the real (larger) payload and exhaust the disk. Entries are already
+        # path/symlink-validated above, so the joined destination stays inside
+        # ``dest``; a partial write on overflow is wiped by the caller's temp-dir
+        # cleanup.
+        total = 0
+        for info in infos:
+            rel = PurePosixPath(info.filename.replace("\\", "/"))
+            target = dest.joinpath(*rel.parts)
+            if info.is_dir():
+                target.mkdir(parents=True, exist_ok=True)
+                continue
+            target.parent.mkdir(parents=True, exist_ok=True)
+            with zf.open(info) as src, target.open("wb") as out:
+                while chunk := src.read(_EXTRACT_CHUNK_BYTES):
+                    total += len(chunk)
+                    if total > MAX_UNCOMPRESSED_BYTES:
+                        return "zip_too_large"
+                    out.write(chunk)
     return None
 
 

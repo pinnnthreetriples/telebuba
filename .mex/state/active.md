@@ -29,9 +29,14 @@ fixed four confirmed correctness defects (PR open, no auto-merge): warming
 `_gate_target_reached` no longer completes a quarantine/flood_wait account;
 neurocomment reads its in-flight near-dup list live (post-reservation) instead of
 a stale entry-time snapshot; `set_account_photo` returns 400 (not 500) on
-`ValueError`; `decode_session_claims` returns None when no `AUTH__SECRET` is set.
-A fifth finding (daily action cap exceedable ~2x on mid-cycle restart) needs a
-design call and is tracked in issue #208.
+`ValueError`; `decode_session_claims` returns None when no `AUTH__SECRET` is set. Two low-severity
+hardening items were added to the same PR: the tdata-zip extractor now streams
+members and counts the bytes actually written (instead of trusting the archive's
+declared sizes) so a crafted archive can't overshoot the size cap and exhaust the
+disk; and a broken loguru debug line in `phone_geo` (`%s` → `{}`) was fixed. A fifth
+MED finding (daily action cap exceedable ~2x on mid-cycle restart) needs a design
+call and is tracked in issue #208; the remaining audit findings were judged
+not-worth-fixing (design opinions / accepted tradeoffs / cosmetic).
 
 ## Not Yet Built (deliberate)
 

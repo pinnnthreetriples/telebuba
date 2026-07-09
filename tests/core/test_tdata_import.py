@@ -118,6 +118,22 @@ async def test_rejects_zip_bomb(sessions_dir: Path, tmp_base: Path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_zip_too_large_counts_bytes_written_across_members(
+    sessions_dir: Path,
+    tmp_base: Path,
+) -> None:
+    # Two members each under the cap but together over it: the extractor accumulates
+    # the bytes it actually writes across members (not the archive's declared sizes)
+    # and aborts mid-extraction, leaving nothing behind.
+    payload = _zip({"a.bin": b"A" * 400, "b.bin": b"B" * 400})
+    req = TdataConvertRequest(filename="bad.zip", content=payload)
+    with patch("core.tdata_import.MAX_UNCOMPRESSED_BYTES", 512):
+        result = await convert_tdata_zip(req, sessions_dir, tmp_base=tmp_base)
+    assert result.status == "zip_too_large"
+    assert list(tmp_base.iterdir()) == []
+
+
+@pytest.mark.asyncio
 async def test_tdata_folder_missing(sessions_dir: Path, tmp_base: Path) -> None:
     payload = _zip({"unrelated_dir/something.txt": b"x"})
     req = TdataConvertRequest(filename="bad.zip", content=payload)

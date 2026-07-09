@@ -60,7 +60,7 @@ def timezone_for_phone(phone: str | None) -> str | None:
         return None
     if len(zones) > 1:
         logger.debug(
-            "phone_timezone_ambiguous phone=%s picked=%s candidates=%s",
+            "phone_timezone_ambiguous phone={} picked={} candidates={}",
             phone,
             zone,
             list(zones),
