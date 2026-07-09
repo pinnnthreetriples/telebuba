@@ -148,6 +148,31 @@ async def _maybe_inter_account_chat(
     return await _open_with_partner(sender_id, partners, secret, accounts)
 
 
+def _should_chat(
+    data: WarmingCycleRequest,
+    secret: WarmingSettingsSecret,
+    tally: _ChannelTally,
+    *,
+    dm_allowed: bool,
+    can_attempt: bool,
+) -> bool:
+    """All gates for an inter-account DM this cycle.
+
+    П11: ``dm_allowed`` is the loop's trust+readiness-aware permission (age-only
+    for direct callers). The persona roll is last so it draws only once every
+    prior gate passed — it decides *how often* to chat, not whether it may.
+    """
+    return (
+        can_attempt
+        and not tally.flooded
+        and not tally.peer_flooded
+        and dm_allowed
+        and secret.inter_account_chat
+        and bool(secret.gemini_api_key)
+        and _seams.rng.random() < persona_dm_probability(data.activity_persona)
+    )
+
+
 async def _run_chat_step(
     data: WarmingCycleRequest,
     secret: WarmingSettingsSecret,
@@ -158,20 +183,9 @@ async def _run_chat_step(
 ) -> int:
     """Maybe start/continue an inter-account DM; return messages_sent.
 
-    П11: ``dm_allowed`` is the loop's trust+readiness-aware permission (age-only
-    for direct callers). The persona roll is last so it draws only once every
-    prior gate passed — it decides *how often* to chat, not whether it may. Any
-    flood is folded into ``tally``.
+    Any flood is folded into ``tally``.
     """
-    if not (
-        can_attempt
-        and not tally.flooded
-        and not tally.peer_flooded
-        and dm_allowed
-        and secret.inter_account_chat
-        and secret.gemini_api_key
-        and _seams.rng.random() < persona_dm_probability(data.activity_persona)
-    ):
+    if not _should_chat(data, secret, tally, dm_allowed=dm_allowed, can_attempt=can_attempt):
         return 0
     chat_result = await _maybe_inter_account_chat(data.account_id, secret)
     tally.attempts += chat_result.attempted_actions

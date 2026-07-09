@@ -75,6 +75,17 @@ async def _emit_step(on_step: _OnStep | None, step: str) -> None:
         await on_step(step)
 
 
+@dataclass
+class _ReadReactOutcome:
+    """One channel's read-then-maybe-react result (replaces a positional 5-tuple)."""
+
+    reads: int = 0
+    reactions: int = 0
+    flood: ActionResult | None = None
+    failures: int = 0
+    attempts: int = 0
+
+
 async def _read_and_react(  # noqa: PLR0913
     account_id: str,
     channel: str,
@@ -83,27 +94,28 @@ async def _read_and_react(  # noqa: PLR0913
     reaction_probability: float,
     attempts_so_far: int,
     remaining_actions: int | None,
-) -> tuple[int, int, ActionResult | None, int, int]:
-    """Read a channel and maybe react. Returns reads, reactions, flood, fails, attempts."""
+) -> _ReadReactOutcome:
+    """Read a channel and maybe react, tallying reads / reactions / fails / flood."""
     warm = settings.warming
-    reads = reactions = failures = attempts = 0
+    out = _ReadReactOutcome()
     read_result = await _seams.execute(
         account_id,
         ReadChannel(channel=channel, message_limit=warm.read_message_limit),
     )
-    attempts += 1
+    out.attempts += 1
     if read_result.status == "ok":
-        reads = 1
+        out.reads = 1
     elif read_result.status == "failed":
-        failures += 1
+        out.failures += 1
     elif read_result.status in _HALT_STATUSES:
-        return reads, reactions, read_result, failures, attempts
+        out.flood = read_result
+        return out
     await _human_pause(warm.reading_min_seconds, warm.reading_max_seconds)
     # Don't react to a channel whose read just failed: it's a pointless extra
     # request on a ban-risk account and yields a contradictory status=failed +
     # reactions_sent=1 result (#100).
     can_react = read_result.status == "ok"
-    if remaining_actions is not None and (attempts_so_far + attempts) >= remaining_actions:
+    if remaining_actions is not None and (attempts_so_far + out.attempts) >= remaining_actions:
         can_react = False
 
     if can_react and reactions_enabled and _seams.rng.random() < reaction_probability:
@@ -115,16 +127,17 @@ async def _read_and_react(  # noqa: PLR0913
                 message_limit=warm.reaction_message_limit,
             ),
         )
-        attempts += 1
+        out.attempts += 1
         if react_result.status in _HALT_STATUSES:
-            return reads, reactions, react_result, failures, attempts
+            out.flood = react_result
+            return out
         # A skipped react (channel permits no usable emoji) is status "ok" with no
         # message_id — don't count it as a reaction the board never actually placed.
         if react_result.status == "ok" and react_result.message_id is not None:
-            reactions = 1
+            out.reactions = 1
         elif react_result.status == "failed":
-            failures += 1
-    return reads, reactions, None, failures, attempts
+            out.failures += 1
+    return out
 
 
 @dataclass
@@ -177,20 +190,16 @@ def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str)
     return False
 
 
-def _apply_read_result(
-    tally: _ChannelTally,
-    outcome: tuple[int, int, ActionResult | None, int, int],
-    channel: str,
-) -> bool:
+def _apply_read_result(tally: _ChannelTally, outcome: _ReadReactOutcome, channel: str) -> bool:
     """Fold a read/react outcome into the tally. Returns True if the cycle should stop."""
-    reads, reactions, channel_flood, failures, attempts = outcome
-    tally.reads += reads
-    tally.reactions += reactions
-    tally.failures += failures
-    tally.attempts += attempts
-    if failures:
+    tally.reads += outcome.reads
+    tally.reactions += outcome.reactions
+    tally.failures += outcome.failures
+    tally.attempts += outcome.attempts
+    if outcome.failures:
         tally.last_failed_action = "read_or_react"
         tally.last_failed_channel = channel
+    channel_flood = outcome.flood
     if channel_flood is None:
         return False
     if channel_flood.status == "peer_flood":
@@ -242,10 +251,9 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             attempts_so_far=attempts_so_far + tally.attempts,
             remaining_actions=remaining_actions,
         )
-        reads, reactions, *_ = outcome
-        if reads:
+        if outcome.reads:
             await _emit_step(on_step, "read")
-        if reactions:
+        if outcome.reactions:
             await _emit_step(on_step, "react")
         if _apply_read_result(tally, outcome, channel.channel):
             break
