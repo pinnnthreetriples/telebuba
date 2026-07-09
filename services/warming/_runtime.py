@@ -14,7 +14,7 @@ from __future__ import annotations
 import asyncio
 import uuid
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.db import (
@@ -42,9 +42,13 @@ from services.warming.pacing import (
 )
 
 if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
     from schemas.warming import (
+        ActivityPersona,
         StartWarmingRequest,
         WarmingAccountState,
+        WarmingReadiness,
+        WarmingStateRecord,
     )
 
 # account_id -> running warming loop. Genuine runtime state (rare exception to
@@ -86,6 +90,89 @@ def _account_lock(account_id: str) -> asyncio.Lock:
     return lock
 
 
+class _CarriedStint(NamedTuple):
+    """The started_at / target_days / activity_persona a start should apply.
+
+    П7: a restart-while-warming carries the original stint anchor, operator
+    target, and persona; a genuine (re)start from idle/stopped restamps them.
+    """
+
+    started_at: str
+    target_days: int
+    activity_persona: ActivityPersona
+
+
+def _carry_or_restamp(
+    existing: WarmingStateRecord | None, data: StartWarmingRequest
+) -> _CarriedStint:
+    """Decide the stint fields once: carry the in-flight ones, restamp the rest."""
+    started_at = (
+        existing.started_at
+        if existing and existing.started_at and is_warming(existing.state)
+        else _now_iso()
+    )
+    target_days = (
+        existing.target_days
+        if existing is not None and existing.target_days and is_warming(existing.state)
+        else (data.target_days or settings.neurocomment.warmed_min_days)
+    )
+    activity_persona = (
+        existing.activity_persona
+        if existing is not None and is_warming(existing.state)
+        else data.activity_persona
+    )
+    return _CarriedStint(started_at, target_days, activity_persona)
+
+
+async def _evaluate_account_readiness(
+    account_id: str,
+    account: AccountRead,
+    channel_count: int,
+) -> WarmingReadiness:
+    """Last-known-state readiness verdict, fetching the account's spam + trust."""
+    return evaluate_readiness(
+        account,
+        channel_count,
+        spam=await get_spam_status(account_id),
+        trust_score=await account_trust_score(account_id),
+    )
+
+
+async def _enforce_start_readiness(account_id: str, account: AccountRead) -> None:
+    """Refuse a not-ready account at start, raising ``WarmingNotReadyError``."""
+    if not (await load_warming_settings()).enforce_readiness:
+        return
+    channel_count = len((await list_warming_channels()).channels)
+    readiness = await _evaluate_account_readiness(account_id, account, channel_count)
+    if readiness.ready:
+        return
+    await log_event(
+        "WARNING",
+        "warming_start_blocked",
+        account_id=account_id,
+        extra={"reasons": readiness.reasons},
+    )
+    raise WarmingNotReadyError(readiness.reasons)
+
+
+async def _cancel_existing_task(account_id: str) -> None:
+    """Cancel + await any in-flight loop task so a "start now" isn't blocked by it.
+
+    F2: the task may still be inside the inter-cycle
+    ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous* ``next_run_at``.
+    We just cleared that schedule, so cancel-and-replace is the only way to honour
+    the operator's "start now".
+    """
+    existing = _RUNTIME.pop(account_id, None)
+    if existing is not None and not existing.done():
+        existing.cancel()
+        with suppress(TimeoutError, asyncio.CancelledError):
+            await asyncio.wait_for(
+                asyncio.shield(existing),
+                timeout=settings.warming.stop_cancel_timeout_seconds,
+            )
+
+
 async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
     """Move an account into the warming column and kick off its loop task."""
     async with _account_lock(data.account_id):
@@ -93,53 +180,12 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if account is None:
             msg = f"Unknown account: {data.account_id}"
             raise UnknownAccountError(msg)
-        if (await load_warming_settings()).enforce_readiness:
-            channel_count = len((await list_warming_channels()).channels)
-            spam = await get_spam_status(data.account_id)
-            trust_score = await account_trust_score(data.account_id)
-            readiness = evaluate_readiness(
-                account,
-                channel_count,
-                spam=spam,
-                trust_score=trust_score,
-            )
-            if not readiness.ready:
-                await log_event(
-                    "WARNING",
-                    "warming_start_blocked",
-                    account_id=data.account_id,
-                    extra={"reasons": readiness.reasons},
-                )
-                raise WarmingNotReadyError(readiness.reasons)
+        await _enforce_start_readiness(data.account_id, account)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
-        # П7: restarting an already-warming account keeps the original stint
-        # anchor so "дней в прогреве" counts from the first start; a genuine
-        # start from idle/stopped (re)stamps it.
         existing = await fetch_warming_state(data.account_id)
-        started_at = (
-            existing.started_at
-            if existing and existing.started_at and is_warming(existing.state)
-            else _now_iso()
-        )
-        # Operator-chosen warming duration (the start modal's day slider). A
-        # restart-while-warming keeps the original pick; a genuine (re)start
-        # honours the new value, falling back to the configured floor when the
-        # request omits it. The loop auto-completes the account once warming
-        # reaches this many days.
-        target_days = (
-            existing.target_days
-            if existing is not None and existing.target_days and is_warming(existing.state)
-            else (data.target_days or settings.neurocomment.warmed_min_days)
-        )
-        # Persona mirrors started_at: a restart-while-warming keeps the original
-        # cadence; a genuine (re)start from idle/stopped honours the new pick.
-        activity_persona = (
-            existing.activity_persona
-            if existing is not None and is_warming(existing.state)
-            else data.activity_persona
-        )
+        stint = _carry_or_restamp(existing, data)
         # Bug 2: a previously-promoted account dragged back into warming would
         # otherwise live in both pools — clear the flag so neurocomment's
         # warmed-account overview drops it on the next poll.
@@ -155,7 +201,7 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             "active",
             last_event="queued",
             next_run_at=None,
-            started_at=started_at,
+            started_at=stint.started_at,
             stopped_at=None,
             last_error=None,
             # П6: clear the previous run's furthest-step/channel so the just-
@@ -167,21 +213,10 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             flood_wait_until=None,
             proxy_snapshot=_proxy_snapshot(account),
             run_id=run_id,
-            target_days=target_days,
-            activity_persona=activity_persona,
+            target_days=stint.target_days,
+            activity_persona=stint.activity_persona,
         )
-        # F2: an existing task may still be inside the inter-cycle
-        # ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous*
-        # ``next_run_at``. We just cleared that schedule, so the only way to
-        # honour the operator's "start now" is to cancel and replace the task.
-        existing = _RUNTIME.pop(data.account_id, None)
-        if existing is not None and not existing.done():
-            existing.cancel()
-            with suppress(TimeoutError, asyncio.CancelledError):
-                await asyncio.wait_for(
-                    asyncio.shield(existing),
-                    timeout=settings.warming.stop_cancel_timeout_seconds,
-                )
+        await _cancel_existing_task(data.account_id)
         await _refresh_dialogue_pairs()
         _RUNTIME[data.account_id] = asyncio.create_task(
             _warming_loop(data.account_id, run_id=run_id),
@@ -252,11 +287,10 @@ async def reconcile_warming_runtime() -> None:
             # while it re-probes); applying the start_warming readiness gate to
             # them would abort an in-progress recovery and park it in error.
             if controls.enforce_readiness and fresh.state in ("active", "sleeping"):
-                readiness = evaluate_readiness(
+                readiness = await _evaluate_account_readiness(
+                    record.account_id,
                     account,
                     channel_count,
-                    spam=await get_spam_status(record.account_id),
-                    trust_score=await account_trust_score(record.account_id),
                 )
                 if not readiness.ready:
                     # Same gate as start_warming: a proxy that died / a fresh
