@@ -129,6 +129,20 @@ async def test_start_not_ready_is_400(app: FastAPI, monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
+async def test_start_listener_account_is_409(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    account_id = "acc-1"
+
+    async def _boom(body: object) -> WarmingAccountState:  # noqa: ARG001
+        raise warming_service.AccountIsListenerError(account_id)
+
+    monkeypatch.setattr("services.warming.start_warming", _boom)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/start", json={"account_id": "acc-1"})
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
+
+
+@pytest.mark.asyncio
 async def test_add_channels(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake(body: object) -> WarmingChannelList:  # noqa: ARG001
         return WarmingChannelList()

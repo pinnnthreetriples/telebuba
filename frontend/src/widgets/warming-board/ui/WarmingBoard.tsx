@@ -247,7 +247,7 @@ function WarmingCard({
             {t('warming.inProgress.days')}
           </span>
           <span className="text-[10px] font-bold text-ink">
-            {t('warming.card.dayProgress', { days })}
+            {t('warming.card.dayProgress', { days, target, count: target })}
           </span>
         </div>
 
@@ -435,7 +435,9 @@ function WarmingCard({
                 {t('warming.card.completeTitle')}
               </div>
               <div className="mt-px text-[10.5px] text-[#3f8a5e]">
-                {t('warming.card.completeSub', { days: t('warming.card.dayProgress', { days }) })}
+                {t('warming.card.completeSub', {
+                  days: t('warming.card.dayProgress', { days, target, count: target }),
+                })}
               </div>
             </div>
           </div>

@@ -17,7 +17,7 @@ from schemas.neurocomment import (
     NeurocommentRuntimeStatus,
     NeurocommentSettings,
 )
-from services.neurocomment import ChannelNotInCampaignError
+from services.neurocomment import ChannelNotInCampaignError, ListenerBusyWarmingError
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -299,6 +299,23 @@ async def test_start_runtime(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> N
     assert resp.json()["running"] is True
     # The activity-log row cap is served from config, not hardcoded in the SPA (#7).
     assert resp.json()["log_limit"] == 50
+
+
+@pytest.mark.asyncio
+async def test_start_runtime_warming_listener_is_409(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _start(listener_account_id: str) -> None:
+        raise ListenerBusyWarmingError(listener_account_id)
+
+    monkeypatch.setattr("services.neurocomment.start_neurocomment", _start)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/start",
+            json={"listener_account_id": "acc-1"},
+        )
+    assert resp.status_code == 409
+    assert resp.json()["error"]["code"] == "conflict"
 
 
 @pytest.mark.asyncio

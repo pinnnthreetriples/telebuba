@@ -16,7 +16,7 @@ from core.db import (
     list_accounts,
     list_dialogue_pairs,
     list_recent_dialogue_messages,
-    list_warming_states,
+    list_warming_account_ids,
     replace_dialogue_pairs,
 )
 from core.logging import log_event
@@ -27,7 +27,6 @@ from schemas.dialogues import (
     DialoguePairsResult,
     DialoguePartnersResult,
 )
-from schemas.warming import is_warming
 
 if TYPE_CHECKING:
     from schemas.dialogues import DialoguePair
@@ -48,8 +47,7 @@ async def get_partners(account_id: str) -> DialoguePartnersResult:
 
 
 async def _eligible_accounts() -> list[str]:
-    records = await list_warming_states()
-    warming_ids = {record.account_id for record in records if is_warming(record.state)}
+    warming_ids = await list_warming_account_ids()
     return sorted(
         account.account_id
         for account in (await list_accounts()).accounts

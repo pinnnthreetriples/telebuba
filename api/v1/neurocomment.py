@@ -232,7 +232,13 @@ async def get_runtime() -> NeurocommentRuntimeStatus:
 
 @router.post("/start", response_model=NeurocommentRuntimeStatus, operation_id="startNeurocomment")
 async def start(body: StartNeurocommentRequest) -> NeurocommentRuntimeStatus:
-    await nc_service.start_neurocomment(body.listener_account_id)
+    try:
+        await nc_service.start_neurocomment(body.listener_account_id)
+    except nc_service.ListenerBusyWarmingError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="listener account is currently warming",
+        ) from exc
     return await nc_service.neurocomment_runtime_status()
 
 

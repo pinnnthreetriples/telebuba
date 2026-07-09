@@ -31,6 +31,8 @@ from core.db import (
     purge_sent_hashes_older_than,
     record_dialogue_message,
     save_warming_settings,
+    set_listener_account_id,
+    set_listener_running,
     update_account_from_session_check,
     update_proxy_check,
     upsert_spam_status,
@@ -1167,6 +1169,34 @@ async def test_start_warming_defaults_target_to_config(monkeypatch: pytest.Monke
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.target_days == 9
+
+
+@pytest.mark.asyncio
+async def test_start_warming_rejects_the_running_listener(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Reciprocal of neurocomment's listener guard: the active listener account
+    # cannot be dragged into warming (the two runtimes must never share a session).
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    await set_listener_account_id("acc-1")
+    await set_listener_running(running=True)
+
+    with pytest.raises(warming.AccountIsListenerError):
+        await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    assert "acc-1" not in warming._RUNTIME
+
+
+@pytest.mark.asyncio
+async def test_start_warming_allows_a_paused_listener(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A merely-remembered (paused) listener is not running, so warming is allowed.
+    monkeypatch.setattr(_runtime, "_warming_loop", _fake_loop)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+    await set_listener_account_id("acc-1")
+    await set_listener_running(running=False)
+
+    started = await warming.start_warming(StartWarmingRequest(account_id="acc-1"))
+    assert started.state == "active"
 
 
 @pytest.mark.asyncio

@@ -11,6 +11,7 @@ from __future__ import annotations
 
 from core.repositories.neurocomment import ChannelNotInCampaignError
 from services.neurocomment._runtime import (
+    ListenerBusyWarmingError,
     clear_neurocomment_listener,
     neurocomment_runtime_status,
     on_post,
@@ -55,6 +56,7 @@ from services.neurocomment.settings_store import (
 
 __all__ = [
     "ChannelNotInCampaignError",
+    "ListenerBusyWarmingError",
     "assign_account_to_campaign",
     "clear_neurocomment_listener",
     "count_campaign_challenge_outcomes",

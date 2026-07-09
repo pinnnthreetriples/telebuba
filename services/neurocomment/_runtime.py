@@ -20,6 +20,7 @@ from core.db import (
     get_listener_running,
     list_active_watch_channels,
     list_campaigns,
+    list_warming_account_ids,
     reclaim_stale_claims,
     set_listener_account_id,
     set_listener_running,
@@ -37,6 +38,16 @@ if TYPE_CHECKING:
 
     from schemas.neurocomment_progress import OnboardingProgressEvent
     from schemas.telegram_actions import NewPostEvent
+
+
+class ListenerBusyWarmingError(Exception):
+    """Raised when the picked listener account is currently warming.
+
+    Warming and neurocomment are mutually exclusive per account (the rest of the
+    codebase enforces this via ``promoted_to_nc``); the listener pick is the one
+    path that bypassed it, so we reject it at save time.
+    """
+
 
 # In-flight on-post tasks, tracked so shutdown can cancel them.
 # ponytail: single-process, in-memory. Bounded by
@@ -79,6 +90,20 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     No active channels → stop the listener (idempotent). Safe to call on every
     boot; ``subscribe_posts`` itself drops any prior handler before registering.
     """
+    # Warming and neurocomment are mutually exclusive per account. This is the
+    # single choke point every subscription path funnels through (start, channel
+    # edit, startup resume), so the guard lives here — start_neurocomment adds an
+    # early raise on top for the interactive 409. A warming listener is unsubscribed
+    # (never re-subscribed) rather than raising, so boot/channel-edit stay safe.
+    if listener_account_id in await list_warming_account_ids():
+        await stop_post_listener(listener_account_id)
+        await _stop_sweep()
+        await log_event(
+            "WARNING",
+            "neurocomment_listener_warming_skipped",
+            account_id=listener_account_id,
+        )
+        return
     channels = (await list_active_watch_channels()).channels
     if not channels:
         await stop_post_listener(listener_account_id)
@@ -146,6 +171,8 @@ async def start_neurocomment(
     A rapid second Start does not spawn a duplicate onboarding task while the first is
     still in flight; already-ready pairs are skipped inside onboarding regardless.
     """
+    if listener_account_id in await list_warming_account_ids():
+        raise ListenerBusyWarmingError(listener_account_id)
     previous = await get_listener_account_id()
     if previous is not None and previous != listener_account_id:
         await stop_post_listener(previous)

@@ -1,16 +1,20 @@
 import { expect, test } from 'vitest';
 
+import { i18n } from '@/shared/i18n';
+
 import { eventLabel } from './eventLabel';
 
-// A minimal stub of i18next's t: echoes the key so we can assert which branch ran.
-const t = ((key: string) => `T:${key}`) as unknown as Parameters<typeof eventLabel>[0];
+test('maps a known code to its translation', () => {
+  expect(eventLabel(i18n.t, 'neurocomment_posted')).toBe('Комментарий опубликован');
+  expect(eventLabel(i18n.t, 'warming_started')).toBe('Прогрев запущен');
+});
 
-test('maps a known code to its logEvent.<code> key', () => {
-  expect(eventLabel(t, 'neurocomment_posted')).toBe('T:logEvent.neurocomment_posted');
-  expect(eventLabel(t, 'warming_started')).toBe('T:logEvent.warming_started');
+test('localizes the tdata import/conversion events (not raw codes)', () => {
+  expect(eventLabel(i18n.t, 'tdata_convert_completed')).toBe('Импорт tdata завершён');
+  expect(eventLabel(i18n.t, 'tdata_no_accounts')).toBe('В архиве нет аккаунтов');
 });
 
 test('falls back to the raw code for an unmapped event', () => {
-  expect(eventLabel(t, 'totally_unknown_event')).toBe('totally_unknown_event');
-  expect(eventLabel(t, '')).toBe('');
+  expect(eventLabel(i18n.t, 'totally_unknown_event')).toBe('totally_unknown_event');
+  expect(eventLabel(i18n.t, '')).toBe('');
 });

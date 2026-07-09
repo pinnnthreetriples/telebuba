@@ -63,6 +63,11 @@ async def start_warming(body: StartWarmingRequest) -> WarmingAccountState:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except warming_service.WarmingNotReadyError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except warming_service.AccountIsListenerError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_409_CONFLICT,
+            detail="account is the neurocomment listener",
+        ) from exc
 
 
 @router.post("/stop", response_model=WarmingAccountState, operation_id="stopWarming")

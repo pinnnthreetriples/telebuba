@@ -49,7 +49,7 @@ export function CaptchaSolverCard({
                 <span className="inline-flex h-[15px] w-[15px] cursor-help items-center justify-center rounded-full border border-line-input bg-white text-[10px] font-bold text-ink-subtle">
                   ?
                 </span>
-                <span className="tb-tip-pop w-[220px] whitespace-normal text-left">
+                <span className="tb-tip-pop tb-tip-pop--wide" style={{ textAlign: 'left' }}>
                   {t('neurocomment.captcha.tooltip')}
                 </span>
               </span>
