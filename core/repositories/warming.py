@@ -45,6 +45,7 @@ from schemas.warming import (
     WarmingStateRecord,
     WarmingStateWrite,
     WarmingStateWriteResult,
+    is_warming,
 )
 
 if TYPE_CHECKING:
@@ -147,6 +148,16 @@ def _list_warming_states() -> list[WarmingStateRecord]:
 
 async def list_warming_states() -> list[WarmingStateRecord]:
     return await asyncio.to_thread(_list_warming_states)
+
+
+async def list_warming_account_ids() -> set[str]:
+    """Ids of accounts currently in the warming runtime (any active warming state).
+
+    The one authoritative definition of "this account is busy warming" — shared by
+    the neurocomment listener guard and the dialogue-partner pool so the set of
+    blocking states cannot drift between call sites.
+    """
+    return {record.account_id for record in await list_warming_states() if is_warming(record.state)}
 
 
 def _fetch_warming_state(account_id: str) -> WarmingStateRecord | None:

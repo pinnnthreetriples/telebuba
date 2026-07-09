@@ -20,6 +20,8 @@ from core.config import settings
 from core.db import (
     fetch_account,
     fetch_warming_state,
+    get_listener_account_id,
+    get_listener_running,
     get_spam_status,
     list_warming_channels,
     list_warming_states,
@@ -80,6 +82,15 @@ class WarmingNotReadyError(ValueError):
     def __init__(self, reasons: list[str]) -> None:
         self.reasons = reasons
         super().__init__("; ".join(reasons) or "account not ready")
+
+
+class AccountIsListenerError(ValueError):
+    """Raised when ``start_warming`` refuses the running neurocomment listener.
+
+    The reciprocal of neurocomment's ``ListenerBusyWarmingError``: the two runtimes
+    are mutually exclusive per account, so an account cannot be warmed while it is
+    the active listener.
+    """
 
 
 def _account_lock(account_id: str) -> asyncio.Lock:
@@ -180,6 +191,10 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if account is None:
             msg = f"Unknown account: {data.account_id}"
             raise UnknownAccountError(msg)
+        # Reciprocal of the neurocomment listener guard: refuse to warm the account
+        # that is the active listener, so the two runtimes never share a session.
+        if await get_listener_running() and await get_listener_account_id() == data.account_id:
+            raise AccountIsListenerError(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.

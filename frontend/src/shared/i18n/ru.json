@@ -472,6 +472,7 @@
     "neurocomment_post_dropped_overloaded": "Комментарий отброшен из-за перегрузки",
     "neurocomment_stale_claims_reclaimed": "Зависшие задачи возвращены в очередь",
     "neurocomment_sweep_read_failed": "Не удалось проверить комментарии",
+    "neurocomment_listener_warming_skipped": "Слушатель пропущен — аккаунт в прогреве",
     "post_listener_callback_failed": "Ошибка обработки нового поста",
     "post_listener_channel_unresolved": "Не удалось определить канал поста",
     "warming_chat_generation_failed": "Не удалось сгенерировать сообщение",
@@ -732,7 +733,9 @@
       "empty": "Перенесите аккаунты сюда, чтобы запустить прогрев"
     },
     "card": {
-      "dayProgress": "{{days}} / {{target}} дней",
+      "dayProgress_one": "{{days}} / {{target}} день",
+      "dayProgress_few": "{{days}} / {{target}} дня",
+      "dayProgress_many": "{{days}} / {{target}} дней",
       "actionsTip": "Действия за сегодня из дневного лимита: онлайн, чтение, реакции, просмотр сторис, сообщения. Лимит зависит от фазы прогрева и растёт по мере взросления аккаунта. На пределе аккаунт засыпает до следующего дня, затем счётчик обнуляется.",
       "cfgTitle": "Настройки прогрева",
       "logToggle": "Лог активности",

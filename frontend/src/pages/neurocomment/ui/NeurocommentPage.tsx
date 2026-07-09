@@ -64,6 +64,18 @@ const NEURO_QUERY_IDS = new Set([
   'listLogs',
 ]);
 
+// True when a failed start is the backend's warming-listener rejection, so the UI
+// can show the warming banner rather than swallowing it. The generated client
+// throws the parsed error envelope ({ error: { code, message } }) on non-2xx, and
+// a 409 maps to code "conflict"; any other error (network, validation) is left alone.
+function isWarmingConflict(error: unknown): boolean {
+  return (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { error?: { code?: string } }).error?.code === 'conflict'
+  );
+}
+
 export function NeurocommentPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
@@ -99,8 +111,9 @@ export function NeurocommentPage() {
   const [showListenerEdit, setShowListenerEdit] = useState(false);
   const [promptFor, setPromptFor] = useState<NeurocommentCampaign | null>(null);
   const [deleteFor, setDeleteFor] = useState<NeurocommentCampaign | null>(null);
-  // Set when a start is refused because the chosen listener is actively warming.
-  const [listenerWarming, setListenerWarming] = useState(false);
+  // Set only when the backend rejects a start it thought was fine — the
+  // client-known case is derived below (listenerIsWarming), not stored.
+  const [startRejectedWarming, setStartRejectedWarming] = useState(false);
 
   const campaigns = useQuery(campaignsQueryOptions());
   const accounts = useQuery(accountsQueryOptions());
@@ -114,11 +127,10 @@ export function NeurocommentPage() {
   // Accounts actively warming must not double as the neurocomment listener
   // (the two runtimes are mutually exclusive per account). The board's "warming"
   // bucket is exactly the backend's ``is_warming`` set, so we reuse it to both
-  // hide those accounts from the picker and block a stale/persisted pick.
-  const warmingBoard = useQuery({
-    ...warmingBoardQueryOptions(),
-    refetchInterval: FALLBACK_POLL_MS,
-  });
+  // hide those accounts from the picker and block a stale/persisted pick. Fetched
+  // once (no poll) — /warming/board is the app's heaviest read-model and the
+  // warming set changes rarely; the authoritative HTTP 409 backstops any staleness.
+  const warmingBoard = useQuery(warmingBoardQueryOptions());
   const runtime = useQuery({
     ...neurocommentRuntimeQueryOptions(),
     refetchInterval: FALLBACK_POLL_MS,
@@ -178,6 +190,11 @@ export function NeurocommentPage() {
   // The listener id survives reload/pause: it comes from the persisted runtime
   // status (returned even when paused) and only falls back to a fresh local pick.
   const listenerId = runtime.data?.listener_account_id ?? listener;
+  // The picker already hides warming accounts; this derived flag additionally
+  // catches a persisted/stale listener that is warming. showWarmingBlock also
+  // lights up when the backend rejects a start the client thought was fine.
+  const listenerIsWarming = listenerId !== '' && warmingIds.has(listenerId);
+  const showWarmingBlock = listenerIsWarming || startRejectedWarming;
   const boardAccounts = board.data?.accounts ?? [];
   const boardChannels = board.data?.channels ?? [];
   const boardChannelNames = boardChannels.map((c) => c.channel);
@@ -237,19 +254,33 @@ export function NeurocommentPage() {
 
   const activeCampaignCount = campaignList.filter((c) => c.status === 'active').length;
 
+  // Start the listener, surfacing the authoritative backend rejection: if the
+  // account began warming after the picker was populated (stale board), the client
+  // pre-check misses it and the server returns 409 — reflect that in the banner.
+  const startListener = (id: string) => {
+    start.mutate(
+      { body: { listener_account_id: id } },
+      {
+        onSuccess: () => {
+          setStartRejectedWarming(false);
+        },
+        onError: (error) => {
+          setStartRejectedWarming(isWarmingConflict(error));
+        },
+        onSettled: invalidate,
+      },
+    );
+  };
+
   // GLOBAL listener start/stop (the whole engine). Kept distinct from the
   // per-campaign run/pause below.
   const toggleRuntime = () => {
     if (running) {
       stop.mutate({}, { onSettled: invalidate });
-    } else if (listenerId) {
-      if (warmingIds.has(listenerId)) {
-        setListenerWarming(true);
-        return;
-      }
-      setListenerWarming(false);
-      start.mutate({ body: { listener_account_id: listenerId } }, { onSettled: invalidate });
+    } else if (listenerId && !warmingIds.has(listenerId)) {
+      startListener(listenerId);
     }
+    // A warming listenerId is not started; showWarmingBlock already renders the banner.
   };
 
   // Per-campaign run/pause (finding #2): flips campaign.status via setCampaignStatus.
@@ -361,12 +392,12 @@ export function NeurocommentPage() {
             }}
             accountOptions={listenerOptions}
             onPickListener={(id) => {
-              setListenerWarming(false);
+              setStartRejectedWarming(false);
               setListener(id);
               setListenerOpen(false);
             }}
           />
-          {listenerWarming ? (
+          {showWarmingBlock ? (
             <p className="mt-2 text-[11.5px] font-medium text-danger">
               {t('neurocomment.listener.warmingBlocked')}
             </p>
@@ -535,10 +566,10 @@ export function NeurocommentPage() {
             setShowListenerEdit(false);
           }}
           onSave={(id) => {
-            setListenerWarming(false);
+            setStartRejectedWarming(false);
             setListener(id);
-            if (running) {
-              start.mutate({ body: { listener_account_id: id } }, { onSettled: invalidate });
+            if (running && !warmingIds.has(id)) {
+              startListener(id);
             }
           }}
         />

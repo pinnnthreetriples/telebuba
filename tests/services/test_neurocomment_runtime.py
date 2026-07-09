@@ -40,7 +40,6 @@ from schemas.telegram_actions import (
     JoinChannel,
     NewPostEvent,
 )
-from schemas.warming import WarmingStateRecord
 from services.neurocomment import _runtime, _state
 
 if TYPE_CHECKING:
@@ -105,24 +104,18 @@ def _patch_execute(monkeypatch: pytest.MonkeyPatch, spy: _ExecuteSpy) -> None:
     monkeypatch.setattr("services.neurocomment._seams.execute", spy.execute)
 
 
-def _patch_warming_states(
-    monkeypatch: pytest.MonkeyPatch,
-    records: list[WarmingStateRecord],
-) -> None:
-    async def _list() -> list[WarmingStateRecord]:
-        return records
+def _patch_warming_ids(monkeypatch: pytest.MonkeyPatch, ids: set[str]) -> None:
+    async def _ids() -> set[str]:
+        return set(ids)
 
-    monkeypatch.setattr(_runtime, "list_warming_states", _list)
+    monkeypatch.setattr(_runtime, "list_warming_account_ids", _ids)
 
 
 @pytest.mark.asyncio
 async def test_start_rejects_listener_that_is_warming(monkeypatch: pytest.MonkeyPatch) -> None:
     # An actively-warming account must not double as the listener; the guard runs
     # before anything is persisted.
-    _patch_warming_states(
-        monkeypatch,
-        [WarmingStateRecord(account_id="listener-1", state="active", updated_at="now")],
-    )
+    _patch_warming_ids(monkeypatch, {"listener-1"})
     with pytest.raises(_runtime.ListenerBusyWarmingError):
         await _runtime.start_neurocomment("listener-1")
     assert await get_listener_account_id() is None
@@ -135,13 +128,27 @@ async def test_start_allows_listener_that_is_not_warming(monkeypatch: pytest.Mon
     _patch_listener(monkeypatch, spy)
     monkeypatch.setattr(_runtime, "_ensure_onboarding_running", lambda *a, **k: None)  # noqa: ARG005
     # A different account is warming; the picked listener is free, so start proceeds.
-    _patch_warming_states(
-        monkeypatch,
-        [WarmingStateRecord(account_id="other", state="active", updated_at="now")],
-    )
+    _patch_warming_ids(monkeypatch, {"other"})
     await _runtime.start_neurocomment("listener-2")
     assert await get_listener_account_id() == "listener-2"
     assert await get_listener_running() is True
+
+
+@pytest.mark.asyncio
+async def test_reconcile_unsubscribes_a_warming_listener(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The guard lives at the reconcile choke point too, so a persisted listener that
+    # is warming is stopped (never re-subscribed) on startup/channel-edit resume,
+    # even when there are active channels to watch.
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
+    _patch_warming_ids(monkeypatch, {"listener-1"})
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    assert spy.subscribed == []
+    assert spy.stopped == ["listener-1"]
 
 
 @pytest.mark.asyncio

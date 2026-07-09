@@ -38,17 +38,22 @@ MED finding (daily action cap exceedable ~2x on mid-cycle restart) needs a desig
 call and is tracked in issue #208; the remaining audit findings were judged
 not-worth-fixing (design opinions / accepted tradeoffs / cosmetic).
 
-A 2026-07-10 operator-reported UI bug pass (PR open, no auto-merge) then fixed four
-defects: (1) activity-log events now fully localized — every `log_event` code is in
-the `eventLabel` allow-list + `logEvent` ru/en dictionaries (was: `tdata_*` and ~55
+A 2026-07-10 operator-reported UI bug pass (PR #210, no auto-merge) then fixed four
+defects: (1) activity-log events now fully localized — `logEvent` ru/en dictionaries
+are the single source of truth, `eventLabel` resolves `t('logEvent.<code>', {defaultValue: code})`
+(the old ~116-entry allow-list was removed), and `tests/test_logevent_i18n_parity.py`
+fails CI if any backend `log_event` code lacks a translation (was: `tdata_*` and ~55
 others rendered as raw snake_case); (2) the warming card day-progress denominator is
-now the account's real `target_days` (`WarmingBoard` passes `target`; the i18n string
-was hardcoded `/ 14 дней`); (3) the neurocomment "Решение капчи" help tooltip uses the
-wrapping `tb-tip-pop--wide` variant (was clipped by an unlayered `white-space:nowrap`
-beating the Tailwind `whitespace-normal` utility); (4) an actively-warming account can
-no longer be the neurocomment listener — authoritative save-time guard
-(`ListenerBusyWarmingError` in `start_neurocomment` → HTTP 409) plus a picker filter
-that hides warming accounts and blocks starting a stale warming listener client-side.
+now the account's real `target_days`, pluralized (`день`/`дня`/`дней` via i18next
+`count`; the i18n string was hardcoded `/ 14 дней`); (3) the neurocomment "Решение
+капчи" help tooltip uses the wrapping, left-aligned `tb-tip-pop--wide` variant (was
+clipped by an unlayered `white-space:nowrap`); (4) warming↔neurocomment-listener
+exclusivity is enforced both directions and at every choke point —
+`ListenerBusyWarmingError` in `start_neurocomment` (→409) AND in
+`reconcile_neurocomment_runtime` (startup/channel-edit skip+stop), the reciprocal
+`AccountIsListenerError` in `start_warming` (→409), one shared
+`core.db.list_warming_account_ids()`, plus a picker filter and the 409 surfaced in the
+listener UI. All backend/frontend gates green (1079 pytest / 205 vitest).
 
 ## Not Yet Built (deliberate)
 

@@ -471,6 +471,7 @@
     "neurocomment_post_dropped_overloaded": "Comment dropped (overloaded)",
     "neurocomment_stale_claims_reclaimed": "Stalled tasks reclaimed",
     "neurocomment_sweep_read_failed": "Failed to check comments",
+    "neurocomment_listener_warming_skipped": "Listener skipped — account is warming",
     "post_listener_callback_failed": "Failed to handle new post",
     "post_listener_channel_unresolved": "Could not resolve post channel",
     "warming_chat_generation_failed": "Failed to generate message",
@@ -731,7 +732,8 @@
       "empty": "Drop accounts here to start warming"
     },
     "card": {
-      "dayProgress": "{{days}} / {{target}} days",
+      "dayProgress_one": "{{days}} / {{target}} day",
+      "dayProgress_other": "{{days}} / {{target}} days",
       "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
       "cfgTitle": "Warming settings",
       "logToggle": "Activity log",
