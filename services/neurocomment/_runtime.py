@@ -20,6 +20,7 @@ from core.db import (
     get_listener_running,
     list_active_watch_channels,
     list_campaigns,
+    list_warming_states,
     reclaim_stale_claims,
     set_listener_account_id,
     set_listener_running,
@@ -28,6 +29,7 @@ from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
 from schemas.neurocomment import NeurocommentRuntimeStatus
 from schemas.telegram_actions import JoinChannel
+from schemas.warming import is_warming
 from services.neurocomment import _seams
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_campaign
@@ -37,6 +39,16 @@ if TYPE_CHECKING:
 
     from schemas.neurocomment_progress import OnboardingProgressEvent
     from schemas.telegram_actions import NewPostEvent
+
+
+class ListenerBusyWarmingError(Exception):
+    """Raised when the picked listener account is currently warming.
+
+    Warming and neurocomment are mutually exclusive per account (the rest of the
+    codebase enforces this via ``promoted_to_nc``); the listener pick is the one
+    path that bypassed it, so we reject it at save time.
+    """
+
 
 # In-flight on-post tasks, tracked so shutdown can cancel them.
 # ponytail: single-process, in-memory. Bounded by
@@ -146,6 +158,9 @@ async def start_neurocomment(
     A rapid second Start does not spawn a duplicate onboarding task while the first is
     still in flight; already-ready pairs are skipped inside onboarding regardless.
     """
+    warming_ids = {rec.account_id for rec in await list_warming_states() if is_warming(rec.state)}
+    if listener_account_id in warming_ids:
+        raise ListenerBusyWarmingError(listener_account_id)
     previous = await get_listener_account_id()
     if previous is not None and previous != listener_account_id:
         await stop_post_listener(previous)

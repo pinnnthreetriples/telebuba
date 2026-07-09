@@ -38,6 +38,18 @@ MED finding (daily action cap exceedable ~2x on mid-cycle restart) needs a desig
 call and is tracked in issue #208; the remaining audit findings were judged
 not-worth-fixing (design opinions / accepted tradeoffs / cosmetic).
 
+A 2026-07-10 operator-reported UI bug pass (PR open, no auto-merge) then fixed four
+defects: (1) activity-log events now fully localized — every `log_event` code is in
+the `eventLabel` allow-list + `logEvent` ru/en dictionaries (was: `tdata_*` and ~55
+others rendered as raw snake_case); (2) the warming card day-progress denominator is
+now the account's real `target_days` (`WarmingBoard` passes `target`; the i18n string
+was hardcoded `/ 14 дней`); (3) the neurocomment "Решение капчи" help tooltip uses the
+wrapping `tb-tip-pop--wide` variant (was clipped by an unlayered `white-space:nowrap`
+beating the Tailwind `whitespace-normal` utility); (4) an actively-warming account can
+no longer be the neurocomment listener — authoritative save-time guard
+(`ListenerBusyWarmingError` in `start_neurocomment` → HTTP 409) plus a picker filter
+that hides warming accounts and blocks starting a stale warming listener client-side.
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

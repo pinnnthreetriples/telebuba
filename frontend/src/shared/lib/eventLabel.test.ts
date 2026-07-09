@@ -10,6 +10,12 @@ test('maps a known code to its logEvent.<code> key', () => {
   expect(eventLabel(t, 'warming_started')).toBe('T:logEvent.warming_started');
 });
 
+test('localizes the tdata import/conversion events (not shown as raw codes)', () => {
+  expect(eventLabel(t, 'tdata_convert_completed')).toBe('T:logEvent.tdata_convert_completed');
+  expect(eventLabel(t, 'tdata_convert_started')).toBe('T:logEvent.tdata_convert_started');
+  expect(eventLabel(t, 'tdata_no_accounts')).toBe('T:logEvent.tdata_no_accounts');
+});
+
 test('falls back to the raw code for an unmapped event', () => {
   expect(eventLabel(t, 'totally_unknown_event')).toBe('totally_unknown_event');
   expect(eventLabel(t, '')).toBe('');

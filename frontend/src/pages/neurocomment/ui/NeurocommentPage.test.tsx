@@ -274,6 +274,65 @@ test('picking a listener account enables the start button', async () => {
   });
 });
 
+test('an actively-warming account is not offered as a listener', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    // The warming board shares the "/board" suffix with the neurocomment board,
+    // so match it first: acc-2 is actively warming and must be excluded.
+    if (url.pathname === '/api/v1/warming/board') {
+      return Promise.resolve(
+        jsonResponse({
+          idle: [],
+          warming: [{ account_id: 'acc-2', label: '+79261119999', state: 'active', health: 'ok' }],
+          channels: { channels: [] },
+        }),
+      );
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              account_id: 'acc-1',
+              label: '+79261112233',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+            {
+              account_id: 'acc-2',
+              label: '+79261119999',
+              status: 'alive',
+              created_at: 'n',
+              updated_at: 'n',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  // acc-1 is offered; the actively-warming acc-2 is filtered out of the picker.
+  expect(await screen.findByRole('button', { name: '+79261112233' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: '+79261119999' })).not.toBeInTheDocument();
+});
+
 test('selecting a campaign card marks it selected', async () => {
   routeApi();
   renderWithClient(<NeurocommentPage />);

@@ -29,7 +29,7 @@ import {
   updateCampaignPromptMutation,
 } from '@/entities/campaign';
 import { logsQueryOptions } from '@/entities/log';
-import { warmedAccountsQueryOptions } from '@/entities/warming';
+import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
 import { ConfirmModal } from '@/shared/ui';
@@ -99,6 +99,8 @@ export function NeurocommentPage() {
   const [showListenerEdit, setShowListenerEdit] = useState(false);
   const [promptFor, setPromptFor] = useState<NeurocommentCampaign | null>(null);
   const [deleteFor, setDeleteFor] = useState<NeurocommentCampaign | null>(null);
+  // Set when a start is refused because the chosen listener is actively warming.
+  const [listenerWarming, setListenerWarming] = useState(false);
 
   const campaigns = useQuery(campaignsQueryOptions());
   const accounts = useQuery(accountsQueryOptions());
@@ -107,6 +109,14 @@ export function NeurocommentPage() {
   // account list.
   const warmed = useQuery({
     ...warmedAccountsQueryOptions(),
+    refetchInterval: FALLBACK_POLL_MS,
+  });
+  // Accounts actively warming must not double as the neurocomment listener
+  // (the two runtimes are mutually exclusive per account). The board's "warming"
+  // bucket is exactly the backend's ``is_warming`` set, so we reuse it to both
+  // hide those accounts from the picker and block a stale/persisted pick.
+  const warmingBoard = useQuery({
+    ...warmingBoardQueryOptions(),
     refetchInterval: FALLBACK_POLL_MS,
   });
   const runtime = useQuery({
@@ -159,6 +169,9 @@ export function NeurocommentPage() {
   const updatePrompt = useMutation(updateCampaignPromptMutation());
 
   const accountOptions = accounts.data?.items ?? [];
+  const warmingIds = new Set((warmingBoard.data?.warming ?? []).map((a) => a.account_id));
+  // Listener candidates exclude accounts that are actively warming.
+  const listenerOptions = accountOptions.filter((a) => !warmingIds.has(a.account_id));
   // The graduated pool — what neurocomment may actually put to work.
   const warmedAccounts = warmed.data?.accounts ?? [];
   const running = runtime.data?.running ?? false;
@@ -230,6 +243,11 @@ export function NeurocommentPage() {
     if (running) {
       stop.mutate({}, { onSettled: invalidate });
     } else if (listenerId) {
+      if (warmingIds.has(listenerId)) {
+        setListenerWarming(true);
+        return;
+      }
+      setListenerWarming(false);
       start.mutate({ body: { listener_account_id: listenerId } }, { onSettled: invalidate });
     }
   };
@@ -341,12 +359,18 @@ export function NeurocommentPage() {
             onToggleOpen={() => {
               setListenerOpen((v) => !v);
             }}
-            accountOptions={accountOptions}
+            accountOptions={listenerOptions}
             onPickListener={(id) => {
+              setListenerWarming(false);
               setListener(id);
               setListenerOpen(false);
             }}
           />
+          {listenerWarming ? (
+            <p className="mt-2 text-[11.5px] font-medium text-danger">
+              {t('neurocomment.listener.warmingBlocked')}
+            </p>
+          ) : null}
 
           <CaptchaSolverCard
             solverEnabled={solverEnabled}
@@ -502,7 +526,7 @@ export function NeurocommentPage() {
 
       {showListenerEdit ? (
         <ListenerEditModal
-          options={accountOptions.map((a) => ({
+          options={listenerOptions.map((a) => ({
             id: a.account_id,
             phone: a.label ?? a.account_id,
           }))}
@@ -511,6 +535,7 @@ export function NeurocommentPage() {
             setShowListenerEdit(false);
           }}
           onSave={(id) => {
+            setListenerWarming(false);
             setListener(id);
             if (running) {
               start.mutate({ body: { listener_account_id: id } }, { onSettled: invalidate });

@@ -72,6 +72,19 @@ test('auto-completes at the per-account target and promotes via the finish butto
   expect(onPromote).toHaveBeenCalledWith('79051184490');
 });
 
+test('shows the per-account target as the day-progress denominator, not a hardcoded 14', () => {
+  renderWithClient(
+    <WarmingBoard
+      warming={[warmed('79051184490', 6, 7)]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+    />,
+  );
+  expect(screen.getByText('6 / 7 дней')).toBeInTheDocument();
+  expect(screen.queryByText(/\/ 14 дней/)).not.toBeInTheDocument();
+});
+
 test('keeps an account in progress below its target', () => {
   renderWithClient(
     <WarmingBoard

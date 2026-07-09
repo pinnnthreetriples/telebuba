@@ -40,6 +40,7 @@ from schemas.telegram_actions import (
     JoinChannel,
     NewPostEvent,
 )
+from schemas.warming import WarmingStateRecord
 from services.neurocomment import _runtime, _state
 
 if TYPE_CHECKING:
@@ -102,6 +103,45 @@ class _ExecuteSpy:
 
 def _patch_execute(monkeypatch: pytest.MonkeyPatch, spy: _ExecuteSpy) -> None:
     monkeypatch.setattr("services.neurocomment._seams.execute", spy.execute)
+
+
+def _patch_warming_states(
+    monkeypatch: pytest.MonkeyPatch,
+    records: list[WarmingStateRecord],
+) -> None:
+    async def _list() -> list[WarmingStateRecord]:
+        return records
+
+    monkeypatch.setattr(_runtime, "list_warming_states", _list)
+
+
+@pytest.mark.asyncio
+async def test_start_rejects_listener_that_is_warming(monkeypatch: pytest.MonkeyPatch) -> None:
+    # An actively-warming account must not double as the listener; the guard runs
+    # before anything is persisted.
+    _patch_warming_states(
+        monkeypatch,
+        [WarmingStateRecord(account_id="listener-1", state="active", updated_at="now")],
+    )
+    with pytest.raises(_runtime.ListenerBusyWarmingError):
+        await _runtime.start_neurocomment("listener-1")
+    assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_start_allows_listener_that_is_not_warming(monkeypatch: pytest.MonkeyPatch) -> None:
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
+    monkeypatch.setattr(_runtime, "_ensure_onboarding_running", lambda *a, **k: None)  # noqa: ARG005
+    # A different account is warming; the picked listener is free, so start proceeds.
+    _patch_warming_states(
+        monkeypatch,
+        [WarmingStateRecord(account_id="other", state="active", updated_at="now")],
+    )
+    await _runtime.start_neurocomment("listener-2")
+    assert await get_listener_account_id() == "listener-2"
+    assert await get_listener_running() is True
 
 
 @pytest.mark.asyncio
