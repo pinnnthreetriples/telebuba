@@ -1465,3 +1465,78 @@ async def test_inflight_blocks_cross_account_near_duplicate(
     assert r2.comment_text is not None
     # The in-flight guard forced acc-2 off the near-duplicate → the two diverge.
     assert similarity(r1.comment_text, r2.comment_text) < 0.5
+
+
+@pytest.mark.asyncio
+async def test_inflight_reread_is_live_when_rival_registers_during_generate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The in-flight guard must re-read LIVE, not from an entry-time snapshot (#3).
+
+    The race the entry-time snapshot misses: acc-2 enters generation and freezes its
+    in-flight view (empty) BEFORE its multi-second generate await; DURING that await a
+    rival on another account (acc-1) reserves + registers a near-duplicate. Nothing is
+    posted yet, so the posted-only ``recent`` snapshot is blind to it too — only a live
+    re-read of in-flight, taken after the reservation, forces acc-2 off the near-dup.
+
+    Deterministic coordination: acc-2's task parks inside ``generate_text`` (its in-flight
+    snapshot already taken and empty); acc-1 then runs to completion (reserve + register +
+    post); acc-2 is released and must reject its near-duplicate candidate and regenerate.
+    """
+    await _make_campaign("@chan", "acc-1", "acc-2")
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_threshold", 0.5)
+    monkeypatch.setattr(settings.neurocomment, "semantic_dedup_window_hours", 24.0)
+
+    # Deterministic assignment: post 1 → acc-2 (parks in generate), post 2 → acc-1.
+    chosen = iter(["acc-2", "acc-1"])
+
+    class _SeqRng:
+        @staticmethod
+        def choice(_seq: list[str]) -> str:
+            return next(chosen)
+
+        @staticmethod
+        def uniform(low: float, _high: float) -> float:
+            return low
+
+    monkeypatch.setattr(_seams, "rng", _SeqRng())
+
+    acc2_in_generate = asyncio.Event()
+    acc1_registered = asyncio.Event()
+    # call 1 → acc-2's first candidate (near-dup, Jaccard 0.75 vs acc-1's text);
+    # call 2 → acc-1's candidate; call 3 → acc-2's regeneration (only under the fix).
+    texts = iter(["alpha beta gamma delta", "alpha beta gamma", "zeta eta theta"])
+    calls = {"n": 0}
+
+    async def _coordinated_generate(_request: object) -> GeminiResult:
+        calls["n"] += 1
+        if calls["n"] == 1:
+            # acc-2 has already snapshotted in-flight (empty). Hold it here until acc-1
+            # has reserved + registered its near-duplicate in-flight text.
+            acc2_in_generate.set()
+            await acc1_registered.wait()
+        return GeminiResult(status="ok", text=next(texts))
+
+    monkeypatch.setattr(_seams, "generate_text", _coordinated_generate)
+    comment = _CommentStub(status="ok", message_id=1)
+    monkeypatch.setattr(_seams, "execute", comment.execute)
+
+    task2 = asyncio.create_task(
+        engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
+    )
+    await acc2_in_generate.wait()
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+    acc1_registered.set()
+    await task2
+
+    r1 = await fetch_comment("@chan", 1)  # acc-2
+    r2 = await fetch_comment("@chan", 2)  # acc-1
+    assert r1 is not None
+    assert r2 is not None
+    assert r1.status == "posted"
+    assert r2.status == "posted"
+    assert r1.comment_text is not None
+    assert r2.comment_text is not None
+    # A live re-read sees acc-1's concurrently-registered text → acc-2 diverges. The
+    # entry-time snapshot (the bug) is empty for both → acc-2 posts the near-duplicate.
+    assert similarity(r1.comment_text, r2.comment_text) < 0.5

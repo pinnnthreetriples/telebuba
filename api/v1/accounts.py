@@ -217,7 +217,10 @@ async def set_account_photo(
         filename=file.filename or "photo.jpg",
         content=content,
     )
-    return await accounts.set_account_profile_photo(upload)
+    try:
+        return await accounts.set_account_profile_photo(upload)
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 def _decode_ref(value: str) -> bytes:

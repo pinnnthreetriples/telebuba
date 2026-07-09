@@ -24,6 +24,20 @@ item (telegram `_dispatch_action`/`_pick_reaction` tidy) was deliberately droppe
 during execution — the extraction didn't clear the lint suppression and tripped
 the file-size gate, i.e. net-negative churn on already-clear dispatch code.
 
+A 2026-07-10 bug audit (parallel review of warming/neurocomment/core/api) then
+fixed four confirmed correctness defects (PR open, no auto-merge): warming
+`_gate_target_reached` no longer completes a quarantine/flood_wait account;
+neurocomment reads its in-flight near-dup list live (post-reservation) instead of
+a stale entry-time snapshot; `set_account_photo` returns 400 (not 500) on
+`ValueError`; `decode_session_claims` returns None when no `AUTH__SECRET` is set. Two low-severity
+hardening items were added to the same PR: the tdata-zip extractor now streams
+members and counts the bytes actually written (instead of trusting the archive's
+declared sizes) so a crafted archive can't overshoot the size cap and exhaust the
+disk; and a broken loguru debug line in `phone_geo` (`%s` → `{}`) was fixed. A fifth
+MED finding (daily action cap exceedable ~2x on mid-cycle restart) needs a design
+call and is tracked in issue #208; the remaining audit findings were judged
+not-worth-fixing (design opinions / accepted tradeoffs / cosmetic).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

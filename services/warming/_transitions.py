@@ -142,8 +142,14 @@ async def _gate_target_reached(
     its completion UI + hand-off button from ``warming_days >= target_days``, and
     the loop stops doing warming work. Manual ``stop_warming`` is unaffected.
     Idempotent: a row already flagged complete re-parks silently (no re-log).
+
+    Completion is only declared from a healthy cycling state: an account under an
+    active restriction (``quarantine`` peer-flood / ``flood_wait`` cooldown) that
+    happens to cross ``target_days`` is skipped here so its recovery probe still
+    runs — otherwise a still-restricted account would be presented as complete and
+    could be graduated into the neurocomment pool.
     """
-    if record is None or record.target_days is None:
+    if record is None or record.target_days is None or record.state in ("quarantine", "flood_wait"):
         return None
     days = warming_days_since(record.started_at, now)
     if days is None or days < record.target_days:

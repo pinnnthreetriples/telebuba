@@ -60,7 +60,12 @@ def decode_session_claims(token: str) -> SessionClaims | None:
     A legacy token minted before the ``ver`` claim existed decodes with ``ver=0``
     (the initial ``token_version`` of every backfilled user), so it still resolves
     until the next logout bumps the counter.
+
+    When no secret is configured, no token is ever valid — mirroring the issuance
+    guard so both paths agree "no secret => no auth" (defense in depth).
     """
+    if not settings.auth.secret:
+        return None
     try:
         payload = jwt.decode(token, settings.auth.secret, algorithms=[settings.auth.algorithm])
     except jwt.PyJWTError:

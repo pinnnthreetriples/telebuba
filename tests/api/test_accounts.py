@@ -326,6 +326,35 @@ async def test_set_photo_accepts_multipart(
 
 
 @pytest.mark.asyncio
+async def test_set_photo_value_error_is_400(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rejected photo (oversize / bad ext / failed action) surfaces as 400.
+
+    ``set_account_profile_photo`` raises ``ValueError`` for an invalid upload or a
+    failed Telegram action; the route must wrap it in the 400 envelope like its
+    sibling upload routes, not let it become a 500.
+    """
+
+    async def _boom(upload: object) -> ActionResult:  # noqa: ARG001
+        msg = "photo_too_large"
+        raise ValueError(msg)
+
+    monkeypatch.setattr("services.accounts.set_account_profile_photo", _boom)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/photo",
+            files={"file": ("photo.jpg", b"img-bytes", "image/jpeg")},
+            data={"account_id": "acc-1"},
+        )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "photo_too_large"
+
+
+@pytest.mark.asyncio
 async def test_profile_snapshot_returns_view(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,

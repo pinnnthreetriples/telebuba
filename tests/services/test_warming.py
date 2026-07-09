@@ -1353,6 +1353,56 @@ async def test_target_complete_reparks_future_next_run(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_loop_quarantine_past_target_recovers_not_completes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Bug #1: a quarantined (peer-flooded) account that crosses target_days must
+    # NOT be parked ``warming_complete`` — that would present a still-restricted
+    # account as promotable and let it be graduated into the neurocomment pool.
+    # The target-reached gate must defer to the quarantine recovery probe.
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_ready_account("acc-1")
+    await _set_settings(chat=False, reactions=False, key="", enforce_readiness=False)
+
+    probe_calls: list[str] = []
+
+    async def fake_probe(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        probe_calls.append(account_id)
+        return SpamStatusVerdict(
+            account_id=account_id,
+            status="clean",
+            detail=None,
+            checked_at="2026-01-01T00:00:00+00:00",
+        )
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", fake_probe)
+
+    old_start = (datetime.now(UTC) - timedelta(days=5)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(
+            account_id="acc-1",
+            state="quarantine",
+            started_at=old_start,
+            target_days=3,
+            quarantine_count=0,
+        ),
+    )
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    # The quarantine recovery probe ran — not the target-complete park.
+    assert probe_calls == ["acc-1"]
+    assert recorder.actions == []
+    record = await fetch_warming_state("acc-1")
+    assert record is not None
+    assert record.last_event != "warming_complete"
+    assert record.last_event == "quarantine_recovered"
+    assert record.state == "sleeping"
+    assert result.detail == "recovered"
+
+
+@pytest.mark.asyncio
 async def test_load_board_card_exposes_target_days() -> None:
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_warming_state(
