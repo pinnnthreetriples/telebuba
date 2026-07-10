@@ -175,6 +175,9 @@ import type {
   StartNeurocommentData,
   StartNeurocommentErrors,
   StartNeurocommentResponses,
+  StartPhoneLoginData,
+  StartPhoneLoginErrors,
+  StartPhoneLoginResponses,
   StartWarmingData,
   StartWarmingErrors,
   StartWarmingResponses,
@@ -323,6 +326,23 @@ export const spamCheckAccount = <ThrowOnError extends boolean = false>(
   (options.client ?? client).post<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}/spam-check',
     ...options,
+  });
+
+/**
+ * Start Phone Login
+ *
+ * Create a new account from a bare phone number, ready for request-code.
+ */
+export const startPhoneLogin = <ThrowOnError extends boolean = false>(
+  options: Options<StartPhoneLoginData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<StartPhoneLoginResponses, StartPhoneLoginErrors, ThrowOnError>({
+    url: '/api/v1/accounts/start-login',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
 
 /**

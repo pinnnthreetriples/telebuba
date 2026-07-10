@@ -307,6 +307,42 @@ async def test_import_session_duplicate_is_409(
 
 
 @pytest.mark.asyncio
+async def test_start_login_returns_the_account(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(phone: str, label: str | None = None) -> AccountRead:  # noqa: ARG001
+        return _account("79990001122")
+
+    monkeypatch.setattr("services.accounts.start_phone_login", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/start-login",
+            json={"phone": "+79990001122"},
+        )
+    assert resp.status_code == 200
+    assert resp.json()["account_id"] == "79990001122"
+
+
+@pytest.mark.asyncio
+async def test_start_login_duplicate_is_409(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _boom(phone: str, label: str | None = None) -> AccountRead:  # noqa: ARG001
+        msg = "already exists"
+        raise SessionAlreadyExistsError(msg)
+
+    monkeypatch.setattr("services.accounts.start_phone_login", _boom)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/start-login",
+            json={"phone": "+79990001122"},
+        )
+    assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
 async def test_set_photo_accepts_multipart(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,

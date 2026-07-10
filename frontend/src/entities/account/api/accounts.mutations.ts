@@ -15,6 +15,7 @@ export {
   resetAccountSessionMutation,
   setAccountPhotoMutation,
   spamCheckAccountMutation,
+  startPhoneLoginMutation,
   submitLoginCodeMutation,
   updateAccountProfileMutation,
 } from '@/shared/api/@tanstack/react-query.gen';

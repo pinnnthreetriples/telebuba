@@ -23,7 +23,7 @@ from schemas.accounts import (
     AccountStats,
 )
 from schemas.api import Page
-from schemas.phone_login import PhoneCodeRequestResult, SubmitCodeRequest
+from schemas.phone_login import PhoneCodeRequestResult, StartPhoneLoginRequest, SubmitCodeRequest
 from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfileMusicUpload,
@@ -89,6 +89,21 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
 async def spam_check_account(account_id: str) -> SpamStatusVerdict:
     """Re-probe @SpamBot for one account and return the fresh, cached verdict."""
     return await spam_status.refresh_spam_status(account_id, force=True)
+
+
+@router.post(
+    "/accounts/start-login",
+    response_model=AccountRead,
+    operation_id="startPhoneLogin",
+)
+async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
+    """Create a new account from a bare phone number, ready for request-code."""
+    try:
+        return await accounts.start_phone_login(body.phone, body.label)
+    except accounts.SessionAlreadyExistsError as exc:
+        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
+    except accounts.PhoneLoginError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post(

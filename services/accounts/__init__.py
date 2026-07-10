@@ -35,6 +35,7 @@ from services.accounts.login import (
     logout_account,
     request_login_code,
     reset_account_session,
+    start_phone_login,
     submit_login_code,
 )
 from services.accounts.media import (
@@ -84,6 +85,7 @@ __all__ = [
     "request_login_code",
     "reset_account_session",
     "set_account_profile_photo",
+    "start_phone_login",
     "submit_login_code",
     "update_account_profile",
 ]

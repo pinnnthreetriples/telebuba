@@ -143,6 +143,7 @@ def _create_account(data: AccountCreate) -> AccountRead:
         "account_id": data.account_id,
         "label": data.label,
         "session_name": data.session_name,
+        "phone": data.phone,
         "status": "new",
         "created_at": now,
         "updated_at": now,
