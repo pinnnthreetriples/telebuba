@@ -56,6 +56,30 @@ function routeApi() {
         jsonResponse({ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }),
       );
     }
+    if (pathname === '/api/v1/accounts/start-login') {
+      return Promise.resolve(
+        jsonResponse({
+          account_id: '79990001122',
+          status: 'new',
+          phone: '+79990001122',
+          created_at: 'n',
+          updated_at: 'n',
+        }),
+      );
+    }
+    if (pathname.endsWith('/request-code')) {
+      return Promise.resolve(jsonResponse({ account_id: '79990001122', phone: '+79990001122' }));
+    }
+    if (pathname.endsWith('/submit-code')) {
+      return Promise.resolve(
+        jsonResponse({
+          account_id: '79990001122',
+          status: 'alive',
+          created_at: 'n',
+          updated_at: 'n',
+        }),
+      );
+    }
     return Promise.resolve(jsonResponse({}));
   });
 }
@@ -191,6 +215,68 @@ test('a failed import shows the error state and keeps Next disabled', async () =
   });
   // The file card reports the failure instead of a premature "File ready".
   expect(await screen.findByText('Не удалось импортировать')).toBeInTheDocument();
+  expect(screen.getByText('Далее')).toBeDisabled();
+});
+
+test('phone method: create account → skip proxy → request + confirm code', async () => {
+  routeApi();
+  const onClose = vi.fn();
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={onImported} />);
+
+  await userEvent.click(screen.getByText('Номер телефона'));
+  await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
+  await userEvent.click(screen.getByText('Продолжить'));
+
+  // start-login provisions the account and unlocks Next.
+  await waitFor(() => {
+    const started = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/accounts/start-login'));
+    expect(started).toBe(true);
+  });
+  const next = screen.getByText('Далее');
+  await waitFor(() => {
+    expect(next).toBeEnabled();
+  });
+  await userEvent.click(next);
+
+  // Proxy step (step 2) — skip straight to the code step.
+  await userEvent.click(screen.getByText('Пропустить'));
+  expect(screen.getByText('Шаг 3 · вход по коду')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByText('Отправить код'));
+  await waitFor(() => {
+    const requested = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/request-code'));
+    expect(requested).toBe(true);
+  });
+
+  await userEvent.type(await screen.findByLabelText('Код из SMS'), '11111');
+  await userEvent.click(screen.getByText('Подтвердить вход'));
+  await waitFor(() => {
+    const submitted = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/submit-code'));
+    expect(submitted).toBe(true);
+  });
+  expect(onClose).toHaveBeenCalled();
+});
+
+test('phone method: a failed start-login shows the error and keeps Next disabled', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/start-login') {
+      return Promise.reject(new Error('boom'));
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+  await userEvent.click(screen.getByText('Номер телефона'));
+  await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
+  await userEvent.click(screen.getByText('Продолжить'));
+  expect(await screen.findByText('Не удалось создать аккаунт')).toBeInTheDocument();
   expect(screen.getByText('Далее')).toBeDisabled();
 });
 

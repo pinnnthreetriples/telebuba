@@ -17,12 +17,15 @@ import time
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_account, update_account_from_session_check
+from core.db import DuplicateSessionNameError, fetch_account, update_account_from_session_check
 from core.logging import log_event
 from core.telegram_client import log_out_session, request_phone_code, submit_phone_code
+from schemas.accounts import AccountCreate
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeRequest, PhoneCodeRequestResult, PhoneCodeSubmit
 from services.accounts._login_state import forget_code, peek_code, remember_code
+from services.accounts.lifecycle import add_account
+from services.accounts.sessions import SessionAlreadyExistsError
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -32,12 +35,40 @@ __all__ = [
     "logout_account",
     "request_login_code",
     "reset_account_session",
+    "start_phone_login",
     "submit_login_code",
 ]
 
 
 class PhoneLoginError(ValueError):
     """A phone-login step the operator can act on (no phone, bad code, expired)."""
+
+
+async def start_phone_login(phone: str, label: str | None = None) -> AccountRead:
+    """Provision a NEW account carrying only a phone number, ready for request-code.
+
+    No ``.session`` file is written here — Telethon mints it on the first connect
+    during ``request_login_code``, which runs after the operator assigns a proxy.
+    The digits of the phone become both ``account_id`` and ``session_name`` (the
+    ``AccountCreate`` pattern forbids the leading ``+``); re-adding the same phone
+    surfaces as :class:`SessionAlreadyExistsError` the API maps to 409.
+    """
+    digits = "".join(ch for ch in phone if ch.isdigit())
+    if not digits:
+        msg = "Phone number must contain digits."
+        raise PhoneLoginError(msg)
+    if await fetch_account(digits) is not None:
+        msg = f"An account for {phone} already exists."
+        raise SessionAlreadyExistsError(msg)
+    try:
+        account = await add_account(
+            AccountCreate(account_id=digits, session_name=digits, phone=phone, label=label),
+        )
+    except DuplicateSessionNameError as exc:
+        msg = f"An account for {phone} already exists."
+        raise SessionAlreadyExistsError(msg) from exc
+    await log_event("INFO", "phone_login_started", account_id=account.account_id)
+    return account
 
 
 async def request_login_code(account_id: str) -> PhoneCodeRequestResult:

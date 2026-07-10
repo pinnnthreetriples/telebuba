@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-10
+last_updated: 2026-07-11
 ---
 
 # Active State
@@ -57,6 +57,20 @@ exclusivity is enforced both directions and at every choke point —
 `AccountIsListenerError` in `start_warming` (→409), one shared
 `core.db.list_warming_account_ids()`, plus a picker filter and the 409 surfaced in the
 listener UI. All backend/frontend gates green (1079 pytest / 205 vitest).
+
+A 2026-07-11 feature added **phone-number authentication as a third add-account
+method** (branch `phone-authentication`). The phone-code gateway/service/cache
+(`_auth.py`, `services/accounts/login.py`, `_login_state.py`) and the
+`request-code`/`submit-code` endpoints already existed for re-auth of an imported
+account; the only gap was creating an account from a bare number. Added: `phone`
+on `AccountCreate` (persisted in `_create_account`), `start_phone_login(phone,
+label?)` (digits → `account_id`/`session_name`, duplicate → `SessionAlreadyExistsError`
+→409), and `POST /accounts/start-login`. The Add-account wizard gained a third
+"Номер телефона" method with a dynamic 2/3-step stepper: phone → account created →
+proxy (existing step 2) → step 3 requests+confirms the login code (code+2FA), run
+**after** proxy assignment so the first Telegram connect uses the account's proxy
+(operator-confirmed ordering). New log-event `phone_login_started` (ru/en labels).
+All gates green (1086 pytest / 207 vitest).
 
 ## Not Yet Built (deliberate)
 

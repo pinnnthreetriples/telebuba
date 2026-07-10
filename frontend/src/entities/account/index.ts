@@ -18,6 +18,7 @@ export {
   resetAccountSessionMutation,
   setAccountPhotoMutation,
   spamCheckAccountMutation,
+  startPhoneLoginMutation,
   submitLoginCodeMutation,
   updateAccountProfileMutation,
 } from './api/accounts.mutations';
