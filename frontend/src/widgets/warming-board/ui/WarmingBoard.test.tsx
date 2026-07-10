@@ -47,7 +47,11 @@ test('renders an in-progress card per warming account with the stage labels', ()
   expect(screen.getByText('79051184490')).toBeInTheDocument();
   expect(screen.getByText('79161234567')).toBeInTheDocument();
   expect(screen.getAllByText('Подписка').length).toBeGreaterThan(0);
-  expect(screen.getAllByText('Отчёт').length).toBeGreaterThan(0);
+  // Rail steps mirror the real cycle order (reactions before stories); the old
+  // decorative "Отчёт" step is gone.
+  expect(screen.getAllByText('Реакции').length).toBeGreaterThan(0);
+  expect(screen.getAllByText('Сторис').length).toBeGreaterThan(0);
+  expect(screen.queryByText('Отчёт')).not.toBeInTheDocument();
 });
 
 test('stops the clicked account', async () => {
@@ -288,9 +292,9 @@ test('an active account shows the real in-cycle step from last_action, not a cyc
   expect(screen.getByText('Чтение ленты постов')).toBeInTheDocument();
 });
 
-test('never lights the decorative "report" step as a running account live activity', () => {
-  // cycles_completed=5 maps to "report" under the old cycles%6 formula; the real
-  // in-cycle action is a reaction, so that is what must show — never "Отчёт".
+test('shows the reaction step and never the removed "report" activity', () => {
+  // cycles_completed=5 mapped to "report" under the old cycles%6 formula; the
+  // real in-cycle action is a reaction, and the report activity no longer exists.
   const running: WarmingAccountState = {
     ...account('a1', 'active'),
     cycles_completed: 5,
@@ -311,12 +315,22 @@ test('maps the join action to the subscribe step', () => {
   expect(screen.getByText('Подписка на каналы')).toBeInTheDocument();
 });
 
-test('folds the DM-send action onto the reactions step (no DM label on the fixed rail)', () => {
+test('shows the real stories step while the engine is watching stories', () => {
+  const watching: WarmingAccountState = { ...account('a1', 'active'), last_action: 'stories' };
+  renderWithClient(
+    <WarmingBoard warming={[watching]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Просмотр сторис')).toBeInTheDocument();
+});
+
+test('folds the DM-send action onto its neighbour step (no DM label on the rail)', () => {
+  // send_dm runs right after stories, so it folds forward onto the stories step
+  // rather than bouncing the rail backward or adding a mostly-dark DM label.
   const dm: WarmingAccountState = { ...account('a1', 'active'), last_action: 'send_dm' };
   renderWithClient(
     <WarmingBoard warming={[dm]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
   );
-  expect(screen.getByText('Поставлены реакции')).toBeInTheDocument();
+  expect(screen.getByText('Просмотр сторис')).toBeInTheDocument();
 });
 
 test('an errored account shows where the engine last was, not a cycle-count guess', () => {

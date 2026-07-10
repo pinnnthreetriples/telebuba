@@ -744,8 +744,7 @@
       "read": "Read",
       "stories": "Stories",
       "reactions": "Reactions",
-      "pause": "Pause",
-      "report": "Report"
+      "pause": "Pause"
     },
     "state": {
       "idle": "Idle",
@@ -805,8 +804,7 @@
       "read": "Reading the feed",
       "stories": "Viewing stories",
       "reactions": "Reactions placed",
-      "pause": "Pause for realism",
-      "report": "Building report"
+      "pause": "Pause for realism"
     },
     "stopModal": {
       "title": "Stop warming?",

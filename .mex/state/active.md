@@ -58,16 +58,21 @@ exclusivity is enforced both directions and at every choke point —
 `core.db.list_warming_account_ids()`, plus a picker filter and the 409 surfaced in the
 listener UI. All backend/frontend gates green (1079 pytest / 205 vitest).
 
-A 2026-07-11 operator-reported UI fix (frontend-only): the warming card activity
-rail no longer derives its live step from the decorative `cycles_completed % 6`
-formula (which could falsely show "Формирование отчёта" as the live step on a
-running account with no timer). `activeStage` now reflects real state — waiting
-states (`sleeping`/`flood_wait`/`quarantine`) park on "pause" (+countdown),
-a running/errored cycle maps its persisted `last_action` (`set_online`/`join`→
-subscribe, `read`, `react`/`send_dm`→reactions) to the matching rail step, idle
-sits at start. The `report`/`stories` labels stay as static rail text (no backend
-action). No backend change — `state`/`last_action`/`next_run_at` were already on
-the board read model. +5 Vitest tests.
+A 2026-07-11 operator-reported UI fix (PR #212, cross-layer): the warming card
+activity rail now reflects the engine's real cycle instead of the decorative
+`cycles_completed % 6` formula (which could falsely show "Формирование отчёта"
+as the live step on a running account with no timer). `activeStage` maps the
+persisted `last_action` to the rail: waiting states (`sleeping`/`flood_wait`/
+`quarantine`) park on "pause" (+countdown), a running/errored cycle shows its
+real step, idle sits at start. The rail was **reordered to match the engine's
+emission order** (`subscribe → read → reactions → stories → pause`) — stories
+runs after reactions, and the rail renders by index, so a mismatched order would
+un-fill a completed step. The fake `report` step (no backend action) was dropped.
+Backend now emits a real `stories` progress step: `maybe_watch_stories` returns
+whether a view landed, `run_one_cycle` advances the rail via `_watch_stories_step`
+only when it did, and `stories` was added to `_loop._PROGRESS_STEPS` (between
+`react` and `send_dm`). `set_online`/`join`→subscribe and the gated, rare
+`send_dm` folds onto its neighbour (`stories`). +2 backend tests / +6 Vitest.
 
 ## Not Yet Built (deliberate)
 

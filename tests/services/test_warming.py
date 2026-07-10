@@ -281,7 +281,31 @@ async def test_cycle_emits_progress_steps(monkeypatch: pytest.MonkeyPatch) -> No
 
     await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"), on_step=_record)
 
-    assert steps == ["set_online", "join", "read", "react"]
+    # story view is enabled by default, so the glance lands after the react pass —
+    # the rail advances set_online → join → read → react → stories.
+    assert steps == ["set_online", "join", "read", "react", "stories"]
+
+
+@pytest.mark.asyncio
+async def test_cycle_omits_stories_step_when_view_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.warming, "story_view_enabled", False)
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+
+    steps: list[str] = []
+
+    async def _record(step: str) -> None:
+        steps.append(step)
+
+    await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"), on_step=_record)
+
+    # No story was watched → the rail must not claim the stories step.
+    assert "stories" not in steps
 
 
 @pytest.mark.asyncio

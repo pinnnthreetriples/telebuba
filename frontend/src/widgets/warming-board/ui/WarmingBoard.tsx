@@ -21,7 +21,11 @@ interface WarmingBoardProps {
 
 type WarmingState = WarmingAccountState['state'];
 
-const STAGES = ['subscribe', 'read', 'stories', 'reactions', 'pause', 'report'] as const;
+// Ordered to match the engine's real cycle: online/subscribe → read → react →
+// watch stories → sleep. The old decorative "report" step had no backend action
+// and has been dropped; the rail advances by index, so the order must not fight
+// the emission order in services/warming (else a completed step would un-fill).
+const STAGES = ['subscribe', 'read', 'reactions', 'stories', 'pause'] as const;
 const DAY_SEGMENTS = [...Array(42).keys()];
 const DAY_TICKS = [0, 4, 7, 11, 14];
 const WARMING_DAYS = 14;
@@ -42,15 +46,16 @@ function mono(id: string): string {
 
 // The rail reflects the engine's real cycle progress: waiting states park on
 // "pause" (+countdown), a running cycle maps its last written action to the
-// matching step, idle sits at the start. The last "report" step has no backend
-// action, so it is never lit — the end of a cycle is the pause, not a report.
+// matching step, idle sits at the start. Keys are the tokens the engine writes
+// to last_action (services/warming _PROGRESS_STEPS); values index into STAGES.
 const ACTION_STAGE: Record<string, number> = {
-  set_online: 0, // subscribe
+  set_online: 0, // subscribe (cycle start)
   join: 0,
-  read: 1, // read
-  react: 3, // reactions
-  // The fixed 6-label rail has no DM step; the brief, gated send_dm folds onto
-  // the nearest prior activity (reactions) rather than adding a 7th label.
+  read: 1,
+  react: 2, // reactions
+  stories: 3,
+  // No DM step on the rail; the brief, gated send_dm (runs after stories) folds
+  // onto its neighbour rather than adding a step dark for most accounts.
   send_dm: 3,
 };
 
