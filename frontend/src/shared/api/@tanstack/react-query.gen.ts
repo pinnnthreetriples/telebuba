@@ -67,6 +67,7 @@ import {
   skipNeurocommentPair,
   spamCheckAccount,
   startNeurocomment,
+  startPhoneLogin,
   startWarming,
   stopNeurocomment,
   stopWarming,
@@ -246,6 +247,9 @@ import type {
   StartNeurocommentData,
   StartNeurocommentError,
   StartNeurocommentResponse,
+  StartPhoneLoginData,
+  StartPhoneLoginError,
+  StartPhoneLoginResponse,
   StartWarmingData,
   StartWarmingError,
   StartWarmingResponse,
@@ -572,6 +576,35 @@ export const spamCheckAccountMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await spamCheckAccount({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Start Phone Login
+ *
+ * Create a new account from a bare phone number, ready for request-code.
+ */
+export const startPhoneLoginMutation = (
+  options?: Partial<Options<StartPhoneLoginData>>,
+): UseMutationOptions<
+  StartPhoneLoginResponse,
+  StartPhoneLoginError,
+  Options<StartPhoneLoginData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartPhoneLoginResponse,
+    StartPhoneLoginError,
+    Options<StartPhoneLoginData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startPhoneLogin({
         ...options,
         ...fnOptions,
         throwOnError: true,

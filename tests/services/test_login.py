@@ -77,6 +77,43 @@ def _fake_submit(
 
 
 @pytest.mark.asyncio
+async def test_start_phone_login_creates_account_with_phone() -> None:
+    account = await login_service.start_phone_login("+7 999 000-11-22")
+
+    assert account.account_id == "79990001122"
+    assert account.session_name == "79990001122"
+    assert account.phone == "+7 999 000-11-22"
+    assert account.status == "new"
+
+
+@pytest.mark.asyncio
+async def test_start_phone_login_then_request_code_has_phone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    account = await login_service.start_phone_login("+79990001122")
+    _fake_request(monkeypatch, hash_value="HASH", error=None)
+
+    result = await login_service.request_login_code(account.account_id)
+
+    assert result.phone == "+79990001122"
+    assert _PENDING[account.account_id].phone_code_hash == "HASH"
+
+
+@pytest.mark.asyncio
+async def test_start_phone_login_duplicate_errors() -> None:
+    await login_service.start_phone_login("+79990001122")
+
+    with pytest.raises(login_service.SessionAlreadyExistsError):
+        await login_service.start_phone_login("79990001122")
+
+
+@pytest.mark.asyncio
+async def test_start_phone_login_without_digits_errors() -> None:
+    with pytest.raises(login_service.PhoneLoginError):
+        await login_service.start_phone_login("no-digits")
+
+
+@pytest.mark.asyncio
 async def test_request_login_code_caches_the_hash(monkeypatch: pytest.MonkeyPatch) -> None:
     await _account_with_phone("acc")
     _fake_request(monkeypatch, hash_value="HASH", error=None)

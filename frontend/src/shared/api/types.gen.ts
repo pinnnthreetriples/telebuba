@@ -1439,6 +1439,22 @@ export type StartNeurocommentRequest = {
 };
 
 /**
+ * StartPhoneLoginRequest
+ *
+ * API body for ``POST /accounts/start-login`` — provision an account by phone.
+ */
+export type StartPhoneLoginRequest = {
+  /**
+   * Phone
+   */
+  phone: string;
+  /**
+   * Label
+   */
+  label?: string | null;
+};
+
+/**
  * StartWarmingRequest
  */
 export type StartWarmingRequest = {
@@ -2235,6 +2251,31 @@ export type SpamCheckAccountResponses = {
 };
 
 export type SpamCheckAccountResponse = SpamCheckAccountResponses[keyof SpamCheckAccountResponses];
+
+export type StartPhoneLoginData = {
+  body: StartPhoneLoginRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/start-login';
+};
+
+export type StartPhoneLoginErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartPhoneLoginError = StartPhoneLoginErrors[keyof StartPhoneLoginErrors];
+
+export type StartPhoneLoginResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type StartPhoneLoginResponse = StartPhoneLoginResponses[keyof StartPhoneLoginResponses];
 
 export type RequestLoginCodeData = {
   body?: never;

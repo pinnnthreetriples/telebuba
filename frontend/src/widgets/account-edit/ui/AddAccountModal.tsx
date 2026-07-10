@@ -1,8 +1,14 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { useRef, useState, type ChangeEvent } from 'react';
+import { Fragment, useRef, useState, type ChangeEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { importAccountSessionMutation, importAccountTdataMutation } from '@/entities/account';
+import {
+  importAccountSessionMutation,
+  importAccountTdataMutation,
+  requestLoginCodeMutation,
+  startPhoneLoginMutation,
+  submitLoginCodeMutation,
+} from '@/entities/account';
 import {
   assignProxyMutation,
   createProxyMutation,
@@ -14,11 +20,13 @@ import { Modal } from '@/shared/ui';
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
-// The design's add-account wizard: a two-step stepper. STEP 1 imports an account
-// (.session or tdata.zip) via the real import endpoints; STEP 2 assigns a proxy
-// to the just-imported account — pick from the pool, or enter one manually
-// (create + assign). The created account's id threads from step 1 into step 2.
-type Method = 'session' | 'tdata' | null;
+// The design's add-account wizard. STEP 1 provisions an account: .session /
+// tdata.zip import via the real import endpoints, or a bare phone number
+// (start-login). STEP 2 assigns a proxy to the just-created account. For the
+// phone method a STEP 3 then requests + confirms the Telegram login code — run
+// after the proxy is assigned so the first Telegram connection uses it. The
+// created account's id threads across all steps.
+type Method = 'session' | 'tdata' | 'phone' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
 
 export function AddAccountModal({
@@ -30,17 +38,23 @@ export function AddAccountModal({
 }) {
   const { t } = useTranslation();
   const fileInput = useRef<HTMLInputElement>(null);
-  const [step, setStep] = useState<1 | 2>(1);
+  const [step, setStep] = useState<1 | 2 | 3>(1);
   const [method, setMethod] = useState<Method>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [phone, setPhone] = useState('');
+  const [code, setCode] = useState('');
+  const [password, setPassword] = useState('');
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
   const [proxyValid, setProxyValid] = useState(false);
-  // The id of the account imported in step 1, so step 2 can assign a proxy to it.
+  // The id of the account created in step 1, so later steps can act on it.
   const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
 
   const importTdata = useMutation(importAccountTdataMutation());
   const importSession = useMutation(importAccountSessionMutation());
+  const startLogin = useMutation(startPhoneLoginMutation());
+  const requestCode = useMutation(requestLoginCodeMutation());
+  const submitCode = useMutation(submitLoginCodeMutation());
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
   const pool = useQuery(proxyPoolQueryOptions());
@@ -48,6 +62,50 @@ export function AddAccountModal({
 
   const importing = importTdata.isPending || importSession.isPending;
   const importFailed = importTdata.isError || importSession.isError;
+
+  const totalSteps = method === 'phone' ? 3 : 2;
+
+  // Phone method, step 1: create the account from a bare number; success unlocks
+  // "Next" exactly like a file import does.
+  const onStartPhone = () => {
+    startLogin.reset();
+    setCreatedAccountId(null);
+    startLogin.mutate(
+      { body: { phone: phone.trim() } },
+      {
+        onSuccess: (account) => {
+          setCreatedAccountId(account.account_id);
+        },
+        onSettled: onImported,
+      },
+    );
+  };
+
+  // After proxy is assigned/skipped: phone goes on to the code step, the file
+  // methods are done and close.
+  const afterProxy = () => {
+    if (method === 'phone') {
+      setStep(3);
+    } else {
+      onClose();
+    }
+  };
+
+  const onConfirmLogin = () => {
+    if (!createdAccountId) return;
+    submitCode.mutate(
+      {
+        path: { account_id: createdAccountId },
+        body: { code: code.trim(), password: password.trim() || null },
+      },
+      {
+        onSuccess: () => {
+          onImported();
+          onClose();
+        },
+      },
+    );
+  };
 
   const onFile = (event: ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -88,7 +146,7 @@ export function AddAccountModal({
         { onSettled: onImported },
       );
     }
-    onClose();
+    afterProxy();
   };
 
   // Step 2 manual: create the entered proxy (idempotent), assign it, then close.
@@ -114,7 +172,7 @@ export function AddAccountModal({
             { onSettled: onImported },
           );
         },
-        onSettled: onClose,
+        onSettled: afterProxy,
       },
     );
   };
@@ -129,7 +187,11 @@ export function AddAccountModal({
           <div>
             <div className="text-[16px] font-bold">{t('accounts.addWizard.title')}</div>
             <div className="mt-[2px] text-[12px] text-ink-subtle">
-              {step === 1 ? t('accounts.addWizard.step1Label') : t('accounts.addWizard.step2Label')}
+              {step === 1
+                ? t('accounts.addWizard.step1Label')
+                : step === 2
+                  ? t('accounts.addWizard.step2Label')
+                  : t('accounts.addWizard.step3Label')}
             </div>
           </div>
           <button
@@ -144,18 +206,21 @@ export function AddAccountModal({
 
         {/* stepper */}
         <div className="mb-5 flex items-center gap-[10px]">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-primary text-[12px] font-semibold text-white">
-            1
-          </span>
-          <span
-            className="h-[2px] flex-1 rounded-full"
-            style={{ background: step === 2 ? '#0066ff' : '#e6e5e3' }}
-          />
-          <span
-            className={`flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-semibold ${step === 2 ? 'bg-primary text-white' : 'border border-line bg-white text-ink-muted'}`}
-          >
-            2
-          </span>
+          {Array.from({ length: totalSteps }, (_, i) => i + 1).map((n) => (
+            <Fragment key={n}>
+              {n > 1 && (
+                <span
+                  className="h-[2px] flex-1 rounded-full"
+                  style={{ background: step >= n ? '#0066ff' : '#e6e5e3' }}
+                />
+              )}
+              <span
+                className={`flex h-7 w-7 items-center justify-center rounded-full text-[12px] font-semibold ${step >= n ? 'bg-primary text-white' : 'border border-line bg-white text-ink-muted'}`}
+              >
+                {n}
+              </span>
+            </Fragment>
+          ))}
         </div>
 
         {step === 1 ? (
@@ -221,7 +286,75 @@ export function AddAccountModal({
                 </span>
               </button>
 
-              {method && (
+              <button
+                type="button"
+                onClick={() => {
+                  setMethod('phone');
+                  setFileName(null);
+                  startLogin.reset();
+                  setCreatedAccountId(null);
+                }}
+                className={`${choiceCard} ${method === 'phone' ? 'border-primary bg-primary-tint' : ''}`}
+              >
+                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="#0066ff"
+                    strokeWidth="1.8"
+                  >
+                    <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
+                  </svg>
+                </span>
+                <span className="flex-1">
+                  <span className="block text-[13.5px] font-semibold">
+                    {t('accounts.addWizard.phoneTitle')}
+                  </span>
+                  <span className="mt-px block text-[11.5px] text-ink-subtle">
+                    {t('accounts.addWizard.phoneDesc')}
+                  </span>
+                </span>
+              </button>
+
+              {method === 'phone' && (
+                <div className="tb-fadeup flex flex-col gap-[10px] rounded-[12px] border border-line bg-white px-3 py-[13px]">
+                  <label className="block text-[11.5px] font-medium text-ink-subtle">
+                    {t('accounts.addWizard.phoneLabel')}
+                  </label>
+                  <input
+                    type="tel"
+                    value={phone}
+                    onChange={(event) => {
+                      setPhone(event.target.value);
+                      setCreatedAccountId(null);
+                      startLogin.reset();
+                    }}
+                    placeholder={t('accounts.addWizard.phonePlaceholder')}
+                    className="rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none focus:border-primary"
+                  />
+                  <button
+                    type="button"
+                    onClick={onStartPhone}
+                    disabled={!phone.trim() || startLogin.isPending || Boolean(createdAccountId)}
+                    className="self-start rounded-full bg-primary px-4 py-[8px] text-[12.5px] font-medium text-white disabled:opacity-50"
+                  >
+                    {startLogin.isPending
+                      ? t('accounts.addWizard.phoneCreating')
+                      : createdAccountId
+                        ? t('accounts.addWizard.phoneCreated')
+                        : t('accounts.addWizard.phoneContinue')}
+                  </button>
+                  {startLogin.isError && (
+                    <div className="text-[11.5px] text-[#c0473f]">
+                      {t('accounts.addWizard.phoneError')}
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {method && method !== 'phone' && (
                 <>
                   <input
                     ref={fileInput}
@@ -371,6 +504,81 @@ export function AddAccountModal({
               </button>
             </div>
           </>
+        ) : step === 3 ? (
+          <>
+            {!requestCode.isSuccess ? (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-[12px] border border-line bg-white px-4 py-[14px] text-[12.5px] text-ink-subtle">
+                  {phone}
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (createdAccountId) {
+                      requestCode.mutate({ path: { account_id: createdAccountId } });
+                    }
+                  }}
+                  disabled={requestCode.isPending || !createdAccountId}
+                  className="self-start rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
+                >
+                  {requestCode.isPending
+                    ? t('accounts.addWizard.sending')
+                    : t('accounts.addWizard.sendCode')}
+                </button>
+                {requestCode.isError && (
+                  <div className="text-[12px] text-[#c0473f]">
+                    {t('accounts.addWizard.loginErr')}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="flex flex-col gap-3">
+                <div className="rounded-[10px] bg-[#e7f2ec] px-3 py-[10px] text-[12.5px] font-medium text-[#2e7d55]">
+                  {t('accounts.addWizard.codeSent', { phone })}
+                </div>
+                <label className="block text-[11.5px] font-medium text-ink-subtle">
+                  {t('accounts.addWizard.smsCode')}
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    autoComplete="one-time-code"
+                    value={code}
+                    onChange={(event) => {
+                      setCode(event.target.value);
+                    }}
+                    className="mt-[6px] w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] font-normal text-ink outline-none focus:border-primary"
+                  />
+                </label>
+                <label className="block text-[11.5px] font-medium text-ink-subtle">
+                  {t('accounts.addWizard.twoFA')}
+                  <input
+                    type="password"
+                    autoComplete="off"
+                    value={password}
+                    onChange={(event) => {
+                      setPassword(event.target.value);
+                    }}
+                    className="mt-[6px] w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] font-normal text-ink outline-none focus:border-primary"
+                  />
+                </label>
+                {submitCode.isError && (
+                  <div className="text-[12px] text-[#c0473f]">
+                    {t('accounts.addWizard.loginErr')}
+                  </div>
+                )}
+              </div>
+            )}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={onConfirmLogin}
+                disabled={!code.trim() || !requestCode.isSuccess || submitCode.isPending}
+                className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
+              >
+                {t('accounts.addWizard.confirmLogin')}
+              </button>
+            </div>
+          </>
         ) : proxyStep === 'choice' ? (
           <>
             <div className="mb-[14px] flex items-center gap-2 rounded-[10px] bg-[#e7f2ec] px-3 py-[10px]">
@@ -478,7 +686,7 @@ export function AddAccountModal({
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={afterProxy}
                 className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink-muted"
               >
                 {t('accounts.addWizard.skip')}
@@ -562,7 +770,7 @@ export function AddAccountModal({
               </button>
               <button
                 type="button"
-                onClick={onClose}
+                onClick={afterProxy}
                 className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white"
               >
                 {t('accounts.addWizard.done')}

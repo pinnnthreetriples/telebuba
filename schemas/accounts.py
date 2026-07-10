@@ -36,6 +36,7 @@ class AccountCreate(BaseModel):
     account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     label: str | None = Field(default=None, min_length=1)
     session_name: str | None = Field(default=None, min_length=1)
+    phone: str | None = Field(default=None, min_length=1)
 
 
 class AccountSessionFileImport(BaseModel):

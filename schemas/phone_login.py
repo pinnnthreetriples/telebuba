@@ -52,6 +52,13 @@ class PhoneCodeRequestResult(BaseModel):
     phone: str = Field(min_length=1)
 
 
+class StartPhoneLoginRequest(BaseModel):
+    """API body for ``POST /accounts/start-login`` — provision an account by phone."""
+
+    phone: str = Field(min_length=1)
+    label: str | None = Field(default=None, min_length=1)
+
+
 class SubmitCodeRequest(BaseModel):
     """API body for ``POST /accounts/{id}/submit-code``."""
 

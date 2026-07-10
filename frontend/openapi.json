@@ -423,6 +423,66 @@
         }
       }
     },
+    "/api/v1/accounts/start-login": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Start Phone Login",
+        "description": "Create a new account from a bare phone number, ready for request-code.",
+        "operationId": "startPhoneLogin",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StartPhoneLoginRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/{account_id}/request-code": {
       "post": {
         "tags": [
@@ -6322,6 +6382,33 @@
         ],
         "title": "StartNeurocommentRequest",
         "description": "Start the fleet listener on the given account."
+      },
+      "StartPhoneLoginRequest": {
+        "properties": {
+          "phone": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Phone"
+          },
+          "label": {
+            "anyOf": [
+              {
+                "type": "string",
+                "minLength": 1
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Label"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phone"
+        ],
+        "title": "StartPhoneLoginRequest",
+        "description": "API body for ``POST /accounts/start-login`` \u2014 provision an account by phone."
       },
       "StartWarmingRequest": {
         "properties": {
