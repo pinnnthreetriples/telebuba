@@ -41,9 +41,12 @@ not-worth-fixing (design opinions / accepted tradeoffs / cosmetic).
 A 2026-07-10 operator-reported UI bug pass (PR #210, no auto-merge) then fixed four
 defects: (1) activity-log events now fully localized — `logEvent` ru/en dictionaries
 are the single source of truth, `eventLabel` resolves `t('logEvent.<code>', {defaultValue: code})`
-(the old ~116-entry allow-list was removed), and `tests/test_logevent_i18n_parity.py`
-fails CI if any backend `log_event` code lacks a translation (was: `tdata_*` and ~55
-others rendered as raw snake_case); (2) the warming card day-progress denominator is
+(the old ~116-entry allow-list was removed), the dynamically-named Telegram action
+events (`telegram_{action}_{status}` f-strings) are labelled compositionally from a
+`logEventTelegram.action`/`.status` map, and `tests/test_logevent_i18n_parity.py`
+fails CI if any backend `log_event` code — or any action_type/status in that map —
+lacks a translation (was: `tdata_*`, ~55 literal codes, and the whole dynamic
+`telegram_*` family rendered as raw snake_case); (2) the warming card day-progress denominator is
 now the account's real `target_days`, pluralized (`день`/`дня`/`дней` via i18next
 `count`; the i18n string was hardcoded `/ 14 дней`); (3) the neurocomment "Решение
 капчи" help tooltip uses the wrapping, left-aligned `tb-tip-pop--wide` variant (was
