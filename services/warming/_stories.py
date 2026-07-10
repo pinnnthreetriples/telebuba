@@ -26,12 +26,15 @@ async def maybe_watch_stories(
     tally: _ChannelTally,
     *,
     can_attempt: bool,
-) -> None:
+) -> bool:
     """View one chosen peer's stories, folding any rate-limit into ``tally``.
 
     A no-op (leaving ``tally`` untouched) when story viewing is disabled, no
     channel was chosen, the daily budget is spent, or the cycle already hit a
     flood — so the caller need not re-check those before calling.
+
+    Returns True iff a story view actually landed, so the caller can advance the
+    board rail's "stories" step only when it really happened.
     """
     warm = settings.warming
     if not (
@@ -41,7 +44,7 @@ async def maybe_watch_stories(
         and not tally.flooded
         and not tally.peer_flooded
     ):
-        return
+        return False
     result = await _seams.execute(
         account_id,
         WatchPeerStories(peer=_seams.rng.choice(chosen).channel),
@@ -53,3 +56,4 @@ async def maybe_watch_stories(
     elif result.status in _WAIT_STATUSES:
         tally.flooded, tally.flood_seconds, tally.flood_until = _classify_flood(result)
         tally.last_failed_action = "watch_peer_stories"
+    return result.status == "ok"

@@ -58,6 +58,22 @@ exclusivity is enforced both directions and at every choke point —
 `core.db.list_warming_account_ids()`, plus a picker filter and the 409 surfaced in the
 listener UI. All backend/frontend gates green (1079 pytest / 205 vitest).
 
+A 2026-07-11 operator-reported UI fix (PR #212, cross-layer): the warming card
+activity rail now reflects the engine's real cycle instead of the decorative
+`cycles_completed % 6` formula (which could falsely show "Формирование отчёта"
+as the live step on a running account with no timer). `activeStage` maps the
+persisted `last_action` to the rail: waiting states (`sleeping`/`flood_wait`/
+`quarantine`) park on "pause" (+countdown), a running/errored cycle shows its
+real step, idle sits at start. The rail was **reordered to match the engine's
+emission order** (`subscribe → read → reactions → stories → pause`) — stories
+runs after reactions, and the rail renders by index, so a mismatched order would
+un-fill a completed step. The fake `report` step (no backend action) was dropped.
+Backend now emits a real `stories` progress step: `maybe_watch_stories` returns
+whether a view landed, `run_one_cycle` advances the rail via `_watch_stories_step`
+only when it did, and `stories` was added to `_loop._PROGRESS_STEPS` (between
+`react` and `send_dm`). `set_online`/`join`→subscribe and the gated, rare
+`send_dm` folds onto its neighbour (`stories`). +2 backend tests / +6 Vitest.
+
 A 2026-07-11 feature added **phone-number authentication as a third add-account
 method** (branch `phone-authentication`). The phone-code gateway/service/cache
 (`_auth.py`, `services/accounts/login.py`, `_login_state.py`) and the

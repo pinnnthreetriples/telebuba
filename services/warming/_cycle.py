@@ -75,6 +75,19 @@ async def _emit_step(on_step: _OnStep | None, step: str) -> None:
         await on_step(step)
 
 
+async def _watch_stories_step(
+    account_id: str,
+    chosen: list[WarmingChannel],
+    tally: _ChannelTally,
+    on_step: _OnStep | None,
+    *,
+    can_attempt: bool,
+) -> None:
+    """Glance at a peer's stories and advance the rail only if the view landed."""
+    if await maybe_watch_stories(account_id, chosen, tally, can_attempt=can_attempt):
+        await _emit_step(on_step, "stories")
+
+
 @dataclass
 class _ReadReactOutcome:
     """One channel's read-then-maybe-react result (replaces a positional 5-tuple)."""
@@ -397,7 +410,7 @@ async def run_one_cycle(
         tally.merge_channel_pass(channel_tally)
 
         # One low-risk "glanced at stories" signal per session (every persona).
-        await maybe_watch_stories(account_id, chosen, tally, can_attempt=_can_attempt())
+        await _watch_stories_step(account_id, chosen, tally, on_step, can_attempt=_can_attempt())
 
         dm_ok = data.dm_allowed if data.dm_allowed is not None else intensity.dm_allowed
         messages_sent = await _run_chat_step(

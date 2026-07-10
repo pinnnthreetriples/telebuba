@@ -21,7 +21,11 @@ interface WarmingBoardProps {
 
 type WarmingState = WarmingAccountState['state'];
 
-const STAGES = ['subscribe', 'read', 'stories', 'reactions', 'pause', 'report'] as const;
+// Ordered to match the engine's real cycle: online/subscribe → read → react →
+// watch stories → sleep. The old decorative "report" step had no backend action
+// and has been dropped; the rail advances by index, so the order must not fight
+// the emission order in services/warming (else a completed step would un-fill).
+const STAGES = ['subscribe', 'read', 'reactions', 'stories', 'pause'] as const;
 const DAY_SEGMENTS = [...Array(42).keys()];
 const DAY_TICKS = [0, 4, 7, 11, 14];
 const WARMING_DAYS = 14;
@@ -40,12 +44,28 @@ function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
 }
 
-// ponytail: no per-account phase field on the board read model yet, so derive a
-// display stage from cycles/state. Decorative until the API exposes current_phase.
+// The rail reflects the engine's real cycle progress: waiting states park on
+// "pause" (+countdown), a running cycle maps its last written action to the
+// matching step, idle sits at the start. Keys are the tokens the engine writes
+// to last_action (services/warming _PROGRESS_STEPS); values index into STAGES.
+const ACTION_STAGE: Record<string, number> = {
+  set_online: 0, // subscribe (cycle start)
+  join: 0,
+  read: 1,
+  react: 2, // reactions
+  stories: 3,
+  // No DM step on the rail; the brief, gated send_dm (runs after stories) folds
+  // onto its neighbour rather than adding a step dark for most accounts.
+  send_dm: 3,
+};
+
 function activeStage(account: WarmingAccountState): number {
-  if (account.state === 'sleeping') return 4;
-  if (account.state === 'idle') return 0;
-  return (account.cycles_completed ?? 0) % STAGES.length;
+  const { state } = account;
+  if (state === 'sleeping' || state === 'flood_wait' || state === 'quarantine') return 4; // pause
+  if (state === 'idle') return 0;
+  // active / error both show where the engine last was (core/warming _loop.py);
+  // an error is distinguished by the red header pill, not a separate rail step.
+  return ACTION_STAGE[account.last_action ?? ''] ?? 0;
 }
 
 // Real per-account activity log, coloured by the log row's status.
