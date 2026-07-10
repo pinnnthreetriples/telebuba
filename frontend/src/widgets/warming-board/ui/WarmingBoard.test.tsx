@@ -280,6 +280,57 @@ test('clear button hides the existing log lines', async () => {
   });
 });
 
+test('an active account shows the real in-cycle step from last_action, not a cycle-count guess', () => {
+  const reading: WarmingAccountState = { ...account('a1', 'active'), last_action: 'read' };
+  renderWithClient(
+    <WarmingBoard warming={[reading]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Чтение ленты постов')).toBeInTheDocument();
+});
+
+test('never lights the decorative "report" step as a running account live activity', () => {
+  // cycles_completed=5 maps to "report" under the old cycles%6 formula; the real
+  // in-cycle action is a reaction, so that is what must show — never "Отчёт".
+  const running: WarmingAccountState = {
+    ...account('a1', 'active'),
+    cycles_completed: 5,
+    last_action: 'react',
+  };
+  renderWithClient(
+    <WarmingBoard warming={[running]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Поставлены реакции')).toBeInTheDocument();
+  expect(screen.queryByText('Формирование отчёта')).not.toBeInTheDocument();
+});
+
+test('maps the join action to the subscribe step', () => {
+  const joining: WarmingAccountState = { ...account('a1', 'active'), last_action: 'join' };
+  renderWithClient(
+    <WarmingBoard warming={[joining]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Подписка на каналы')).toBeInTheDocument();
+});
+
+test('folds the DM-send action onto the reactions step (no DM label on the fixed rail)', () => {
+  const dm: WarmingAccountState = { ...account('a1', 'active'), last_action: 'send_dm' };
+  renderWithClient(
+    <WarmingBoard warming={[dm]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Поставлены реакции')).toBeInTheDocument();
+});
+
+test('an errored account shows where the engine last was, not a cycle-count guess', () => {
+  const failed: WarmingAccountState = {
+    ...account('a1', 'error'),
+    health: 'fail',
+    last_action: 'read',
+  };
+  renderWithClient(
+    <WarmingBoard warming={[failed]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Чтение ленты постов')).toBeInTheDocument();
+});
+
 test('shows a live pause countdown for a sleeping account', () => {
   const nextRunAt = new Date(Date.now() + 90_000).toISOString(); // ~1:30 ahead
   const paused: WarmingAccountState = {

@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-10
+last_updated: 2026-07-11
 ---
 
 # Active State
@@ -57,6 +57,17 @@ exclusivity is enforced both directions and at every choke point —
 `AccountIsListenerError` in `start_warming` (→409), one shared
 `core.db.list_warming_account_ids()`, plus a picker filter and the 409 surfaced in the
 listener UI. All backend/frontend gates green (1079 pytest / 205 vitest).
+
+A 2026-07-11 operator-reported UI fix (frontend-only): the warming card activity
+rail no longer derives its live step from the decorative `cycles_completed % 6`
+formula (which could falsely show "Формирование отчёта" as the live step on a
+running account with no timer). `activeStage` now reflects real state — waiting
+states (`sleeping`/`flood_wait`/`quarantine`) park on "pause" (+countdown),
+a running/errored cycle maps its persisted `last_action` (`set_online`/`join`→
+subscribe, `read`, `react`/`send_dm`→reactions) to the matching rail step, idle
+sits at start. The `report`/`stories` labels stay as static rail text (no backend
+action). No backend change — `state`/`last_action`/`next_run_at` were already on
+the board read model. +5 Vitest tests.
 
 ## Not Yet Built (deliberate)
 

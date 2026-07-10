@@ -40,12 +40,27 @@ function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
 }
 
-// ponytail: no per-account phase field on the board read model yet, so derive a
-// display stage from cycles/state. Decorative until the API exposes current_phase.
+// The rail reflects the engine's real cycle progress: waiting states park on
+// "pause" (+countdown), a running cycle maps its last written action to the
+// matching step, idle sits at the start. The last "report" step has no backend
+// action, so it is never lit — the end of a cycle is the pause, not a report.
+const ACTION_STAGE: Record<string, number> = {
+  set_online: 0, // subscribe
+  join: 0,
+  read: 1, // read
+  react: 3, // reactions
+  // The fixed 6-label rail has no DM step; the brief, gated send_dm folds onto
+  // the nearest prior activity (reactions) rather than adding a 7th label.
+  send_dm: 3,
+};
+
 function activeStage(account: WarmingAccountState): number {
-  if (account.state === 'sleeping') return 4;
-  if (account.state === 'idle') return 0;
-  return (account.cycles_completed ?? 0) % STAGES.length;
+  const { state } = account;
+  if (state === 'sleeping' || state === 'flood_wait' || state === 'quarantine') return 4; // pause
+  if (state === 'idle') return 0;
+  // active / error both show where the engine last was (core/warming _loop.py);
+  // an error is distinguished by the red header pill, not a separate rail step.
+  return ACTION_STAGE[account.last_action ?? ''] ?? 0;
 }
 
 // Real per-account activity log, coloured by the log row's status.
