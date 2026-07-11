@@ -284,6 +284,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_failed_for_channel,
     list_linked_groups,
     list_posted_comments_for_channel_since,
+    list_posted_comments_page,
     list_posted_comments_since,
     load_neurocomment_settings,
     lookup_cached_decision,
