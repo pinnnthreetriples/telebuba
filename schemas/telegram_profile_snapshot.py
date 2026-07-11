@@ -19,9 +19,6 @@ class TelegramProfileSnapshot(BaseModel):
     username: str | None = None
     phone: str | None = None
     bio: str | None = None
-    # Raw image bytes for the current avatar (any format Telegram returns —
-    # usually JPEG). ``None`` when the user has no avatar set.
-    avatar_bytes: bytes | None = None
 
 
 StoryPrivacyPreset = Literal[

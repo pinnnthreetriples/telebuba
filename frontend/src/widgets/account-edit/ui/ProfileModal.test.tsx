@@ -40,8 +40,7 @@ const VIEW = {
   last_name: null,
   username: 'ivanov',
   bio: null,
-  avatar_data_uri: null,
-  photos: [{ photo_id: 1, access_hash: 2, file_reference: 'YWJj', thumb_data_uri: null }],
+  photos: [{ photo_id: 1, access_hash: 2, file_reference: 'YWJj', thumb_url: null }],
   stories: [
     {
       story_id: 3,
@@ -49,7 +48,7 @@ const VIEW = {
       privacy_preset: 'contacts',
       is_pinned: false,
       views: 128,
-      thumb_data_uri: null,
+      thumb_url: null,
     },
   ],
   music: [
@@ -424,8 +423,8 @@ test('«Сделать основным» promotes a non-first photo via the rea
   const twoPhotos = {
     ...VIEW,
     photos: [
-      { photo_id: '111', access_hash: '222', file_reference: 'YWJj', thumb_data_uri: null },
-      { photo_id: '333', access_hash: '444', file_reference: 'ZmZm', thumb_data_uri: null },
+      { photo_id: '111', access_hash: '222', file_reference: 'YWJj', thumb_url: null },
+      { photo_id: '333', access_hash: '444', file_reference: 'ZmZm', thumb_url: null },
     ],
   };
   vi.mocked(fetch).mockImplementation((input) => {

@@ -13,6 +13,7 @@ from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfilePhotoSetMain,
     AccountProfileView,
+    ProfileImage,
     ProfileMusicView,
     ProfilePhotoView,
     ProfileStoryView,
@@ -453,7 +454,6 @@ async def test_profile_snapshot_returns_view(
         return AccountProfileView(
             first_name="Petr",
             username="petr_tg",
-            avatar_data_uri="data:image/jpeg;base64,YWJj",
             photos=[ProfilePhotoView(photo_id="1", access_hash="2", file_reference="YWJj")],
             stories=[
                 ProfileStoryView(story_id=5, kind="image", privacy_preset="contacts", views=42),
@@ -473,6 +473,76 @@ async def test_profile_snapshot_returns_view(
     assert body["stories"][0]["views"] == 42
     assert body["music"][0]["title"] == "T"
     assert seen["force_refresh"] is True  # the ?refresh=true query forwards to the service
+
+
+@pytest.mark.asyncio
+async def test_photo_thumb_returns_image_with_cache_headers(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str, *, kind: str, item_id: int) -> ProfileImage | None:
+        assert account_id == "acc-1"
+        assert kind == "photos"
+        assert item_id == 1
+        return ProfileImage(content=b"jpeg-bytes", etag="abc123")
+
+    monkeypatch.setattr("services.accounts.account_profile_image", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/profile/photos/1/thumb")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.headers["etag"] == "abc123"
+    assert resp.headers["cache-control"] == "private, max-age=3600, immutable"
+    assert resp.content == b"jpeg-bytes"
+
+
+@pytest.mark.asyncio
+async def test_photo_thumb_returns_304_on_matching_etag(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str, *, kind: str, item_id: int) -> ProfileImage | None:  # noqa: ARG001
+        return ProfileImage(content=b"jpeg-bytes", etag="abc123")
+
+    monkeypatch.setattr("services.accounts.account_profile_image", _fake)
+    async with _client(app) as client:
+        resp = await client.get(
+            "/api/v1/accounts/acc-1/profile/photos/1/thumb",
+            headers={"If-None-Match": "abc123"},
+        )
+    assert resp.status_code == 304
+    assert resp.content == b""
+
+
+@pytest.mark.asyncio
+async def test_photo_thumb_unknown_id_is_404(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str, *, kind: str, item_id: int) -> ProfileImage | None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.accounts.account_profile_image", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/profile/photos/999/thumb")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_story_thumb_returns_image(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str, *, kind: str, item_id: int) -> ProfileImage | None:  # noqa: ARG001
+        assert kind == "stories"
+        assert item_id == 9
+        return ProfileImage(content=b"story-bytes", etag="def456")
+
+    monkeypatch.setattr("services.accounts.account_profile_image", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/profile/stories/9/thumb")
+    assert resp.status_code == 200
+    assert resp.content == b"story-bytes"
 
 
 @pytest.mark.asyncio

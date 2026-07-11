@@ -38,6 +38,19 @@ MED finding (daily action cap exceedable ~2x on mid-cycle restart) needs a desig
 call and is tracked in issue #208; the remaining audit findings were judged
 not-worth-fixing (design opinions / accepted tradeoffs / cosmetic).
 
+The 2026-07-11 profile-edit modal fix pass (#226, merged) repaired the five
+operator-reported bugs (honest "обновлено" timestamp, refresh ✓/✗ feedback, real
+«Сделать основным» via `photos.updateProfilePhoto`, int64 ids carried as strings
+so photo/music delete stops silently no-op-ing, story view counts) and
+parallelized the per-item thumb downloads. Its deferred follow-up is now done (PR
+open): profile/story thumbnails are served from cacheable, cookie-authed image
+endpoints (`GET /accounts/{id}/profile/{photos|stories}/{id}/thumb`,
+`include_in_schema=False`, ETag + `Cache-Control: private, immutable` + 304)
+instead of base64 `data:` URIs inlined in the snapshot JSON — the view now carries
+`thumb_url` and the dead, never-rendered `avatar_data_uri`/`avatar_bytes` (plus its
+redundant per-fetch avatar download) were dropped. Still deferred: right-sizing the
+640px thumbs to the ~104px tiles + optimistic add/remove.
+
 A 2026-07-10 operator-reported UI bug pass (PR #210, no auto-merge) then fixed four
 defects: (1) activity-log events now fully localized — `logEvent` ru/en dictionaries
 are the single source of truth, `eventLabel` resolves `t('logEvent.<code>', {defaultValue: code})`

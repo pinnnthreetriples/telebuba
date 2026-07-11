@@ -131,10 +131,6 @@ export type AccountProfileView = {
    */
   bio?: string | null;
   /**
-   * Avatar Data Uri
-   */
-  avatar_data_uri?: string | null;
-  /**
    * Photos
    */
   photos?: Array<ProfilePhotoView>;
@@ -1217,9 +1213,9 @@ export type ProfilePhotoView = {
    */
   file_reference: string;
   /**
-   * Thumb Data Uri
+   * Thumb Url
    */
-  thumb_data_uri?: string | null;
+  thumb_url?: string | null;
 };
 
 /**
@@ -1251,9 +1247,9 @@ export type ProfileStoryView = {
    */
   views?: number | null;
   /**
-   * Thumb Data Uri
+   * Thumb Url
    */
-  thumb_data_uri?: string | null;
+  thumb_url?: string | null;
 };
 
 /**

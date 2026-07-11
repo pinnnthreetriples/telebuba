@@ -4344,17 +4344,6 @@
             ],
             "title": "Bio"
           },
-          "avatar_data_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avatar Data Uri"
-          },
           "photos": {
             "items": {
               "$ref": "#/components/schemas/ProfilePhotoView"
@@ -6131,7 +6120,7 @@
             "minLength": 1,
             "title": "File Reference"
           },
-          "thumb_data_uri": {
+          "thumb_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -6140,7 +6129,7 @@
                 "type": "null"
               }
             ],
-            "title": "Thumb Data Uri"
+            "title": "Thumb Url"
           }
         },
         "type": "object",
@@ -6194,7 +6183,7 @@
             ],
             "title": "Views"
           },
-          "thumb_data_uri": {
+          "thumb_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -6203,7 +6192,7 @@
                 "type": "null"
               }
             ],
-            "title": "Thumb Data Uri"
+            "title": "Thumb Url"
           }
         },
         "type": "object",

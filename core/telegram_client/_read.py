@@ -225,30 +225,13 @@ async def _dispatch_get_user_profile(client: TelegramClient) -> TelegramProfileS
     bio = _optional_str(getattr(full_user, "about", None))
     users = getattr(full, "users", []) or []
     user = users[0] if users else None
-    avatar_bytes = await _download_self_avatar(client)
     return TelegramProfileSnapshot(
         first_name=_optional_str(getattr(user, "first_name", None)),
         last_name=_optional_str(getattr(user, "last_name", None)),
         username=_optional_str(getattr(user, "username", None)),
         phone=_optional_str(getattr(user, "phone", None)),
         bio=bio,
-        avatar_bytes=avatar_bytes,
     )
-
-
-async def _download_self_avatar(client: TelegramClient) -> bytes | None:
-    """Return raw avatar bytes for the signed-in user, or ``None`` if absent."""
-    try:
-        # Passing the ``bytes`` type (not an instance) makes Telethon return
-        # the downloaded payload in memory. The type stub only lists concrete
-        # bytes / str / BinaryIO values, hence the ignore.
-        data = await client.download_profile_photo("me", file=bytes)  # ty: ignore[invalid-argument-type]
-    except errors.RPCError:
-        # Some accounts return a photo ref that can't be downloaded (e.g.
-        # privacy-restricted self-photos). Treat as "no avatar" rather than
-        # killing the whole snapshot fetch.
-        return None
-    return data if isinstance(data, (bytes, bytearray)) else None
 
 
 async def _dispatch_list_profile_music(client: TelegramClient) -> TelegramProfileMusic:
