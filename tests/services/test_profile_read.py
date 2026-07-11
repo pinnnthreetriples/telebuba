@@ -324,6 +324,9 @@ async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatc
                     kind="image",
                     privacy_preset="contacts",
                     thumb_bytes=b"\x89story",
+                    is_pinned=True,
+                    views=137,
+                    reactions=12,
                 ),
             ],
             music=[TelegramMusicItem(file_id=4, title="T", access_hash=5, file_reference=b"mref")],
@@ -347,6 +350,10 @@ async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatc
         view.stories[0].thumb_url
         == f"/api/{settings.api.version}/accounts/acc-1/profile/stories/3/thumb"
     )
+    # Pin state + engagement counts flow through to the view for the modal.
+    assert view.stories[0].is_pinned is True
+    assert view.stories[0].views == 137
+    assert view.stories[0].reactions == 12
     assert view.music[0].file_id == "4"
     assert view.music[0].file_reference == base64.b64encode(b"mref").decode()
 

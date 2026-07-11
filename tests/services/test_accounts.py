@@ -29,6 +29,7 @@ from schemas.profile_media import (
     AccountProfilePhotoRemove,
     AccountProfilePhotoSetMain,
     AccountProfilePhotoUpload,
+    AccountStoryPin,
     AccountStoryRemove,
     AccountStoryUpload,
 )
@@ -43,6 +44,7 @@ from schemas.telegram_actions import (
     RemoveStory,
     SetMainProfilePhoto,
     SetProfilePhoto,
+    ToggleStoryPinned,
     UpdateProfile,
 )
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -64,6 +66,7 @@ from services.accounts import (
     remove_account_story,
     set_account_main_profile_photo,
     set_account_profile_photo,
+    set_account_story_pinned,
     update_account_profile,
 )
 from tests.factories import seed_account_proxy
@@ -1018,6 +1021,61 @@ async def test_remove_account_story_executes_action_and_invalidates_cache(
     assert isinstance(captured[0], RemoveStory)
     assert captured[0].story_id == 9876
     assert invalidated == ["account-story-remove"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pinned", [True, False])
+async def test_set_account_story_pinned_executes_action_and_invalidates_cache(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    pinned: bool,
+) -> None:
+    """Pinning/unpinning reaches Telegram with the target state + clears the cache."""
+    captured: list[object] = []
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="toggle_story_pinned", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    result = await set_account_story_pinned(
+        AccountStoryPin(account_id="account-story-pin", story_id=3210, pinned=pinned),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], ToggleStoryPinned)
+    assert captured[0].story_id == 3210
+    assert captured[0].pinned is pinned
+    assert invalidated == ["account-story-pin"]
+
+
+@pytest.mark.asyncio
+async def test_set_account_story_pinned_raises_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A Telegram refusal surfaces as ``AccountActionError`` (mapped to the envelope)."""
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="toggle_story_pinned",
+            account_id=account_id,
+            error_type="RPCError",
+            error_message="STORY_ID_INVALID",
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    with pytest.raises(AccountActionError):
+        await set_account_story_pinned(
+            AccountStoryPin(account_id="account-story-pin", story_id=1, pinned=True),
+        )
 
 
 @pytest.mark.asyncio

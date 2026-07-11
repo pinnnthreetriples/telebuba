@@ -248,6 +248,20 @@ class RemoveStory(BaseModel):
     story_id: int = Field(gt=0)
 
 
+class ToggleStoryPinned(BaseModel):
+    """Pin a story to the profile (kept forever) or unpin it (expires in ≤24 h).
+
+    ``stories.togglePinned`` flips ``StoryItem.pinned``: a pinned story stays in
+    the profile's Stories grid past its active window, an unpinned one only
+    survives as an active story until ``expire_date``. Idempotent — re-pinning
+    an already-pinned story is a no-op server-side.
+    """
+
+    action_type: Literal["toggle_story_pinned"] = "toggle_story_pinned"
+    story_id: int = Field(gt=0)
+    pinned: bool
+
+
 class WatchPeerStories(BaseModel):
     """View a subscribed peer's active stories and mark them seen.
 
@@ -313,6 +327,7 @@ TelegramAction = Annotated[
     | RemoveProfilePhoto
     | SetMainProfilePhoto
     | RemoveStory
+    | ToggleStoryPinned
     | WatchPeerStories,
     Field(discriminator="action_type"),
 ]

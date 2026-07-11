@@ -15,6 +15,7 @@ export {
   resetAccountSessionMutation,
   setAccountPhotoMainMutation,
   setAccountPhotoMutation,
+  setAccountStoryPinnedMutation,
   spamCheckAccountMutation,
   startPhoneLoginMutation,
   submitLoginCodeMutation,

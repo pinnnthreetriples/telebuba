@@ -1267,6 +1267,10 @@ export type ProfileStoryView = {
    */
   views?: number | null;
   /**
+   * Reactions
+   */
+  reactions?: number | null;
+  /**
    * Thumb Url
    */
   thumb_url?: string | null;
@@ -1590,6 +1594,20 @@ export type StopWarmingRequest = {
    * Account Id
    */
   account_id: string;
+};
+
+/**
+ * StoryPinRequest
+ */
+export type StoryPinRequest = {
+  /**
+   * Story Id
+   */
+  story_id: number;
+  /**
+   * Pinned
+   */
+  pinned: boolean;
 };
 
 /**
@@ -2774,6 +2792,38 @@ export type RemoveAccountStoryResponses = {
 
 export type RemoveAccountStoryResponse =
   RemoveAccountStoryResponses[keyof RemoveAccountStoryResponses];
+
+export type SetAccountStoryPinnedData = {
+  body: StoryPinRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/story/pin';
+};
+
+export type SetAccountStoryPinnedErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetAccountStoryPinnedError =
+  SetAccountStoryPinnedErrors[keyof SetAccountStoryPinnedErrors];
+
+export type SetAccountStoryPinnedResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type SetAccountStoryPinnedResponse =
+  SetAccountStoryPinnedResponses[keyof SetAccountStoryPinnedResponses];
 
 export type RemoveAccountMusicData = {
   body: MusicRemoveRequest;

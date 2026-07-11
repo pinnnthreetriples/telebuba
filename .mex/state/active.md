@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-11
+last_updated: 2026-07-12
 ---
 
 # Active State
@@ -50,6 +50,14 @@ instead of base64 `data:` URIs inlined in the snapshot JSON — the view now car
 `thumb_url` and the dead, never-rendered `avatar_data_uri`/`avatar_bytes` (plus its
 redundant per-fetch avatar download) were dropped. Still deferred: right-sizing the
 640px thumbs to the ~104px tiles + optimistic add/remove.
+
+A follow-up story pass (PR open) adds two operator-requested story features: (1) a
+per-story pin toggle in the stories tab — «📌 Навсегда» vs «🕑 24 часа» — backed by a
+new `toggle_story_pinned` action (`stories.togglePinned`), service
+`set_account_story_pinned`, and `POST /accounts/{id}/story/pin`; pinning keeps a story
+on the profile past its 24 h active window, unpinning lets it expire. (2) Story reaction
+counts alongside the existing view counts (`StoryViews.reactions_count` → snapshot
+`reactions` → view `reactions`, rendered as a ❤ badge next to 👁).
 
 A 2026-07-10 operator-reported UI bug pass (PR #210, no auto-merge) then fixed four
 defects: (1) activity-log events now fully localized — `logEvent` ru/en dictionaries

@@ -13,6 +13,7 @@ from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfilePhotoSetMain,
     AccountProfileView,
+    AccountStoryPin,
     ProfileImage,
     ProfileMusicView,
     ProfilePhotoView,
@@ -657,6 +658,31 @@ async def test_remove_story(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> No
             json={"story_id": 9},
         )
     assert resp.status_code == 200
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pinned", [True, False])
+async def test_set_story_pinned(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    pinned: bool,
+) -> None:
+    seen: dict[str, object] = {}
+
+    async def _fake(data: AccountStoryPin) -> ActionResult:
+        seen["story_id"] = data.story_id
+        seen["pinned"] = data.pinned
+        return ActionResult(status="ok", action_type="toggle_story_pinned", account_id="acc-1")
+
+    monkeypatch.setattr("services.accounts.set_account_story_pinned", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story/pin",
+            json={"story_id": 9, "pinned": pinned},
+        )
+    assert resp.status_code == 200
+    assert seen == {"story_id": 9, "pinned": pinned}
 
 
 @pytest.mark.asyncio

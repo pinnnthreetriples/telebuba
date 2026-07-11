@@ -1289,6 +1289,74 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/story/pin": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set Account Story Pinned",
+        "operationId": "setAccountStoryPinned",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StoryPinRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/{account_id}/music/remove": {
       "post": {
         "tags": [
@@ -6272,6 +6340,17 @@
             ],
             "title": "Views"
           },
+          "reactions": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reactions"
+          },
           "thumb_url": {
             "anyOf": [
               {
@@ -6855,6 +6934,25 @@
           "account_id"
         ],
         "title": "StopWarmingRequest"
+      },
+      "StoryPinRequest": {
+        "properties": {
+          "story_id": {
+            "type": "integer",
+            "exclusiveMinimum": 0.0,
+            "title": "Story Id"
+          },
+          "pinned": {
+            "type": "boolean",
+            "title": "Pinned"
+          }
+        },
+        "type": "object",
+        "required": [
+          "story_id",
+          "pinned"
+        ],
+        "title": "StoryPinRequest"
       },
       "StoryRemoveRequest": {
         "properties": {

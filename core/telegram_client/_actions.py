@@ -46,6 +46,7 @@ from schemas.telegram_actions import (
     SetMainProfilePhoto,
     SetOnline,
     SetProfilePhoto,
+    ToggleStoryPinned,
     UpdateProfile,
     WatchPeerStories,
 )
@@ -427,6 +428,8 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             extra = {"photo_id": action.photo_id}
         case RemoveStory():
             extra = {"story_id": action.story_id}
+        case ToggleStoryPinned():
+            extra = {"story_id": action.story_id, "pinned": action.pinned}
         case _:  # pragma: no cover - discriminated union is exhaustive
             extra = {}
     return extra
