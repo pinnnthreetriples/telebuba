@@ -47,6 +47,7 @@ from services.accounts.media import (
     remove_account_story,
     set_account_main_profile_photo,
     set_account_profile_photo,
+    set_account_story_pinned,
 )
 from services.accounts.profile import update_account_profile
 from services.accounts.profile_read import (
@@ -91,6 +92,7 @@ __all__ = [
     "reset_account_session",
     "set_account_main_profile_photo",
     "set_account_profile_photo",
+    "set_account_story_pinned",
     "start_phone_login",
     "submit_login_code",
     "update_account_profile",

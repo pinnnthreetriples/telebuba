@@ -54,6 +54,9 @@ class TelegramStoryThumb(BaseModel):
     # ``StoryItem.views.views_count`` — how many accounts viewed the story.
     # ``None`` when Telegram omits view data (e.g. an expired, unpinned story).
     views: int | None = None
+    # ``StoryItem.views.reactions_count`` — total reactions left on the story.
+    # ``None`` under the same conditions as ``views``.
+    reactions: int | None = None
 
 
 class TelegramPinnedStories(BaseModel):

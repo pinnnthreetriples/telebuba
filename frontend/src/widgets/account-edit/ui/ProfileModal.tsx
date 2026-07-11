@@ -13,6 +13,7 @@ import {
   removeAccountStoryMutation,
   setAccountPhotoMainMutation,
   setAccountPhotoMutation,
+  setAccountStoryPinnedMutation,
   updateAccountProfileMutation,
 } from '@/entities/account';
 import type {
@@ -113,6 +114,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const setMainPhoto = useMutation(setAccountPhotoMainMutation());
   const addMusic = useMutation(addAccountMusicMutation());
   const removeStory = useMutation(removeAccountStoryMutation());
+  const setStoryPinned = useMutation(setAccountStoryPinnedMutation());
   const removeMusic = useMutation(removeAccountMusicMutation());
   const removePhoto = useMutation(removeAccountPhotoMutation());
   const photoInput = useRef<HTMLInputElement>(null);
@@ -513,23 +515,38 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         className="rounded-[12px] border border-black/5"
                         style={tileStyle(story.thumb_url, '9 / 16')}
                       />
-                      {story.views != null && (
-                        <span
-                          title={t('accounts.profile.storyViews', { n: story.views })}
-                          className="absolute left-[5px] top-[5px] inline-flex items-center gap-[3px] rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[9px] font-medium text-white"
-                        >
-                          <svg
-                            width="10"
-                            height="10"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="2"
-                          >
-                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                            <circle cx="12" cy="12" r="3" />
-                          </svg>
-                          {story.views}
+                      {(story.views != null || story.reactions != null) && (
+                        <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-[6px] rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[9px] font-medium text-white">
+                          {story.views != null && (
+                            <span
+                              title={t('accounts.profile.storyViews', { n: story.views })}
+                              className="inline-flex items-center gap-[3px]"
+                            >
+                              <svg
+                                width="10"
+                                height="10"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                              >
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                                <circle cx="12" cy="12" r="3" />
+                              </svg>
+                              {story.views}
+                            </span>
+                          )}
+                          {story.reactions != null && (
+                            <span
+                              title={t('accounts.profile.storyReactions', { n: story.reactions })}
+                              className="inline-flex items-center gap-[3px]"
+                            >
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 21l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.18L12 21z" />
+                              </svg>
+                              {story.reactions}
+                            </span>
+                          )}
                         </span>
                       )}
                       <button
@@ -541,6 +558,35 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
                       >
                         ×
+                      </button>
+                      <button
+                        type="button"
+                        disabled={setStoryPinned.isPending}
+                        aria-label={t(
+                          story.is_pinned
+                            ? 'accounts.profile.unpinStory'
+                            : 'accounts.profile.pinStory',
+                        )}
+                        onClick={() => {
+                          setStoryPinned.mutate(
+                            {
+                              path: { account_id: account.account_id },
+                              body: { story_id: story.story_id, pinned: !story.is_pinned },
+                            },
+                            { onSuccess: refresh },
+                          );
+                        }}
+                        className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-[6px] px-[5px] py-[2px] text-center text-[9px] font-medium disabled:opacity-50 ${
+                          story.is_pinned
+                            ? 'bg-primary text-white'
+                            : 'bg-[rgba(11,11,12,0.6)] text-white'
+                        }`}
+                      >
+                        {t(
+                          story.is_pinned
+                            ? 'accounts.profile.pinnedForever'
+                            : 'accounts.profile.pin24h',
+                        )}
                       </button>
                       <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-center text-[9px] font-medium text-white">
                         {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}

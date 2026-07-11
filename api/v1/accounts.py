@@ -31,12 +31,14 @@ from schemas.profile_media import (
     AccountProfilePhotoSetMain,
     AccountProfilePhotoUpload,
     AccountProfileView,
+    AccountStoryPin,
     AccountStoryRemove,
     AccountStoryUpload,
     MusicRemoveRequest,
     PhotoMainRequest,
     PhotoRemoveRequest,
     StoryMediaKind,
+    StoryPinRequest,
     StoryPrivacyPreset,
     StoryRemoveRequest,
 )
@@ -355,6 +357,22 @@ async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> Act
     try:
         return await accounts.remove_account_story(
             AccountStoryRemove(account_id=account_id, story_id=body.story_id),
+        )
+    except accounts.AccountActionError:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/story/pin",
+    response_model=ActionResult,
+    operation_id="setAccountStoryPinned",
+)
+async def set_account_story_pinned(account_id: str, body: StoryPinRequest) -> ActionResult:
+    try:
+        return await accounts.set_account_story_pinned(
+            AccountStoryPin(account_id=account_id, story_id=body.story_id, pinned=body.pinned),
         )
     except accounts.AccountActionError:
         raise

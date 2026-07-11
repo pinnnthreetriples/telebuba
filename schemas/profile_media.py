@@ -84,6 +84,18 @@ class AccountStoryRemove(BaseModel):
     story_id: int = Field(gt=0)
 
 
+class AccountStoryPin(BaseModel):
+    """Pin a story to the profile (``pinned=True``, kept forever) or unpin it.
+
+    ``story_id`` comes from the live snapshot; ``pinned`` is the target state so
+    the UI toggle is idempotent regardless of the story's current state.
+    """
+
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
+    story_id: int = Field(gt=0)
+    pinned: bool
+
+
 class AccountProfileMusicRemove(BaseModel):
     """Unpin a single track from the account's saved profile music.
 
@@ -118,6 +130,8 @@ class ProfileStoryView(BaseModel):
     # Story view count from Telegram (``None`` when the account can't see its
     # own story views, e.g. the story is expired and unpinned).
     views: int | None = None
+    # Total reactions left on the story (``None`` under the same conditions).
+    reactions: int | None = None
     thumb_url: str | None = None
 
 
@@ -159,6 +173,11 @@ class ProfileImage(BaseModel):
 
 class StoryRemoveRequest(BaseModel):
     story_id: int = Field(gt=0)
+
+
+class StoryPinRequest(BaseModel):
+    story_id: int = Field(gt=0)
+    pinned: bool
 
 
 class MusicRemoveRequest(BaseModel):

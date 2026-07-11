@@ -29,6 +29,7 @@ from telethon.tl.functions.stories import (
     CanSendStoryRequest,
     DeleteStoriesRequest,
     SendStoryRequest,
+    TogglePinnedRequest,
 )
 from telethon.tl.types import InputPhoto
 
@@ -52,6 +53,7 @@ from schemas.telegram_actions import (
     SendDirectMessage,
     SetMainProfilePhoto,
     SetProfilePhoto,
+    ToggleStoryPinned,
     UpdateProfile,
 )
 from tests.factories import DeviceFingerprintFactory
@@ -867,6 +869,40 @@ async def test_execute_remove_story_sends_delete_stories_request(
     delete_requests = [req for req in captured if isinstance(req, DeleteStoriesRequest)]
     assert len(delete_requests) == 1
     assert delete_requests[0].id == [9876]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("pinned", [True, False])
+async def test_execute_toggle_story_pinned_sends_toggle_request(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    pinned: bool,
+) -> None:
+    """``stories.togglePinned`` carries the target ``pinned`` state + single id.
+
+    Pinning keeps the story on the profile forever; unpinning drops it back to
+    the 24 h active window. Both directions hit the same request, differing only
+    in the ``pinned`` flag.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            return [3210]
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-story-pin", ToggleStoryPinned(story_id=3210, pinned=pinned))
+
+    assert result.status == "ok"
+    toggles = [req for req in captured if isinstance(req, TogglePinnedRequest)]
+    assert len(toggles) == 1
+    assert toggles[0].id == [3210]
+    assert toggles[0].pinned is pinned
 
 
 @pytest.mark.asyncio

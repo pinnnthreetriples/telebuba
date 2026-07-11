@@ -48,6 +48,7 @@ const VIEW = {
       privacy_preset: 'contacts',
       is_pinned: false,
       views: 128,
+      reactions: 24,
       thumb_url: null,
     },
   ],
@@ -126,6 +127,46 @@ test('stories tab opens the add-story modal and removes a story', async () => {
 
   await userEvent.click(screen.getByText('Добавить'));
   expect(screen.getByText('Новая сторис')).toBeInTheDocument();
+});
+
+test('stories tab shows view/reaction counts and pins a story via the endpoint', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сторис'));
+
+  // Engagement badges: 👁 views and ❤ reactions from the snapshot.
+  expect(await screen.findByText('128')).toBeInTheDocument();
+  expect(screen.getByText('24')).toBeInTheDocument();
+
+  // An unpinned story offers "pin forever"; clicking it hits /story/pin.
+  await userEvent.click(screen.getByLabelText('Закрепить в профиле навсегда'));
+  await waitFor(() => {
+    expect(fired('/story/pin')).toBe(true);
+  });
+});
+
+test('a pinned story shows the "forever" label and offers to unpin it', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(
+        jsonResponse({
+          ...VIEW,
+          stories: [{ story_id: 3, kind: 'image', privacy_preset: 'contacts', is_pinned: true }],
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сторис'));
+
+  expect(await screen.findByText('📌 Навсегда')).toBeInTheDocument();
+  await userEvent.click(screen.getByLabelText('Открепить — истечёт через 24 ч'));
+  await waitFor(() => {
+    expect(fired('/story/pin')).toBe(true);
+  });
 });
 
 test('a close_friends / unknown story renders a translated label, not the raw key', async () => {

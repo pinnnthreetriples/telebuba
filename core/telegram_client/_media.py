@@ -20,6 +20,7 @@ from telethon.tl.functions.stories import (
     CanSendStoryRequest,
     DeleteStoriesRequest,
     SendStoryRequest,
+    TogglePinnedRequest,
 )
 from telethon.tl.types import (
     DocumentAttributeAudio,
@@ -43,6 +44,7 @@ from schemas.telegram_actions import (
     RemoveStory,
     SetMainProfilePhoto,
     SetProfilePhoto,
+    ToggleStoryPinned,
 )
 
 if TYPE_CHECKING:
@@ -87,6 +89,8 @@ async def _dispatch_profile_media_action(
             await _set_main_profile_photo(client, action)
         case RemoveStory():
             await _remove_story(client, action)
+        case ToggleStoryPinned():
+            await _toggle_story_pinned(client, action)
         case _:  # pragma: no cover - caller only routes media actions here
             msg = f"Unsupported profile media action_type: {action.action_type}"
             raise ValueError(msg)
@@ -330,6 +334,18 @@ async def _remove_story(client: TelegramClient, action: RemoveStory) -> None:
     snapshot and click), which is fine for an idempotent operation.
     """
     await client(DeleteStoriesRequest(peer=InputPeerSelf(), id=[action.story_id]))
+
+
+async def _toggle_story_pinned(client: TelegramClient, action: ToggleStoryPinned) -> None:
+    """Pin the story to the profile (kept forever) or unpin it (24 h active only).
+
+    ``stories.togglePinned`` returns the ids it actually toggled; we don't
+    inspect it — an already-in-state story yields an empty vector, which is a
+    fine no-op for an idempotent toggle.
+    """
+    await client(
+        TogglePinnedRequest(peer=InputPeerSelf(), id=[action.story_id], pinned=action.pinned),
+    )
 
 
 def _named_bytes(filename: str, content: bytes) -> BytesIO:

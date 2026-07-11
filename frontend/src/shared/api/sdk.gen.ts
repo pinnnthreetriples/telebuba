@@ -166,6 +166,9 @@ import type {
   SetAccountPhotoMainErrors,
   SetAccountPhotoMainResponses,
   SetAccountPhotoResponses,
+  SetAccountStoryPinnedData,
+  SetAccountStoryPinnedErrors,
+  SetAccountStoryPinnedResponses,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelErrors,
   SetCampaignAccountChannelResponses,
@@ -558,6 +561,25 @@ export const removeAccountStory = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/accounts/{account_id}/story/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Account Story Pinned
+ */
+export const setAccountStoryPinned = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountStoryPinnedData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetAccountStoryPinnedResponses,
+    SetAccountStoryPinnedErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/story/pin',
     ...options,
     headers: {
       'Content-Type': 'application/json',

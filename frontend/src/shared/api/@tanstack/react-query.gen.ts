@@ -64,6 +64,7 @@ import {
   retryChallenge,
   setAccountPhoto,
   setAccountPhotoMain,
+  setAccountStoryPinned,
   setCampaignAccountChannel,
   setCampaignSolver,
   setCampaignStatus,
@@ -241,6 +242,9 @@ import type {
   SetAccountPhotoMainError,
   SetAccountPhotoMainResponse,
   SetAccountPhotoResponse,
+  SetAccountStoryPinnedData,
+  SetAccountStoryPinnedError,
+  SetAccountStoryPinnedResponse,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelError,
   SetCampaignAccountChannelResponse,
@@ -972,6 +976,33 @@ export const removeAccountStoryMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await removeAccountStory({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Story Pinned
+ */
+export const setAccountStoryPinnedMutation = (
+  options?: Partial<Options<SetAccountStoryPinnedData>>,
+): UseMutationOptions<
+  SetAccountStoryPinnedResponse,
+  SetAccountStoryPinnedError,
+  Options<SetAccountStoryPinnedData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountStoryPinnedResponse,
+    SetAccountStoryPinnedError,
+    Options<SetAccountStoryPinnedData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountStoryPinned({
         ...options,
         ...fnOptions,
         throwOnError: true,

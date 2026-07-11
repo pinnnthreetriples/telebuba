@@ -97,6 +97,7 @@ async def account_profile_view(
                 privacy_preset=story.privacy_preset,
                 is_pinned=story.is_pinned,
                 views=story.views,
+                reactions=story.reactions,
                 thumb_url=(
                     _thumb_url(account_id, "stories", story.story_id) if story.thumb_bytes else None
                 ),

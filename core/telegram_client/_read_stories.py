@@ -122,12 +122,19 @@ async def _story_thumb(
         is_active=_story_is_active(story),
         privacy_preset=_story_privacy_preset(story),
         views=_story_views(story),
+        reactions=_story_reactions(story),
     )
 
 
 def _story_views(story: object) -> int | None:
     """Read ``StoryItem.views.views_count``; ``None`` when Telegram omits it."""
     count = getattr(getattr(story, "views", None), "views_count", None)
+    return int(count) if isinstance(count, int) else None
+
+
+def _story_reactions(story: object) -> int | None:
+    """Read ``StoryItem.views.reactions_count``; ``None`` when Telegram omits it."""
+    count = getattr(getattr(story, "views", None), "reactions_count", None)
     return int(count) if isinstance(count, int) else None
 
 

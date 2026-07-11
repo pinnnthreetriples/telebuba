@@ -19,6 +19,7 @@ from schemas.telegram_actions import (
     RemoveStory,
     SetMainProfilePhoto,
     SetProfilePhoto,
+    ToggleStoryPinned,
 )
 from services.accounts._result import raise_for_result
 from services.accounts._uploads import (
@@ -37,6 +38,7 @@ if TYPE_CHECKING:
         AccountProfilePhotoRemove,
         AccountProfilePhotoSetMain,
         AccountProfilePhotoUpload,
+        AccountStoryPin,
         AccountStoryRemove,
         AccountStoryUpload,
     )
@@ -50,6 +52,7 @@ __all__ = [
     "remove_account_story",
     "set_account_main_profile_photo",
     "set_account_profile_photo",
+    "set_account_story_pinned",
 ]
 
 
@@ -216,5 +219,21 @@ async def remove_account_story(data: AccountStoryRemove) -> ActionResult:
         "account_story_removed",
         account_id=data.account_id,
         extra={"story_id": data.story_id},
+    )
+    return result
+
+
+async def set_account_story_pinned(data: AccountStoryPin) -> ActionResult:
+    result = await execute(
+        data.account_id,
+        ToggleStoryPinned(story_id=data.story_id, pinned=data.pinned),
+    )
+    raise_for_result(result)
+    invalidate_account_profile_cache(data.account_id)
+    await log_event(
+        "INFO",
+        "account_story_pinned",
+        account_id=data.account_id,
+        extra={"story_id": data.story_id, "pinned": data.pinned},
     )
     return result
