@@ -6855,6 +6855,17 @@
             ],
             "title": "Proxy Type"
           },
+          "proxy_country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Proxy Country"
+          },
           "trust_score": {
             "anyOf": [
               {

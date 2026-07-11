@@ -178,6 +178,16 @@ Once onboarding finishes the flag flips and the real per-channel statuses render
 Gates: neuro runtime+api 76 pytest green, ruff+ty clean; frontend tsc+eslint+
 vitest green, API client drift-free (only the `onboarding` field).
 
+A 2026-07-11 operator-reported UI fix (PR open, no merge): the warming «Прогреты»
+(warmed) card showed the phone-country flag next to the proxy label and no proxy
+flag at all. Root cause — `WarmedAccount` never carried `proxy_country` (schema
+gap), and the card rendered `phone_country`'s flag on the proxy row. Fix: added
+`proxy_country` to the schema, populated it from the board card in
+`list_warmed_accounts`, and moved the flags so the phone-country flag sits with
+the number and the proxy-exit flag with the proxy type — matching the already-
+correct «Готовы» card. Gates: warmed-accounts + api warming pytest green, ruff+ty
+clean; WarmingPage vitest green, client regenerated (only `proxy_country`).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

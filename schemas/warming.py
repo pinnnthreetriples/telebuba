@@ -333,6 +333,7 @@ class WarmedAccount(BaseModel):
     phone: str | None = None
     phone_country: str | None = None
     proxy_type: str | None = None
+    proxy_country: str | None = None
     trust_score: int | None = Field(default=None, ge=0, le=100)
     # The warming target (days) the account graduated against — the "X / Y дней" Y.
     target_days: int = Field(ge=0)

@@ -147,6 +147,7 @@ test('shows graduated accounts and wires return-to-warming + navigate', async ()
         warming_days: 20,
         phone: '+79261112233',
         phone_country: 'RU',
+        proxy_country: 'ID',
         proxy_type: 'socks5',
         trust_score: 88,
         target_days: 14,
@@ -159,11 +160,17 @@ test('shows graduated accounts and wires return-to-warming + navigate', async ()
     if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
     return Promise.resolve(jsonResponse({}));
   });
-  renderWithClient(<WarmingPage />);
+  const { container } = renderWithClient(<WarmingPage />);
   await waitFor(() => {
     expect(screen.getByText('+79261112233')).toBeInTheDocument();
   });
   expect(screen.getByText('SOCKS5')).toBeInTheDocument();
+  // Warmed card: phone country flag sits with the number, proxy exit country
+  // flag with the proxy type — not the phone flag crammed by the proxy label.
+  const phoneFlag = container.querySelector('.fi-ru');
+  const proxyFlag = container.querySelector('.fi-id');
+  expect(phoneFlag?.parentElement?.textContent).toContain('+79261112233');
+  expect(proxyFlag?.parentElement?.textContent).toContain('SOCKS5');
 
   await userEvent.click(screen.getByLabelText('Обратно в прогрев'));
   await waitFor(() => {

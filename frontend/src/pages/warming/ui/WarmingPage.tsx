@@ -445,13 +445,20 @@ export function WarmingPage() {
                       {mono(acc.phone ?? acc.label)}
                     </div>
                     <div className="min-w-0 flex-1">
-                      <div className="text-[14px] font-bold leading-tight">
-                        {acc.phone ?? acc.label}
-                      </div>
-                      <div className="mt-[5px] flex items-center gap-[6px]">
+                      <div className="flex items-center gap-[5px]">
+                        <span className="truncate text-[14px] font-bold leading-tight">
+                          {acc.phone ?? acc.label}
+                        </span>
                         {acc.phone_country ? (
                           <span
-                            className={`fi fi-${acc.phone_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
+                            className={`fi fi-${acc.phone_country.toLowerCase()} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                          />
+                        ) : null}
+                      </div>
+                      <div className="mt-[5px] flex items-center gap-[6px]">
+                        {acc.proxy_country ? (
+                          <span
+                            className={`fi fi-${acc.proxy_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
                           />
                         ) : null}
                         <span className="text-[11.5px] text-ink-subtle">

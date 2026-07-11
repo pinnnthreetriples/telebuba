@@ -150,7 +150,9 @@ async def test_promote_to_neurocomment_appears_in_warmed_list_after_threshold() 
 
 @pytest.mark.asyncio
 async def test_warmed_account_carries_card_meta() -> None:
-    """The warmed entry surfaces the card's proxy type + target days (de-mock enrichment)."""
+    """The warmed entry surfaces the card's proxy type/country + target days (de-mock)."""
+    from core.db import update_proxy_check  # noqa: PLC0415
+    from schemas.proxy import ProxyCheckUpdate  # noqa: PLC0415
     from services.warming import promote_to_neurocomment  # noqa: PLC0415
     from tests.factories import seed_account_proxy  # noqa: PLC0415
 
@@ -158,7 +160,11 @@ async def test_warmed_account_carries_card_meta() -> None:
     await upsert_warming_state(
         WarmingStateWrite(account_id="meta", state="active", started_at=_days_ago(20)),
     )
-    await seed_account_proxy("meta")
+    proxy_id = await seed_account_proxy("meta")
+    # A proxy check stamps the exit country; the warmed card renders its flag.
+    await update_proxy_check(
+        ProxyCheckUpdate(proxy_id=proxy_id, status="tcp_working", country_code="CO"),
+    )
     await promote_to_neurocomment("meta")
 
     result = await list_warmed_accounts(14)
@@ -166,6 +172,7 @@ async def test_warmed_account_carries_card_meta() -> None:
     assert len(result.accounts) == 1
     warmed = result.accounts[0]
     assert warmed.proxy_type == "socks5"
+    assert warmed.proxy_country == "CO"
     assert warmed.target_days == 14
 
 

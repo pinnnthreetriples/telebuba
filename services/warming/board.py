@@ -197,6 +197,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
             phone=card.phone,
             phone_country=card.phone_country,
             proxy_type=card.proxy_type,
+            proxy_country=card.proxy_country,
             trust_score=card.trust_score,
             target_days=card.target_days or min_days,
         )
