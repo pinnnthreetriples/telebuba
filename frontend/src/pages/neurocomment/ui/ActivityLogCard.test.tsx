@@ -40,7 +40,9 @@ test('shows the channel and the translated reason inline', () => {
 test('colours an attempted-but-failed event red even though it is logged INFO', () => {
   render(
     <ActivityLogCard
-      logLines={[entry({ event: 'neurocomment_generation_exhausted', extra: { reason: 'gemini_error' } })]}
+      logLines={[
+        entry({ event: 'neurocomment_generation_exhausted', extra: { reason: 'gemini_error' } }),
+      ]}
     />,
   );
   const label = screen.getByText('Не удалось сгенерировать текст');
