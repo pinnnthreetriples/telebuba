@@ -114,6 +114,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         )
         for channel in channels
     ]
+    feed = sorted(posted, key=lambda c: c.created_at, reverse=True)[
+        : settings.neurocomment.board_comment_feed_limit
+    ]
     return NeurocommentBoard(
         campaign_id=campaign.campaign_id,
         campaign_name=campaign.name,
@@ -121,6 +124,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         solver_enabled=campaign.solver_enabled,
         accounts=cards,
         channels=rows,
+        comments=feed,
     )
 
 

@@ -603,6 +603,50 @@ export type ChannelLinkOutcome = {
 };
 
 /**
+ * CommentRecord
+ *
+ * One row of ``neurocomment_comments`` — the claim + outcome for a post.
+ */
+export type CommentRecord = {
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Post Id
+   */
+  post_id: number;
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'claimed' | 'posted' | 'failed';
+  /**
+   * Comment Text
+   */
+  comment_text?: string | null;
+  /**
+   * Comment Msg Id
+   */
+  comment_msg_id?: number | null;
+  /**
+   * Created At
+   */
+  created_at: string;
+  /**
+   * Updated At
+   */
+  updated_at: string;
+};
+
+/**
  * DialogueFeed
  *
  * Recent inter-account messages, newest first — the live conversation feed.
@@ -846,6 +890,10 @@ export type NeurocommentBoard = {
    * Channels
    */
   channels?: Array<NeurocommentChannelRow>;
+  /**
+   * Comments
+   */
+  comments?: Array<CommentRecord>;
 };
 
 /**

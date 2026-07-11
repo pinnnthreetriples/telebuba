@@ -133,6 +133,7 @@ export type {
   ClearNeurocommentListenerResponse,
   ClearNeurocommentListenerResponses,
   ClientOptions,
+  CommentRecord,
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesError,
   CountCampaignChallengeOutcomesErrors,

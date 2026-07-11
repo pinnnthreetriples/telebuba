@@ -54,9 +54,16 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     setup_logging()
 
 
-async def _post_comment(channel: str, post_id: int, campaign_id: str, account_id: str) -> None:
+async def _post_comment(
+    channel: str,
+    post_id: int,
+    campaign_id: str,
+    account_id: str,
+    *,
+    text: str = "hi",
+) -> None:
     await claim_comment(channel, post_id, campaign_id, account_id)
-    await mark_comment_posted(channel, post_id, comment_text="hi", comment_msg_id=post_id)
+    await mark_comment_posted(channel, post_id, comment_text=text, comment_msg_id=post_id)
 
 
 @pytest.mark.asyncio
@@ -126,6 +133,43 @@ async def test_card_counts_today_and_last_hour() -> None:
     assert card.comments_last_hour == 2
     assert card.last_comment_at is not None
     assert card.last_comment_text == "hi"
+
+
+@pytest.mark.asyncio
+async def test_board_comment_feed_is_recent_first() -> None:
+    # The board carries a published-comments feed: every posted comment in the day
+    # window, most-recent first (so the UI can show all N, not just the last one).
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await _post_comment("@chan", 1, campaign.campaign_id, "acc-1", text="first")
+    await _post_comment("@chan", 2, campaign.campaign_id, "acc-1", text="second")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert [c.comment_text for c in board.comments] == ["second", "first"]
+
+
+@pytest.mark.asyncio
+async def test_board_comment_feed_capped_to_config_limit(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # The feed is capped by config so a busy campaign can't unbound the payload;
+    # the newest ones survive the cap.
+    monkeypatch.setattr(settings.neurocomment, "board_comment_feed_limit", 2)
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    for post_id in (1, 2, 3):
+        await _post_comment("@chan", post_id, campaign.campaign_id, "acc-1", text=str(post_id))
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert [c.comment_text for c in board.comments] == ["3", "2"]
 
 
 @pytest.mark.asyncio

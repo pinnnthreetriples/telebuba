@@ -36,6 +36,7 @@ import { ConfirmModal } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 import { ActivityLogCard } from './ActivityLogCard';
+import { CommentFeedCard } from './CommentFeedCard';
 import { CampaignsCard } from './CampaignsCard';
 import { CaptchaSolverCard } from './CaptchaSolverCard';
 import { HowItWorksCard } from './HowItWorksCard';
@@ -358,6 +359,10 @@ export function NeurocommentPage() {
                 setShowAccounts(true);
               }}
             />
+          ) : null}
+
+          {board.data ? (
+            <CommentFeedCard comments={board.data.comments ?? []} accounts={boardAccounts} />
           ) : null}
 
           <ActivityLogCard logLines={logLines} />
