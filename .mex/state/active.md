@@ -178,6 +178,24 @@ Once onboarding finishes the flag flips and the real per-channel statuses render
 Gates: neuro runtime+api 76 pytest green, ruff+ty clean; frontend tsc+eslint+
 vitest green, API client drift-free (only the `onboarding` field).
 
+A 2026-07-11 log-informativeness pass (PR open): the neurocomment activity log
+now reads by meaning, not just level. Frontend `logSeverity` (shared/lib) recolours
+by event code — attempted-but-failed (`*_failed`/`_exhausted`/`_dropped`) is red
+even when logged INFO, deliberate skips/pauses (`_skipped`/`no_account`/`_cooldown`)
+amber, successes green; the "Errors" stat reuses it. `ActivityLogCard` lines gained
+the channel + a translated reason (`logEventReason.*`) and a hover hint
+(`logEventHint.*`, "why + fix"). Backend now records *why*: `_select_account`
+returns `_Selection(account_id, reason)` (quota/cooldown/not_ready/unhealthy/
+no_accounts_linked via the single `_account_block_reason` gate ladder that
+`_is_eligible` now delegates to), and `_generate_acceptable` returns
+`_GenOutcome(text, reason)` (gemini_error/gemini_rate_limited/gemini_empty/too_long/
+not_acceptable/duplicate) — both surfaced in the `no_account_available` /
+`generation_exhausted` log `extra`. Settings label clarified «Комментариев в час
+(на аккаунт)». Diagnosis behind it: one account served 9+ channels → 113/258 recent
+events were `no_account_available` (capacity, not a bug). Gates: full 1168 pytest
+green (strict profile), ruff+ty+aislop clean; frontend 244 vitest + tsc+eslint+
+steiger green; no API-client change (extra-only).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

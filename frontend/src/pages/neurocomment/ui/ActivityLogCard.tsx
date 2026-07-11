@@ -1,15 +1,40 @@
+import type { TFunction } from 'i18next';
 import { useTranslation } from 'react-i18next';
 
 import type { LogEntry } from '@/shared/api';
-import { eventLabel, formatLocalTime } from '@/shared/lib';
+import { eventLabel, formatLocalTime, logSeverity } from '@/shared/lib';
 import { CollapsibleCard } from '@/shared/ui';
 
-// Activity-feed line colour by the real log row's status.
+// Activity-feed line colour by the event's display severity (see `logSeverity`).
 const NEURO_LOG_COLOR: Record<'success' | 'warning' | 'error', string> = {
   success: '#7be0a6',
   warning: '#ffd27f',
   error: '#e5736b',
 };
+
+function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
+  const value = extra?.[key];
+  return typeof value === 'string' ? value : undefined;
+}
+
+// One terminal line: time · channel · event · reason, with a hover hint (why + fix).
+function LogLine({ line, t }: { line: LogEntry; t: TFunction }) {
+  const channel = extraStr(line.extra, 'channel');
+  // Most negative outcomes carry a `reason`; a failed post carries the Telegram `status`.
+  const reasonCode = extraStr(line.extra, 'reason') ?? extraStr(line.extra, 'status');
+  const detail = reasonCode ? t(`logEventReason.${reasonCode}`, { defaultValue: '' }) : '';
+  const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
+  return (
+    <div className="flex gap-[10px]" title={hint || undefined}>
+      <span className="shrink-0 text-[#5c5c66]">
+        {formatLocalTime(line.created_at, { seconds: true })}
+      </span>
+      {channel ? <span className="shrink-0 text-[#6ea8fe]">{channel}</span> : null}
+      <span style={{ color: NEURO_LOG_COLOR[logSeverity(line)] }}>{eventLabel(t, line.event)}</span>
+      {detail ? <span className="truncate text-[#7a7a85]">· {detail}</span> : null}
+    </div>
+  );
+}
 
 // The neurocomment activity terminal — the tail of the live log stream.
 export function ActivityLogCard({ logLines }: { logLines: LogEntry[] }) {
@@ -34,16 +59,7 @@ export function ActivityLogCard({ logLines }: { logLines: LogEntry[] }) {
         {logLines.length === 0 ? (
           <div className="text-[#5c5c66]">{t('neurocomment.log.empty')}</div>
         ) : (
-          logLines.map((line) => (
-            <div key={line.id} className="flex gap-[10px]">
-              <span className="shrink-0 text-[#5c5c66]">
-                {formatLocalTime(line.created_at, { seconds: true })}
-              </span>
-              <span style={{ color: NEURO_LOG_COLOR[line.status] }}>
-                {eventLabel(t, line.event)}
-              </span>
-            </div>
-          ))
+          logLines.map((line) => <LogLine key={line.id} line={line} t={t} />)
         )}
       </div>
     </CollapsibleCard>

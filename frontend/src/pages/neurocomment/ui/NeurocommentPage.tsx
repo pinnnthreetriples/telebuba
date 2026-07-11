@@ -31,7 +31,7 @@ import {
 import { logsQueryOptions } from '@/entities/log';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
-import { useLogEventStream, useTransientFeedback } from '@/shared/lib';
+import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
 import { ConfirmModal } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
@@ -233,8 +233,9 @@ export function NeurocommentPage() {
       })),
   ];
 
-  // Errors stat: error-level rows in today's loaded neuro activity log.
-  const errorCount = logLines.filter((line) => line.status === 'error').length;
+  // Errors stat: failure-severity rows in today's loaded neuro activity log
+  // (genuine gen/publish failures — skips and busy-account misses don't count).
+  const errorCount = logLines.filter((line) => logSeverity(line) === 'error').length;
 
   // Idle = graduated ("Прогреты") accounts not yet linked to the selected
   // campaign's board. Only warmed accounts count — a still-warming or un-graduated

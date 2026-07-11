@@ -354,7 +354,7 @@
       "subtitle": "Темп публикации комментариев",
       "cpd": "Комментариев в день на канал",
       "delay": "Задержка ответа (сек)",
-      "parallel": "Комментариев в час",
+      "parallel": "Комментариев в час (на аккаунт)",
       "trust": "Мин. trust-score для работы",
       "delayFrom": "Задержка ответа, от (сек)",
       "delayTo": "Задержка ответа, до (сек)",
@@ -518,6 +518,38 @@
     "tdata_import_completed": "Импорт завершён",
     "tdata_import_failed": "Ошибка импорта",
     "tdata_import_rolled_back": "Импорт отменён"
+  },
+  "logEventReason": {
+    "forward": "репост",
+    "media_no_caption": "медиа без текста",
+    "empty": "пустой пост",
+    "link_only": "только ссылка",
+    "quota": "лимит исчерпан",
+    "cooldown": "аккаунт на паузе",
+    "not_ready": "аккаунт не готов",
+    "unhealthy": "низкий trust / здоровье",
+    "no_accounts_linked": "нет привязанных аккаунтов",
+    "gemini_error": "ошибка Gemini",
+    "gemini_rate_limited": "лимит запросов Gemini",
+    "gemini_empty": "Gemini не дал ответ",
+    "too_long": "слишком длинный",
+    "not_acceptable": "не прошёл фильтр",
+    "duplicate": "дубликат",
+    "failed": "Telegram отклонил",
+    "flood_wait": "флуд-контроль",
+    "slow_mode_wait": "медленный режим",
+    "premium_wait": "нужен Premium",
+    "peer_flood": "флуд-ограничение"
+  },
+  "logEventHint": {
+    "neurocomment_no_account_available": "Все аккаунты заняты, на паузе или выбрали лимит. Добавьте аккаунтов или поднимите «Комментариев в час».",
+    "neurocomment_generation_exhausted": "ИИ не выдал подходящий текст. Проверьте ключ Gemini, промпт кампании и лимит запросов.",
+    "neurocomment_post_skipped": "Пост не подходит для комментария (репост, только медиа/ссылка или пусто).",
+    "neurocomment_post_failed": "Telegram отклонил отправку комментария.",
+    "neurocomment_post_cooldown": "Пауза от Telegram (флуд-контроль) — аккаунт временно не комментирует.",
+    "neurocomment_post_gated": "Нужна капча/разблокировка для отправки в этот канал.",
+    "neurocomment_channel_cooled": "Канал на паузе после ошибок или массовых удалений.",
+    "neurocomment_no_campaign": "Для этого канала нет активной кампании."
   },
   "logEventTelegram": {
     "action": {
