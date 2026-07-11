@@ -2,6 +2,7 @@ export {
   assignCampaignAccountMutation,
   campaignChallengesQueryOptions,
   campaignsQueryOptions,
+  checkCampaignChannelBansMutation,
   clearNeurocommentListenerMutation,
   createCampaignMutation,
   deleteCampaignMutation,

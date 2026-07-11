@@ -26,6 +26,9 @@ import type {
   CheckAccountData,
   CheckAccountErrors,
   CheckAccountResponses,
+  CheckCampaignChannelBansData,
+  CheckCampaignChannelBansErrors,
+  CheckCampaignChannelBansResponses,
   CheckProxyData,
   CheckProxyErrors,
   CheckProxyResponses,
@@ -944,6 +947,20 @@ export const getNeurocommentBoard = <ThrowOnError extends boolean = false>(
     GetNeurocommentBoardErrors,
     ThrowOnError
   >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/board', ...options });
+
+/**
+ * Check Channel Bans
+ *
+ * Live-probe each campaign channel for account bans (the "Проверить каналы" button).
+ */
+export const checkCampaignChannelBans = <ThrowOnError extends boolean = false>(
+  options: Options<CheckCampaignChannelBansData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    CheckCampaignChannelBansResponses,
+    CheckCampaignChannelBansErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/channel-bans', ...options });
 
 /**
  * List Comments

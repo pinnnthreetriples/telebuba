@@ -27,6 +27,8 @@ from core.telegram_client import (
     execute_read_many,
 )
 from schemas.telegram_actions import (
+    BanCheckResult,
+    CheckBannedInChannel,
     CheckMessagesAlive,
     CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
@@ -603,6 +605,120 @@ async def test_check_messages_alive_unresolved_group_reports_nothing(
 
     assert isinstance(result, CheckMessagesAliveResult)
     assert result.missing_ids == []
+
+
+def _ban_client(participant: object | None, *, linked: int | None = 999) -> object:
+    """A FakeClient answering GetFullChannel then GetParticipant for the ban probe.
+
+    ``participant`` None → raise UserNotParticipantError; otherwise return it
+    wrapped as ``.participant``. ``linked`` None → channel has no linked group.
+    """
+    from telethon.tl.functions.channels import (  # noqa: PLC0415
+        GetFullChannelRequest,
+        GetParticipantRequest,
+    )
+
+    group = MagicMock(id=999)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, GetFullChannelRequest):
+                chats = [group] if linked is not None else []
+                return MagicMock(full_chat=MagicMock(linked_chat_id=linked), chats=chats)
+            assert isinstance(request, GetParticipantRequest)
+            if participant is None:
+                raise errors.UserNotParticipantError(request=None)
+            return MagicMock(participant=participant)
+
+    return FakeClient()
+
+
+@pytest.mark.asyncio
+async def test_check_banned_muted_participant_is_restricted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ChannelParticipantBanned with send_messages restricted → restricted."""
+    from telethon.tl.types import (  # noqa: PLC0415
+        ChannelParticipantBanned,
+        ChatBannedRights,
+        PeerUser,
+    )
+
+    banned = ChannelParticipantBanned(
+        peer=PeerUser(1),
+        kicked_by=2,
+        date=datetime.now(UTC),
+        banned_rights=ChatBannedRights(until_date=0, send_messages=True),  # ty: ignore[invalid-argument-type]
+    )
+    _patch_client(monkeypatch, _ban_client(banned))
+
+    result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
+
+    assert isinstance(result, BanCheckResult)
+    assert result.state == "restricted"
+
+
+@pytest.mark.asyncio
+async def test_check_banned_kicked_participant_is_not_member(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """view_messages restricted = kicked out entirely → not_member."""
+    from telethon.tl.types import (  # noqa: PLC0415
+        ChannelParticipantBanned,
+        ChatBannedRights,
+        PeerUser,
+    )
+
+    kicked = ChannelParticipantBanned(
+        peer=PeerUser(1),
+        kicked_by=2,
+        date=datetime.now(UTC),
+        banned_rights=ChatBannedRights(until_date=0, view_messages=True),  # ty: ignore[invalid-argument-type]
+    )
+    _patch_client(monkeypatch, _ban_client(kicked))
+
+    result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
+
+    assert isinstance(result, BanCheckResult)
+    assert result.state == "not_member"
+
+
+@pytest.mark.asyncio
+async def test_check_banned_normal_participant_can_send(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Any non-banned participant type → can_send."""
+    _patch_client(monkeypatch, _ban_client(MagicMock()))
+
+    result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
+
+    assert isinstance(result, BanCheckResult)
+    assert result.state == "can_send"
+
+
+@pytest.mark.asyncio
+async def test_check_banned_not_participant_is_not_member(monkeypatch: pytest.MonkeyPatch) -> None:
+    """UserNotParticipantError (kicked / never joined) → not_member."""
+    _patch_client(monkeypatch, _ban_client(None))
+
+    result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
+
+    assert isinstance(result, BanCheckResult)
+    assert result.state == "not_member"
+
+
+@pytest.mark.asyncio
+async def test_check_banned_no_linked_group_is_comments_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No linked discussion group / comments off → can't check → comments_disabled."""
+    _patch_client(monkeypatch, _ban_client(MagicMock(), linked=None))
+
+    result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
+
+    assert isinstance(result, BanCheckResult)
+    assert result.state == "comments_disabled"
 
 
 @pytest.mark.asyncio

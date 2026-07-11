@@ -12,6 +12,14 @@ const STATUS_COLOR = {
   archived: '#74726e',
 } as const;
 
+// Channel-chip tone driven by the live "Проверить каналы" verdict: banned = red
+// (persists), ok = green (5s flash), default = the neutral gray pill.
+const CHANNEL_CHIP = {
+  banned: 'border-danger bg-[#fdecea] text-danger',
+  ok: 'border-[#2e9e64] bg-[#e9f7ef] text-[#2e9e64]',
+  default: 'border-line bg-[#f4f3f0] text-[#3a3a3a]',
+} as const;
+
 // The campaigns card: per-campaign run/pause/edit/delete (SurfHover-revealed),
 // the create button, and the selected campaign's channel editor.
 export function CampaignsCard({
@@ -34,6 +42,9 @@ export function CampaignsCard({
   onChannelInput,
   onAddChannel,
   onRemoveChannel,
+  onCheckChannels,
+  checkingChannels,
+  channelCheckStatus,
 }: {
   campaignList: NeurocommentCampaign[];
   campaignId: string | null;
@@ -54,6 +65,9 @@ export function CampaignsCard({
   onChannelInput: (value: string) => void;
   onAddChannel: () => void;
   onRemoveChannel: (channel: string) => void;
+  onCheckChannels: () => void;
+  checkingChannels: boolean;
+  channelCheckStatus: Record<string, 'banned' | 'ok'>;
 }) {
   const { t } = useTranslation();
   return (
@@ -232,16 +246,26 @@ export function CampaignsCard({
             <span className="text-[12.5px] font-semibold">{t('neurocomment.channels.title')}</span>
           }
         >
-          {activeCampaign ? (
-            <div className="mb-[10px] truncate text-[11.5px] font-medium text-primary">
-              {activeCampaign.name}
-            </div>
-          ) : null}
+          <div className="mb-[10px] flex items-center justify-between gap-2">
+            <span className="min-w-0 truncate text-[11.5px] font-medium text-primary">
+              {activeCampaign?.name ?? ''}
+            </span>
+            <button
+              type="button"
+              disabled={campaignId === null || checkingChannels}
+              onClick={onCheckChannels}
+              className="shrink-0 rounded-full border border-line-input bg-white px-[11px] py-[4px] text-[11.5px] font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+            >
+              {checkingChannels
+                ? t('neurocomment.channels.checking')
+                : t('neurocomment.channels.check')}
+            </button>
+          </div>
           <div className="flex flex-wrap gap-[7px]">
             {boardChannels.map((channel) => (
               <span
                 key={channel.channel}
-                className="inline-flex items-center gap-[6px] rounded-full border border-line bg-[#f4f3f0] px-[11px] py-[5px] text-[12px] text-[#3a3a3a]"
+                className={`inline-flex items-center gap-[6px] rounded-full border px-[11px] py-[5px] text-[12px] transition-colors ${CHANNEL_CHIP[channelCheckStatus[channel.channel] ?? 'default']}`}
               >
                 <FeedbackMark result={channelFeedback[channel.channel]} />
                 {channel.channel}

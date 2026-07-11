@@ -2,6 +2,7 @@
 // only via shared/api).
 export {
   assignCampaignAccountMutation,
+  checkCampaignChannelBansMutation,
   clearNeurocommentListenerMutation,
   createCampaignMutation,
   deleteCampaignMutation,

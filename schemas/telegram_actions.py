@@ -211,6 +211,19 @@ class CheckMessagesAlive(BaseModel):
     message_ids: list[int]
 
 
+class CheckBannedInChannel(BaseModel):
+    """Read-only: is this account banned / write-forbidden in ``channel``?
+
+    Comments are posted into the channel's linked discussion group, so the ban
+    lives there, not on the broadcast channel. The gateway resolves that group
+    (like ``CheckMessagesAlive``) and probes the account's own participant state
+    via ``GetParticipantRequest`` — a pure read, no message is sent.
+    """
+
+    action_type: Literal["check_banned_in_channel"] = "check_banned_in_channel"
+    channel: str = Field(min_length=1)
+
+
 class GetUserProfile(BaseModel):
     """Read-only: pull the signed-in user's own current profile state."""
 
@@ -320,6 +333,7 @@ TelegramAction = Annotated[
 TelegramReadAction = Annotated[
     GetLinkedDiscussionGroup
     | CheckMessagesAlive
+    | CheckBannedInChannel
     | GetUserProfile
     | ListPinnedStories
     | ListActiveStories
@@ -345,6 +359,17 @@ class CheckMessagesAliveResult(BaseModel):
     """Gateway output for ``CheckMessagesAlive`` — the ids that no longer exist."""
 
     missing_ids: list[int]
+
+
+class BanCheckResult(BaseModel):
+    """Gateway output for ``CheckBannedInChannel`` — the account's participant state.
+
+    ``can_send`` = a member able to comment; ``restricted`` = banned from sending;
+    ``not_member`` = kicked / no longer a participant; ``comments_disabled`` = the
+    channel has no linked discussion group / comments off (can't be checked).
+    """
+
+    state: Literal["can_send", "restricted", "not_member", "comments_disabled"]
 
 
 class BotChallengeWaitResult(BaseModel):

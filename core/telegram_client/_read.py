@@ -16,10 +16,11 @@ import asyncio
 from typing import TYPE_CHECKING, cast
 
 from telethon import errors
-from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantRequest
 from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
+    ChannelParticipantBanned,
     DocumentAttributeAudio,
     InputUserSelf,
 )
@@ -34,6 +35,8 @@ from core.telegram_client._read_stories import (
     dispatch_list_pinned_stories,
 )
 from schemas.telegram_actions import (
+    BanCheckResult,
+    CheckBannedInChannel,
     CheckMessagesAlive,
     CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
@@ -141,6 +144,8 @@ async def _dispatch_read_action(  # noqa: PLR0911 - one return per read-action c
             return await _dispatch_get_linked_group(client, action)
         case CheckMessagesAlive():
             return await _dispatch_check_messages_alive(client, action)
+        case CheckBannedInChannel():
+            return await _dispatch_check_banned(client, action)
         case WaitForBotChallenge():
             return await dispatch_wait_for_bot_challenge(client, action)
         case GetUserProfile():
@@ -210,6 +215,53 @@ async def _dispatch_check_messages_alive(
         mid for mid, message in zip(action.message_ids, messages, strict=True) if message is None
     ]
     return CheckMessagesAliveResult(missing_ids=missing)
+
+
+def _classify_participant(participant: object) -> BanCheckResult:
+    """Map a resolved participant object to a ban-check state.
+
+    ``ChannelParticipantBanned`` with ``view_messages`` restricted = kicked out
+    (treated as ``not_member``); with only ``send_messages`` restricted = muted
+    (``restricted``). Any other participant type is a normal/admin member able to
+    comment (``can_send``).
+    """
+    if isinstance(participant, ChannelParticipantBanned):
+        rights = getattr(participant, "banned_rights", None)
+        if getattr(rights, "view_messages", False):
+            return BanCheckResult(state="not_member")
+        if getattr(rights, "send_messages", False):
+            return BanCheckResult(state="restricted")
+    return BanCheckResult(state="can_send")
+
+
+async def _dispatch_check_banned(
+    client: TelegramClient,
+    action: CheckBannedInChannel,
+) -> BanCheckResult:
+    """Probe whether the account is banned/write-forbidden in ``channel``.
+
+    Resolve the linked discussion group like ``_dispatch_check_messages_alive``
+    (the ban lives in the group, not the broadcast channel), then read the
+    account's own participant state via ``GetParticipantRequest`` — a pure read,
+    no message is sent. Not a participant → kicked/never-joined (``not_member``);
+    no linked group / comments off → ``comments_disabled``.
+    """
+    full = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+    linked = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
+    if linked is None:
+        return BanCheckResult(state="comments_disabled")
+    linked_id = int(linked)
+    entity = next(
+        (chat for chat in getattr(full, "chats", []) if int(getattr(chat, "id", 0)) == linked_id),
+        None,
+    )
+    if entity is None:
+        return BanCheckResult(state="comments_disabled")
+    try:
+        result = await client(GetParticipantRequest(channel=entity, participant=InputUserSelf()))  # ty: ignore[invalid-argument-type]
+    except errors.UserNotParticipantError:
+        return BanCheckResult(state="not_member")
+    return _classify_participant(getattr(result, "participant", None))
 
 
 def _optional_str(value: object) -> str | None:

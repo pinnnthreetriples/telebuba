@@ -900,3 +900,61 @@ test('the SSE callback invalidates only this page keys, not the whole cache', as
     spy.mock.calls.every(([arg]) => typeof arg === 'object' && arg !== null && 'predicate' in arg),
   ).toBe(true);
 });
+
+test('checking channels colours banned chips red and healthy chips green', async () => {
+  const board2 = {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+      { channel: '@promo', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname.endsWith('/channel-bans') && request.method === 'POST') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            { channel: '@news', status: 'banned' },
+            { channel: '@promo', status: 'ok' },
+          ],
+        }),
+      );
+    }
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(board2));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+
+  const chip = (channel: string): HTMLElement | null =>
+    screen
+      .getAllByLabelText('Убрать канал')
+      .map((btn) => btn.closest('span'))
+      .find((span) => span?.textContent?.includes(channel)) ?? null;
+
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Проверить каналы')).toBeInTheDocument();
+  });
+  await waitFor(() => {
+    expect(chip('@news')).not.toBeNull();
+  });
+
+  await userEvent.click(screen.getByText('Проверить каналы'));
+
+  await waitFor(() => {
+    expect(chip('@news')?.className).toContain('text-danger');
+  });
+  expect(chip('@promo')?.className).toContain('text-[#2e9e64]');
+});

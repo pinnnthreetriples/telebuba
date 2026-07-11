@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { accountsQueryOptions } from '@/entities/account';
@@ -9,6 +9,7 @@ import {
   CampaignDeleteModal,
   CampaignPromptModal,
   campaignsQueryOptions,
+  checkCampaignChannelBansMutation,
   clearNeurocommentListenerMutation,
   createCampaignMutation,
   CreateCampaignModal,
@@ -32,7 +33,7 @@ import { clearLogsMutation, logsQueryOptions } from '@/entities/log';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
-import { ConfirmModal } from '@/shared/ui';
+import { ConfirmModal, toastError } from '@/shared/ui';
 import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 import { ActivityLogCard } from './ActivityLogCard';
@@ -109,6 +110,10 @@ export function NeurocommentPage() {
   const [confirmClearLogs, setConfirmClearLogs] = useState(false);
   const channelFeedback = useTransientFeedback();
   const accountFeedback = useTransientFeedback();
+  // "Проверить каналы" verdicts: banned channels stay red until the next check;
+  // healthy ones flash green for 5s then revert (auto-clearing transient feedback).
+  const [bannedChannels, setBannedChannels] = useState<string[]>([]);
+  const okCheck = useTransientFeedback(5000);
 
   // Modal open state.
   const [showAccounts, setShowAccounts] = useState(false);
@@ -187,6 +192,7 @@ export function NeurocommentPage() {
   const setAccountChannel = useMutation(setCampaignAccountChannelMutation());
   const updatePrompt = useMutation(updateCampaignPromptMutation());
   const clearLogs = useMutation(clearLogsMutation());
+  const checkBans = useMutation(checkCampaignChannelBansMutation());
 
   const accountOptions = accounts.data?.items ?? [];
   const warmingIds = new Set((warmingBoard.data?.warming ?? []).map((a) => a.account_id));
@@ -339,6 +345,37 @@ export function NeurocommentPage() {
     );
   };
 
+  // Stale red from another campaign must not linger after switching.
+  useEffect(() => {
+    setBannedChannels([]);
+  }, [campaignId]);
+
+  const checkChannels = () => {
+    if (campaignId === null) return;
+    checkBans.mutate(
+      { path: { campaign_id: campaignId } },
+      {
+        onSuccess: (data) => {
+          const items = data.items ?? [];
+          setBannedChannels(
+            items.filter((item) => item.status === 'banned').map((item) => item.channel),
+          );
+          for (const item of items) {
+            if (item.status === 'ok') okCheck.mark(item.channel, true);
+          }
+        },
+        onError: () => {
+          toastError(t('neurocomment.channels.checkFailed'));
+        },
+      },
+    );
+  };
+
+  // Per-chip colour: banned (persistent red) merged with the transient green marks.
+  const channelCheckStatus: Record<string, 'banned' | 'ok'> = {};
+  for (const channel of bannedChannels) channelCheckStatus[channel] = 'banned';
+  for (const channel of Object.keys(okCheck.feedback)) channelCheckStatus[channel] = 'ok';
+
   return (
     <div className="tb-fadeup">
       <h1 className="m-0 mb-[18px] text-[22px] font-bold tracking-[-0.02em]">
@@ -483,6 +520,9 @@ export function NeurocommentPage() {
             onChannelInput={setChannelInput}
             onAddChannel={addChannel}
             onRemoveChannel={setChannelToRemove}
+            onCheckChannels={checkChannels}
+            checkingChannels={checkBans.isPending}
+            channelCheckStatus={channelCheckStatus}
           />
 
           <HowItWorksCard />
