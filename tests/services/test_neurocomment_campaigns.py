@@ -187,6 +187,31 @@ async def test_assign_and_remove_account() -> None:
 
 
 @pytest.mark.asyncio
+async def test_assign_account_reconciles_running_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Assigning an account re-points a running listener (which onboards it); removal doesn't.
+
+    The NOXX failure: the account was assigned last, after every channel link, and
+    nothing re-triggered onboarding — the campaign sat with zero readiness rows.
+    """
+    calls: list[str] = []
+
+    async def _reconcile() -> None:
+        calls.append("reconcile")
+
+    monkeypatch.setattr(campaigns._runtime, "reconcile_if_running", _reconcile)
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
+
+    await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    assert calls == ["reconcile"]
+
+    await campaigns.remove_account_from_campaign(campaign.campaign_id, "acc-1")
+    assert calls == ["reconcile"]  # unassign stays trigger-free (no onboarding needed)
+
+
+@pytest.mark.asyncio
 async def test_list_campaign_challenges_merges_failed_across_channels() -> None:
     campaign = await campaigns.create_campaign(CampaignCreate(name="C", prompt="p"))
     await campaigns.link_channel(campaign.campaign_id, "@a")

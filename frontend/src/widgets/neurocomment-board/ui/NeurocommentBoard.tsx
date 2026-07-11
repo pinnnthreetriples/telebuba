@@ -13,25 +13,31 @@ interface BoardRow {
   account: string;
   channel: string;
   text: string;
-  status: NeurocommentChannelRow['status'];
+  // 'no_data' is frontend-only: no readiness rows yet (onboarding not run), so
+  // there is no channel status to look up — distinct from the real backend
+  // 'comments_off' state.
+  status: NeurocommentChannelRow['status'] | 'no_data';
 }
 
-// One work row per account, joined on the account's OWN channel: its first
-// joined channel from the readiness list (a real link, not an arbitrary pairing)
-// with that channel's real aggregate status. The comment cell shows the account's
-// real last comment text (falling back to a generic "posted" hint, then an em
-// dash when it has never commented).
+// One work row per account, joined on the account's OWN channel: its pinned
+// channel when set, else its first joined channel from the readiness list (a
+// real link, not an arbitrary pairing) with that channel's real aggregate
+// status. The comment cell shows the account's real last comment text (falling
+// back to a generic "posted" hint, then an em dash when it has never commented).
 function deriveRows(board: NeurocommentBoardData, placeholder: string): BoardRow[] {
   const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
-    const primary = readiness.find((r) => r.joined) ?? readiness[0];
+    const primary =
+      readiness.find((r) => r.channel === account.pinned_channel) ??
+      readiness.find((r) => r.joined) ??
+      readiness[0];
     const channel = primary?.channel ?? '—';
     return {
       account: account.label,
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
-      status: channelStatus.get(channel) ?? 'comments_off',
+      status: channelStatus.get(channel) ?? 'no_data',
     };
   });
 }

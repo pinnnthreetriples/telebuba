@@ -263,6 +263,51 @@ async def test_reconcile_join_failure_does_not_block_subscribe(
 
 
 @pytest.mark.asyncio
+async def test_reconcile_joins_each_channel_once_per_process(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Repeated reconciles (one per channel link) must not re-join joined channels.
+
+    Ten rapid channel links used to re-run the full join sweep each time — dozens
+    of JoinChannel RPCs in seconds, a real Telegram flood risk on the listener.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    exec_spy = _ExecuteSpy()
+    _patch_execute(monkeypatch, exec_spy)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    # One join per channel across both reconciles, not per call.
+    assert len(exec_spy.joined) == 2
+    assert {ch for _aid, ch in exec_spy.joined} == {"@a", "@b"}
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_reconcile_retries_failed_join_on_next_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only an ok join is cached — a failed join is retried on the next reconcile."""
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    exec_spy = _ExecuteSpy(ok=False)
+    _patch_execute(monkeypatch, exec_spy)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")  # join fails → not cached
+    exec_spy.ok = True
+    await _runtime.reconcile_neurocomment_runtime("listener-1")  # retried → ok → cached
+    await _runtime.reconcile_neurocomment_runtime("listener-1")  # cached → skipped
+
+    assert exec_spy.joined == [("listener-1", "@a"), ("listener-1", "@a")]
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
 async def test_on_post_spawns_task_and_returns_without_blocking(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -560,7 +605,11 @@ async def test_start_passes_on_progress_through_to_onboard(
 async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Two rapid Starts must not run onboarding twice concurrently (#4)."""
+    """Two rapid Starts must not run onboarding twice concurrently (#4).
+
+    The second Start reuses the in-flight task and queues one coalesced rerun,
+    so its trigger is deferred — never a concurrent duplicate.
+    """
     await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     _patch_engine(monkeypatch, _ReconcileSpy())
     release = asyncio.Event()
@@ -569,7 +618,8 @@ async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
     async def slow_onboard(_campaign_id: str, **_kwargs: object) -> object:
         nonlocal runs
         runs += 1
-        await release.wait()
+        if runs == 1:
+            await release.wait()
         return None
 
     monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
@@ -580,10 +630,42 @@ async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
     # Second Start while the first onboarding is still in flight reuses it.
     await _runtime.start_neurocomment("listener-1")
     assert _runtime._ONBOARD_TASK is first_task
+    assert runs == 1  # never ran concurrently; the second trigger only queued a rerun
 
     release.set()
     await _drain_onboarding()
-    assert runs == 1  # onboarding ran once, not twice
+    assert runs == 2  # the queued rerun executed after the first pass finished
+
+
+@pytest.mark.asyncio
+async def test_trigger_while_onboarding_in_flight_queues_one_rerun(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A trigger mid-run is not dropped: onboarding reruns once after the pass finishes."""
+    await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    _patch_engine(monkeypatch, _ReconcileSpy())
+    release = asyncio.Event()
+    runs = 0
+
+    async def slow_onboard(_campaign_id: str, **_kwargs: object) -> object:
+        nonlocal runs
+        runs += 1
+        if runs == 1:
+            await release.wait()
+        return None
+
+    monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
+
+    await _runtime.start_neurocomment("listener-1")
+    await asyncio.sleep(0)  # first pass starts + blocks
+    # e.g. a channel link / account assignment lands while onboarding is running:
+    _runtime._ensure_onboarding_running(None)
+    _runtime._ensure_onboarding_running(None)  # coalesces with the first trigger
+    release.set()
+    await _drain_onboarding()
+
+    assert runs == 2  # exactly one rerun, not one per trigger
+    assert _runtime._ONBOARD_RERUN is False
 
 
 @pytest.mark.asyncio
@@ -710,6 +792,75 @@ async def test_reconcile_if_running_gates_on_persisted_listener(
     await set_listener_running(running=True)
     await _runtime.reconcile_if_running()
     assert spy.reconciled == ["listener-1"]
+    await _drain_onboarding()  # reconcile_if_running also spawned onboarding
+
+
+@pytest.mark.asyncio
+async def test_reconcile_if_running_spawns_onboarding_when_running(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A running-runtime reconcile also (re)triggers campaign onboarding (NOXX fix).
+
+    A campaign whose channels/accounts were edited after Start would otherwise
+    never get readiness rows until the operator pressed Start again.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", _ReconcileSpy().reconcile)
+    onboarded: list[str] = []
+
+    async def fake_onboard(campaign_id: str, **_kwargs: object) -> object:
+        onboarded.append(campaign_id)
+        return None
+
+    monkeypatch.setattr(_runtime, "onboard_campaign", fake_onboard)
+
+    # Paused: listener remembered, run flag off → no onboarding task.
+    await set_listener_account_id("listener-1")
+    await _runtime.reconcile_if_running()
+    assert _runtime._ONBOARD_TASK is None
+
+    # Running → onboarding spawned for the active campaign.
+    await set_listener_running(running=True)
+    await _runtime.reconcile_if_running()
+    await _drain_onboarding()
+    assert onboarded == [campaign.campaign_id]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_on_startup_spawns_onboarding_when_resuming(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A boot that resumes the listener also onboards campaigns created since the last Start."""
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", _ReconcileSpy().reconcile)
+    onboarded: list[str] = []
+
+    async def fake_onboard(campaign_id: str, **_kwargs: object) -> object:
+        onboarded.append(campaign_id)
+        return None
+
+    monkeypatch.setattr(_runtime, "onboard_campaign", fake_onboard)
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+
+    await _runtime.reconcile_neurocomment_on_startup()
+    await _drain_onboarding()
+
+    assert onboarded == [campaign.campaign_id]
+
+
+@pytest.mark.asyncio
+async def test_reconcile_on_startup_paused_does_not_spawn_onboarding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A paused listener stays paused on boot: no reconcile, and no onboarding either."""
+    await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    monkeypatch.setattr(_runtime, "reconcile_neurocomment_runtime", _ReconcileSpy().reconcile)
+    await set_listener_account_id("listener-1")  # remembered, run flag off
+
+    await _runtime.reconcile_neurocomment_on_startup()
+
+    assert _runtime._ONBOARD_TASK is None
 
 
 @pytest.mark.asyncio
@@ -724,6 +875,7 @@ async def test_reconcile_on_startup_resumes_persisted_listener(
     await _runtime.reconcile_neurocomment_on_startup()
 
     assert spy.reconciled == ["listener-1"]
+    await _drain_onboarding()  # startup resume also spawned onboarding
 
 
 @pytest.mark.asyncio

@@ -64,6 +64,18 @@ _SWEEP_TASK: asyncio.Task[None] | None = None
 # when no onboarding run is in flight.
 _ONBOARD_TASK: asyncio.Task[None] | None = None
 
+# A trigger that arrives while onboarding is in flight queues exactly one rerun,
+# so a channel/account added mid-run is picked up when the pass finishes instead
+# of waiting for the next mutation. ponytail: one coalescing bool, not a queue.
+_ONBOARD_RERUN = False
+
+# (listener, channel) pairs successfully joined this process, so reconcile does not
+# re-join every channel on every call (10 rapid channel links = dozens of join RPCs
+# before this guard — a real Telegram flood risk). Joins are idempotent, so this is
+# a flood guard, not a correctness cache. ponytail: process-lifetime, never
+# invalidated — a failed join simply retries on the next reconcile.
+_JOINED_CHANNELS: set[tuple[str, str]] = set()
+
 
 async def on_post(event: NewPostEvent) -> None:
     """Listener callback: spawn the pipeline task and return at once (non-blocking).
@@ -112,11 +124,15 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     # The listener account only receives NewMessage updates for channels it has
     # joined, so subscribe (join) it to each one first. Join is idempotent
     # (already-participant → ok); a per-channel failure is logged, not fatal.
-    # ponytail: re-joins on every reconcile (one API call/channel even when already
-    # a member); gate on a membership check if it ever flood-limits.
+    # Gated on ``_JOINED_CHANNELS`` so repeated reconciles (every channel link
+    # re-runs this) cost one join per (account, channel) per process, not per call.
     for channel in channels:
+        if (listener_account_id, channel) in _JOINED_CHANNELS:
+            continue
         result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
-        if result.status != "ok":
+        if result.status == "ok":
+            _JOINED_CHANNELS.add((listener_account_id, channel))
+        else:
             await log_event(
                 "WARNING",
                 "neurocomment_listener_join_failed",
@@ -185,9 +201,14 @@ async def start_neurocomment(
 def _ensure_onboarding_running(
     on_progress: Callable[[OnboardingProgressEvent], None] | None,
 ) -> None:
-    """Spawn the background campaign-onboarding task unless one is already in flight."""
-    global _ONBOARD_TASK  # noqa: PLW0603 - single module-level onboarding-task handle
+    """Spawn the background campaign-onboarding task unless one is already in flight.
+
+    A trigger while a task is in flight queues one coalesced rerun instead of being
+    dropped, so a channel/account added mid-run is still onboarded.
+    """
+    global _ONBOARD_TASK, _ONBOARD_RERUN  # noqa: PLW0603 - single module-level handles
     if _ONBOARD_TASK is not None and not _ONBOARD_TASK.done():
+        _ONBOARD_RERUN = True
         return
     _ONBOARD_TASK = asyncio.create_task(_onboard_active_campaigns(on_progress))
 
@@ -195,21 +216,30 @@ def _ensure_onboarding_running(
 async def _onboard_active_campaigns(
     on_progress: Callable[[OnboardingProgressEvent], None] | None,
 ) -> None:
-    """Onboard every active campaign (background). One campaign's failure is isolated."""
-    for campaign in (await list_campaigns()).campaigns:
-        if campaign.status != "active":
-            continue
-        try:
-            await onboard_campaign(campaign.campaign_id, on_progress=on_progress)
-        except Exception as exc:  # noqa: BLE001 - one campaign must never abort onboarding
-            await log_event(
-                "ERROR",
-                "neurocomment_start_onboard_failed",
-                extra={
-                    "campaign_id": campaign.campaign_id,
-                    "error_type": type(exc).__name__,
-                },
-            )
+    """Onboard every active campaign (background). One campaign's failure is isolated.
+
+    Loops while a rerun was queued mid-pass (``_ensure_onboarding_running`` fired
+    during the run), so triggers arriving mid-run are never lost.
+    """
+    global _ONBOARD_RERUN  # noqa: PLW0603 - single module-level rerun flag
+    while True:
+        for campaign in (await list_campaigns()).campaigns:
+            if campaign.status != "active":
+                continue
+            try:
+                await onboard_campaign(campaign.campaign_id, on_progress=on_progress)
+            except Exception as exc:  # noqa: BLE001 - one campaign must never abort onboarding
+                await log_event(
+                    "ERROR",
+                    "neurocomment_start_onboard_failed",
+                    extra={
+                        "campaign_id": campaign.campaign_id,
+                        "error_type": type(exc).__name__,
+                    },
+                )
+        if not _ONBOARD_RERUN:
+            return
+        _ONBOARD_RERUN = False
 
 
 async def stop_neurocomment() -> None:
@@ -281,13 +311,15 @@ async def reconcile_if_running() -> None:
     Called after a channel link/unlink so the running listener's subscription tracks
     the DB immediately, instead of only at the next start/boot. Gated on
     ``listener_running`` so a *paused* runtime (id remembered, flag off) is not
-    silently resubscribed by a channel edit.
+    silently resubscribed by a channel edit. Also (re)triggers campaign onboarding —
+    a campaign edited after Start would otherwise never get readiness rows.
     """
     if not await get_listener_running():
         return
     listener_account_id = await get_listener_account_id()
     if listener_account_id is not None:
         await reconcile_neurocomment_runtime(listener_account_id)
+        _ensure_onboarding_running(None)
 
 
 async def reconcile_neurocomment_on_startup() -> None:
@@ -307,6 +339,9 @@ async def reconcile_neurocomment_on_startup() -> None:
     listener_account_id = await get_listener_account_id()
     if listener_account_id is not None:
         await reconcile_neurocomment_runtime(listener_account_id)
+        # Resume onboarding too: campaigns created since the last Start would
+        # otherwise boot with a live listener but zero readiness rows.
+        _ensure_onboarding_running(None)
 
 
 async def _reclaim_stale_claims_on_startup() -> None:
@@ -352,7 +387,8 @@ async def _stop_sweep() -> None:
 
 async def _stop_onboarding() -> None:
     """Cancel the background campaign-onboarding task (bounded wait), if in flight."""
-    global _ONBOARD_TASK  # noqa: PLW0603 - single module-level onboarding-task handle
+    global _ONBOARD_TASK, _ONBOARD_RERUN  # noqa: PLW0603 - single module-level handles
+    _ONBOARD_RERUN = False  # shutdown discards any queued rerun
     task = _ONBOARD_TASK
     _ONBOARD_TASK = None
     if task is None or task.done():
@@ -367,8 +403,10 @@ async def _stop_onboarding() -> None:
 
 def reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
-    global _SWEEP_TASK, _ONBOARD_TASK  # noqa: PLW0603 - single module-level task handles
+    global _SWEEP_TASK, _ONBOARD_TASK, _ONBOARD_RERUN  # noqa: PLW0603 - module-level handles
     _TASKS.clear()
+    _JOINED_CHANNELS.clear()
+    _ONBOARD_RERUN = False
     if _SWEEP_TASK is not None:  # pragma: no cover - tests await shutdown, so it's already None
         _SWEEP_TASK.cancel()
         _SWEEP_TASK = None

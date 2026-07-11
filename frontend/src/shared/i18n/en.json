@@ -609,7 +609,8 @@
       "chat_restricted": "Chat restricted",
       "bot_challenge": "Bot challenge",
       "bot_challenge_backoff": "Challenge back-off",
-      "throttled": "Throttled"
+      "throttled": "Throttled",
+      "no_data": "No data yet"
     },
     "idle": {
       "label": "{{count}} idle",

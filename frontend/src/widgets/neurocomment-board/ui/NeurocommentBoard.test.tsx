@@ -50,6 +50,37 @@ test('renders the 4-column work table with channel and dot-pill status', () => {
   expect(screen.getByText('Отличный пост!')).toBeInTheDocument();
 });
 
+test('an account with no readiness rows shows the no-data badge, not comments-off', () => {
+  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={() => undefined} />);
+  // acc-2 has readiness: [] — no channel to look up, so the frontend-only
+  // 'no_data' status renders instead of colliding with the real backend state.
+  expect(screen.getByText('Нет данных')).toBeInTheDocument();
+  expect(screen.queryByText('Комментарии выкл.')).not.toBeInTheDocument();
+});
+
+test('a pinned account shows its pinned channel, not the first joined one', () => {
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [
+      { channel: '@news', status: 'ready', ready_accounts: 1, total_accounts: 1 },
+      { channel: '@second', status: 'throttled', ready_accounts: 0, total_accounts: 1 },
+    ],
+    accounts: [
+      {
+        ...BOARD.accounts![0]!,
+        pinned_channel: '@second',
+        readiness: [
+          { channel: '@news', ready: true, joined: true, captcha_passed: true },
+          { channel: '@second', ready: false, joined: false, captcha_passed: false },
+        ],
+      },
+    ],
+  };
+  render(<NeurocommentBoard board={board} accountsCount={1} onOpenAccounts={() => undefined} />);
+  expect(screen.getByText('@second')).toBeInTheDocument();
+  expect(screen.queryByText('@news')).not.toBeInTheDocument();
+});
+
 test('the gear button opens the accounts modal', async () => {
   const onOpenAccounts = vi.fn();
   render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={onOpenAccounts} />);

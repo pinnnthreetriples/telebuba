@@ -610,7 +610,8 @@
       "chat_restricted": "Чат ограничен",
       "bot_challenge": "Капча бота",
       "bot_challenge_backoff": "Пауза после капчи",
-      "throttled": "Throttle"
+      "throttled": "Throttle",
+      "no_data": "Нет данных"
     },
     "idle": {
       "label": "{{count}} простаивающих",
