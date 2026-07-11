@@ -339,7 +339,8 @@ class NeurocommentSettings(BaseSettings):
     stale_claim_reclaim_seconds: float = Field(default=900.0, gt=0.0)
     # Ф2 deletion-sweep → escalating channel back-off.
     # How often the periodic sweep re-reads recent comments (0 disables the sweep).
-    deletion_sweep_interval_seconds: float = Field(default=1800.0, ge=0.0)
+    # 5 min → near-real-time deletion detection without hammering the read path.
+    deletion_sweep_interval_seconds: float = Field(default=300.0, ge=0.0)
     # How far back the sweep re-checks posted comments for deletion.
     deletion_sweep_lookback_hours: float = Field(default=24.0, ge=0.0)
     # Vanished comments within the window needed to trip a channel's back-off.

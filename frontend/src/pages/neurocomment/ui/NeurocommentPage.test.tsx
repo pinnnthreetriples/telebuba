@@ -571,6 +571,10 @@ test('campaign edit-prompt saves and delete removes the campaign', async () => {
   });
 
   await userEvent.click(screen.getByTitle('Редактировать промт'));
+  // Bug fix: an unpinned account shows the CAMPAIGN scope in the modal, not an
+  // arbitrary first-readiness channel (`@news`). The account subtitle is the only
+  // muted-text 'Promo' on the page.
+  expect(await screen.findByText('Promo', { selector: '.text-ink-muted' })).toBeInTheDocument();
   await userEvent.click(await screen.findByText('Сохранить'));
   await waitFor(() => {
     const saved = vi.mocked(fetch).mock.calls.some(([input]) => {
@@ -825,6 +829,55 @@ test('the neuro log localizes a known event code and falls back for an unknown o
   });
   // Unmapped code renders verbatim.
   expect(screen.getByText('some_unmapped_code')).toBeInTheDocument();
+});
+
+test('the clear-log trash confirms, then DELETEs only the neurocomment logs', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/logs' && request.method === 'GET') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [{ id: 1, created_at: 'now', level: 'INFO', status: 'success', event: 'x' }],
+          next_cursor: null,
+        }),
+      );
+    }
+    if (url.pathname === '/api/v1/logs' && request.method === 'DELETE') {
+      return Promise.resolve(jsonResponse({ deleted: 1 }));
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByLabelText('Очистить лог')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByLabelText('Очистить лог'));
+  const confirm = await screen.findByText('Очистить');
+  const wasDeleted = () =>
+    vi.mocked(fetch).mock.calls.some(([input]) => {
+      const request = input as Request;
+      const url = new URL(request.url);
+      return (
+        request.method === 'DELETE' &&
+        url.pathname === '/api/v1/logs' &&
+        url.searchParams.get('event_prefix') === 'neurocomment'
+      );
+    });
+  expect(wasDeleted()).toBe(false); // not until confirmed
+  await userEvent.click(confirm);
+  await waitFor(() => {
+    expect(wasDeleted()).toBe(true);
+  });
 });
 
 test('the SSE callback invalidates only this page keys, not the whole cache', async () => {

@@ -1150,6 +1150,40 @@ async def test_sweep_trips_backoff_when_deletions_reach_threshold(
 
 
 @pytest.mark.asyncio
+async def test_sweep_marks_deleted_comments_and_logs(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Even below the back-off threshold, vanished comments are stamped + logged once."""
+    monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 5)
+    await _campaign_with_posted_comments("@a", [101, 102, 103])
+
+    async def fake_read(_account_id: str, action: CheckMessagesAlive) -> CheckMessagesAliveResult:
+        return CheckMessagesAliveResult(
+            missing_ids=[mid for mid in action.message_ids if mid == 102]
+        )
+
+    monkeypatch.setattr("services.neurocomment._seams.execute_read", fake_read)
+
+    await _runtime._sweep_once()
+
+    gone = await fetch_comment("@a", 2)  # post_id 2 → comment_msg_id 102
+    live = await fetch_comment("@a", 1)  # post_id 1 → comment_msg_id 101
+    assert gone is not None
+    assert gone.deleted_at is not None
+    assert live is not None
+    assert live.deleted_at is None
+    logs = await list_recent_logs(limit=50)
+    deleted_logs = [entry for entry in logs if entry.event == "neurocomment_comment_deleted"]
+    assert len(deleted_logs) == 1
+    assert deleted_logs[0].extra["count"] == 1
+
+    # Idempotent: a second sweep over the same window neither re-marks nor re-logs.
+    await _runtime._sweep_once()
+    again = [
+        e for e in await list_recent_logs(limit=50) if e.event == "neurocomment_comment_deleted"
+    ]
+    assert len(again) == 1
+
+
+@pytest.mark.asyncio
 async def test_sweep_below_threshold_does_not_trip(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.neurocomment, "channel_backoff_min_deletions", 3)
     await _campaign_with_posted_comments("@a", [101, 102, 103])

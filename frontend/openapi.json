@@ -4126,6 +4126,64 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Delete Logs",
+        "description": "Clear log rows whose event starts with ``event_prefix`` (all rows when empty).",
+        "operationId": "clearLogs",
+        "parameters": [
+          {
+            "name": "event_prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Event Prefix"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPurgeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -5268,6 +5326,17 @@
             "type": "string",
             "minLength": 1,
             "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
           }
         },
         "type": "object",
@@ -5450,6 +5519,21 @@
         ],
         "title": "LogEntry",
         "description": "One row of the ``logs`` SQLite table."
+      },
+      "LogPurgeResult": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "LogPurgeResult",
+        "description": "How many log rows a clear operation removed."
       },
       "LoginRequest": {
         "properties": {
@@ -5765,6 +5849,11 @@
           "total_accounts": {
             "type": "integer",
             "title": "Total Accounts"
+          },
+          "deleted_recent": {
+            "type": "integer",
+            "title": "Deleted Recent",
+            "default": 0
           }
         },
         "type": "object",

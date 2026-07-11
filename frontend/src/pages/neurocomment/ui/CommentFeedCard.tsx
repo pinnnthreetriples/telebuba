@@ -49,21 +49,31 @@ export function CommentFeedCard({
         </div>
       ) : (
         <div className="tb-scroll max-h-[260px] overflow-y-auto">
-          {comments.map((c) => (
-            <div
-              key={`${c.channel}:${String(c.post_id)}`}
-              className="flex items-baseline gap-[10px] border-b border-[#f4f2ef] py-[7px] last:border-b-0 text-[12.5px]"
-            >
-              <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
-              <span className="shrink-0 font-medium">
-                {labelOf.get(c.account_id) ?? c.account_id}
-              </span>
-              <span className="shrink-0 text-primary">{c.channel}</span>
-              <span className="min-w-0 flex-1 truncate text-[#5c5c5c]">
-                {c.comment_text ?? '—'}
-              </span>
-            </div>
-          ))}
+          {comments.map((c) => {
+            const deleted = Boolean(c.deleted_at);
+            return (
+              <div
+                key={`${c.channel}:${String(c.post_id)}`}
+                className="flex items-baseline gap-[10px] border-b border-[#f4f2ef] py-[7px] text-[12.5px] last:border-b-0"
+              >
+                <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
+                <span className="shrink-0 font-medium">
+                  {labelOf.get(c.account_id) ?? c.account_id}
+                </span>
+                <span className="shrink-0 text-primary">{c.channel}</span>
+                <span
+                  className={`min-w-0 flex-1 truncate ${deleted ? 'text-ink-subtle line-through' : 'text-[#5c5c5c]'}`}
+                >
+                  {c.comment_text ?? '—'}
+                </span>
+                {deleted ? (
+                  <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+                    {t('neurocomment.feed.deleted')}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
         </div>
       )}
     </CollapsibleCard>

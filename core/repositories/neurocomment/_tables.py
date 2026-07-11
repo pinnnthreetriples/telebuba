@@ -101,6 +101,9 @@ _neurocomment_comments = Table(
     Column("comment_msg_id", Integer, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
+    # Set (migration #27) when a posted comment is later found deleted from the
+    # channel — NULL = still live. Its status stays 'posted' (it *was* delivered).
+    Column("deleted_at", String, nullable=True),
 )
 # Challenge audit-and-cache table (migration #14): one row per guardian-bot
 # challenge encountered at onboarding. Doubles as the global solved-decision

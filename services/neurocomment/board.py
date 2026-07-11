@@ -62,6 +62,14 @@ class _AccountSignals(NamedTuple):
     pinned_channel: str | None  # channel pin, or None when the account serves all
 
 
+class _ChannelFlags(NamedTuple):
+    """Per-channel signals that travel together into a channel row."""
+
+    challenged: bool
+    backed_off: bool
+    deleted_recent: int  # our comments removed from this channel in the 24h window
+
+
 async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     """Assemble the work-view board for one campaign, or ``None`` if it is gone."""
     campaign = await fetch_campaign(campaign_id)
@@ -104,13 +112,20 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
         for account_id in account_ids
         if account_id in accounts
     ]
+    deleted_by_channel: dict[str, int] = {}
+    for comment in posted:
+        if comment.deleted_at:
+            deleted_by_channel[comment.channel] = deleted_by_channel.get(comment.channel, 0) + 1
     rows = [
         _build_channel_row(
             channel,
             readiness,
             linked.get(channel),
-            challenged=channel in challenged,
-            backed_off=_state.is_channel_in_challenge_backoff(channel, now),
+            _ChannelFlags(
+                challenged=channel in challenged,
+                backed_off=_state.is_channel_in_challenge_backoff(channel, now),
+                deleted_recent=deleted_by_channel.get(channel, 0),
+            ),
         )
         for channel in channels
     ]
@@ -178,19 +193,18 @@ def _build_channel_row(
     channel: str,
     readiness: list[NeurocommentReadiness],
     linked: LinkedDiscussionGroup | None,
-    *,
-    challenged: bool,
-    backed_off: bool,
+    flags: _ChannelFlags,
 ) -> NeurocommentChannelRow:
     rows = [r for r in readiness if r.channel == channel]
     ready_count = sum(1 for r in rows if r.ready)
     return NeurocommentChannelRow(
         channel=channel,
         status=_channel_status(
-            rows, linked, ready_count, challenged=challenged, backed_off=backed_off
+            rows, linked, ready_count, challenged=flags.challenged, backed_off=flags.backed_off
         ),
         ready_accounts=ready_count,
         total_accounts=len(rows),
+        deleted_recent=flags.deleted_recent,
     )
 
 

@@ -8,7 +8,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
 from schemas.api import Page
-from schemas.logs import LogEntry, LogFilter, LogStatusFilter
+from schemas.logs import LogEntry, LogFilter, LogPurgeResult, LogStatusFilter
 from services import logs as logs_service
 
 router = APIRouter(tags=["logs"])
@@ -35,3 +35,9 @@ async def list_logs(
             status_code=http_status.HTTP_400_BAD_REQUEST,
             detail="invalid pagination cursor",
         ) from exc
+
+
+@router.delete("/logs", response_model=LogPurgeResult, operation_id="clearLogs")
+async def delete_logs(event_prefix: str = "") -> LogPurgeResult:
+    """Clear log rows whose event starts with ``event_prefix`` (all rows when empty)."""
+    return await logs_service.clear_logs(event_prefix)

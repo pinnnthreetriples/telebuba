@@ -219,6 +219,46 @@ Once onboarding finishes the flag flips and the real per-channel statuses render
 Gates: neuro runtime+api 76 pytest green, ruff+ty clean; frontend tsc+eslint+
 vitest green, API client drift-free (only the `onboarding` field).
 
+A 2026-07-11 log-informativeness pass (PR open): the neurocomment activity log
+now reads by meaning, not just level. Frontend `logSeverity` (shared/lib) recolours
+by event code — attempted-but-failed (`*_failed`/`_exhausted`/`_dropped`) is red
+even when logged INFO, deliberate skips/pauses (`_skipped`/`no_account`/`_cooldown`)
+amber, successes green; the "Errors" stat reuses it. `ActivityLogCard` lines gained
+the channel + a translated reason (`logEventReason.*`) and a hover hint
+(`logEventHint.*`, "why + fix"). Backend now records *why*: `_select_account`
+returns `_Selection(account_id, reason)` (quota/cooldown/not_ready/unhealthy/
+no_accounts_linked via the single `_account_block_reason` gate ladder that
+`_is_eligible` now delegates to), and `_generate_acceptable` returns
+`_GenOutcome(text, reason)` (gemini_error/gemini_rate_limited/gemini_empty/too_long/
+not_acceptable/duplicate) — both surfaced in the `no_account_available` /
+`generation_exhausted` log `extra`. Settings label clarified «Комментариев в час
+(на аккаунт)». Diagnosis behind it: one account served 9+ channels → 113/258 recent
+events were `no_account_available` (capacity, not a bug).
+
+Same PR, second pass: (1) a **clear-logs** action — `DELETE /api/v1/logs?event_prefix=`
+(`clearLogs` op → `LogPurgeResult`, repo `purge_logs(prefix)`, service `clear_logs`);
+the neuro log card gained a trash button (shown only with rows) → confirm → clears
+`event_prefix=neurocomment` only. (2) Bug fix: the campaign-prompt modal showed an
+account's arbitrary first-readiness channel; it now shows `pinned_channel` or the
+campaign name (unpinned = whole-campaign scope). Gates: full 1171 pytest green
+(strict), ruff+ty+aislop clean; frontend 244+ vitest + tsc+eslint+steiger green;
+API client regenerated (adds `clearLogs`, drift-free).
+
+Same PR, third pass — **deleted-comment tracking** (near-real-time). The deletion
+sweep already computes the vanished comment ids; it now also stamps them: migration
+#27 adds `neurocomment_comments.deleted_at`, `mark_comments_deleted` (new
+`_deletions.py` — `_comments.py` was already 438 lines, grandfathered over the 400
+cap, so the new code lives outside it) marks posted-and-still-live rows idempotently,
+and the sweep logs `neurocomment_comment_deleted` per fresh batch. Sweep interval
+dropped 1800→300s (`.env.example` mirrored; arch test enforces value match).
+Surfacing: feed + history show deleted comments struck-through with a danger badge;
+the board channel cell gets a «N удалено» chip (`NeurocommentChannelRow.deleted_recent`,
+counted in `board.py` via `_ChannelFlags`); `logSeverity` colours `*_deleted` red.
+True-instant `MessageDeleted` gateway handler is a deliberate follow-up (needs live
+group→channel peer-mapping validation — can't smoke-test blind against the untouchable
+live instance). Gates: full 1173 pytest green (strict), ruff+ty+aislop clean; frontend
+249 vitest + tsc+eslint+steiger green; client regenerated (`deleted_at`, `deleted_recent`).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

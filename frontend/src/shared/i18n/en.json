@@ -356,7 +356,7 @@
       "subtitle": "Comment publishing pace",
       "cpd": "Comments per day per channel",
       "delay": "Reply delay (sec)",
-      "parallel": "Comments per hour",
+      "parallel": "Comments per hour (per account)",
       "trust": "Min. trust-score to run",
       "delayFrom": "Reply delay, from (sec)",
       "delayTo": "Reply delay, to (sec)",
@@ -414,6 +414,7 @@
   "logEvent": {
     "neurocomment_posted": "Comment posted",
     "neurocomment_post_failed": "Comment failed",
+    "neurocomment_comment_deleted": "Comment deleted",
     "neurocomment_post_skipped": "Post skipped",
     "neurocomment_post_cooldown": "Cooldown between comments",
     "neurocomment_post_gated": "Comment held by limit",
@@ -522,6 +523,39 @@
     "tdata_import_failed": "Import failed",
     "tdata_import_rolled_back": "Import rolled back"
   },
+  "logEventReason": {
+    "forward": "repost",
+    "media_no_caption": "media without text",
+    "empty": "empty post",
+    "link_only": "link only",
+    "quota": "limit reached",
+    "cooldown": "account paused",
+    "not_ready": "account not ready",
+    "unhealthy": "low trust / health",
+    "no_accounts_linked": "no accounts linked",
+    "gemini_error": "Gemini error",
+    "gemini_rate_limited": "Gemini rate limit",
+    "gemini_empty": "Gemini returned nothing",
+    "too_long": "too long",
+    "not_acceptable": "failed content filter",
+    "duplicate": "duplicate",
+    "failed": "Telegram rejected",
+    "flood_wait": "flood wait",
+    "slow_mode_wait": "slow mode",
+    "premium_wait": "Premium required",
+    "peer_flood": "peer flood"
+  },
+  "logEventHint": {
+    "neurocomment_no_account_available": "All accounts are busy, paused, or maxed out. Add accounts or raise \"Comments per hour\".",
+    "neurocomment_generation_exhausted": "The AI produced no acceptable text. Check the Gemini key, campaign prompt, and rate limit.",
+    "neurocomment_post_skipped": "The post isn't commentable (repost, media/link only, or empty).",
+    "neurocomment_post_failed": "Telegram rejected the comment.",
+    "neurocomment_comment_deleted": "The channel removed our comment — moderation or a ban. Check the channel/account.",
+    "neurocomment_post_cooldown": "Telegram pause (flood control) — the account is briefly not commenting.",
+    "neurocomment_post_gated": "A captcha/unblock is required to post in this channel.",
+    "neurocomment_channel_cooled": "Channel paused after errors or mass deletions.",
+    "neurocomment_no_campaign": "No active campaign for this channel."
+  },
   "logEventTelegram": {
     "action": {
       "join_channel": "Join channel",
@@ -591,12 +625,14 @@
     },
     "log": {
       "title": "Event log",
-      "empty": "No events yet"
+      "empty": "No events yet",
+      "clear": "Clear log"
     },
     "feed": {
       "title": "Published comments",
       "empty": "No published comments yet",
-      "history": "Full history"
+      "history": "Full history",
+      "deleted": "deleted"
     },
     "campaigns": {
       "title": "Campaigns",
@@ -669,6 +705,7 @@
       "onboarding": "Onboarding {{ready}}/{{total}}",
       "commentPlaceholder": "Comment sent",
       "empty": "No work yet",
+      "deleted": "{{count}} deleted",
       "col": {
         "account": "Account",
         "channel": "Channel",
@@ -689,6 +726,11 @@
       "cancel": "Cancel",
       "close": "Close",
       "save": "Save",
+      "clearLogs": {
+        "title": "Clear the event log?",
+        "body": "All neurocomment log entries will be permanently deleted.",
+        "confirm": "Clear"
+      },
       "saved": "Saved",
       "add": "Add",
       "campaignDelete": {

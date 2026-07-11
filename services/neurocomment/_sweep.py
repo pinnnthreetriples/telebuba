@@ -19,6 +19,7 @@ from core.db import (
     fetch_active_campaign_for_channel,
     list_active_watch_channels,
     list_posted_comments_since,
+    mark_comments_deleted,
 )
 from core.logging import log_event
 from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult
@@ -107,6 +108,15 @@ async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datet
         return
     if not isinstance(result, CheckMessagesAliveResult):  # pragma: no cover - typed gateway
         return
+    # Stamp the vanished comments so the feed/history can show which were removed;
+    # log only the freshly-marked ones (idempotent across the overlapping window).
+    newly_deleted = (await mark_comments_deleted(channel, list(result.missing_ids))).comments
+    if newly_deleted:
+        await log_event(
+            "WARNING",
+            "neurocomment_comment_deleted",
+            extra={"channel": channel, "count": len(newly_deleted)},
+        )
     seconds = _state.register_channel_deletions(
         channel,
         now,

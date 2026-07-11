@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NamedTuple
 
 from core.config import settings
 from core.db import (
@@ -40,7 +40,16 @@ from services.neurocomment import _seams, _state
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 
 if TYPE_CHECKING:
+    from schemas.gemini import GeminiResult
     from schemas.neurocomment import NeurocommentCampaign
+
+
+class _GenOutcome(NamedTuple):
+    """A generated comment, or ``None`` with the last attempt's failure reason."""
+
+    text: str | None
+    reason: str | None  # set only when text is None (surfaced in the exhausted log)
+
 
 # Joined the group but writes are forbidden → a captcha/gate we detect and skip
 # (mirrors onboarding's set). Flip readiness so the pair is no longer selected.
@@ -96,14 +105,15 @@ async def _generate_and_post(
     account_id: str,
 ) -> None:
     """Generate + light-check a comment, pause, post, and classify the outcome."""
-    text = await _generate_acceptable(campaign, event.channel, event.text)
+    outcome = await _generate_acceptable(campaign, event.channel, event.text)
+    text = outcome.text
     if text is None:
         await mark_comment_failed(event.channel, event.post_id)
         await log_event(
             "INFO",
             "neurocomment_generation_exhausted",
             account_id=account_id,
-            extra={"channel": event.channel, "post_id": event.post_id},
+            extra={"channel": event.channel, "post_id": event.post_id, "reason": outcome.reason},
         )
         return
 
@@ -126,18 +136,27 @@ async def _generate_and_post(
     await _classify_post(event, account_id, text, result)
 
 
+def _gemini_reason(result: GeminiResult) -> str:
+    """Classify a non-usable Gemini result for the exhausted-generation log."""
+    if result.status == "rate_limited":
+        return "gemini_rate_limited"
+    if result.status == "ok":  # 200 but no text — safety block / empty candidates
+        return "gemini_empty"
+    return "gemini_error"
+
+
 async def _generate_acceptable(
     campaign: NeurocommentCampaign,
     channel: str,
     post_text: str,
-) -> str | None:
-    """Generate a comment passing word-count + filter + exact-hash + semantic dedup, or ``None``.
+) -> _GenOutcome:
+    """Generate a comment passing word-count + filter + exact-hash + semantic dedup.
 
     Tries once plus ``max_retries`` regenerations. The exact-hash reservation is the
     atomic claim; the semantic check (token-set Jaccard vs the channel's recent posted
     comments) is layered after it as a cross-account near-duplicate guard. A
     reserved-but-rejected text is released so a later attempt isn't filtered as its own
-    duplicate.
+    duplicate. On exhaustion the last attempt's failure reason travels back for the log.
     """
     nc = settings.neurocomment
     recent = await _recent_channel_comments(campaign.campaign_id, channel)
@@ -145,17 +164,24 @@ async def _generate_acceptable(
     # Comment generation always uses Gemini; read the operator's key from the DB
     # (falls back to .env) so a UI-set key takes effect without a restart.
     secret = await load_warming_settings()
+    reason: str | None = None
     for _ in range(nc.max_retries + 1):
         request = _build_request(
             campaign.prompt, post_text, api_key=secret.gemini_api_key, model=secret.gemini_model
         )
         generated = await _seams.generate_text(request)
         if generated.status != "ok" or not generated.text:
+            reason = _gemini_reason(generated)
             continue
         candidate = generated.text.strip()
-        if len(candidate.split()) > nc.comment_max_words or not is_acceptable(candidate):
+        if len(candidate.split()) > nc.comment_max_words:
+            reason = "too_long"
+            continue
+        if not is_acceptable(candidate):
+            reason = "not_acceptable"
             continue
         if not await try_reserve_sent(candidate):
+            reason = "duplicate"
             continue
         # In-flight (reserved-but-unposted) comments on this channel, read LIVE here —
         # after the multi-second generate await, not at function entry — so a rival on
@@ -174,11 +200,12 @@ async def _generate_acceptable(
             for prev in (*recent, *inflight)
         ):
             await release_sent_text(candidate)
+            reason = "duplicate"
             continue
         if nc.semantic_dedup_threshold > 0:
             _add_inflight(channel, candidate, now)
-        return candidate
-    return None
+        return _GenOutcome(candidate, None)
+    return _GenOutcome(None, reason)
 
 
 async def _recent_channel_comments(campaign_id: str, channel: str) -> list[str]:
