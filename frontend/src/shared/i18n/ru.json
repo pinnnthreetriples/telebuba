@@ -490,6 +490,7 @@
     "neurocomment_post_dropped_overloaded": "Комментарий отброшен из-за перегрузки",
     "neurocomment_stale_claims_reclaimed": "Зависшие задачи возвращены в очередь",
     "neurocomment_sweep_read_failed": "Не удалось проверить комментарии",
+    "neurocomment_sweep_channel_failed": "Ошибка проверки удалений в канале",
     "neurocomment_listener_warming_skipped": "Слушатель пропущен — аккаунт в прогреве",
     "post_listener_callback_failed": "Ошибка обработки нового поста",
     "post_listener_channel_unresolved": "Не удалось определить канал поста",

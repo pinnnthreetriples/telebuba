@@ -223,6 +223,16 @@ def _deactivate_channel(campaign_id: str, channel: str) -> None:
             )
             .values(active=0),
         )
+        # Clear any pin to this now-inactive channel: a pin to a channel no longer
+        # active would silently exclude the account from selection + onboarding forever.
+        connection.execute(
+            update(_neurocomment_campaign_accounts)
+            .where(
+                (_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
+                & (_neurocomment_campaign_accounts.c.channel == channel),
+            )
+            .values(channel=None),
+        )
 
 
 async def deactivate_channel(campaign_id: str, channel: str) -> None:

@@ -4898,11 +4898,13 @@
         "properties": {
           "name": {
             "type": "string",
+            "maxLength": 128,
             "minLength": 1,
             "title": "Name"
           },
           "prompt": {
             "type": "string",
+            "maxLength": 4000,
             "minLength": 1,
             "title": "Prompt"
           },
@@ -5523,7 +5525,8 @@
               "chat_restricted",
               "bot_challenge",
               "bot_challenge_backoff",
-              "throttled"
+              "throttled",
+              "no_data"
             ],
             "title": "Status"
           },
@@ -6523,6 +6526,7 @@
         "properties": {
           "prompt": {
             "type": "string",
+            "maxLength": 4000,
             "minLength": 1,
             "title": "Prompt"
           }

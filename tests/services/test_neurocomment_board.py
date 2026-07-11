@@ -250,12 +250,29 @@ async def test_channel_status_join_failed_is_distinct_from_join_by_request() -> 
 
 
 @pytest.mark.asyncio
-async def test_channel_status_throttled_when_no_rows() -> None:
-    # No readiness rows at all (no account joined) and comments are enabled →
-    # nothing ready, no specific gate → throttled fallback.
+async def test_channel_status_no_data_when_no_rows() -> None:
+    # No readiness rows at all (onboarding hasn't produced data) and comments are
+    # enabled → no_data, distinct from the throttled catch-all.
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
     await link_channel_to_campaign(campaign.campaign_id, "@chan")
     await upsert_linked_group("@chan", 123, comments_enabled=True)
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "no_data"
+
+
+@pytest.mark.asyncio
+async def test_channel_status_throttled_when_joined_but_not_ready() -> None:
+    # A joined, captcha-passed row that is not ready hits none of the gates → the
+    # throttled catch-all (distinct from the no-rows no_data case).
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await upsert_linked_group("@chan", 123, comments_enabled=True)
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=False)
 
     board = await load_neurocomment_board(campaign.campaign_id)
 

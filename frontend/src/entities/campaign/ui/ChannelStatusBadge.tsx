@@ -2,9 +2,9 @@ import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentChannelRow } from '@/shared/api';
 
-// 'no_data' is frontend-only: an account with no readiness rows yet (see
-// NeurocommentBoard.deriveRows) — never sent by the API.
-type ChannelStatus = NeurocommentChannelRow['status'] | 'no_data';
+// 'no_data' is a channel with no readiness rows yet (onboarding hasn't produced
+// data); the backend now emits it, so it rides in NeurocommentChannelRow['status'].
+type ChannelStatus = NeurocommentChannelRow['status'];
 
 // The design's fully-rounded dot-pill: per-status text/background hex from the
 // status map, with a 5px leading dot tinted to match the text.

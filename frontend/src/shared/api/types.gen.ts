@@ -917,7 +917,8 @@ export type NeurocommentChannelRow = {
     | 'chat_restricted'
     | 'bot_challenge'
     | 'bot_challenge_backoff'
-    | 'throttled';
+    | 'throttled'
+    | 'no_data';
   /**
    * Ready Accounts
    */

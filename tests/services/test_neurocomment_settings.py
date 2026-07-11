@@ -5,10 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from pydantic import ValidationError
 
 from core.config import settings
 from core.db import configure_database
-from schemas.neurocomment import NeurocommentSettingsUpdate
+from schemas.neurocomment import (
+    CampaignCreate,
+    NeurocommentSettingsUpdate,
+    UpdatePromptRequest,
+)
 from services.neurocomment import settings_store
 
 if TYPE_CHECKING:
@@ -67,3 +72,26 @@ async def test_save_overrides_live_config(monkeypatch: pytest.MonkeyPatch) -> No
     monkeypatch.setattr(settings.neurocomment, "max_comments_per_hour", 99)
     reloaded = await settings_store.load_settings()
     assert reloaded.max_comments_per_hour == 2
+
+
+def test_settings_update_rejects_inverted_reply_delay_range() -> None:
+    with pytest.raises(ValidationError):
+        NeurocommentSettingsUpdate(
+            max_comments_per_hour=1,
+            max_comments_per_channel_per_day=0,
+            reply_delay_min_seconds=10.0,
+            reply_delay_max_seconds=1.0,
+            min_trust_score=0,
+        )
+
+
+def test_campaign_create_rejects_over_long_name_and_prompt() -> None:
+    with pytest.raises(ValidationError):
+        CampaignCreate(name="x" * 129, prompt="p")
+    with pytest.raises(ValidationError):
+        CampaignCreate(name="ok", prompt="p" * 4001)
+
+
+def test_update_prompt_rejects_over_long_prompt() -> None:
+    with pytest.raises(ValidationError):
+        UpdatePromptRequest(prompt="p" * 4001)

@@ -339,14 +339,19 @@ async def _resolve_group_for_join(
 ) -> int | None:
     """Resolve+cache the channel's group once; record per-account skips, return its id.
 
-    Uses the first account's session for the read (any member-less read works). A
-    resolve failure records a ``failed`` outcome per account; comments-off records a
+    Tries each account's session in order and uses the first that resolves — a single
+    dead/banned session must not block the healthy accounts behind it. A resolve failure
+    (every account failed) records a ``failed`` outcome per account; comments-off records a
     ``comments_off`` outcome per account. Either way returns ``None`` so the caller
     skips the joins — one bad channel never aborts the campaign.
     """
     if not accounts:
         return None
-    linked = await _safe_resolve(accounts[0], channel)
+    linked = None
+    for account_id in accounts:
+        linked = await _safe_resolve(account_id, channel)
+        if linked is not None:
+            break
     if linked is None:
         if report:
             report(OnboardingProgressEvent(code="channel_resolve_failed", channel=channel))

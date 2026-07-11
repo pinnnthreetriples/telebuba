@@ -66,7 +66,14 @@ async def _sweep_once() -> None:
         for comment in comments:
             buckets[comment.channel].append(comment)
         for channel in channels:
-            await _sweep_channel(channel, buckets.get(channel, []), now)
+            try:
+                await _sweep_channel(channel, buckets.get(channel, []), now)
+            except Exception as exc:  # noqa: BLE001 - one channel must not abort the pass.
+                await log_event(
+                    "WARNING",
+                    "neurocomment_sweep_channel_failed",
+                    extra={"channel": channel, "error_type": type(exc).__name__},
+                )
 
 
 async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datetime) -> None:

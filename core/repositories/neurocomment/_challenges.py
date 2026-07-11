@@ -168,12 +168,17 @@ def _resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> boo
         target_id = connection.execute(latest_pending).scalar()
         if target_id is None:
             return False
-        connection.execute(
+        # The pending-guard makes concurrent resolutions winner-takes-all so the
+        # channel failure counter can't be double-counted.
+        result = connection.execute(
             update(_neurocomment_challenges)
-            .where(_neurocomment_challenges.c.id == target_id)
+            .where(
+                (_neurocomment_challenges.c.id == target_id)
+                & (_neurocomment_challenges.c.outcome == "pending"),
+            )
             .values(outcome=outcome, outcome_at=_now_iso()),
         )
-    return True
+    return result.rowcount > 0
 
 
 async def resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> bool:

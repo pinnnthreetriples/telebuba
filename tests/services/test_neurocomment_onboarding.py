@@ -622,6 +622,82 @@ async def test_campaign_resolve_failure_does_not_abort_rest(
     assert states["@good"] == "ready"  # the later channel still onboarded
 
 
+class _AccountRaisingReadStub:
+    """Read stub that RAISES on resolve for designated accounts (dead/banned session)."""
+
+    def __init__(self, *, raise_for: set[str], linked_chat_id: int = 1) -> None:
+        self.raise_for = raise_for
+        self.result = LinkedDiscussionGroupResult(
+            linked_chat_id=linked_chat_id,
+            comments_enabled=True,
+        )
+        self.calls: list[tuple[str, TelegramReadAction]] = []
+
+    async def execute_read(self, account_id: str, action: TelegramReadAction) -> object:
+        self.calls.append((account_id, action))
+        if isinstance(action, WaitForBotChallenge):
+            return BotChallengeWaitResult(message=None)
+        if account_id in self.raise_for:
+            msg = f"dead session {account_id}"
+            raise RuntimeError(msg)
+        return self.result
+
+
+@pytest.mark.asyncio
+async def test_campaign_resolve_falls_back_to_healthy_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dead first-in-order session must not block the healthy accounts behind it."""
+    for acc in ("dead", "healthy"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "dead")  # first in order
+    await assign_account_to_campaign(campaign.campaign_id, "healthy")
+
+    read = _AccountRaisingReadStub(raise_for={"dead"}, linked_chat_id=77)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    result = await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    states = {o.account_id: o.state for o in result.outcomes}
+    # Resolution fell through the dead session to the healthy one → onboarded, not both-failed.
+    assert states["healthy"] == "ready"
+    assert all(o.reason != "resolve_failed" for o in result.outcomes)
+    cached = await fetch_linked_group("@chan")
+    assert cached is not None
+    assert cached.linked_chat_id == 77
+
+
+@pytest.mark.asyncio
+async def test_campaign_resolve_all_accounts_fail_marks_all_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only when EVERY account fails to resolve is the failed outcome recorded for all."""
+    for acc in ("acc-1", "acc-2"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
+
+    read = _AccountRaisingReadStub(raise_for={"acc-1", "acc-2"})
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    result = await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    states = {o.account_id: o.state for o in result.outcomes}
+    assert states == {"acc-1": "failed", "acc-2": "failed"}
+    assert all(o.reason == "resolve_failed" for o in result.outcomes)
+    assert join.calls == []  # never reached a join
+
+
 @pytest.mark.asyncio
 async def test_campaign_probes_spam_once_per_account(monkeypatch: pytest.MonkeyPatch) -> None:
     for acc in ("acc-1", "acc-2"):
