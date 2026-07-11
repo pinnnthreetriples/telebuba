@@ -19,6 +19,14 @@ from schemas.trust import TrustBand  # noqa: TC001
 # digit-only Telegram user_ids and the session-name stems we actually use.
 _ACCOUNT_ID_PATTERN = r"^[A-Za-z0-9._-]+$"
 
+# Telegram protocol limits for account.updateProfile / account.updateUsername:
+# first/last name ≤ 64 chars, about (bio) ≤ 70 chars; usernames are 5-32 chars,
+# letter-first, [A-Za-z0-9_]. Field contract: "" clears, None leaves unchanged —
+# the optional group in the pattern is what lets "" through as a valid "clear".
+PROFILE_NAME_MAX_LENGTH = 64
+PROFILE_BIO_MAX_LENGTH = 70
+PROFILE_USERNAME_PATTERN = r"^(?:[A-Za-z][A-Za-z0-9_]{4,31})?$"
+
 AccountStatus = Literal[
     "new",
     "alive",
@@ -94,10 +102,10 @@ class AccountCheckRequest(BaseModel):
 
 class AccountProfileUpdateRequest(BaseModel):
     account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
-    first_name: str = Field(min_length=1)
-    last_name: str | None = None
-    username: str | None = None
-    bio: str | None = None
+    first_name: str = Field(min_length=1, max_length=PROFILE_NAME_MAX_LENGTH)
+    last_name: str | None = Field(default=None, max_length=PROFILE_NAME_MAX_LENGTH)
+    username: str | None = Field(default=None, pattern=PROFILE_USERNAME_PATTERN)
+    bio: str | None = Field(default=None, max_length=PROFILE_BIO_MAX_LENGTH)
 
 
 class AccountStats(BaseModel):

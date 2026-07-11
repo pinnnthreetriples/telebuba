@@ -23,6 +23,7 @@ fake an external collaborator monkeypatch it on its owning submodule, e.g.
 from __future__ import annotations
 
 from core.db import list_accounts
+from services.accounts._result import AccountActionError
 from services.accounts._table import (
     InvalidCursorError,
     account_stats,
@@ -60,6 +61,7 @@ from services.accounts.sessions import (
 )
 
 __all__ = [
+    "AccountActionError",
     "InvalidCursorError",
     "PhoneLoginError",
     "SessionAlreadyExistsError",

@@ -88,11 +88,13 @@ async def _flood_action_result(
 
 
 async def _generic_error(account_id: str, action: TelegramAction, exc: Exception) -> ActionResult:
+    # Stable-code wrappers chain the real reason (Pillow error + magic bytes) as __cause__.
+    cause = str(exc.__cause__) if exc.__cause__ is not None else None
     await log_event(
         "ERROR",
         f"telegram_{action.action_type}_failed",
         account_id=account_id,
-        extra={"error_type": type(exc).__name__, "message": str(exc)},
+        extra={"error_type": type(exc).__name__, "message": str(exc), "cause": cause},
     )
     return ActionResult(
         status="failed",
@@ -246,10 +248,11 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
 
 
 async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
+    """Field contract: ``""`` clears, ``None`` leaves unchanged (omitted from TL flags)."""
     await client(
         UpdateProfileRequest(
             first_name=action.first_name,
-            last_name=action.last_name or "",
+            last_name=action.last_name,
             about=action.bio,
         ),
     )

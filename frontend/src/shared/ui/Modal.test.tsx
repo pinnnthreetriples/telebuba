@@ -24,3 +24,34 @@ test('backdrop click closes, card click does not, Escape closes', async () => {
   await userEvent.keyboard('{Escape}');
   expect(onClose).toHaveBeenCalledTimes(2);
 });
+
+test('focuses the dialog on open and restores focus to the opener on close', () => {
+  const opener = document.createElement('button');
+  document.body.appendChild(opener);
+  opener.focus();
+  const { unmount } = render(
+    <Modal onClose={vi.fn()}>
+      <button type="button">внутри</button>
+    </Modal>,
+  );
+  expect(screen.getByRole('dialog')).toHaveFocus();
+  unmount();
+  expect(opener).toHaveFocus();
+  opener.remove();
+});
+
+test('Tab is trapped inside the dialog and wraps around', async () => {
+  render(
+    <Modal onClose={vi.fn()}>
+      <button type="button">один</button>
+      <button type="button">два</button>
+    </Modal>,
+  );
+  // Tab from the last focusable wraps to the first.
+  screen.getByText('два').focus();
+  await userEvent.tab();
+  expect(screen.getByText('один')).toHaveFocus();
+  // Shift+Tab from the first wraps back to the last.
+  await userEvent.tab({ shift: true });
+  expect(screen.getByText('два')).toHaveFocus();
+});

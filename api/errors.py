@@ -16,6 +16,7 @@ from fastapi.responses import JSONResponse
 
 from core.logging import log_event
 from schemas.api import ErrorDetail, ErrorEnvelope
+from services.accounts import AccountActionError
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request
@@ -49,6 +50,21 @@ async def _handle_http_exception(_request: Request, exc: HTTPException) -> JSONR
     return _envelope(code=code, message=str(exc.detail), status_code=exc.status_code)
 
 
+async def _handle_account_action_error(
+    _request: Request,
+    exc: AccountActionError,
+) -> JSONResponse:
+    # Telegram refused the action: ``message`` is the stable code (the SPA
+    # translates it); a flood-family retry duration travels in ``fields``
+    # instead of being dropped with the str() collapse.
+    fields = (
+        {"retry_after_seconds": str(exc.retry_after_seconds)}
+        if exc.retry_after_seconds is not None
+        else None
+    )
+    return _envelope(code="bad_request", message=exc.code, status_code=400, fields=fields)
+
+
 async def _handle_validation_error(
     _request: Request,
     exc: RequestValidationError,
@@ -79,5 +95,6 @@ def register_error_handlers(app: FastAPI) -> None:
     # api/ may not import starlette's ``ExceptionHandler`` type (allowlist), so the
     # contravariance is documented here rather than satisfied via a cast.
     app.add_exception_handler(HTTPException, _handle_http_exception)  # ty: ignore[invalid-argument-type]
+    app.add_exception_handler(AccountActionError, _handle_account_action_error)  # ty: ignore[invalid-argument-type]
     app.add_exception_handler(RequestValidationError, _handle_validation_error)  # ty: ignore[invalid-argument-type]
     app.add_exception_handler(Exception, _handle_unexpected)

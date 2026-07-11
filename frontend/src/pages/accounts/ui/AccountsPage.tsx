@@ -3,12 +3,14 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  accountsQueryKey,
   accountsQueryOptions,
+  accountStatsQueryKey,
   accountStatsQueryOptions,
   checkAccountMutation,
   deleteAccountMutation,
 } from '@/entities/account';
-import type { AccountRead } from '@/shared/api';
+import { proxyPoolQueryOptions } from '@/entities/proxy';
 import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
 import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
@@ -26,7 +28,7 @@ export function AccountsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [proxyAdding, setProxyAdding] = useState(false);
-  const [profiling, setProfiling] = useState<AccountRead | null>(null);
+  const [profilingId, setProfilingId] = useState<string | null>(null);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
   const { data, isPending, isError } = useQuery(
@@ -36,8 +38,12 @@ export function AccountsPage() {
   // counts stay correct across pagination and search (unlike counting items).
   const { data: fleetStats } = useQuery(accountStatsQueryOptions());
 
+  // Scoped: check / delete / import touch the accounts table, the fleet stat
+  // tiles, and proxy usage (an account holds a pool slot) — not the whole cache.
   const invalidate = () => {
-    void queryClient.invalidateQueries();
+    void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: accountStatsQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: proxyPoolQueryOptions().queryKey });
   };
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
@@ -85,10 +91,11 @@ export function AccountsPage() {
   const hasPrev = cursorStack.length > 1;
   const hasNext = Boolean(data?.next_cursor);
 
-  // Derive the edited row from the live list each render so it reflects the
-  // latest refetch (e.g. status flips from 'unauthorized' after a code login),
-  // rather than a stale snapshot captured at click time.
+  // Derive the edited/profiled row from the live list each render so it
+  // reflects the latest refetch (e.g. status flips from 'unauthorized' after a
+  // code login), rather than a stale snapshot captured at click time.
   const editing = editingId ? (items.find((a) => a.account_id === editingId) ?? null) : null;
+  const profiling = profilingId ? (items.find((a) => a.account_id === profilingId) ?? null) : null;
   if (editing) {
     return (
       <AccountEdit
@@ -177,7 +184,9 @@ export function AccountsPage() {
             onOpen={(account) => {
               setEditingId(account.account_id);
             }}
-            onProfile={setProfiling}
+            onProfile={(account) => {
+              setProfilingId(account.account_id);
+            }}
             busyId={busyId}
           />
           <div className="mt-4 flex items-center justify-end gap-2">
@@ -232,7 +241,7 @@ export function AccountsPage() {
         <ProfileModal
           account={profiling}
           onClose={() => {
-            setProfiling(null);
+            setProfilingId(null);
           }}
         />
       ) : null}

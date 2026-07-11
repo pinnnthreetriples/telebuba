@@ -1,11 +1,12 @@
 import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 
 import {
   accountProfileSnapshotQueryOptions,
+  accountsQueryKey,
   addAccountMusicMutation,
   removeAccountMusicMutation,
   removeAccountPhotoMutation,
@@ -14,21 +15,32 @@ import {
   updateAccountProfileMutation,
 } from '@/entities/account';
 import type {
+  AccountProfileView,
   AccountRead,
   ProfileMusicView,
   ProfilePhotoView,
   ProfileStoryView,
 } from '@/shared/api';
-import { ConfirmModal, FormField, Modal } from '@/shared/ui';
+import { ConfirmModal, FieldError, FormField, Modal } from '@/shared/ui';
 
 import { AddStoryModal } from './AddStoryModal';
 
-// Telegram requires a non-empty first name; the rest are optional free text.
+// Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
+// bio ≤70, username 5–32 chars of [A-Za-z0-9_] starting with a letter
+// ('' is allowed everywhere but first name — it clears the field).
+const USERNAME_RE = /^[A-Za-z][A-Za-z0-9_]{4,31}$/;
 const profileSchema = z.object({
-  first_name: z.string().trim().min(1, 'accounts.profile.errFirstName'),
-  last_name: z.string(),
-  username: z.string(),
-  bio: z.string(),
+  first_name: z
+    .string()
+    .trim()
+    .min(1, 'accounts.profile.errFirstName')
+    .max(64, 'accounts.profile.errFirstNameMax'),
+  last_name: z.string().trim().max(64, 'accounts.profile.errLastNameMax'),
+  username: z
+    .string()
+    .trim()
+    .refine((value) => value === '' || USERNAME_RE.test(value), 'accounts.profile.errUsername'),
+  bio: z.string().trim().max(70, 'accounts.profile.errBioMax'),
 });
 
 // The design's profile-edit modal: hero header, a 4-tab segmented header
@@ -48,28 +60,35 @@ function DashedAdd({
   ratio,
   label,
   onClick,
+  busy = false,
 }: {
   ratio: string;
   label: string;
   onClick: () => void;
+  busy?: boolean;
 }) {
   return (
     <button
       type="button"
+      disabled={busy}
       onClick={onClick}
       style={{ aspectRatio: ratio }}
-      className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted"
+      className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted disabled:opacity-60"
     >
-      <svg
-        width="20"
-        height="20"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.8"
-      >
-        <path d="M12 5v14M5 12h14" />
-      </svg>
+      {busy ? (
+        <span className="tb-spin inline-block h-[18px] w-[18px] rounded-full border-2 border-line-input border-t-primary" />
+      ) : (
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        >
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      )}
       {label}
     </button>
   );
@@ -105,8 +124,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const photos = snapshot.data?.photos ?? [];
   const stories = snapshot.data?.stories ?? [];
   const music = snapshot.data?.music ?? [];
+  // Scoped: this account's snapshot + the accounts table (name/username/avatar
+  // show in the list) — not the whole cache.
   const refresh = () => {
-    void queryClient.invalidateQueries();
+    void queryClient.invalidateQueries({ queryKey: snapOpts.queryKey });
+    void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
   };
   // "Обновлено {только что | N мин назад}" — from the snapshot query's last fetch.
   const syncMins = snapshot.dataUpdatedAt
@@ -135,12 +157,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     onSubmit: ({ value }) => {
       updateProfile.mutate(
         {
+          // Contract: '' CLEARS a field on Telegram, null means "leave
+          // unchanged" — the form always submits explicit (trimmed) strings.
           body: {
             account_id: account.account_id,
             first_name: value.first_name.trim(),
-            last_name: value.last_name.trim() || null,
-            username: value.username.trim() || null,
-            bio: value.bio.trim() || null,
+            last_name: value.last_name.trim(),
+            username: value.username.trim(),
+            bio: value.bio.trim(),
           },
         },
         {
@@ -149,13 +173,36 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             window.setTimeout(() => {
               setSaved(false);
             }, 1400);
-            void queryClient.invalidateQueries();
+            refresh();
           },
         },
       );
     },
   });
   const canSave = useStore(form.store, (state) => state.canSubmit);
+
+  // Seed the text fields from a successfully-pulled live profile ('' for unset
+  // fields), without marking the form dirty. first_name can't be empty on
+  // Telegram, so a null there means "no text in this snapshot" — keep ours.
+  const seedForm = useCallback(
+    (view: AccountProfileView) => {
+      if (view.error) return;
+      if (view.first_name != null) {
+        form.setFieldValue('first_name', view.first_name, { dontUpdateMeta: true });
+      }
+      form.setFieldValue('last_name', view.last_name ?? '', { dontUpdateMeta: true });
+      form.setFieldValue('username', view.username ?? '', { dontUpdateMeta: true });
+      form.setFieldValue('bio', view.bio ?? '', { dontUpdateMeta: true });
+    },
+    [form],
+  );
+
+  // The row snapshot the modal opened with can lag Telegram; once the live
+  // profile arrives, re-seed the fields — but never clobber user edits.
+  const snapshotData = snapshot.data;
+  useEffect(() => {
+    if (snapshotData && !form.state.isDirty) seedForm(snapshotData);
+  }, [snapshotData, form, seedForm]);
 
   // «Обновить»: force a live re-pull (bypasses the read cache), write it into the
   // rendered snapshot, and reseed the header + text fields from the fresh profile.
@@ -169,15 +216,17 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         }),
       );
       queryClient.setQueryData(snapOpts.queryKey, fresh);
-      if (fresh.first_name != null) {
-        form.setFieldValue('first_name', fresh.first_name);
-        form.setFieldValue('last_name', fresh.last_name ?? '');
-        form.setFieldValue('username', fresh.username ?? '');
-        form.setFieldValue('bio', fresh.bio ?? '');
-      }
+      seedForm(fresh);
     } finally {
       setRefreshing(false);
     }
+  };
+
+  // Escape / backdrop / × ask before discarding unsaved text edits.
+  const [confirmDiscard, setConfirmDiscard] = useState(false);
+  const requestClose = () => {
+    if (form.state.isDirty) setConfirmDiscard(true);
+    else onClose();
   };
 
   // Header reflects the live snapshot (falls back to the stored account row).
@@ -210,7 +259,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
   return (
     <>
-      <Modal onClose={onClose} z={70} className="w-[580px]">
+      <Modal onClose={requestClose} z={70} className="w-[580px]">
         <div className="flex max-h-[88vh] flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-[14px] border-b border-[#f0eeeb] px-5 py-[18px]">
@@ -251,7 +300,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             </div>
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               aria-label={t('accounts.profile.close')}
               className="ml-[2px] h-[30px] w-[30px] shrink-0 rounded-full border border-line bg-white text-[16px] text-ink-muted"
             >
@@ -302,6 +351,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                           className={`${FIELD} pl-[26px]`}
                         />
                       </div>
+                      <FieldError field={field} />
                     </label>
                   )}
                 </form.Field>
@@ -318,6 +368,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         onBlur={field.handleBlur}
                         className={`${FIELD} resize-none [font-family:inherit]`}
                       />
+                      <FieldError field={field} />
                     </label>
                   )}
                 </form.Field>
@@ -358,6 +409,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   <DashedAdd
                     ratio="1"
                     label={t('accounts.profile.upload')}
+                    busy={setPhoto.isPending}
                     onClick={() => photoInput.current?.click()}
                   />
                 </div>
@@ -452,10 +504,18 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 )}
                 <button
                   type="button"
+                  disabled={addMusic.isPending}
                   onClick={() => musicInput.current?.click()}
-                  className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium"
+                  className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-60"
                 >
-                  {t('accounts.profile.pickTrack')}
+                  {addMusic.isPending ? (
+                    <span className="inline-flex items-center gap-[6px]">
+                      <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
+                      {t('accounts.profile.pickTrack')}
+                    </span>
+                  ) : (
+                    t('accounts.profile.pickTrack')
+                  )}
                 </button>
                 <input
                   ref={musicInput}
@@ -472,7 +532,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           <div className="flex justify-end gap-2 border-t border-[#f0eeeb] px-5 py-[14px]">
             <button
               type="button"
-              onClick={onClose}
+              onClick={requestClose}
               className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
             >
               {t('accounts.profile.cancel')}
@@ -533,19 +593,18 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           onClose={() => {
             setConfirmPhoto(null);
           }}
-          onConfirm={() => {
-            removePhoto.mutate(
-              {
+          onConfirm={() =>
+            removePhoto
+              .mutateAsync({
                 path: { account_id: account.account_id },
                 body: {
                   photo_id: confirmPhoto.photo_id,
                   access_hash: confirmPhoto.access_hash,
                   file_reference: confirmPhoto.file_reference,
                 },
-              },
-              { onSuccess: refresh },
-            );
-          }}
+              })
+              .then(refresh)
+          }
         />
       ) : null}
       {confirmStory ? (
@@ -557,15 +616,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           onClose={() => {
             setConfirmStory(null);
           }}
-          onConfirm={() => {
-            removeStory.mutate(
-              {
+          onConfirm={() =>
+            removeStory
+              .mutateAsync({
                 path: { account_id: account.account_id },
                 body: { story_id: confirmStory.story_id },
-              },
-              { onSuccess: refresh },
-            );
-          }}
+              })
+              .then(refresh)
+          }
         />
       ) : null}
       {confirmMusic ? (
@@ -577,19 +635,30 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           onClose={() => {
             setConfirmMusic(null);
           }}
-          onConfirm={() => {
-            removeMusic.mutate(
-              {
+          onConfirm={() =>
+            removeMusic
+              .mutateAsync({
                 path: { account_id: account.account_id },
                 body: {
                   file_id: confirmMusic.file_id,
                   access_hash: confirmMusic.access_hash ?? 0,
                   file_reference: confirmMusic.file_reference ?? '',
                 },
-              },
-              { onSuccess: refresh },
-            );
+              })
+              .then(refresh)
+          }
+        />
+      ) : null}
+      {confirmDiscard ? (
+        <ConfirmModal
+          title={t('accounts.profile.discardTitle')}
+          body={t('accounts.profile.discardBody')}
+          confirmLabel={t('accounts.profile.discardConfirm')}
+          cancelLabel={t('accounts.profile.cancel')}
+          onClose={() => {
+            setConfirmDiscard(false);
           }}
+          onConfirm={onClose}
         />
       ) : null}
     </>

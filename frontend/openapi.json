@@ -4084,13 +4084,15 @@
           },
           "first_name": {
             "type": "string",
+            "maxLength": 64,
             "minLength": 1,
             "title": "First Name"
           },
           "last_name": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 64
               },
               {
                 "type": "null"
@@ -4101,7 +4103,8 @@
           "username": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "pattern": "^(?:[A-Za-z][A-Za-z0-9_]{4,31})?$"
               },
               {
                 "type": "null"
@@ -4112,7 +4115,8 @@
           "bio": {
             "anyOf": [
               {
-                "type": "string"
+                "type": "string",
+                "maxLength": 70
               },
               {
                 "type": "null"

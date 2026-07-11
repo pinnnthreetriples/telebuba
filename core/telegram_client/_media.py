@@ -47,6 +47,20 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import TelegramAction
 
 
+class StoryImageNormalisationError(ValueError):
+    """Raised when a story image can't be decoded onto the 1080x1920 canvas.
+
+    Mirrors :class:`core.telegram_client._video.StoryVideoNormalisationError`:
+    ``str(exc)`` is the stable, locale-neutral code — it survives the
+    ``execute`` → ``ActionResult.error_message`` → API error-envelope path as a
+    code the SPA translates, never Russian prose (non-negotiable #12).
+    """
+
+    def __init__(self) -> None:
+        self.code = "story_image_invalid"
+        super().__init__(self.code)
+
+
 async def _dispatch_profile_media_action(
     client: TelegramClient,
     action: TelegramAction,
@@ -160,9 +174,13 @@ def _normalize_story_image_for_telegram(content: bytes) -> bytes:
         with Image.open(BytesIO(content)) as opened:
             opened.load()
             source = opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
-    except UnidentifiedImageError as exc:
-        msg = "Изображение не удалось прочитать — выберите JPG/PNG/WebP"
-        raise ValueError(msg) from exc
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        # UnidentifiedImageError = container Pillow can't decode (e.g. HEIC/JXL
+        # renamed to .png); OSError from load() = truncated/corrupt bytes. The
+        # chained cause carries the Pillow reason plus the file's real magic
+        # bytes so the telegram_post_story_failed log shows what the file was.
+        detail = f"{type(exc).__name__}: {exc}; magic={content[:12].hex()}"
+        raise StoryImageNormalisationError from ValueError(detail)
 
     canvas = _blurred_story_background(source, target_width, target_height)
     fitted = source.copy()

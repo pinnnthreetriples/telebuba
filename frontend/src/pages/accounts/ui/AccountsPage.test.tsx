@@ -226,3 +226,46 @@ test('the edited account reflects the fresh row after the list refetches', async
   });
   expect(screen.queryByText('Не авторизован')).not.toBeInTheDocument();
 });
+
+test('the profile modal tracks the fresh row after the list refetches', async () => {
+  // Like the edit view, the profile modal derives its account from the live
+  // list — a refetched phone must show up in the open modal, not the snapshot
+  // captured at click time.
+  const before: AccountRead = { ...account('acc-1'), phone: '+70000000001' };
+  const after: AccountRead = { ...before, phone: '+70000000002' };
+  let call = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(
+        jsonResponse({ total: 1, active: 1, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+      call += 1;
+      return Promise.resolve(
+        jsonResponse({ items: [call === 1 ? before : after], next_cursor: null }),
+      );
+    }
+    return Promise.resolve(jsonResponse(account('acc-1')));
+  });
+
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AccountsPage />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => {
+    expect(screen.getByText('+70000000001')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByTitle('Редактировать профиль'));
+  expect(screen.getByText('Текст')).toBeInTheDocument();
+
+  await client.invalidateQueries();
+  // Both the row and the open modal now carry the fresh phone.
+  await waitFor(() => {
+    expect(screen.getAllByText(/\+70000000002/).length).toBeGreaterThanOrEqual(2);
+  });
+});

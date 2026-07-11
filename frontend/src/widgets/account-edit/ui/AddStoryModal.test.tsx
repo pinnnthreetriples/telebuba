@@ -88,6 +88,34 @@ test('a failed publish surfaces the backend error reason on the row', async () =
   expect(await screen.findByText('Proxy connection timed out')).toBeInTheDocument();
 });
 
+test('a locale-neutral failure code translates to user-facing copy', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const req = input as Request;
+    if (req.url.endsWith('/accounts/acc-1/story') && req.method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({ error: { code: 'bad_request', message: 'story_image_invalid' } }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+  });
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  fireEvent.change(input, {
+    target: { files: [new File(['x'], 's.jpg', { type: 'image/jpeg' })] },
+  });
+  await userEvent.click(screen.getByText('Опубликовать'));
+  // The raw code never leaks — the RU copy from accounts.addStory.code.* shows.
+  expect(
+    await screen.findByText('Изображение не удалось прочитать — выберите JPG/PNG/WebP'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText('story_image_invalid')).not.toBeInTheDocument();
+});
+
 test('the picked-file size uses localized units, not hardcoded RU', async () => {
   renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
   const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;

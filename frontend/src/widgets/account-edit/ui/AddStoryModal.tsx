@@ -31,9 +31,16 @@ function fileSize(
 
 // Pull the reason out of the /api/v1 error envelope ({error:{code,message}}) the
 // failed publish rejects with, so the hover tooltip shows *why* it failed.
-function errorText(err: unknown, fallback: string): string {
+// Known locale-neutral failure codes (story_image_invalid / story_video_invalid)
+// translate via accounts.addStory.code.*; anything else shows as-is.
+function errorText(
+  err: unknown,
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  fallback: string,
+): string {
   const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
-  return typeof message === 'string' && message.trim() ? message : fallback;
+  if (typeof message !== 'string' || !message.trim()) return fallback;
+  return t(`accounts.addStory.code.${message}`, { defaultValue: message });
 }
 
 export function AddStoryModal({
@@ -67,7 +74,7 @@ export function AddStoryModal({
   } else if (busy) {
     metaText = t('accounts.addStory.stUploading');
   }
-  const errorDetail = errorText(post.error, t('accounts.addStory.stError'));
+  const errorDetail = errorText(post.error, t, t('accounts.addStory.stError'));
 
   const seg = (on: boolean): string =>
     `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;

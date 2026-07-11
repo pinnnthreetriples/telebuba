@@ -16,6 +16,11 @@ from pydantic import BaseModel, Field
 
 # Runtime import (not TYPE_CHECKING): pydantic resolves the BotChallengeWaitResult
 # field annotation at class-build time, so the type must exist at runtime.
+from schemas.accounts import (
+    PROFILE_BIO_MAX_LENGTH,
+    PROFILE_NAME_MAX_LENGTH,
+    PROFILE_USERNAME_PATTERN,
+)
 from schemas.challenge import BotChallengeMessage  # noqa: TC001
 
 
@@ -76,11 +81,13 @@ class ClickButton(BaseModel):
 
 
 class UpdateProfile(BaseModel):
+    """Update profile text. Field contract: ``""`` clears, ``None`` leaves unchanged."""
+
     action_type: Literal["update_profile"] = "update_profile"
-    first_name: str = Field(min_length=1)
-    last_name: str | None = None
-    username: str | None = None
-    bio: str | None = None
+    first_name: str = Field(min_length=1, max_length=PROFILE_NAME_MAX_LENGTH)
+    last_name: str | None = Field(default=None, max_length=PROFILE_NAME_MAX_LENGTH)
+    username: str | None = Field(default=None, pattern=PROFILE_USERNAME_PATTERN)
+    bio: str | None = Field(default=None, max_length=PROFILE_BIO_MAX_LENGTH)
 
 
 class SetOnline(BaseModel):

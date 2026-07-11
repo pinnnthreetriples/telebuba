@@ -162,6 +162,9 @@ async def reset_account_session(account_id: str) -> AccountRead:
 async def update_account_profile(body: AccountProfileUpdateRequest) -> AccountRead:
     try:
         return await accounts.update_account_profile(body)
+    except accounts.AccountActionError:
+        # api.errors maps it to the envelope: stable code + retry seconds in fields.
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -234,6 +237,8 @@ async def set_account_photo(
     )
     try:
         return await accounts.set_account_profile_photo(upload)
+    except accounts.AccountActionError:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -291,6 +296,8 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
     )
     try:
         return await accounts.post_account_story(upload)
+    except accounts.AccountActionError:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -316,6 +323,8 @@ async def add_account_music(
     )
     try:
         return await accounts.add_account_profile_music(upload)
+    except accounts.AccountActionError:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -330,6 +339,8 @@ async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> Act
         return await accounts.remove_account_story(
             AccountStoryRemove(account_id=account_id, story_id=body.story_id),
         )
+    except accounts.AccountActionError:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -348,6 +359,8 @@ async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> Act
     )
     try:
         return await accounts.remove_account_profile_music(remove)
+    except accounts.AccountActionError:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
@@ -366,5 +379,7 @@ async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> Act
     )
     try:
         return await accounts.remove_account_profile_photo(remove)
+    except accounts.AccountActionError:
+        raise
     except ValueError as exc:
         raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
