@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CampaignStatus = Literal["active", "paused", "archived"]
 CommentStatus = Literal["claimed", "posted", "failed"]
@@ -30,8 +30,10 @@ class CampaignCreate(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    name: str = Field(min_length=1)
-    prompt: str = Field(min_length=1)
+    name: str = Field(min_length=1, max_length=128)
+    # Generous product-mention prompt ceiling — bounds what gets re-sent to the LLM
+    # on every comment generation.
+    prompt: str = Field(min_length=1, max_length=4000)
     status: CampaignStatus = "active"
 
 
@@ -64,7 +66,7 @@ class UpdatePromptRequest(BaseModel):
 
     model_config = ConfigDict(extra="forbid")
 
-    prompt: str = Field(min_length=1)
+    prompt: str = Field(min_length=1, max_length=4000)
 
 
 class RetryPairRequest(BaseModel):
@@ -317,6 +319,8 @@ ChannelStatus = Literal[
     "bot_challenge",
     "bot_challenge_backoff",
     "throttled",
+    # no readiness rows yet — onboarding hasn't produced data for this channel
+    "no_data",
 ]
 
 
@@ -412,3 +416,10 @@ class NeurocommentSettingsUpdate(BaseModel):
     reply_delay_min_seconds: float = Field(ge=0)
     reply_delay_max_seconds: float = Field(ge=0)
     min_trust_score: int = Field(ge=0, le=100)
+
+    @model_validator(mode="after")
+    def _check_delay_bounds(self) -> NeurocommentSettingsUpdate:
+        if self.reply_delay_min_seconds > self.reply_delay_max_seconds:
+            msg = "reply_delay_min_seconds must not exceed reply_delay_max_seconds"
+            raise ValueError(msg)
+        return self

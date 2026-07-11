@@ -999,6 +999,31 @@ async def test_reconcile_with_no_channels_does_not_start_sweep(
     assert _runtime._SWEEP_TASK is None
 
 
+@pytest.mark.asyncio
+async def test_sweep_one_channel_fault_does_not_abort_the_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A per-channel bookkeeping fault (not the read, which _sweep_channel already
+    # guards) must not abort the remaining channels of the pass.
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+
+    attempts: list[str] = []
+
+    async def flaky(channel: str, _comments: object, _now: object) -> None:
+        attempts.append(channel)
+        if len(attempts) == 1:
+            msg = "bookkeeping boom"
+            raise RuntimeError(msg)
+
+    monkeypatch.setattr("services.neurocomment._sweep._sweep_channel", flaky)
+
+    await _runtime._sweep_once()  # first channel raises; second must still be swept
+
+    assert len(attempts) == 2  # both channels processed despite the fault
+
+
 async def _campaign_with_posted_comments(channel: str, msg_ids: list[int]) -> None:
     """Active campaign on ``channel`` with one ``posted`` comment per ``msg_ids`` entry."""
     campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))

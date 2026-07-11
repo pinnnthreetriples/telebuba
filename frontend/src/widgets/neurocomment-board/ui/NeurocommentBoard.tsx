@@ -13,10 +13,9 @@ interface BoardRow {
   account: string;
   channel: string;
   text: string;
-  // 'no_data' is frontend-only: no readiness rows yet (onboarding not run), so
-  // there is no channel status to look up — distinct from the real backend
-  // 'comments_off' state.
-  status: NeurocommentChannelRow['status'] | 'no_data';
+  // 'no_data' (no readiness rows yet) is now a real backend status; deriveRows
+  // also falls back to it when an account's channel is absent from the board map.
+  status: NeurocommentChannelRow['status'];
 }
 
 // One work row per account, joined on the account's OWN channel: its pinned

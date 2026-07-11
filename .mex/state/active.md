@@ -135,6 +135,35 @@ collided with the real backend `comments_off` status — now a frontend-only
 `no_data` status («Нет данных»), and `deriveRows` prefers the account's
 `pinned_channel` row over first-joined. Gates: full pytest suite + vitest green.
 
+A 2026-07-11 second neurocomment audit (four parallel sonnet auditors over
+engine/challenge/onboarding/board/api, then three implementers on disjoint
+files) fixed eight defects in one PR — the recent trigger fix (1531b76) was
+re-verified regression-free. HIGH: `_resolve_group_for_join` used only
+`accounts[0]` for the linked-group read, so one dead/banned first session
+marked every account `resolve_failed` and blocked the channel for all — now
+tries each session in order, first success wins. HIGH: `resolve_pending_outcome`
+was a read-then-write race (two concurrent `_classify_post`s for the same
+account+channel could both consume one pending challenge row and double-count
+the channel failure counter) — the UPDATE now guards on `outcome='pending'` and
+returns on rowcount (winner-takes-all). MED: deactivating a channel left
+accounts pinned to it stranded (pin never cleared → silently excluded from
+selection+onboarding forever) — `_deactivate_channel` now nulls the pin in the
+same txn. MED: the deletion sweep aborted the whole pass on one channel's
+bookkeeping fault — `_sweep_once` now isolates per channel
+(`neurocomment_sweep_channel_failed`). MED: `NeurocommentSettingsUpdate` lacked
+the `reply_delay_min<=max` validator its config twin enforces — added. MED: the
+board's backend channel badge showed `throttled` for a channel with zero
+readiness rows — new `no_data` `ChannelStatus` (frontend already handled it;
+API client regenerated). LOW: unbounded campaign `name`/`prompt` at the trust
+boundary — `max_length` added; LOW: `future.set_result` race in the challenge
+wait handler — `future.done()` re-check. Deferred (reported, not fixed):
+shutdown-cancel can mis-mark a just-delivered comment `failed` (microscopic
+window, existing guard mostly covers); no periodic re-onboard for `joining`
+pairs (event triggers + boot cover it); solved-challenge cache has no
+TTL/invalidation; RPC-hang stale-claim reclaim and HTTPException-locale are
+systemic/codebase-wide. Gates: 1140 pytest / i18n-parity green, ruff+ty clean,
+frontend tsc+vitest green.
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

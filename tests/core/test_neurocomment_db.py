@@ -315,6 +315,27 @@ async def test_resolve_pending_outcome_is_noop_without_pending() -> None:
     await resolve_pending_outcome("ghost", "@chan", "failed")
 
 
+@pytest.mark.asyncio
+async def test_resolve_pending_outcome_is_winner_takes_all() -> None:
+    # A pending row resolves exactly once: the first call wins (True), a second
+    # sees no still-pending row and returns False, so its challenge-counter side
+    # effect never double-fires.
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h",
+            account_id="acc-1",
+            channel="@chan",
+            raw_text="x",
+            button_labels=["y"],
+            outcome="pending",
+            decision_json=None,
+        ),
+    )
+
+    assert await resolve_pending_outcome("acc-1", "@chan", "solved") is True
+    assert await resolve_pending_outcome("acc-1", "@chan", "failed") is False
+
+
 def test_migration_15_adds_human_skipped_column() -> None:
     engine = _get_engine()
     with engine.connect() as connection:

@@ -489,6 +489,7 @@
     "neurocomment_post_dropped_overloaded": "Comment dropped (overloaded)",
     "neurocomment_stale_claims_reclaimed": "Stalled tasks reclaimed",
     "neurocomment_sweep_read_failed": "Failed to check comments",
+    "neurocomment_sweep_channel_failed": "Channel deletion sweep failed",
     "neurocomment_listener_warming_skipped": "Listener skipped — account is warming",
     "post_listener_callback_failed": "Failed to handle new post",
     "post_listener_channel_unresolved": "Could not resolve post channel",

@@ -111,6 +111,21 @@ async def test_pin_account_channel_rejects_foreign_channel() -> None:
 
 
 @pytest.mark.asyncio
+async def test_deactivate_channel_clears_pins_to_it() -> None:
+    """Deactivating a channel clears any account pinned to it, else the pin strands the account."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
+    await campaigns.link_channel(campaign.campaign_id, "@news")
+    await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", "@news")
+
+    await campaigns.deactivate_channel(campaign.campaign_id, "@news")
+
+    links = (await campaigns.list_campaign_accounts(campaign.campaign_id)).links
+    assert {link.account_id: link.channel for link in links} == {"acc-1": None}
+
+
+@pytest.mark.asyncio
 async def test_link_channel_reconciles_only_when_running(monkeypatch: pytest.MonkeyPatch) -> None:
     """Linking a channel re-points a running listener; while stopped it does nothing (#2)."""
     calls: list[str] = []

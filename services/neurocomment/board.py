@@ -226,6 +226,8 @@ def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
     captcha_passed=True) — a terminal join failure that never self-resolves, distinct
     from the approval gate ``join_by_request``; ``throttled`` is the catch-all.
     """
+    if not rows:
+        return "no_data"  # onboarding hasn't produced readiness data for this channel yet
     if any(not r.joined and r.captcha_passed for r in rows):
         return "join_failed"
     if any(not r.joined for r in rows):

@@ -144,7 +144,9 @@ async def dispatch_wait_for_bot_challenge(
                 image_b64 = await download_challenge_image(client, message)
                 if image_b64 is not None:
                     match = match.model_copy(update={"image_b64": image_b64})
-            future.set_result(match)
+            # Re-check: the earlier guard is stale after the awaited image download.
+            if not future.done():
+                future.set_result(match)
 
     # Resolve the group entity rather than trusting the bare linked_chat_id (no
     # access_hash); the account just joined on this client, so the cache is warm.
