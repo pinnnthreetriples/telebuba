@@ -159,6 +159,9 @@ import type {
   RetryChallengeResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
+  SetAccountPhotoMainData,
+  SetAccountPhotoMainErrors,
+  SetAccountPhotoMainResponses,
   SetAccountPhotoResponses,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelErrors,
@@ -590,6 +593,25 @@ export const removeAccountPhoto = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/accounts/{account_id}/photo/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Account Photo Main
+ */
+export const setAccountPhotoMain = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountPhotoMainData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetAccountPhotoMainResponses,
+    SetAccountPhotoMainErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/photo/main',
     ...options,
     headers: {
       'Content-Type': 'application/json',

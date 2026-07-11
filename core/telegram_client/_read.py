@@ -12,6 +12,7 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, cast
 
 from telethon import errors
@@ -308,22 +309,25 @@ async def _dispatch_list_profile_photos(
             limit=action.limit,
         ),
     )
-    raw_photos = getattr(result, "photos", []) or []
-    items: list[TelegramProfilePhoto] = []
-    for photo in raw_photos:
-        photo_id = int(getattr(photo, "id", 0) or 0)
-        if photo_id == 0:
-            continue
-        items.append(
-            TelegramProfilePhoto(
-                photo_id=photo_id,
-                access_hash=int(getattr(photo, "access_hash", 0) or 0),
-                file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
-                date_unix=_photo_date_unix(photo),
-                thumb_bytes=await _download_photo_thumb(client, photo),
-            ),
-        )
-    return TelegramProfilePhotos(items=items)
+    raw_photos = [
+        photo
+        for photo in (getattr(result, "photos", []) or [])
+        if int(getattr(photo, "id", 0) or 0)
+    ]
+    # Fetch every thumbnail concurrently — serial awaits made the modal open
+    # scale linearly with the number of history photos.
+    items = await asyncio.gather(*(_profile_photo(client, photo) for photo in raw_photos))
+    return TelegramProfilePhotos(items=list(items))
+
+
+async def _profile_photo(client: TelegramClient, photo: object) -> TelegramProfilePhoto:
+    return TelegramProfilePhoto(
+        photo_id=int(getattr(photo, "id", 0) or 0),
+        access_hash=int(getattr(photo, "access_hash", 0) or 0),
+        file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
+        date_unix=_photo_date_unix(photo),
+        thumb_bytes=await _download_photo_thumb(client, photo),
+    )
 
 
 def _photo_date_unix(photo: object) -> int:

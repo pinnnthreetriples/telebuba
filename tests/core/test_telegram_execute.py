@@ -20,7 +20,11 @@ from telethon.tl.functions.channels import (
     JoinChannelRequest,
     LeaveChannelRequest,
 )
-from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
+from telethon.tl.functions.photos import (
+    DeletePhotosRequest,
+    UpdateProfilePhotoRequest,
+    UploadProfilePhotoRequest,
+)
 from telethon.tl.functions.stories import (
     CanSendStoryRequest,
     DeleteStoriesRequest,
@@ -46,6 +50,7 @@ from schemas.telegram_actions import (
     RemoveProfilePhoto,
     RemoveStory,
     SendDirectMessage,
+    SetMainProfilePhoto,
     SetProfilePhoto,
     UpdateProfile,
 )
@@ -789,6 +794,46 @@ async def test_execute_remove_profile_photo_sends_delete_photos_request(
     # attributes are present.
     assert isinstance(sent, InputPhoto)
     assert sent.id == 4242
+    assert sent.access_hash == 7
+    assert sent.file_reference == b"\x01\x02"
+
+
+@pytest.mark.asyncio
+async def test_execute_set_main_photo_sends_update_profile_photo_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """«Сделать основным» must hit ``UpdateProfilePhotoRequest`` with the triple.
+
+    The int64 id has to survive intact — that's the whole point of carrying it
+    as a string across the JSON edge, so we assert a value past 2^53.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    big_id = 9_007_199_254_740_993  # 2^53 + 1
+    result = await execute(
+        "acc-photo-main",
+        SetMainProfilePhoto(
+            photo_id=big_id,
+            access_hash=7,
+            file_reference=b"\x01\x02",
+        ),
+    )
+
+    assert result.status == "ok"
+    updates = [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]
+    assert len(updates) == 1
+    sent = updates[0].id
+    assert isinstance(sent, InputPhoto)
+    assert sent.id == big_id
     assert sent.access_hash == 7
     assert sent.file_reference == b"\x01\x02"
 

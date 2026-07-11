@@ -789,11 +789,11 @@ export type MusicRemoveRequest = {
   /**
    * File Id
    */
-  file_id: number;
+  file_id: string;
   /**
    * Access Hash
    */
-  access_hash: number;
+  access_hash: string;
   /**
    * File Reference
    */
@@ -1134,17 +1134,40 @@ export type PhoneCodeRequestResult = {
 };
 
 /**
+ * PhotoMainRequest
+ *
+ * Promote an existing profile photo to the current avatar.
+ *
+ * Same ``InputPhoto`` triple as :class:`PhotoRemoveRequest` — the id fields
+ * arrive as int64 strings from the view (see :data:`_Int64Str`).
+ */
+export type PhotoMainRequest = {
+  /**
+   * Photo Id
+   */
+  photo_id: string;
+  /**
+   * Access Hash
+   */
+  access_hash: string;
+  /**
+   * File Reference
+   */
+  file_reference: string;
+};
+
+/**
  * PhotoRemoveRequest
  */
 export type PhotoRemoveRequest = {
   /**
    * Photo Id
    */
-  photo_id: number;
+  photo_id: string;
   /**
    * Access Hash
    */
-  access_hash: number;
+  access_hash: string;
   /**
    * File Reference
    */
@@ -1158,7 +1181,7 @@ export type ProfileMusicView = {
   /**
    * File Id
    */
-  file_id: number;
+  file_id: string;
   /**
    * Title
    */
@@ -1170,7 +1193,7 @@ export type ProfileMusicView = {
   /**
    * Access Hash
    */
-  access_hash?: number;
+  access_hash?: string;
   /**
    * File Reference
    */
@@ -1184,11 +1207,11 @@ export type ProfilePhotoView = {
   /**
    * Photo Id
    */
-  photo_id: number;
+  photo_id: string;
   /**
    * Access Hash
    */
-  access_hash: number;
+  access_hash: string;
   /**
    * File Reference
    */
@@ -1223,6 +1246,10 @@ export type ProfileStoryView = {
    * Is Pinned
    */
   is_pinned?: boolean;
+  /**
+   * Views
+   */
+  views?: number | null;
   /**
    * Thumb Data Uri
    */
@@ -2789,6 +2816,37 @@ export type RemoveAccountPhotoResponses = {
 
 export type RemoveAccountPhotoResponse =
   RemoveAccountPhotoResponses[keyof RemoveAccountPhotoResponses];
+
+export type SetAccountPhotoMainData = {
+  body: PhotoMainRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/photo/main';
+};
+
+export type SetAccountPhotoMainErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetAccountPhotoMainError = SetAccountPhotoMainErrors[keyof SetAccountPhotoMainErrors];
+
+export type SetAccountPhotoMainResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type SetAccountPhotoMainResponse =
+  SetAccountPhotoMainResponses[keyof SetAccountPhotoMainResponses];
 
 export type ListProxiesData = {
   body?: never;

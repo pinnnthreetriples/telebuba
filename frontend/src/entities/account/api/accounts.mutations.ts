@@ -13,6 +13,7 @@ export {
   removeAccountStoryMutation,
   requestLoginCodeMutation,
   resetAccountSessionMutation,
+  setAccountPhotoMainMutation,
   setAccountPhotoMutation,
   spamCheckAccountMutation,
   startPhoneLoginMutation,

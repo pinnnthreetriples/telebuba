@@ -27,6 +27,7 @@ from schemas.accounts import (
 from schemas.profile_media import (
     AccountProfileMusicUpload,
     AccountProfilePhotoRemove,
+    AccountProfilePhotoSetMain,
     AccountProfilePhotoUpload,
     AccountStoryRemove,
     AccountStoryUpload,
@@ -40,6 +41,7 @@ from schemas.telegram_actions import (
     PostStory,
     RemoveProfilePhoto,
     RemoveStory,
+    SetMainProfilePhoto,
     SetProfilePhoto,
     UpdateProfile,
 )
@@ -60,6 +62,7 @@ from services.accounts import (
     post_account_story,
     remove_account_profile_photo,
     remove_account_story,
+    set_account_main_profile_photo,
     set_account_profile_photo,
     update_account_profile,
 )
@@ -945,6 +948,43 @@ async def test_remove_account_profile_photo_executes_action_and_invalidates_cach
     assert captured[0].access_hash == 7
     assert captured[0].file_reference == b"\x01\x02"
     assert invalidated == ["account-photo-remove"]
+
+
+@pytest.mark.asyncio
+async def test_set_account_main_profile_photo_executes_action_and_invalidates_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """«Сделать основным» must reach Telegram with the InputPhoto triple + clear cache."""
+    captured: list[object] = []
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(
+            status="ok", action_type="set_main_profile_photo", account_id=account_id
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    result = await set_account_main_profile_photo(
+        AccountProfilePhotoSetMain(
+            account_id="account-photo-main",
+            photo_id=4242,
+            access_hash=7,
+            file_reference=b"\x01\x02",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], SetMainProfilePhoto)
+    assert captured[0].photo_id == 4242
+    assert captured[0].access_hash == 7
+    assert captured[0].file_reference == b"\x01\x02"
+    assert invalidated == ["account-photo-main"]
 
 
 @pytest.mark.asyncio

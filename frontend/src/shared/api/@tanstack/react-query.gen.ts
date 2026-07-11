@@ -62,6 +62,7 @@ import {
   resetAccountSession,
   retryChallenge,
   setAccountPhoto,
+  setAccountPhotoMain,
   setCampaignAccountChannel,
   setCampaignSolver,
   setCampaignStatus,
@@ -232,6 +233,9 @@ import type {
   RetryChallengeResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
+  SetAccountPhotoMainData,
+  SetAccountPhotoMainError,
+  SetAccountPhotoMainResponse,
   SetAccountPhotoResponse,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelError,
@@ -1018,6 +1022,33 @@ export const removeAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await removeAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Photo Main
+ */
+export const setAccountPhotoMainMutation = (
+  options?: Partial<Options<SetAccountPhotoMainData>>,
+): UseMutationOptions<
+  SetAccountPhotoMainResponse,
+  SetAccountPhotoMainError,
+  Options<SetAccountPhotoMainData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountPhotoMainResponse,
+    SetAccountPhotoMainError,
+    Options<SetAccountPhotoMainData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountPhotoMain({
         ...options,
         ...fnOptions,
         throwOnError: true,

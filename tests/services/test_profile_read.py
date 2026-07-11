@@ -333,7 +333,11 @@ async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatc
     assert view.avatar_data_uri.startswith("data:image/jpeg;base64,")
     assert view.photos[0].file_reference == base64.b64encode(b"ref").decode()
     assert view.photos[0].thumb_data_uri is not None
+    # int64 ids cross the JSON edge as strings so the SPA can't round them.
+    assert view.photos[0].photo_id == "1"
+    assert view.photos[0].access_hash == "2"
     assert view.stories[0].story_id == 3
+    assert view.music[0].file_id == "4"
     assert view.music[0].file_reference == base64.b64encode(b"mref").decode()
 
 
