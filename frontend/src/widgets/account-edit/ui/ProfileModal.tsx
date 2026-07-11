@@ -385,6 +385,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             ))}
           </div>
 
+          {/* Applying indicator: every edit calls refresh(), which re-pulls the
+              snapshot from Telegram in the background. Without this the modal
+              looks frozen during that (often multi-second) fetch. */}
+          <div className="relative h-[2px] overflow-hidden">
+            {snapshot.isFetching && (
+              <span className="tb-indbar absolute top-0 h-full w-[45%] rounded-full bg-primary" />
+            )}
+          </div>
+
           {/* content */}
           <div className="tb-scroll flex-1 overflow-y-auto p-5">
             {tab === 'text' && (
@@ -481,7 +490,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                           }}
                           className="mt-[6px] block w-full py-[2px] text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
                         >
-                          {t('accounts.profile.makeMain')}
+                          {setMainPhoto.isPending &&
+                          setMainPhoto.variables?.body?.photo_id === photo.photo_id ? (
+                            <span className="inline-flex items-center gap-[5px]">
+                              <span className="tb-spin inline-block h-[11px] w-[11px] rounded-full border-2 border-line-input border-t-primary" />
+                              {t('accounts.profile.makingMain')}
+                            </span>
+                          ) : (
+                            t('accounts.profile.makeMain')
+                          )}
                         </button>
                       )}
                     </div>

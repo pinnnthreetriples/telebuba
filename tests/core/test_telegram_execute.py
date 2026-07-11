@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from contextlib import asynccontextmanager
 from io import BytesIO
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
@@ -801,13 +802,16 @@ async def test_execute_remove_profile_photo_sends_delete_photos_request(
 
 
 @pytest.mark.asyncio
-async def test_execute_set_main_photo_sends_update_profile_photo_request(
+async def test_execute_set_main_photo_promotes_then_deletes_stale_duplicate(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """«Сделать основным» must hit ``UpdateProfilePhotoRequest`` with the triple.
+    """«Сделать основным» promotes the photo, then removes the stale duplicate.
 
-    The int64 id has to survive intact — that's the whole point of carrying it
-    as a string across the JSON edge, so we assert a value past 2^53.
+    Raw ``updateProfilePhoto`` mints a NEW photo (here id 555) at the front and
+    leaves the original (``big_id``) behind, so we must follow up with a
+    ``DeletePhotosRequest`` for the old id. The int64 id also has to survive
+    intact (carried as a string across the JSON edge), so we use a value past
+    2^53.
     """
     captured: list[object] = []
 
@@ -815,8 +819,10 @@ async def test_execute_set_main_photo_sends_update_profile_photo_request(
         async def connect(self) -> None:
             return None
 
-        async def __call__(self, request: object) -> None:
+        async def __call__(self, request: object) -> object:
             captured.append(request)
+            # updateProfilePhoto returns photos.Photo with a freshly-minted id.
+            return SimpleNamespace(photo=SimpleNamespace(id=555))
 
     _patch_client(monkeypatch, FakeClient())
 
@@ -838,6 +844,42 @@ async def test_execute_set_main_photo_sends_update_profile_photo_request(
     assert sent.id == big_id
     assert sent.access_hash == 7
     assert sent.file_reference == b"\x01\x02"
+    # The stale original (old id) is deleted; the new current photo is untouched.
+    deletes = [req for req in captured if isinstance(req, DeletePhotosRequest)]
+    assert len(deletes) == 1
+    assert len(deletes[0].id) == 1
+    stale = deletes[0].id[0]
+    # Narrow the InputPhoto | InputPhotoEmpty union so ty sees `.id` (see the
+    # matching note in the remove-photo test above).
+    assert isinstance(stale, InputPhoto)
+    assert stale.id == big_id
+
+
+@pytest.mark.asyncio
+async def test_execute_set_main_photo_skips_delete_when_reordered_in_place(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """If a server ever reorders in place (returned id == old id), delete nothing."""
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            return SimpleNamespace(photo=SimpleNamespace(id=4242))
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-photo-main",
+        SetMainProfilePhoto(photo_id=4242, access_hash=7, file_reference=b"\x01\x02"),
+    )
+
+    assert result.status == "ok"
+    assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
+    assert len([req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]) == 1
 
 
 @pytest.mark.asyncio

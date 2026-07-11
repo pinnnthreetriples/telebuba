@@ -147,6 +147,17 @@
     width: 92%;
   }
 }
+/* Indeterminate sliding bar for background refetches (e.g. the profile modal
+   re-pulling from Telegram after an edit is applied) — there are no real
+   progress events, so a looping sweep just signals "still working". */
+@keyframes indbar {
+  0% {
+    left: -45%;
+  }
+  100% {
+    left: 100%;
+  }
+}
 
 .tb-blur {
   animation: blurswap 0.34s cubic-bezier(0.34, 1.56, 0.64, 1) both;
@@ -180,6 +191,9 @@
 }
 .tb-upbar {
   animation: upbar 1.7s ease-out forwards;
+}
+.tb-indbar {
+  animation: indbar 1.05s ease-in-out infinite;
 }
 /* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
    opacity keyframe, staggered so the wave reads as ongoing chatter. */
