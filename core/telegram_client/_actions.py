@@ -88,17 +88,13 @@ async def _flood_action_result(
 
 
 async def _generic_error(account_id: str, action: TelegramAction, exc: Exception) -> ActionResult:
+    # Stable-code wrappers chain the real reason (Pillow error + magic bytes) as __cause__.
+    cause = str(exc.__cause__) if exc.__cause__ is not None else None
     await log_event(
         "ERROR",
         f"telegram_{action.action_type}_failed",
         account_id=account_id,
-        extra={
-            "error_type": type(exc).__name__,
-            "message": str(exc),
-            # Stable-code wrappers (Story*NormalisationError) chain the real
-            # reason as the cause — surface it, or the log only says the code.
-            "cause": str(exc.__cause__) if exc.__cause__ is not None else None,
-        },
+        extra={"error_type": type(exc).__name__, "message": str(exc), "cause": cause},
     )
     return ActionResult(
         status="failed",
@@ -252,13 +248,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
 
 
 async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
-    """Field contract: ``""`` clears, ``None`` leaves unchanged.
-
-    ``account.updateProfile`` omits a ``None`` field from the TL flags (server
-    keeps the current value) while ``""`` is serialized and clears it — so the
-    values pass through untouched. The username lives behind its own request:
-    ``None`` skips the call entirely, ``""`` dispatches the removal.
-    """
+    """Field contract: ``""`` clears, ``None`` leaves unchanged (omitted from TL flags)."""
     await client(
         UpdateProfileRequest(
             first_name=action.first_name,
