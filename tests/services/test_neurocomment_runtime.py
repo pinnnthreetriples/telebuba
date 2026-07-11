@@ -637,6 +637,7 @@ async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
     """
     await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     _patch_engine(monkeypatch, _ReconcileSpy())
+    started = asyncio.Event()
     release = asyncio.Event()
     runs = 0
 
@@ -644,6 +645,7 @@ async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
         nonlocal runs
         runs += 1
         if runs == 1:
+            started.set()
             await release.wait()
         return None
 
@@ -651,7 +653,9 @@ async def test_rapid_second_start_does_not_spawn_duplicate_onboarding(
 
     await _runtime.start_neurocomment("listener-1")
     first_task = _runtime._ONBOARD_TASK
-    await asyncio.sleep(0)  # let the first onboarding task start + block
+    # Deterministically wait for the first pass to begin + block (an unconditional
+    # sleep(0) races the to_thread DB read on a loaded runner → runs still 0).
+    await asyncio.wait_for(started.wait(), timeout=0.5)
     # Second Start while the first onboarding is still in flight reuses it.
     await _runtime.start_neurocomment("listener-1")
     assert _runtime._ONBOARD_TASK is first_task
@@ -669,6 +673,7 @@ async def test_trigger_while_onboarding_in_flight_queues_one_rerun(
     """A trigger mid-run is not dropped: onboarding reruns once after the pass finishes."""
     await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     _patch_engine(monkeypatch, _ReconcileSpy())
+    started = asyncio.Event()
     release = asyncio.Event()
     runs = 0
 
@@ -676,13 +681,16 @@ async def test_trigger_while_onboarding_in_flight_queues_one_rerun(
         nonlocal runs
         runs += 1
         if runs == 1:
+            started.set()
             await release.wait()
         return None
 
     monkeypatch.setattr(_runtime, "onboard_campaign", slow_onboard)
 
     await _runtime.start_neurocomment("listener-1")
-    await asyncio.sleep(0)  # first pass starts + blocks
+    # Wait for the first pass to actually begin + block before triggering reruns
+    # (sleep(0) races the onboarding task's to_thread DB read on a loaded runner).
+    await asyncio.wait_for(started.wait(), timeout=0.5)
     # e.g. a channel link / account assignment lands while onboarding is running:
     _runtime._ensure_onboarding_running(None)
     _runtime._ensure_onboarding_running(None)  # coalesces with the first trigger
