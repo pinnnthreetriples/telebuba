@@ -246,10 +246,17 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
 
 
 async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
+    """Field contract: ``""`` clears, ``None`` leaves unchanged.
+
+    ``account.updateProfile`` omits a ``None`` field from the TL flags (server
+    keeps the current value) while ``""`` is serialized and clears it — so the
+    values pass through untouched. The username lives behind its own request:
+    ``None`` skips the call entirely, ``""`` dispatches the removal.
+    """
     await client(
         UpdateProfileRequest(
             first_name=action.first_name,
-            last_name=action.last_name or "",
+            last_name=action.last_name,
             about=action.bio,
         ),
     )

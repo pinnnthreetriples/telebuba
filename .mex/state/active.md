@@ -88,6 +88,34 @@ proxy (existing step 2) → step 3 requests+confirms the login code (code+2FA), 
 (operator-confirmed ordering). New log-event `phone_login_started` (ru/en labels).
 All gates green (1086 pytest / 207 vitest).
 
+A 2026-07-11 profile-editing audit (two sonnet subagents, backend+frontend,
+cross-verified adversarially) found and fixed in one PR: (1) **clearing
+last_name/username/bio was broken end-to-end** — the SPA sent `null` for a
+blanked field, but `None` means "leave unchanged" everywhere downstream
+(Telethon omits the TL flag; the repo write skips `is not None`), so clearing
+bio/username silently no-opped and clearing last_name desynced DB from
+Telegram. Contract fixed as **`"" clears, None leaves unchanged`** across all
+layers (SPA now sends trimmed plain strings; `_dispatch_update_profile` dropped
+the `last_name or ""` coercion); (2) `flood_wait_seconds` was dropped by the
+seven `raise ValueError(status)` blocks — new `services/accounts/_result.py`
+(`AccountActionError` + `raise_for_result`) carries the code +
+`retry_after_seconds` into the envelope's `fields`; (3) the story-image
+normalisation error was hardcoded Russian prose → `StoryImageNormalisationError`
+code `story_image_invalid` (mirrors the video path; FE maps both codes now —
+`story_video_invalid` previously leaked raw); (4) server-side Telegram limits
+(64/64/70, username `^(?:[A-Za-z][A-Za-z0-9_]{4,31})?$` — the optional group
+admits `""`=clear) on `AccountProfileUpdateRequest`+`UpdateProfile`, mirrored in
+the zod schema with i18n errors; (5) UX: ProfileModal auto-seeds pristine form
+fields from the live snapshot (stale-prop overwrite fixed), dirty-close asks
+before discarding, ConfirmModal got async opt-in (closes only on success),
+photo/music uploads disable+spin while pending, `invalidateQueries()` blanket
+calls scoped, `profiling` derived from the live list, Modal got focus
+trap/restore. Deliberately skipped: B8 ownership cross-check on photo/music
+removal (single-operator, Telegram self-scopes). Caveat: 4-char Fragment
+collectible usernames are blocked by the 5-char minimum (matches
+`account.updateUsername` RPC rules). Gates: 1121 pytest / 95% branch, 227
+vitest / 96% lines.
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

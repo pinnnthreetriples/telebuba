@@ -12,6 +12,7 @@ from core.db import update_account_profile_snapshot
 from core.logging import log_event
 from core.telegram_client import execute
 from schemas.telegram_actions import UpdateProfile
+from services.accounts._result import raise_for_result
 from services.accounts.profile_read import invalidate_account_profile_cache
 
 if TYPE_CHECKING:
@@ -30,9 +31,7 @@ async def update_account_profile(data: AccountProfileUpdateRequest) -> AccountRe
             bio=data.bio,
         ),
     )
-    if result.status != "ok":
-        msg = result.error_message or result.status
-        raise ValueError(msg)
+    raise_for_result(result)
     account = await update_account_profile_snapshot(data)
     invalidate_account_profile_cache(data.account_id)
     await log_event(

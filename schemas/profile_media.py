@@ -4,18 +4,22 @@ from typing import Literal
 
 from pydantic import BaseModel, Field
 
+# Same charset guard as every other account_id entry point (see the
+# rationale next to the pattern's definition in schemas.accounts).
+from schemas.accounts import _ACCOUNT_ID_PATTERN
+
 StoryMediaKind = Literal["image", "video"]
 StoryPrivacyPreset = Literal["contacts", "close_friends", "public"]
 
 
 class AccountProfilePhotoUpload(BaseModel):
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     filename: str = Field(min_length=1)
     content: bytes = Field(min_length=1)
 
 
 class AccountStoryUpload(BaseModel):
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     filename: str = Field(min_length=1)
     content: bytes = Field(min_length=1)
     media_kind: StoryMediaKind
@@ -26,7 +30,7 @@ class AccountStoryUpload(BaseModel):
 
 
 class AccountProfileMusicUpload(BaseModel):
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     filename: str = Field(min_length=1)
     content: bytes = Field(min_length=1)
     title: str | None = Field(default=None, min_length=1)
@@ -41,7 +45,7 @@ class AccountProfilePhotoRemove(BaseModel):
     empty ``file_reference`` and must not reach this service.
     """
 
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     photo_id: int = Field(gt=0)
     access_hash: int
     file_reference: bytes = Field(min_length=1)
@@ -56,7 +60,7 @@ class AccountStoryRemove(BaseModel):
     as ``status='ok'``.
     """
 
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     story_id: int = Field(gt=0)
 
 
@@ -69,7 +73,7 @@ class AccountProfileMusicRemove(BaseModel):
     reach this service (the UI guards them with a disabled delete button).
     """
 
-    account_id: str = Field(min_length=1)
+    account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     file_id: int = Field(gt=0)
     access_hash: int
     file_reference: bytes = Field(min_length=1)

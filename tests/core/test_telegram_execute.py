@@ -459,6 +459,70 @@ async def test_execute_update_profile_dispatches_request(
 
 
 @pytest.mark.asyncio
+async def test_execute_update_profile_none_fields_are_omitted(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``None`` must reach the TL request as ``None`` (omitted = unchanged).
+
+    Regression guard for the old ``last_name or ""`` coercion, which turned
+    "leave my last name alone" into "clear my last name" — and for the
+    username: a ``None`` username must not dispatch ``UpdateUsernameRequest``.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-4-none", UpdateProfile(first_name="Alice"))
+
+    assert result.status == "ok"
+    profile_req = next(req for req in captured if isinstance(req, UpdateProfileRequest))
+    assert profile_req.first_name == "Alice"
+    assert profile_req.last_name is None
+    assert profile_req.about is None
+    assert not any(isinstance(req, UpdateUsernameRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_execute_update_profile_empty_strings_clear(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``""`` must reach the TL requests verbatim — the "clear this field" form.
+
+    ``account.updateProfile`` serializes ``""`` (flag set → server clears) and
+    ``UpdateUsernameRequest(username="")`` removes the username.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-4-clear",
+        UpdateProfile(first_name="Alice", last_name="", username="", bio=""),
+    )
+
+    assert result.status == "ok"
+    profile_req = next(req for req in captured if isinstance(req, UpdateProfileRequest))
+    assert profile_req.last_name == ""
+    assert profile_req.about == ""
+    username_req = next(req for req in captured if isinstance(req, UpdateUsernameRequest))
+    assert username_req.username == ""
+
+
+@pytest.mark.asyncio
 async def test_execute_set_profile_photo_uploads_photo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -576,13 +640,23 @@ def test_normalize_story_image_renders_blurred_background_canvas() -> None:
         assert abs(int(centre[0]) - source_rgb[0]) < 30, "fitted source must dominate the centre"
 
 
-def test_normalize_story_image_rejects_non_image_bytes() -> None:
+def test_normalize_story_image_rejects_non_image_bytes_with_stable_code() -> None:
+    """Undecodable image bytes raise the stable code, never Russian prose.
+
+    Mirrors the video path's ``StoryVideoNormalisationError`` contract
+    (non-negotiable #12): ``str(exc)`` must be the locale-neutral code the SPA
+    translates, because it travels the ``execute`` → ``error_message`` →
+    error-envelope path verbatim.
+    """
     from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+        StoryImageNormalisationError,
         _normalize_story_image_for_telegram,
     )
 
-    with pytest.raises(ValueError, match="JPG/PNG/WebP"):
+    with pytest.raises(StoryImageNormalisationError) as excinfo:
         _normalize_story_image_for_telegram(b"not an image")
+    assert str(excinfo.value) == "story_image_invalid"
+    assert not any("Ѐ" <= ch <= "ӿ" for ch in str(excinfo.value))
 
 
 @pytest.mark.asyncio

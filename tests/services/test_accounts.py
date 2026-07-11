@@ -45,6 +45,7 @@ from schemas.telegram_actions import (
 )
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
+    AccountActionError,
     SessionAlreadyExistsError,
     account_stats,
     add_account,
@@ -704,6 +705,73 @@ async def test_update_account_profile_surfaces_action_failure(
         await update_account_profile(
             AccountProfileUpdateRequest(account_id="account-profile-fail", first_name="Alice"),
         )
+
+
+@pytest.mark.asyncio
+async def test_update_account_profile_none_fields_leave_db_untouched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Contract: ``None`` means "leave unchanged" — in the DB row and the action.
+
+    The SPA sends ``""`` to clear; a ``None`` payload must neither clear the
+    stored snapshot nor claim it did.
+    """
+    captured: list[object] = []
+    await add_account(AccountCreate(account_id="account-profile-none"))
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile-none",
+            first_name="Alice",
+            last_name="L",
+            username="alice",
+            bio="Bio",
+        ),
+    )
+
+    account = await update_account_profile(
+        AccountProfileUpdateRequest(account_id="account-profile-none", first_name="Alicia"),
+    )
+
+    assert account.first_name == "Alicia"
+    assert account.last_name == "L"
+    assert account.username == "alice"
+    assert account.bio == "Bio"
+    action = captured[-1]
+    assert isinstance(action, UpdateProfile)
+    assert action.last_name is None
+    assert action.username is None
+    assert action.bio is None
+
+
+@pytest.mark.asyncio
+async def test_update_account_profile_flood_wait_carries_retry_seconds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flood-limited update raises ``AccountActionError`` with the wait duration."""
+    await add_account(AccountCreate(account_id="account-profile-flood"))
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="flood_wait",
+            action_type="update_profile",
+            account_id=account_id,
+            flood_wait_seconds=345,
+        )
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+
+    with pytest.raises(AccountActionError, match="flood_wait") as excinfo:
+        await update_account_profile(
+            AccountProfileUpdateRequest(account_id="account-profile-flood", first_name="Alice"),
+        )
+    assert excinfo.value.code == "flood_wait"
+    assert excinfo.value.retry_after_seconds == 345
 
 
 @pytest.mark.asyncio

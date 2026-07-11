@@ -19,6 +19,7 @@ from schemas.telegram_actions import (
     RemoveStory,
     SetProfilePhoto,
 )
+from services.accounts._result import raise_for_result
 from services.accounts._uploads import (
     _PROFILE_MUSIC_SUFFIXES,
     _PROFILE_PHOTO_SUFFIXES,
@@ -61,9 +62,7 @@ async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionRe
         data.account_id,
         SetProfilePhoto(filename=data.filename, content=data.content),
     )
-    if result.status != "ok":
-        msg = result.error_message or result.status
-        raise ValueError(msg)
+    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
@@ -102,9 +101,7 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
             protect_content=data.protect_content,
         ),
     )
-    if result.status != "ok":
-        msg = result.error_message or result.status
-        raise ValueError(msg)
+    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
@@ -136,9 +133,7 @@ async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionRe
             performer=data.performer,
         ),
     )
-    if result.status != "ok":
-        msg = result.error_message or result.status
-        raise ValueError(msg)
+    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
@@ -158,9 +153,7 @@ async def remove_account_profile_music(data: AccountProfileMusicRemove) -> Actio
             file_reference=data.file_reference,
         ),
     )
-    if result.status != "ok":
-        msg = result.error_message or result.status
-        raise ValueError(msg)
+    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
@@ -180,9 +173,7 @@ async def remove_account_profile_photo(data: AccountProfilePhotoRemove) -> Actio
             file_reference=data.file_reference,
         ),
     )
-    if result.status != "ok":
-        msg = result.error_message or result.status
-        raise ValueError(msg)
+    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
@@ -195,9 +186,7 @@ async def remove_account_profile_photo(data: AccountProfilePhotoRemove) -> Actio
 
 async def remove_account_story(data: AccountStoryRemove) -> ActionResult:
     result = await execute(data.account_id, RemoveStory(story_id=data.story_id))
-    if result.status != "ok":
-        msg = result.error_message or result.status
-        raise ValueError(msg)
+    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",

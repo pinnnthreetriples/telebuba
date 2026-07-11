@@ -193,7 +193,11 @@
       "stDone": "Published",
       "stError": "Error",
       "retry": "Retry",
-      "removeFile": "Remove file"
+      "removeFile": "Remove file",
+      "code": {
+        "story_image_invalid": "The image could not be read — choose a JPG/PNG/WebP file",
+        "story_video_invalid": "The video could not be processed — choose an MP4/MOV file"
+      }
     },
     "profile": {
       "close": "Close",
@@ -208,6 +212,10 @@
       "username": "Username",
       "bio": "Bio",
       "errFirstName": "Enter a first name",
+      "errFirstNameMax": "First name must be at most 64 characters",
+      "errLastNameMax": "Last name must be at most 64 characters",
+      "errBioMax": "Bio must be at most 70 characters",
+      "errUsername": "Username: 5–32 characters, latin letters, digits and _, starting with a letter",
       "photoHint": "Current photo and history · drag to replace",
       "removePhoto": "Remove photo",
       "removePhotoTitle": "Remove photo?",
@@ -236,7 +244,10 @@
       "saving": "Saving…",
       "refresh": "Refresh",
       "updatedJustNow": "Updated just now",
-      "updatedMinAgo": "Updated {{n}} min ago"
+      "updatedMinAgo": "Updated {{n}} min ago",
+      "discardTitle": "Discard changes?",
+      "discardBody": "You have unsaved profile edits. Close without saving?",
+      "discardConfirm": "Discard"
     },
     "addWizard": {
       "title": "Add account",

@@ -19,7 +19,12 @@ from schemas.profile_media import (
 from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataImportResult
 from schemas.telegram_actions import ActionResult
-from services.accounts import PhoneLoginError, SessionAlreadyExistsError, add_account
+from services.accounts import (
+    AccountActionError,
+    PhoneLoginError,
+    SessionAlreadyExistsError,
+    add_account,
+)
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -202,6 +207,51 @@ async def test_update_profile_maps_value_error_to_400(
         )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.asyncio
+async def test_update_profile_flood_wait_surfaces_retry_seconds(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flood-limited profile update keeps the wait duration on the wire.
+
+    ``message`` stays the stable code and the server-mandated seconds land in
+    the envelope's ``fields`` — previously the duration was dropped by the
+    ``str(exc)`` collapse and the client had no idea how long to back off.
+    """
+
+    async def _flood(body: object) -> AccountRead:  # noqa: ARG001
+        code = "flood_wait"
+        raise AccountActionError(code, retry_after_seconds=345)
+
+    monkeypatch.setattr("services.accounts.update_account_profile", _flood)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/profile",
+            json={"account_id": "acc-1", "first_name": "New"},
+        )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "flood_wait"
+    assert body["error"]["fields"] == {"retry_after_seconds": "345"}
+
+
+@pytest.mark.asyncio
+async def test_update_profile_over_limit_first_name_is_422_with_fields(
+    app: FastAPI,
+) -> None:
+    """Server-side length limits hold without the SPA: 65-char first_name → 422."""
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/profile",
+            json={"account_id": "acc-1", "first_name": "x" * 65},
+        )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"]["code"] == "validation_error"
+    assert "body.first_name" in body["error"]["fields"]
 
 
 @pytest.mark.asyncio
@@ -468,6 +518,37 @@ async def test_post_story_surfaces_video_error_code_not_russian(
     # The stable code is emitted; no Cyrillic / Russian prose crosses the wire.
     assert body["error"]["message"] == "story_video_invalid"
     assert not any("Ѐ" <= ch <= "ӿ" for ch in body["error"]["message"])
+
+
+@pytest.mark.asyncio
+async def test_post_story_surfaces_image_error_code_not_russian(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The image twin of the video regression above (non-negotiable #12).
+
+    ``StoryImageNormalisationError`` flows through ``execute`` into the
+    service's ``AccountActionError``; the wire must carry the stable code
+    ``story_image_invalid``, never the old Russian prose.
+    """
+
+    async def _boom(upload: object) -> ActionResult:  # noqa: ARG001
+        code = "story_image_invalid"
+        raise AccountActionError(code)
+
+    monkeypatch.setattr("services.accounts.post_account_story", _boom)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story",
+            files={"file": ("s.jpg", b"img", "image/jpeg")},
+            data={"media_kind": "image", "privacy_preset": "contacts"},
+        )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "story_image_invalid"
+    assert not any("Ѐ" <= ch <= "ӿ" for ch in body["error"]["message"])
+    assert "fields" not in body["error"]  # no retry seconds on a non-flood failure
 
 
 @pytest.mark.asyncio
