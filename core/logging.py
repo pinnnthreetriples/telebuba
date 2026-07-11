@@ -26,9 +26,9 @@ import sentry_sdk
 from loguru import logger
 
 from core.config import settings
-from core.db import insert_log_row
+from core.db import _now_iso, insert_log_row
 from core.events import publish as publish_event
-from schemas.logs import LogEventInput
+from schemas.logs import LogEntry, LogEventInput
 
 if TYPE_CHECKING:
     from schemas.logs import LogLevel
@@ -153,3 +153,26 @@ async def log_event(
         _send_to_sentry(payload)
     except Exception as exc:  # noqa: BLE001 — Sentry SDK can hiccup; swallow.
         logger.warning("sentry_send_failed event={event} error={error}", event=event, error=exc)
+
+
+def signal_event(event: str, extra: dict[str, object] | None = None) -> None:
+    """Fan a transient SSE nudge to live subscribers — deliberately NOT persisted.
+
+    The publish-without-insert path (contrast :func:`log_event`, which inserts a
+    ``logs`` row *then* publishes). Builds an in-memory :class:`LogEntry` (``id=0``)
+    and fans it straight out to SSE subscribers so the SPA re-reads over HTTP.
+
+    Because no row is written, high-frequency refresh nudges (e.g. onboarding
+    channel-joins) refresh the board live without flooding the event log — which
+    is the entire reason this exists.
+    """
+    entry = LogEntry(
+        id=0,
+        created_at=_now_iso(),
+        level="INFO",
+        status="success",
+        account_id=None,
+        event=event,
+        extra=extra or {},
+    )
+    publish_event(entry)

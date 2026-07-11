@@ -43,11 +43,10 @@ import { IdleBanner } from './IdleBanner';
 import { ListenerCard } from './ListenerCard';
 import { PipelineCard } from './PipelineCard';
 
-// SSE drives live runtime/board updates; this poll is just the fallback net.
+// SSE drives live runtime/board updates (onboarding now emits a transient bus
+// frame per progress step, so the board refreshes live during it too); this poll
+// is just the fallback net.
 const FALLBACK_POLL_MS = 30000;
-// Onboarding writes readiness rows without a per-join log event, so the SSE
-// stream is quiet during it. Poll fast while it runs so joins surface near-live.
-const ONBOARDING_POLL_MS = 4000;
 const NEURO_LOG_LIMIT = 40;
 const CAPTCHA_QUEUE_LIMIT = 20;
 
@@ -136,10 +135,7 @@ export function NeurocommentPage() {
   const warmingBoard = useQuery(warmingBoardQueryOptions());
   const runtime = useQuery({
     ...neurocommentRuntimeQueryOptions(),
-    // While onboarding is in flight, poll fast so the runtime flag (and thus the
-    // board's live animation) turns off promptly when arming finishes.
-    refetchInterval: (query) =>
-      query.state.data?.onboarding ? ONBOARDING_POLL_MS : FALLBACK_POLL_MS,
+    refetchInterval: FALLBACK_POLL_MS,
   });
 
   const campaignList = campaigns.data?.campaigns ?? [];
@@ -149,7 +145,7 @@ export function NeurocommentPage() {
   const onboarding = runtime.data?.onboarding ?? false;
   const board = useQuery({
     ...neurocommentBoardQueryOptions({ path: { campaign_id: campaignId ?? '' } }),
-    refetchInterval: onboarding ? ONBOARDING_POLL_MS : FALLBACK_POLL_MS,
+    refetchInterval: FALLBACK_POLL_MS,
     enabled: campaignId !== null,
   });
   // Real neurocomment activity feed (live-invalidated by the SSE stream above).

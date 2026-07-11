@@ -13,7 +13,7 @@ from core import events
 from core import logging as logging_module
 from core.config import settings
 from core.db import configure_database, list_recent_logs
-from core.logging import log_event, reset_logging_for_tests, setup_logging
+from core.logging import log_event, reset_logging_for_tests, setup_logging, signal_event
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -149,6 +149,26 @@ async def test_log_event_publishes_persisted_row_to_bus() -> None:
     assert published.extra == {"k": "v"}
     # The published row is the persisted DB row (real id), not a synthetic one.
     assert published.id > 0
+
+
+@pytest.mark.asyncio
+async def test_signal_event_publishes_to_bus_without_persisting() -> None:
+    """A transient nudge reaches live subscribers but is deliberately never persisted.
+
+    This is the whole point of ``signal_event`` (vs ``log_event``): high-frequency
+    refresh nudges (onboarding channel-joins) must refresh the SPA without flooding
+    the ``logs`` table / event log.
+    """
+    async with events.subscribe() as queue:
+        signal_event("neurocomment_onboarding_progress", extra={"k": "v"})
+        published = await asyncio.wait_for(queue.get(), timeout=1)
+
+    assert published.event == "neurocomment_onboarding_progress"
+    assert published.status == "success"
+    assert published.extra == {"k": "v"}
+    assert published.id == 0  # synthetic, never a real DB id
+    # Nothing was written to the logs table.
+    assert await list_recent_logs(limit=5) == []
 
 
 @pytest.mark.asyncio

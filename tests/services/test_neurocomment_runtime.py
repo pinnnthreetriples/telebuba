@@ -9,14 +9,17 @@ warming runtime tests' approach to task tracking + shutdown.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 import pytest
 
+from core import events
 from core.config import settings
 from core.db import (
     _get_engine,
+    assign_account_to_campaign,
     claim_comment,
     configure_database,
     create_account,
@@ -25,6 +28,7 @@ from core.db import (
     get_listener_account_id,
     get_listener_running,
     link_channel_to_campaign,
+    list_recent_logs,
     mark_comment_posted,
     set_listener_account_id,
     set_listener_running,
@@ -32,15 +36,19 @@ from core.db import (
 from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
+from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import (
     ActionResult,
     ActionStatus,
+    BotChallengeWaitResult,
     CheckMessagesAlive,
     CheckMessagesAliveResult,
     JoinChannel,
+    LinkedDiscussionGroupResult,
     NewPostEvent,
+    WaitForBotChallenge,
 )
-from services.neurocomment import _runtime, _state
+from services.neurocomment import _runtime, _seams, _state, onboarding
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
@@ -624,6 +632,61 @@ async def test_start_passes_on_progress_through_to_onboard(
     await _drain_onboarding()
 
     assert seen == [on_progress]
+
+
+@pytest.mark.asyncio
+async def test_onboarding_emits_transient_progress_frames_without_persisting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Onboarding nudges the SSE bus so the board refreshes live — with NO log row.
+
+    The transient frame replaced the FE's 4s onboarding poll: it must reach the bus
+    (drives the SPA's invalidate → board refetch) yet never be persisted, or the
+    event log would flood with a frame per channel-join.
+    """
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    _patch_listener(monkeypatch, _ListenerSpy())
+    _patch_execute(monkeypatch, _ExecuteSpy())  # reconcile + onboarding joins → ok
+
+    async def _resolve(_account_id: str, action: object) -> object:
+        if isinstance(action, WaitForBotChallenge):
+            return BotChallengeWaitResult(message=None)
+        return LinkedDiscussionGroupResult(linked_chat_id=500, comments_enabled=True)
+
+    async def _clean_spam(account_id: str, **_kwargs: object) -> SpamStatusVerdict:
+        return SpamStatusVerdict(
+            account_id=account_id, status="clean", checked_at="2026-01-01T00:00:00"
+        )
+
+    monkeypatch.setattr(_seams, "execute_read", _resolve)
+    monkeypatch.setattr(_seams, "refresh_spam_status", _clean_spam)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    async with events.subscribe() as queue:
+        await _runtime.start_neurocomment("listener-1")
+        await _drain_onboarding()
+        frames: list[object] = []
+        with suppress(asyncio.QueueEmpty):
+            while True:
+                frames.append(queue.get_nowait())
+
+    transient = [f for f in frames if f.event == "neurocomment_onboarding_progress"]
+    assert transient, "onboarding must nudge the bus with a transient progress frame"
+    assert all(f.id == 0 for f in transient)  # synthetic, never a persisted row
+    # The nudge is deliberately absent from the logs table (no event-log flooding).
+    logs = await list_recent_logs(limit=200)
+    assert all(row.event != "neurocomment_onboarding_progress" for row in logs)
+
+
+def _no_sleep(records: list[float]) -> object:
+    async def _sleep(seconds: float) -> None:
+        records.append(seconds)
+
+    return _sleep
 
 
 @pytest.mark.asyncio
