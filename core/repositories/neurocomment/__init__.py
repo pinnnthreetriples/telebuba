@@ -11,10 +11,15 @@ models / ``None`` / ``bool`` — never raw rows (non-negotiable #2).
 
 from __future__ import annotations
 
-from core.repositories.neurocomment._campaigns import (
-    ChannelAlreadyAssignedError,
+from core.repositories.neurocomment._accounts import (
     ChannelNotInCampaignError,
     assign_account_to_campaign,
+    list_campaign_accounts,
+    remove_account_from_campaign,
+    set_campaign_account_channel,
+)
+from core.repositories.neurocomment._campaigns import (
+    ChannelAlreadyAssignedError,
     create_campaign,
     deactivate_channel,
     delete_campaign,
@@ -22,11 +27,8 @@ from core.repositories.neurocomment._campaigns import (
     fetch_campaign,
     link_channel_to_campaign,
     list_active_watch_channels,
-    list_campaign_accounts,
     list_campaign_channels,
     list_campaigns,
-    remove_account_from_campaign,
-    set_campaign_account_channel,
     set_campaign_status,
     update_campaign_prompt,
     update_solver_enabled,
