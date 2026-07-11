@@ -26,8 +26,8 @@ from core._config_domains import (
     NeurocommentSettings,
     OpenAISettings,
     TrustSettings,
-    WarmingSettings,
 )
+from core._config_warming import WarmingSettings
 
 # RFC 7518 §3.2: an HS256 HMAC key should be at least 32 bytes.
 _MIN_AUTH_SECRET_BYTES = 32
