@@ -54,6 +54,9 @@ class TelegramStoryThumb(BaseModel):
     is_pinned: bool = False
     is_active: bool = False
     privacy_preset: StoryPrivacyPreset = "unknown"
+    # ``StoryItem.views.views_count`` — how many accounts viewed the story.
+    # ``None`` when Telegram omits view data (e.g. an expired, unpinned story).
+    views: int | None = None
 
 
 class TelegramPinnedStories(BaseModel):

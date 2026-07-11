@@ -116,6 +116,34 @@ collectible usernames are blocked by the 5-char minimum (matches
 `account.updateUsername` RPC rules). Gates: 1121 pytest / 95% branch, 227
 vitest / 96% lines.
 
+A 2026-07-11 profile-editing bug pass (operator-reported, this branch) fixed
+five defects in the edit-profile modal: (1) **photo/music delete silently
+failed** — Telegram `photo_id`/`access_hash`/`file_id` are int64 (~19 digits)
+but crossed the JSON edge as *numbers*, so the SPA rounded them past 2^53 and
+sent back an `InputPhoto` Telegram didn't recognise (dropped silently, 200
+returned, modal closed "as if" it worked; story delete survived only because
+`story_id` is small). Fixed by carrying those ids as **strings** across the
+JSON boundary (`_Int64Str` in `schemas/profile_media.py`, `str(...)` in
+`account_profile_view`, `_decode_id` parse in the API); (2) **«Сделать
+основным» was a dead label** (the old `ponytail:` comment wrongly claimed no
+RPC) — implemented for real via `photos.updateProfilePhoto`: new
+`SetMainProfilePhoto` action → `_set_main_profile_photo` gateway helper →
+`set_account_main_profile_photo` service → `POST /accounts/{id}/photo/main` →
+`setAccountPhotoMainMutation` → button; (3) **«Обновлено только что» was frozen
+fake info** — the relative-time label used a render-time `Date.now()` and never
+re-computed; added a 30 s tick; (4) **«Обновить» gave no outcome** — replaced the
+`refreshing` bool with an `idle/loading/ok/error` machine (green ✓ / red ✗,
+1.4 s auto-reset; a 200-with-`error` counts as failure); (5) **stories showed no
+view count** — captured `StoryItem.views.views_count` into
+`TelegramStoryThumb.views` → `ProfileStoryView.views` → «👁 N» badge. Also a
+cheap load win: profile-photo and story thumbnail downloads now run via
+`asyncio.gather` instead of serial awaits. Deferred (documented in the PR):
+serving thumbnails from a cacheable image endpoint instead of inlining base64 in
+the snapshot JSON. Gates: 1165 pytest, 241 vitest, aislop clean (the profile-media
+`case` block in `_dispatch_action` was collapsed to the wildcard arm — the media
+dispatcher's own `case _` already guards unknowns — keeping the file under the
+size budget).
+
 A 2026-07-11 neurocomment audit (operator-reported: NOXX campaign never
 comments, board stuck on «Комментарии выкл.», reconcile "loop") diagnosed via
 live-DB forensics + three sonnet subagents and fixed in one PR: (1) **root

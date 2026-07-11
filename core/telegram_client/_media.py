@@ -11,7 +11,11 @@ from typing import TYPE_CHECKING
 from PIL import Image, ImageFilter, UnidentifiedImageError
 from telethon import utils
 from telethon.tl.functions.account import SaveMusicRequest
-from telethon.tl.functions.photos import DeletePhotosRequest, UploadProfilePhotoRequest
+from telethon.tl.functions.photos import (
+    DeletePhotosRequest,
+    UpdateProfilePhotoRequest,
+    UploadProfilePhotoRequest,
+)
 from telethon.tl.functions.stories import (
     CanSendStoryRequest,
     DeleteStoriesRequest,
@@ -37,6 +41,7 @@ from schemas.telegram_actions import (
     RemoveProfileMusic,
     RemoveProfilePhoto,
     RemoveStory,
+    SetMainProfilePhoto,
     SetProfilePhoto,
 )
 
@@ -65,27 +70,27 @@ async def _dispatch_profile_media_action(
     client: TelegramClient,
     action: TelegramAction,
 ) -> int | None:
+    # Only PostStory yields a message_id; every other action is fire-and-forget
+    # (single trailing ``return None`` keeps the return count lint-friendly).
     match action:
-        case SetProfilePhoto():
-            await _set_profile_photo(client, action.filename, action.content)
-            return None
         case PostStory():
             return await _post_story(client, action)
+        case SetProfilePhoto():
+            await _set_profile_photo(client, action.filename, action.content)
         case AddProfileMusic():
             await _add_profile_music(client, action)
-            return None
         case RemoveProfileMusic():
             await _remove_profile_music(client, action)
-            return None
         case RemoveProfilePhoto():
             await _remove_profile_photo(client, action)
-            return None
+        case SetMainProfilePhoto():
+            await _set_main_profile_photo(client, action)
         case RemoveStory():
             await _remove_story(client, action)
-            return None
         case _:  # pragma: no cover - caller only routes media actions here
             msg = f"Unsupported profile media action_type: {action.action_type}"
             raise ValueError(msg)
+    return None
 
 
 async def _set_profile_photo(client: TelegramClient, filename: str, content: bytes) -> None:
@@ -293,6 +298,25 @@ async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePho
                     file_reference=action.file_reference,
                 ),
             ],
+        ),
+    )
+
+
+async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:
+    """Promote an existing history photo to the current avatar.
+
+    ``UpdateProfilePhotoRequest`` takes the ``InputPhoto`` of a photo already in
+    the account's history and moves it to the front (current avatar) — no
+    re-upload, no duplicate. The id triple comes straight from the read-side
+    ``TelegramProfilePhoto`` the UI is showing.
+    """
+    await client(
+        UpdateProfilePhotoRequest(
+            id=InputPhoto(
+                id=action.photo_id,
+                access_hash=action.access_hash,
+                file_reference=action.file_reference,
+            ),
         ),
     )
 

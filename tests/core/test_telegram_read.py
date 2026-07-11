@@ -204,6 +204,49 @@ async def test_list_pinned_stories_returns_items(monkeypatch: pytest.MonkeyPatch
 
 
 @pytest.mark.asyncio
+async def test_list_pinned_stories_captures_view_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``StoryItem.views.views_count`` must land on the snapshot row.
+
+    A story that omits view data (Telegram returns no ``views`` object for
+    expired, unpinned stories) maps to ``None``, not a crash.
+    """
+    with_views = MagicMock(
+        id=401,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption=None,
+        views=MagicMock(views_count=137),
+    )
+    without_views = MagicMock(
+        id=402,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption=None,
+        views=None,
+    )
+    stories_payload = MagicMock(stories=[with_views, without_views])
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, name: str) -> object:  # noqa: ARG002
+            return MagicMock()
+
+        async def __call__(self, request: object) -> object:  # noqa: ARG002
+            return stories_payload
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            return b"thumb"
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-story-views", ListPinnedStories(limit=5))
+
+    assert isinstance(result, TelegramPinnedStories)
+    assert result.items[0].views == 137
+    assert result.items[1].views is None
+
+
+@pytest.mark.asyncio
 async def test_list_active_stories_extracts_inner_stories_and_flags(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

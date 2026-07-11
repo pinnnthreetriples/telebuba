@@ -80,8 +80,8 @@ async def account_profile_view(
         avatar_data_uri=_data_uri(snapshot.avatar_bytes),
         photos=[
             ProfilePhotoView(
-                photo_id=photo.photo_id,
-                access_hash=photo.access_hash,
+                photo_id=str(photo.photo_id),
+                access_hash=str(photo.access_hash),
                 file_reference=base64.b64encode(photo.file_reference).decode("ascii"),
                 thumb_data_uri=_data_uri(photo.thumb_bytes),
             )
@@ -94,16 +94,17 @@ async def account_profile_view(
                 caption=story.caption,
                 privacy_preset=story.privacy_preset,
                 is_pinned=story.is_pinned,
+                views=story.views,
                 thumb_data_uri=_data_uri(story.thumb_bytes),
             )
             for story in snapshot.stories
         ],
         music=[
             ProfileMusicView(
-                file_id=track.file_id,
+                file_id=str(track.file_id),
                 title=track.title,
                 performer=track.performer,
-                access_hash=track.access_hash,
+                access_hash=str(track.access_hash),
                 file_reference=base64.b64encode(track.file_reference).decode("ascii"),
             )
             for track in snapshot.music

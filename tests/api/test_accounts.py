@@ -11,6 +11,7 @@ from schemas.accounts import AccountCreate, AccountRead
 from schemas.phone_login import PhoneCodeRequestResult
 from schemas.profile_media import (
     AccountProfileMusicRemove,
+    AccountProfilePhotoSetMain,
     AccountProfileView,
     ProfileMusicView,
     ProfilePhotoView,
@@ -453,9 +454,13 @@ async def test_profile_snapshot_returns_view(
             first_name="Petr",
             username="petr_tg",
             avatar_data_uri="data:image/jpeg;base64,YWJj",
-            photos=[ProfilePhotoView(photo_id=1, access_hash=2, file_reference="YWJj")],
-            stories=[ProfileStoryView(story_id=5, kind="image", privacy_preset="contacts")],
-            music=[ProfileMusicView(file_id=7, title="T", access_hash=3, file_reference="YWJj")],
+            photos=[ProfilePhotoView(photo_id="1", access_hash="2", file_reference="YWJj")],
+            stories=[
+                ProfileStoryView(story_id=5, kind="image", privacy_preset="contacts", views=42),
+            ],
+            music=[
+                ProfileMusicView(file_id="7", title="T", access_hash="3", file_reference="YWJj"),
+            ],
         )
 
     monkeypatch.setattr("services.accounts.account_profile_view", _fake)
@@ -464,7 +469,8 @@ async def test_profile_snapshot_returns_view(
     assert resp.status_code == 200
     body = resp.json()
     assert body["first_name"] == "Petr"
-    assert body["photos"][0]["photo_id"] == 1
+    assert body["photos"][0]["photo_id"] == "1"
+    assert body["stories"][0]["views"] == 42
     assert body["music"][0]["title"] == "T"
     assert seen["force_refresh"] is True  # the ?refresh=true query forwards to the service
 
@@ -592,16 +598,19 @@ async def test_remove_music_decodes_file_reference(
 
     async def _fake(data: AccountProfileMusicRemove) -> ActionResult:
         seen["ref"] = data.file_reference
+        seen["file_id"] = data.file_id
         return ActionResult(status="ok", action_type="remove_profile_music", account_id="acc-1")
 
     monkeypatch.setattr("services.accounts.remove_account_profile_music", _fake)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/acc-1/music/remove",
-            json={"file_id": 7, "access_hash": 3, "file_reference": "YWJj"},
+            # int64 ids travel as strings so the SPA can't round them past 2^53.
+            json={"file_id": "9007199254740993", "access_hash": "3", "file_reference": "YWJj"},
         )
     assert resp.status_code == 200
     assert seen["ref"] == b"abc"  # base64 "YWJj" -> b"abc"
+    assert seen["file_id"] == 9007199254740993  # survives past JS's safe-int limit
 
 
 @pytest.mark.asyncio
@@ -609,6 +618,34 @@ async def test_remove_photo_bad_reference_is_400(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/acc-1/photo/remove",
-            json={"photo_id": 1, "access_hash": 2, "file_reference": "!!notbase64!!"},
+            json={"photo_id": "1", "access_hash": "2", "file_reference": "!!notbase64!!"},
         )
     assert resp.status_code == 400
+
+
+@pytest.mark.asyncio
+async def test_set_photo_main_preserves_int64_ids(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The set-main endpoint must decode the string ids back to full-precision int64."""
+    seen: dict[str, object] = {}
+
+    async def _fake(data: AccountProfilePhotoSetMain) -> ActionResult:
+        seen["photo_id"] = data.photo_id
+        seen["access_hash"] = data.access_hash
+        return ActionResult(status="ok", action_type="set_main_profile_photo", account_id="acc-1")
+
+    monkeypatch.setattr("services.accounts.set_account_main_profile_photo", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/photo/main",
+            json={
+                "photo_id": "9007199254740993",  # 2^53 + 1, unrepresentable as a JS number
+                "access_hash": "-8000000000000000000",
+                "file_reference": "YWJj",
+            },
+        )
+    assert resp.status_code == 200
+    assert seen["photo_id"] == 9007199254740993
+    assert seen["access_hash"] == -8000000000000000000
