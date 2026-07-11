@@ -657,6 +657,49 @@ def test_normalize_story_image_rejects_non_image_bytes_with_stable_code() -> Non
         _normalize_story_image_for_telegram(b"not an image")
     assert str(excinfo.value) == "story_image_invalid"
     assert not any("Ѐ" <= ch <= "ӿ" for ch in str(excinfo.value))
+    # The chained cause names the Pillow failure and the real magic bytes, so
+    # the telegram_post_story_failed log says what the file actually was.
+    assert "magic=" in str(excinfo.value.__cause__)
+
+
+def test_normalize_story_image_rejects_truncated_file_with_stable_code() -> None:
+    """A truncated download maps to the stable code, not raw Pillow prose.
+
+    A cut-off file raises ``OSError`` from ``load()``, not
+    ``UnidentifiedImageError`` — both must collapse into the same
+    locale-neutral ``story_image_invalid`` code.
+    """
+    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+        StoryImageNormalisationError,
+        _normalize_story_image_for_telegram,
+    )
+
+    buffer = BytesIO()
+    Image.new("RGB", (200, 200)).save(buffer, format="JPEG")
+    truncated = buffer.getvalue()[:400]
+
+    with pytest.raises(StoryImageNormalisationError) as excinfo:
+        _normalize_story_image_for_telegram(truncated)
+    assert str(excinfo.value) == "story_image_invalid"
+
+
+def test_normalize_story_image_rejects_decompression_bomb_with_stable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Pillow's decompression-bomb guard maps to the stable code too."""
+    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+        StoryImageNormalisationError,
+        _normalize_story_image_for_telegram,
+    )
+
+    buffer = BytesIO()
+    Image.new("RGB", (100, 100)).save(buffer, format="PNG")
+    # 100x100 = 10_000 px against a limit of 100 exceeds 2x => hard error.
+    monkeypatch.setattr(Image, "MAX_IMAGE_PIXELS", 100)
+
+    with pytest.raises(StoryImageNormalisationError) as excinfo:
+        _normalize_story_image_for_telegram(buffer.getvalue())
+    assert str(excinfo.value) == "story_image_invalid"
 
 
 @pytest.mark.asyncio

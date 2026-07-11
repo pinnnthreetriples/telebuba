@@ -174,8 +174,13 @@ def _normalize_story_image_for_telegram(content: bytes) -> bytes:
         with Image.open(BytesIO(content)) as opened:
             opened.load()
             source = opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
-    except UnidentifiedImageError as exc:
-        raise StoryImageNormalisationError from exc
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        # UnidentifiedImageError = container Pillow can't decode (e.g. HEIC/JXL
+        # renamed to .png); OSError from load() = truncated/corrupt bytes. The
+        # chained cause carries the Pillow reason plus the file's real magic
+        # bytes so the telegram_post_story_failed log shows what the file was.
+        detail = f"{type(exc).__name__}: {exc}; magic={content[:12].hex()}"
+        raise StoryImageNormalisationError from ValueError(detail)
 
     canvas = _blurred_story_background(source, target_width, target_height)
     fitted = source.copy()

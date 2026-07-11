@@ -92,7 +92,13 @@ async def _generic_error(account_id: str, action: TelegramAction, exc: Exception
         "ERROR",
         f"telegram_{action.action_type}_failed",
         account_id=account_id,
-        extra={"error_type": type(exc).__name__, "message": str(exc)},
+        extra={
+            "error_type": type(exc).__name__,
+            "message": str(exc),
+            # Stable-code wrappers (Story*NormalisationError) chain the real
+            # reason as the cause — surface it, or the log only says the code.
+            "cause": str(exc.__cause__) if exc.__cause__ is not None else None,
+        },
     )
     return ActionResult(
         status="failed",
