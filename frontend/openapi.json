@@ -5063,6 +5063,82 @@
         "title": "ChannelLinkOutcome",
         "description": "Result of attaching a channel to a campaign.\n\n``already_assigned`` means the channel is the active target of another campaign\n(the repository's uniqueness guard). The service returns this instead of letting\n``ChannelAlreadyAssignedError`` reach the UI, so features never catch internals (#2)."
       },
+      "CommentRecord": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "post_id": {
+            "type": "integer",
+            "title": "Post Id"
+          },
+          "campaign_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Campaign Id"
+          },
+          "account_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Account Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "claimed",
+              "posted",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "comment_text": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Text"
+          },
+          "comment_msg_id": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Comment Msg Id"
+          },
+          "created_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Created At"
+          },
+          "updated_at": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Updated At"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "post_id",
+          "campaign_id",
+          "account_id",
+          "status",
+          "created_at",
+          "updated_at"
+        ],
+        "title": "CommentRecord",
+        "description": "One row of ``neurocomment_comments`` \u2014 the claim + outcome for a post."
+      },
       "DialogueFeed": {
         "properties": {
           "messages": {
@@ -5425,6 +5501,13 @@
             },
             "type": "array",
             "title": "Channels"
+          },
+          "comments": {
+            "items": {
+              "$ref": "#/components/schemas/CommentRecord"
+            },
+            "type": "array",
+            "title": "Comments"
           }
         },
         "type": "object",

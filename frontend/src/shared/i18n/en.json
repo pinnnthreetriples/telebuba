@@ -588,6 +588,10 @@
       "title": "Event log",
       "empty": "No events yet"
     },
+    "feed": {
+      "title": "Published comments",
+      "empty": "No published comments yet"
+    },
     "campaigns": {
       "title": "Campaigns",
       "none": "No campaigns",

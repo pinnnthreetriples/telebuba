@@ -373,6 +373,10 @@ class NeurocommentBoard(BaseModel):
     solver_enabled: bool | None = None  # per-campaign solver override (#148)
     accounts: list[NeurocommentAccountCard] = Field(default_factory=list)
     channels: list[NeurocommentChannelRow] = Field(default_factory=list)
+    # Published-comments feed: the campaign's recent posted comments, newest first,
+    # capped by ``settings.neurocomment.board_comment_feed_limit``. Lets the UI show
+    # every published comment instead of only each account's last one.
+    comments: list[CommentRecord] = Field(default_factory=list)
 
 
 class NeurocommentRuntimeStatus(BaseModel):

@@ -306,6 +306,9 @@ class NeurocommentSettings(BaseSettings):
     join_delay_max_seconds: float = Field(default=60.0, ge=0.0)
     # Per-account throughput ceiling.
     max_comments_per_hour: int = Field(default=10, ge=1)
+    # Cap on how many recent posted comments the board's published-comments feed
+    # carries (newest first) — bounds the board payload for a busy campaign.
+    board_comment_feed_limit: int = Field(default=50, ge=1)
     # Minimum Trust Score an account needs to be picked for commenting (0 = no
     # gate). Operator-tunable via the neurocomment settings store + Settings UI.
     min_trust_score: int = Field(default=0, ge=0, le=100)
