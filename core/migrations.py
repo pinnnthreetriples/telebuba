@@ -27,6 +27,7 @@ from core.migration_steps import (
     _add_warming_join_enabled,
     _add_warming_joined_channels,
     _add_warming_phase_columns,
+    _add_warming_settings_gemini_tuning,
     _add_warming_settings_llm_columns,
     _add_warming_state_promoted_to_nc,
     _add_warming_state_run_id,
@@ -83,6 +84,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (25, "add_campaign_account_channel", _add_campaign_account_channel),
     (26, "add_warming_settings_llm_columns", _add_warming_settings_llm_columns),
     (27, "add_neurocomment_comment_deleted_at", _add_neurocomment_comment_deleted_at),
+    (28, "add_warming_settings_gemini_tuning", _add_warming_settings_gemini_tuning),
 )
 
 

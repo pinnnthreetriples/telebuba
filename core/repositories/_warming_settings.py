@@ -32,6 +32,10 @@ def _int_or(value: object, default: int) -> int:
     return default if value is None else int(cast("int | str", value))
 
 
+def _float_or(value: object, default: float) -> float:
+    return default if value is None else float(cast("float | int | str", value))
+
+
 def _str_or(value: object, default: str) -> str:
     """DB column value if present + non-empty, else the config/.env fallback."""
     text = "" if value is None else str(value)
@@ -74,6 +78,10 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         max_daily_actions=_int_or(mapping.get("max_daily_actions"), warm.max_daily_actions),
         gemini_api_key=_str_or(mapping.get("gemini_api_key"), settings.gemini.api_key),
         gemini_model=_str_or(mapping.get("gemini_model"), settings.gemini.model),
+        gemini_max_retries=_int_or(mapping.get("gemini_max_retries"), settings.gemini.max_retries),
+        gemini_min_interval_seconds=_float_or(
+            mapping.get("gemini_min_interval_seconds"), settings.gemini.min_interval_seconds
+        ),
         openai_api_key=_str_or(mapping.get("openai_api_key"), settings.openai.api_key),
         openai_model=_str_or(mapping.get("openai_model"), settings.openai.model),
         captcha_llm_provider=_captcha_provider(mapping.get("captcha_llm_provider")),
@@ -92,6 +100,8 @@ def _default_warming_settings_values() -> dict[str, object]:
         "max_daily_actions": warm.max_daily_actions,
         "gemini_api_key": "",
         "gemini_model": settings.gemini.model,
+        "gemini_max_retries": settings.gemini.max_retries,
+        "gemini_min_interval_seconds": settings.gemini.min_interval_seconds,
         "openai_api_key": "",
         "openai_model": settings.openai.model,
         "captcha_llm_provider": settings.neurocomment.challenge_llm_provider,
@@ -124,6 +134,8 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
+    gemini_max_retries: int = 1,
+    gemini_min_interval_seconds: float = 0.0,
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
@@ -151,6 +163,8 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
             "gemini_model": _keep_nonempty(
                 gemini_model, cur.get("gemini_model"), settings.gemini.model
             ),
+            "gemini_max_retries": gemini_max_retries,
+            "gemini_min_interval_seconds": gemini_min_interval_seconds,
             "openai_api_key": _keep(openai_api_key, cur.get("openai_api_key")),
             "openai_model": _keep_nonempty(
                 openai_model, cur.get("openai_model"), settings.openai.model
@@ -179,6 +193,8 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
+    gemini_max_retries: int = 1,
+    gemini_min_interval_seconds: float = 0.0,
     openai_api_key: str | None = None,
     openai_model: str | None = None,
     captcha_llm_provider: str | None = None,
@@ -197,6 +213,8 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         max_daily_actions=max_daily_actions,
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
+        gemini_max_retries=gemini_max_retries,
+        gemini_min_interval_seconds=gemini_min_interval_seconds,
         openai_api_key=openai_api_key,
         openai_model=openai_model,
         captcha_llm_provider=captcha_llm_provider,

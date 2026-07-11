@@ -11,7 +11,7 @@ import pytest_asyncio
 import respx
 
 from core.config import settings
-from core.gemini import _get_client, close_gemini_client, generate_text
+from core.gemini import _get_client, _throttle, close_gemini_client, generate_text
 from schemas.gemini import GeminiRequest
 
 if TYPE_CHECKING:
@@ -254,3 +254,93 @@ async def test_generate_text_malformed_payload_is_error(body: dict[str, object])
 
     assert result.status == "error"
     assert result.text is None
+
+
+@pytest.mark.asyncio
+async def test_request_max_retries_overrides_config(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A per-request ``max_retries`` wins over ``settings.gemini.max_retries``."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 0)  # config says: no retry
+    monkeypatch.setattr(settings.gemini, "retry_backoff_seconds", 0.0)
+    request = GeminiRequest(
+        api_key="k", prompt="hi", model="m", temperature=0.0, max_output_tokens=10, max_retries=2
+    )
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(429, text="slow"),
+        )
+        result = await generate_text(request)
+
+    assert result.status == "rate_limited"
+    assert route.call_count == 3  # original + 2 overridden retries
+
+
+@pytest.mark.asyncio
+async def test_request_max_retries_none_falls_back_to_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``max_retries=None`` (the default) uses the config value."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 0)
+    monkeypatch.setattr(settings.gemini, "retry_backoff_seconds", 0.0)
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(429, text="slow"),
+        )
+        await generate_text(_request())  # no override on the fixture request
+
+    assert route.call_count == 1  # config max_retries=0 → single attempt
+
+
+@pytest.mark.asyncio
+async def test_min_interval_spaces_consecutive_calls(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A non-zero ``min_interval_seconds`` sleeps to space calls by the interval."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 0)
+    monkeypatch.setattr("core.gemini.time.monotonic", lambda: 100.0)  # frozen clock
+    _throttle.last_call = 0.0
+    slept: list[float] = []
+
+    async def _capture(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("core.gemini.asyncio.sleep", _capture)
+    request = GeminiRequest(
+        api_key="k",
+        prompt="hi",
+        model="m",
+        temperature=0.0,
+        max_output_tokens=10,
+        min_interval_seconds=5.0,
+    )
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200, json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+            ),
+        )
+        await generate_text(request)  # first: last_call=0 → no wait, stamps 100
+        await generate_text(request)  # second: 100+5-100 = 5 → sleeps 5
+
+    assert slept == [5.0]
+
+
+@pytest.mark.asyncio
+async def test_zero_interval_never_sleeps(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``min_interval_seconds`` 0/None disables the throttle (no sleep, clock untouched)."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 0)
+    monkeypatch.setattr(settings.gemini, "min_interval_seconds", 0.0)
+    _throttle.last_call = 999.0
+    slept: list[float] = []
+
+    async def _capture(seconds: float) -> None:
+        slept.append(seconds)
+
+    monkeypatch.setattr("core.gemini.asyncio.sleep", _capture)
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200, json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]}
+            ),
+        )
+        await generate_text(_request())  # no override → config 0 → no throttle
+
+    assert slept == []
+    assert _throttle.last_call == 999.0  # opted-out call left the shared clock alone

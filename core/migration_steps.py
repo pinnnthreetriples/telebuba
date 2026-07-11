@@ -261,6 +261,22 @@ def _add_warming_settings_llm_columns(connection: Connection) -> None:
         )
 
 
+def _add_warming_settings_gemini_tuning(connection: Connection) -> None:
+    # Operator-editable Gemini rate-limit knobs: retry count + min spacing between
+    # calls. Nullable → legacy rows read the config/.env fallback until saved.
+    if not _sqlite_table_exists(connection, "warming_settings"):
+        return
+    columns = _sqlite_columns(connection, "warming_settings")
+    if "gemini_max_retries" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_settings ADD COLUMN gemini_max_retries INTEGER",
+        )
+    if "gemini_min_interval_seconds" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_settings ADD COLUMN gemini_min_interval_seconds REAL",
+        )
+
+
 def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
     # Operator graduation flag set from the warming card; default 0 keeps existing
     # rows opt-in (NC overview shows them only after explicit promotion).

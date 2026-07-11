@@ -7687,6 +7687,20 @@
             "minLength": 1,
             "title": "Gemini Model"
           },
+          "gemini_max_retries": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Gemini Max Retries",
+            "default": 1
+          },
+          "gemini_min_interval_seconds": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Gemini Min Interval Seconds",
+            "default": 0.0
+          },
           "has_openai_key": {
             "type": "boolean",
             "title": "Has Openai Key",
@@ -7770,6 +7784,20 @@
               }
             ],
             "title": "Gemini Model"
+          },
+          "gemini_max_retries": {
+            "type": "integer",
+            "maximum": 5.0,
+            "minimum": 0.0,
+            "title": "Gemini Max Retries",
+            "default": 1
+          },
+          "gemini_min_interval_seconds": {
+            "type": "number",
+            "maximum": 60.0,
+            "minimum": 0.0,
+            "title": "Gemini Min Interval Seconds",
+            "default": 0.0
           },
           "clear_gemini_key": {
             "type": "boolean",
