@@ -29,6 +29,9 @@ import type {
   CheckProxyData,
   CheckProxyErrors,
   CheckProxyResponses,
+  ClearLogsData,
+  ClearLogsErrors,
+  ClearLogsResponses,
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerErrors,
   ClearNeurocommentListenerResponses,
@@ -1281,6 +1284,19 @@ export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * Delete Logs
+ *
+ * Clear log rows whose event starts with ``event_prefix`` (all rows when empty).
+ */
+export const clearLogs = <ThrowOnError extends boolean = false>(
+  options?: Options<ClearLogsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).delete<ClearLogsResponses, ClearLogsErrors, ThrowOnError>({
+    url: '/api/v1/logs',
+    ...options,
   });
 
 /**

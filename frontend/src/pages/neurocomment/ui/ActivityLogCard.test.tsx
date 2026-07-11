@@ -1,5 +1,6 @@
 import { render, screen } from '@testing-library/react';
-import { expect, test } from 'vitest';
+import userEvent from '@testing-library/user-event';
+import { expect, test, vi } from 'vitest';
 
 import '@/shared/i18n';
 
@@ -47,6 +48,22 @@ test('colours an attempted-but-failed event red even though it is logged INFO', 
   );
   const label = screen.getByText('Не удалось сгенерировать текст');
   expect(label).toHaveStyle({ color: '#e5736b' });
+});
+
+test('shows a clear-log button only with onClear and rows, and fires it', async () => {
+  const onClear = vi.fn();
+  const { rerender } = render(<ActivityLogCard logLines={[]} onClear={onClear} />);
+  // No rows → nothing to clear, button hidden.
+  expect(screen.queryByRole('button', { name: 'Очистить лог' })).toBeNull();
+
+  rerender(<ActivityLogCard logLines={[entry({})]} onClear={onClear} />);
+  await userEvent.click(screen.getByRole('button', { name: 'Очистить лог' }));
+  expect(onClear).toHaveBeenCalledTimes(1);
+});
+
+test('omits the clear button when no onClear is given', () => {
+  render(<ActivityLogCard logLines={[entry({})]} />);
+  expect(screen.queryByRole('button', { name: 'Очистить лог' })).toBeNull();
 });
 
 test('attaches a what-to-do hint as a hover tooltip', () => {

@@ -192,9 +192,16 @@ no_accounts_linked via the single `_account_block_reason` gate ladder that
 not_acceptable/duplicate) — both surfaced in the `no_account_available` /
 `generation_exhausted` log `extra`. Settings label clarified «Комментариев в час
 (на аккаунт)». Diagnosis behind it: one account served 9+ channels → 113/258 recent
-events were `no_account_available` (capacity, not a bug). Gates: full 1168 pytest
-green (strict profile), ruff+ty+aislop clean; frontend 244 vitest + tsc+eslint+
-steiger green; no API-client change (extra-only).
+events were `no_account_available` (capacity, not a bug).
+
+Same PR, second pass: (1) a **clear-logs** action — `DELETE /api/v1/logs?event_prefix=`
+(`clearLogs` op → `LogPurgeResult`, repo `purge_logs(prefix)`, service `clear_logs`);
+the neuro log card gained a trash button (shown only with rows) → confirm → clears
+`event_prefix=neurocomment` only. (2) Bug fix: the campaign-prompt modal showed an
+account's arbitrary first-readiness channel; it now shows `pinned_channel` or the
+campaign name (unpinned = whole-campaign scope). Gates: full 1171 pytest green
+(strict), ruff+ty+aislop clean; frontend 244+ vitest + tsc+eslint+steiger green;
+API client regenerated (adds `clearLogs`, drift-free).
 
 ## Not Yet Built (deliberate)
 

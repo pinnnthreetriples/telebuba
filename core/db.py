@@ -251,6 +251,7 @@ from core.repositories.logs import (  # noqa: E402, F401
     insert_log_row,
     list_filtered_logs,
     list_recent_logs,
+    purge_logs,
     purge_logs_older_than,
 )
 from core.repositories.neurocomment import (  # noqa: E402, F401

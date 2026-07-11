@@ -73,3 +73,9 @@ class LogsPageState(BaseModel):
 
     entries: list[LogEntry] = Field(default_factory=list)
     summary: LogsSummary
+
+
+class LogPurgeResult(BaseModel):
+    """How many log rows a clear operation removed."""
+
+    deleted: int = Field(ge=0)

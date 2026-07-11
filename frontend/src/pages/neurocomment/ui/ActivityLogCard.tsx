@@ -37,7 +37,13 @@ function LogLine({ line, t }: { line: LogEntry; t: TFunction }) {
 }
 
 // The neurocomment activity terminal — the tail of the live log stream.
-export function ActivityLogCard({ logLines }: { logLines: LogEntry[] }) {
+export function ActivityLogCard({
+  logLines,
+  onClear,
+}: {
+  logLines: LogEntry[];
+  onClear?: () => void;
+}) {
   const { t } = useTranslation();
   return (
     <CollapsibleCard
@@ -45,6 +51,29 @@ export function ActivityLogCard({ logLines }: { logLines: LogEntry[] }) {
       label={t('neurocomment.log.title')}
       headerClassName="px-4 py-[13px]"
       bodyClassName="px-[14px] pb-[14px]"
+      trailing={
+        onClear && logLines.length > 0 ? (
+          <button
+            type="button"
+            aria-label={t('neurocomment.log.clear')}
+            title={t('neurocomment.log.clear')}
+            onClick={onClear}
+            className="flex h-[28px] w-[28px] items-center justify-center rounded-lg border border-line bg-white text-ink-subtle hover:border-[#f0c9c5] hover:bg-danger-tint hover:text-danger"
+          >
+            <svg
+              width="15"
+              height="15"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="M3 6h18" />
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+            </svg>
+          </button>
+        ) : undefined
+      }
       header={
         <>
           <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />

@@ -28,7 +28,7 @@ import {
   stopNeurocommentMutation,
   updateCampaignPromptMutation,
 } from '@/entities/campaign';
-import { logsQueryOptions } from '@/entities/log';
+import { clearLogsMutation, logsQueryOptions } from '@/entities/log';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
@@ -106,6 +106,7 @@ export function NeurocommentPage() {
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
   const [channelToRemove, setChannelToRemove] = useState<string | null>(null);
+  const [confirmClearLogs, setConfirmClearLogs] = useState(false);
   const channelFeedback = useTransientFeedback();
   const accountFeedback = useTransientFeedback();
 
@@ -185,6 +186,7 @@ export function NeurocommentPage() {
   const removeAccount = useMutation(removeCampaignAccountMutation());
   const setAccountChannel = useMutation(setCampaignAccountChannelMutation());
   const updatePrompt = useMutation(updateCampaignPromptMutation());
+  const clearLogs = useMutation(clearLogsMutation());
 
   const accountOptions = accounts.data?.items ?? [];
   const warmingIds = new Set((warmingBoard.data?.warming ?? []).map((a) => a.account_id));
@@ -374,7 +376,12 @@ export function NeurocommentPage() {
             />
           ) : null}
 
-          <ActivityLogCard logLines={logLines} />
+          <ActivityLogCard
+            logLines={logLines}
+            onClear={() => {
+              setConfirmClearLogs(true);
+            }}
+          />
         </div>
 
         {/* LEFT column */}
@@ -558,6 +565,24 @@ export function NeurocommentPage() {
         />
       ) : null}
 
+      {confirmClearLogs ? (
+        <ConfirmModal
+          title={t('neurocomment.modal.clearLogs.title')}
+          body={t('neurocomment.modal.clearLogs.body')}
+          confirmLabel={t('neurocomment.modal.clearLogs.confirm')}
+          cancelLabel={t('neurocomment.modal.cancel')}
+          onClose={() => {
+            setConfirmClearLogs(false);
+          }}
+          onConfirm={() =>
+            clearLogs.mutateAsync(
+              { query: { event_prefix: 'neurocomment' } },
+              { onSettled: invalidateNeuro },
+            )
+          }
+        />
+      ) : null}
+
       {showCreate ? (
         <CreateCampaignModal
           onClose={() => {
@@ -616,7 +641,10 @@ export function NeurocommentPage() {
               ? boardAccounts.map((a) => ({
                   account_id: a.account_id,
                   phone: a.label,
-                  channel: a.readiness?.[0]?.channel ?? '—',
+                  // An account pinned to one channel shows it; an unpinned account
+                  // serves the whole campaign, so show the campaign — not an
+                  // arbitrary first-readiness channel (that misrepresented its scope).
+                  channel: a.pinned_channel ?? promptFor.name,
                   initials: initials(a.label),
                 }))
               : []

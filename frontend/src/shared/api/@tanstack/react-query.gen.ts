@@ -17,6 +17,7 @@ import {
   assignProxy,
   checkAccount,
   checkProxy,
+  clearLogs,
   clearNeurocommentListener,
   countCampaignChallengeOutcomes,
   createCampaign,
@@ -102,6 +103,9 @@ import type {
   CheckProxyData,
   CheckProxyError,
   CheckProxyResponse,
+  ClearLogsData,
+  ClearLogsError,
+  ClearLogsResponse,
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerError,
   ClearNeurocommentListenerResponse,
@@ -2205,6 +2209,31 @@ export const updateNeurocommentSettingsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateNeurocommentSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Logs
+ *
+ * Clear log rows whose event starts with ``event_prefix`` (all rows when empty).
+ */
+export const clearLogsMutation = (
+  options?: Partial<Options<ClearLogsData>>,
+): UseMutationOptions<ClearLogsResponse, ClearLogsError, Options<ClearLogsData>> => {
+  const mutationOptions: UseMutationOptions<
+    ClearLogsResponse,
+    ClearLogsError,
+    Options<ClearLogsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await clearLogs({
         ...options,
         ...fnOptions,
         throwOnError: true,

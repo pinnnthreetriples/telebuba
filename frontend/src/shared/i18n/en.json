@@ -618,7 +618,8 @@
     },
     "log": {
       "title": "Event log",
-      "empty": "No events yet"
+      "empty": "No events yet",
+      "clear": "Clear log"
     },
     "feed": {
       "title": "Published comments",
@@ -716,6 +717,11 @@
       "cancel": "Cancel",
       "close": "Close",
       "save": "Save",
+      "clearLogs": {
+        "title": "Clear the event log?",
+        "body": "All neurocomment log entries will be permanently deleted.",
+        "confirm": "Clear"
+      },
       "saved": "Saved",
       "add": "Add",
       "campaignDelete": {

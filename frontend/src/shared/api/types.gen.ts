@@ -769,6 +769,18 @@ export type LogEntry = {
 };
 
 /**
+ * LogPurgeResult
+ *
+ * How many log rows a clear operation removed.
+ */
+export type LogPurgeResult = {
+  /**
+   * Deleted
+   */
+  deleted: number;
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -4029,6 +4041,36 @@ export type UpdateNeurocommentSettingsResponses = {
 
 export type UpdateNeurocommentSettingsResponse =
   UpdateNeurocommentSettingsResponses[keyof UpdateNeurocommentSettingsResponses];
+
+export type ClearLogsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Event Prefix
+     */
+    event_prefix?: string;
+  };
+  url: '/api/v1/logs';
+};
+
+export type ClearLogsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ClearLogsError = ClearLogsErrors[keyof ClearLogsErrors];
+
+export type ClearLogsResponses = {
+  /**
+   * Successful Response
+   */
+  200: LogPurgeResult;
+};
+
+export type ClearLogsResponse = ClearLogsResponses[keyof ClearLogsResponses];
 
 export type ListLogsData = {
   body?: never;
