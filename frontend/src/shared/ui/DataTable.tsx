@@ -2,10 +2,11 @@ import {
   type ColumnDef,
   flexRender,
   getCoreRowModel,
+  getExpandedRowModel,
   type Row,
   useReactTable,
 } from '@tanstack/react-table';
-import { type HTMLAttributes } from 'react';
+import { Fragment, type HTMLAttributes, type ReactNode } from 'react';
 
 // A thin, headless-table wrapper over @tanstack/react-table: one consistent
 // `<table>` shell (uppercase header on the surface tint, hover rows) that later
@@ -22,9 +23,15 @@ interface DataTableProps<TData> {
   data: TData[];
   columns: ColumnDef<TData>[];
   getRowProps?: (row: Row<TData>) => HTMLAttributes<HTMLTableRowElement>;
+  // When set, a row whose TanStack expanded-state is on renders this full-width
+  // beneath it (drive the toggle from a column cell via row.toggleExpanded()).
+  renderSubRow?: (row: Row<TData>) => ReactNode;
 }
 
-const TH = 'px-4 py-[11px] text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
+// text-left so headers sit directly above their left-aligned cells; a column that
+// wants a different alignment sets it via meta.className (text-right wins over this).
+const TH =
+  'px-4 py-[11px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
 const ROW = 'tb-row border-t border-[#f0eeeb] transition-colors';
 
 // Local, dependency-free class join (avoids a shared/ui → shared/lib → query
@@ -34,8 +41,19 @@ function join(...parts: (string | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
 }
 
-export function DataTable<TData>({ data, columns, getRowProps }: DataTableProps<TData>) {
-  const table = useReactTable({ data, columns, getCoreRowModel: getCoreRowModel() });
+export function DataTable<TData>({
+  data,
+  columns,
+  getRowProps,
+  renderSubRow,
+}: DataTableProps<TData>) {
+  const table = useReactTable({
+    data,
+    columns,
+    getCoreRowModel: getCoreRowModel(),
+    getExpandedRowModel: getExpandedRowModel(),
+    getRowCanExpand: () => renderSubRow !== undefined,
+  });
 
   return (
     <table className="w-full min-w-[880px] border-collapse">
@@ -60,19 +78,28 @@ export function DataTable<TData>({ data, columns, getRowProps }: DataTableProps<
         {table.getRowModel().rows.map((row) => {
           const rowProps = getRowProps?.(row);
           return (
-            <tr key={row.id} {...rowProps} className={join(ROW, rowProps?.className)}>
-              {row.getVisibleCells().map((cell) => (
-                <td
-                  key={cell.id}
-                  className={join(
-                    'px-4 py-3',
-                    (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
-                  )}
-                >
-                  {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                </td>
-              ))}
-            </tr>
+            <Fragment key={row.id}>
+              <tr {...rowProps} className={join(ROW, rowProps?.className)}>
+                {row.getVisibleCells().map((cell) => (
+                  <td
+                    key={cell.id}
+                    className={join(
+                      'px-4 py-3',
+                      (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
+                    )}
+                  >
+                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                  </td>
+                ))}
+              </tr>
+              {renderSubRow && row.getIsExpanded() ? (
+                <tr>
+                  <td colSpan={row.getVisibleCells().length} className="p-0">
+                    {renderSubRow(row)}
+                  </td>
+                </tr>
+              ) : null}
+            </Fragment>
           );
         })}
       </tbody>

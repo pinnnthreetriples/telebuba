@@ -1,16 +1,21 @@
-import { type ColumnDef } from '@tanstack/react-table';
+import { type ColumnDef, type Row } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChannelStatusBadge } from '@/entities/campaign';
 import type {
+  CommentRecord,
   NeurocommentBoard as NeurocommentBoardData,
   NeurocommentChannelRow,
 } from '@/shared/api';
+import { formatLocalTime } from '@/shared/lib';
 import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
 
 interface BoardRow {
   account: string;
+  // Carried so the expandable sub-row can filter the board's comments down to
+  // just this account's published ones.
+  accountId: string;
   channel: string;
   text: string;
   // 'no_data' (no readiness rows yet) is now a real backend status; deriveRows
@@ -50,6 +55,7 @@ function deriveRows(
     const armedReady = Math.min(readiness.filter((r) => r.ready).length, armedTarget);
     return {
       account: account.label,
+      accountId: account.account_id,
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
       status: channelStatus.get(channel) ?? 'no_data',
@@ -73,6 +79,71 @@ function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
   );
 }
 
+// The expandable sub-row under an account: that account's published comments
+// (newest first, as the board already orders them), inline instead of the old
+// separate feed card. The account column is dropped — we're already inside it.
+function AccountComments({
+  comments,
+  onOpenHistory,
+}: {
+  comments: CommentRecord[];
+  onOpenHistory?: () => void;
+}) {
+  const { t } = useTranslation();
+  return (
+    <div className="border-t border-[#f0eeeb] bg-[#faf9f7] px-4 py-3">
+      <div className="mb-2 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <span className="pl-pulse h-[7px] w-[7px] shrink-0 rounded-full bg-primary" />
+          <span className="text-[12px] font-semibold">{t('neurocomment.feed.title')}</span>
+          <span className="rounded-full bg-[#f2f1ee] px-2 py-[2px] text-[11px] font-medium text-ink-muted">
+            {comments.length}
+          </span>
+        </div>
+        {onOpenHistory ? (
+          <button
+            type="button"
+            onClick={onOpenHistory}
+            className="rounded-full border border-line bg-white px-3 py-[4px] text-[11.5px] font-medium text-primary hover:border-primary"
+          >
+            {t('neurocomment.feed.history')}
+          </button>
+        ) : null}
+      </div>
+      {comments.length === 0 ? (
+        <div className="py-4 text-center text-[12.5px] text-ink-subtle">
+          {t('neurocomment.feed.empty')}
+        </div>
+      ) : (
+        <div className="tb-scroll max-h-[220px] overflow-y-auto">
+          {comments.map((c) => {
+            const deleted = Boolean(c.deleted_at);
+            return (
+              <div
+                key={`${c.channel}:${String(c.post_id)}`}
+                className="flex items-baseline gap-[10px] border-b border-[#f4f2ef] py-[7px] text-[12.5px] last:border-b-0"
+              >
+                <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
+                <span className="shrink-0 text-primary">{c.channel}</span>
+                <span
+                  className={`min-w-0 flex-1 truncate ${deleted ? 'text-ink-subtle line-through' : 'text-[#5c5c5c]'}`}
+                >
+                  {c.comment_text ?? '—'}
+                </span>
+                {deleted ? (
+                  <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+                    {t('neurocomment.feed.deleted')}
+                  </span>
+                ) : null}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // The design's "Доска работ" card: a collapsible header (account count pill,
 // freshness, gear→neuro-accounts modal, chevron) over the shared DataTable with
 // the design's 4 work columns (account / channel / comment / status).
@@ -81,6 +152,7 @@ export function NeurocommentBoard({
   accountsCount,
   onboarding = false,
   onOpenAccounts,
+  onOpenHistory,
 }: {
   board: NeurocommentBoardData;
   accountsCount: number;
@@ -88,6 +160,8 @@ export function NeurocommentBoard({
   // animates a live indicator instead of reading as an idle "no data" state.
   onboarding?: boolean;
   onOpenAccounts: () => void;
+  // Opens the full comment-history modal from an expanded account's sub-row.
+  onOpenHistory?: () => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
@@ -145,6 +219,32 @@ export function NeurocommentBoard({
             <ChannelStatusBadge status={row.status} />
           );
         },
+      },
+      {
+        id: 'expander',
+        header: () => null,
+        cell: ({ row }) => (
+          <button
+            type="button"
+            aria-label={t('neurocomment.feed.title')}
+            aria-expanded={row.getIsExpanded()}
+            onClick={row.getToggleExpandedHandler()}
+            className={`flex text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path d="m6 9 6 6 6-6" />
+            </svg>
+          </button>
+        ),
+        // Last column, sized to the chevron so it hugs the row's right edge.
+        meta: { className: 'w-px', cellClassName: 'w-px' } satisfies DataTableColumnMeta,
       },
     ],
     [t, onboarding],
@@ -217,7 +317,18 @@ export function NeurocommentBoard({
       <div className={`tb-collapse ${open ? 'tb-open' : ''}`}>
         <div className="tb-scroll overflow-x-auto">
           {rows.length > 0 ? (
-            <DataTable data={rows} columns={columns} />
+            <DataTable
+              data={rows}
+              columns={columns}
+              renderSubRow={(row: Row<BoardRow>) => (
+                <AccountComments
+                  comments={(board.comments ?? []).filter(
+                    (c) => c.account_id === row.original.accountId,
+                  )}
+                  onOpenHistory={onOpenHistory}
+                />
+              )}
+            />
           ) : (
             <div className="px-4 py-8 text-center text-[12.5px] text-ink-subtle">
               {t('neurocomment.board.empty')}

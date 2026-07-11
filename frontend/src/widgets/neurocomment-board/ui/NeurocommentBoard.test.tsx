@@ -129,3 +129,51 @@ test('the gear button opens the accounts modal', async () => {
   await userEvent.click(screen.getByLabelText('Аккаунты в нейрокомментинге'));
   expect(onOpenAccounts).toHaveBeenCalledOnce();
 });
+
+test('expanding an account row reveals only that account’s published comments', async () => {
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    comments: [
+      {
+        channel: '@news',
+        post_id: 1,
+        campaign_id: 'c1',
+        account_id: 'acc-1',
+        status: 'posted',
+        comment_text: 'mine',
+        created_at: '2026-07-11T10:00:00+00:00',
+        updated_at: '2026-07-11T10:00:00+00:00',
+      },
+      {
+        channel: '@news',
+        post_id: 2,
+        campaign_id: 'c1',
+        account_id: 'acc-2',
+        status: 'posted',
+        comment_text: 'theirs',
+        created_at: '2026-07-11T10:00:00+00:00',
+        updated_at: '2026-07-11T10:00:00+00:00',
+      },
+    ],
+  };
+  const onOpenHistory = vi.fn();
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      onOpenHistory={onOpenHistory}
+    />,
+  );
+  // collapsed by default — neither comment is visible yet
+  expect(screen.queryByText('mine')).not.toBeInTheDocument();
+  // the first account row's expander is the first "Опубликованные комментарии" button
+  const expanders = screen.getAllByRole('button', { name: 'Опубликованные комментарии' });
+  await userEvent.click(expanders[0]!);
+  // only acc-1's comment shows, not acc-2's
+  expect(screen.getByText('mine')).toBeInTheDocument();
+  expect(screen.queryByText('theirs')).not.toBeInTheDocument();
+  // and the history button reaches the modal opener
+  await userEvent.click(screen.getByRole('button', { name: 'Вся история' }));
+  expect(onOpenHistory).toHaveBeenCalledOnce();
+});
