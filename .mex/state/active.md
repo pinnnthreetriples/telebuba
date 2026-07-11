@@ -38,6 +38,19 @@ MED finding (daily action cap exceedable ~2x on mid-cycle restart) needs a desig
 call and is tracked in issue #208; the remaining audit findings were judged
 not-worth-fixing (design opinions / accepted tradeoffs / cosmetic).
 
+The 2026-07-11 profile-edit modal fix pass (#226, merged) repaired the five
+operator-reported bugs (honest "обновлено" timestamp, refresh ✓/✗ feedback, real
+«Сделать основным» via `photos.updateProfilePhoto`, int64 ids carried as strings
+so photo/music delete stops silently no-op-ing, story view counts) and
+parallelized the per-item thumb downloads. Its deferred follow-up is now done (PR
+open): profile/story thumbnails are served from cacheable, cookie-authed image
+endpoints (`GET /accounts/{id}/profile/{photos|stories}/{id}/thumb`,
+`include_in_schema=False`, ETag + `Cache-Control: private, immutable` + 304)
+instead of base64 `data:` URIs inlined in the snapshot JSON — the view now carries
+`thumb_url` and the dead, never-rendered `avatar_data_uri`/`avatar_bytes` (plus its
+redundant per-fetch avatar download) were dropped. Still deferred: right-sizing the
+640px thumbs to the ~104px tiles + optimistic add/remove.
+
 A 2026-07-10 operator-reported UI bug pass (PR #210, no auto-merge) then fixed four
 defects: (1) activity-log events now fully localized — `logEvent` ru/en dictionaries
 are the single source of truth, `eventLabel` resolves `t('logEvent.<code>', {defaultValue: code})`
@@ -116,6 +129,34 @@ collectible usernames are blocked by the 5-char minimum (matches
 `account.updateUsername` RPC rules). Gates: 1121 pytest / 95% branch, 227
 vitest / 96% lines.
 
+A 2026-07-11 profile-editing bug pass (operator-reported, this branch) fixed
+five defects in the edit-profile modal: (1) **photo/music delete silently
+failed** — Telegram `photo_id`/`access_hash`/`file_id` are int64 (~19 digits)
+but crossed the JSON edge as *numbers*, so the SPA rounded them past 2^53 and
+sent back an `InputPhoto` Telegram didn't recognise (dropped silently, 200
+returned, modal closed "as if" it worked; story delete survived only because
+`story_id` is small). Fixed by carrying those ids as **strings** across the
+JSON boundary (`_Int64Str` in `schemas/profile_media.py`, `str(...)` in
+`account_profile_view`, `_decode_id` parse in the API); (2) **«Сделать
+основным» was a dead label** (the old `ponytail:` comment wrongly claimed no
+RPC) — implemented for real via `photos.updateProfilePhoto`: new
+`SetMainProfilePhoto` action → `_set_main_profile_photo` gateway helper →
+`set_account_main_profile_photo` service → `POST /accounts/{id}/photo/main` →
+`setAccountPhotoMainMutation` → button; (3) **«Обновлено только что» was frozen
+fake info** — the relative-time label used a render-time `Date.now()` and never
+re-computed; added a 30 s tick; (4) **«Обновить» gave no outcome** — replaced the
+`refreshing` bool with an `idle/loading/ok/error` machine (green ✓ / red ✗,
+1.4 s auto-reset; a 200-with-`error` counts as failure); (5) **stories showed no
+view count** — captured `StoryItem.views.views_count` into
+`TelegramStoryThumb.views` → `ProfileStoryView.views` → «👁 N» badge. Also a
+cheap load win: profile-photo and story thumbnail downloads now run via
+`asyncio.gather` instead of serial awaits. Deferred (documented in the PR):
+serving thumbnails from a cacheable image endpoint instead of inlining base64 in
+the snapshot JSON. Gates: 1165 pytest, 241 vitest, aislop clean (the profile-media
+`case` block in `_dispatch_action` was collapsed to the wildcard arm — the media
+dispatcher's own `case _` already guards unknowns — keeping the file under the
+size budget).
+
 A 2026-07-11 neurocomment audit (operator-reported: NOXX campaign never
 comments, board stuck on «Комментарии выкл.», reconcile "loop") diagnosed via
 live-DB forensics + three sonnet subagents and fixed in one PR: (1) **root
@@ -178,15 +219,45 @@ Once onboarding finishes the flag flips and the real per-channel statuses render
 Gates: neuro runtime+api 76 pytest green, ruff+ty clean; frontend tsc+eslint+
 vitest green, API client drift-free (only the `onboarding` field).
 
-A 2026-07-11 operator-reported UI fix (PR open, no merge): the warming «Прогреты»
-(warmed) card showed the phone-country flag next to the proxy label and no proxy
-flag at all. Root cause — `WarmedAccount` never carried `proxy_country` (schema
-gap), and the card rendered `phone_country`'s flag on the proxy row. Fix: added
-`proxy_country` to the schema, populated it from the board card in
-`list_warmed_accounts`, and moved the flags so the phone-country flag sits with
-the number and the proxy-exit flag with the proxy type — matching the already-
-correct «Готовы» card. Gates: warmed-accounts + api warming pytest green, ruff+ty
-clean; WarmingPage vitest green, client regenerated (only `proxy_country`).
+A 2026-07-11 log-informativeness pass (PR open): the neurocomment activity log
+now reads by meaning, not just level. Frontend `logSeverity` (shared/lib) recolours
+by event code — attempted-but-failed (`*_failed`/`_exhausted`/`_dropped`) is red
+even when logged INFO, deliberate skips/pauses (`_skipped`/`no_account`/`_cooldown`)
+amber, successes green; the "Errors" stat reuses it. `ActivityLogCard` lines gained
+the channel + a translated reason (`logEventReason.*`) and a hover hint
+(`logEventHint.*`, "why + fix"). Backend now records *why*: `_select_account`
+returns `_Selection(account_id, reason)` (quota/cooldown/not_ready/unhealthy/
+no_accounts_linked via the single `_account_block_reason` gate ladder that
+`_is_eligible` now delegates to), and `_generate_acceptable` returns
+`_GenOutcome(text, reason)` (gemini_error/gemini_rate_limited/gemini_empty/too_long/
+not_acceptable/duplicate) — both surfaced in the `no_account_available` /
+`generation_exhausted` log `extra`. Settings label clarified «Комментариев в час
+(на аккаунт)». Diagnosis behind it: one account served 9+ channels → 113/258 recent
+events were `no_account_available` (capacity, not a bug).
+
+Same PR, second pass: (1) a **clear-logs** action — `DELETE /api/v1/logs?event_prefix=`
+(`clearLogs` op → `LogPurgeResult`, repo `purge_logs(prefix)`, service `clear_logs`);
+the neuro log card gained a trash button (shown only with rows) → confirm → clears
+`event_prefix=neurocomment` only. (2) Bug fix: the campaign-prompt modal showed an
+account's arbitrary first-readiness channel; it now shows `pinned_channel` or the
+campaign name (unpinned = whole-campaign scope). Gates: full 1171 pytest green
+(strict), ruff+ty+aislop clean; frontend 244+ vitest + tsc+eslint+steiger green;
+API client regenerated (adds `clearLogs`, drift-free).
+
+Same PR, third pass — **deleted-comment tracking** (near-real-time). The deletion
+sweep already computes the vanished comment ids; it now also stamps them: migration
+#27 adds `neurocomment_comments.deleted_at`, `mark_comments_deleted` (new
+`_deletions.py` — `_comments.py` was already 438 lines, grandfathered over the 400
+cap, so the new code lives outside it) marks posted-and-still-live rows idempotently,
+and the sweep logs `neurocomment_comment_deleted` per fresh batch. Sweep interval
+dropped 1800→300s (`.env.example` mirrored; arch test enforces value match).
+Surfacing: feed + history show deleted comments struck-through with a danger badge;
+the board channel cell gets a «N удалено» chip (`NeurocommentChannelRow.deleted_recent`,
+counted in `board.py` via `_ChannelFlags`); `logSeverity` colours `*_deleted` red.
+True-instant `MessageDeleted` gateway handler is a deliberate follow-up (needs live
+group→channel peer-mapping validation — can't smoke-test blind against the untouchable
+live instance). Gates: full 1173 pytest green (strict), ruff+ty+aislop clean; frontend
+249 vitest + tsc+eslint+steiger green; client regenerated (`deleted_at`, `deleted_recent`).
 
 ## Not Yet Built (deliberate)
 

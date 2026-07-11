@@ -106,11 +106,6 @@ async def test_get_user_profile_returns_snapshot(monkeypatch: pytest.MonkeyPatch
                 )
             return MagicMock()
 
-        async def download_profile_photo(self, target: str, *, file: object) -> bytes:
-            assert target == "me"
-            assert file is bytes
-            return b"jpeg-bytes"
-
     _patch_client(monkeypatch, FakeClient())
 
     result = await execute_read("acc-1", GetUserProfile())
@@ -121,34 +116,7 @@ async def test_get_user_profile_returns_snapshot(monkeypatch: pytest.MonkeyPatch
     assert result.username == "alice"
     assert result.phone == "79991234567"
     assert result.bio == "Hi there"
-    assert result.avatar_bytes == b"jpeg-bytes"
     assert any(isinstance(req, GetFullUserRequest) for req in requested)
-
-
-@pytest.mark.asyncio
-async def test_get_user_profile_handles_missing_avatar(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    class FakeClient:
-        async def connect(self) -> None:
-            return None
-
-        async def __call__(self, _request: object) -> object:
-            return MagicMock(
-                full_user=MagicMock(about=None),
-                users=[MagicMock(first_name=None, last_name=None, username=None, phone=None)],
-            )
-
-        async def download_profile_photo(self, _target: str, *, file: object) -> object:  # noqa: ARG002
-            return None
-
-    _patch_client(monkeypatch, FakeClient())
-
-    result = await execute_read("acc-no-photo", GetUserProfile())
-
-    assert isinstance(result, TelegramProfileSnapshot)
-    assert result.avatar_bytes is None
-    assert result.bio is None
 
 
 @pytest.mark.asyncio
@@ -201,6 +169,49 @@ async def test_list_pinned_stories_returns_items(monkeypatch: pytest.MonkeyPatch
     assert result.items[0].thumb_bytes == b"thumb"
     assert result.items[1].kind == "video"
     assert any(isinstance(req, GetPinnedStoriesRequest) for req in requested)
+
+
+@pytest.mark.asyncio
+async def test_list_pinned_stories_captures_view_count(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``StoryItem.views.views_count`` must land on the snapshot row.
+
+    A story that omits view data (Telegram returns no ``views`` object for
+    expired, unpinned stories) maps to ``None``, not a crash.
+    """
+    with_views = MagicMock(
+        id=401,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption=None,
+        views=MagicMock(views_count=137),
+    )
+    without_views = MagicMock(
+        id=402,
+        media=MagicMock(spec=MessageMediaPhoto),
+        caption=None,
+        views=None,
+    )
+    stories_payload = MagicMock(stories=[with_views, without_views])
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, name: str) -> object:  # noqa: ARG002
+            return MagicMock()
+
+        async def __call__(self, request: object) -> object:  # noqa: ARG002
+            return stories_payload
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            return b"thumb"
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-story-views", ListPinnedStories(limit=5))
+
+    assert isinstance(result, TelegramPinnedStories)
+    assert result.items[0].views == 137
+    assert result.items[1].views is None
 
 
 @pytest.mark.asyncio
@@ -616,9 +627,6 @@ async def test_execute_read_flood_wait_wraps_telethon_error(
         async def __call__(self, _request: object) -> object:
             raise errors.FloodWaitError(request=None, capture=42)
 
-        async def download_profile_photo(self, _target: str, *, file: object) -> object:  # noqa: ARG002
-            return None
-
     _patch_client(monkeypatch, FakeClient())
 
     with pytest.raises(TelegramReadError) as exc_info:
@@ -637,9 +645,6 @@ async def test_execute_read_rpc_error_wraps_telethon_error(
 
         async def __call__(self, _request: object) -> object:
             raise errors.RPCError(request=None, message="USER_DEACTIVATED", code=400)
-
-        async def download_profile_photo(self, _target: str, *, file: object) -> object:  # noqa: ARG002
-            return None
 
     _patch_client(monkeypatch, FakeClient())
 
@@ -716,9 +721,6 @@ async def test_execute_read_many_opens_single_client_for_batch(
                 return MagicMock(stories=[])
             # GetSavedMusicRequest fallback
             return MagicMock(documents=[])
-
-        async def download_profile_photo(self, _target: str, *, file: object) -> object:  # noqa: ARG002
-            return None
 
     shared_client = FakeClient()
 

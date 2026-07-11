@@ -117,6 +117,23 @@ async def list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[Log
     return await asyncio.to_thread(_list_filtered_logs, log_filter, offset)
 
 
+def _purge_logs(event_prefix: str) -> int:
+    statement = delete(_logs)
+    if event_prefix:
+        statement = statement.where(_logs.c.event.like(f"{event_prefix}%"))
+    with _get_engine().begin() as connection:
+        return connection.execute(statement).rowcount
+
+
+async def purge_logs(event_prefix: str = "") -> int:
+    """Delete log rows whose event starts with ``event_prefix`` (all rows when empty).
+
+    Powers the operator "clear logs" action; scoped by prefix so the neurocomment
+    panel can wipe only its own feed without touching warming/account history.
+    """
+    return await asyncio.to_thread(_purge_logs, event_prefix)
+
+
 def _purge_logs_older_than(cutoff_iso: str) -> int:
     statement = delete(_logs).where(_logs.c.created_at < cutoff_iso)
     with _get_engine().begin() as connection:

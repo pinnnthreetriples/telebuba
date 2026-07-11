@@ -160,6 +160,20 @@ class RemoveProfilePhoto(BaseModel):
     file_reference: bytes = Field(min_length=1)
 
 
+class SetMainProfilePhoto(BaseModel):
+    """Promote an existing profile photo to the current avatar.
+
+    ``photos.updateProfilePhoto`` re-orders the history so this photo becomes
+    current — no re-upload needed. Same ``InputPhoto`` triple as
+    :class:`RemoveProfilePhoto`; all three id fields are required.
+    """
+
+    action_type: Literal["set_main_profile_photo"] = "set_main_profile_photo"
+    photo_id: int = Field(gt=0)
+    access_hash: int
+    file_reference: bytes = Field(min_length=1)
+
+
 class RemoveProfileMusic(BaseModel):
     """Unpins one track from the account's saved profile music.
 
@@ -297,6 +311,7 @@ TelegramAction = Annotated[
     | AddProfileMusic
     | RemoveProfileMusic
     | RemoveProfilePhoto
+    | SetMainProfilePhoto
     | RemoveStory
     | WatchPeerStories,
     Field(discriminator="action_type"),

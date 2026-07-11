@@ -29,6 +29,9 @@ import type {
   CheckProxyData,
   CheckProxyErrors,
   CheckProxyResponses,
+  ClearLogsData,
+  ClearLogsErrors,
+  ClearLogsResponses,
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerErrors,
   ClearNeurocommentListenerResponses,
@@ -159,6 +162,9 @@ import type {
   RetryChallengeResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
+  SetAccountPhotoMainData,
+  SetAccountPhotoMainErrors,
+  SetAccountPhotoMainResponses,
   SetAccountPhotoResponses,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelErrors,
@@ -590,6 +596,25 @@ export const removeAccountPhoto = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/accounts/{account_id}/photo/remove',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Account Photo Main
+ */
+export const setAccountPhotoMain = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountPhotoMainData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetAccountPhotoMainResponses,
+    SetAccountPhotoMainErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/photo/main',
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -1281,6 +1306,19 @@ export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * Delete Logs
+ *
+ * Clear log rows whose event starts with ``event_prefix`` (all rows when empty).
+ */
+export const clearLogs = <ThrowOnError extends boolean = false>(
+  options?: Options<ClearLogsData, ThrowOnError>,
+) =>
+  (options?.client ?? client).delete<ClearLogsResponses, ClearLogsErrors, ThrowOnError>({
+    url: '/api/v1/logs',
+    ...options,
   });
 
 /**

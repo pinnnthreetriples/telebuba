@@ -12,6 +12,7 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING, cast
 
 from telethon import errors
@@ -224,30 +225,13 @@ async def _dispatch_get_user_profile(client: TelegramClient) -> TelegramProfileS
     bio = _optional_str(getattr(full_user, "about", None))
     users = getattr(full, "users", []) or []
     user = users[0] if users else None
-    avatar_bytes = await _download_self_avatar(client)
     return TelegramProfileSnapshot(
         first_name=_optional_str(getattr(user, "first_name", None)),
         last_name=_optional_str(getattr(user, "last_name", None)),
         username=_optional_str(getattr(user, "username", None)),
         phone=_optional_str(getattr(user, "phone", None)),
         bio=bio,
-        avatar_bytes=avatar_bytes,
     )
-
-
-async def _download_self_avatar(client: TelegramClient) -> bytes | None:
-    """Return raw avatar bytes for the signed-in user, or ``None`` if absent."""
-    try:
-        # Passing the ``bytes`` type (not an instance) makes Telethon return
-        # the downloaded payload in memory. The type stub only lists concrete
-        # bytes / str / BinaryIO values, hence the ignore.
-        data = await client.download_profile_photo("me", file=bytes)  # ty: ignore[invalid-argument-type]
-    except errors.RPCError:
-        # Some accounts return a photo ref that can't be downloaded (e.g.
-        # privacy-restricted self-photos). Treat as "no avatar" rather than
-        # killing the whole snapshot fetch.
-        return None
-    return data if isinstance(data, (bytes, bytearray)) else None
 
 
 async def _dispatch_list_profile_music(client: TelegramClient) -> TelegramProfileMusic:
@@ -308,22 +292,25 @@ async def _dispatch_list_profile_photos(
             limit=action.limit,
         ),
     )
-    raw_photos = getattr(result, "photos", []) or []
-    items: list[TelegramProfilePhoto] = []
-    for photo in raw_photos:
-        photo_id = int(getattr(photo, "id", 0) or 0)
-        if photo_id == 0:
-            continue
-        items.append(
-            TelegramProfilePhoto(
-                photo_id=photo_id,
-                access_hash=int(getattr(photo, "access_hash", 0) or 0),
-                file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
-                date_unix=_photo_date_unix(photo),
-                thumb_bytes=await _download_photo_thumb(client, photo),
-            ),
-        )
-    return TelegramProfilePhotos(items=items)
+    raw_photos = [
+        photo
+        for photo in (getattr(result, "photos", []) or [])
+        if int(getattr(photo, "id", 0) or 0)
+    ]
+    # Fetch every thumbnail concurrently — serial awaits made the modal open
+    # scale linearly with the number of history photos.
+    items = await asyncio.gather(*(_profile_photo(client, photo) for photo in raw_photos))
+    return TelegramProfilePhotos(items=list(items))
+
+
+async def _profile_photo(client: TelegramClient, photo: object) -> TelegramProfilePhoto:
+    return TelegramProfilePhoto(
+        photo_id=int(getattr(photo, "id", 0) or 0),
+        access_hash=int(getattr(photo, "access_hash", 0) or 0),
+        file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
+        date_unix=_photo_date_unix(photo),
+        thumb_bytes=await _download_photo_thumb(client, photo),
+    )
 
 
 def _photo_date_unix(photo: object) -> int:

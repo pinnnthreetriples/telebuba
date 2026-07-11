@@ -9,6 +9,7 @@ endpoint, privacy preset, double-nested ``stories.stories`` unwrap).
 
 from __future__ import annotations
 
+import asyncio
 import time
 from typing import TYPE_CHECKING, Literal
 
@@ -48,7 +49,11 @@ async def dispatch_list_pinned_stories(
         GetPinnedStoriesRequest(peer=InputPeerSelf(), offset_id=0, limit=action.limit),
     )
     raw_stories = getattr(result, "stories", []) or []
-    items = [await _story_thumb(client, story, is_pinned=True) for story in raw_stories]
+    # Download every story's thumbnail concurrently — serial awaits here made
+    # the modal open scale linearly with the number of stories.
+    items = await asyncio.gather(
+        *(_story_thumb(client, story, is_pinned=True) for story in raw_stories),
+    )
     return TelegramPinnedStories(items=[item for item in items if item is not None])
 
 
@@ -84,10 +89,12 @@ async def dispatch_list_active_stories(client: TelegramClient) -> TelegramActive
     result = await client(GetPeerStoriesRequest(peer=InputPeerSelf()))
     outer = getattr(result, "stories", None)
     raw_stories = getattr(outer, "stories", []) or []
-    items = [
-        await _story_thumb(client, story, is_pinned=bool(getattr(story, "pinned", False)))
-        for story in raw_stories
-    ]
+    items = await asyncio.gather(
+        *(
+            _story_thumb(client, story, is_pinned=bool(getattr(story, "pinned", False)))
+            for story in raw_stories
+        ),
+    )
     return TelegramActiveStories(items=[item for item in items if item is not None])
 
 
@@ -114,7 +121,14 @@ async def _story_thumb(
         is_pinned=is_pinned,
         is_active=_story_is_active(story),
         privacy_preset=_story_privacy_preset(story),
+        views=_story_views(story),
     )
+
+
+def _story_views(story: object) -> int | None:
+    """Read ``StoryItem.views.views_count``; ``None`` when Telegram omits it."""
+    count = getattr(getattr(story, "views", None), "views_count", None)
+    return int(count) if isinstance(count, int) else None
 
 
 def _story_privacy_preset(story: object) -> StoryPrivacyPreset:

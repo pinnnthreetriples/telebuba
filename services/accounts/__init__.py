@@ -45,10 +45,12 @@ from services.accounts.media import (
     remove_account_profile_music,
     remove_account_profile_photo,
     remove_account_story,
+    set_account_main_profile_photo,
     set_account_profile_photo,
 )
 from services.accounts.profile import update_account_profile
 from services.accounts.profile_read import (
+    account_profile_image,
     account_profile_view,
     fetch_live_account_profile,
     invalidate_account_profile_cache,
@@ -65,6 +67,7 @@ __all__ = [
     "InvalidCursorError",
     "PhoneLoginError",
     "SessionAlreadyExistsError",
+    "account_profile_image",
     "account_profile_view",
     "account_stats",
     "add_account",
@@ -86,6 +89,7 @@ __all__ = [
     "remove_account_story",
     "request_login_code",
     "reset_account_session",
+    "set_account_main_profile_photo",
     "set_account_profile_photo",
     "start_phone_login",
     "submit_login_code",

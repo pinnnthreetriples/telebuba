@@ -71,7 +71,18 @@ export function CommentHistoryModal({
       {
         id: 'text',
         header: () => t('neurocomment.history.col.text'),
-        cell: ({ row }) => row.original.comment_text ?? '—',
+        cell: ({ row }) => {
+          const text = row.original.comment_text ?? '—';
+          if (!row.original.deleted_at) return text;
+          return (
+            <span className="inline-flex items-center gap-2">
+              <span className="text-ink-subtle line-through">{text}</span>
+              <span className="shrink-0 rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+                {t('neurocomment.feed.deleted')}
+              </span>
+            </span>
+          );
+        },
         meta: { cellClassName: 'text-[12.5px] text-[#3a3a3a]' } satisfies DataTableColumnMeta,
       },
     ],

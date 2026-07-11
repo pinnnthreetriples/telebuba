@@ -11,6 +11,7 @@ import {
   removeAccountMusicMutation,
   removeAccountPhotoMutation,
   removeAccountStoryMutation,
+  setAccountPhotoMainMutation,
   setAccountPhotoMutation,
   updateAccountProfileMutation,
 } from '@/entities/account';
@@ -109,6 +110,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const queryClient = useQueryClient();
   const updateProfile = useMutation(updateAccountProfileMutation());
   const setPhoto = useMutation(setAccountPhotoMutation());
+  const setMainPhoto = useMutation(setAccountPhotoMainMutation());
   const addMusic = useMutation(addAccountMusicMutation());
   const removeStory = useMutation(removeAccountStoryMutation());
   const removeMusic = useMutation(removeAccountMusicMutation());
@@ -120,7 +122,19 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     path: { account_id: account.account_id },
   });
   const snapshot = useQuery(snapOpts);
-  const [refreshing, setRefreshing] = useState(false);
+  // «Обновить» outcome: spin while loading, then flash a green ✓ / red ✗.
+  const [refreshState, setRefreshState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  // Re-render every 30s so the "Обновлено N мин назад" label keeps advancing —
+  // it's derived from Date.now() and would otherwise freeze on "только что".
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setNowTick((n) => n + 1);
+    }, 30_000);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, []);
   const photos = snapshot.data?.photos ?? [];
   const stories = snapshot.data?.stories ?? [];
   const music = snapshot.data?.music ?? [];
@@ -207,7 +221,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // «Обновить»: force a live re-pull (bypasses the read cache), write it into the
   // rendered snapshot, and reseed the header + text fields from the fresh profile.
   const onRefresh = async () => {
-    setRefreshing(true);
+    setRefreshState('loading');
     try {
       const fresh = await queryClient.fetchQuery(
         accountProfileSnapshotQueryOptions({
@@ -217,8 +231,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       );
       queryClient.setQueryData(snapOpts.queryKey, fresh);
       seedForm(fresh);
+      // A 200 carrying an `error` field means Telegram refused the live pull —
+      // that's a failed refresh, not a success.
+      setRefreshState(fresh.error ? 'error' : 'ok');
+    } catch {
+      setRefreshState('error');
     } finally {
-      setRefreshing(false);
+      window.setTimeout(() => {
+        setRefreshState('idle');
+      }, 1400);
     }
   };
 
@@ -276,25 +297,63 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             <div className="flex shrink-0 flex-col items-end gap-[5px]">
               <button
                 type="button"
-                disabled={refreshing}
+                disabled={refreshState === 'loading'}
                 onClick={() => {
                   void onRefresh();
                 }}
-                className="inline-flex items-center gap-[6px] rounded-full border border-line-input bg-white px-3 py-[6px] text-[12.5px] font-medium text-ink transition-colors hover:border-[#bfd6ff] hover:text-primary disabled:opacity-70"
+                className={`inline-flex items-center gap-[6px] rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${
+                  refreshState === 'ok'
+                    ? 'border-[#bfe4cc] text-[#2e9e64]'
+                    : refreshState === 'error'
+                      ? 'border-[#f0c9c5] text-danger'
+                      : 'border-line-input text-ink hover:border-[#bfd6ff] hover:text-primary'
+                }`}
               >
-                <span className={`inline-flex ${refreshing ? 'tb-spin' : ''}`}>
-                  <svg
-                    width="13"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                  >
-                    <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
-                  </svg>
-                </span>
-                {t('accounts.profile.refresh')}
+                {refreshState === 'ok' ? (
+                  <span className="tb-swapin inline-flex">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                    >
+                      <path d="M20 6 9 17l-5-5" />
+                    </svg>
+                  </span>
+                ) : refreshState === 'error' ? (
+                  <span className="tb-swapin inline-flex">
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2.4"
+                    >
+                      <path d="M18 6 6 18M6 6l12 12" />
+                    </svg>
+                  </span>
+                ) : (
+                  <span className={`inline-flex ${refreshState === 'loading' ? 'tb-spin' : ''}`}>
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
+                    </svg>
+                  </span>
+                )}
+                {refreshState === 'ok'
+                  ? t('accounts.profile.refreshOk')
+                  : refreshState === 'error'
+                    ? t('accounts.profile.refreshError')
+                    : t('accounts.profile.refresh')}
               </button>
               <span className="text-[11px] text-ink-subtle">{syncLabel}</span>
             </div>
@@ -385,7 +444,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     <div key={photo.photo_id} className="relative">
                       <div
                         className="rounded-[12px] border border-black/5"
-                        style={tileStyle(photo.thumb_data_uri, '1')}
+                        style={tileStyle(photo.thumb_url, '1')}
                       />
                       <button
                         type="button"
@@ -397,13 +456,32 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       >
                         ×
                       </button>
-                      {/* ponytail: "make main" is a status label, not an action —
-                          Telegram has no set-existing-as-main RPC in the gateway. */}
-                      <span className="mt-[6px] block w-full py-[2px] text-[11px] font-medium text-primary">
-                        {index === 0
-                          ? t('accounts.profile.mainPhoto')
-                          : t('accounts.profile.makeMain')}
-                      </span>
+                      {index === 0 ? (
+                        <span className="mt-[6px] block w-full py-[2px] text-[11px] font-medium text-primary">
+                          {t('accounts.profile.mainPhoto')}
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          disabled={setMainPhoto.isPending}
+                          onClick={() => {
+                            setMainPhoto.mutate(
+                              {
+                                path: { account_id: account.account_id },
+                                body: {
+                                  photo_id: photo.photo_id,
+                                  access_hash: photo.access_hash,
+                                  file_reference: photo.file_reference,
+                                },
+                              },
+                              { onSuccess: refresh },
+                            );
+                          }}
+                          className="mt-[6px] block w-full py-[2px] text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
+                        >
+                          {t('accounts.profile.makeMain')}
+                        </button>
+                      )}
                     </div>
                   ))}
                   <DashedAdd
@@ -433,8 +511,27 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     <div key={story.story_id} className="relative">
                       <div
                         className="rounded-[12px] border border-black/5"
-                        style={tileStyle(story.thumb_data_uri, '9 / 16')}
+                        style={tileStyle(story.thumb_url, '9 / 16')}
                       />
+                      {story.views != null && (
+                        <span
+                          title={t('accounts.profile.storyViews', { n: story.views })}
+                          className="absolute left-[5px] top-[5px] inline-flex items-center gap-[3px] rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[9px] font-medium text-white"
+                        >
+                          <svg
+                            width="10"
+                            height="10"
+                            viewBox="0 0 24 24"
+                            fill="none"
+                            stroke="currentColor"
+                            strokeWidth="2"
+                          >
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                            <circle cx="12" cy="12" r="3" />
+                          </svg>
+                          {story.views}
+                        </span>
+                      )}
                       <button
                         type="button"
                         aria-label={t('accounts.profile.removeStory')}
@@ -641,7 +738,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 path: { account_id: account.account_id },
                 body: {
                   file_id: confirmMusic.file_id,
-                  access_hash: confirmMusic.access_hash ?? 0,
+                  access_hash: confirmMusic.access_hash ?? '0',
                   file_reference: confirmMusic.file_reference ?? '',
                 },
               })

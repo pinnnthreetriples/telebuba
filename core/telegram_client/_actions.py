@@ -43,6 +43,7 @@ from schemas.telegram_actions import (
     RemoveProfilePhoto,
     RemoveStory,
     SendDirectMessage,
+    SetMainProfilePhoto,
     SetOnline,
     SetProfilePhoto,
     UpdateProfile,
@@ -232,18 +233,10 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
             message_id = await _dispatch_react_to_post(client, action)
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
-        case (
-            SetProfilePhoto()
-            | PostStory()
-            | AddProfileMusic()
-            | RemoveProfileMusic()
-            | RemoveProfilePhoto()
-            | RemoveStory()
-        ):
+        case _:
+            # Everything else is a profile-media write (photo / story / music);
+            # its own dispatcher raises for anything genuinely unhandled.
             message_id = await _dispatch_profile_media_action(client, action)
-        case _:  # pragma: no cover - discriminated union is exhaustive
-            msg = f"Unsupported action_type: {action.action_type}"
-            raise ValueError(msg)
     return message_id
 
 
@@ -430,7 +423,7 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             extra = {"filename": action.filename}
         case RemoveProfileMusic():
             extra = {"file_id": action.file_id}
-        case RemoveProfilePhoto():
+        case RemoveProfilePhoto() | SetMainProfilePhoto():
             extra = {"photo_id": action.photo_id}
         case RemoveStory():
             extra = {"story_id": action.story_id}

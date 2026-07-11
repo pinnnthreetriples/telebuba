@@ -165,7 +165,6 @@ class AccountProfileSnapshot(BaseModel):
     username: str | None = None
     phone: str | None = None
     bio: str | None = None
-    avatar_bytes: bytes | None = None
     stories: list[TelegramStoryThumb] = Field(default_factory=list)
     music: list[TelegramMusicItem] = Field(default_factory=list)
     photos: list[TelegramProfilePhoto] = Field(default_factory=list)

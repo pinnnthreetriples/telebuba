@@ -10,7 +10,7 @@ from core.config import settings
 from core.db import configure_database
 from core.logging import log_event, reset_logging_for_tests, setup_logging
 from schemas.logs import LogFilter
-from services.logs import load_logs_page
+from services.logs import clear_logs, load_logs_page
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -147,3 +147,27 @@ async def test_event_prefix_empty_is_no_filter() -> None:
     state = await load_logs_page(LogFilter(event_prefix=""))
 
     assert state.summary.total == 2
+
+
+@pytest.mark.asyncio
+async def test_clear_logs_by_prefix_removes_only_matching_rows() -> None:
+    await log_event("INFO", "neurocomment_posted")
+    await log_event("WARNING", "neurocomment_post_failed")
+    await log_event("INFO", "warming_cycle_completed")
+
+    result = await clear_logs("neurocomment")
+
+    assert result.deleted == 2
+    remaining = await load_logs_page(LogFilter())
+    assert {e.event for e in remaining.entries} == {"warming_cycle_completed"}
+
+
+@pytest.mark.asyncio
+async def test_clear_logs_empty_prefix_wipes_everything() -> None:
+    await log_event("INFO", "neurocomment_posted")
+    await log_event("INFO", "warming_cycle_completed")
+
+    result = await clear_logs("")
+
+    assert result.deleted == 2
+    assert (await load_logs_page(LogFilter())).entries == []

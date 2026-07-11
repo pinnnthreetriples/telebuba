@@ -17,6 +17,7 @@ import {
   assignProxy,
   checkAccount,
   checkProxy,
+  clearLogs,
   clearNeurocommentListener,
   countCampaignChallengeOutcomes,
   createCampaign,
@@ -62,6 +63,7 @@ import {
   resetAccountSession,
   retryChallenge,
   setAccountPhoto,
+  setAccountPhotoMain,
   setCampaignAccountChannel,
   setCampaignSolver,
   setCampaignStatus,
@@ -102,6 +104,9 @@ import type {
   CheckProxyData,
   CheckProxyError,
   CheckProxyResponse,
+  ClearLogsData,
+  ClearLogsError,
+  ClearLogsResponse,
   ClearNeurocommentListenerData,
   ClearNeurocommentListenerError,
   ClearNeurocommentListenerResponse,
@@ -232,6 +237,9 @@ import type {
   RetryChallengeResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
+  SetAccountPhotoMainData,
+  SetAccountPhotoMainError,
+  SetAccountPhotoMainResponse,
   SetAccountPhotoResponse,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelError,
@@ -1018,6 +1026,33 @@ export const removeAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await removeAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Photo Main
+ */
+export const setAccountPhotoMainMutation = (
+  options?: Partial<Options<SetAccountPhotoMainData>>,
+): UseMutationOptions<
+  SetAccountPhotoMainResponse,
+  SetAccountPhotoMainError,
+  Options<SetAccountPhotoMainData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountPhotoMainResponse,
+    SetAccountPhotoMainError,
+    Options<SetAccountPhotoMainData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountPhotoMain({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -2205,6 +2240,31 @@ export const updateNeurocommentSettingsMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await updateNeurocommentSettings({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Logs
+ *
+ * Clear log rows whose event starts with ``event_prefix`` (all rows when empty).
+ */
+export const clearLogsMutation = (
+  options?: Partial<Options<ClearLogsData>>,
+): UseMutationOptions<ClearLogsResponse, ClearLogsError, Options<ClearLogsData>> => {
+  const mutationOptions: UseMutationOptions<
+    ClearLogsResponse,
+    ClearLogsError,
+    Options<ClearLogsData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await clearLogs({
         ...options,
         ...fnOptions,
         throwOnError: true,

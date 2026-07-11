@@ -187,6 +187,20 @@ def _add_readiness_human_skipped(connection: Connection) -> None:
         )
 
 
+def _add_neurocomment_comment_deleted_at(connection: Connection) -> None:
+    # #27: mark a posted comment that later vanished from the channel. NULL = still
+    # live; an ISO timestamp = when we noticed it was deleted. The comments table is
+    # outside migration_steps._ALLOWED_TABLES, so the column probe is inlined (a
+    # hard-coded table name, never user input).
+    if not _sqlite_table_exists(connection, "neurocomment_comments"):
+        return
+    rows = connection.exec_driver_sql("PRAGMA table_info(neurocomment_comments)").mappings().all()
+    if "deleted_at" not in {str(row["name"]) for row in rows}:
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_comments ADD COLUMN deleted_at VARCHAR",
+        )
+
+
 def _add_campaign_account_channel(connection: Connection) -> None:
     # #25: optional per-account channel pin. NULL = all campaign channels (current
     # behaviour); a channel handle restricts the account to that one channel. The

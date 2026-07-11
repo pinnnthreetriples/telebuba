@@ -19,9 +19,6 @@ class TelegramProfileSnapshot(BaseModel):
     username: str | None = None
     phone: str | None = None
     bio: str | None = None
-    # Raw image bytes for the current avatar (any format Telegram returns —
-    # usually JPEG). ``None`` when the user has no avatar set.
-    avatar_bytes: bytes | None = None
 
 
 StoryPrivacyPreset = Literal[
@@ -54,6 +51,9 @@ class TelegramStoryThumb(BaseModel):
     is_pinned: bool = False
     is_active: bool = False
     privacy_preset: StoryPrivacyPreset = "unknown"
+    # ``StoryItem.views.views_count`` — how many accounts viewed the story.
+    # ``None`` when Telegram omits view data (e.g. an expired, unpinned story).
+    views: int | None = None
 
 
 class TelegramPinnedStories(BaseModel):

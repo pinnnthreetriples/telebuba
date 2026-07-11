@@ -29,6 +29,7 @@ from core.db import (
     insert_challenge,
     link_channel_to_campaign,
     list_failed_for_channel,
+    list_recent_logs,
     mark_comment_posted,
     mark_human_skipped,
     upsert_readiness,
@@ -353,6 +354,111 @@ async def test_not_ready_account_is_skipped_no_claim(monkeypatch: pytest.MonkeyP
     assert comment.calls == []
     assert await fetch_comment("@chan", 10) is None
     assert campaign_id  # silence unused
+
+
+# --------------------------------------------------------------------------- #
+# Miss-reason logging — the activity log must say *why* nothing happened.
+# --------------------------------------------------------------------------- #
+
+
+async def _latest_reason(event: str) -> object | None:
+    for entry in await list_recent_logs(limit=50):
+        if entry.event == event:
+            return entry.extra.get("reason")
+    return None
+
+
+@pytest.mark.asyncio
+async def test_no_account_reason_quota(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A healthy account that is merely maxed out reports ``quota`` (add accounts/raise cap)."""
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "max_comments_per_hour", 1)
+    assert await claim_comment("@chan", 1, campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 1, comment_text="x", comment_msg_id=1)
+    _patch_io(monkeypatch, comment=_CommentStub())
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    assert await _latest_reason("neurocomment_no_account_available") == "quota"
+
+
+@pytest.mark.asyncio
+async def test_no_account_reason_cooldown(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _make_campaign("@chan", "acc-1")
+    _state.set_cooldown("acc-1", datetime.now(UTC) + timedelta(hours=1))
+    _patch_io(monkeypatch, comment=_CommentStub())
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert await _latest_reason("neurocomment_no_account_available") == "cooldown"
+
+
+@pytest.mark.asyncio
+async def test_no_account_reason_not_ready(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _make_campaign("@chan", "acc-1")
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)
+    _patch_io(monkeypatch, comment=_CommentStub())
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert await _latest_reason("neurocomment_no_account_available") == "not_ready"
+
+
+@pytest.mark.asyncio
+async def test_no_account_reason_no_accounts_linked(monkeypatch: pytest.MonkeyPatch) -> None:
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    _patch_io(monkeypatch, comment=_CommentStub())
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert await _latest_reason("neurocomment_no_account_available") == "no_accounts_linked"
+
+
+@pytest.mark.asyncio
+async def test_generation_exhausted_reason_gemini_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
+    monkeypatch.setattr(_seams, "execute", _CommentStub().execute)
+    monkeypatch.setattr(_seams, "rng", _FixedRng())
+    monkeypatch.setattr(
+        _seams, "generate_text", _async_return(GeminiResult(status="error", error="boom"))
+    )
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert await _latest_reason("neurocomment_generation_exhausted") == "gemini_error"
+
+
+@pytest.mark.asyncio
+async def test_generation_exhausted_reason_rate_limited(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
+    monkeypatch.setattr(_seams, "execute", _CommentStub().execute)
+    monkeypatch.setattr(_seams, "rng", _FixedRng())
+    monkeypatch.setattr(
+        _seams, "generate_text", _async_return(GeminiResult(status="rate_limited", error="429"))
+    )
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert await _latest_reason("neurocomment_generation_exhausted") == "gemini_rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_generation_exhausted_reason_too_long(monkeypatch: pytest.MonkeyPatch) -> None:
+    await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
+    monkeypatch.setattr(settings.neurocomment, "comment_max_words", 2)
+    monkeypatch.setattr(_seams, "execute", _CommentStub().execute)
+    monkeypatch.setattr(_seams, "rng", _FixedRng())
+    monkeypatch.setattr(
+        _seams, "generate_text", _async_return(GeminiResult(status="ok", text="one two three four"))
+    )
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    assert await _latest_reason("neurocomment_generation_exhausted") == "too_long"
 
 
 @pytest.mark.asyncio
@@ -1154,19 +1260,19 @@ async def test_injection_payload_post_still_posts_clean_comment(
 
 
 async def _select_then_rival_claims(
-    original: Callable[[NeurocommentCampaign, str], Awaitable[str | None]],
-) -> Callable[[NeurocommentCampaign, str], Awaitable[str | None]]:
+    original: Callable[[NeurocommentCampaign, str], Awaitable[engine._Selection]],
+) -> Callable[[NeurocommentCampaign, str], Awaitable[engine._Selection]]:
     """Wrap ``_select_account`` so a rival claims the account's last slot after selection.
 
     Deterministically reproduces the burst race the under-lock re-read must catch (fails
     against the pre-fix select->claim, which had no re-read).
     """
 
-    async def _wrapped(campaign: NeurocommentCampaign, channel: str) -> str | None:
-        account_id = await original(campaign, channel)
-        if account_id is not None:
-            await claim_comment(channel, 999, campaign.campaign_id, account_id)
-        return account_id
+    async def _wrapped(campaign: NeurocommentCampaign, channel: str) -> engine._Selection:
+        selection = await original(campaign, channel)
+        if selection.account_id is not None:
+            await claim_comment(channel, 999, campaign.campaign_id, selection.account_id)
+        return selection
 
     return _wrapped
 

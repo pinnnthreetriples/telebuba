@@ -40,19 +40,19 @@ const VIEW = {
   last_name: null,
   username: 'ivanov',
   bio: null,
-  avatar_data_uri: null,
-  photos: [{ photo_id: 1, access_hash: 2, file_reference: 'YWJj', thumb_data_uri: null }],
+  photos: [{ photo_id: 1, access_hash: 2, file_reference: 'YWJj', thumb_url: null }],
   stories: [
     {
       story_id: 3,
       kind: 'image',
       privacy_preset: 'contacts',
       is_pinned: false,
-      thumb_data_uri: null,
+      views: 128,
+      thumb_url: null,
     },
   ],
   music: [
-    { file_id: 4, title: 'Track', performer: 'Artist', access_hash: 5, file_reference: 'YWJj' },
+    { file_id: '4', title: 'Track', performer: 'Artist', access_hash: '5', file_reference: 'YWJj' },
   ],
   music_supported: true,
 };
@@ -417,6 +417,69 @@ test('refresh syncs the bio even when other fresh fields are null', async () => 
   expect(screen.getByDisplayValue('Пётр')).toBeInTheDocument();
   // The username was cleared on Telegram → the field empties too.
   expect(screen.queryByDisplayValue('ivanov')).not.toBeInTheDocument();
+});
+
+test('«Сделать основным» promotes a non-first photo via the real endpoint', async () => {
+  const twoPhotos = {
+    ...VIEW,
+    photos: [
+      { photo_id: '111', access_hash: '222', file_reference: 'YWJj', thumb_url: null },
+      { photo_id: '333', access_hash: '444', file_reference: 'ZmZm', thumb_url: null },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(twoPhotos));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+
+  // The first photo shows the static «Основное фото» marker; only the second
+  // exposes an actionable «Сделать основным» button.
+  const makeMain = await screen.findByText('Сделать основным', { selector: 'button' });
+  await userEvent.click(makeMain);
+  await waitFor(() => {
+    expect(fired('/photo/main')).toBe(true);
+  });
+  const call = vi
+    .mocked(fetch)
+    .mock.calls.find(([input]) => (input as Request).url.includes('/photo/main'));
+  const body = (await (call?.[0] as Request).clone().json()) as Record<string, unknown>;
+  // The int64 id is carried as a string end-to-end (no JS rounding).
+  expect(body).toMatchObject({ photo_id: '333', access_hash: '444' });
+});
+
+test('the refresh button flashes a success state on a clean re-pull', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Обновить'));
+  expect(await screen.findByText('Обновлено')).toBeInTheDocument();
+});
+
+test('the refresh button flashes an error state when the live pull fails', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      // A forced refresh that Telegram refuses returns a 200 carrying `error`.
+      const live =
+        url.searchParams.get('refresh') === 'true' ? { ...VIEW, error: 'floodwait' } : VIEW;
+      return Promise.resolve(jsonResponse(live));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Обновить'));
+  expect(await screen.findByText('Ошибка')).toBeInTheDocument();
+});
+
+test('the stories tab shows the view count on each story', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сторис'));
+  expect(await screen.findByText('128')).toBeInTheDocument();
 });
 
 test('closing with unsaved edits asks for confirmation; a clean close does not', async () => {

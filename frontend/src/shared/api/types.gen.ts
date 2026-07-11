@@ -131,10 +131,6 @@ export type AccountProfileView = {
    */
   bio?: string | null;
   /**
-   * Avatar Data Uri
-   */
-  avatar_data_uri?: string | null;
-  /**
    * Photos
    */
   photos?: Array<ProfilePhotoView>;
@@ -644,6 +640,10 @@ export type CommentRecord = {
    * Updated At
    */
   updated_at: string;
+  /**
+   * Deleted At
+   */
+  deleted_at?: string | null;
 };
 
 /**
@@ -769,6 +769,18 @@ export type LogEntry = {
 };
 
 /**
+ * LogPurgeResult
+ *
+ * How many log rows a clear operation removed.
+ */
+export type LogPurgeResult = {
+  /**
+   * Deleted
+   */
+  deleted: number;
+};
+
+/**
  * LoginRequest
  */
 export type LoginRequest = {
@@ -789,11 +801,11 @@ export type MusicRemoveRequest = {
   /**
    * File Id
    */
-  file_id: number;
+  file_id: string;
   /**
    * Access Hash
    */
-  access_hash: number;
+  access_hash: string;
   /**
    * File Reference
    */
@@ -975,6 +987,10 @@ export type NeurocommentChannelRow = {
    * Total Accounts
    */
   total_accounts: number;
+  /**
+   * Deleted Recent
+   */
+  deleted_recent?: number;
 };
 
 /**
@@ -1134,17 +1150,40 @@ export type PhoneCodeRequestResult = {
 };
 
 /**
+ * PhotoMainRequest
+ *
+ * Promote an existing profile photo to the current avatar.
+ *
+ * Same ``InputPhoto`` triple as :class:`PhotoRemoveRequest` — the id fields
+ * arrive as int64 strings from the view (see :data:`_Int64Str`).
+ */
+export type PhotoMainRequest = {
+  /**
+   * Photo Id
+   */
+  photo_id: string;
+  /**
+   * Access Hash
+   */
+  access_hash: string;
+  /**
+   * File Reference
+   */
+  file_reference: string;
+};
+
+/**
  * PhotoRemoveRequest
  */
 export type PhotoRemoveRequest = {
   /**
    * Photo Id
    */
-  photo_id: number;
+  photo_id: string;
   /**
    * Access Hash
    */
-  access_hash: number;
+  access_hash: string;
   /**
    * File Reference
    */
@@ -1158,7 +1197,7 @@ export type ProfileMusicView = {
   /**
    * File Id
    */
-  file_id: number;
+  file_id: string;
   /**
    * Title
    */
@@ -1170,7 +1209,7 @@ export type ProfileMusicView = {
   /**
    * Access Hash
    */
-  access_hash?: number;
+  access_hash?: string;
   /**
    * File Reference
    */
@@ -1184,19 +1223,19 @@ export type ProfilePhotoView = {
   /**
    * Photo Id
    */
-  photo_id: number;
+  photo_id: string;
   /**
    * Access Hash
    */
-  access_hash: number;
+  access_hash: string;
   /**
    * File Reference
    */
   file_reference: string;
   /**
-   * Thumb Data Uri
+   * Thumb Url
    */
-  thumb_data_uri?: string | null;
+  thumb_url?: string | null;
 };
 
 /**
@@ -1224,9 +1263,13 @@ export type ProfileStoryView = {
    */
   is_pinned?: boolean;
   /**
-   * Thumb Data Uri
+   * Views
    */
-  thumb_data_uri?: string | null;
+  views?: number | null;
+  /**
+   * Thumb Url
+   */
+  thumb_url?: string | null;
 };
 
 /**
@@ -2794,6 +2837,37 @@ export type RemoveAccountPhotoResponses = {
 export type RemoveAccountPhotoResponse =
   RemoveAccountPhotoResponses[keyof RemoveAccountPhotoResponses];
 
+export type SetAccountPhotoMainData = {
+  body: PhotoMainRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/photo/main';
+};
+
+export type SetAccountPhotoMainErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetAccountPhotoMainError = SetAccountPhotoMainErrors[keyof SetAccountPhotoMainErrors];
+
+export type SetAccountPhotoMainResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type SetAccountPhotoMainResponse =
+  SetAccountPhotoMainResponses[keyof SetAccountPhotoMainResponses];
+
 export type ListProxiesData = {
   body?: never;
   path?: never;
@@ -4033,6 +4107,36 @@ export type UpdateNeurocommentSettingsResponses = {
 
 export type UpdateNeurocommentSettingsResponse =
   UpdateNeurocommentSettingsResponses[keyof UpdateNeurocommentSettingsResponses];
+
+export type ClearLogsData = {
+  body?: never;
+  path?: never;
+  query?: {
+    /**
+     * Event Prefix
+     */
+    event_prefix?: string;
+  };
+  url: '/api/v1/logs';
+};
+
+export type ClearLogsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ClearLogsError = ClearLogsErrors[keyof ClearLogsErrors];
+
+export type ClearLogsResponses = {
+  /**
+   * Successful Response
+   */
+  200: LogPurgeResult;
+};
+
+export type ClearLogsResponse = ClearLogsResponses[keyof ClearLogsResponses];
 
 export type ListLogsData = {
   body?: never;

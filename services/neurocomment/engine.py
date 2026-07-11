@@ -115,12 +115,13 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         )
         return
 
-    account_id = await _select_account(campaign, event.channel)
+    selection = await _select_account(campaign, event.channel)
+    account_id = selection.account_id
     if account_id is None:
         await log_event(
             "INFO",
             "neurocomment_no_account_available",
-            extra={"channel": event.channel, "post_id": event.post_id},
+            extra={"channel": event.channel, "post_id": event.post_id, "reason": selection.reason},
         )
         return
 
@@ -134,7 +135,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
             await log_event(
                 "INFO",
                 "neurocomment_no_account_available",
-                extra={"channel": event.channel, "post_id": event.post_id},
+                extra={"channel": event.channel, "post_id": event.post_id, "reason": "quota"},
             )
             return
         won = await claim_comment(event.channel, event.post_id, campaign.campaign_id, account_id)
@@ -201,7 +202,14 @@ async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) ->
     )
 
 
-async def _select_account(campaign: NeurocommentCampaign, channel: str) -> str | None:
+class _Selection(NamedTuple):
+    """The chosen account, or ``None`` with the binding reason nothing was eligible."""
+
+    account_id: str | None
+    reason: str | None  # set only when account_id is None (surfaced in the miss log)
+
+
+async def _select_account(campaign: NeurocommentCampaign, channel: str) -> _Selection:
     """Pick one ready, healthy, under-quota, non-cooled account at random.
 
     Every signal is bulk-loaded once (mirroring ``services.neurocomment.board``), so
@@ -209,6 +217,9 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> str |
     account — the cost stays flat as the fleet grows. Spam status is read from the
     cache and never re-probed here: probing @SpamBot per post is itself a ban
     signal, so warming/onboarding own spam freshness.
+
+    On a miss returns the binding blocker (``_selection_block_reason``) so the
+    activity log can tell the operator *why* — busy quota vs cooldown vs not warmed.
     """
     # A pinned account (link.channel set) is eligible only for its channel; an
     # unpinned account (None) is eligible for every channel of the campaign.
@@ -218,7 +229,7 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> str |
         if link.channel in (None, channel)
     ]
     if not account_ids:
-        return None
+        return _Selection(None, "no_accounts_linked")
     channel_count = max(1, len((await list_campaign_channels(campaign.campaign_id)).links))
     now = datetime.now(UTC)
     pool = await _load_selection_pool(campaign.campaign_id, channel, now)
@@ -228,27 +239,57 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> str |
         if _is_eligible(account_id, channel, channel_count, now, pool)
     ]
     if not candidates:
-        return None
-    return _seams.rng.choice(candidates)
+        return _Selection(
+            None, _selection_block_reason(account_ids, channel, channel_count, now, pool)
+        )
+    return _Selection(_seams.rng.choice(candidates), None)
 
 
-def _is_eligible(
+# Report the blocker of the account that passed the *most* gates — the most actionable
+# one. A maxed-out-but-healthy account (quota) means "add accounts / raise the cap",
+# which is more useful than reporting some other account that is merely not warmed yet.
+_BLOCK_PRIORITY = ("quota", "cooldown", "unhealthy", "not_ready")
+
+
+def _account_block_reason(
     account_id: str,
     channel: str,
     channel_count: int,
     now: datetime,
     pool: _SelectionPool,
-) -> bool:
+) -> str | None:
+    """The first gate that makes one account ineligible, or ``None`` if it's eligible.
+
+    Single source of the selection gate ladder — ``_is_eligible`` is just "no reason".
+    """
     if _state.in_cooldown(account_id, now, channel):
-        return False
-    if account_id not in pool.ready_account_ids:
-        return False
+        return "cooldown"
     account = pool.accounts.get(account_id)
-    if account is None:
-        return False
+    if account_id not in pool.ready_account_ids or account is None:
+        return "not_ready"
     if not _is_healthy(account, channel_count, now, pool):
-        return False
-    return _under_quota(account_id, pool)
+        return "unhealthy"
+    if not _under_quota(account_id, pool):
+        return "quota"
+    return None
+
+
+def _is_eligible(
+    account_id: str, channel: str, channel_count: int, now: datetime, pool: _SelectionPool
+) -> bool:
+    return _account_block_reason(account_id, channel, channel_count, now, pool) is None
+
+
+def _selection_block_reason(
+    account_ids: list[str], channel: str, channel_count: int, now: datetime, pool: _SelectionPool
+) -> str:
+    """Summarise why no account was eligible as the highest-priority binding blocker."""
+    reasons = {
+        reason
+        for account_id in account_ids
+        if (reason := _account_block_reason(account_id, channel, channel_count, now, pool))
+    }
+    return next((reason for reason in _BLOCK_PRIORITY if reason in reasons), "not_ready")
 
 
 def _is_healthy(

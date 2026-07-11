@@ -1425,6 +1425,74 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/photo/main": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set Account Photo Main",
+        "operationId": "setAccountPhotoMain",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhotoMainRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ActionResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies": {
       "get": {
         "tags": [
@@ -4058,6 +4126,64 @@
             }
           }
         }
+      },
+      "delete": {
+        "tags": [
+          "logs"
+        ],
+        "summary": "Delete Logs",
+        "description": "Clear log rows whose event starts with ``event_prefix`` (all rows when empty).",
+        "operationId": "clearLogs",
+        "parameters": [
+          {
+            "name": "event_prefix",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string",
+              "default": "",
+              "title": "Event Prefix"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/LogPurgeResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
       }
     }
   },
@@ -4275,17 +4401,6 @@
               }
             ],
             "title": "Bio"
-          },
-          "avatar_data_uri": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Avatar Data Uri"
           },
           "photos": {
             "items": {
@@ -5211,6 +5326,17 @@
             "type": "string",
             "minLength": 1,
             "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
           }
         },
         "type": "object",
@@ -5394,6 +5520,21 @@
         "title": "LogEntry",
         "description": "One row of the ``logs`` SQLite table."
       },
+      "LogPurgeResult": {
+        "properties": {
+          "deleted": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Deleted"
+          }
+        },
+        "type": "object",
+        "required": [
+          "deleted"
+        ],
+        "title": "LogPurgeResult",
+        "description": "How many log rows a clear operation removed."
+      },
       "LoginRequest": {
         "properties": {
           "username": {
@@ -5417,12 +5558,13 @@
       "MusicRemoveRequest": {
         "properties": {
           "file_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
+            "type": "string",
+            "pattern": "^-?\\d+$",
             "title": "File Id"
           },
           "access_hash": {
-            "type": "integer",
+            "type": "string",
+            "pattern": "^-?\\d+$",
             "title": "Access Hash"
           },
           "file_reference": {
@@ -5707,6 +5849,11 @@
           "total_accounts": {
             "type": "integer",
             "title": "Total Accounts"
+          },
+          "deleted_recent": {
+            "type": "integer",
+            "title": "Deleted Recent",
+            "default": 0
           }
         },
         "type": "object",
@@ -5949,15 +6096,43 @@
         "title": "PhoneCodeRequestResult",
         "description": "API response after a code is sent \u2014 confirmation only, no secrets."
       },
-      "PhotoRemoveRequest": {
+      "PhotoMainRequest": {
         "properties": {
           "photo_id": {
-            "type": "integer",
-            "exclusiveMinimum": 0.0,
+            "type": "string",
+            "pattern": "^-?\\d+$",
             "title": "Photo Id"
           },
           "access_hash": {
-            "type": "integer",
+            "type": "string",
+            "pattern": "^-?\\d+$",
+            "title": "Access Hash"
+          },
+          "file_reference": {
+            "type": "string",
+            "minLength": 1,
+            "title": "File Reference"
+          }
+        },
+        "type": "object",
+        "required": [
+          "photo_id",
+          "access_hash",
+          "file_reference"
+        ],
+        "title": "PhotoMainRequest",
+        "description": "Promote an existing profile photo to the current avatar.\n\nSame ``InputPhoto`` triple as :class:`PhotoRemoveRequest` \u2014 the id fields\narrive as int64 strings from the view (see :data:`_Int64Str`)."
+      },
+      "PhotoRemoveRequest": {
+        "properties": {
+          "photo_id": {
+            "type": "string",
+            "pattern": "^-?\\d+$",
+            "title": "Photo Id"
+          },
+          "access_hash": {
+            "type": "string",
+            "pattern": "^-?\\d+$",
             "title": "Access Hash"
           },
           "file_reference": {
@@ -5977,7 +6152,7 @@
       "ProfileMusicView": {
         "properties": {
           "file_id": {
-            "type": "integer",
+            "type": "string",
             "title": "File Id"
           },
           "title": {
@@ -6003,9 +6178,9 @@
             "title": "Performer"
           },
           "access_hash": {
-            "type": "integer",
+            "type": "string",
             "title": "Access Hash",
-            "default": 0
+            "default": "0"
           },
           "file_reference": {
             "type": "string",
@@ -6022,11 +6197,11 @@
       "ProfilePhotoView": {
         "properties": {
           "photo_id": {
-            "type": "integer",
+            "type": "string",
             "title": "Photo Id"
           },
           "access_hash": {
-            "type": "integer",
+            "type": "string",
             "title": "Access Hash"
           },
           "file_reference": {
@@ -6034,7 +6209,7 @@
             "minLength": 1,
             "title": "File Reference"
           },
-          "thumb_data_uri": {
+          "thumb_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -6043,7 +6218,7 @@
                 "type": "null"
               }
             ],
-            "title": "Thumb Data Uri"
+            "title": "Thumb Url"
           }
         },
         "type": "object",
@@ -6086,7 +6261,18 @@
             "title": "Is Pinned",
             "default": false
           },
-          "thumb_data_uri": {
+          "views": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Views"
+          },
+          "thumb_url": {
             "anyOf": [
               {
                 "type": "string"
@@ -6095,7 +6281,7 @@
                 "type": "null"
               }
             ],
-            "title": "Thumb Data Uri"
+            "title": "Thumb Url"
           }
         },
         "type": "object",

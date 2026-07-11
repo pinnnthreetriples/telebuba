@@ -70,3 +70,19 @@ async def test_logs_invalid_cursor_is_400(app: FastAPI) -> None:
         resp = await client.get("/api/v1/logs", params={"cursor": "nope"})
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.asyncio
+async def test_clear_logs_by_prefix_deletes_and_returns_count(app: FastAPI) -> None:
+    await log_event("INFO", "neurocomment_posted")
+    await log_event("WARNING", "neurocomment_post_failed")
+    await log_event("INFO", "warming_subscribe")
+    async with _client(app) as client:
+        resp = await client.request(
+            "DELETE", "/api/v1/logs", params={"event_prefix": "neurocomment"}
+        )
+        assert resp.status_code == 200
+        assert resp.json() == {"deleted": 2}
+        left = await client.get("/api/v1/logs")
+    events = [row["event"] for row in left.json()["items"]]
+    assert events == ["warming_subscribe"]

@@ -1,18 +1,18 @@
-"""Business logic for the logs domain (read-only).
+"""Business logic for the logs domain.
 
 Pure async functions: accept a filter, hit ``core.db`` for the rows, compute
 a small summary, return a Pydantic page state. The NiceGUI Logs page in
 ``features/logs.py`` calls this on every poll tick.
 
-The underlying ``logs`` table is filled by ``core.logging.log_event`` — this
-module never writes to it.
+Reads only, except ``clear_logs`` (the operator "clear logs" action); rows are
+otherwise written solely by ``core.logging.log_event``.
 """
 
 from __future__ import annotations
 
-from core.db import list_filtered_logs
+from core.db import list_filtered_logs, purge_logs
 from schemas.api import Page
-from schemas.logs import LogEntry, LogFilter, LogsPageState, LogsSummary
+from schemas.logs import LogEntry, LogFilter, LogPurgeResult, LogsPageState, LogsSummary
 
 
 class InvalidCursorError(ValueError):
@@ -46,6 +46,12 @@ async def list_logs_page(log_filter: LogFilter, cursor: str | None = None) -> Pa
     items = rows[: log_filter.limit]
     next_cursor = str(offset + log_filter.limit) if has_more else None
     return Page(items=items, next_cursor=next_cursor)
+
+
+async def clear_logs(event_prefix: str = "") -> LogPurgeResult:
+    """Delete the log rows matching ``event_prefix`` (all rows when empty); return the count."""
+    deleted = await purge_logs(event_prefix)
+    return LogPurgeResult(deleted=deleted)
 
 
 def _summarize(entries: list[LogEntry]) -> LogsSummary:

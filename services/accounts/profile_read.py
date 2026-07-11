@@ -14,8 +14,9 @@ the gateway internals.
 from __future__ import annotations
 
 import base64
+import hashlib
 import time
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from core.config import settings
 from core.logging import log_event
@@ -27,6 +28,7 @@ from core.telegram_client import (
 from schemas.accounts import AccountProfileSnapshot
 from schemas.profile_media import (
     AccountProfileView,
+    ProfileImage,
     ProfileMusicView,
     ProfilePhotoView,
     ProfileStoryView,
@@ -50,17 +52,16 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
+    "account_profile_image",
     "account_profile_view",
     "fetch_live_account_profile",
     "invalidate_account_profile_cache",
 ]
 
 
-def _data_uri(data: bytes | None, mime: str = "image/jpeg") -> str | None:
-    """Encode raw image bytes as a ``data:`` URI for the JSON profile view."""
-    if not data:
-        return None
-    return f"data:{mime};base64,{base64.b64encode(data).decode('ascii')}"
+def _thumb_url(account_id: str, kind: str, item_id: int | str) -> str:
+    """Build the browser-cacheable thumbnail URL for one photo/story item."""
+    return f"/api/{settings.api.version}/accounts/{account_id}/profile/{kind}/{item_id}/thumb"
 
 
 async def account_profile_view(
@@ -77,13 +78,14 @@ async def account_profile_view(
         last_name=snapshot.last_name,
         username=snapshot.username,
         bio=snapshot.bio,
-        avatar_data_uri=_data_uri(snapshot.avatar_bytes),
         photos=[
             ProfilePhotoView(
-                photo_id=photo.photo_id,
-                access_hash=photo.access_hash,
+                photo_id=str(photo.photo_id),
+                access_hash=str(photo.access_hash),
                 file_reference=base64.b64encode(photo.file_reference).decode("ascii"),
-                thumb_data_uri=_data_uri(photo.thumb_bytes),
+                thumb_url=(
+                    _thumb_url(account_id, "photos", photo.photo_id) if photo.thumb_bytes else None
+                ),
             )
             for photo in snapshot.photos
         ],
@@ -94,22 +96,54 @@ async def account_profile_view(
                 caption=story.caption,
                 privacy_preset=story.privacy_preset,
                 is_pinned=story.is_pinned,
-                thumb_data_uri=_data_uri(story.thumb_bytes),
+                views=story.views,
+                thumb_url=(
+                    _thumb_url(account_id, "stories", story.story_id) if story.thumb_bytes else None
+                ),
             )
             for story in snapshot.stories
         ],
         music=[
             ProfileMusicView(
-                file_id=track.file_id,
+                file_id=str(track.file_id),
                 title=track.title,
                 performer=track.performer,
-                access_hash=track.access_hash,
+                access_hash=str(track.access_hash),
                 file_reference=base64.b64encode(track.file_reference).decode("ascii"),
             )
             for track in snapshot.music
         ],
         music_supported=snapshot.music_supported,
     )
+
+
+async def account_profile_image(
+    account_id: str,
+    *,
+    kind: Literal["photos", "stories"],
+    item_id: int,
+) -> ProfileImage | None:
+    """Serve one cached thumbnail.
+
+    Cache-first: reuses the snapshot the modal just fetched; refetches from
+    Telegram only if the TTL cache is cold/stale.
+    """
+    snapshot = await fetch_live_account_profile(account_id)
+    data = _locate_thumb_bytes(snapshot, kind, item_id)
+    if not data:
+        return None
+    etag = hashlib.blake2b(data, digest_size=16).hexdigest()
+    return ProfileImage(content=data, etag=etag)
+
+
+def _locate_thumb_bytes(
+    snapshot: AccountProfileSnapshot,
+    kind: Literal["photos", "stories"],
+    item_id: int,
+) -> bytes | None:
+    if kind == "photos":
+        return next((p.thumb_bytes for p in snapshot.photos if p.photo_id == item_id), None)
+    return next((s.thumb_bytes for s in snapshot.stories if s.story_id == item_id), None)
 
 
 _CACHE: dict[str, AccountProfileSnapshot] = {}

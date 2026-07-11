@@ -28,11 +28,13 @@ from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfileMusicUpload,
     AccountProfilePhotoRemove,
+    AccountProfilePhotoSetMain,
     AccountProfilePhotoUpload,
     AccountProfileView,
     AccountStoryRemove,
     AccountStoryUpload,
     MusicRemoveRequest,
+    PhotoMainRequest,
     PhotoRemoveRequest,
     StoryMediaKind,
     StoryPrivacyPreset,
@@ -254,6 +256,21 @@ def _decode_ref(value: str) -> bytes:
         ) from exc
 
 
+def _decode_id(value: str) -> int:
+    """Parse an int64 identifier carried as a string in the profile view, or 400.
+
+    The view sends photo_id / file_id / access_hash as decimal strings so the
+    SPA doesn't round them past 2^53 (see schemas.profile_media._Int64Str).
+    """
+    try:
+        return int(value)
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="invalid id",
+        ) from exc
+
+
 @router.get(
     "/accounts/{account_id}/profile-snapshot",
     response_model=AccountProfileView,
@@ -353,8 +370,8 @@ async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> Act
 async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> ActionResult:
     remove = AccountProfileMusicRemove(
         account_id=account_id,
-        file_id=body.file_id,
-        access_hash=body.access_hash,
+        file_id=_decode_id(body.file_id),
+        access_hash=_decode_id(body.access_hash),
         file_reference=_decode_ref(body.file_reference),
     )
     try:
@@ -373,12 +390,32 @@ async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> Act
 async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> ActionResult:
     remove = AccountProfilePhotoRemove(
         account_id=account_id,
-        photo_id=body.photo_id,
-        access_hash=body.access_hash,
+        photo_id=_decode_id(body.photo_id),
+        access_hash=_decode_id(body.access_hash),
         file_reference=_decode_ref(body.file_reference),
     )
     try:
         return await accounts.remove_account_profile_photo(remove)
+    except accounts.AccountActionError:
+        raise
+    except ValueError as exc:
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
+    "/accounts/{account_id}/photo/main",
+    response_model=ActionResult,
+    operation_id="setAccountPhotoMain",
+)
+async def set_account_photo_main(account_id: str, body: PhotoMainRequest) -> ActionResult:
+    set_main = AccountProfilePhotoSetMain(
+        account_id=account_id,
+        photo_id=_decode_id(body.photo_id),
+        access_hash=_decode_id(body.access_hash),
+        file_reference=_decode_ref(body.file_reference),
+    )
+    try:
+        return await accounts.set_account_main_profile_photo(set_main)
     except accounts.AccountActionError:
         raise
     except ValueError as exc:
