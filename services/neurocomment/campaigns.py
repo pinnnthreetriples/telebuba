@@ -80,6 +80,8 @@ async def list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
 async def assign_account_to_campaign(campaign_id: str, account_id: str) -> None:
     """Add an account to a campaign's serving fleet (idempotent)."""
     await db.assign_account_to_campaign(campaign_id, account_id)
+    # A running listener onboards the new account now, not at the next Start.
+    await _runtime.reconcile_if_running()
 
 
 async def remove_account_from_campaign(campaign_id: str, account_id: str) -> None:

@@ -116,6 +116,25 @@ collectible usernames are blocked by the 5-char minimum (matches
 `account.updateUsername` RPC rules). Gates: 1121 pytest / 95% branch, 227
 vitest / 96% lines.
 
+A 2026-07-11 neurocomment audit (operator-reported: NOXX campaign never
+comments, board stuck on «Комментарии выкл.», reconcile "loop") diagnosed via
+live-DB forensics + three sonnet subagents and fixed in one PR: (1) **root
+cause — onboarding only ever ran from `start_neurocomment`**, so a campaign
+created/edited *after* Start (NOXX: listener started 23:20, campaign built
+00:55) never got readiness rows → every post logged
+`neurocomment_no_account_available`. Now `reconcile_if_running` and
+`reconcile_neurocomment_on_startup` also call `_ensure_onboarding_running`,
+`assign_account_to_campaign` reconciles a running listener, and a trigger
+arriving mid-run queues one coalesced rerun (`_ONBOARD_RERUN`); (2) the
+"reconcile every second" was **not** an infinite loop — each of 10 sequential
+`link_channel` POSTs re-ran reconcile which re-joined ALL channels (~55
+JoinChannel RPCs in 16 s, real flood risk); reconcile's join sweep is now gated
+by a process-lifetime `_JOINED_CHANNELS` set (failed joins retry next call);
+(3) the board's frontend fallback for an account with zero readiness rows
+collided with the real backend `comments_off` status — now a frontend-only
+`no_data` status («Нет данных»), and `deriveRows` prefers the account's
+`pinned_channel` row over first-joined. Gates: full pytest suite + vitest green.
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.
