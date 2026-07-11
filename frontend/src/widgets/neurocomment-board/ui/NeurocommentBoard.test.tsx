@@ -50,6 +50,23 @@ test('renders the 4-column work table with channel and dot-pill status', () => {
   expect(screen.getByText('Отличный пост!')).toBeInTheDocument();
 });
 
+test('shows a deleted-count chip on a channel with recent deletions', () => {
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    channels: [
+      {
+        channel: '@news',
+        status: 'ready',
+        ready_accounts: 2,
+        total_accounts: 3,
+        deleted_recent: 3,
+      },
+    ],
+  };
+  render(<NeurocommentBoard board={board} accountsCount={1} onOpenAccounts={() => undefined} />);
+  expect(screen.getByText('3 удалено')).toBeInTheDocument();
+});
+
 test('an account with no readiness rows shows the no-data badge, not comments-off', () => {
   render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={() => undefined} />);
   // acc-2 has readiness: [] — no channel to look up, so the frontend-only

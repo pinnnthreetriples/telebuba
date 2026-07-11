@@ -13,6 +13,8 @@ describe('logSeverity', () => {
     expect(logSeverity({ event: 'neurocomment_post_dropped_overloaded', status: 'success' })).toBe(
       'error',
     );
+    // A deleted comment reads as a failure, even logged WARNING.
+    expect(logSeverity({ event: 'neurocomment_comment_deleted', status: 'warning' })).toBe('error');
   });
 
   it('maps deliberate skips / pauses / limits to warning', () => {

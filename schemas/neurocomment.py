@@ -240,6 +240,8 @@ class CommentRecord(BaseModel):
     comment_msg_id: int | None = None
     created_at: str = Field(min_length=1)
     updated_at: str = Field(min_length=1)
+    # Set when a delivered comment is later found removed from the channel; NULL = live.
+    deleted_at: str | None = None
 
 
 class CommentList(BaseModel):
@@ -362,6 +364,8 @@ class NeurocommentChannelRow(BaseModel):
     status: ChannelStatus
     ready_accounts: int
     total_accounts: int
+    # Comments of ours removed from this channel within the board's 24h window.
+    deleted_recent: int = 0
 
 
 class NeurocommentBoard(BaseModel):

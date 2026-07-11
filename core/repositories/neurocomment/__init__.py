@@ -59,6 +59,7 @@ from core.repositories.neurocomment._comments import (
     upsert_linked_group,
     upsert_readiness,
 )
+from core.repositories.neurocomment._deletions import mark_comments_deleted
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
     count_account_comments_since,
@@ -114,6 +115,7 @@ __all__ = [
     "lookup_cached_decision",
     "mark_comment_failed",
     "mark_comment_posted",
+    "mark_comments_deleted",
     "mark_human_skipped",
     "reclaim_stale_claims",
     "remove_account_from_campaign",

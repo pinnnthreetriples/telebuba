@@ -291,6 +291,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     lookup_cached_decision,
     mark_comment_failed,
     mark_comment_posted,
+    mark_comments_deleted,
     mark_human_skipped,
     reclaim_stale_claims,
     remove_account_from_campaign,

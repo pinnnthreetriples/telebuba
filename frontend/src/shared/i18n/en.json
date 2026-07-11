@@ -411,6 +411,7 @@
   "logEvent": {
     "neurocomment_posted": "Comment posted",
     "neurocomment_post_failed": "Comment failed",
+    "neurocomment_comment_deleted": "Comment deleted",
     "neurocomment_post_skipped": "Post skipped",
     "neurocomment_post_cooldown": "Cooldown between comments",
     "neurocomment_post_gated": "Comment held by limit",
@@ -545,6 +546,7 @@
     "neurocomment_generation_exhausted": "The AI produced no acceptable text. Check the Gemini key, campaign prompt, and rate limit.",
     "neurocomment_post_skipped": "The post isn't commentable (repost, media/link only, or empty).",
     "neurocomment_post_failed": "Telegram rejected the comment.",
+    "neurocomment_comment_deleted": "The channel removed our comment — moderation or a ban. Check the channel/account.",
     "neurocomment_post_cooldown": "Telegram pause (flood control) — the account is briefly not commenting.",
     "neurocomment_post_gated": "A captcha/unblock is required to post in this channel.",
     "neurocomment_channel_cooled": "Channel paused after errors or mass deletions.",
@@ -624,7 +626,8 @@
     "feed": {
       "title": "Published comments",
       "empty": "No published comments yet",
-      "history": "Full history"
+      "history": "Full history",
+      "deleted": "deleted"
     },
     "campaigns": {
       "title": "Campaigns",
@@ -697,6 +700,7 @@
       "onboarding": "Onboarding {{ready}}/{{total}}",
       "commentPlaceholder": "Comment sent",
       "empty": "No work yet",
+      "deleted": "{{count}} deleted",
       "col": {
         "account": "Account",
         "channel": "Channel",

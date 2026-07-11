@@ -5269,6 +5269,17 @@
             "type": "string",
             "minLength": 1,
             "title": "Updated At"
+          },
+          "deleted_at": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Deleted At"
           }
         },
         "type": "object",
@@ -5780,6 +5791,11 @@
           "total_accounts": {
             "type": "integer",
             "title": "Total Accounts"
+          },
+          "deleted_recent": {
+            "type": "integer",
+            "title": "Deleted Recent",
+            "default": 0
           }
         },
         "type": "object",

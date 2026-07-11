@@ -16,6 +16,8 @@ interface BoardRow {
   // 'no_data' (no readiness rows yet) is now a real backend status; deriveRows
   // also falls back to it when an account's channel is absent from the board map.
   status: NeurocommentChannelRow['status'];
+  // Our comments removed from this row's channel within the 24h board window.
+  deletedRecent: number;
   // Onboarding progress for this account: ready channels / target. While the
   // runtime reports onboarding in flight and the account is not yet fully armed,
   // the status cell animates this instead of the (misleading) static status.
@@ -34,6 +36,7 @@ function deriveRows(
   totalChannels: number,
 ): BoardRow[] {
   const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
+  const channelDeleted = new Map((board.channels ?? []).map((c) => [c.channel, c.deleted_recent]));
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
     const primary =
@@ -50,6 +53,7 @@ function deriveRows(
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
       status: channelStatus.get(channel) ?? 'no_data',
+      deletedRecent: channelDeleted.get(channel) ?? 0,
       armedReady,
       armedTarget,
     };
@@ -106,7 +110,16 @@ export function NeurocommentBoard({
       {
         accessorKey: 'channel',
         header: t('neurocomment.board.col.channel'),
-        cell: (info) => info.getValue<string>(),
+        cell: ({ row }) => (
+          <span className="inline-flex items-center gap-[6px] whitespace-nowrap">
+            {row.original.channel}
+            {row.original.deletedRecent > 0 ? (
+              <span className="rounded-full bg-danger-tint px-[7px] py-px text-[10px] font-medium text-danger">
+                {t('neurocomment.board.deleted', { count: row.original.deletedRecent })}
+              </span>
+            ) : null}
+          </span>
+        ),
         meta: {
           cellClassName: 'whitespace-nowrap text-[12.5px] text-primary',
         } satisfies DataTableColumnMeta,

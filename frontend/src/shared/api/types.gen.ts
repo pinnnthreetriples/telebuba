@@ -644,6 +644,10 @@ export type CommentRecord = {
    * Updated At
    */
   updated_at: string;
+  /**
+   * Deleted At
+   */
+  deleted_at?: string | null;
 };
 
 /**
@@ -987,6 +991,10 @@ export type NeurocommentChannelRow = {
    * Total Accounts
    */
   total_accounts: number;
+  /**
+   * Deleted Recent
+   */
+  deleted_recent?: number;
 };
 
 /**

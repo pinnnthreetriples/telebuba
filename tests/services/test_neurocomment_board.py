@@ -24,6 +24,7 @@ from core.db import (
     insert_device_fingerprint,
     link_channel_to_campaign,
     mark_comment_posted,
+    mark_comments_deleted,
     upsert_linked_group,
     upsert_readiness,
     upsert_spam_status,
@@ -69,6 +70,23 @@ async def _post_comment(
 @pytest.mark.asyncio
 async def test_unknown_campaign_returns_none() -> None:
     assert await load_neurocomment_board("nope") is None
+
+
+@pytest.mark.asyncio
+async def test_channel_row_counts_recently_deleted_comments() -> None:
+    campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1", label="Account One"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await _post_comment("@chan", 1, campaign.campaign_id, "acc-1")  # comment_msg_id == post_id
+    await _post_comment("@chan", 2, campaign.campaign_id, "acc-1")
+    await mark_comments_deleted("@chan", [1])  # one of the two removed
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].deleted_recent == 1
 
 
 @pytest.mark.asyncio

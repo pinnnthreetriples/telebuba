@@ -203,6 +203,21 @@ campaign name (unpinned = whole-campaign scope). Gates: full 1171 pytest green
 (strict), ruff+ty+aislop clean; frontend 244+ vitest + tsc+eslint+steiger green;
 API client regenerated (adds `clearLogs`, drift-free).
 
+Same PR, third pass — **deleted-comment tracking** (near-real-time). The deletion
+sweep already computes the vanished comment ids; it now also stamps them: migration
+#27 adds `neurocomment_comments.deleted_at`, `mark_comments_deleted` (new
+`_deletions.py` — `_comments.py` was already 438 lines, grandfathered over the 400
+cap, so the new code lives outside it) marks posted-and-still-live rows idempotently,
+and the sweep logs `neurocomment_comment_deleted` per fresh batch. Sweep interval
+dropped 1800→300s (`.env.example` mirrored; arch test enforces value match).
+Surfacing: feed + history show deleted comments struck-through with a danger badge;
+the board channel cell gets a «N удалено» chip (`NeurocommentChannelRow.deleted_recent`,
+counted in `board.py` via `_ChannelFlags`); `logSeverity` colours `*_deleted` red.
+True-instant `MessageDeleted` gateway handler is a deliberate follow-up (needs live
+group→channel peer-mapping validation — can't smoke-test blind against the untouchable
+live instance). Gates: full 1173 pytest green (strict), ruff+ty+aislop clean; frontend
+249 vitest + tsc+eslint+steiger green; client regenerated (`deleted_at`, `deleted_recent`).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

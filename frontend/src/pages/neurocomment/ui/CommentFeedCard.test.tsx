@@ -48,6 +48,18 @@ test('renders one row per comment with its resolved account label', () => {
   expect(screen.getAllByText('Account One')).toHaveLength(2);
 });
 
+test('marks a deleted comment with a badge and struck-through text', () => {
+  render(
+    <CommentFeedCard
+      comments={[{ ...comment(1, 'gone'), deleted_at: '2026-07-11T11:00:00+00:00' }]}
+      accounts={ACCOUNTS}
+      onOpenHistory={vi.fn()}
+    />,
+  );
+  expect(screen.getByText('удалён')).toBeInTheDocument();
+  expect(screen.getByText('gone')).toHaveClass('line-through');
+});
+
 test('shows the empty state when there are no comments', () => {
   render(<CommentFeedCard comments={[]} accounts={ACCOUNTS} onOpenHistory={vi.fn()} />);
   expect(screen.getByText('Пока нет опубликованных комментариев')).toBeInTheDocument();

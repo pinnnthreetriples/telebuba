@@ -412,6 +412,7 @@
   "logEvent": {
     "neurocomment_posted": "Комментарий опубликован",
     "neurocomment_post_failed": "Ошибка публикации",
+    "neurocomment_comment_deleted": "Комментарий удалён",
     "neurocomment_post_skipped": "Пост пропущен",
     "neurocomment_post_cooldown": "Пауза между комментариями",
     "neurocomment_post_gated": "Комментарий отложен по лимиту",
@@ -546,6 +547,7 @@
     "neurocomment_generation_exhausted": "ИИ не выдал подходящий текст. Проверьте ключ Gemini, промпт кампании и лимит запросов.",
     "neurocomment_post_skipped": "Пост не подходит для комментария (репост, только медиа/ссылка или пусто).",
     "neurocomment_post_failed": "Telegram отклонил отправку комментария.",
+    "neurocomment_comment_deleted": "Наш комментарий удалили из канала — модерация или бан. Проверьте канал/аккаунт.",
     "neurocomment_post_cooldown": "Пауза от Telegram (флуд-контроль) — аккаунт временно не комментирует.",
     "neurocomment_post_gated": "Нужна капча/разблокировка для отправки в этот канал.",
     "neurocomment_channel_cooled": "Канал на паузе после ошибок или массовых удалений.",
@@ -625,7 +627,8 @@
     "feed": {
       "title": "Опубликованные комментарии",
       "empty": "Пока нет опубликованных комментариев",
-      "history": "Вся история"
+      "history": "Вся история",
+      "deleted": "удалён"
     },
     "campaigns": {
       "title": "Кампании",
@@ -698,6 +701,7 @@
       "onboarding": "Онбординг {{ready}}/{{total}}",
       "commentPlaceholder": "Комментарий отправлен",
       "empty": "Пока нет работ",
+      "deleted": "{{count}} удалено",
       "col": {
         "account": "Аккаунт",
         "channel": "Канал",
