@@ -444,7 +444,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     <div key={photo.photo_id} className="relative">
                       <div
                         className="rounded-[12px] border border-black/5"
-                        style={tileStyle(photo.thumb_data_uri, '1')}
+                        style={tileStyle(photo.thumb_url, '1')}
                       />
                       <button
                         type="button"
@@ -511,7 +511,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     <div key={story.story_id} className="relative">
                       <div
                         className="rounded-[12px] border border-black/5"
-                        style={tileStyle(story.thumb_data_uri, '9 / 16')}
+                        style={tileStyle(story.thumb_url, '9 / 16')}
                       />
                       {story.views != null && (
                         <span

@@ -100,12 +100,13 @@ class AccountProfileMusicRemove(BaseModel):
 
 
 # The *View models are the JSON-safe edit-profile snapshot: file_reference (raw
-# bytes in the live snapshot) travels as base64, thumbnails as data: URIs.
+# bytes in the live snapshot) travels as base64, thumbnails as a cacheable
+# image-endpoint URL (see ProfileImage / account_profile_image).
 class ProfilePhotoView(BaseModel):
     photo_id: str  # int64 as string (see _Int64Str)
     access_hash: str
     file_reference: str = Field(min_length=1)  # base64
-    thumb_data_uri: str | None = None
+    thumb_url: str | None = None
 
 
 class ProfileStoryView(BaseModel):
@@ -117,7 +118,7 @@ class ProfileStoryView(BaseModel):
     # Story view count from Telegram (``None`` when the account can't see its
     # own story views, e.g. the story is expired and unpinned).
     views: int | None = None
-    thumb_data_uri: str | None = None
+    thumb_url: str | None = None
 
 
 class ProfileMusicView(BaseModel):
@@ -138,11 +139,22 @@ class AccountProfileView(BaseModel):
     last_name: str | None = None
     username: str | None = None
     bio: str | None = None
-    avatar_data_uri: str | None = None
     photos: list[ProfilePhotoView] = Field(default_factory=list)
     stories: list[ProfileStoryView] = Field(default_factory=list)
     music: list[ProfileMusicView] = Field(default_factory=list)
     music_supported: bool = True
+
+
+class ProfileImage(BaseModel):
+    """Raw thumbnail bytes + cache metadata served by the image endpoints.
+
+    The service returns this model (Pydantic boundary); the API layer turns it
+    into a binary Response with cache headers.
+    """
+
+    content: bytes = Field(min_length=1)
+    media_type: str = "image/jpeg"
+    etag: str = Field(min_length=1)  # content hash, used for If-None-Match revalidation
 
 
 class StoryRemoveRequest(BaseModel):

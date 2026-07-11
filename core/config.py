@@ -199,6 +199,10 @@ class ProfileMediaSettings(BaseSettings):
     # A stalling or maliciously-crafted video would otherwise hang the request
     # coroutine forever and orphan the process; on timeout we kill it and fail.
     ffmpeg_timeout_seconds: float = Field(default=120.0, ge=1.0)
+    # Browser cache lifetime for the per-item profile thumbnail endpoints. Thumbnails
+    # are content-immutable per photo_id/story_id, so this can be long; served with
+    # Cache-Control: private (per-account, authenticated) + an ETag for revalidation.
+    thumb_cache_max_age_seconds: int = Field(default=3600, ge=0)
 
 
 class LoggingSettings(BaseSettings):

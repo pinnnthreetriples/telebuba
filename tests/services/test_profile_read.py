@@ -30,6 +30,7 @@ from schemas.telegram_profile_snapshot import (
     TelegramStoryThumb,
 )
 from services.accounts.profile_read import (
+    account_profile_image,
     account_profile_view,
     fetch_live_account_profile,
     invalidate_account_profile_cache,
@@ -75,7 +76,6 @@ def _stub_execute_read_many(
                         username="alice",
                         phone="79991234567",
                         bio="Hi there",
-                        avatar_bytes=b"jpeg",
                     ),
                 )
             elif isinstance(action, ListPinnedStories):
@@ -153,7 +153,6 @@ async def test_fetch_live_profile_returns_combined_snapshot(
     assert snapshot.account_id == "acc-1"
     assert snapshot.first_name == "Alice"
     assert snapshot.bio == "Hi there"
-    assert snapshot.avatar_bytes == b"jpeg"
     # Active first (newer date_unix), then pinned, deduped — pinned-only #101
     # and active-only #202 appear once each in date-descending order.
     assert [story.story_id for story in snapshot.stories] == [202, 101]
@@ -314,13 +313,19 @@ async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatc
     async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
         return AccountProfileSnapshot(
             account_id=account_id,
-            avatar_bytes=b"\xff\xd8avatar",
             photos=[
                 TelegramProfilePhoto(
                     photo_id=1, access_hash=2, file_reference=b"ref", thumb_bytes=b"\x89PNG"
                 ),
             ],
-            stories=[TelegramStoryThumb(story_id=3, kind="image", privacy_preset="contacts")],
+            stories=[
+                TelegramStoryThumb(
+                    story_id=3,
+                    kind="image",
+                    privacy_preset="contacts",
+                    thumb_bytes=b"\x89story",
+                ),
+            ],
             music=[TelegramMusicItem(file_id=4, title="T", access_hash=5, file_reference=b"mref")],
             music_supported=True,
         )
@@ -329,16 +334,41 @@ async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatc
     view = await account_profile_view("acc-1")
 
     assert view.error is None
-    assert view.avatar_data_uri is not None
-    assert view.avatar_data_uri.startswith("data:image/jpeg;base64,")
     assert view.photos[0].file_reference == base64.b64encode(b"ref").decode()
-    assert view.photos[0].thumb_data_uri is not None
+    assert (
+        view.photos[0].thumb_url
+        == f"/api/{settings.api.version}/accounts/acc-1/profile/photos/1/thumb"
+    )
     # int64 ids cross the JSON edge as strings so the SPA can't round them.
     assert view.photos[0].photo_id == "1"
     assert view.photos[0].access_hash == "2"
     assert view.stories[0].story_id == 3
+    assert (
+        view.stories[0].thumb_url
+        == f"/api/{settings.api.version}/accounts/acc-1/profile/stories/3/thumb"
+    )
     assert view.music[0].file_id == "4"
     assert view.music[0].file_reference == base64.b64encode(b"mref").decode()
+
+
+@pytest.mark.asyncio
+async def test_account_profile_view_thumb_url_none_without_thumb_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A photo/story with no cached thumbnail gets no thumb_url — nothing to serve."""
+
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return AccountProfileSnapshot(
+            account_id=account_id,
+            photos=[TelegramProfilePhoto(photo_id=1, access_hash=2, file_reference=b"ref")],
+            stories=[TelegramStoryThumb(story_id=3, kind="image", privacy_preset="contacts")],
+        )
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+    view = await account_profile_view("acc-1")
+
+    assert view.photos[0].thumb_url is None
+    assert view.stories[0].thumb_url is None
 
 
 @pytest.mark.asyncio
@@ -352,3 +382,79 @@ async def test_account_profile_view_surfaces_error(monkeypatch: pytest.MonkeyPat
     assert view.error == "floodwait"
     assert view.photos == []
     assert view.music == []
+
+
+def _image_snapshot() -> AccountProfileSnapshot:
+    return AccountProfileSnapshot(
+        account_id="acc-1",
+        photos=[
+            TelegramProfilePhoto(
+                photo_id=1, access_hash=2, file_reference=b"ref", thumb_bytes=b"photo-thumb"
+            ),
+            TelegramProfilePhoto(photo_id=2, access_hash=3, file_reference=b"ref2"),
+        ],
+        stories=[
+            TelegramStoryThumb(
+                story_id=9, kind="image", privacy_preset="contacts", thumb_bytes=b"story-thumb"
+            ),
+        ],
+    )
+
+
+@pytest.mark.asyncio
+async def test_account_profile_image_returns_photo_bytes_and_etag(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return _image_snapshot()
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+
+    image = await account_profile_image("acc-1", kind="photos", item_id=1)
+
+    assert image is not None
+    assert image.content == b"photo-thumb"
+    assert image.media_type == "image/jpeg"
+    assert image.etag  # non-empty content hash
+
+
+@pytest.mark.asyncio
+async def test_account_profile_image_returns_story_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return _image_snapshot()
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+
+    image = await account_profile_image("acc-1", kind="stories", item_id=9)
+
+    assert image is not None
+    assert image.content == b"story-thumb"
+
+
+@pytest.mark.asyncio
+async def test_account_profile_image_unknown_id_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return _image_snapshot()
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+
+    assert await account_profile_image("acc-1", kind="photos", item_id=999) is None
+    assert await account_profile_image("acc-1", kind="stories", item_id=999) is None
+
+
+@pytest.mark.asyncio
+async def test_account_profile_image_no_thumb_bytes_returns_none(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Photo #2 exists in the snapshot but has no cached thumb — 404, not empty bytes."""
+
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return _image_snapshot()
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+
+    assert await account_profile_image("acc-1", kind="photos", item_id=2) is None
