@@ -7,6 +7,7 @@ export {
   deleteCampaignMutation,
   linkCampaignChannelMutation,
   neurocommentBoardQueryOptions,
+  neurocommentCommentsQueryOptions,
   neurocommentRuntimeQueryOptions,
   neurocommentSettingsQueryOptions,
   removeCampaignAccountMutation,

@@ -7,17 +7,23 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRow, ChallengeRowList
 from schemas.neurocomment import (
     AccountChannelOnboarding,
     CampaignList,
     ChannelLinkOutcome,
+    CommentRecord,
     NeurocommentBoard,
     NeurocommentCampaign,
     NeurocommentRuntimeStatus,
     NeurocommentSettings,
 )
-from services.neurocomment import ChannelNotInCampaignError, ListenerBusyWarmingError
+from services.neurocomment import (
+    ChannelNotInCampaignError,
+    InvalidCursorError,
+    ListenerBusyWarmingError,
+)
 
 if TYPE_CHECKING:
     from fastapi import FastAPI
@@ -507,3 +513,49 @@ async def test_update_prompt_is_204(app: FastAPI, monkeypatch: pytest.MonkeyPatc
             json={"prompt": "be nice"},
         )
     assert resp.status_code == 204
+
+
+def _comment(post_id: int) -> CommentRecord:
+    return CommentRecord(
+        channel="@chan",
+        post_id=post_id,
+        campaign_id="c1",
+        account_id="acc-1",
+        status="posted",
+        comment_text=f"c{post_id}",
+        comment_msg_id=post_id,
+        created_at="2026-07-11T10:00:00+00:00",
+        updated_at="2026-07-11T10:00:00+00:00",
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_comments_ok_shape(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(campaign_id: str, cursor: str | None, limit: int) -> Page[CommentRecord]:  # noqa: ARG001
+        return Page(items=[_comment(2), _comment(1)], next_cursor="2")
+
+    monkeypatch.setattr("services.neurocomment.list_comments_page", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/neurocomment/campaigns/c1/comments", params={"limit": 2})
+    assert resp.status_code == 200
+    body = resp.json()
+    assert set(body) == {"items", "next_cursor"}
+    assert [c["post_id"] for c in body["items"]] == [2, 1]
+    assert body["next_cursor"] == "2"
+
+
+@pytest.mark.asyncio
+async def test_list_comments_invalid_cursor_is_400(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(campaign_id: str, cursor: str | None, limit: int) -> Page[CommentRecord]:  # noqa: ARG001
+        raise InvalidCursorError(cursor)
+
+    monkeypatch.setattr("services.neurocomment.list_comments_page", _fake)
+    async with _client(app) as client:
+        resp = await client.get(
+            "/api/v1/neurocomment/campaigns/c1/comments",
+            params={"cursor": "nope"},
+        )
+    assert resp.status_code == 400

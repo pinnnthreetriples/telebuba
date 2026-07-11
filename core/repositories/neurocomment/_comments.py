@@ -377,6 +377,32 @@ async def list_posted_comments_since(campaign_id: str, since_iso: str) -> Commen
     return await asyncio.to_thread(_list_posted_comments_since, campaign_id, since_iso)
 
 
+def _list_posted_comments_page(campaign_id: str, offset: int, limit: int) -> CommentList:
+    # Newest-first; created_at is an ISO string so lexical desc == chronological
+    # desc, and post_id desc breaks ties within the same second for a stable page.
+    statement = (
+        select(_neurocomment_comments)
+        .where(
+            (_neurocomment_comments.c.campaign_id == campaign_id)
+            & (_neurocomment_comments.c.status == "posted"),
+        )
+        .order_by(
+            _neurocomment_comments.c.created_at.desc(),
+            _neurocomment_comments.c.post_id.desc(),
+        )
+        .limit(limit)
+        .offset(offset)
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return CommentList(comments=[_row_to_comment(row) for row in rows])
+
+
+async def list_posted_comments_page(campaign_id: str, offset: int, limit: int) -> CommentList:
+    """One page of a campaign's ``posted`` comments (newest first) for the history modal."""
+    return await asyncio.to_thread(_list_posted_comments_page, campaign_id, offset, limit)
+
+
 def _list_posted_comments_for_channel_since(
     campaign_id: str,
     channel: str,

@@ -37,6 +37,7 @@ import { NeurocommentBoard } from '@/widgets/neurocomment-board';
 
 import { ActivityLogCard } from './ActivityLogCard';
 import { CommentFeedCard } from './CommentFeedCard';
+import { CommentHistoryModal } from './CommentHistoryModal';
 import { CampaignsCard } from './CampaignsCard';
 import { CaptchaSolverCard } from './CaptchaSolverCard';
 import { HowItWorksCard } from './HowItWorksCard';
@@ -110,6 +111,7 @@ export function NeurocommentPage() {
 
   // Modal open state.
   const [showAccounts, setShowAccounts] = useState(false);
+  const [showHistory, setShowHistory] = useState(false);
   const [showCreate, setShowCreate] = useState(false);
   const [showListenerEdit, setShowListenerEdit] = useState(false);
   const [promptFor, setPromptFor] = useState<NeurocommentCampaign | null>(null);
@@ -362,7 +364,13 @@ export function NeurocommentPage() {
           ) : null}
 
           {board.data ? (
-            <CommentFeedCard comments={board.data.comments ?? []} accounts={boardAccounts} />
+            <CommentFeedCard
+              comments={board.data.comments ?? []}
+              accounts={boardAccounts}
+              onOpenHistory={() => {
+                setShowHistory(true);
+              }}
+            />
           ) : null}
 
           <ActivityLogCard logLines={logLines} />
@@ -522,6 +530,16 @@ export function NeurocommentPage() {
                 },
               );
             }
+          }}
+        />
+      ) : null}
+
+      {showHistory && campaignId !== null ? (
+        <CommentHistoryModal
+          campaignId={campaignId}
+          accounts={boardAccounts}
+          onClose={() => {
+            setShowHistory(false);
           }}
         />
       ) : null}

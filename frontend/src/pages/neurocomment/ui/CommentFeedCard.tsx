@@ -10,9 +10,11 @@ import { CollapsibleCard } from '@/shared/ui';
 export function CommentFeedCard({
   comments,
   accounts,
+  onOpenHistory,
 }: {
   comments: CommentRecord[];
   accounts: NeurocommentAccountCard[];
+  onOpenHistory: () => void;
 }) {
   const { t } = useTranslation();
   const labelOf = new Map(accounts.map((a) => [a.account_id, a.label]));
@@ -30,6 +32,15 @@ export function CommentFeedCard({
             {comments.length}
           </span>
         </>
+      }
+      trailing={
+        <button
+          type="button"
+          onClick={onOpenHistory}
+          className="rounded-full border border-line bg-white px-3 py-[4px] text-[11.5px] font-medium text-primary hover:border-primary"
+        >
+          {t('neurocomment.feed.history')}
+        </button>
       }
     >
       {comments.length === 0 ? (

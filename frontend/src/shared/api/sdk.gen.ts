@@ -97,6 +97,9 @@ import type {
   ListLogsData,
   ListLogsErrors,
   ListLogsResponses,
+  ListNeurocommentCommentsData,
+  ListNeurocommentCommentsErrors,
+  ListNeurocommentCommentsResponses,
   ListProxiesData,
   ListProxiesErrors,
   ListProxiesResponses,
@@ -916,6 +919,20 @@ export const getNeurocommentBoard = <ThrowOnError extends boolean = false>(
     GetNeurocommentBoardErrors,
     ThrowOnError
   >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/board', ...options });
+
+/**
+ * List Comments
+ *
+ * One cursor page of a campaign's posted comments (newest first) — the history modal.
+ */
+export const listNeurocommentComments = <ThrowOnError extends boolean = false>(
+  options: Options<ListNeurocommentCommentsData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    ListNeurocommentCommentsResponses,
+    ListNeurocommentCommentsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/comments', ...options });
 
 /**
  * Link Channel

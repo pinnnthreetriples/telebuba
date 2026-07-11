@@ -590,7 +590,8 @@
     },
     "feed": {
       "title": "Published comments",
-      "empty": "No published comments yet"
+      "empty": "No published comments yet",
+      "history": "Full history"
     },
     "campaigns": {
       "title": "Campaigns",
@@ -729,6 +730,21 @@
         "empty": "No accounts in neurocommenting",
         "done": "Done"
       }
+    },
+    "history": {
+      "title": "Comment history",
+      "empty": "No published comments yet",
+      "loading": "Loading…",
+      "error": "Failed to load history",
+      "col": {
+        "time": "Time",
+        "account": "Account",
+        "channel": "Channel",
+        "text": "Comment"
+      },
+      "prev": "Previous",
+      "next": "Next",
+      "done": "Close"
     }
   },
   "warming": {

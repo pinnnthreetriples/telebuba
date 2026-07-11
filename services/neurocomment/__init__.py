@@ -10,6 +10,7 @@ tests patch one place. NiceGUI wiring (#119) delegates here.
 from __future__ import annotations
 
 from core.repositories.neurocomment import ChannelNotInCampaignError
+from services.logs import InvalidCursorError
 from services.neurocomment._runtime import (
     ListenerBusyWarmingError,
     clear_neurocomment_listener,
@@ -45,6 +46,7 @@ from services.neurocomment.campaigns import (
     set_status as set_campaign_status,
 )
 from services.neurocomment.challenge import retry_pair
+from services.neurocomment.comments_page import list_comments_page
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_account_channel, onboard_campaign
 from services.neurocomment.settings_store import (
@@ -56,6 +58,7 @@ from services.neurocomment.settings_store import (
 
 __all__ = [
     "ChannelNotInCampaignError",
+    "InvalidCursorError",
     "ListenerBusyWarmingError",
     "assign_account_to_campaign",
     "clear_neurocomment_listener",
@@ -70,6 +73,7 @@ __all__ = [
     "list_campaign_channels",
     "list_campaigns",
     "list_channel_challenges",
+    "list_comments_page",
     "load_neurocomment_board",
     "load_neurocomment_settings",
     "neurocomment_runtime_status",

@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
+from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
     AccountChannelOnboarding,
@@ -14,6 +15,7 @@ from schemas.neurocomment import (
     CampaignCreate,
     CampaignList,
     ChannelLinkOutcome,
+    CommentRecord,
     LinkChannelRequest,
     NeurocommentBoard,
     NeurocommentCampaign,
@@ -52,6 +54,26 @@ async def get_board(campaign_id: str) -> NeurocommentBoard:
     if board is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
     return board
+
+
+@router.get(
+    "/campaigns/{campaign_id}/comments",
+    response_model=Page[CommentRecord],
+    operation_id="listNeurocommentComments",
+)
+async def list_comments(
+    campaign_id: str,
+    cursor: str | None = None,
+    limit: Annotated[int, Query(ge=1, le=200)] = 50,
+) -> Page[CommentRecord]:
+    """One cursor page of a campaign's posted comments (newest first) — the history modal."""
+    try:
+        return await nc_service.list_comments_page(campaign_id, cursor, limit)
+    except nc_service.InvalidCursorError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="invalid pagination cursor",
+        ) from exc
 
 
 @router.post(

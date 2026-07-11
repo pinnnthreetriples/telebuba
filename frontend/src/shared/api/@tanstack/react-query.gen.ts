@@ -40,6 +40,7 @@ import {
   listCampaigns,
   listChannelChallenges,
   listLogs,
+  listNeurocommentComments,
   listProxies,
   listWarmedAccounts,
   listWarmingChannels,
@@ -169,6 +170,9 @@ import type {
   ListLogsData,
   ListLogsError,
   ListLogsResponse,
+  ListNeurocommentCommentsData,
+  ListNeurocommentCommentsError,
+  ListNeurocommentCommentsResponse,
   ListProxiesData,
   ListProxiesError,
   ListProxiesResponse,
@@ -1573,6 +1577,86 @@ export const getNeurocommentBoardOptions = (options: Options<GetNeurocommentBoar
     },
     queryKey: getNeurocommentBoardQueryKey(options),
   });
+
+export const listNeurocommentCommentsQueryKey = (options: Options<ListNeurocommentCommentsData>) =>
+  createQueryKey('listNeurocommentComments', options);
+
+/**
+ * List Comments
+ *
+ * One cursor page of a campaign's posted comments (newest first) — the history modal.
+ */
+export const listNeurocommentCommentsOptions = (options: Options<ListNeurocommentCommentsData>) =>
+  queryOptions<
+    ListNeurocommentCommentsResponse,
+    ListNeurocommentCommentsError,
+    ListNeurocommentCommentsResponse,
+    ReturnType<typeof listNeurocommentCommentsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listNeurocommentComments({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listNeurocommentCommentsQueryKey(options),
+  });
+
+export const listNeurocommentCommentsInfiniteQueryKey = (
+  options: Options<ListNeurocommentCommentsData>,
+): QueryKey<Options<ListNeurocommentCommentsData>> =>
+  createQueryKey('listNeurocommentComments', options, true);
+
+/**
+ * List Comments
+ *
+ * One cursor page of a campaign's posted comments (newest first) — the history modal.
+ */
+export const listNeurocommentCommentsInfiniteOptions = (
+  options: Options<ListNeurocommentCommentsData>,
+) =>
+  infiniteQueryOptions<
+    ListNeurocommentCommentsResponse,
+    ListNeurocommentCommentsError,
+    InfiniteData<ListNeurocommentCommentsResponse>,
+    QueryKey<Options<ListNeurocommentCommentsData>>,
+    | string
+    | null
+    | Pick<
+        QueryKey<Options<ListNeurocommentCommentsData>>[0],
+        'body' | 'headers' | 'path' | 'query'
+      >
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListNeurocommentCommentsData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  cursor: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listNeurocommentComments({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listNeurocommentCommentsInfiniteQueryKey(options),
+    },
+  );
 
 /**
  * Link Channel

@@ -1090,6 +1090,20 @@ export type PageAccountRead = {
 };
 
 /**
+ * Page[CommentRecord]
+ */
+export type PageCommentRecord = {
+  /**
+   * Items
+   */
+  items: Array<CommentRecord>;
+  /**
+   * Next Cursor
+   */
+  next_cursor?: string | null;
+};
+
+/**
  * Page[LogEntry]
  */
 export type PageLogEntry = {
@@ -3366,6 +3380,47 @@ export type GetNeurocommentBoardResponses = {
 
 export type GetNeurocommentBoardResponse =
   GetNeurocommentBoardResponses[keyof GetNeurocommentBoardResponses];
+
+export type ListNeurocommentCommentsData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: {
+    /**
+     * Cursor
+     */
+    cursor?: string | null;
+    /**
+     * Limit
+     */
+    limit?: number;
+  };
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/comments';
+};
+
+export type ListNeurocommentCommentsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListNeurocommentCommentsError =
+  ListNeurocommentCommentsErrors[keyof ListNeurocommentCommentsErrors];
+
+export type ListNeurocommentCommentsResponses = {
+  /**
+   * Successful Response
+   */
+  200: PageCommentRecord;
+};
+
+export type ListNeurocommentCommentsResponse =
+  ListNeurocommentCommentsResponses[keyof ListNeurocommentCommentsResponses];
 
 export type LinkCampaignChannelData = {
   body: LinkChannelRequest;
