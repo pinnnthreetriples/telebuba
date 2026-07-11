@@ -5575,6 +5575,11 @@
             "type": "integer",
             "minimum": 1.0,
             "title": "Log Limit"
+          },
+          "onboarding": {
+            "type": "boolean",
+            "title": "Onboarding",
+            "default": false
           }
         },
         "type": "object",

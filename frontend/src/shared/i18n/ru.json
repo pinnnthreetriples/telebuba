@@ -656,6 +656,8 @@
       "title": "Доска работ",
       "accounts": "{{count}} аккаунтов",
       "updated": "обновлено только что",
+      "onboardingLive": "Онбординг идёт",
+      "onboarding": "Онбординг {{ready}}/{{total}}",
       "commentPlaceholder": "Комментарий отправлен",
       "empty": "Пока нет работ",
       "col": {
