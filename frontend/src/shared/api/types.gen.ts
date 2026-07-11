@@ -1725,6 +1725,10 @@ export type WarmedAccount = {
    */
   proxy_type?: string | null;
   /**
+   * Proxy Country
+   */
+  proxy_country?: string | null;
+  /**
    * Trust Score
    */
   trust_score?: number | null;
