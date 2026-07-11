@@ -11,6 +11,7 @@ key in the ``x-goog-api-key`` header.
 from __future__ import annotations
 
 import asyncio
+import time
 from typing import cast
 
 import httpx
@@ -21,6 +22,35 @@ from schemas.gemini import GeminiRequest, GeminiResult
 _HTTP_OK = 200
 _HTTP_TOO_MANY_REQUESTS = 429
 _HTTP_SERVER_ERROR_MIN = 500
+
+
+class _ThrottleState:
+    """Shared last-call clock for the inter-request spacing gate.
+
+    A single lock serialises the wait so concurrent generations queue and fire
+    ``min_interval`` apart, keeping a burst under a per-minute API quota.
+    """
+
+    lock = asyncio.Lock()
+    last_call: float = 0.0  # time.monotonic() of the previous slot
+
+
+_throttle = _ThrottleState()
+
+
+async def _await_slot(min_interval: float) -> None:
+    """Sleep until ``min_interval`` has elapsed since the previous Gemini call.
+
+    ``min_interval <= 0`` disables the gate entirely (and never touches the
+    shared clock, so callers that opt out don't perturb opted-in spacing).
+    """
+    if min_interval <= 0:
+        return
+    async with _throttle.lock:
+        wait = _throttle.last_call + min_interval - time.monotonic()
+        if wait > 0:
+            await asyncio.sleep(wait)
+        _throttle.last_call = time.monotonic()
 
 
 class _ClientHolder:
@@ -131,11 +161,21 @@ async def generate_text(request: GeminiRequest) -> GeminiResult:
     Never raises: HTTP errors, timeouts, and unexpected payload shapes map to
     ``GeminiResult(status="error", ...)`` and a 429 maps to ``status="rate_limited"``
     so callers can differentiate. Retries a transient failure (429 / 5xx /
-    transport error) up to ``settings.gemini.max_retries`` times with a short
-    backoff. The shared AsyncClient is reused across calls.
+    transport error) up to ``request.max_retries`` (or ``settings.gemini.max_retries``)
+    times with a short backoff, and spaces calls by ``request.min_interval_seconds``
+    (or the config default). The shared AsyncClient is reused across calls.
     """
+    interval = (
+        request.min_interval_seconds
+        if request.min_interval_seconds is not None
+        else settings.gemini.min_interval_seconds
+    )
+    await _await_slot(interval)
     client = _get_client()
-    attempts = settings.gemini.max_retries + 1
+    max_retries = (
+        request.max_retries if request.max_retries is not None else settings.gemini.max_retries
+    )
+    attempts = max_retries + 1
     result = GeminiResult(status="error", error="No attempt made")
     for attempt in range(attempts):
         try:

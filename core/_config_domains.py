@@ -244,6 +244,10 @@ class GeminiSettings(BaseSettings):
     # Backoff slept between retries (seconds); kept short so the warming loop is
     # not blocked long on a flapping upstream.
     retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
+    # Minimum spacing between Gemini calls (seconds); 0 = no throttle. The default
+    # seeds the operator-editable settings-row column and is the gateway fallback
+    # when a request does not carry its own override.
+    min_interval_seconds: float = Field(default=0.0, ge=0.0)
 
 
 class OpenAISettings(BaseSettings):

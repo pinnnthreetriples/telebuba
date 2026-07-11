@@ -5,9 +5,12 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 import pytest
+from sqlalchemy import update
 
 from core.config import settings
 from core.db import (
+    _get_engine,
+    _warming_settings,
     add_warming_channel,
     configure_database,
     create_account,
@@ -69,6 +72,48 @@ async def test_settings_default_row_is_created_on_first_read() -> None:
     assert secret.reactions_enabled is True
     assert secret.gemini_api_key == ""
     assert secret.gemini_model == "gemini-2.5-flash"
+
+
+@pytest.mark.asyncio
+async def test_gemini_tuning_defaults_and_roundtrip() -> None:
+    """Retry count + interval default from config and survive a save/reload."""
+    secret = await load_warming_settings()
+    assert secret.gemini_max_retries == settings.gemini.max_retries
+    assert secret.gemini_min_interval_seconds == settings.gemini.min_interval_seconds
+
+    saved = await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=True,
+        gemini_api_key=None,
+        gemini_max_retries=3,
+        gemini_min_interval_seconds=4.5,
+    )
+    assert saved.gemini_max_retries == 3
+    assert saved.gemini_min_interval_seconds == 4.5
+
+    reloaded = await load_warming_settings()
+    assert reloaded.gemini_max_retries == 3
+    assert reloaded.gemini_min_interval_seconds == 4.5
+
+
+@pytest.mark.asyncio
+async def test_gemini_tuning_null_column_falls_back_to_config(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A legacy row (NULL tuning columns) reads the config defaults, not a crash."""
+    monkeypatch.setattr(settings.gemini, "max_retries", 2)
+    monkeypatch.setattr(settings.gemini, "min_interval_seconds", 1.5)
+    await load_warming_settings()  # ensure the singleton row exists
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_warming_settings).values(
+                gemini_max_retries=None, gemini_min_interval_seconds=None
+            )
+        )
+
+    secret = await load_warming_settings()
+    assert secret.gemini_max_retries == 2
+    assert secret.gemini_min_interval_seconds == 1.5
 
 
 @pytest.mark.asyncio

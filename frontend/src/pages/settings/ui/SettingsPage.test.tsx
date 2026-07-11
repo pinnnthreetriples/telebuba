@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import type { ReactElement } from 'react';
 import { expect, test, vi } from 'vitest';
@@ -21,6 +21,8 @@ const SETTINGS = {
   max_daily_actions: 0,
   has_gemini_key: true,
   gemini_model: 'gemini-2.5-flash',
+  gemini_max_retries: 2,
+  gemini_min_interval_seconds: 1.5,
   updated_at: 'now',
 };
 
@@ -181,6 +183,51 @@ test('the clear-key action sends clear_gemini_key: true', async () => {
   await userEvent.click(screen.getByText('Сохранить'));
   await waitFor(async () => {
     expect((await warmingPutBody()).clear_gemini_key).toBe(true);
+  });
+});
+
+test('Gemini tuning fields load, show help hints, and are sent in the warming PUT', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  const retries = screen.getByLabelText('Повторные попытки Gemini');
+  const interval = screen.getByLabelText('Пауза между генерациями (сек)');
+  // loaded from the settings row
+  expect(retries).toHaveValue(2);
+  expect(interval).toHaveValue(1.5);
+  // each field carries a "?" help hint with a plain-language explanation
+  expect(
+    screen.getByText(/упереться в лимит запросов в минуту/, { exact: false }),
+  ).toBeInTheDocument();
+
+  await userEvent.clear(retries);
+  await userEvent.type(retries, '3');
+  await userEvent.clear(interval);
+  await userEvent.type(interval, '4.5');
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    const body = await warmingPutBody();
+    expect(body.gemini_max_retries).toBe(3);
+    expect(body.gemini_min_interval_seconds).toBe(4.5);
+  });
+});
+
+test('an out-of-range Gemini retry value is clamped before the PUT', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  const retries = screen.getByLabelText('Повторные попытки Gemini');
+  // Set an over-max value directly (a number input rejects out-of-range typing).
+  fireEvent.change(retries, { target: { value: '99' } });
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    expect((await warmingPutBody()).gemini_max_retries).toBe(5); // clamped to max
   });
 });
 

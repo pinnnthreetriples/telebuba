@@ -29,6 +29,10 @@ class WarmingSettings(BaseModel):
     max_daily_actions: int = Field(default=0, ge=0)
     has_gemini_key: bool = False
     gemini_model: str = Field(min_length=1)
+    # Operator-tunable Gemini rate-limit handling (not secret): retry count on a
+    # 429/5xx and the minimum spacing between calls (seconds; 0 = no throttle).
+    gemini_max_retries: int = Field(default=1, ge=0, le=5)
+    gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
     # Captcha LLM: presence flag + model + provider choice (keys never surfaced).
     has_openai_key: bool = False
     openai_model: str = Field(default="gpt-4o", min_length=1)
@@ -46,6 +50,8 @@ class WarmingSettingsSecret(BaseModel):
     max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str
     gemini_model: str = Field(min_length=1)
+    gemini_max_retries: int = Field(default=1, ge=0, le=5)
+    gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
     openai_api_key: str = ""
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
@@ -71,6 +77,8 @@ class WarmingSettingsUpdate(BaseModel):
     max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str | None = None
     gemini_model: str | None = None
+    gemini_max_retries: int = Field(default=1, ge=0, le=5)
+    gemini_min_interval_seconds: float = Field(default=0.0, ge=0.0, le=60.0)
     clear_gemini_key: bool = False
     # Same keep/clear/replace semantics for the captcha OpenAI key + model, plus
     # the provider selector (None keeps the stored value).

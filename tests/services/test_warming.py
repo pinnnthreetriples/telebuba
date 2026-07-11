@@ -1828,6 +1828,25 @@ async def test_save_settings_persists_gemini_key_and_model() -> None:
 
 
 @pytest.mark.asyncio
+async def test_save_settings_persists_gemini_tuning() -> None:
+    """The retry count + inter-call interval round-trip through the masked view."""
+    masked = await warming.save_settings(
+        WarmingSettingsUpdate(
+            inter_account_chat=False,
+            reactions_enabled=False,
+            gemini_max_retries=3,
+            gemini_min_interval_seconds=4.0,
+        ),
+    )
+    assert masked.gemini_max_retries == 3
+    assert masked.gemini_min_interval_seconds == 4.0
+
+    reloaded = await warming.load_settings()
+    assert reloaded.gemini_max_retries == 3
+    assert reloaded.gemini_min_interval_seconds == 4.0
+
+
+@pytest.mark.asyncio
 async def test_save_settings_clear_gemini_key_falls_back_to_env(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

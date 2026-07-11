@@ -343,7 +343,13 @@
       "keyUnset": "No key set",
       "clearKey": "Clear key",
       "keyCleared": "Key will be cleared on save",
-      "toggleVisibility": "Toggle key visibility"
+      "toggleVisibility": "Toggle key visibility",
+      "geminiRetries": "Gemini retries",
+      "geminiRetriesHelp": "How many times to retry a request when Gemini returns a rate-limit error before skipping the post.",
+      "geminiRetriesExample": "Example: 3 — retries 3 more times. 0 — no retries.",
+      "geminiInterval": "Pause between generations (sec)",
+      "geminiIntervalHelp": "Minimum pause before each Gemini call so a burst doesn't hit the per-minute request limit.",
+      "geminiIntervalExample": "Example: 4 — at most one request every 4s. 0 — no pause."
     },
     "captchaLlm": {
       "title": "Captcha solver LLM",

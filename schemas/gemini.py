@@ -27,6 +27,11 @@ class GeminiRequest(BaseModel):
     # ``image_b64`` is None; the model must be vision-capable (gemini-2.5-flash is).
     image_b64: str | None = None
     image_mime: str = Field(default="image/jpeg", min_length=1)
+    # Per-request overrides for the gateway's rate-limit handling. ``None`` falls
+    # back to ``settings.gemini.*`` — only callers that want to self-throttle (the
+    # neurocomment generator) set them, so captcha/warming calls are unaffected.
+    max_retries: int | None = Field(default=None, ge=0, le=5)
+    min_interval_seconds: float | None = Field(default=None, ge=0.0)
 
 
 class GeminiResult(BaseModel):

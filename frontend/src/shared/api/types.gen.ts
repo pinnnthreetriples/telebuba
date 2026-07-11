@@ -2052,6 +2052,14 @@ export type WarmingSettings = {
    */
   gemini_model: string;
   /**
+   * Gemini Max Retries
+   */
+  gemini_max_retries?: number;
+  /**
+   * Gemini Min Interval Seconds
+   */
+  gemini_min_interval_seconds?: number;
+  /**
    * Has Openai Key
    */
   has_openai_key?: boolean;
@@ -2109,6 +2117,14 @@ export type WarmingSettingsUpdate = {
    * Gemini Model
    */
   gemini_model?: string | null;
+  /**
+   * Gemini Max Retries
+   */
+  gemini_max_retries?: number;
+  /**
+   * Gemini Min Interval Seconds
+   */
+  gemini_min_interval_seconds?: number;
   /**
    * Clear Gemini Key
    */

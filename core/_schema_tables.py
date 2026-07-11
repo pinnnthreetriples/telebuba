@@ -11,6 +11,7 @@ from __future__ import annotations
 from sqlalchemy import (
     BigInteger,
     Column,
+    Float,
     ForeignKey,
     Index,
     Integer,
@@ -124,6 +125,8 @@ _warming_settings = Table(
     Column("max_daily_actions", Integer, nullable=True),
     Column("gemini_api_key", String, nullable=False),
     Column("gemini_model", String, nullable=False),
+    Column("gemini_max_retries", Integer, nullable=True),
+    Column("gemini_min_interval_seconds", Float, nullable=True),
     Column("openai_api_key", String, nullable=True),
     Column("openai_model", String, nullable=True),
     Column("captcha_llm_provider", String, nullable=True),

@@ -1,6 +1,6 @@
 import { useForm, useStore } from '@tanstack/react-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { type ReactNode, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -9,9 +9,11 @@ import {
 } from '@/entities/campaign';
 import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
 import type { NeurocommentSettings, WarmingSettings } from '@/shared/api';
-import { FieldError, FormField } from '@/shared/ui';
+import { FieldError, FormField, HelpHint } from '@/shared/ui';
 
+import { ApiKeyField } from './ApiKeyField';
 import { neuroFormSchema, neuroFormValue, neuroUpdateBody } from './neuroSettingsForm';
+import { Card, Switch } from './SettingsPrimitives';
 
 const INPUT =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
@@ -21,143 +23,12 @@ const FIELD_LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 const WARMING_TOGGLES = ['reactions_enabled', 'join_enabled', 'inter_account_chat'] as const;
 type WarmingToggle = (typeof WARMING_TOGGLES)[number];
 
-// The design's pill switch (track + sliding thumb), 18px of travel.
-function Switch({
-  checked,
-  onChange,
-  label,
-}: {
-  checked: boolean;
-  onChange: (value: boolean) => void;
-  label: string;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => {
-        onChange(!checked);
-      }}
-      className={`tb-sw relative h-[26px] w-[44px] shrink-0 rounded-full transition-colors ${checked ? 'bg-primary' : 'bg-[#cbc9c4]'}`}
-    >
-      <span
-        className={`tb-sw-thumb absolute top-[3px] block h-5 w-5 rounded-full bg-white shadow-[0_1px_3px_rgba(0,0,0,0.3)] transition-transform ${checked ? 'translate-x-[21px]' : 'translate-x-[3px]'}`}
-      />
-    </button>
-  );
-}
-
-function Card({
-  title,
-  subtitle,
-  className = 'px-5 py-[18px]',
-  mb = 'mb-[14px]',
-  children,
-}: {
-  title?: string;
-  subtitle?: string;
-  className?: string;
-  mb?: string;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`${mb} rounded-2xl border border-line bg-white ${className}`}>
-      {title ? <div className="mb-[3px] text-[13px] font-semibold">{title}</div> : null}
-      {subtitle ? <div className="mb-4 text-[12px] text-ink-subtle">{subtitle}</div> : null}
-      {children}
-    </div>
-  );
-}
-
-function EyeIcon({ off }: { off: boolean }) {
-  return off ? (
-    <svg
-      width="17"
-      height="17"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 10 8 10 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-      <path d="M1 1l22 22" />
-      <path d="M6.61 6.61A13.5 13.5 0 0 0 2 12s3 8 10 8a9.7 9.7 0 0 0 5.39-1.61" />
-    </svg>
-  ) : (
-    <svg
-      width="17"
-      height="17"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-    >
-      <path d="M2 12s3-8 10-8 10 8 10 8-3 8-10 8-10-8-10-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  );
-}
-
-// One masked API-key input (Gemini or OpenAI): password field + show/hide toggle
-// + a "clear stored key" affordance. Blank = keep; clear = wipe the stored key.
-function ApiKeyField({
-  label,
-  value,
-  show,
-  keySet,
-  placeholder,
-  toggleLabel,
-  clearLabel,
-  onChange,
-  onToggleShow,
-  onClear,
-}: {
-  label: string;
-  value: string;
-  show: boolean;
-  keySet: boolean;
-  placeholder: string;
-  toggleLabel: string;
-  clearLabel: string;
-  onChange: (value: string) => void;
-  onToggleShow: () => void;
-  onClear: () => void;
-}) {
-  return (
-    <label className="block">
-      <span className={FIELD_LABEL}>{label}</span>
-      <div className="flex gap-2">
-        <input
-          type={show ? 'text' : 'password'}
-          value={value}
-          onChange={(event) => {
-            onChange(event.target.value);
-          }}
-          placeholder={placeholder}
-          className={`${INPUT} flex-1 font-mono`}
-        />
-        <button
-          type="button"
-          aria-label={toggleLabel}
-          onClick={onToggleShow}
-          className="flex w-[42px] items-center justify-center rounded-[10px] border border-line-input bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
-        >
-          <EyeIcon off={show} />
-        </button>
-      </div>
-      {keySet && (
-        <button
-          type="button"
-          onClick={onClear}
-          className="mt-[9px] text-[12px] font-medium text-danger transition-colors hover:underline"
-        >
-          {clearLabel}
-        </button>
-      )}
-    </label>
-  );
+// Parse a numeric field, clamping to [min, max] and falling back on empty/NaN.
+// Keeps a fat-fingered value from failing the backend's Field bounds with a 422.
+function clampNumber(raw: string, min: number, max: number, fallback: number): number {
+  const n = Number(raw);
+  if (raw.trim() === '' || Number.isNaN(n)) return fallback;
+  return Math.min(max, Math.max(min, n));
 }
 
 function SettingsForm({
@@ -180,6 +51,11 @@ function SettingsForm({
   const [openaiKey, setOpenaiKey] = useState('');
   const [showOpenaiKey, setShowOpenaiKey] = useState(false);
   const [clearOpenaiKey, setClearOpenaiKey] = useState(false);
+  // Gemini rate-limit knobs (see the "?" hints): retry count + min spacing between calls.
+  const [geminiRetries, setGeminiRetries] = useState(String(settings.gemini_max_retries ?? 1));
+  const [geminiInterval, setGeminiInterval] = useState(
+    String(settings.gemini_min_interval_seconds ?? 0),
+  );
   const [provider, setProvider] = useState<'gemini' | 'openai'>(
     settings.captcha_llm_provider ?? 'gemini',
   );
@@ -206,6 +82,8 @@ function SettingsForm({
               enforce_readiness: settings.enforce_readiness ?? true,
               max_daily_actions: 0,
               gemini_model: settings.gemini_model,
+              gemini_max_retries: clampNumber(geminiRetries, 0, 5, 1),
+              gemini_min_interval_seconds: clampNumber(geminiInterval, 0, 60, 0),
               // clear wins over a typed key; a typed key sets it; blank keeps it.
               gemini_api_key: clearKey ? null : geminiKey.trim() === '' ? null : geminiKey,
               clear_gemini_key: clearKey,
@@ -257,6 +135,8 @@ function SettingsForm({
     setClearKey(false);
     setOpenaiKey('');
     setClearOpenaiKey(false);
+    setGeminiRetries(String(settings.gemini_max_retries ?? 1));
+    setGeminiInterval(String(settings.gemini_min_interval_seconds ?? 0));
     setProvider(settings.captcha_llm_provider ?? 'gemini');
     form.reset(neuroFormValue(neuroSettings));
     setToggles({
@@ -268,6 +148,7 @@ function SettingsForm({
 
   return (
     <form
+      noValidate
       onSubmit={(event) => {
         event.preventDefault();
         void form.handleSubmit();
@@ -327,6 +208,51 @@ function SettingsForm({
               setOpenaiKey('');
             }}
           />
+          <div className="grid grid-cols-2 gap-3">
+            <label className="block">
+              <span className={`${FIELD_LABEL} flex items-center gap-[6px]`}>
+                {t('settings.api.geminiRetries')}
+                <HelpHint
+                  text={t('settings.api.geminiRetriesHelp')}
+                  example={t('settings.api.geminiRetriesExample')}
+                />
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={5}
+                inputMode="numeric"
+                value={geminiRetries}
+                onChange={(event) => {
+                  setGeminiRetries(event.target.value);
+                }}
+                aria-label={t('settings.api.geminiRetries')}
+                className={INPUT}
+              />
+            </label>
+            <label className="block">
+              <span className={`${FIELD_LABEL} flex items-center gap-[6px]`}>
+                {t('settings.api.geminiInterval')}
+                <HelpHint
+                  text={t('settings.api.geminiIntervalHelp')}
+                  example={t('settings.api.geminiIntervalExample')}
+                />
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={60}
+                step="0.5"
+                inputMode="decimal"
+                value={geminiInterval}
+                onChange={(event) => {
+                  setGeminiInterval(event.target.value);
+                }}
+                aria-label={t('settings.api.geminiInterval')}
+                className={INPUT}
+              />
+            </label>
+          </div>
         </div>
       </Card>
 
