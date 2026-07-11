@@ -18,16 +18,16 @@ from typing import TYPE_CHECKING, NamedTuple
 from core.config import settings
 from core.db import (
     fetch_campaign,
-    list_accounts,
+    list_accounts_by_ids,
     list_campaign_accounts,
     list_campaign_channels,
     list_campaign_readiness,
     list_challenged_channels,
-    list_device_fingerprints,
+    list_device_fingerprints_by_ids,
     list_linked_groups,
     list_posted_comments_since,
-    list_spam_statuses,
-    list_warming_states,
+    list_spam_statuses_by_ids,
+    list_warming_states_by_ids,
 )
 from schemas.neurocomment import (
     AccountChannelReadiness,
@@ -73,7 +73,7 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     pins = {link.account_id: link.channel for link in account_links}
     channels = [link.channel for link in (await list_campaign_channels(campaign_id)).links]
 
-    accounts = {acc.account_id: acc for acc in (await list_accounts()).accounts}
+    accounts = {acc.account_id: acc for acc in (await list_accounts_by_ids(account_ids)).accounts}
     readiness = (await list_campaign_readiness(campaign_id)).readiness
     linked = {g.channel: g for g in (await list_linked_groups(channels)).groups}
     challenged = set((await list_challenged_channels(channels)).channels)
@@ -82,9 +82,9 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     day_ago = (now - timedelta(days=1)).isoformat()
     posted = (await list_posted_comments_since(campaign_id, day_ago)).comments
 
-    records = {rec.account_id: rec for rec in await list_warming_states()}
-    spam_by_account = await list_spam_statuses()
-    fingerprints = await list_device_fingerprints()
+    records = {rec.account_id: rec for rec in await list_warming_states_by_ids(account_ids)}
+    spam_by_account = await list_spam_statuses_by_ids(account_ids)
+    fingerprints = await list_device_fingerprints_by_ids(account_ids)
     channel_count = max(1, len(channels))
 
     cards = [

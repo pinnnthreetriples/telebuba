@@ -21,16 +21,22 @@ from core.db import (
     create_account,
     create_campaign,
     insert_challenge,
+    insert_device_fingerprint,
     link_channel_to_campaign,
     mark_comment_posted,
     upsert_linked_group,
     upsert_readiness,
+    upsert_spam_status,
+    upsert_warming_state,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from core.repositories.neurocomment import set_campaign_account_channel
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
+from schemas.device_fingerprint import DeviceFingerprint
 from schemas.neurocomment import CampaignCreate
+from schemas.spam_status import SpamStatusVerdict
+from schemas.warming import WarmingStateWrite
 from services.neurocomment import _state
 from services.neurocomment.board import load_neurocomment_board
 
@@ -299,6 +305,44 @@ async def test_card_readiness_scoped_to_this_campaigns_channels() -> None:
 
     assert board is not None
     assert [r.channel for r in board.accounts[0].readiness] == ["@mine"]
+
+
+def _fingerprint(account_id: str) -> DeviceFingerprint:
+    return DeviceFingerprint(
+        account_id=account_id,
+        platform="windows",
+        device_model="Desktop",
+        system_version="Windows 11",
+        app_version="5.4.0 x64",
+        lang_code="en",
+        system_lang_code="en-US",
+    )
+
+
+@pytest.mark.asyncio
+async def test_board_ignores_account_outside_campaign() -> None:
+    # Scoped reads (#2): an account seeded with warming/spam/fingerprint but NOT
+    # assigned to the campaign must not appear on the board, while the in-campaign
+    # account's health/trust/spam/fingerprint-derived fields still populate.
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    for acc in ("acc-in", "acc-out"):
+        await create_account(AccountCreate(account_id=acc))
+        await upsert_warming_state(WarmingStateWrite(account_id=acc, state="active"))
+        await upsert_spam_status(
+            SpamStatusVerdict(account_id=acc, status="clean", checked_at="2026-07-11T00:00:00Z"),
+        )
+        await insert_device_fingerprint(_fingerprint(acc))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-in")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert [card.account_id for card in board.accounts] == ["acc-in"]
+    card = board.accounts[0]
+    assert card.spam_status == "clean"
+    assert card.trust_score is not None
+    assert card.health in {"ready", "blocked"}
 
 
 @pytest.mark.asyncio

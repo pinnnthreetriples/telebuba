@@ -14,6 +14,7 @@ from core.db import (
     insert_challenge,
     insert_device_fingerprint,
     list_accounts,
+    list_accounts_by_ids,
     list_challenged_channels,
     set_listener_account_id,
     set_listener_running,
@@ -48,6 +49,28 @@ async def test_create_account_lists_device_profile(tmp_path: Path) -> None:
     assert account.session_name == "session-1"
     assert account.status == "new"
     assert account.device_model == "Desktop"
+
+
+@pytest.mark.asyncio
+async def test_list_accounts_by_ids_scopes_to_requested(tmp_path: Path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="wanted", label="Wanted"))
+    await create_account(AccountCreate(account_id="other"))
+    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="wanted"))
+
+    result = await list_accounts_by_ids(["wanted"])
+
+    assert [a.account_id for a in result.accounts] == ["wanted"]
+    # The device-fingerprint join still populates on the scoped read.
+    assert result.accounts[0].device_model == "Desktop"
+
+
+@pytest.mark.asyncio
+async def test_list_accounts_by_ids_empty_returns_empty_without_query(tmp_path: Path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="present"))
+
+    assert (await list_accounts_by_ids([])).accounts == []
 
 
 @pytest.mark.parametrize(

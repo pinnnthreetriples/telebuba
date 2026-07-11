@@ -269,6 +269,22 @@ async def list_accounts(
     )
 
 
+def _list_accounts_by_ids(account_ids: list[str]) -> AccountList:
+    if not account_ids:
+        return AccountList(accounts=[])
+    statement = _account_select_statement().where(_accounts.c.account_id.in_(account_ids))
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return AccountList(
+        accounts=[_row_to_account(cast("Mapping[str, object]", row)) for row in rows],
+    )
+
+
+async def list_accounts_by_ids(account_ids: list[str]) -> AccountList:
+    """Read model for a specific set of accounts (bulk read for the board, one query)."""
+    return await asyncio.to_thread(_list_accounts_by_ids, account_ids)
+
+
 def _account_summary_counts() -> dict[str, int]:
     statement = select(_accounts.c.status, func.count()).group_by(_accounts.c.status)
     with _get_engine().connect() as connection:

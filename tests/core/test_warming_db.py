@@ -14,6 +14,7 @@ from core.db import (
     fetch_warming_state,
     list_warming_channels,
     list_warming_states,
+    list_warming_states_by_ids,
     load_warming_settings,
     mark_promoted_to_nc,
     remove_warming_channel,
@@ -110,6 +111,18 @@ async def test_save_settings_can_clear_key_with_empty_string() -> None:
     )
 
     assert cleared.gemini_api_key == ""
+
+
+@pytest.mark.asyncio
+async def test_list_warming_states_by_ids_scopes_and_guards_empty() -> None:
+    for acc in ("acc-1", "acc-2"):
+        await create_account(AccountCreate(account_id=acc))
+        await upsert_warming_state(WarmingStateWrite(account_id=acc, state="active"))
+
+    scoped = await list_warming_states_by_ids(["acc-1"])
+
+    assert [r.account_id for r in scoped] == ["acc-1"]
+    assert await list_warming_states_by_ids([]) == []
 
 
 @pytest.mark.asyncio

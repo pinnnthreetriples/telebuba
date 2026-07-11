@@ -150,6 +150,22 @@ async def list_warming_states() -> list[WarmingStateRecord]:
     return await asyncio.to_thread(_list_warming_states)
 
 
+def _list_warming_states_by_ids(account_ids: list[str]) -> list[WarmingStateRecord]:
+    if not account_ids:
+        return []
+    statement = select(_warming_account_state).where(
+        _warming_account_state.c.account_id.in_(account_ids),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return [_row_to_warming_state_record(cast("Mapping[str, object]", row)) for row in rows]
+
+
+async def list_warming_states_by_ids(account_ids: list[str]) -> list[WarmingStateRecord]:
+    """Warming states for a specific set of accounts (bulk read for the board)."""
+    return await asyncio.to_thread(_list_warming_states_by_ids, account_ids)
+
+
 async def list_warming_account_ids() -> set[str]:
     """Ids of accounts currently in the warming runtime (any active warming state).
 
