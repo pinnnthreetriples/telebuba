@@ -58,6 +58,25 @@ async def list_spam_statuses() -> dict[str, SpamStatusVerdict]:
     return await asyncio.to_thread(_list_spam_statuses)
 
 
+def _list_spam_statuses_by_ids(account_ids: list[str]) -> dict[str, SpamStatusVerdict]:
+    if not account_ids:
+        return {}
+    statement = select(_account_spam_status).where(
+        _account_spam_status.c.account_id.in_(account_ids),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return {
+        str(row["account_id"]): _row_to_spam_status(cast("Mapping[str, object]", row))
+        for row in rows
+    }
+
+
+async def list_spam_statuses_by_ids(account_ids: list[str]) -> dict[str, SpamStatusVerdict]:
+    """Cached spam-status verdicts for a set of accounts keyed by ``account_id``."""
+    return await asyncio.to_thread(_list_spam_statuses_by_ids, account_ids)
+
+
 def _upsert_spam_status(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
     values = {
         "status": verdict.status,

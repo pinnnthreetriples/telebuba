@@ -10,6 +10,7 @@ from core.db import (
     configure_database,
     create_account,
     insert_device_fingerprint,
+    list_device_fingerprints_by_ids,
 )
 from core.device_fingerprint import (
     generate_random_device_fingerprint,
@@ -59,6 +60,18 @@ async def test_insert_duplicate_device_fingerprint_returns_saved_row(tmp_path: P
 
     assert first == saved
     assert second == saved
+
+
+@pytest.mark.asyncio
+async def test_list_device_fingerprints_by_ids_scopes_and_guards_empty(tmp_path: Path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="acc-1"))
+    await insert_device_fingerprint(DeviceFingerprintFactory.build(account_id="acc-2"))
+
+    scoped = await list_device_fingerprints_by_ids(["acc-1"])
+
+    assert set(scoped) == {"acc-1"}
+    assert await list_device_fingerprints_by_ids([]) == {}
 
 
 @pytest.mark.asyncio

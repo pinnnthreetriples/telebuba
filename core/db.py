@@ -217,6 +217,7 @@ from core.repositories.accounts import (  # noqa: E402, F401
     delete_account,
     fetch_account,
     list_accounts,
+    list_accounts_by_ids,
     update_account_from_session_check,
     update_account_profile_snapshot,
 )
@@ -231,6 +232,7 @@ from core.repositories.device_fingerprint import (  # noqa: E402, F401
     fetch_device_fingerprint,
     insert_device_fingerprint,
     list_device_fingerprints,
+    list_device_fingerprints_by_ids,
 )
 from core.repositories.dialogues import (  # noqa: E402, F401
     count_pair_messages_since,
@@ -314,6 +316,7 @@ from core.repositories.proxies import (  # noqa: E402, F401
 from core.repositories.spam_status import (  # noqa: E402, F401
     get_spam_status,
     list_spam_statuses,
+    list_spam_statuses_by_ids,
     upsert_spam_status,
 )
 from core.repositories.warming import (  # noqa: E402, F401
@@ -322,6 +325,7 @@ from core.repositories.warming import (  # noqa: E402, F401
     list_warming_account_ids,
     list_warming_channels,
     list_warming_states,
+    list_warming_states_by_ids,
     load_warming_settings,
     mark_promoted_to_nc,
     remove_warming_channel,

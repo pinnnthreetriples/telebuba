@@ -48,6 +48,25 @@ async def list_device_fingerprints() -> dict[str, DeviceFingerprint]:
     return await asyncio.to_thread(_list_device_fingerprints)
 
 
+def _list_device_fingerprints_by_ids(account_ids: list[str]) -> dict[str, DeviceFingerprint]:
+    if not account_ids:
+        return {}
+    statement = select(_device_fingerprints).where(
+        _device_fingerprints.c.account_id.in_(account_ids),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return {
+        str(row["account_id"]): _row_to_device_fingerprint(cast("Mapping[str, object]", row))
+        for row in rows
+    }
+
+
+async def list_device_fingerprints_by_ids(account_ids: list[str]) -> dict[str, DeviceFingerprint]:
+    """Device fingerprints for a specific set of accounts keyed by ``account_id``."""
+    return await asyncio.to_thread(_list_device_fingerprints_by_ids, account_ids)
+
+
 def _insert_device_fingerprint(profile: DeviceFingerprint) -> DeviceFingerprint:
     statement = insert(_device_fingerprints).values(**profile.model_dump())
     with _get_engine().begin() as connection:
