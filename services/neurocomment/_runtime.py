@@ -29,7 +29,7 @@ from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
 from schemas.neurocomment import NeurocommentRuntimeStatus
 from schemas.telegram_actions import JoinChannel
-from services.neurocomment import _seams
+from services.neurocomment import _seams, _signals
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_campaign
 
@@ -195,7 +195,7 @@ async def start_neurocomment(
     await set_listener_account_id(listener_account_id)
     await set_listener_running(running=True)
     await reconcile_neurocomment_runtime(listener_account_id)
-    _ensure_onboarding_running(on_progress)
+    _ensure_onboarding_running(on_progress or _signals.signal_onboarding_progress)
 
 
 def is_onboarding_running() -> bool:
@@ -332,7 +332,7 @@ async def reconcile_if_running() -> None:
     listener_account_id = await get_listener_account_id()
     if listener_account_id is not None:
         await reconcile_neurocomment_runtime(listener_account_id)
-        _ensure_onboarding_running(None)
+        _ensure_onboarding_running(_signals.signal_onboarding_progress)
 
 
 async def reconcile_neurocomment_on_startup() -> None:
@@ -354,7 +354,7 @@ async def reconcile_neurocomment_on_startup() -> None:
         await reconcile_neurocomment_runtime(listener_account_id)
         # Resume onboarding too: campaigns created since the last Start would
         # otherwise boot with a live listener but zero readiness rows.
-        _ensure_onboarding_running(None)
+        _ensure_onboarding_running(_signals.signal_onboarding_progress)
 
 
 async def _reclaim_stale_claims_on_startup() -> None:
