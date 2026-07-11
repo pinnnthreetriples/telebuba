@@ -589,6 +589,7 @@
       "remove_profile_music": "Remove profile music",
       "get_linked_discussion_group": "Resolve channel chat",
       "check_messages_alive": "Check messages",
+      "check_banned_in_channel": "Check channel ban",
       "get_user_profile": "Read profile",
       "list_pinned_stories": "List pinned stories",
       "list_active_stories": "List active stories",
@@ -655,6 +656,9 @@
     "channels": {
       "title": "Campaign channels",
       "addPill": "+ Channel",
+      "check": "Check channels",
+      "checking": "Checking…",
+      "checkFailed": "Couldn't check channels",
       "placeholder": "t.me/channel or @channel",
       "remove": "Remove channel",
       "removeTitle": "Remove channel {{channel}} from the campaign?",

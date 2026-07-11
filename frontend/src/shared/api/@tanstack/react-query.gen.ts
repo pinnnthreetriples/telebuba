@@ -16,6 +16,7 @@ import {
   assignCampaignAccount,
   assignProxy,
   checkAccount,
+  checkCampaignChannelBans,
   checkProxy,
   clearLogs,
   clearNeurocommentListener,
@@ -102,6 +103,9 @@ import type {
   CheckAccountData,
   CheckAccountError,
   CheckAccountResponse,
+  CheckCampaignChannelBansData,
+  CheckCampaignChannelBansError,
+  CheckCampaignChannelBansResponse,
   CheckProxyData,
   CheckProxyError,
   CheckProxyResponse,
@@ -1643,6 +1647,35 @@ export const getNeurocommentBoardOptions = (options: Options<GetNeurocommentBoar
     },
     queryKey: getNeurocommentBoardQueryKey(options),
   });
+
+/**
+ * Check Channel Bans
+ *
+ * Live-probe each campaign channel for account bans (the "Проверить каналы" button).
+ */
+export const checkCampaignChannelBansMutation = (
+  options?: Partial<Options<CheckCampaignChannelBansData>>,
+): UseMutationOptions<
+  CheckCampaignChannelBansResponse,
+  CheckCampaignChannelBansError,
+  Options<CheckCampaignChannelBansData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CheckCampaignChannelBansResponse,
+    CheckCampaignChannelBansError,
+    Options<CheckCampaignChannelBansData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await checkCampaignChannelBans({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 export const listNeurocommentCommentsQueryKey = (options: Options<ListNeurocommentCommentsData>) =>
   createQueryKey('listNeurocommentComments', options);

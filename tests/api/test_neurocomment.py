@@ -19,6 +19,7 @@ from schemas.neurocomment import (
     NeurocommentRuntimeStatus,
     NeurocommentSettings,
 )
+from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from services.neurocomment import (
     ChannelNotInCampaignError,
     InvalidCursorError,
@@ -155,6 +156,42 @@ async def test_board_missing_is_404(app: FastAPI, monkeypatch: pytest.MonkeyPatc
     monkeypatch.setattr("services.neurocomment.load_neurocomment_board", _none)
     async with _client(app) as client:
         resp = await client.get("/api/v1/neurocomment/campaigns/ghost/board")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_check_channel_bans_returns_list(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _fake(campaign_id: str) -> ChannelBanCheckList:  # noqa: ARG001
+        return ChannelBanCheckList(
+            items=[
+                ChannelBanCheck(channel="@a", status="banned"),
+                ChannelBanCheck(channel="@b", status="ok"),
+            ]
+        )
+
+    monkeypatch.setattr("services.neurocomment.check_campaign_channel_bans", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/neurocomment/campaigns/c1/channel-bans")
+    assert resp.status_code == 200
+    assert resp.json()["items"] == [
+        {"channel": "@a", "status": "banned"},
+        {"channel": "@b", "status": "ok"},
+    ]
+
+
+@pytest.mark.asyncio
+async def test_check_channel_bans_missing_is_404(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _none(campaign_id: str) -> None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.neurocomment.check_campaign_channel_bans", _none)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/neurocomment/campaigns/ghost/channel-bans")
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "not_found"
 

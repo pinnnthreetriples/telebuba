@@ -579,6 +579,36 @@ export type ChallengeRowList = {
 };
 
 /**
+ * ChannelBanCheck
+ *
+ * Live ban-probe verdict for one campaign channel.
+ *
+ * ``ok`` = at least one serving account can still comment; ``banned`` = every
+ * serving account is banned/kicked; ``unknown`` = couldn't determine (no serving
+ * account, comments disabled, or a probe error).
+ */
+export type ChannelBanCheck = {
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Status
+   */
+  status: 'ok' | 'banned' | 'unknown';
+};
+
+/**
+ * ChannelBanCheckList
+ */
+export type ChannelBanCheckList = {
+  /**
+   * Items
+   */
+  items?: Array<ChannelBanCheck>;
+};
+
+/**
  * ChannelLinkOutcome
  *
  * Result of attaching a channel to a campaign.
@@ -3524,6 +3554,38 @@ export type GetNeurocommentBoardResponses = {
 
 export type GetNeurocommentBoardResponse =
   GetNeurocommentBoardResponses[keyof GetNeurocommentBoardResponses];
+
+export type CheckCampaignChannelBansData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/channel-bans';
+};
+
+export type CheckCampaignChannelBansErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CheckCampaignChannelBansError =
+  CheckCampaignChannelBansErrors[keyof CheckCampaignChannelBansErrors];
+
+export type CheckCampaignChannelBansResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChannelBanCheckList;
+};
+
+export type CheckCampaignChannelBansResponse =
+  CheckCampaignChannelBansResponses[keyof CheckCampaignChannelBansResponses];
 
 export type ListNeurocommentCommentsData = {
   body?: never;

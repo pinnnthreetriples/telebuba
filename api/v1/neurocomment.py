@@ -29,6 +29,7 @@ from schemas.neurocomment import (
     StartNeurocommentRequest,
     UpdatePromptRequest,
 )
+from schemas.neurocomment_bans import ChannelBanCheckList
 from services import neurocomment as nc_service
 
 router = APIRouter(prefix="/neurocomment", tags=["neurocomment"])
@@ -54,6 +55,19 @@ async def get_board(campaign_id: str) -> NeurocommentBoard:
     if board is None:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
     return board
+
+
+@router.post(
+    "/campaigns/{campaign_id}/channel-bans",
+    response_model=ChannelBanCheckList,
+    operation_id="checkCampaignChannelBans",
+)
+async def check_channel_bans(campaign_id: str) -> ChannelBanCheckList:
+    """Live-probe each campaign channel for account bans (the "Проверить каналы" button)."""
+    result = await nc_service.check_campaign_channel_bans(campaign_id)
+    if result is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
+    return result
 
 
 @router.get(

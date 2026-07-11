@@ -2789,6 +2789,65 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/channel-bans": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Check Channel Bans",
+        "description": "Live-probe each campaign channel for account bans (the \"\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b\u044b\" button).",
+        "operationId": "checkCampaignChannelBans",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ChannelBanCheckList"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns/{campaign_id}/comments": {
       "get": {
         "tags": [
@@ -5308,6 +5367,44 @@
         "type": "object",
         "title": "ChallengeRowList",
         "description": "Wrapper so the repo returns a model, never a raw list (non-negotiable #2)."
+      },
+      "ChannelBanCheck": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "banned",
+              "unknown"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "status"
+        ],
+        "title": "ChannelBanCheck",
+        "description": "Live ban-probe verdict for one campaign channel.\n\n``ok`` = at least one serving account can still comment; ``banned`` = every\nserving account is banned/kicked; ``unknown`` = couldn't determine (no serving\naccount, comments disabled, or a probe error)."
+      },
+      "ChannelBanCheckList": {
+        "properties": {
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/ChannelBanCheck"
+            },
+            "type": "array",
+            "title": "Items"
+          }
+        },
+        "type": "object",
+        "title": "ChannelBanCheckList"
       },
       "ChannelLinkOutcome": {
         "properties": {

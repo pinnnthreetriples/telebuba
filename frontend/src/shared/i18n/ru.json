@@ -590,6 +590,7 @@
       "remove_profile_music": "Удаление музыки профиля",
       "get_linked_discussion_group": "Поиск чата канала",
       "check_messages_alive": "Проверка сообщений",
+      "check_banned_in_channel": "Проверка бана в канале",
       "get_user_profile": "Чтение профиля",
       "list_pinned_stories": "Список закреплённых историй",
       "list_active_stories": "Список активных историй",
@@ -656,6 +657,9 @@
     "channels": {
       "title": "Каналы кампании",
       "addPill": "+ Канал",
+      "check": "Проверить каналы",
+      "checking": "Проверка…",
+      "checkFailed": "Не удалось проверить каналы",
       "placeholder": "t.me/канал или @канал",
       "remove": "Убрать канал",
       "removeTitle": "Убрать канал {{channel}} из кампании?",

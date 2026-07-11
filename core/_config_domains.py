@@ -352,6 +352,9 @@ class NeurocommentSettings(BaseSettings):
     # First back-off duration; doubles per consecutive trip, capped at the max.
     channel_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
     channel_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
+    # Max concurrent Telegram ban probes for the "Проверить каналы" check — keeps
+    # a burst of GetParticipant reads on a few accounts from tripping flood limits.
+    ban_check_concurrency: int = Field(default=4, ge=1, le=32)
     # Ф2 challenge solver — global default (a per-campaign solver_enabled overrides
     # it). Default ON so captcha solving is autonomous out of the box; turn it off
     # globally or per-campaign to fall back to the manual queue.
