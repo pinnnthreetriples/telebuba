@@ -206,6 +206,31 @@ async def test_runtime_status_running_with_no_channels_reports_zero() -> None:
 
 
 @pytest.mark.asyncio
+async def test_runtime_status_reports_onboarding_in_flight() -> None:
+    """The live onboarding flag comes from the real task handle, not a heuristic.
+
+    The SPA animates the board on this: a slow jittered onboarding must read as
+    "working", not "no data".
+    """
+    assert (await _runtime.neurocomment_runtime_status()).onboarding is False
+
+    release = asyncio.Event()
+
+    async def _hold() -> None:
+        await release.wait()
+
+    _runtime._ONBOARD_TASK = asyncio.create_task(_hold())
+    try:
+        assert _runtime.is_onboarding_running() is True
+        assert (await _runtime.neurocomment_runtime_status()).onboarding is True
+    finally:
+        release.set()
+        await _runtime._ONBOARD_TASK
+
+    assert (await _runtime.neurocomment_runtime_status()).onboarding is False
+
+
+@pytest.mark.asyncio
 async def test_reconcile_subscribes_with_active_watch_channels(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

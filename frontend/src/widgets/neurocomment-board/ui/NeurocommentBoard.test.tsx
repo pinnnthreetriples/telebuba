@@ -81,6 +81,31 @@ test('a pinned account shows its pinned channel, not the first joined one', () =
   expect(screen.queryByText('@news')).not.toBeInTheDocument();
 });
 
+test('during onboarding, a not-yet-armed account animates progress instead of "no data"', () => {
+  render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onboarding
+      onOpenAccounts={() => undefined}
+    />,
+  );
+  // header carries the live onboarding indicator (was a static "updated" label)
+  expect(screen.getByText('Онбординг идёт')).toBeInTheDocument();
+  // acc-2 has 0 of 1 channels ready → animated progress, not the misleading no-data
+  expect(screen.getByText('Онбординг 0/1')).toBeInTheDocument();
+  expect(screen.queryByText('Нет данных')).not.toBeInTheDocument();
+  // acc-1 is fully armed (1/1) → keeps its real status even mid-onboarding
+  expect(screen.getByText('Готов')).toBeInTheDocument();
+});
+
+test('with onboarding off, the static status shows (no progress badge)', () => {
+  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={() => undefined} />);
+  expect(screen.queryByText('Онбординг идёт')).not.toBeInTheDocument();
+  expect(screen.queryByText('Онбординг 0/1')).not.toBeInTheDocument();
+  expect(screen.getByText('Нет данных')).toBeInTheDocument();
+});
+
 test('the gear button opens the accounts modal', async () => {
   const onOpenAccounts = vi.fn();
   render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={onOpenAccounts} />);

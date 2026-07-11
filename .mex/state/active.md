@@ -164,6 +164,20 @@ TTL/invalidation; RPC-hang stale-claim reclaim and HTTPException-locale are
 systemic/codebase-wide. Gates: 1140 pytest / i18n-parity green, ruff+ty clean,
 frontend tsc+vitest green.
 
+A 2026-07-11 board-honesty UX follow-up (PR open, auto-merge): a slow jittered
+onboarding read as a stalled «Нет данных» with no live feedback. Root cause —
+clean joins write readiness rows but emit no log event, so the SSE stream is
+quiet and the board only moved on the 30s poll. Fix: the runtime status now
+carries a real `onboarding: bool` from the live `_ONBOARD_TASK` handle
+(`is_onboarding_running`; not a readiness-count heuristic — a `comments_off`
+channel yields no row and would stall a counter). Frontend: while `onboarding`,
+the board polls 4s (not 30s), the header shows a pulsing «Онбординг идёт»
+indicator, and a not-yet-armed account's status cell animates «Онбординг N/M»
+(ready/target; target = 1 if pinned else channel count) instead of `no_data`.
+Once onboarding finishes the flag flips and the real per-channel statuses render.
+Gates: neuro runtime+api 76 pytest green, ruff+ty clean; frontend tsc+eslint+
+vitest green, API client drift-free (only the `onboarding` field).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

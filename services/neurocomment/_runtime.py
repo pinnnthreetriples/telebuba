@@ -198,6 +198,16 @@ async def start_neurocomment(
     _ensure_onboarding_running(on_progress)
 
 
+def is_onboarding_running() -> bool:
+    """True while the background campaign-onboarding pass is in flight.
+
+    The status read (and thus the SPA's live board animation) reflects the real
+    task handle, not a heuristic on readiness counts — a comments-off channel
+    never yields a readiness row, so a count would stall and mislead.
+    """
+    return _ONBOARD_TASK is not None and not _ONBOARD_TASK.done()
+
+
 def _ensure_onboarding_running(
     on_progress: Callable[[OnboardingProgressEvent], None] | None,
 ) -> None:
@@ -290,11 +300,13 @@ async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
     log_limit = settings.neurocomment.log_limit
     listener_account_id = await get_listener_account_id()
     running = await get_listener_running()
+    onboarding = is_onboarding_running()
     if not running:
         return NeurocommentRuntimeStatus(
             running=False,
             listener_account_id=listener_account_id,
             log_limit=log_limit,
+            onboarding=onboarding,
         )
     channels = (await list_active_watch_channels()).channels
     return NeurocommentRuntimeStatus(
@@ -302,6 +314,7 @@ async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
         active_channels=len(channels),
         listener_account_id=listener_account_id,
         log_limit=log_limit,
+        onboarding=onboarding,
     )
 
 

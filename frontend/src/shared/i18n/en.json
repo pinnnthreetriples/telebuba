@@ -655,6 +655,8 @@
       "title": "Work board",
       "accounts": "{{count}} accounts",
       "updated": "updated just now",
+      "onboardingLive": "Onboarding in progress",
+      "onboarding": "Onboarding {{ready}}/{{total}}",
       "commentPlaceholder": "Comment sent",
       "empty": "No work yet",
       "col": {

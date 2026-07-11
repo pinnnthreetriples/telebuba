@@ -16,6 +16,11 @@ interface BoardRow {
   // 'no_data' (no readiness rows yet) is now a real backend status; deriveRows
   // also falls back to it when an account's channel is absent from the board map.
   status: NeurocommentChannelRow['status'];
+  // Onboarding progress for this account: ready channels / target. While the
+  // runtime reports onboarding in flight and the account is not yet fully armed,
+  // the status cell animates this instead of the (misleading) static status.
+  armedReady: number;
+  armedTarget: number;
 }
 
 // One work row per account, joined on the account's OWN channel: its pinned
@@ -23,7 +28,11 @@ interface BoardRow {
 // real link, not an arbitrary pairing) with that channel's real aggregate
 // status. The comment cell shows the account's real last comment text (falling
 // back to a generic "posted" hint, then an em dash when it has never commented).
-function deriveRows(board: NeurocommentBoardData, placeholder: string): BoardRow[] {
+function deriveRows(
+  board: NeurocommentBoardData,
+  placeholder: string,
+  totalChannels: number,
+): BoardRow[] {
   const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
@@ -32,13 +41,32 @@ function deriveRows(board: NeurocommentBoardData, placeholder: string): BoardRow
       readiness.find((r) => r.joined) ??
       readiness[0];
     const channel = primary?.channel ?? '—';
+    // A pinned account only ever onboards its one channel; an unpinned one covers
+    // every campaign channel. Ready count drives the "N/M" progress badge.
+    const armedTarget = account.pinned_channel ? 1 : Math.max(1, totalChannels);
+    const armedReady = Math.min(readiness.filter((r) => r.ready).length, armedTarget);
     return {
       account: account.label,
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
       status: channelStatus.get(channel) ?? 'no_data',
+      armedReady,
+      armedTarget,
     };
   });
+}
+
+// Animated "onboarding in progress" pill for the status cell — shown while the
+// runtime is actively arming an account (joining channels), replacing the
+// static "Нет данных" that otherwise reads as a stall.
+function OnboardingBadge({ ready, total }: { ready: number; total: number }) {
+  const { t } = useTranslation();
+  return (
+    <span className="inline-flex animate-pulse items-center gap-[5px] rounded-full bg-primary-tint px-[9px] py-[3px] text-[11.5px] font-medium text-primary">
+      <span className="h-[5px] w-[5px] rounded-full bg-primary" />
+      {t('neurocomment.board.onboarding', { ready, total })}
+    </span>
+  );
 }
 
 // The design's "Доска работ" card: a collapsible header (account count pill,
@@ -47,15 +75,23 @@ function deriveRows(board: NeurocommentBoardData, placeholder: string): BoardRow
 export function NeurocommentBoard({
   board,
   accountsCount,
+  onboarding = false,
   onOpenAccounts,
 }: {
   board: NeurocommentBoardData;
   accountsCount: number;
+  // True while the runtime is actively onboarding (joining channels): the board
+  // animates a live indicator instead of reading as an idle "no data" state.
+  onboarding?: boolean;
   onOpenAccounts: () => void;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(true);
-  const rows = deriveRows(board, t('neurocomment.board.commentPlaceholder'));
+  const rows = deriveRows(
+    board,
+    t('neurocomment.board.commentPlaceholder'),
+    (board.channels ?? []).length,
+  );
 
   const columns = useMemo<ColumnDef<BoardRow>[]>(
     () => [
@@ -87,10 +123,18 @@ export function NeurocommentBoard({
       {
         accessorKey: 'status',
         header: t('neurocomment.board.col.status'),
-        cell: (info) => <ChannelStatusBadge status={info.getValue<BoardRow['status']>()} />,
+        cell: (info) => {
+          const row = info.row.original;
+          // Actively arming this account → animate progress, not a static status.
+          return onboarding && row.armedReady < row.armedTarget ? (
+            <OnboardingBadge ready={row.armedReady} total={row.armedTarget} />
+          ) : (
+            <ChannelStatusBadge status={row.status} />
+          );
+        },
       },
     ],
-    [t],
+    [t, onboarding],
   );
 
   return (
@@ -109,7 +153,14 @@ export function NeurocommentBoard({
           </span>
         </button>
         <div className="flex items-center gap-[10px]">
-          <span className="text-[11px] text-ink-muted">{t('neurocomment.board.updated')}</span>
+          {onboarding ? (
+            <span className="inline-flex animate-pulse items-center gap-[5px] rounded-full bg-primary-tint px-[9px] py-[3px] text-[11px] font-semibold text-primary">
+              <span className="h-[5px] w-[5px] rounded-full bg-primary" />
+              {t('neurocomment.board.onboardingLive')}
+            </span>
+          ) : (
+            <span className="text-[11px] text-ink-muted">{t('neurocomment.board.updated')}</span>
+          )}
           <button
             type="button"
             title={t('neurocomment.modal.neuroAccounts.title')}

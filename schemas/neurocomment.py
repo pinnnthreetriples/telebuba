@@ -393,6 +393,10 @@ class NeurocommentRuntimeStatus(BaseModel):
     active_channels: int = 0
     listener_account_id: str | None = None
     log_limit: int = Field(ge=1)
+    # True while the background campaign-onboarding pass is in flight (accounts are
+    # actively joining channels). The SPA animates the board on this so a slow,
+    # jittered onboarding reads as "working", not "no data".
+    onboarding: bool = False
 
 
 class NeurocommentSettings(BaseModel):

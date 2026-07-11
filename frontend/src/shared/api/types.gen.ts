@@ -961,6 +961,10 @@ export type NeurocommentRuntimeStatus = {
    * Log Limit
    */
   log_limit: number;
+  /**
+   * Onboarding
+   */
+  onboarding?: boolean;
 };
 
 /**
