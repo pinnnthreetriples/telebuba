@@ -189,9 +189,12 @@ class ProfileMediaSettings(BaseSettings):
     # .session files = effective credentials. Cap to deter accidental large uploads.
     session_max_bytes: int = Field(default=5_000_000, ge=1)
     # How long a live-fetched profile snapshot is reused before the next
-    # dialog-open triggers another GetFullUserRequest. 5 min keeps repeated
-    # opens cheap without staling so much that a user sees outdated data.
-    read_snapshot_ttl_seconds: int = Field(default=300, ge=1)
+    # dialog-open triggers another GetFullUserRequest. Kept short: the snapshot
+    # is only invalidated by THIS app's edits, so a change made in the Telegram
+    # app (or by another session) is invisible until the TTL lapses — a long
+    # window made the modal show photos that no longer matched the real profile.
+    # 30s still coalesces rapid reopens; «Обновить» forces an immediate re-pull.
+    read_snapshot_ttl_seconds: int = Field(default=30, ge=1)
     # Max tracks pulled by the profile-music preview. Low cap keeps the TL
     # response light — the tab is a preview list, not a media library.
     music_preview_limit: int = Field(default=50, ge=1, le=200)

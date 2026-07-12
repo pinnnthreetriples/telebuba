@@ -307,22 +307,26 @@ async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePho
 
 
 async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:
-    """Promote an existing history photo to the current avatar.
+    """Promote an existing history photo to the current avatar — no duplicate left.
 
-    ``UpdateProfilePhotoRequest`` takes the ``InputPhoto`` of a photo already in
-    the account's history and moves it to the front (current avatar) — no
-    re-upload, no duplicate. The id triple comes straight from the read-side
-    ``TelegramProfilePhoto`` the UI is showing.
+    Raw ``photos.updateProfilePhoto`` on a photo already in the account's
+    history does NOT reorder it: the server mints a brand-new photo (fresh id)
+    at the front and leaves the original entry behind, so a naive call leaves
+    two identical photos in the history. Official clients (TDLib's
+    ``inputChatPhotoPrevious``) compensate by deleting the stale original right
+    after promoting. We mirror that: promote, then delete the old id — but only
+    when the server actually minted a new one (``new_id != old``), so a future
+    server that reorders in place stays a no-op instead of nuking the avatar.
     """
-    await client(
-        UpdateProfilePhotoRequest(
-            id=InputPhoto(
-                id=action.photo_id,
-                access_hash=action.access_hash,
-                file_reference=action.file_reference,
-            ),
-        ),
+    old = InputPhoto(
+        id=action.photo_id,
+        access_hash=action.access_hash,
+        file_reference=action.file_reference,
     )
+    result = await client(UpdateProfilePhotoRequest(id=old))
+    new_id = getattr(getattr(result, "photo", None), "id", None)
+    if isinstance(new_id, int) and new_id != action.photo_id:
+        await client(DeletePhotosRequest(id=[old]))
 
 
 async def _remove_story(client: TelegramClient, action: RemoveStory) -> None:

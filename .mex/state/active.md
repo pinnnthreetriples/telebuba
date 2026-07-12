@@ -285,7 +285,9 @@ live proof is the ubuntu nightly.
 - Proxy unassign-from-account: backend exists (`POST /proxies/unassign`), no UI trigger.
 - `ListenerEditModal` persists the picked listener only while the runtime runs.
 - Accounts table status filter / column sort / bulk actions — backend supports, UI gap.
-- Photo «сделать главной» — no set-existing-as-main RPC in the gateway.
+- Photo «сделать главной» — implemented as promote-then-delete-old (raw
+  `updateProfilePhoto` mints a new photo + leaves the original, so we delete the
+  stale id after, mirroring TDLib `inputChatPhotoPrevious`).
 - Warming per-action numeric limits stay auto/config (read-only in UI, auto-cap ADR).
 - **Interest-partitioned channel catalog** — the durable fix for cross-account channel overlap (joins are permanent + the pool is shared, so churn/exploration only bound convergence, not eliminate it). Explicitly deferred by #203 as a separate follow-up.
 

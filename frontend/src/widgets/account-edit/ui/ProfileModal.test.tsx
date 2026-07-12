@@ -541,3 +541,94 @@ test('closing with unsaved edits asks for confirmation; a clean close does not',
   await userEvent.click(screen.getByText('Не сохранять'));
   expect(onClose).toHaveBeenCalledTimes(2);
 });
+
+test('Save is disabled until the form is actually edited', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  const save = screen.getByText('Сохранить').closest('button');
+  expect(save).toBeDisabled();
+  await userEvent.type(screen.getByDisplayValue('Иван'), 'ов');
+  expect(save).toBeEnabled();
+});
+
+test('a successful save clears the dirty state so closing does not prompt', async () => {
+  let saved = false;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(saved ? { ...VIEW, first_name: 'Иванов' } : VIEW));
+    }
+    if (pathname === '/api/v1/accounts/profile') {
+      saved = true;
+      return Promise.resolve(jsonResponse({ ...ACCOUNT, first_name: 'Иванов' }));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  const onClose = vi.fn();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={onClose} />);
+  await userEvent.type(screen.getByDisplayValue('Иван'), 'ов');
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(() => {
+    expect(fired('/accounts/profile')).toBe(true);
+  });
+  await userEvent.click(screen.getByLabelText('Закрыть'));
+  expect(screen.queryByText('Отменить изменения?')).not.toBeInTheDocument();
+  expect(onClose).toHaveBeenCalled();
+});
+
+test('a failed snapshot load shows an error with a retry instead of empty tabs', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse({ ...VIEW, error: 'floodwait' }));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  expect(
+    await screen.findByText('Не удалось загрузить данные профиля из Telegram'),
+  ).toBeInTheDocument();
+});
+
+test('the music tab shows an unsupported note when Telegram lacks the TL methods', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse({ ...VIEW, music: [], music_supported: false }));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Музыка'));
+  expect(
+    await screen.findByText('Профильная музыка недоступна для этого аккаунта'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText('Выбрать трек')).not.toBeInTheDocument();
+});
+
+test('the header renders the real avatar when the snapshot carries one', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(
+        jsonResponse({
+          ...VIEW,
+          photos: [
+            {
+              photo_id: '1',
+              access_hash: '1',
+              file_reference: 'AA==',
+              thumb_url: 'data:image/jpeg;base64,QQ==',
+            },
+          ],
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await waitFor(() => {
+    // The round header avatar (not a square photo tile) carries the thumbnail.
+    expect(document.querySelector('.rounded-full[style*="data:image/jpeg"]')).not.toBeNull();
+  });
+});
