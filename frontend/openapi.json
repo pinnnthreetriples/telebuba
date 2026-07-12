@@ -3131,7 +3131,7 @@
           "neurocomment"
         ],
         "summary": "Set Account Channel",
-        "description": "Pin a campaign account to one channel (``channel: null`` clears the pin).\n\nA pinned account comments only on that channel; an unpinned one serves all\ncampaign channels. Returns the refreshed board so the SPA re-renders the card.",
+        "description": "Set a campaign account's channel subset (empty ``channels`` = all channels).\n\nAn account with a non-empty subset comments only on those channels; an empty\nsubset serves all campaign channels. Returns the refreshed board so the SPA\nre-renders the card.",
         "operationId": "setCampaignAccountChannel",
         "parameters": [
           {
@@ -5817,16 +5817,12 @@
             ],
             "title": "Last Comment Text"
           },
-          "pinned_channel": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Pinned Channel"
+          "pinned_channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Pinned Channels"
           },
           "readiness": {
             "items": {
@@ -6844,23 +6840,18 @@
       },
       "SetAccountChannelRequest": {
         "properties": {
-          "channel": {
-            "anyOf": [
-              {
-                "type": "string",
-                "minLength": 1
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Channel"
+          "channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Channels"
           }
         },
         "additionalProperties": false,
         "type": "object",
         "title": "SetAccountChannelRequest",
-        "description": "Pin a campaign account to one channel; ``null`` clears the pin (all channels)."
+        "description": "Set the campaign channels an account targets; an empty list = all channels."
       },
       "SetCampaignStatusRequest": {
         "properties": {

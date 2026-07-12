@@ -7,8 +7,8 @@ import '@/shared/i18n';
 import { NeuroAccountsModal, type NeuroAccountRow } from './NeuroAccountsModal';
 
 const ACCOUNTS: NeuroAccountRow[] = [
-  { account_id: 'a1', phone: '+79990000001', linked: true, pinned_channel: '@crypto' },
-  { account_id: 'a2', phone: '+79990000002', linked: false, pinned_channel: null },
+  { account_id: 'a1', phone: '+79990000001', linked: true, pinned_channels: ['@crypto'] },
+  { account_id: 'a2', phone: '+79990000002', linked: false, pinned_channels: [] },
 ];
 const CHANNELS = ['@crypto', '@news'];
 
@@ -27,9 +27,8 @@ test('assigns an idle account, confirms removal, and closes', async () => {
     />,
   );
   expect(screen.getByText('Аккаунты в нейрокомментинге')).toBeInTheDocument();
-  // an already-assigned account shows its channel in a dropdown of the
-  // campaign's channels
-  expect(screen.getByText('@crypto')).toBeInTheDocument();
+  // an already-assigned account shows its single channel in the dropdown trigger
+  expect(screen.getByLabelText('Каналы аккаунта')).toHaveTextContent('@crypto');
 
   // assign the idle account to the campaign
   await userEvent.click(screen.getByText('Добавить в кампанию'));
@@ -45,7 +44,7 @@ test('assigns an idle account, confirms removal, and closes', async () => {
   expect(onClose).toHaveBeenCalledTimes(1);
 });
 
-test('a linked account channel dropdown reflects the pin and offers all channels', () => {
+test('the dropdown reflects the account subset and offers all channels', async () => {
   render(
     <NeuroAccountsModal
       accounts={ACCOUNTS}
@@ -56,19 +55,21 @@ test('a linked account channel dropdown reflects the pin and offers all channels
       onChannelChange={vi.fn()}
     />,
   );
-  const select = screen.getByLabelText('Канал аккаунта') as HTMLSelectElement;
-  expect(select).not.toBeDisabled();
-  // the "all channels" sentinel plus the campaign's channels
-  const options = Array.from(select.querySelectorAll('option')).map((o) => o.textContent);
+  const trigger = screen.getByLabelText('Каналы аккаунта');
+  // a one-channel subset shows the channel name
+  expect(trigger).toHaveTextContent('@crypto');
+  await userEvent.click(trigger);
+  // the "all channels" row plus the campaign's channels
+  const options = screen.getAllByRole('option').map((o) => o.textContent);
   expect(options).toEqual(['Все каналы', '@crypto', '@news']);
-  // the current value reflects the account's pin
-  expect(select.value).toBe('@crypto');
+  // the account's channel is the selected option
+  expect(screen.getByRole('option', { selected: true })).toHaveTextContent('@crypto');
 });
 
-test('an unpinned linked account selects "all channels"', () => {
+test('an empty subset shows and selects "all channels"', async () => {
   render(
     <NeuroAccountsModal
-      accounts={[{ account_id: 'a3', phone: '+79990000003', linked: true, pinned_channel: null }]}
+      accounts={[{ account_id: 'a3', phone: '+79990000003', linked: true, pinned_channels: [] }]}
       channels={CHANNELS}
       onClose={vi.fn()}
       onPick={vi.fn()}
@@ -76,15 +77,40 @@ test('an unpinned linked account selects "all channels"', () => {
       onChannelChange={vi.fn()}
     />,
   );
-  const select = screen.getByLabelText('Канал аккаунта') as HTMLSelectElement;
-  expect(select.value).toBe('');
+  const trigger = screen.getByLabelText('Каналы аккаунта');
+  expect(trigger).toHaveTextContent('Все каналы');
+  await userEvent.click(trigger);
+  expect(screen.getByRole('option', { selected: true })).toHaveTextContent('Все каналы');
 });
 
-test('choosing a channel pins it; choosing "all channels" sends null', async () => {
+test('a multi-channel subset shows a count in the trigger', () => {
+  render(
+    <NeuroAccountsModal
+      accounts={[
+        {
+          account_id: 'a3',
+          phone: '+79990000003',
+          linked: true,
+          pinned_channels: ['@crypto', '@news'],
+        },
+      ]}
+      channels={CHANNELS}
+      onClose={vi.fn()}
+      onPick={vi.fn()}
+      onRemove={vi.fn()}
+      onChannelChange={vi.fn()}
+    />,
+  );
+  expect(screen.getByLabelText('Каналы аккаунта')).toHaveTextContent('Каналов: 2');
+});
+
+test('toggling channels adds/removes; "all channels" clears the subset', async () => {
   const onChannelChange = vi.fn();
   render(
     <NeuroAccountsModal
-      accounts={[{ account_id: 'a3', phone: '+79990000003', linked: true, pinned_channel: null }]}
+      accounts={[
+        { account_id: 'a3', phone: '+79990000003', linked: true, pinned_channels: ['@crypto'] },
+      ]}
       channels={CHANNELS}
       onClose={vi.fn()}
       onPick={vi.fn()}
@@ -92,13 +118,20 @@ test('choosing a channel pins it; choosing "all channels" sends null', async () 
       onChannelChange={onChannelChange}
     />,
   );
-  const select = screen.getByLabelText('Канал аккаунта');
+  const trigger = screen.getByLabelText('Каналы аккаунта');
+  await userEvent.click(trigger);
 
-  await userEvent.selectOptions(select, '@news');
-  expect(onChannelChange).toHaveBeenLastCalledWith('a3', '@news');
+  // an unselected channel is added to the subset (menu stays open — multi-select)
+  await userEvent.click(screen.getByRole('option', { name: '@news' }));
+  expect(onChannelChange).toHaveBeenLastCalledWith('a3', ['@crypto', '@news']);
 
-  await userEvent.selectOptions(select, 'Все каналы');
-  expect(onChannelChange).toHaveBeenLastCalledWith('a3', null);
+  // toggling a selected channel removes it
+  await userEvent.click(screen.getByRole('option', { name: '@crypto' }));
+  expect(onChannelChange).toHaveBeenLastCalledWith('a3', []);
+
+  // "Все каналы" clears the whole subset (= all channels)
+  await userEvent.click(screen.getByRole('option', { name: 'Все каналы' }));
+  expect(onChannelChange).toHaveBeenLastCalledWith('a3', []);
 });
 
 test('empty list shows the empty hint', () => {

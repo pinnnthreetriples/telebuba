@@ -38,6 +38,7 @@ from core.migration_steps import (
 )
 from core.migration_steps_neurocomment import (
     _add_campaign_account_channel,
+    _add_campaign_account_channels_table,
     _add_neurocomment_comment_deleted_at,
 )
 from core.migration_steps_pool import (
@@ -85,6 +86,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (26, "add_warming_settings_llm_columns", _add_warming_settings_llm_columns),
     (27, "add_neurocomment_comment_deleted_at", _add_neurocomment_comment_deleted_at),
     (28, "add_warming_settings_gemini_tuning", _add_warming_settings_gemini_tuning),
+    (29, "add_campaign_account_channels_table", _add_campaign_account_channels_table),
 )
 
 

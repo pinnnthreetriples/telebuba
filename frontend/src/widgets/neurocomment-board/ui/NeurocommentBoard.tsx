@@ -44,14 +44,15 @@ function deriveRows(
   const channelDeleted = new Map((board.channels ?? []).map((c) => [c.channel, c.deleted_recent]));
   return (board.accounts ?? []).map((account) => {
     const readiness = account.readiness ?? [];
+    const pins = account.pinned_channels ?? [];
     const primary =
-      readiness.find((r) => r.channel === account.pinned_channel) ??
+      readiness.find((r) => pins.includes(r.channel)) ??
       readiness.find((r) => r.joined) ??
       readiness[0];
     const channel = primary?.channel ?? '—';
-    // A pinned account only ever onboards its one channel; an unpinned one covers
+    // An account with a channel subset onboards only those; an empty subset covers
     // every campaign channel. Ready count drives the "N/M" progress badge.
-    const armedTarget = account.pinned_channel ? 1 : Math.max(1, totalChannels);
+    const armedTarget = pins.length || Math.max(1, totalChannels);
     const armedReady = Math.min(readiness.filter((r) => r.ready).length, armedTarget);
     return {
       account: account.label,

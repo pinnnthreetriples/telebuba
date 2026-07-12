@@ -60,9 +60,27 @@ _neurocomment_campaign_accounts = Table(
     ),
     Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
     Column("created_at", String, nullable=False),
-    # Optional per-account channel pin (migration #25): NULL = all campaign channels
-    # (current behaviour); a channel handle restricts the account to that one channel.
+    # Legacy single-channel pin (migration #25): superseded by the subset table
+    # below (migration #29) and no longer read or written — kept only because
+    # migrations are add-only. NULL = all campaign channels.
     Column("channel", String, nullable=True),
+)
+# Per-account channel SUBSET within a campaign (migration #29): one row per channel
+# the account is pinned to. NO rows for a (campaign, account) pair = the account
+# serves ALL of the campaign's channels (the default). Supersedes the scalar
+# ``channel`` column above.
+_neurocomment_campaign_account_channels = Table(
+    "neurocomment_campaign_account_channels",
+    _metadata,
+    Column(
+        "campaign_id",
+        String,
+        ForeignKey("neurocomment_campaigns.campaign_id"),
+        primary_key=True,
+    ),
+    Column("account_id", String, ForeignKey("accounts.account_id"), primary_key=True),
+    Column("channel", String, primary_key=True),
+    Column("created_at", String, nullable=False),
 )
 _neurocomment_linked_groups = Table(
     "neurocomment_linked_groups",

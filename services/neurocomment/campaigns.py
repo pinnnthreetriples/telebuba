@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from core import db
 from core.repositories.neurocomment import (
-    set_campaign_account_channel,
+    set_campaign_account_channels,
     set_campaign_status,
 )
 from schemas.challenge import ChallengeRowList
@@ -153,19 +153,19 @@ async def skip_pair(account_id: str, channel: str) -> None:
     await db.mark_human_skipped(account_id, channel)
 
 
-async def pin_account_channel(
+async def set_account_channels(
     campaign_id: str,
     account_id: str,
-    channel: str | None,
+    channels: list[str],
 ) -> NeurocommentBoard | None:
-    """Pin a campaign account to one channel (``None`` clears the pin); return the board.
+    """Set a campaign account's channel subset (empty = all channels); return the board.
 
-    Raises ``ChannelNotInCampaignError`` when the target is not an active channel of
+    Raises ``ChannelNotInCampaignError`` when any channel is not an active channel of
     the campaign, so the route can map it to a 400 instead of leaking a repo internal.
-    Onboarding after a pin change is operator-driven (Start), matching the existing
-    solver-toggle behaviour; selection immediately honours the new pin on the next post.
+    Onboarding after a subset change is operator-driven (Start), matching the existing
+    solver-toggle behaviour; selection immediately honours the new subset on the next post.
     """
-    await set_campaign_account_channel(campaign_id, account_id, channel)
+    await set_campaign_account_channels(campaign_id, account_id, channels)
     return await load_neurocomment_board(campaign_id)
 
 

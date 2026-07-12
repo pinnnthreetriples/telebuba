@@ -20,7 +20,7 @@ from core.db import (
     link_channel_to_campaign,
 )
 from core.logging import reset_logging_for_tests, setup_logging
-from core.repositories.neurocomment import set_campaign_account_channel
+from core.repositories.neurocomment import set_campaign_account_channels
 from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
@@ -128,7 +128,7 @@ async def test_pin_scopes_accounts_and_unpinned_channel_is_unknown(
 ) -> None:
     """acc-1 pinned to @a → serves only @a; @b has no serving account → unknown."""
     cid = await _seed(["@a", "@b"], ["acc-1"])
-    await set_campaign_account_channel(cid, "acc-1", "@a")
+    await set_campaign_account_channels(cid, "acc-1", ["@a"])
     _patch_seam(monkeypatch, {("acc-1", "@a"): "restricted"})
 
     result = await check_campaign_channel_bans(cid)

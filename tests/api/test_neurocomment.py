@@ -202,53 +202,53 @@ async def test_set_account_channel_returns_board(
 ) -> None:
     seen: dict[str, object] = {}
 
-    async def _fake(campaign_id: str, account_id: str, channel: str | None) -> NeurocommentBoard:
-        seen.update(campaign_id=campaign_id, account_id=account_id, channel=channel)
+    async def _fake(campaign_id: str, account_id: str, channels: list[str]) -> NeurocommentBoard:
+        seen.update(campaign_id=campaign_id, account_id=account_id, channels=channels)
         return NeurocommentBoard(campaign_id=campaign_id, campaign_name="Promo", status="active")
 
-    monkeypatch.setattr("services.neurocomment.pin_account_channel", _fake)
+    monkeypatch.setattr("services.neurocomment.set_account_channels", _fake)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/neurocomment/campaigns/c1/accounts/acc-1/channel",
-            json={"channel": "@news"},
+            json={"channels": ["@news"]},
         )
     assert resp.status_code == 200
     assert resp.json()["campaign_name"] == "Promo"
-    assert seen == {"campaign_id": "c1", "account_id": "acc-1", "channel": "@news"}
+    assert seen == {"campaign_id": "c1", "account_id": "acc-1", "channels": ["@news"]}
 
 
 @pytest.mark.asyncio
-async def test_set_account_channel_null_clears_pin(
+async def test_set_account_channel_empty_clears_subset(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     seen: dict[str, object] = {}
 
-    async def _fake(campaign_id: str, account_id: str, channel: str | None) -> NeurocommentBoard:  # noqa: ARG001
-        seen["channel"] = channel
+    async def _fake(campaign_id: str, account_id: str, channels: list[str]) -> NeurocommentBoard:  # noqa: ARG001
+        seen["channels"] = channels
         return NeurocommentBoard(campaign_id=campaign_id, campaign_name="Promo", status="active")
 
-    monkeypatch.setattr("services.neurocomment.pin_account_channel", _fake)
+    monkeypatch.setattr("services.neurocomment.set_account_channels", _fake)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/neurocomment/campaigns/c1/accounts/acc-1/channel",
-            json={"channel": None},
+            json={"channels": []},
         )
     assert resp.status_code == 200
-    assert seen == {"channel": None}
+    assert seen == {"channels": []}
 
 
 @pytest.mark.asyncio
 async def test_set_account_channel_foreign_channel_is_400(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _boom(campaign_id: str, account_id: str, channel: str | None) -> NeurocommentBoard:  # noqa: ARG001
+    async def _boom(campaign_id: str, account_id: str, channels: list[str]) -> NeurocommentBoard:  # noqa: ARG001
         raise ChannelNotInCampaignError
 
-    monkeypatch.setattr("services.neurocomment.pin_account_channel", _boom)
+    monkeypatch.setattr("services.neurocomment.set_account_channels", _boom)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/neurocomment/campaigns/c1/accounts/acc-1/channel",
-            json={"channel": "@other"},
+            json={"channels": ["@other"]},
         )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "bad_request"
@@ -258,14 +258,14 @@ async def test_set_account_channel_foreign_channel_is_400(
 async def test_set_account_channel_missing_campaign_is_404(
     app: FastAPI, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    async def _none(campaign_id: str, account_id: str, channel: str | None) -> None:  # noqa: ARG001
+    async def _none(campaign_id: str, account_id: str, channels: list[str]) -> None:  # noqa: ARG001
         return None
 
-    monkeypatch.setattr("services.neurocomment.pin_account_channel", _none)
+    monkeypatch.setattr("services.neurocomment.set_account_channels", _none)
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/neurocomment/campaigns/ghost/accounts/acc-1/channel",
-            json={"channel": None},
+            json={"channels": []},
         )
     assert resp.status_code == 404
     assert resp.json()["error"]["code"] == "not_found"

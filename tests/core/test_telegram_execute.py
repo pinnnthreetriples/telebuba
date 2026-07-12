@@ -772,8 +772,10 @@ async def test_execute_remove_profile_photo_sends_delete_photos_request(
         async def connect(self) -> None:
             return None
 
-        async def __call__(self, request: object) -> None:
+        async def __call__(self, request: object) -> object:
             captured.append(request)
+            # ``DeletePhotosRequest`` returns the vector of ids it deleted.
+            return [4242]
 
     _patch_client(monkeypatch, FakeClient())
 
@@ -799,6 +801,36 @@ async def test_execute_remove_profile_photo_sends_delete_photos_request(
     assert sent.id == 4242
     assert sent.access_hash == 7
     assert sent.file_reference == b"\x01\x02"
+
+
+@pytest.mark.asyncio
+async def test_execute_remove_profile_photo_errors_when_telegram_deletes_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An empty delete vector means the photo stayed — surface an error, not success.
+
+    Telegram silently no-ops a stale or unrecognised ``InputPhoto`` (empty
+    vector). That must NOT be reported as a removal — the false success is what
+    let JS-rounded int64 ids "delete" the same photo over and over.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            # Telegram recognised no photo to delete.
+            return []
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-photo-remove-noop",
+        RemoveProfilePhoto(photo_id=4242, access_hash=7, file_reference=b"\x01\x02"),
+    )
+
+    assert result.status != "ok"
+    assert result.error_message
 
 
 @pytest.mark.asyncio

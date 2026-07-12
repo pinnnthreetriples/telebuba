@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmModal, FeedbackMark, Modal } from '@/shared/ui';
@@ -7,11 +7,27 @@ export interface NeuroAccountRow {
   account_id: string;
   phone: string;
   linked: boolean;
-  pinned_channel: string | null;
+  pinned_channels: string[];
 }
 
-// Empty <option> value is the "all channels" sentinel (unpin → channel: null).
-const ALL_CHANNELS = '';
+// Stable React key for the "all channels" row (an empty subset = serve all).
+const ALL_CHANNELS = 'all';
+
+function CheckIcon() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      className="shrink-0"
+    >
+      <path d="M20 6 9 17l-5-5" />
+    </svg>
+  );
+}
 
 function AccountRow({
   account,
@@ -25,16 +41,49 @@ function AccountRow({
   channels: string[];
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
-  onChannelChange: (accountId: string, channel: string | null) => void;
+  onChannelChange: (accountId: string, channels: string[]) => void;
   result?: 'ok' | 'err';
 }) {
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState(false);
+  const [open, setOpen] = useState(false);
+  const ddRef = useRef<HTMLDivElement>(null);
 
-  // A linked account may be pinned to one campaign channel or left on all of
-  // them; an unknown pin (e.g. a channel since removed) is still surfaced.
-  const pin = account.pinned_channel;
-  const options = pin !== null && !channels.includes(pin) ? [pin, ...channels] : channels;
+  // A linked account targets a subset of the campaign's channels, or an empty
+  // subset = all of them. Any already-selected channel no longer on the campaign
+  // (since removed) is still surfaced so it can be un-checked.
+  const selected = account.pinned_channels;
+  const options = [...channels, ...selected.filter((c) => !channels.includes(c))];
+  const allChannels = t('neurocomment.modal.neuroAccounts.allChannels');
+  const triggerLabel =
+    selected.length === 0
+      ? allChannels
+      : selected.length === 1
+        ? selected[0]
+        : t('neurocomment.modal.neuroAccounts.channelsSelected', { count: selected.length });
+
+  // Close the dropdown on any click outside it (mirrors the app's tb-dd menus).
+  useEffect(() => {
+    if (!open) return undefined;
+    const onDown = (e: MouseEvent) => {
+      if (ddRef.current && !ddRef.current.contains(e.target as Node)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => {
+      document.removeEventListener('mousedown', onDown);
+    };
+  }, [open]);
+
+  // Multi-select: toggling a channel keeps the menu open; "Все каналы" clears the
+  // whole subset (= all). The empty list is the "serve all channels" sentinel.
+  const toggleChannel = (channel: string) => {
+    onChannelChange(
+      account.account_id,
+      selected.includes(channel) ? selected.filter((c) => c !== channel) : [...selected, channel],
+    );
+  };
 
   return (
     <div className="flex items-center gap-[10px] border-b border-[#f4f2ef] py-[11px]">
@@ -43,26 +92,81 @@ function AccountRow({
         {account.phone}
       </span>
       {account.linked ? (
-        // Design gives each linked account a ~180px channel dropdown to redirect
-        // it to another campaign channel; "Все каналы" clears the pin.
-        <select
-          value={pin ?? ALL_CHANNELS}
-          aria-label={t('neurocomment.modal.neuroAccounts.channelLabel')}
-          onChange={(e) => {
-            onChannelChange(
-              account.account_id,
-              e.target.value === ALL_CHANNELS ? null : e.target.value,
-            );
-          }}
-          className="w-[180px] shrink-0 truncate rounded-[9px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink"
-        >
-          <option value={ALL_CHANNELS}>{t('neurocomment.modal.neuroAccounts.allChannels')}</option>
-          {options.map((channel) => (
-            <option key={channel} value={channel}>
-              {channel}
-            </option>
-          ))}
-        </select>
+        // Each linked account gets a ~180px multi-select of the campaign's channels;
+        // an empty selection ("Все каналы") = comment on all. Custom tb-dd menu (not a
+        // native <select>) so the open list matches the design and allows multi-pick.
+        <div ref={ddRef} className="relative w-[180px] shrink-0">
+          <button
+            type="button"
+            aria-haspopup="listbox"
+            aria-expanded={open}
+            aria-label={t('neurocomment.modal.neuroAccounts.channelLabel')}
+            onClick={() => {
+              setOpen((v) => !v);
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Escape') setOpen(false);
+            }}
+            className="tb-time flex w-full items-center justify-between gap-2 rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink"
+          >
+            <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
+              {triggerLabel}
+            </span>
+            <span className={`tb-ddchev flex shrink-0 text-ink-subtle ${open ? 'open' : ''}`}>
+              <svg
+                width="14"
+                height="14"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path d="m6 9 6 6 6-6" />
+              </svg>
+            </span>
+          </button>
+          <div
+            role="listbox"
+            aria-multiselectable
+            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${open ? 'open' : ''}`}
+          >
+            <button
+              key={ALL_CHANNELS}
+              type="button"
+              role="option"
+              aria-selected={selected.length === 0}
+              onClick={() => {
+                onChannelChange(account.account_id, []);
+              }}
+              className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
+                selected.length === 0 ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
+              }`}
+            >
+              <span className="min-w-0 truncate">{allChannels}</span>
+              {selected.length === 0 ? <CheckIcon /> : null}
+            </button>
+            {options.map((channel) => {
+              const isSelected = selected.includes(channel);
+              return (
+                <button
+                  key={channel}
+                  type="button"
+                  role="option"
+                  aria-selected={isSelected}
+                  onClick={() => {
+                    toggleChannel(channel);
+                  }}
+                  className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
+                    isSelected ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
+                  }`}
+                >
+                  <span className="min-w-0 truncate">{channel}</span>
+                  {isSelected ? <CheckIcon /> : null}
+                </button>
+              );
+            })}
+          </div>
+        </div>
       ) : (
         <button
           type="button"
@@ -128,7 +232,7 @@ export function NeuroAccountsModal({
   onClose: () => void;
   onPick: (accountId: string) => void;
   onRemove: (accountId: string) => void;
-  onChannelChange: (accountId: string, channel: string | null) => void;
+  onChannelChange: (accountId: string, channels: string[]) => void;
   feedback?: Record<string, 'ok' | 'err'>;
 }) {
   const { t } = useTranslation();

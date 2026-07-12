@@ -289,11 +289,18 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
 async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePhoto) -> None:
     """Drop one photo from the account's profile-photo history.
 
-    ``DeletePhotosRequest`` accepts a list of ``InputPhoto``; if the deleted
-    photo was the current avatar, Telegram automatically promotes the next
-    one — no explicit re-set needed.
+    ``DeletePhotosRequest`` accepts a list of ``InputPhoto`` and returns the
+    vector of ids it actually deleted; if the deleted photo was the current
+    avatar, Telegram automatically promotes the next one — no explicit re-set
+    needed.
+
+    We verify our id is in that returned vector. Telegram answers a stale or
+    unrecognised ``InputPhoto`` with an empty vector — a silent no-op that
+    would otherwise be logged as a successful removal while the photo stays on
+    the server (this is what let JS-rounded int64 ids "delete" the same photo
+    repeatedly). Raising turns that into a surfaced error instead.
     """
-    await client(
+    deleted = await client(
         DeletePhotosRequest(
             id=[
                 InputPhoto(
@@ -304,6 +311,9 @@ async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePho
             ],
         ),
     )
+    if action.photo_id not in (deleted or []):
+        msg = "Telegram did not delete the photo (unknown or expired reference)"
+        raise RuntimeError(msg)
 
 
 async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:

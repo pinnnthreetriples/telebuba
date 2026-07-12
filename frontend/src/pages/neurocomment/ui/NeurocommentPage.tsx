@@ -228,7 +228,7 @@ export function NeurocommentPage() {
       account_id: a.account_id,
       phone: a.label,
       linked: true,
-      pinned_channel: a.pinned_channel ?? null,
+      pinned_channels: a.pinned_channels ?? [],
     })),
     ...warmedAccounts
       .filter((a) => !linkedIds.has(a.account_id))
@@ -236,7 +236,7 @@ export function NeurocommentPage() {
         account_id: a.account_id,
         phone: a.label ?? a.account_id,
         linked: false,
-        pinned_channel: null,
+        pinned_channels: [],
       })),
   ];
 
@@ -555,12 +555,12 @@ export function NeurocommentPage() {
               );
             }
           }}
-          onChannelChange={(accountId, channel) => {
+          onChannelChange={(accountId, channels) => {
             if (campaignId !== null) {
               setAccountChannel.mutate(
                 {
                   path: { campaign_id: campaignId, account_id: accountId },
-                  body: { channel },
+                  body: { channels },
                 },
                 {
                   onSettled: (_data, error) => {
@@ -673,10 +673,10 @@ export function NeurocommentPage() {
               ? boardAccounts.map((a) => ({
                   account_id: a.account_id,
                   phone: a.label,
-                  // An account pinned to one channel shows it; an unpinned account
+                  // An account with a channel subset shows it; an empty subset
                   // serves the whole campaign, so show the campaign — not an
                   // arbitrary first-readiness channel (that misrepresented its scope).
-                  channel: a.pinned_channel ?? promptFor.name,
+                  channel: (a.pinned_channels ?? []).join(', ') || promptFor.name,
                   initials: initials(a.label),
                 }))
               : []

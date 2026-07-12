@@ -26,9 +26,9 @@ class OnboardContext:
     accumulator, solver flag, progress callbacks) into one value so the helpers
     stay under the PLR0913 argument-count limit.
 
-    ``pins`` maps each account to its channel pin (``None`` = all channels). A
-    pinned account is onboarded only against its channel — ``accounts_for`` filters
-    the per-channel account list.
+    ``pins`` maps each account to its channel subset (empty = all channels). An
+    account with a subset is onboarded only against those channels — ``accounts_for``
+    filters the per-channel account list.
     """
 
     accounts: list[str]
@@ -37,14 +37,14 @@ class OnboardContext:
     solver_enabled: bool
     on_progress: Callable[[OnboardingProgressEvent], None] | None
     report: Callable[[OnboardingProgressEvent], None]
-    pins: dict[str, str | None] = dataclasses.field(default_factory=dict)
+    pins: dict[str, list[str]] = dataclasses.field(default_factory=dict)
 
     def accounts_for(self, channel: str) -> list[str]:
-        """Accounts eligible for ``channel``: unpinned, or pinned to this channel."""
+        """Accounts eligible for ``channel``: empty subset, or subset holding it."""
         return [
             account_id
             for account_id in self.accounts
-            if self.pins.get(account_id) in (None, channel)
+            if not self.pins.get(account_id) or channel in self.pins[account_id]
         ]
 
 

@@ -11,6 +11,7 @@ from sqlalchemy.exc import IntegrityError
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import (
+    _neurocomment_campaign_account_channels,
     _neurocomment_campaign_accounts,
     _neurocomment_campaign_channels,
     _neurocomment_campaigns,
@@ -220,15 +221,15 @@ def _deactivate_channel(campaign_id: str, channel: str) -> None:
             )
             .values(active=0),
         )
-        # Clear any pin to this now-inactive channel: a pin to a channel no longer
-        # active would silently exclude the account from selection + onboarding forever.
+        # Drop this now-inactive channel from every account's subset: a subset entry
+        # for a channel no longer active would silently exclude the account from
+        # selection + onboarding forever. An account left with an empty subset reverts
+        # to serving all (remaining) campaign channels.
         connection.execute(
-            update(_neurocomment_campaign_accounts)
-            .where(
-                (_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
-                & (_neurocomment_campaign_accounts.c.channel == channel),
-            )
-            .values(channel=None),
+            delete(_neurocomment_campaign_account_channels).where(
+                (_neurocomment_campaign_account_channels.c.campaign_id == campaign_id)
+                & (_neurocomment_campaign_account_channels.c.channel == channel),
+            ),
         )
 
 
@@ -310,6 +311,11 @@ async def list_active_watch_channels() -> ChannelList:
 
 def _delete_campaign(campaign_id: str) -> None:
     with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_neurocomment_campaign_account_channels).where(
+                _neurocomment_campaign_account_channels.c.campaign_id == campaign_id,
+            ),
+        )
         connection.execute(
             delete(_neurocomment_campaign_accounts).where(
                 _neurocomment_campaign_accounts.c.campaign_id == campaign_id,

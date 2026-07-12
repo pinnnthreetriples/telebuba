@@ -80,25 +80,28 @@ async def test_list_campaigns_carries_per_campaign_channel_and_account_counts() 
 
 
 @pytest.mark.asyncio
-async def test_pin_account_channel_persists_and_returns_board() -> None:
-    """Pinning returns the refreshed board carrying the account's pin; clearing resets it."""
+async def test_set_account_channels_persists_and_returns_board() -> None:
+    """Setting the subset returns the refreshed board carrying it; clearing resets it."""
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
     await campaigns.link_channel(campaign.campaign_id, "@news")
+    await campaigns.link_channel(campaign.campaign_id, "@sport")
     await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
 
-    board = await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", "@news")
+    board = await campaigns.set_account_channels(campaign.campaign_id, "acc-1", ["@news", "@sport"])
     assert board is not None
-    assert {c.account_id: c.pinned_channel for c in board.accounts} == {"acc-1": "@news"}
+    assert {c.account_id: c.pinned_channels for c in board.accounts} == {
+        "acc-1": ["@news", "@sport"],
+    }
 
-    cleared = await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", None)
+    cleared = await campaigns.set_account_channels(campaign.campaign_id, "acc-1", [])
     assert cleared is not None
-    assert {c.account_id: c.pinned_channel for c in cleared.accounts} == {"acc-1": None}
+    assert {c.account_id: c.pinned_channels for c in cleared.accounts} == {"acc-1": []}
 
 
 @pytest.mark.asyncio
-async def test_pin_account_channel_rejects_foreign_channel() -> None:
-    """Pinning to a channel outside the campaign raises ``ChannelNotInCampaignError``."""
+async def test_set_account_channels_rejects_foreign_channel() -> None:
+    """A channel outside the campaign raises ``ChannelNotInCampaignError``."""
     from services.neurocomment import ChannelNotInCampaignError  # noqa: PLC0415
 
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
@@ -107,22 +110,22 @@ async def test_pin_account_channel_rejects_foreign_channel() -> None:
     await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
 
     with pytest.raises(ChannelNotInCampaignError):
-        await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", "@other")
+        await campaigns.set_account_channels(campaign.campaign_id, "acc-1", ["@other"])
 
 
 @pytest.mark.asyncio
 async def test_deactivate_channel_clears_pins_to_it() -> None:
-    """Deactivating a channel clears any account pinned to it, else the pin strands the account."""
+    """Deactivating a channel drops it from every account's subset, else it strands them."""
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
     campaign = await campaigns.create_campaign(CampaignCreate(name="A", prompt="p"))
     await campaigns.link_channel(campaign.campaign_id, "@news")
     await campaigns.assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    await campaigns.pin_account_channel(campaign.campaign_id, "acc-1", "@news")
+    await campaigns.set_account_channels(campaign.campaign_id, "acc-1", ["@news"])
 
     await campaigns.deactivate_channel(campaign.campaign_id, "@news")
 
     links = (await campaigns.list_campaign_accounts(campaign.campaign_id)).links
-    assert {link.account_id: link.channel for link in links} == {"acc-1": None}
+    assert {link.account_id: link.channels for link in links} == {"acc-1": []}
 
 
 @pytest.mark.asyncio
