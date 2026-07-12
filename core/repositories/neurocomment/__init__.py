@@ -16,7 +16,7 @@ from core.repositories.neurocomment._accounts import (
     assign_account_to_campaign,
     list_campaign_accounts,
     remove_account_from_campaign,
-    set_campaign_account_channel,
+    set_campaign_account_channels,
 )
 from core.repositories.neurocomment._campaigns import (
     ChannelAlreadyAssignedError,
@@ -121,7 +121,7 @@ __all__ = [
     "remove_account_from_campaign",
     "resolve_pending_outcome",
     "save_neurocomment_settings",
-    "set_campaign_account_channel",
+    "set_campaign_account_channels",
     "set_campaign_status",
     "set_listener_account_id",
     "set_listener_running",

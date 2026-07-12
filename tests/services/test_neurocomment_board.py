@@ -31,7 +31,7 @@ from core.db import (
     upsert_warming_state,
 )
 from core.logging import reset_logging_for_tests, setup_logging
-from core.repositories.neurocomment import set_campaign_account_channel
+from core.repositories.neurocomment import set_campaign_account_channels
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.device_fingerprint import DeviceFingerprint
@@ -116,21 +116,21 @@ async def test_board_basic_shape() -> None:
 
 
 @pytest.mark.asyncio
-async def test_card_carries_pinned_channel_and_null_when_unpinned() -> None:
-    """A pinned account's card reports its channel; an unpinned one reports None."""
+async def test_card_carries_pinned_channels_and_empty_when_unpinned() -> None:
+    """A pinned account's card reports its channel subset; an unpinned one reports []."""
     campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
     await create_account(AccountCreate(account_id="pinned", label="Pinned"))
     await create_account(AccountCreate(account_id="free", label="Free"))
     await assign_account_to_campaign(campaign.campaign_id, "pinned")
     await assign_account_to_campaign(campaign.campaign_id, "free")
     await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await set_campaign_account_channel(campaign.campaign_id, "pinned", "@chan")
+    await set_campaign_account_channels(campaign.campaign_id, "pinned", ["@chan"])
 
     board = await load_neurocomment_board(campaign.campaign_id)
 
     assert board is not None
-    pins = {card.account_id: card.pinned_channel for card in board.accounts}
-    assert pins == {"pinned": "@chan", "free": None}
+    pins = {card.account_id: card.pinned_channels for card in board.accounts}
+    assert pins == {"pinned": ["@chan"], "free": []}
 
 
 @pytest.mark.asyncio

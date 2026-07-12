@@ -67,4 +67,4 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
 
 
 def _serving_accounts(links: list[CampaignAccountLink], channel: str) -> list[str]:
-    return [link.account_id for link in links if link.channel in (None, channel)]
+    return [link.account_id for link in links if not link.channels or channel in link.channels]

@@ -893,9 +893,9 @@ export type NeurocommentAccountCard = {
    */
   last_comment_text?: string | null;
   /**
-   * Pinned Channel
+   * Pinned Channels
    */
-  pinned_channel?: string | null;
+  pinned_channels?: Array<string>;
   /**
    * Readiness
    */
@@ -1513,13 +1513,13 @@ export type RetryPairRequest = {
 /**
  * SetAccountChannelRequest
  *
- * Pin a campaign account to one channel; ``null`` clears the pin (all channels).
+ * Set the campaign channels an account targets; an empty list = all channels.
  */
 export type SetAccountChannelRequest = {
   /**
-   * Channel
+   * Channels
    */
-  channel?: string | null;
+  channels?: Array<string>;
 };
 
 /**

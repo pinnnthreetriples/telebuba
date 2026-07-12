@@ -218,3 +218,33 @@ def _add_campaign_account_channel(connection: Connection) -> None:
         connection.exec_driver_sql(
             "ALTER TABLE neurocomment_campaign_accounts ADD COLUMN channel VARCHAR",
         )
+
+
+def _add_campaign_account_channels_table(connection: Connection) -> None:
+    # #29: per-account channel SUBSET within a campaign — one row per pinned channel.
+    # NO rows for a (campaign, account) pair = serves ALL campaign channels (default).
+    # Supersedes the scalar `channel` pin (#25); existing non-NULL pins are backfilled
+    # here as a single subset row each (INSERT OR IGNORE keeps the migration idempotent).
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_campaign_account_channels ("
+        "  campaign_id VARCHAR NOT NULL REFERENCES neurocomment_campaigns(campaign_id),"
+        "  account_id VARCHAR NOT NULL REFERENCES accounts(account_id),"
+        "  channel VARCHAR NOT NULL,"
+        "  created_at VARCHAR NOT NULL,"
+        "  PRIMARY KEY (campaign_id, account_id, channel)"
+        ")",
+    )
+    if not _sqlite_table_exists(connection, "neurocomment_campaign_accounts"):
+        return
+    rows = (
+        connection.exec_driver_sql("PRAGMA table_info(neurocomment_campaign_accounts)")
+        .mappings()
+        .all()
+    )
+    if "channel" in {str(row["name"]) for row in rows}:
+        connection.exec_driver_sql(
+            "INSERT OR IGNORE INTO neurocomment_campaign_account_channels "
+            "(campaign_id, account_id, channel, created_at) "
+            "SELECT campaign_id, account_id, channel, created_at "
+            "FROM neurocomment_campaign_accounts WHERE channel IS NOT NULL",
+        )

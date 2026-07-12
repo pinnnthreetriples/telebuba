@@ -787,8 +787,9 @@
       "neuroAccounts": {
         "title": "Accounts in neurocommenting",
         "sub": "{{count}} accounts · assign to the campaign or remove from work",
-        "channelLabel": "Account channel",
+        "channelLabel": "Account channels",
         "allChannels": "All channels",
+        "channelsSelected": "Channels: {{count}}",
         "assign": "Add to campaign",
         "remove": "Remove from neurocommenting",
         "removeTitle": "Remove {{phone}} from neurocommenting?",

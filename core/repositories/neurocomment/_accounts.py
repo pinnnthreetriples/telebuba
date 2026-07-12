@@ -10,11 +10,12 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import (
+    _neurocomment_campaign_account_channels,
     _neurocomment_campaign_accounts,
     _neurocomment_campaign_channels,
 )
@@ -49,6 +50,12 @@ async def assign_account_to_campaign(campaign_id: str, account_id: str) -> None:
 def _remove_account_from_campaign(campaign_id: str, account_id: str) -> None:
     with _get_engine().begin() as connection:
         connection.execute(
+            delete(_neurocomment_campaign_account_channels).where(
+                (_neurocomment_campaign_account_channels.c.campaign_id == campaign_id)
+                & (_neurocomment_campaign_account_channels.c.account_id == account_id),
+            ),
+        )
+        connection.execute(
             delete(_neurocomment_campaign_accounts).where(
                 (_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
                 & (_neurocomment_campaign_accounts.c.account_id == account_id),
@@ -79,46 +86,81 @@ def _channel_is_active_in_campaign(connection: Connection, campaign_id: str, cha
     return connection.execute(statement).first() is not None
 
 
-def _set_campaign_account_channel(campaign_id: str, account_id: str, channel: str | None) -> None:
+def _set_campaign_account_channels(campaign_id: str, account_id: str, channels: list[str]) -> None:
+    # Replace the account's channel subset wholesale (delete-then-insert). An empty
+    # list clears the subset → the account reverts to serving all campaign channels.
+    # dict.fromkeys dedupes while preserving order (the composite PK forbids dupes).
+    unique_channels = list(dict.fromkeys(channels))
     with _get_engine().begin() as connection:
-        if channel is not None and not _channel_is_active_in_campaign(
-            connection, campaign_id, channel
-        ):
-            msg = f"Channel {channel!r} is not active in campaign {campaign_id!r}"
-            raise ChannelNotInCampaignError(msg)
+        for channel in unique_channels:
+            if not _channel_is_active_in_campaign(connection, campaign_id, channel):
+                msg = f"Channel {channel!r} is not active in campaign {campaign_id!r}"
+                raise ChannelNotInCampaignError(msg)
         connection.execute(
-            update(_neurocomment_campaign_accounts)
-            .where(
-                (_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
-                & (_neurocomment_campaign_accounts.c.account_id == account_id),
-            )
-            .values(channel=channel),
+            delete(_neurocomment_campaign_account_channels).where(
+                (_neurocomment_campaign_account_channels.c.campaign_id == campaign_id)
+                & (_neurocomment_campaign_account_channels.c.account_id == account_id),
+            ),
         )
+        if unique_channels:
+            now = _now_iso()
+            connection.execute(
+                sqlite_insert(_neurocomment_campaign_account_channels),
+                [
+                    {
+                        "campaign_id": campaign_id,
+                        "account_id": account_id,
+                        "channel": channel,
+                        "created_at": now,
+                    }
+                    for channel in unique_channels
+                ],
+            )
 
 
-async def set_campaign_account_channel(
+async def set_campaign_account_channels(
     campaign_id: str,
     account_id: str,
-    channel: str | None,
+    channels: list[str],
 ) -> None:
-    """Pin a campaign account to one channel; ``None`` clears the pin (all channels).
+    """Set the campaign channels an account targets; an empty list = all channels.
 
-    Raises ``ChannelNotInCampaignError`` when pinning to a channel that is not an
-    active link of the campaign.
+    Replaces the account's whole subset. Raises ``ChannelNotInCampaignError`` when
+    any channel is not an active link of the campaign.
     """
-    await asyncio.to_thread(_set_campaign_account_channel, campaign_id, account_id, channel)
+    await asyncio.to_thread(_set_campaign_account_channels, campaign_id, account_id, channels)
 
 
 def _list_campaign_accounts(campaign_id: str) -> CampaignAccountList:
-    statement = (
+    account_stmt = (
         select(_neurocomment_campaign_accounts)
         .where(_neurocomment_campaign_accounts.c.campaign_id == campaign_id)
         .order_by(_neurocomment_campaign_accounts.c.created_at.asc())
     )
+    channel_stmt = (
+        select(
+            _neurocomment_campaign_account_channels.c.account_id,
+            _neurocomment_campaign_account_channels.c.channel,
+        )
+        .where(_neurocomment_campaign_account_channels.c.campaign_id == campaign_id)
+        .order_by(_neurocomment_campaign_account_channels.c.channel.asc())
+    )
     with _get_engine().connect() as connection:
-        rows = connection.execute(statement).mappings().all()
+        rows = connection.execute(account_stmt).mappings().all()
+        channel_rows = connection.execute(channel_stmt).all()
+    channels_by_account: dict[str, list[str]] = {}
+    for account_id, channel in channel_rows:
+        channels_by_account.setdefault(account_id, []).append(channel)
     return CampaignAccountList(
-        links=[CampaignAccountLink.model_validate(dict(row)) for row in rows],
+        links=[
+            CampaignAccountLink(
+                campaign_id=row["campaign_id"],
+                account_id=row["account_id"],
+                created_at=row["created_at"],
+                channels=channels_by_account.get(row["account_id"], []),
+            )
+            for row in rows
+        ],
     )
 
 

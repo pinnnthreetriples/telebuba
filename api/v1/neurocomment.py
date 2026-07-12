@@ -127,13 +127,14 @@ async def set_account_channel(
     account_id: str,
     body: SetAccountChannelRequest,
 ) -> NeurocommentBoard:
-    """Pin a campaign account to one channel (``channel: null`` clears the pin).
+    """Set a campaign account's channel subset (empty ``channels`` = all channels).
 
-    A pinned account comments only on that channel; an unpinned one serves all
-    campaign channels. Returns the refreshed board so the SPA re-renders the card.
+    An account with a non-empty subset comments only on those channels; an empty
+    subset serves all campaign channels. Returns the refreshed board so the SPA
+    re-renders the card.
     """
     try:
-        board = await nc_service.pin_account_channel(campaign_id, account_id, body.channel)
+        board = await nc_service.set_account_channels(campaign_id, account_id, body.channels)
     except nc_service.ChannelNotInCampaignError as exc:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST,

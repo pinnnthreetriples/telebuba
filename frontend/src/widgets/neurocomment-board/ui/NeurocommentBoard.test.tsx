@@ -85,7 +85,7 @@ test('a pinned account shows its pinned channel, not the first joined one', () =
     accounts: [
       {
         ...BOARD.accounts![0]!,
-        pinned_channel: '@second',
+        pinned_channels: ['@second'],
         readiness: [
           { channel: '@news', ready: true, joined: true, captcha_passed: true },
           { channel: '@second', ready: false, joined: false, captcha_passed: false },

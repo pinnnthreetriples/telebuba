@@ -36,7 +36,7 @@ from core.db import (
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from core.repositories.neurocomment import (
-    set_campaign_account_channel,
+    set_campaign_account_channels,
     set_campaign_status,
 )
 from schemas.accounts import AccountCreate, AccountList, AccountRead
@@ -271,7 +271,7 @@ async def test_pinned_account_not_selected_for_other_channel(
     # Ready on BOTH channels, but pinned to @a.
     await upsert_readiness("acc-1", "@a", joined=True, captcha_passed=True, ready=True)
     await upsert_readiness("acc-1", "@b", joined=True, captcha_passed=True, ready=True)
-    await set_campaign_account_channel(campaign.campaign_id, "acc-1", "@a")
+    await set_campaign_account_channels(campaign.campaign_id, "acc-1", ["@a"])
 
     comment = _CommentStub()
     _patch_io(monkeypatch, comment=comment)

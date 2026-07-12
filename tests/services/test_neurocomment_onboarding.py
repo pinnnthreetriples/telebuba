@@ -27,7 +27,7 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
-from core.repositories.neurocomment import set_campaign_account_channel
+from core.repositories.neurocomment import set_campaign_account_channels
 from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage
 from schemas.gemini import GeminiResult
@@ -459,7 +459,7 @@ async def test_campaign_pinned_account_only_onboards_its_channel(
     await link_channel_to_campaign(campaign.campaign_id, "@two")
     await assign_account_to_campaign(campaign.campaign_id, "pinned")
     await assign_account_to_campaign(campaign.campaign_id, "free")
-    await set_campaign_account_channel(campaign.campaign_id, "pinned", "@one")
+    await set_campaign_account_channels(campaign.campaign_id, "pinned", ["@one"])
 
     read = _ReadStub(linked_chat_id=500, comments_enabled=True)
     join = _JoinStub()

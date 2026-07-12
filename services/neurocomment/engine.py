@@ -221,12 +221,12 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> _Sele
     On a miss returns the binding blocker (``_selection_block_reason``) so the
     activity log can tell the operator *why* — busy quota vs cooldown vs not warmed.
     """
-    # A pinned account (link.channel set) is eligible only for its channel; an
-    # unpinned account (None) is eligible for every channel of the campaign.
+    # An account with a channel subset is eligible only for channels in it; an
+    # account with an empty subset is eligible for every channel of the campaign.
     account_ids = [
         link.account_id
         for link in (await list_campaign_accounts(campaign.campaign_id)).links
-        if link.channel in (None, channel)
+        if not link.channels or channel in link.channels
     ]
     if not account_ids:
         return _Selection(None, "no_accounts_linked")

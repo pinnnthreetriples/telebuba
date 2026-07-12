@@ -1058,10 +1058,11 @@ export const removeCampaignAccount = <ThrowOnError extends boolean = false>(
 /**
  * Set Account Channel
  *
- * Pin a campaign account to one channel (``channel: null`` clears the pin).
+ * Set a campaign account's channel subset (empty ``channels`` = all channels).
  *
- * A pinned account comments only on that channel; an unpinned one serves all
- * campaign channels. Returns the refreshed board so the SPA re-renders the card.
+ * An account with a non-empty subset comments only on those channels; an empty
+ * subset serves all campaign channels. Returns the refreshed board so the SPA
+ * re-renders the card.
  */
 export const setCampaignAccountChannel = <ThrowOnError extends boolean = false>(
   options: Options<SetCampaignAccountChannelData, ThrowOnError>,

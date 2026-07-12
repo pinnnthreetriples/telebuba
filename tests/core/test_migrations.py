@@ -322,6 +322,54 @@ def test_campaign_account_channel_migration_skips_missing_table(tmp_path: Path) 
     engine.dispose()
 
 
+def test_campaign_account_channels_table_created() -> None:
+    """#29 adds the channel-subset join table and stamps its version."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        tables = {
+            str(row[0])
+            for row in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type = 'table'",
+            )
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "neurocomment_campaign_account_channels" in tables
+    assert 29 in versions
+
+
+def test_campaign_account_channels_migration_backfills_legacy_pins(tmp_path: Path) -> None:
+    """A legacy single ``channel`` pin is backfilled as one subset row; re-run is clean."""
+    from core.migration_steps_neurocomment import (  # noqa: PLC0415
+        _add_campaign_account_channels_table,
+    )
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_accounts ("
+            "campaign_id VARCHAR NOT NULL, account_id VARCHAR NOT NULL, "
+            "created_at VARCHAR NOT NULL, channel VARCHAR, "
+            "PRIMARY KEY (campaign_id, account_id))",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_accounts "
+            "(campaign_id, account_id, created_at, channel) VALUES "
+            "('c1', 'pinned', ?, '@news'), ('c1', 'free', ?, NULL)",
+            (now, now),
+        )
+        _add_campaign_account_channels_table(connection)
+        _add_campaign_account_channels_table(connection)  # idempotent — no dupe rows.
+    with engine.connect() as connection:
+        rows = connection.exec_driver_sql(
+            "SELECT account_id, channel FROM neurocomment_campaign_account_channels",
+        ).all()
+    engine.dispose()
+    assert rows == [("pinned", "@news")]  # only the non-NULL pin is backfilled
+
+
 def test_append_only_versions_are_unique() -> None:
     """Two migrations sharing the same version would silently mask each other."""
     versions = [v for v, _name, _fn in MIGRATIONS]
