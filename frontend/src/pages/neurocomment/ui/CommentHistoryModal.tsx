@@ -10,9 +10,9 @@ import { DataTable, type DataTableColumnMeta, Modal } from '@/shared/ui';
 
 const PAGE_SIZE = 50;
 
-// Full paginated published-comment history (all time, newest first) — the board
-// feed shows only the last 24h. Cursor-stack paging mirrors LogsPage; account
-// labels resolve from the board's cards, as CommentFeedCard does.
+// Full paginated published-comment history (all time, newest first) — the board's
+// per-account feed shows only the last 24h. Cursor-stack paging mirrors LogsPage;
+// account labels resolve from the board's cards.
 export function CommentHistoryModal({
   campaignId,
   accounts,
