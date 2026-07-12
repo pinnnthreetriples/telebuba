@@ -242,9 +242,15 @@ mutate_only_covered_lines = true
 #     (present, never mutated);
 #   - tests/, the root conftest.py, pyproject.toml (pytest config), and the
 #     .env.example that tests/test_architecture.py reads.
-# Without this, pytest hits ModuleNotFoundError / collects zero tests inside
-# mutants/ and mutmut aborts before testing a single mutant.
-also_copy = ["api", "core", "main.py", "tests", "conftest.py", "pyproject.toml", ".env.example"]
+#   - frontend/src/shared/i18n/ — the locale JSON that
+#     tests/test_logevent_i18n_parity.py reads (frontend owns the log-event
+#     labels); only this leaf is copied, never the whole frontend/ tree (its
+#     node_modules/dist would balloon the per-mutant copy).
+# Without this, pytest hits ModuleNotFoundError / FileNotFoundError / collects
+# zero tests inside mutants/ and mutmut aborts before testing a single mutant.
+# RULE: any new test that reads a repo file outside services/ or schemas/ must
+# add that path here, or the nightly mutation sweep breaks on the baseline run.
+also_copy = ["api", "core", "main.py", "tests", "conftest.py", "pyproject.toml", ".env.example", "frontend/src/shared/i18n"]
 # Drop the project addopts for the per-mutant runs: the strict --cov /
 # --cov-fail-under=90 gates would make every partial run exit non-zero and
 # corrupt mutmut's kill/survive signal. asyncio_mode / filterwarnings live in
