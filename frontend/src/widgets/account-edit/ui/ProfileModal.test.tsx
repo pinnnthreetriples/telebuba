@@ -611,13 +611,24 @@ test('the header renders the real avatar when the snapshot carries one', async (
     const { pathname } = new URL((input as Request).url);
     if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
       return Promise.resolve(
-        jsonResponse({ ...VIEW, avatar_data_uri: 'data:image/jpeg;base64,QQ==' }),
+        jsonResponse({
+          ...VIEW,
+          photos: [
+            {
+              photo_id: '1',
+              access_hash: '1',
+              file_reference: 'AA==',
+              thumb_url: 'data:image/jpeg;base64,QQ==',
+            },
+          ],
+        }),
       );
     }
     return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
   });
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
   await waitFor(() => {
-    expect(document.querySelector('[style*="data:image/jpeg"]')).not.toBeNull();
+    // The round header avatar (not a square photo tile) carries the thumbnail.
+    expect(document.querySelector('.rounded-full[style*="data:image/jpeg"]')).not.toBeNull();
   });
 });

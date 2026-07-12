@@ -268,7 +268,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const liveFirst = snapshot.data?.first_name ?? account.first_name;
   const liveLast = snapshot.data?.last_name ?? account.last_name;
   const liveUser = snapshot.data?.username ?? account.username;
-  const avatarUri = snapshot.data?.avatar_data_uri;
+  // The current avatar is the first profile photo (index 0 = main); #227 serves
+  // its thumbnail from the cacheable image endpoint (thumb_url), not inline data.
+  const avatarUri = snapshot.data?.photos?.[0]?.thumb_url ?? undefined;
   const initial = (liveFirst ?? account.phone ?? account.account_id).trim().charAt(0).toUpperCase();
   const fullName =
     [liveFirst, liveLast].filter(Boolean).join(' ') || (account.phone ?? account.account_id);
