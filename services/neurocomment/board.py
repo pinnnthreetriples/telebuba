@@ -220,11 +220,12 @@ def _channel_status(
 
     Precedence: a comments-off channel can never be commented on; a channel in
     challenge back-off (Ф2 #147, K solver failures) is paused regardless of
-    readiness; otherwise an account that's ready wins; then the joined-but-blocked
-    failure modes — ``bot_challenge`` when a guardian-bot challenge row exists for
-    the channel (#145), else ``chat_restricted`` (a Telegram-level write block) —
-    then, for a not-joined row, ``join_failed`` (onboarding's hard-failure sentinel)
-    vs ``join_by_request`` (approval gate); ``throttled`` is the catch-all.
+    readiness; otherwise an account that's ready wins; then an auto-ban (#30) when no
+    account is ready but one is banned here; then the joined-but-blocked failure modes
+    — ``bot_challenge`` when a guardian-bot challenge row exists for the channel
+    (#145), else ``chat_restricted`` (a Telegram-level write block) — then, for a
+    not-joined row, ``join_failed`` (onboarding's hard-failure sentinel) vs
+    ``join_by_request`` (approval gate); ``throttled`` is the catch-all.
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
@@ -232,6 +233,8 @@ def _channel_status(
         return "bot_challenge_backoff"
     if ready_count > 0:
         return "ready"
+    if any(r.banned for r in rows):
+        return "banned"
     if any(r.joined and not r.captcha_passed for r in rows):
         return "bot_challenge" if challenged else "chat_restricted"
     return _not_joined_status(rows)

@@ -14,7 +14,12 @@ import asyncio
 from typing import TYPE_CHECKING, Literal
 
 from core.config import settings
-from core.db import fetch_campaign, list_campaign_accounts, list_campaign_channels
+from core.db import (
+    clear_pair_banned,
+    fetch_campaign,
+    list_campaign_accounts,
+    list_campaign_channels,
+)
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from schemas.telegram_actions import BanCheckResult, CheckBannedInChannel
 from services.neurocomment import _seams
@@ -60,6 +65,11 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
         if not serving:
             return ChannelBanCheck(channel=channel, status="unknown")
         states = await asyncio.gather(*(_probe(acc, channel) for acc in serving))
+        # Recovery (#30): a live can_send verdict is proof the account may write again,
+        # so lift any sticky auto-ban on that pair — this button is the un-ban path.
+        for account_id, state in zip(serving, states, strict=True):
+            if state == "can_send":
+                await clear_pair_banned(account_id, channel)
         return ChannelBanCheck(channel=channel, status=_aggregate(list(states)))
 
     items = await asyncio.gather(*(_check_channel(channel) for channel in channels))

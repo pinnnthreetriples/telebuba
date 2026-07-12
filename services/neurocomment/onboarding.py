@@ -107,6 +107,10 @@ async def _join_and_classify(
     An operator-skipped pair (#148) is also left alone: re-joining it would run the
     solver and flip readiness back to ready, silently undoing the skip. The operator
     un-skips via ``retry_pair`` (which clears the readiness row first).
+
+    An auto-banned pair (#30) is likewise left alone — re-joining would flip it back to
+    ready and the engine would keep hitting the ban. It is cleared by a can_send probe
+    ("Проверить каналы") or ``retry_pair``.
     """
     existing = await fetch_readiness(account_id, channel)
     if existing is not None and existing.human_skipped:
@@ -114,6 +118,12 @@ async def _join_and_classify(
             account_id=account_id,
             channel=channel,
             state="human_skipped",
+        )
+    if existing is not None and existing.banned:
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="banned",
         )
     if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)

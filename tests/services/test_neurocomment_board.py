@@ -25,6 +25,7 @@ from core.db import (
     link_channel_to_campaign,
     mark_comment_posted,
     mark_comments_deleted,
+    mark_pair_banned,
     upsert_linked_group,
     upsert_readiness,
     upsert_spam_status,
@@ -239,6 +240,42 @@ async def test_channel_status_chat_restricted() -> None:
 
     assert board is not None
     assert board.channels[0].status == "chat_restricted"
+
+
+@pytest.mark.asyncio
+async def test_channel_status_banned() -> None:
+    # #30: a pair auto-banned while commenting surfaces as ``banned`` on the board,
+    # taking precedence over the join-state fallbacks (and over chat_restricted).
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@chan")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "banned"
+
+
+@pytest.mark.asyncio
+async def test_channel_status_ready_wins_over_a_banned_sibling_account() -> None:
+    # Two accounts serve @chan; one banned, one ready → the channel is still ready.
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await create_account(AccountCreate(account_id="acc-2"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@chan")
+    await upsert_readiness("acc-2", "@chan", joined=True, captcha_passed=True, ready=True)
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+
+    assert board is not None
+    assert board.channels[0].status == "ready"
 
 
 @pytest.mark.asyncio

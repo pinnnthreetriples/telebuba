@@ -23,6 +23,7 @@ from core.db import (
     link_channel_to_campaign,
     list_failed_for_channel,
     mark_human_skipped,
+    mark_pair_banned,
     update_solver_enabled,
     upsert_readiness,
 )
@@ -867,6 +868,36 @@ async def test_human_skipped_pair_is_not_re_enabled_by_onboarding(
     readiness = await fetch_readiness("acc-1", "@chan")
     assert readiness is not None
     assert readiness.human_skipped is True
+    assert readiness.ready is False  # NOT re-enabled
+    assert all(account_id != "acc-1" for account_id, _ in join.calls)  # never re-joined
+
+
+@pytest.mark.asyncio
+async def test_banned_pair_is_not_re_enabled_by_onboarding(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # #30: an auto-ban must survive a Start/onboard cycle — the pair must not be
+    # re-joined nor have its readiness flipped back to ready (or the engine would
+    # keep hitting the ban).
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    # The pair was onboarded, then got banned while commenting.
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@chan")
+
+    read = _ReadStub(linked_chat_id=4423, comments_enabled=True)
+    join = _JoinStub()
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.banned is True
     assert readiness.ready is False  # NOT re-enabled
     assert all(account_id != "acc-1" for account_id, _ in join.calls)  # never re-joined
 

@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-12
+last_updated: 2026-07-13
 ---
 
 # Active State
@@ -277,6 +277,31 @@ to `also_copy` and documented the contract (any test reading a repo file outside
 `copy_also_copy_files` (dir → `copytree` into `mutants/`) + auditing all
 filesystem-reading tests; mutmut can't run natively on Windows (needs WSL), so the
 live proof is the ubuntu nightly.
+
+A 2026-07-13 operator-reported neurocomment pass (this branch) shipped three
+fixes: (1) **channel ban-check false-negatives** — the "Проверить каналы" probe
+resolved a channel's linked discussion group only from `ChatFull.chats`, which
+Telegram omits for some channels, so the probe degraded to `unknown` (chip stayed
+uncoloured) while the account could actually comment. Now it falls back to
+`get_input_entity(linked_id)` off the warm session cache (same idiom as
+`_read_challenge`); the identical latent bug in `_dispatch_check_messages_alive`
+(deletion-sweep liveness) was fixed via a shared `_resolve_linked_group_entity`
+helper. (2) **precise quota reasons** — `no_account_available` now logs
+`quota_hour` (per-account/hour) vs `quota_day` (per-channel/day) instead of a
+generic `quota`, so the log names which cap was hit (`_quota_block_reason` replaces
+`_quota_ok`/`_under_quota`; `_BLOCK_PRIORITY` split). (3) **auto-ban skip (#30)** —
+a post that fails with `UserBannedInChannelError` now marks the (account, channel)
+pair with a new sticky `neurocomment_readiness.banned` flag (migration #30):
+selection excludes it, a re-onboard can't revive it (onboarding leaves it alone
+like an operator skip), and it logs `neurocomment_account_banned` (red in the
+feed). Recovery: a live `can_send` verdict from "Проверить каналы" lifts the ban
+(`clear_pair_banned` → banned=0, ready=1); `retry_pair`/`delete_readiness` also
+clear it. Board surfaces a red «Забанен» channel status (aggregate: ready wins over
+a banned sibling account). Ban is classified separately from the solver-clearable
+gates (no challenge back-off / pending-resolve). Deferred: per-account (not
+channel-aggregate) ban badge in the work-row would need a `deriveRows` rework.
+Gates: 1232 pytest (strict, ≥90% branch), 271 vitest + tsc green, ruff+ty clean,
+API client regenerated (`banned` state + `quota_*` reasons drift-free).
 
 ## Not Yet Built (deliberate)
 

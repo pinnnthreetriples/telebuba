@@ -15,6 +15,8 @@ describe('logSeverity', () => {
     );
     // A deleted comment reads as a failure, even logged WARNING.
     expect(logSeverity({ event: 'neurocomment_comment_deleted', status: 'warning' })).toBe('error');
+    // An account banned in a channel reads as a failure (red), logged WARNING.
+    expect(logSeverity({ event: 'neurocomment_account_banned', status: 'warning' })).toBe('error');
   });
 
   it('maps deliberate skips / pauses / limits to warning', () => {

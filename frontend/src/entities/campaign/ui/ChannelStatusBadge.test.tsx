@@ -15,3 +15,8 @@ test('uses the danger colour for chat_restricted', () => {
   // Design dot-pill: colour is an inline hex, not a token class.
   expect(screen.getByText('Чат ограничен')).toHaveStyle({ color: '#c0473f' });
 });
+
+test('renders banned in the danger colour', () => {
+  render(<ChannelStatusBadge status="banned" />);
+  expect(screen.getByText('Забанен')).toHaveStyle({ color: '#c0473f' });
+});

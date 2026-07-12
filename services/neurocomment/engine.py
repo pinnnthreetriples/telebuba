@@ -131,11 +131,12 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         # the lock so a serialized sibling sees the prior claim's row and can't stack
         # past the cap. ponytail: if the re-check finds the account now over-cap we drop
         # the post rather than re-selecting another (rare burst edge; not worth a loop).
-        if not await _account_under_quota(account_id, event.channel):
+        quota_reason = await _account_quota_block_reason(account_id, event.channel)
+        if quota_reason is not None:
             await log_event(
                 "INFO",
                 "neurocomment_no_account_available",
-                extra={"channel": event.channel, "post_id": event.post_id, "reason": "quota"},
+                extra={"channel": event.channel, "post_id": event.post_id, "reason": quota_reason},
             )
             return
         won = await claim_comment(event.channel, event.post_id, campaign.campaign_id, account_id)
@@ -174,9 +175,9 @@ async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) ->
     ready_account_ids = frozenset(
         r.account_id
         for r in (await list_campaign_readiness(campaign_id)).readiness
-        # Honour the operator skip (#148) even if a stale re-enable left ready=1: a
-        # human-skipped pair is never selected.
-        if r.channel == channel and r.ready and not r.human_skipped
+        # Honour the operator skip (#148) and the auto-ban (#30) even if a stale
+        # re-enable left ready=1: a human-skipped or banned pair is never selected.
+        if r.channel == channel and r.ready and not r.human_skipped and not r.banned
     )
     states = {rec.account_id: rec for rec in await list_warming_states()}
     spam = await list_spam_statuses()
@@ -248,7 +249,8 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> _Sele
 # Report the blocker of the account that passed the *most* gates — the most actionable
 # one. A maxed-out-but-healthy account (quota) means "add accounts / raise the cap",
 # which is more useful than reporting some other account that is merely not warmed yet.
-_BLOCK_PRIORITY = ("quota", "cooldown", "unhealthy", "not_ready")
+# The two quota caps report separately (which one is full) but both outrank the rest.
+_BLOCK_PRIORITY = ("quota_hour", "quota_day", "cooldown", "unhealthy", "not_ready")
 
 
 def _account_block_reason(
@@ -269,9 +271,7 @@ def _account_block_reason(
         return "not_ready"
     if not _is_healthy(account, channel_count, now, pool):
         return "unhealthy"
-    if not _under_quota(account_id, pool):
-        return "quota"
-    return None
+    return _quota_block_reason(account_id, pool.limits, pool.hourly_counts, pool.daily_counts)
 
 
 def _is_eligible(
@@ -314,27 +314,30 @@ def _is_healthy(
     return health.ready
 
 
-def _quota_ok(
+def _quota_block_reason(
     account_id: str,
     limits: NeurocommentSettings,
     hourly: dict[str, int],
     daily: dict[str, int],
-) -> bool:
-    # Quota counts in-flight claims AND delivered comments (status in claimed/posted),
-    # so a burst arriving inside one account's reply-delay window can't stack past the
-    # cap — each claim consumes quota the moment it is won.
+) -> str | None:
+    """Which cap the account has reached, or ``None`` while under both.
+
+    ``quota_hour`` (per-account/hour) is reported before ``quota_day`` (per-channel/
+    day) when both are full, so the log names the specific limit the operator hit.
+    Quota counts in-flight claims AND delivered comments (status in claimed/posted),
+    so a burst arriving inside one account's reply-delay window can't stack past the
+    cap — each claim consumes quota the moment it is won.
+    """
+    if hourly.get(account_id, 0) >= limits.max_comments_per_hour:
+        return "quota_hour"
     day_cap = limits.max_comments_per_channel_per_day
-    over_hour = hourly.get(account_id, 0) >= limits.max_comments_per_hour
-    over_day = day_cap > 0 and daily.get(account_id, 0) >= day_cap
-    return not (over_hour or over_day)
+    if day_cap > 0 and daily.get(account_id, 0) >= day_cap:
+        return "quota_day"
+    return None
 
 
-def _under_quota(account_id: str, pool: _SelectionPool) -> bool:
-    return _quota_ok(account_id, pool.limits, pool.hourly_counts, pool.daily_counts)
-
-
-async def _account_under_quota(account_id: str, channel: str) -> bool:
-    """Fresh single-account quota re-read, run under the account lock before the claim."""
+async def _account_quota_block_reason(account_id: str, channel: str) -> str | None:
+    """Fresh single-account quota re-read (which cap, if any) under the lock before the claim."""
     limits = await load_neuro_settings()
     now = datetime.now(UTC)
     hour_ago = (now - timedelta(hours=1)).isoformat()
@@ -348,7 +351,7 @@ async def _account_under_quota(account_id: str, channel: str) -> bool:
             c.account_id: c.count
             for c in (await count_channel_comments_per_account_since(channel, day_ago)).counts
         }
-    return _quota_ok(account_id, limits, hourly, daily)
+    return _quota_block_reason(account_id, limits, hourly, daily)
 
 
 # The generation + outcome-classification back half lives in ``_generate`` (file-

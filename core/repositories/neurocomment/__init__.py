@@ -43,6 +43,7 @@ from core.repositories.neurocomment._challenges import (
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
+    clear_pair_banned,
     delete_readiness,
     fetch_comment,
     fetch_linked_group,
@@ -55,6 +56,7 @@ from core.repositories.neurocomment._comments import (
     mark_comment_failed,
     mark_comment_posted,
     mark_human_skipped,
+    mark_pair_banned,
     reclaim_stale_claims,
     upsert_linked_group,
     upsert_readiness,
@@ -82,6 +84,7 @@ __all__ = [
     "ChannelNotInCampaignError",
     "assign_account_to_campaign",
     "claim_comment",
+    "clear_pair_banned",
     "count_account_channel_comments_since",
     "count_account_comments_since",
     "count_by_outcome",
@@ -117,6 +120,7 @@ __all__ = [
     "mark_comment_posted",
     "mark_comments_deleted",
     "mark_human_skipped",
+    "mark_pair_banned",
     "reclaim_stale_claims",
     "remove_account_from_campaign",
     "resolve_pending_outcome",

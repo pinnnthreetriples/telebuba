@@ -12,7 +12,7 @@ import type { LogEntry } from '@/shared/api';
 // An unmatched code falls back to the level-derived status, so ERROR rows stay red.
 type LogSeverity = 'success' | 'warning' | 'error';
 
-const FAILURE = /(_failed|_exhausted|_crashed|_dropped|_overloaded|_deleted)$/;
+const FAILURE = /(_failed|_exhausted|_crashed|_dropped|_overloaded|_deleted|_banned)$/;
 const SOFT =
   /(_skipped|_gated|_cooled|_cooldown|_backoff|_reclaimed|no_account_available|no_campaign|retry_later)$/;
 

@@ -17,7 +17,10 @@ from core.db import (
     configure_database,
     create_account,
     create_campaign,
+    fetch_readiness,
     link_channel_to_campaign,
+    mark_pair_banned,
+    upsert_readiness,
 )
 from core.logging import reset_logging_for_tests, setup_logging
 from core.repositories.neurocomment import set_campaign_account_channels
@@ -120,6 +123,41 @@ async def test_probe_error_is_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert result is not None
     assert _status_of(result.items, "@a") == "unknown"
+
+
+@pytest.mark.asyncio
+async def test_can_send_probe_clears_a_sticky_ban(monkeypatch: pytest.MonkeyPatch) -> None:
+    """#30 recovery: 'Проверить каналы' lifts the auto-ban when the account can send again."""
+    cid = await _seed(["@a"], ["acc-1"])
+    await upsert_readiness("acc-1", "@a", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@a")
+    _patch_seam(monkeypatch, {("acc-1", "@a"): "can_send"})
+
+    result = await check_campaign_channel_bans(cid)
+
+    assert result is not None
+    assert _status_of(result.items, "@a") == "ok"
+    readiness = await fetch_readiness("acc-1", "@a")
+    assert readiness is not None
+    assert readiness.banned is False  # the ban was lifted
+    assert readiness.ready is True
+
+
+@pytest.mark.asyncio
+async def test_still_banned_probe_keeps_the_ban(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A restricted probe must NOT clear the ban — only a can_send verdict does."""
+    cid = await _seed(["@a"], ["acc-1"])
+    await upsert_readiness("acc-1", "@a", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@a")
+    _patch_seam(monkeypatch, {("acc-1", "@a"): "restricted"})
+
+    result = await check_campaign_channel_bans(cid)
+
+    assert result is not None
+    assert _status_of(result.items, "@a") == "banned"
+    readiness = await fetch_readiness("acc-1", "@a")
+    assert readiness is not None
+    assert readiness.banned is True
 
 
 @pytest.mark.asyncio

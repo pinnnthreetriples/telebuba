@@ -181,6 +181,34 @@ async def _dispatch_get_linked_group(
     )
 
 
+async def _resolve_linked_group_entity(client: TelegramClient, channel: str) -> object | None:
+    """Resolve ``channel``'s linked discussion-group entity, or ``None`` if there is none.
+
+    The ban and deletion probes both act on the linked group — comments live there,
+    not on the broadcast channel. ``GetFullChannelRequest`` carries the bare
+    ``linked_chat_id`` and *usually* the resolved ``Channel`` in ``chats`` (with
+    access_hash), but Telegram omits that entity for some channels, so we fall back to
+    ``get_input_entity`` off the warm session cache (the account joined the group at
+    onboarding — same idiom as ``_read_challenge``). ``None`` means no linked group /
+    comments disabled / the id couldn't be resolved.
+    """
+    full = await client(GetFullChannelRequest(channel=channel))  # ty: ignore[invalid-argument-type]
+    linked = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
+    if linked is None:
+        return None
+    linked_id = int(linked)
+    entity = next(
+        (chat for chat in getattr(full, "chats", []) if int(getattr(chat, "id", 0)) == linked_id),
+        None,
+    )
+    if entity is not None:
+        return entity
+    try:
+        return await client.get_input_entity(linked_id)
+    except (ValueError, errors.RPCError):
+        return None
+
+
 async def _dispatch_check_messages_alive(
     client: TelegramClient,
     action: CheckMessagesAlive,
@@ -188,22 +216,10 @@ async def _dispatch_check_messages_alive(
     """Re-read ``message_ids`` in ``channel``'s linked discussion group; ``None`` → gone.
 
     Comments are posted via ``comment_to``, so they live in the channel's linked
-    discussion group, not the broadcast channel. Resolve that group from
-    ``GetFullChannelRequest`` (mirrors ``_dispatch_join_discussion_group``: the
-    bare ``linked_chat_id`` has no access_hash, so we take the resolved entity
-    from ``chats``) and batch-read the ids. ``get_messages`` yields ``None`` for a
-    message that was deleted or is no longer visible. Comments disabled or the
-    group unresolved → we cannot verify, so report nothing missing.
+    discussion group. ``get_messages`` yields ``None`` for a message that was deleted
+    or is no longer visible. Group unresolvable → we cannot verify, report nothing missing.
     """
-    full = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-    linked = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
-    if linked is None:
-        return CheckMessagesAliveResult(missing_ids=[])
-    linked_id = int(linked)
-    entity = next(
-        (chat for chat in getattr(full, "chats", []) if int(getattr(chat, "id", 0)) == linked_id),
-        None,
-    )
+    entity = await _resolve_linked_group_entity(client, action.channel)
     if entity is None:
         return CheckMessagesAliveResult(missing_ids=[])
     # get_messages(ids=[...]) returns a list aligned to ids (None where a message is
@@ -240,21 +256,13 @@ async def _dispatch_check_banned(
 ) -> BanCheckResult:
     """Probe whether the account is banned/write-forbidden in ``channel``.
 
-    Resolve the linked discussion group like ``_dispatch_check_messages_alive``
-    (the ban lives in the group, not the broadcast channel), then read the
-    account's own participant state via ``GetParticipantRequest`` — a pure read,
-    no message is sent. Not a participant → kicked/never-joined (``not_member``);
-    no linked group / comments off → ``comments_disabled``.
+    Resolve the linked discussion group (the ban lives in the group, not the
+    broadcast channel), then read the account's own participant state via
+    ``GetParticipantRequest`` — a pure read, no message is sent. Not a participant →
+    kicked/never-joined (``not_member``); no linked group / comments off / group
+    unresolvable → ``comments_disabled``.
     """
-    full = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-    linked = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
-    if linked is None:
-        return BanCheckResult(state="comments_disabled")
-    linked_id = int(linked)
-    entity = next(
-        (chat for chat in getattr(full, "chats", []) if int(getattr(chat, "id", 0)) == linked_id),
-        None,
-    )
+    entity = await _resolve_linked_group_entity(client, action.channel)
     if entity is None:
         return BanCheckResult(state="comments_disabled")
     try:

@@ -220,6 +220,9 @@ class NeurocommentReadiness(BaseModel):
     checked_at: str = Field(min_length=1)
     # Operator skip (#148): the engine never selects a human-skipped pair.
     human_skipped: bool = False
+    # Auto-detected hard ban (#30): the account hit UserBannedInChannelError posting
+    # here. Sticky — the engine never selects it and a re-onboard won't clear it.
+    banned: bool = False
 
 
 class ReadinessList(BaseModel):
@@ -280,6 +283,7 @@ OnboardingState = Literal[
     "bot_challenge_backoff",
     "joining",
     "human_skipped",
+    "banned",
     "failed",
 ]
 
@@ -318,6 +322,8 @@ ChannelStatus = Literal[
     "join_by_request",
     "join_failed",
     "chat_restricted",
+    # every serving account is auto-banned here (#30) and none can currently comment
+    "banned",
     "bot_challenge",
     "bot_challenge_backoff",
     "throttled",
