@@ -51,11 +51,9 @@ from schemas.telegram_actions import (
 from services.neurocomment import _seams, _state, challenge
 from services.neurocomment._onboard_channel import OnboardContext, onboard_channel
 
-# Join succeeded but writes are Telegram-blocked → chat_restricted (Ф2 #120):
-# unsolvable by the challenge solver. The set is small and intentional.
+# Writes Telegram-blocked at join → chat_restricted (Ф2 #120); solver can't clear it.
 _GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
-# A hard ban at join time → sticky ban (#30), same as a ban hit while commenting:
-# never retried, so onboarding stops re-joining the group every cycle.
+# A hard ban at join → sticky ban (#30), same as a ban hit while commenting (never retried).
 _BAN_ERROR = "UserBannedInChannelError"
 # Rate-limit families: never terminal, retry later, must return promptly.
 _RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
@@ -106,27 +104,14 @@ async def _join_and_classify(
     join, no solver — until its cooldown expires; the board renders it
     ``bot_challenge_backoff`` from the in-memory back-off state.
 
-    An operator-skipped pair (#148) is also left alone: re-joining it would run the
-    solver and flip readiness back to ready, silently undoing the skip. The operator
-    un-skips via ``retry_pair`` (which clears the readiness row first).
-
-    An auto-banned pair (#30) is likewise left alone — re-joining would flip it back to
-    ready and the engine would keep hitting the ban. It is cleared by a can_send probe
-    ("Проверить каналы") or ``retry_pair``.
+    An operator-skipped pair (#148) or an auto-banned pair (#30) is left alone:
+    re-joining would run the solver and flip readiness back to ready, undoing the
+    skip / reviving the ban. Cleared via ``retry_pair`` (skip) or a can_send probe (ban).
     """
     existing = await fetch_readiness(account_id, channel)
-    if existing is not None and existing.human_skipped:
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="human_skipped",
-        )
-    if existing is not None and existing.banned:
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="banned",
-        )
+    if existing is not None and (existing.human_skipped or existing.banned):
+        state = "human_skipped" if existing.human_skipped else "banned"
+        return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
     if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
@@ -209,10 +194,7 @@ async def _classify_join(
             state="join_by_request",
         )
     if result.error_type == _BAN_ERROR:
-        # Hard ban detected at join → sticky ban (#30), mirroring the post path so the
-        # same Telegram error behaves the same everywhere. upsert first (the row may
-        # not exist yet on a first onboard), then flag banned so a re-onboard's
-        # ``existing.banned`` short-circuit stops re-joining the group.
+        # Hard ban at join → sticky ban (#30) so a re-onboard stops re-joining the group.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
         await mark_pair_banned(account_id, channel)
         return AccountChannelOnboarding(

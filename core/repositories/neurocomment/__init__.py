@@ -18,6 +18,7 @@ from core.repositories.neurocomment._accounts import (
     remove_account_from_campaign,
     set_campaign_account_channels,
 )
+from core.repositories.neurocomment._bans import clear_pair_banned, mark_pair_banned
 from core.repositories.neurocomment._campaigns import (
     ChannelAlreadyAssignedError,
     create_campaign,
@@ -43,7 +44,6 @@ from core.repositories.neurocomment._challenges import (
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
-    clear_pair_banned,
     delete_readiness,
     fetch_comment,
     fetch_linked_group,
@@ -56,7 +56,6 @@ from core.repositories.neurocomment._comments import (
     mark_comment_failed,
     mark_comment_posted,
     mark_human_skipped,
-    mark_pair_banned,
     reclaim_stale_claims,
     upsert_linked_group,
     upsert_readiness,
