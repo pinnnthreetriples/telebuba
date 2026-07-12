@@ -267,6 +267,17 @@ group→channel peer-mapping validation — can't smoke-test blind against the u
 live instance). Gates: full 1173 pytest green (strict), ruff+ty+aislop clean; frontend
 249 vitest + tsc+eslint+steiger green; client regenerated (`deleted_at`, `deleted_recent`).
 
+A 2026-07-12 CI fix (this branch): the **nightly mutation job had been red since
+2026-07-10** — it never tested a single mutant, dying at the baseline stats run
+because `tests/test_logevent_i18n_parity.py` reads `frontend/src/shared/i18n/*.json`
+but `[tool.mutmut].also_copy` didn't copy that path into the `mutants/` sandbox
+(FileNotFoundError → "failed to collect stats"). Added `frontend/src/shared/i18n`
+to `also_copy` and documented the contract (any test reading a repo file outside
+`services/`/`schemas/` must be added there). Verified by reading mutmut's
+`copy_also_copy_files` (dir → `copytree` into `mutants/`) + auditing all
+filesystem-reading tests; mutmut can't run natively on Windows (needs WSL), so the
+live proof is the ubuntu nightly.
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.
