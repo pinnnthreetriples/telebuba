@@ -305,7 +305,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-[20px] font-semibold text-white"
               style={
                 avatarUri
-                  ? { backgroundImage: `url(${avatarUri})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                  ? {
+                      backgroundImage: `url(${avatarUri})`,
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
+                    }
                   : undefined
               }
             >
