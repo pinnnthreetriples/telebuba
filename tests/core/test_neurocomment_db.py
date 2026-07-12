@@ -443,6 +443,24 @@ async def test_clear_pair_banned_restores_ready_only_for_a_banned_row() -> None:
 
 
 @pytest.mark.asyncio
+async def test_clear_pair_banned_keeps_ready_off_for_a_human_skipped_pair() -> None:
+    # ban → operator skip → can_send probe: the un-ban must not resurrect ready, or the
+    # board would show a skipped pair as "ready" while the engine still excludes it.
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@chan")
+    await mark_human_skipped("acc-1", "@chan")
+
+    await clear_pair_banned("acc-1", "@chan")
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.banned is False  # ban lifted
+    assert readiness.human_skipped is True  # ...but the operator skip survives
+    assert readiness.ready is False  # ...so the pair stays unselectable
+
+
+@pytest.mark.asyncio
 async def test_clear_pair_banned_is_a_noop_when_not_banned() -> None:
     await create_account(AccountCreate(account_id="acc-1"))
     await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)

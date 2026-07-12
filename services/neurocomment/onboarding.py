@@ -35,6 +35,7 @@ from core.db import (
     list_campaign_accounts,
     list_campaign_channels,
     list_campaign_readiness,
+    mark_pair_banned,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -50,11 +51,12 @@ from schemas.telegram_actions import (
 from services.neurocomment import _seams, _state, challenge
 from services.neurocomment._onboard_channel import OnboardContext, onboard_channel
 
-# Join failed because writes are Telegram-blocked → chat_restricted (Ф2 #120):
+# Join succeeded but writes are Telegram-blocked → chat_restricted (Ф2 #120):
 # unsolvable by the challenge solver. The set is small and intentional.
-_GATE_ERRORS = frozenset(
-    {"ChatGuestSendForbiddenError", "ChatWriteForbiddenError", "UserBannedInChannelError"},
-)
+_GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
+# A hard ban at join time → sticky ban (#30), same as a ban hit while commenting:
+# never retried, so onboarding stops re-joining the group every cycle.
+_BAN_ERROR = "UserBannedInChannelError"
 # Rate-limit families: never terminal, retry later, must return promptly.
 _RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
 
@@ -206,10 +208,22 @@ async def _classify_join(
             channel=channel,
             state="join_by_request",
         )
+    if result.error_type == _BAN_ERROR:
+        # Hard ban detected at join → sticky ban (#30), mirroring the post path so the
+        # same Telegram error behaves the same everywhere. upsert first (the row may
+        # not exist yet on a first onboard), then flag banned so a re-onboard's
+        # ``existing.banned`` short-circuit stops re-joining the group.
+        await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
+        await mark_pair_banned(account_id, channel)
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="banned",
+        )
     if result.error_type in _GATE_ERRORS:
-        # Telegram-level write block (mute / restrict / ban) → chat_restricted (Ф2
-        # #120). Unsolvable by the challenge solver, so it is never invoked here;
-        # joined stays True (we are a member) but ready is False.
+        # Telegram-level write block (mute / restrict) → chat_restricted (Ф2 #120).
+        # Unsolvable by the challenge solver, so it is never invoked here; joined stays
+        # True (we are a member) but ready is False.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
             account_id=account_id,
@@ -298,7 +312,7 @@ async def onboard_campaign(
     already_ready = {
         (r.account_id, r.channel)
         for r in (await list_campaign_readiness(campaign_id)).readiness
-        if r.ready and r.joined and r.captcha_passed and not r.human_skipped
+        if r.ready and r.joined and r.captcha_passed and not r.human_skipped and not r.banned
     }
 
     def report(event: OnboardingProgressEvent) -> None:

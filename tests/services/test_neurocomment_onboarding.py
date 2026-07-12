@@ -242,6 +242,25 @@ async def test_join_gate_error_maps_to_chat_restricted(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_join_time_ban_is_sticky(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A ban surfaced at join time is a sticky ban (#30), not a retryable chat_restricted."""
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    read = _ReadStub(linked_chat_id=88, comments_enabled=True)
+    join = _JoinStub()
+    join.set("@banned", status="failed", error_type="UserBannedInChannelError")
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+
+    outcome = await onboarding.onboard_account_channel("acc-1", "@banned")
+
+    assert outcome.state == "banned"
+    readiness = await fetch_readiness("acc-1", "@banned")
+    assert readiness is not None
+    assert readiness.banned is True  # sticky → a re-onboard won't re-join
+    assert readiness.ready is False
+
+
+@pytest.mark.asyncio
 async def test_successful_join_without_challenge_is_ready(monkeypatch: pytest.MonkeyPatch) -> None:
     """Ф2 #145: an ok join with no challenge in the wait window → ``ready``."""
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))

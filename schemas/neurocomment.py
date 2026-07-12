@@ -322,7 +322,7 @@ ChannelStatus = Literal[
     "join_by_request",
     "join_failed",
     "chat_restricted",
-    # every serving account is auto-banned here (#30) and none can currently comment
+    # no account is ready here and at least one is auto-banned (#30)
     "banned",
     "bot_challenge",
     "bot_challenge_backoff",

@@ -205,7 +205,7 @@ async def _resolve_linked_group_entity(client: TelegramClient, channel: str) -> 
         return entity
     try:
         return await client.get_input_entity(linked_id)
-    except (ValueError, errors.RPCError):
+    except (ValueError, TypeError, errors.RPCError):
         return None
 
 

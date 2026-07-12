@@ -53,7 +53,7 @@ if TYPE_CHECKING:
 
 # One lock per account serialises its [re-read quota → claim] section so a burst of
 # concurrent events for the same account can't each read an under-cap count and all
-# claim (the bulk select->claim gap is otherwise racy — see _under_quota). Single
+# claim (the bulk select->claim gap is otherwise racy — see _quota_block_reason). Single
 # loop + single worker, so a plain dict needs no lock to grow (asyncio.Lock binds to
 # the running loop; tests clear this between cases).
 _ACCOUNT_LOCKS: dict[str, asyncio.Lock] = {}

@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import case, delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -223,7 +223,15 @@ def _clear_pair_banned(account_id: str, channel: str) -> None:
                 # pair must not spuriously flip its readiness.
                 & (_neurocomment_readiness.c.banned == 1),
             )
-            .values(banned=0, ready=1, checked_at=_now_iso()),
+            .values(
+                banned=0,
+                # A can_send probe restores selectability — UNLESS the operator also
+                # skipped this pair, in which case the skip outlives the un-ban
+                # (ready stays 0, or the board would show it "ready" while the engine
+                # still excludes it — see human_skipped filter in engine._load_selection_pool).
+                ready=case((_neurocomment_readiness.c.human_skipped == 1, 0), else_=1),
+                checked_at=_now_iso(),
+            ),
         )
 
 
