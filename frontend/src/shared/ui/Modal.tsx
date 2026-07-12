@@ -5,6 +5,11 @@ import { createPortal } from 'react-dom';
 const FOCUSABLE =
   'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
 
+// Mount order of open modals. Every Modal listens for Escape on `document`, so
+// without this a nested dialog's Escape would also close its parent — only the
+// topmost (last-registered) modal should handle it.
+const modalStack: object[] = [];
+
 // The design's modal shell: a fixed dimmed backdrop (ovfade) centering a white
 // card (fadeup). Backdrop-click and Escape close; the card stops propagation.
 // z and backdrop opacity match the design's per-modal values. Focus moves into
@@ -24,10 +29,24 @@ export function Modal({
   backdrop?: number;
 }) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const idRef = useRef<object>({});
+
+  // Register in the modal stack for the lifetime of this dialog (mount/unmount
+  // only) so the Escape handler can tell whether it is the topmost one.
+  useEffect(() => {
+    const id = idRef.current;
+    modalStack.push(id);
+    return () => {
+      const index = modalStack.indexOf(id);
+      if (index !== -1) modalStack.splice(index, 1);
+    };
+  }, []);
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') onClose();
+      if (event.key === 'Escape' && modalStack[modalStack.length - 1] === idRef.current) {
+        onClose();
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => {

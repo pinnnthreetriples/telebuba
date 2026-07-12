@@ -25,6 +25,25 @@ test('backdrop click closes, card click does not, Escape closes', async () => {
   expect(onClose).toHaveBeenCalledTimes(2);
 });
 
+test('Escape only closes the topmost modal, not the parent underneath it', async () => {
+  const onCloseParent = vi.fn();
+  const onCloseChild = vi.fn();
+  render(
+    <>
+      <Modal onClose={onCloseParent} z={70}>
+        <div>родитель</div>
+      </Modal>
+      <Modal onClose={onCloseChild} z={80}>
+        <div>потомок</div>
+      </Modal>
+    </>,
+  );
+  await userEvent.keyboard('{Escape}');
+  // Only the last-mounted (topmost) modal handles the key.
+  expect(onCloseChild).toHaveBeenCalledTimes(1);
+  expect(onCloseParent).not.toHaveBeenCalled();
+});
+
 test('focuses the dialog on open and restores focus to the opener on close', () => {
   const opener = document.createElement('button');
   document.body.appendChild(opener);

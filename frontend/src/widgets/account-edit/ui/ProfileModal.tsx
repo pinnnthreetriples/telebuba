@@ -140,6 +140,13 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const photos = snapshot.data?.photos ?? [];
   const stories = snapshot.data?.stories ?? [];
   const music = snapshot.data?.music ?? [];
+  // A transport failure (snapshot.isError) or a Telegram refusal (200 carrying
+  // `error`) must show an explicit error + retry — otherwise the media tabs
+  // render empty and read as "this account has no photos/stories/music".
+  const loadError = snapshot.isError || Boolean(snapshot.data?.error);
+  // Older Telethon builds lack the saved-music TL methods; the snapshot flags
+  // that so the UI shows an "unsupported" note instead of a picker that fails.
+  const musicSupported = snapshot.data?.music_supported !== false;
   // Scoped: this account's snapshot + the accounts table (name/username/avatar
   // show in the list) — not the whole cache.
   const refresh = () => {
@@ -185,6 +192,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         },
         {
           onSuccess: () => {
+            // Reset the baseline to the just-saved values so the form is no
+            // longer "dirty" — otherwise closing afterwards wrongly prompts
+            // "discard unsaved edits?" even though everything was saved.
+            form.reset(value);
             setSaved(true);
             window.setTimeout(() => {
               setSaved(false);
@@ -196,6 +207,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     },
   });
   const canSave = useStore(form.store, (state) => state.canSubmit);
+  const isDirty = useStore(form.store, (state) => state.isDirty);
 
   // Seed the text fields from a successfully-pulled live profile ('' for unset
   // fields), without marking the form dirty. first_name can't be empty on
@@ -256,6 +268,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const liveFirst = snapshot.data?.first_name ?? account.first_name;
   const liveLast = snapshot.data?.last_name ?? account.last_name;
   const liveUser = snapshot.data?.username ?? account.username;
+  const avatarUri = snapshot.data?.avatar_data_uri;
   const initial = (liveFirst ?? account.phone ?? account.account_id).trim().charAt(0).toUpperCase();
   const fullName =
     [liveFirst, liveLast].filter(Boolean).join(' ') || (account.phone ?? account.account_id);
@@ -286,8 +299,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         <div className="flex max-h-[88vh] flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-[14px] border-b border-[#f0eeeb] px-5 py-[18px]">
-            <div className="flex h-[52px] w-[52px] shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-[20px] font-semibold text-white">
-              {initial}
+            <div
+              className="flex h-[52px] w-[52px] shrink-0 items-center justify-center overflow-hidden rounded-full bg-gradient-to-br from-[#7c9cff] to-[#a0e0c0] text-[20px] font-semibold text-white"
+              style={
+                avatarUri
+                  ? { backgroundImage: `url(${avatarUri})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+                  : undefined
+              }
+            >
+              {avatarUri ? '' : initial}
             </div>
             <div className="min-w-0 flex-1">
               <div className="truncate text-[16px] font-bold">{fullName}</div>
@@ -396,6 +416,21 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
           {/* content */}
           <div className="tb-scroll flex-1 overflow-y-auto p-5">
+            {loadError && (
+              <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
+                <span>{t('accounts.profile.loadError')}</span>
+                <button
+                  type="button"
+                  disabled={refreshState === 'loading'}
+                  onClick={() => {
+                    void onRefresh();
+                  }}
+                  className="shrink-0 rounded-full border border-[#f0c9c5] bg-white px-3 py-[4px] text-[12px] font-medium disabled:opacity-60"
+                >
+                  {t('accounts.profile.refresh')}
+                </button>
+              </div>
+            )}
             {tab === 'text' && (
               <div className="flex flex-col gap-[14px]">
                 <div className="grid grid-cols-2 gap-3">
@@ -621,7 +656,13 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               </div>
             )}
 
-            {tab === 'music' && (
+            {tab === 'music' && !musicSupported && (
+              <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
+                {t('accounts.profile.musicUnsupported')}
+              </div>
+            )}
+
+            {tab === 'music' && musicSupported && (
               <div>
                 {music.length > 0 ? (
                   <div className="flex flex-col gap-2">
@@ -702,7 +743,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               onClick={() => {
                 void form.handleSubmit();
               }}
-              disabled={updateProfile.isPending || !canSave}
+              disabled={updateProfile.isPending || !canSave || !isDirty}
               className={`rounded-full px-[22px] py-[9px] text-[13px] font-medium text-white transition-colors disabled:opacity-60 ${saved ? 'bg-[#2e9e64]' : 'bg-primary'}`}
             >
               {updateProfile.isPending ? (
