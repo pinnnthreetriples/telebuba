@@ -95,6 +95,15 @@ only when it did, and `stories` was added to `_loop._PROGRESS_STEPS` (between
 `react` and `send_dm`). `set_online`/`join`→subscribe and the gated, rare
 `send_dm` folds onto its neighbour (`stories`). +2 backend tests / +6 Vitest.
 
+A 2026-07-13 operator-reported UI fix (PR open): a freshly-queued account showed a
+blinking «Подписка на каналы» during the cold-start wait (up to
+`cold_start_spread_hours` ~24h before the first cycle), implying work that wasn't
+happening. The loop now persists the computed first-run time to `next_run_at`
+(new `_persist_cold_start_schedule`, generation-CAS guarded → a restart resumes the
+same wait), and the card detects the pre-start hold (`active` + `cycles_completed==0`
++ no `last_action`) to show «Выдержка перед стартом» + the real live countdown, with
+the step rail idle until the first action lands. +2 backend / +1 Vitest.
+
 A 2026-07-11 feature added **phone-number authentication as a third add-account
 method** (branch `phone-authentication`). The phone-code gateway/service/cache
 (`_auth.py`, `services/accounts/login.py`, `_login_state.py`) and the

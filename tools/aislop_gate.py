@@ -25,6 +25,12 @@ _EXCLUDED_PREFIXES = ("frontend/",)
 # hallucinated-import check can't map: argon2-cffi -> argon2, PyJWT -> jwt.
 # Both are declared in pyproject.toml; only the names differ.
 _KNOWN_IMPORT_ALIASES = ("argon2", "jwt")
+# Vulnerable-dependency findings that are unfixable here and accepted as such.
+# ``click`` (PYSEC-2026-2132, < 8.3.3) can't be bumped while semgrep pins
+# ``click~=8.1.8`` (< 8.2); it's dev-tooling / uvicorn-CLI only, not a runtime
+# request path. Mirrors the pip-audit ``--ignore-vuln`` in ci.yml; drop both once
+# semgrep loosens its click pin.
+_ACCEPTED_VULN_DEPS = ("click",)
 
 
 def _is_known_import_alias(item: dict[str, object]) -> bool:
@@ -32,6 +38,13 @@ def _is_known_import_alias(item: dict[str, object]) -> bool:
         return False
     message = str(item.get("message", ""))
     return any(f'"{name}"' in message for name in _KNOWN_IMPORT_ALIASES)
+
+
+def _is_accepted_vuln_dep(item: dict[str, object]) -> bool:
+    if item.get("rule") != "security/vulnerable-dependency":
+        return False
+    message = str(item.get("message", ""))
+    return any(message.rstrip().endswith(f": {name}") for name in _ACCEPTED_VULN_DEPS)
 
 
 def main() -> int:
@@ -72,6 +85,7 @@ def main() -> int:
         for item in report.get("diagnostics", [])
         if not str(item.get("filePath", "")).replace("\\", "/").startswith(_EXCLUDED_PREFIXES)
         and not _is_known_import_alias(item)
+        and not _is_accepted_vuln_dep(item)
     ]
     for item in diagnostics:
         sys.stdout.write(

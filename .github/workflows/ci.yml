@@ -126,7 +126,11 @@ jobs:
         run: uv sync --frozen
 
       - name: Run pip-audit
-        run: uv run pip-audit --strict
+        # PYSEC-2026-2132 (click < 8.3.3) is unfixable here: semgrep pins
+        # ``click~=8.1.8`` (< 8.2), so click cannot be bumped while semgrep is a
+        # dev dependency. click is dev-tooling / uvicorn-CLI only, not a runtime
+        # request path. Drop this ignore once semgrep loosens its click pin.
+        run: uv run pip-audit --strict --ignore-vuln PYSEC-2026-2132
 
   # ---------------------------------------------------------------------------
   # SAST scan on every PR and push, so the security gate fires before merge

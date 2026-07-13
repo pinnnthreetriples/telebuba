@@ -2849,6 +2849,43 @@ async def test_initial_delay_cold_start_spans_full_day(monkeypatch: pytest.Monke
     assert all(0 <= d <= span for d in delays)
 
 
+@pytest.mark.asyncio
+async def test_cold_start_schedule_persists_first_run() -> None:
+    # The pre-start hold must write the computed first-cycle time so the card can
+    # show a real countdown (instead of a blinking "subscribe" with no target).
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
+    )
+    record = await fetch_warming_state("acc-1")
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+
+    await _runner._persist_cold_start_schedule("acc-1", record, 3600.0, now, "run-a")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.next_run_at == (now + timedelta(seconds=3600)).isoformat()
+    assert state.last_action is None  # still a hold, not mid-cycle
+
+
+@pytest.mark.asyncio
+async def test_cold_start_schedule_noop_when_already_scheduled() -> None:
+    # A restart that already has a future schedule must not be re-rolled.
+    await create_account(AccountCreate(account_id="acc-1"))
+    scheduled = (datetime(2026, 6, 12, 12, 0, tzinfo=UTC) + timedelta(hours=5)).isoformat()
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", next_run_at=scheduled),
+    )
+    record = await fetch_warming_state("acc-1")
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+
+    await _runner._persist_cold_start_schedule("acc-1", record, 3600.0, now, None)
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.next_run_at == scheduled  # untouched
+
+
 def test_loop_sleep_respects_future_next_run() -> None:
     now = datetime(2026, 6, 12, 0, 0, tzinfo=UTC)
     record = WarmingStateRecord(

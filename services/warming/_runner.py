@@ -86,6 +86,32 @@ async def _initial_delay_seconds(
     return _seconds_until(candidate.isoformat(), now)
 
 
+async def _persist_cold_start_schedule(
+    account_id: str,
+    record: WarmingStateRecord | None,
+    delay: float,
+    now: datetime,
+    run_id: str | None,
+) -> None:
+    """Persist the first-cycle time so the card can show a real pre-start countdown.
+
+    A cold start (no persisted ``next_run_at``) otherwise waits up to
+    ``cold_start_spread_hours`` with the row's ``next_run_at`` still null, so the
+    board can't tell "waiting for the first cycle" apart from "mid-subscribe" and
+    shows no countdown. Writing the computed time here (guarded by the generation
+    CAS) fixes both, and lets a restart resume the same schedule instead of
+    re-rolling the wait.
+    """
+    if record is not None and record.next_run_at is not None:
+        return
+    await _set_state(
+        account_id,
+        "active",
+        next_run_at=(now + timedelta(seconds=delay)).isoformat(),
+        expected_run_id=run_id,
+    )
+
+
 async def _warming_loop(
     account_id: str,
     *,
@@ -110,7 +136,10 @@ async def _warming_loop(
         record = await fetch_warming_state(account_id)
         if not _is_live_generation(record, run_id):
             return
-        await asyncio.sleep(await _initial_delay_seconds(account_id, record, datetime.now(UTC)))
+        now = datetime.now(UTC)
+        delay = await _initial_delay_seconds(account_id, record, now)
+        await _persist_cold_start_schedule(account_id, record, delay, now, run_id)
+        await asyncio.sleep(delay)
         while True:
             record = await fetch_warming_state(account_id)
             if not _is_live_generation(record, run_id):
