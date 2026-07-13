@@ -163,6 +163,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       : t('accounts.profile.updatedMinAgo', { n: syncMins });
 
   const [tab, setTab] = useState<Tab>('text');
+  const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
+  const [dragOver, setDragOver] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
@@ -275,11 +277,31 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const fullName =
     [liveFirst, liveLast].filter(Boolean).join(' ') || (account.phone ?? account.account_id);
 
-  const onPhotoPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    setPhoto.mutate({ body: { account_id: account.account_id, file } }, { onSuccess: refresh });
+  // Bulk profile-photo upload. Sequential on purpose: each uploadProfilePhoto
+  // becomes the account's current avatar and Telegram orders the photo history
+  // by upload time, so parallel uploads on one session would race on ordering
+  // and invite FLOOD_WAIT. One-at-a-time keeps the pick order (last file ends
+  // up as the main avatar) and is gentle on the session. A rejected file is
+  // skipped — the global mutation-error toast reports it — so one bad image
+  // doesn't abort the batch. Snapshot refreshes once, after the batch.
+  const uploadPhotos = async (files: File[]) => {
+    if (!files.length) return;
+    setPhotoProgress({ done: 0, total: files.length });
+    for (const [index, file] of files.entries()) {
+      try {
+        await setPhoto.mutateAsync({ body: { account_id: account.account_id, file } });
+      } catch {
+        // reported by the global mutation-error toast; keep going
+      }
+      setPhotoProgress({ done: index + 1, total: files.length });
+    }
+    setPhotoProgress(null);
+    refresh();
+  };
+  const onPhotosPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
     event.target.value = '';
+    void uploadPhotos(Array.from(files ?? []));
   };
 
   const onMusicPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -487,7 +509,34 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             )}
 
             {tab === 'photo' && (
-              <div>
+              <div
+                onDragOver={(event) => {
+                  event.preventDefault();
+                  setDragOver(true);
+                }}
+                onDragLeave={(event) => {
+                  // Only clear on a real exit — hovering a child tile fires
+                  // dragleave on the container and would otherwise flicker.
+                  if (!event.currentTarget.contains(event.relatedTarget as Node))
+                    setDragOver(false);
+                }}
+                onDrop={(event) => {
+                  event.preventDefault();
+                  setDragOver(false);
+                  // Ignore a second drop while a batch is still uploading.
+                  if (photoProgress) return;
+                  const images = Array.from(event.dataTransfer.files).filter((file) =>
+                    file.type.startsWith('image/'),
+                  );
+                  void uploadPhotos(images);
+                }}
+                className={`relative rounded-[12px] border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
+              >
+                {dragOver && (
+                  <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[12px] bg-white/70 text-[13px] font-medium text-primary">
+                    {t('accounts.profile.dropPhotos')}
+                  </div>
+                )}
                 <div className="mb-3 text-[12px] text-ink-subtle">
                   {t('accounts.profile.photoHint')}
                 </div>
@@ -546,8 +595,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   ))}
                   <DashedAdd
                     ratio="1"
-                    label={t('accounts.profile.upload')}
-                    busy={setPhoto.isPending}
+                    label={
+                      photoProgress
+                        ? t('accounts.profile.uploadingCount', photoProgress)
+                        : t('accounts.profile.upload')
+                    }
+                    busy={Boolean(photoProgress)}
                     onClick={() => photoInput.current?.click()}
                   />
                 </div>
@@ -555,7 +608,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   ref={photoInput}
                   type="file"
                   accept="image/*"
-                  onChange={onPhotoPicked}
+                  multiple
+                  onChange={onPhotosPicked}
                   className="hidden"
                 />
               </div>

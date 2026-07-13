@@ -226,6 +226,8 @@
       "makeMain": "Сделать основным",
       "makingMain": "Назначаю…",
       "upload": "Загрузить",
+      "uploadingCount": "Загрузка {{done}}/{{total}}",
+      "dropPhotos": "Отпустите, чтобы загрузить",
       "storiesHint": "Текущие сторис аккаунта",
       "removeStory": "Удалить сторис",
       "removeStoryTitle": "Удалить сторис?",

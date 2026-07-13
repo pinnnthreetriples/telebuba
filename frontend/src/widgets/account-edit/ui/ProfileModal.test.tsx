@@ -114,6 +114,77 @@ test('photo tab uploads an avatar and removes a photo', async () => {
   });
 });
 
+test('the photo tab bulk-uploads every picked file', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+
+  const fileInput = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  expect(fileInput.multiple).toBe(true);
+  fireEvent.change(fileInput, {
+    target: {
+      files: [
+        new File(['a'], 'a.jpg', { type: 'image/jpeg' }),
+        new File(['b'], 'b.jpg', { type: 'image/jpeg' }),
+        new File(['c'], 'c.jpg', { type: 'image/jpeg' }),
+      ],
+    },
+  });
+  await waitFor(() => {
+    const uploads = vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => (input as Request).url.includes('/accounts/photo'));
+    expect(uploads).toHaveLength(3);
+  });
+});
+
+test('dropping image files on the photo tab uploads each one', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+
+  const dropZone = screen.getByText('Текущая фотография и история · перетащите для замены')
+    .parentElement as HTMLElement;
+  fireEvent.drop(dropZone, {
+    dataTransfer: {
+      files: [
+        new File(['a'], 'a.jpg', { type: 'image/jpeg' }),
+        new File(['b'], 'b.png', { type: 'image/png' }),
+      ],
+    },
+  });
+  await waitFor(() => {
+    const uploads = vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => (input as Request).url.includes('/accounts/photo'));
+    expect(uploads).toHaveLength(2);
+  });
+});
+
+test('dropping a mix of files uploads only the images', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+
+  const dropZone = screen.getByText('Текущая фотография и история · перетащите для замены')
+    .parentElement as HTMLElement;
+  fireEvent.drop(dropZone, {
+    dataTransfer: {
+      files: [
+        new File(['a'], 'a.jpg', { type: 'image/jpeg' }),
+        new File(['b'], 'notes.txt', { type: 'text/plain' }),
+      ],
+    },
+  });
+  await waitFor(() => {
+    expect(fired('/accounts/photo')).toBe(true);
+  });
+  const uploads = vi
+    .mocked(fetch)
+    .mock.calls.filter(([input]) => (input as Request).url.includes('/accounts/photo'));
+  expect(uploads).toHaveLength(1);
+});
+
 test('stories tab opens the add-story modal and removes a story', async () => {
   routeApi();
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
@@ -345,7 +416,8 @@ test('the upload tile is disabled while a photo upload is pending', async () => 
     target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] },
   });
   await waitFor(() => {
-    expect(screen.getByRole('button', { name: 'Загрузить' })).toBeDisabled();
+    // Mid-upload the tile shows sequential progress and is disabled.
+    expect(screen.getByRole('button', { name: 'Загрузка 0/1' })).toBeDisabled();
   });
   resolvePhoto(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
   await waitFor(() => {
