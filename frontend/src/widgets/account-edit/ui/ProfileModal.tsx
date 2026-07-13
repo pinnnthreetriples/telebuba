@@ -23,7 +23,7 @@ import type {
   ProfilePhotoView,
   ProfileStoryView,
 } from '@/shared/api';
-import { ConfirmModal, FieldError, FormField, Modal } from '@/shared/ui';
+import { ConfirmModal, FieldError, FormField, Modal, toastError } from '@/shared/ui';
 
 import { AddStoryModal } from './AddStoryModal';
 
@@ -57,6 +57,17 @@ const FIELD =
 const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 // Fallback tile background when a media item carries no thumbnail.
 const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
+// Client-side mirror of the backend photo gate (services/accounts/_uploads.py
+// suffix allowlist + settings.profile_media.photo_max_bytes default) so a
+// GIF/HEIC/oversized file is rejected up front instead of uploading fully and
+// failing with an untranslated 400.
+const PHOTO_SUFFIXES = ['.jpg', '.jpeg', '.png', '.webp'];
+const PHOTO_MAX_BYTES = 10_000_000;
+
+function isUploadablePhoto(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return file.size <= PHOTO_MAX_BYTES && PHOTO_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
 
 function DashedAdd({
   ratio,
@@ -140,6 +151,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // The post-action background re-pull is fire-and-forget; this drives the
   // content-body overlay so a media edit doesn't look frozen while it settles.
   const [syncing, setSyncing] = useState(false);
+  // A failed background re-pull rejects on the refresh:true query key, which
+  // loadError (watching the plain key) can't see — track it here so the banner
+  // shows instead of silently presenting a pre-mutation grid as current.
+  const [syncError, setSyncError] = useState(false);
   // Re-render every 30s so the "Обновлено N мин назад" label keeps advancing —
   // it's derived from Date.now() and would otherwise freeze on "только что".
   const [, setNowTick] = useState(0);
@@ -159,7 +174,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // A transport failure (snapshot.isError) or a Telegram refusal (200 carrying
   // `error`) must show an explicit error + retry — otherwise the media tabs
   // render empty and read as "this account has no photos/stories/music".
-  const loadError = snapshot.isError || Boolean(snapshot.data?.error);
+  const loadError = snapshot.isError || Boolean(snapshot.data?.error) || syncError;
   // Older Telethon builds lack the saved-music TL methods; the snapshot flags
   // that so the UI shows an "unsupported" note instead of a picker that fails.
   const musicSupported = snapshot.data?.music_supported !== false;
@@ -181,6 +196,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     void forcePull()
       .then((fresh) => {
         queryClient.setQueryData(snapOpts.queryKey, fresh);
+        setSyncError(false);
+      })
+      .catch(() => {
+        setSyncError(true);
       })
       .finally(() => {
         setSyncing(false);
@@ -288,6 +307,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     try {
       const fresh = await forcePull();
       queryClient.setQueryData(snapOpts.queryKey, fresh);
+      setSyncError(false);
       seedForm(fresh);
       // A 200 carrying an `error` field means Telegram refused the live pull —
       // that's a failed refresh, not a success.
@@ -328,15 +348,27 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // skipped — the global mutation-error toast reports it — so one bad image
   // doesn't abort the batch. Snapshot refreshes once, after the batch.
   const uploadPhotos = async (files: File[]) => {
-    if (!files.length) return;
-    setPhotoProgress({ done: 0, total: files.length });
-    for (const [index, file] of files.entries()) {
+    // Prefilter by the backend's own suffix/size gate: a file it would 400 is
+    // rejected here with a translated toast instead of uploading fully first.
+    const uploadable: File[] = [];
+    for (const file of files) {
+      if (isUploadablePhoto(file)) {
+        uploadable.push(file);
+      } else {
+        toastError(
+          t('accounts.profile.photoRejected', { name: file.name, mb: PHOTO_MAX_BYTES / 1_000_000 }),
+        );
+      }
+    }
+    if (!uploadable.length) return;
+    setPhotoProgress({ done: 0, total: uploadable.length });
+    for (const [index, file] of uploadable.entries()) {
       try {
         await setPhoto.mutateAsync({ body: { account_id: account.account_id, file } });
       } catch {
         // reported by the global mutation-error toast; keep going
       }
-      setPhotoProgress({ done: index + 1, total: files.length });
+      setPhotoProgress({ done: index + 1, total: uploadable.length });
     }
     setPhotoProgress(null);
     refresh();
@@ -355,7 +387,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     if (!file) return;
     addMusic.mutate(
       { path: { account_id: account.account_id }, body: { file } },
-      { onSuccess: refresh },
+      // Settled, not success: a failure has already invalidated the server-side
+      // snapshot cache, so the grid must re-pull either way or it keeps serving
+      // ids Telegram has since replaced.
+      { onSettled: refresh },
     );
     event.target.value = '';
   };
@@ -633,7 +668,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                                   file_reference: photo.file_reference,
                                 },
                               },
-                              { onSuccess: refresh },
+                              // Settled: make-main REPLACES the photo id on
+                              // Telegram; after a failure the old id may be
+                              // dead, so the grid must re-pull either way.
+                              { onSettled: refresh },
                             );
                           }}
                           className="mt-[6px] block w-full py-[2px] text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
@@ -653,7 +691,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 <input
                   ref={photoInput}
                   type="file"
-                  accept="image/*"
+                  accept={PHOTO_SUFFIXES.join(',')}
                   multiple
                   onChange={onPhotosPicked}
                   className="hidden"
@@ -731,7 +769,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                               path: { account_id: account.account_id },
                               body: { story_id: story.story_id, pinned: !story.is_pinned },
                             },
-                            { onSuccess: refresh },
+                            { onSettled: refresh },
                           );
                         }}
                         className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-[6px] px-[5px] py-[2px] text-center text-[9px] font-medium disabled:opacity-50 ${
@@ -903,7 +941,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   file_reference: confirmPhoto.file_reference,
                 },
               })
-              .then(refresh)
+              // finally, not then: a failed remove has already invalidated the
+              // server-side cache, so the grid must re-pull or it keeps dead
+              // ids; the rejection still propagates so the dialog stays open.
+              .finally(refresh)
           }
         />
       ) : null}
@@ -922,7 +963,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 path: { account_id: account.account_id },
                 body: { story_id: confirmStory.story_id },
               })
-              .then(refresh)
+              .finally(refresh)
           }
         />
       ) : null}
@@ -945,7 +986,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   file_reference: confirmMusic.file_reference ?? '',
                 },
               })
-              .then(refresh)
+              .finally(refresh)
           }
         />
       ) : null}
