@@ -1115,6 +1115,47 @@ async def test_set_account_main_profile_photo_executes_action_and_invalidates_ca
 
 
 @pytest.mark.asyncio
+async def test_set_account_main_profile_photo_invalidates_cache_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A FAILED «Сделать основным» must still drop the cached profile snapshot.
+
+    Regression (debug.log 2026-07-13 18:11:39): a failed promote kept the stale
+    snapshot alive, so the dialog kept offering photo ids that no longer existed
+    on the server and the operator re-clicked dead entries. Invalidate whether
+    the action succeeded or not — the next open re-reads live state.
+    """
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="set_main_profile_photo",
+            account_id=account_id,
+            error_type="RuntimeError",
+            error_message="Target profile photo is no longer in the account's history",
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    with pytest.raises(AccountActionError):
+        await set_account_main_profile_photo(
+            AccountProfilePhotoSetMain(
+                account_id="account-photo-main-failed",
+                photo_id=4242,
+                access_hash=7,
+                file_reference=b"\x01\x02",
+            ),
+        )
+
+    assert invalidated == ["account-photo-main-failed"]
+
+
+@pytest.mark.asyncio
 async def test_remove_account_story_executes_action_and_invalidates_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

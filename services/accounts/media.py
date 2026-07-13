@@ -219,8 +219,11 @@ async def set_account_main_profile_photo(data: AccountProfilePhotoSetMain) -> Ac
             file_reference=data.file_reference,
         ),
     )
-    raise_for_result(result)
+    # Invalidate BEFORE raising on failure: a failed promote can still have
+    # touched server state, and a kept-stale snapshot makes the operator
+    # re-click photo ids that no longer exist (log-proven 2026-07-13 18:11:39).
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_profile_photo_set_main",
