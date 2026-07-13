@@ -840,21 +840,26 @@ _FRESH_ACCESS_HASH = 99
 _FRESH_REFERENCE = b"\xaa\xbb"
 
 
-def _set_main_client(
+def _set_main_client(  # noqa: PLR0913 - keyword-only knobs for the make-main fake
     captured: list[object],
     *,
     target_id: int,
     updated_id: int,
     deleted_vector: list[int] | None = None,
     history_ids: list[int] | None = None,
+    history_ids_after: list[int] | None = None,
 ) -> object:
     """Fake client for the make-main flow: GetUserPhotos → updateProfilePhoto → delete.
 
-    ``history_ids`` seeds the fresh ``GetUserPhotos`` (default: just ``target_id``);
-    ``updated_id`` is the id ``updateProfilePhoto`` returns; ``deleted_vector`` is
-    what ``DeletePhotosRequest`` reports removed.
+    ``history_ids`` seeds the FIRST ``GetUserPhotos`` (default: just ``target_id``);
+    ``history_ids_after`` seeds the SECOND one — the post-promote re-resolve used
+    to delete the leftover original (defaults to ``history_ids``). ``updated_id``
+    is the id ``updateProfilePhoto`` returns; ``deleted_vector`` is what
+    ``DeletePhotosRequest`` reports removed.
     """
     ids = history_ids if history_ids is not None else [target_id]
+    ids_after = history_ids_after if history_ids_after is not None else ids
+    calls = {"get_user_photos": 0}
 
     class FakeClient:
         async def connect(self) -> None:
@@ -863,13 +868,15 @@ def _set_main_client(
         async def __call__(self, request: object) -> object:
             captured.append(request)
             if isinstance(request, GetUserPhotosRequest):
+                calls["get_user_photos"] += 1
+                seed = ids if calls["get_user_photos"] == 1 else ids_after
                 photos = [
                     SimpleNamespace(
                         id=pid,
                         access_hash=_FRESH_ACCESS_HASH,
                         file_reference=_FRESH_REFERENCE,
                     )
-                    for pid in ids
+                    for pid in seed
                 ]
                 return SimpleNamespace(photos=photos)
             if isinstance(request, DeletePhotosRequest):
@@ -906,8 +913,9 @@ async def test_execute_set_main_photo_promotes_then_deletes_stale_duplicate(
     )
 
     assert result.status == "ok"
-    # A fresh GetUserPhotos is pulled to re-resolve the target.
-    assert len([req for req in captured if isinstance(req, GetUserPhotosRequest)]) == 1
+    # Two fresh GetUserPhotos: one to re-resolve the target before promoting,
+    # one after (the promote rotates file_references) to delete the leftover.
+    assert len([req for req in captured if isinstance(req, GetUserPhotosRequest)]) == 2
     updates = [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]
     assert len(updates) == 1
     sent = updates[0].id
@@ -936,6 +944,37 @@ async def test_execute_set_main_photo_skips_delete_when_reordered_in_place(
     _patch_client(
         monkeypatch,
         _set_main_client(captured, target_id=4242, updated_id=4242),
+    )
+
+    result = await execute(
+        "acc-photo-main",
+        SetMainProfilePhoto(photo_id=4242, access_hash=7, file_reference=b"\x01\x02"),
+    )
+
+    assert result.status == "ok"
+    assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
+    assert len([req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]) == 1
+
+
+@pytest.mark.asyncio
+async def test_execute_set_main_photo_skips_delete_when_no_leftover(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Minted a new id, but the original is gone post-promote → moved, not duplicated.
+
+    Telegram consumed the original rather than leaving a copy, so there is
+    nothing to clean up: no ``DeletePhotos`` fires and the action still succeeds.
+    """
+    captured: list[object] = []
+    _patch_client(
+        monkeypatch,
+        _set_main_client(
+            captured,
+            target_id=4242,
+            updated_id=555,
+            history_ids=[4242],  # present before the promote
+            history_ids_after=[555],  # gone after — only the new photo remains
+        ),
     )
 
     result = await execute(
