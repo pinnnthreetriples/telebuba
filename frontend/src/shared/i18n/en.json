@@ -496,6 +496,7 @@
     "telegram_pool_disconnect_failed": "Failed to disconnect from Telegram",
     "telegram_pool_rebuild_hook_failed": "Failed to rebuild connections",
     "telegram_list_profile_music_unsupported": "Profile music not supported",
+    "telegram_set_main_id_flow": "Main photo promotion id flow",
     "account_added": "Account added",
     "account_removed": "Account removed",
     "account_remove_stop_warming_failed": "Failed to stop warming on removal",

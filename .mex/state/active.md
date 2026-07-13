@@ -127,6 +127,20 @@ normal 5-8→10-16, active 10-14→20-28 (config + `.env.example` + the picker h
 ru/en). Mature accounts run ~2× the daily cycles with ~half the inter-cycle pause; the
 age/phase safety cap (`min(persona, phase)`) still throttles young accounts unchanged.
 
+A 2026-07-13 data-loss fix (PR open, do not merge unattended): «Сделать основным»
+(`_set_main_profile_photo`) **no longer deletes anything, ever**. Live debug.log
+evidence + official-client research established the true `photos.updateProfilePhoto`
+semantics: promoting a history photo REPLACES it — the original id is consumed and a
+new id minted at the front (TDLib/tdesktop do an old→new id swap; neither calls
+`photos.deletePhotos`). Post-promote `GetUserPhotos` reads can still list the consumed
+id (replication lag), and the old "dedup" delete issued against that stale view —
+own-profile deletes resolve by id alone — destroyed the account's previous main
+avatar. The delete block is gone; the action now logs `telegram_set_main_id_flow`
+(phase before/after, target/history/current-avatar/promoted ids) as the live
+acceptance instrument, and `set_account_main_profile_photo` invalidates the profile
+cache even on failure so the dialog stops offering dead photo ids. Tests remodelled
+to REPLACE semantics + a never-deletes regression on a lagged read.
+
 A 2026-07-11 feature added **phone-number authentication as a third add-account
 method** (branch `phone-authentication`). The phone-code gateway/service/cache
 (`_auth.py`, `services/accounts/login.py`, `_login_state.py`) and the

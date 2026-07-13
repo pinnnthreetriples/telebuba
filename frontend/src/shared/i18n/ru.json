@@ -497,6 +497,7 @@
     "telegram_pool_disconnect_failed": "Ошибка отключения от Telegram",
     "telegram_pool_rebuild_hook_failed": "Ошибка пересборки подключений",
     "telegram_list_profile_music_unsupported": "Музыка профиля не поддерживается",
+    "telegram_set_main_id_flow": "Смена основного фото: поток id",
     "account_added": "Аккаунт добавлен",
     "account_removed": "Аккаунт удалён",
     "account_remove_stop_warming_failed": "Не удалось остановить прогрев при удалении",
