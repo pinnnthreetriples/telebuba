@@ -440,11 +440,14 @@ test('the upload tile is disabled while a photo upload is pending', async () => 
     target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] },
   });
   await waitFor(() => {
-    // Mid-upload the tile shows sequential progress and is disabled.
-    expect(screen.getByRole('button', { name: 'Загрузка 0/1' })).toBeDisabled();
+    // Mid-upload the content overlay is shown and the upload tile is disabled.
+    expect(screen.getByRole('status')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Загрузить' })).toBeDisabled();
   });
   resolvePhoto(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
   await waitFor(() => {
+    // Once the batch and its background sync settle, the overlay clears.
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Загрузить' })).toBeEnabled();
   });
 });
@@ -683,6 +686,55 @@ test('make-main refetches via the forced-refresh path (not the TTL cache)', asyn
       .mocked(fetch)
       .mock.calls.some(([input]) => (input as Request).url.includes('refresh=true'));
     expect(forced).toBe(true);
+  });
+});
+
+test('the content overlay appears during the post-action sync and clears when it settles', async () => {
+  const twoPhotos = {
+    ...VIEW,
+    photos: [
+      {
+        photo_id: '111',
+        access_hash: '222',
+        file_reference: 'YWJj',
+        thumb_url: null,
+        is_main: true,
+      },
+      {
+        photo_id: '333',
+        access_hash: '444',
+        file_reference: 'ZmZm',
+        thumb_url: null,
+        is_main: false,
+      },
+    ],
+  };
+  let resolveRefresh!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      // Hold the forced re-pull so the in-flight overlay is observable.
+      if (url.searchParams.get('refresh') === 'true') {
+        return new Promise((resolve) => {
+          resolveRefresh = resolve;
+        });
+      }
+      return Promise.resolve(jsonResponse(twoPhotos));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+  await userEvent.click(await screen.findByText('Сделать основным', { selector: 'button' }));
+
+  // The background re-pull is in flight → the content overlay is shown.
+  await waitFor(() => {
+    expect(screen.getByRole('status')).toBeInTheDocument();
+  });
+  // Settling the pull clears the overlay.
+  resolveRefresh(jsonResponse(twoPhotos));
+  await waitFor(() => {
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
 });
 

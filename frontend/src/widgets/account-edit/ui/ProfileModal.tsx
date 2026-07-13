@@ -63,16 +63,18 @@ function DashedAdd({
   label,
   onClick,
   busy = false,
+  disabled = false,
 }: {
   ratio: string;
   label: string;
   onClick: () => void;
   busy?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={onClick}
       style={{ aspectRatio: ratio }}
       className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted disabled:opacity-60"
@@ -135,6 +137,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const snapshot = useQuery(snapOpts);
   // «Обновить» outcome: spin while loading, then flash a green ✓ / red ✗.
   const [refreshState, setRefreshState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  // The post-action background re-pull is fire-and-forget; this drives the
+  // content-body overlay so a media edit doesn't look frozen while it settles.
+  const [syncing, setSyncing] = useState(false);
   // Re-render every 30s so the "Обновлено N мин назад" label keeps advancing —
   // it's derived from Date.now() and would otherwise freeze on "только что".
   const [, setNowTick] = useState(0);
@@ -172,9 +177,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // Scoped: this account's snapshot + the accounts table (name/username/avatar
   // show in the list) — not the whole cache.
   const refresh = () => {
-    void forcePull().then((fresh) => {
-      queryClient.setQueryData(snapOpts.queryKey, fresh);
-    });
+    setSyncing(true);
+    void forcePull()
+      .then((fresh) => {
+        queryClient.setQueryData(snapOpts.queryKey, fresh);
+      })
+      .finally(() => {
+        setSyncing(false);
+      });
     void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
   };
   // "Обновлено {только что | N мин назад}" — from the snapshot query's last fetch.
@@ -194,6 +204,19 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
   const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
   const [confirmMusic, setConfirmMusic] = useState<ProfileMusicView | null>(null);
+
+  // A single "media in flight" flag: any photo/story/music write plus the
+  // post-action background sync. Drives the content-body overlay and disables
+  // the media controls. Excludes the text Save (footer has its own spinner).
+  const busy =
+    syncing ||
+    Boolean(photoProgress) ||
+    setMainPhoto.isPending ||
+    removePhoto.isPending ||
+    removeStory.isPending ||
+    setStoryPinned.isPending ||
+    addMusic.isPending ||
+    removeMusic.isPending;
 
   const form = useForm({
     defaultValues: {
@@ -456,17 +479,29 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             ))}
           </div>
 
-          {/* Applying indicator: every edit calls refresh(), which re-pulls the
-              snapshot from Telegram in the background. Without this the modal
-              looks frozen during that (often multi-second) fetch. */}
-          <div className="relative h-[2px] overflow-hidden">
-            {snapshot.isFetching && (
-              <span className="tb-indbar absolute top-0 h-full w-[45%] rounded-full bg-primary" />
-            )}
-          </div>
-
           {/* content */}
-          <div className="tb-scroll flex-1 overflow-y-auto p-5">
+          <div className="tb-scroll relative flex-1 overflow-y-auto p-5">
+            {/* Applying overlay: every media edit calls refresh(), which re-pulls
+                the snapshot from Telegram in the background. A greyed scrim with a
+                spinner signals "still working" and blocks input to stop double-
+                submits. It sits inside the overflow container, so `inset-0` pins it
+                to the visible viewport rather than scrolling away. The text tab is
+                excluded — its Save keeps the footer's own spinner/✓. */}
+            {busy && tab !== 'text' && (
+              <div
+                role="status"
+                aria-live="polite"
+                aria-label={t('accounts.profile.syncing')}
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/10 [animation:ovfade_0.2s_ease]"
+              >
+                <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-input border-t-primary" />
+                <span className="text-[12px] font-medium text-ink-muted">
+                  {photoProgress
+                    ? t('accounts.profile.uploadingCount', photoProgress)
+                    : t('accounts.profile.syncing')}
+                </span>
+              </div>
+            )}
             {loadError && (
               <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                 <span>{t('accounts.profile.loadError')}</span>
@@ -587,7 +622,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       ) : (
                         <button
                           type="button"
-                          disabled={setMainPhoto.isPending}
+                          disabled={busy}
                           onClick={() => {
                             setMainPhoto.mutate(
                               {
@@ -603,27 +638,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                           }}
                           className="mt-[6px] block w-full py-[2px] text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
                         >
-                          {setMainPhoto.isPending &&
-                          setMainPhoto.variables?.body?.photo_id === photo.photo_id ? (
-                            <span className="inline-flex items-center gap-[5px]">
-                              <span className="tb-spin inline-block h-[11px] w-[11px] rounded-full border-2 border-line-input border-t-primary" />
-                              {t('accounts.profile.makingMain')}
-                            </span>
-                          ) : (
-                            t('accounts.profile.makeMain')
-                          )}
+                          {t('accounts.profile.makeMain')}
                         </button>
                       )}
                     </div>
                   ))}
                   <DashedAdd
                     ratio="1"
-                    label={
-                      photoProgress
-                        ? t('accounts.profile.uploadingCount', photoProgress)
-                        : t('accounts.profile.upload')
-                    }
-                    busy={Boolean(photoProgress)}
+                    label={t('accounts.profile.upload')}
+                    disabled={busy}
                     onClick={() => photoInput.current?.click()}
                   />
                 </div>
@@ -788,18 +811,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 )}
                 <button
                   type="button"
-                  disabled={addMusic.isPending}
+                  disabled={busy}
                   onClick={() => musicInput.current?.click()}
                   className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-60"
                 >
-                  {addMusic.isPending ? (
-                    <span className="inline-flex items-center gap-[6px]">
-                      <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
-                      {t('accounts.profile.pickTrack')}
-                    </span>
-                  ) : (
-                    t('accounts.profile.pickTrack')
-                  )}
+                  {t('accounts.profile.pickTrack')}
                 </button>
                 <input
                   ref={musicInput}
