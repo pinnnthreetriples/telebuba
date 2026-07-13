@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import zipfile
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 import pytest
 
@@ -25,6 +25,7 @@ from schemas.accounts import (
     health_for_status,
 )
 from schemas.profile_media import (
+    AccountProfileMusicRemove,
     AccountProfileMusicUpload,
     AccountProfilePhotoRemove,
     AccountProfilePhotoSetMain,
@@ -62,6 +63,7 @@ from services.accounts import (
     list_accounts_page,
     list_listener_accounts,
     post_account_story,
+    remove_account_profile_music,
     remove_account_profile_photo,
     remove_account_story,
     set_account_main_profile_photo,
@@ -72,7 +74,7 @@ from services.accounts import (
 from tests.factories import seed_account_proxy
 
 if TYPE_CHECKING:
-    from collections.abc import Iterator
+    from collections.abc import Awaitable, Callable, Iterator
     from pathlib import Path
 
 
@@ -1153,6 +1155,188 @@ async def test_set_account_main_profile_photo_invalidates_cache_on_failure(
         )
 
     assert invalidated == ["account-photo-main-failed"]
+
+
+def _media_failure_calls() -> list[tuple[object, object]]:
+    """(service coroutine, payload) for every media mutation — used twice below."""
+    return [
+        (
+            set_account_profile_photo,
+            AccountProfilePhotoUpload(account_id="acc-inv", filename="a.jpg", content=b"jpg"),
+        ),
+        (
+            post_account_story,
+            AccountStoryUpload(
+                account_id="acc-inv", filename="s.jpg", content=b"jpg", media_kind="image"
+            ),
+        ),
+        (
+            add_account_profile_music,
+            AccountProfileMusicUpload(account_id="acc-inv", filename="t.mp3", content=b"mp3"),
+        ),
+        (
+            remove_account_profile_music,
+            AccountProfileMusicRemove(
+                account_id="acc-inv", file_id=1, access_hash=2, file_reference=b"\x01"
+            ),
+        ),
+        (
+            remove_account_profile_photo,
+            AccountProfilePhotoRemove(
+                account_id="acc-inv", photo_id=1, access_hash=2, file_reference=b"\x01"
+            ),
+        ),
+        (remove_account_story, AccountStoryRemove(account_id="acc-inv", story_id=9)),
+        (set_account_story_pinned, AccountStoryPin(account_id="acc-inv", story_id=9, pinned=True)),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("service_call", "payload"),
+    _media_failure_calls(),
+    ids=lambda value: getattr(value, "__name__", None),
+)
+async def test_every_media_mutation_invalidates_cache_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+    service_call: Callable[[Any], Awaitable[ActionResult]],
+    payload: Any,
+) -> None:
+    """EVERY media mutation must invalidate the snapshot cache on failure too.
+
+    Regression: only set-main applied the #249 invalidate-before-raise pattern;
+    the other mutations raised first, kept the stale snapshot for the TTL, and
+    the modal went on offering ids the server no longer recognised.
+    """
+    invalidated: list[str] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type=getattr(action, "action_type", "unknown"),
+            account_id=account_id,
+            error_type="RuntimeError",
+            error_message="boom",
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    with pytest.raises(AccountActionError):
+        await service_call(payload)
+
+    assert invalidated == ["acc-inv"], "failed mutations must still drop the cached snapshot"
+
+
+@pytest.mark.asyncio
+async def test_media_mutation_unavailable_maps_to_stable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An ``unavailable`` gateway result raises the stable ``unavailable`` code.
+
+    ``raise_for_result`` must NOT leak the raw pool-error message as the code —
+    the API maps ``unavailable`` to 503 (infrastructure), not 400 (client).
+    """
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        return ActionResult(
+            status="unavailable",
+            action_type=getattr(action, "action_type", "unknown"),
+            account_id=account_id,
+            error_type="TelegramClientPoolError",
+            error_message="telegram pool connect failed for acc-inv: boom",
+        )
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.media.invalidate_account_profile_cache",
+        lambda _account_id: None,
+    )
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await remove_account_story(AccountStoryRemove(account_id="acc-inv", story_id=9))
+
+    assert excinfo.value.code == "unavailable"
+
+
+@pytest.mark.asyncio
+async def test_update_account_profile_invalidates_cache_on_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused profile edit still drops the cached snapshot.
+
+    A partial commit (name applied, username refused — see the gateway's
+    username-first ordering) leaves server state changed even when the action
+    reports failure; serving the cached snapshot would show pre-edit fields.
+    """
+    invalidated: list[str] = []
+    await add_account(AccountCreate(account_id="account-profile-inv"))
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="update_profile",
+            account_id=account_id,
+            error_type="UsernameOccupiedError",
+            error_message="USERNAME_OCCUPIED",
+        )
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.profile.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    with pytest.raises(AccountActionError):
+        await update_account_profile(
+            AccountProfileUpdateRequest(
+                account_id="account-profile-inv",
+                first_name="Alice",
+                username="taken",
+            ),
+        )
+
+    assert invalidated == ["account-profile-inv"]
+
+
+@pytest.mark.asyncio
+async def test_update_account_profile_invalidates_cache_when_db_write_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram write ok + DB snapshot write failing must still invalidate.
+
+    The live server state HAS changed; a stale cached snapshot would hide it
+    until the TTL lapses even though the edit succeeded on Telegram.
+    """
+    invalidated: list[str] = []
+    await add_account(AccountCreate(account_id="account-profile-db"))
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    async def failing_snapshot_update(_data: object) -> object:
+        msg = "db is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    monkeypatch.setattr(
+        "services.accounts.profile.update_account_profile_snapshot",
+        failing_snapshot_update,
+    )
+    monkeypatch.setattr(
+        "services.accounts.profile.invalidate_account_profile_cache",
+        invalidated.append,
+    )
+
+    with pytest.raises(RuntimeError):
+        await update_account_profile(
+            AccountProfileUpdateRequest(account_id="account-profile-db", first_name="Alice"),
+        )
+
+    assert invalidated == ["account-profile-db"]
 
 
 @pytest.mark.asyncio

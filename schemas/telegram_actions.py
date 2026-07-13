@@ -287,6 +287,9 @@ ActionStatus = Literal[
     "premium_wait",
     "peer_flood",
     "failed",
+    # Infrastructure failure (client pool / socket / timeout) — the account and
+    # the request are fine; the API maps this to 503, never a 400 client fault.
+    "unavailable",
 ]
 
 

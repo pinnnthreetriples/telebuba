@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -24,8 +25,13 @@ from telethon.tl.types import ReactionEmoji
 from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
+from core.telegram_client._action_results import (
+    _flood_action_result,
+    _generic_error,
+    _unavailable_result,
+)
 from core.telegram_client._media import _dispatch_profile_media_action
-from core.telegram_client._pool import get_client
+from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._react import _channel_reaction_whitelist, _pick_reaction
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._util import extract_invite_hash
@@ -56,7 +62,7 @@ from schemas.telegram_actions import (
 if TYPE_CHECKING:
     from telethon import TelegramClient
 
-    from schemas.telegram_actions import ActionStatus, TelegramAction
+    from schemas.telegram_actions import TelegramAction
 
 # SystemRandom: non-cryptographic jitter/selection, but avoids the module-level
 # `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
@@ -76,53 +82,7 @@ class _DispatchResult:
     log_extra: dict[str, object] | None = None
 
 
-async def _flood_action_result(
-    account_id: str,
-    action: TelegramAction,
-    *,
-    status: ActionStatus,
-    seconds: int | None,
-) -> ActionResult:
-    """Log a Telegram rate-limit event and build the matching ``ActionResult``.
-
-    Covers the differentiated flood family — generic flood-wait, per-peer
-    ``PEER_FLOOD`` (no duration), per-chat slow mode, and premium-gated waits —
-    so callers can react per type instead of treating a moderation restriction
-    as an ordinary failure.
-    """
-    await log_event(
-        "WARNING",
-        f"telegram_{action.action_type}_{status}",
-        account_id=account_id,
-        extra={"seconds": seconds},
-    )
-    return ActionResult(
-        status=status,
-        action_type=action.action_type,
-        account_id=account_id,
-        flood_wait_seconds=seconds,
-    )
-
-
-async def _generic_error(account_id: str, action: TelegramAction, exc: Exception) -> ActionResult:
-    # Stable-code wrappers chain the real reason (Pillow error + magic bytes) as __cause__.
-    cause = str(exc.__cause__) if exc.__cause__ is not None else None
-    await log_event(
-        "ERROR",
-        f"telegram_{action.action_type}_failed",
-        account_id=account_id,
-        extra={"error_type": type(exc).__name__, "message": str(exc), "cause": cause},
-    )
-    return ActionResult(
-        status="failed",
-        action_type=action.action_type,
-        account_id=account_id,
-        error_type=type(exc).__name__,
-        error_message=str(exc),
-    )
-
-
-async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: PLR0911
+async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: C901, PLR0911 - one except per Telegram error family
     """Dispatch a typed Telegram action against ``account_id``.
 
     The only entry point for Telethon calls from outside ``core/``. Borrows
@@ -169,6 +129,8 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
             )
             return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
         return await _generic_error(account_id, action, exc)
+    except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
+        return await _unavailable_result(account_id, action, exc)
     except Exception as exc:  # noqa: BLE001
         return await _generic_error(account_id, action, exc)
 
@@ -265,7 +227,17 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
 
 
 async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
-    """Field contract: ``""`` clears, ``None`` leaves unchanged (omitted from TL flags)."""
+    """Field contract: ``""`` clears, ``None`` leaves unchanged (omitted from TL flags).
+
+    The username goes FIRST: it is the fallible call (occupied/invalid handle),
+    and sending it after ``UpdateProfileRequest`` used to half-apply the edit —
+    name/bio already changed on Telegram while the UI reported "nothing saved"
+    and the DB snapshot stayed stale.
+    """
+    if action.username is not None:
+        # Re-sending the account's current username is a no-op, not a failure.
+        with suppress(errors.UsernameNotModifiedError):
+            await client(UpdateUsernameRequest(username=action.username))
     await client(
         UpdateProfileRequest(
             first_name=action.first_name,
@@ -273,8 +245,6 @@ async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile
             about=action.bio,
         ),
     )
-    if action.username is not None:
-        await client(UpdateUsernameRequest(username=action.username))
 
 
 async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> None:

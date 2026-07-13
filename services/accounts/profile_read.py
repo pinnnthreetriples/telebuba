@@ -13,6 +13,7 @@ the gateway internals.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import hashlib
 import time
@@ -152,6 +153,16 @@ def _locate_thumb_bytes(
 
 
 _CACHE: dict[str, AccountProfileSnapshot] = {}
+# Generation counter per account: ``invalidate_account_profile_cache`` bumps it,
+# and a fetch only stores its snapshot when the generation it captured before
+# the (seconds-long) Telegram round-trip is still current. Otherwise an
+# in-flight fetch that started BEFORE a mutation would re-populate the cache
+# with pre-mutation state right AFTER the invalidation ran, defeating every
+# invalidation for up to a full TTL.
+_CACHE_GEN: dict[str, int] = {}
+# Single-flight: concurrent callers (modal open + N cold thumb requests) share
+# one in-flight fetch instead of firing N+1 full 5-action Telegram fetches.
+_INFLIGHT: dict[str, tuple[int, asyncio.Task[AccountProfileSnapshot]]] = {}
 
 
 def _is_fresh(snapshot: AccountProfileSnapshot) -> bool:
@@ -176,25 +187,51 @@ async def fetch_live_account_profile(
     if cached is not None and not force_refresh and _is_fresh(cached):
         return cached
 
-    snapshot = await _fetch_live_or_error(account_id)
-    # Don't cache failures: a transient FloodWait/RPC/network error would
-    # otherwise pin the dialog to a stale error for the whole TTL, so reopening
-    # (force_refresh=False) would keep showing it instead of retrying.
-    if snapshot.error is None:
-        _CACHE[account_id] = snapshot
-    return snapshot
+    gen = _CACHE_GEN.get(account_id, 0)
+    inflight = _INFLIGHT.get(account_id)
+    if inflight is not None and inflight[0] == gen:
+        # Join the live fetch already in progress (this also satisfies
+        # force_refresh: the data is being read from Telegram right now,
+        # not served from the TTL cache).
+        return await inflight[1]
+    task = asyncio.create_task(_fetch_and_maybe_cache(account_id, gen))
+    _INFLIGHT[account_id] = (gen, task)
+    return await task
+
+
+async def _fetch_and_maybe_cache(account_id: str, gen: int) -> AccountProfileSnapshot:
+    try:
+        snapshot = await _fetch_live_or_error(account_id)
+        # Don't cache failures: a transient FloodWait/RPC/network error would
+        # otherwise pin the dialog to a stale error for the whole TTL. And don't
+        # cache when an invalidation ran mid-flight (generation moved on): the
+        # snapshot may predate the mutation that triggered the invalidation.
+        if snapshot.error is None and _CACHE_GEN.get(account_id, 0) == gen:
+            _CACHE[account_id] = snapshot
+        return snapshot
+    finally:
+        entry = _INFLIGHT.get(account_id)
+        if entry is not None and entry[0] == gen:
+            _INFLIGHT.pop(account_id, None)
 
 
 def invalidate_account_profile_cache(account_id: str | None = None) -> None:
     """Drop cached snapshots — ``None`` clears the entire cache.
 
     Called after a profile edit so the next dialog open reflects the new state
-    immediately instead of waiting for the TTL.
+    immediately instead of waiting for the TTL. Bumping the generation also
+    tells any in-flight fetch (started before the edit) not to store its —
+    now stale — result, and stops later callers joining that fetch.
     """
     if account_id is None:
+        for key in set(_CACHE) | set(_INFLIGHT) | set(_CACHE_GEN):
+            _CACHE_GEN[key] = _CACHE_GEN.get(key, 0) + 1
         _CACHE.clear()
+        _INFLIGHT.clear()
     else:
+        _CACHE_GEN[account_id] = _CACHE_GEN.get(account_id, 0) + 1
         _CACHE.pop(account_id, None)
+        _INFLIGHT.pop(account_id, None)
 
 
 async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:

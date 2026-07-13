@@ -31,9 +31,13 @@ async def update_account_profile(data: AccountProfileUpdateRequest) -> AccountRe
             bio=data.bio,
         ),
     )
+    # Invalidate BEFORE raising and BEFORE the DB snapshot write: a failed or
+    # partial Telegram write (e.g. name applied, username refused) can still
+    # have changed server state, and a DB failure after a successful write
+    # must not leave the cached snapshot stale either (#249 pattern).
+    invalidate_account_profile_cache(data.account_id)
     raise_for_result(result)
     account = await update_account_profile_snapshot(data)
-    invalidate_account_profile_cache(data.account_id)
     await log_event(
         "INFO",
         "account_profile_updated",

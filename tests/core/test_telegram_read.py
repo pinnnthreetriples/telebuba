@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
@@ -26,6 +27,7 @@ from core.telegram_client import (
     execute_read,
     execute_read_many,
 )
+from core.telegram_client._pool import TelegramClientPoolError
 from schemas.telegram_actions import (
     BanCheckResult,
     CheckBannedInChannel,
@@ -497,6 +499,86 @@ async def test_list_profile_photos_thumb_failure_is_swallowed(
     assert result.items[0].thumb_bytes is None
 
 
+def _dated_photo(photo_id: int) -> MagicMock:
+    return MagicMock(
+        id=photo_id,
+        access_hash=photo_id,
+        file_reference=b"\x01",
+        date=datetime(2024, 1, 1, tzinfo=UTC),
+    )
+
+
+@pytest.mark.asyncio
+async def test_list_profile_photos_flood_wait_breaks_thumb_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The first FloodWait trips the batch breaker — remaining thumbs are skipped.
+
+    ``FloodWaitError`` is an ``RPCError`` subclass; the old per-item swallow
+    turned it into "no thumbnail" while sibling downloads kept hammering the
+    flooded connection. With concurrency 1 the order is deterministic: one
+    download attempt, everything after it skipped, all thumbs ``None`` — and
+    the photo rows themselves still come back (the dialog must open).
+    """
+    monkeypatch.setattr(settings.profile_media, "thumb_concurrency", 1)
+    photos = [_dated_photo(n) for n in (1, 2, 3)]
+    attempts: list[int] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(photos=photos)
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            attempts.append(1)
+            raise errors.FloodWaitError(request=None, capture=33)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-flood-thumbs", ListProfilePhotos())
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert [item.photo_id for item in result.items] == [1, 2, 3]
+    assert all(item.thumb_bytes is None for item in result.items)
+    assert len(attempts) == 1, "siblings must skip after the breaker trips, not keep hammering"
+
+
+@pytest.mark.asyncio
+async def test_list_profile_photos_thumb_downloads_are_bounded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """At most ``profile_media.thumb_concurrency`` downloads may run at once."""
+    monkeypatch.setattr(settings.profile_media, "thumb_concurrency", 2)
+    photos = [_dated_photo(n) for n in range(1, 7)]
+    live = 0
+    peak = 0
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(photos=photos)
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            nonlocal live, peak
+            live += 1
+            peak = max(peak, live)
+            await asyncio.sleep(0)
+            live -= 1
+            return b"thumb"
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-bounded-thumbs", ListProfilePhotos())
+
+    assert isinstance(result, TelegramProfilePhotos)
+    assert all(item.thumb_bytes == b"thumb" for item in result.items)
+    assert peak <= 2, f"unbounded thumb fan-out: {peak} concurrent downloads"
+
+
 @pytest.mark.asyncio
 async def test_get_linked_discussion_group_present(monkeypatch: pytest.MonkeyPatch) -> None:
     from telethon.tl.functions.channels import GetFullChannelRequest  # noqa: PLC0415
@@ -847,6 +929,42 @@ async def test_execute_read_rpc_error_wraps_telethon_error(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        TelegramClientPoolError("acc-pool", RuntimeError("connect failed")),
+        ConnectionError("socket closed"),
+        TimeoutError("handshake timed out"),
+    ],
+)
+async def test_execute_read_wraps_infrastructure_errors(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+) -> None:
+    """Pool/socket/timeout failures must surface as ``TelegramReadError``.
+
+    Services only handle ``TelegramReadError`` (layer contract) — raw
+    ``TelegramClientPoolError`` / ``ConnectionError`` / ``TimeoutError`` used
+    to escape the gateway and bypass the dialog's degrade-to-error path.
+    """
+
+    async def failing_get_client(_account_id: str) -> object:
+        raise exc
+
+    async def fake_fetch(account_id: str) -> object:
+        return MagicMock(session_name=account_id)
+
+    monkeypatch.setattr("core.telegram_client._read.get_client", failing_get_client)
+    monkeypatch.setattr("core.telegram_client._read.fetch_account", fake_fetch)
+
+    with pytest.raises(TelegramReadError) as exc_info:
+        await execute_read("acc-pool", GetUserProfile())
+
+    assert type(exc).__name__ in exc_info.value.reason
+    assert exc_info.value.__cause__ is exc
+
+
+@pytest.mark.asyncio
 async def test_download_story_thumb_swallows_rpc_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -883,6 +1001,47 @@ async def test_download_story_thumb_swallows_rpc_error(
     assert len(result.items) == 1
     assert result.items[0].story_id == 99
     assert result.items[0].thumb_bytes is None
+
+
+@pytest.mark.asyncio
+async def test_list_pinned_stories_flood_wait_breaks_thumb_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Story thumbs share the photo-grid breaker: first FloodWait stops the batch.
+
+    Stories still come back (``thumb_bytes=None`` placeholders) so the dialog
+    opens; siblings must not keep downloading against a flooded connection.
+    """
+    monkeypatch.setattr(settings.profile_media, "thumb_concurrency", 1)
+    photo_media = MagicMock(spec=MessageMediaPhoto)
+
+    class FakeStory:
+        def __init__(self, story_id: int) -> None:
+            self.id = story_id
+            self.media = photo_media
+            self.caption = None
+
+    attempts: list[int] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(stories=[FakeStory(1), FakeStory(2), FakeStory(3)])
+
+        async def download_media(self, _media: object, *, file: object, thumb: int) -> bytes:  # noqa: ARG002
+            attempts.append(1)
+            raise errors.FloodWaitError(request=None, capture=27)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-story-flood", ListPinnedStories())
+
+    assert isinstance(result, TelegramPinnedStories)
+    assert [item.story_id for item in result.items] == [1, 2, 3]
+    assert all(item.thumb_bytes is None for item in result.items)
+    assert len(attempts) == 1, "siblings must skip after the breaker trips, not keep hammering"
 
 
 @pytest.mark.asyncio

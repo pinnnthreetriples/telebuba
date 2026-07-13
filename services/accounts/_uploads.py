@@ -32,6 +32,21 @@ def _write_session_file(path: Path, content: bytes) -> None:
         path.chmod(0o600)
 
 
+def _validate_content(
+    *,
+    content: bytes,
+    max_bytes: int,
+    label: str,
+) -> None:
+    """Content-only checks (empty / size cap) for uploads without a filename."""
+    if not content:
+        msg = f"{label} file is empty"
+        raise ValueError(msg)
+    if len(content) > max_bytes:
+        msg = f"{label} file is too large"
+        raise ValueError(msg)
+
+
 def _validate_upload(
     *,
     filename: str,
@@ -40,12 +55,7 @@ def _validate_upload(
     allowed_suffixes: set[str],
     label: str,
 ) -> None:
-    if not content:
-        msg = f"{label} file is empty"
-        raise ValueError(msg)
-    if len(content) > max_bytes:
-        msg = f"{label} file is too large"
-        raise ValueError(msg)
+    _validate_content(content=content, max_bytes=max_bytes, label=label)
     suffix = Path(filename).suffix.lower()
     if suffix not in allowed_suffixes:
         allowed = ", ".join(sorted(allowed_suffixes))

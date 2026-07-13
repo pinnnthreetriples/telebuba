@@ -495,6 +495,8 @@
     "telegram_pool_connect_retry": "Retrying Telegram connection",
     "telegram_pool_disconnect_failed": "Failed to disconnect from Telegram",
     "telegram_pool_rebuild_hook_failed": "Failed to rebuild connections",
+    "telegram_action_unavailable": "Telegram temporarily unavailable",
+    "telegram_thumb_download_flood_wait": "Thumbnail downloads paused: rate limit",
     "telegram_list_profile_music_unsupported": "Profile music not supported",
     "telegram_set_main_id_flow": "Main photo promotion id flow",
     "account_added": "Account added",
