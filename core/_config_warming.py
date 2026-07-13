@@ -214,7 +214,7 @@ class WarmingSettings(BaseSettings):
     # day (a range, drawn per next-run) plus per-session reaction and inter-account
     # DM probability. calm < normal < active for every lever.
     persona_sessions: dict[str, tuple[int, int]] = Field(
-        default_factory=lambda: {"calm": (2, 4), "normal": (5, 8), "active": (10, 14)},
+        default_factory=lambda: {"calm": (4, 8), "normal": (10, 16), "active": (20, 28)},
     )
     persona_reaction_probability: dict[str, float] = Field(
         default_factory=lambda: {"calm": 0.15, "normal": 0.40, "active": 0.70},

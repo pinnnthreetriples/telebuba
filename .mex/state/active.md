@@ -122,6 +122,10 @@ seam; `dispatch_watch_peer_stories` now returns the seen count. Note: story view
 **no probability gate** (attempted once per cycle), so there's deliberately no "chance
 missed" line for it. Cold-start spread was also lowered 24h→8h (#239) so the first cycle
 lands the same evening/next morning. +3 backend tests / +1 Vitest / i18n ru+en.
+Operator also doubled the persona session presets (`persona_sessions`): calm 2-4→4-8,
+normal 5-8→10-16, active 10-14→20-28 (config + `.env.example` + the picker hints in
+ru/en). Mature accounts run ~2× the daily cycles with ~half the inter-cycle pause; the
+age/phase safety cap (`min(persona, phase)`) still throttles young accounts unchanged.
 
 A 2026-07-11 feature added **phone-number authentication as a third add-account
 method** (branch `phone-authentication`). The phone-code gateway/service/cache
