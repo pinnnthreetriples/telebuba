@@ -623,7 +623,7 @@ def test_normalize_story_image_renders_blurred_background_canvas() -> None:
     - Centre pixel reads back close to the source colour because the fitted
       copy sits on top of the blurred background.
     """
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         _normalize_story_image_for_telegram,
     )
 
@@ -657,7 +657,7 @@ def test_normalize_story_image_rejects_non_image_bytes_with_stable_code() -> Non
     translates, because it travels the ``execute`` → ``error_message`` →
     error-envelope path verbatim.
     """
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         StoryImageNormalisationError,
         _normalize_story_image_for_telegram,
     )
@@ -678,7 +678,7 @@ def test_normalize_story_image_rejects_truncated_file_with_stable_code() -> None
     ``UnidentifiedImageError`` — both must collapse into the same
     locale-neutral ``story_image_invalid`` code.
     """
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         StoryImageNormalisationError,
         _normalize_story_image_for_telegram,
     )
@@ -696,7 +696,7 @@ def test_normalize_story_image_rejects_decompression_bomb_with_stable_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Pillow's decompression-bomb guard maps to the stable code too."""
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         StoryImageNormalisationError,
         _normalize_story_image_for_telegram,
     )
@@ -723,7 +723,7 @@ def _jpeg(size: tuple[int, int], colour: tuple[int, int, int]) -> bytes:
 )
 def test_compose_story_collage_produces_canvas_jpeg(count: int, layout: str) -> None:
     """A collage of representative counts renders one 1080x1920 JPEG."""
-    from core.telegram_client._media import _compose_story_collage  # noqa: PLC0415
+    from core.telegram_client._story_image import _compose_story_collage  # noqa: PLC0415
 
     images = [_jpeg((400, 500), (10 * i, 20, 30)) for i in range(count)]
     out = _compose_story_collage(images, layout)
@@ -734,14 +734,14 @@ def test_compose_story_collage_produces_canvas_jpeg(count: int, layout: str) -> 
 
 
 def test_compose_story_collage_default_layout_is_first_for_count() -> None:
-    from core.telegram_client._media import _default_collage_layout  # noqa: PLC0415
+    from core.telegram_client._story_image import _default_collage_layout  # noqa: PLC0415
 
     assert _default_collage_layout(2) == "v2"
     assert _default_collage_layout(3) == "v3"
 
 
 def test_compose_story_collage_unknown_layout_raises() -> None:
-    from core.telegram_client._media import (  # noqa: PLC0415
+    from core.telegram_client._story_image import (  # noqa: PLC0415
         StoryCollageLayoutError,
         _compose_story_collage,
     )
@@ -754,7 +754,7 @@ def test_compose_story_collage_unknown_layout_raises() -> None:
 
 
 def test_compose_story_collage_unsupported_count_raises() -> None:
-    from core.telegram_client._media import (  # noqa: PLC0415
+    from core.telegram_client._story_image import (  # noqa: PLC0415
         StoryCollageLayoutError,
         _compose_story_collage,
     )
@@ -766,7 +766,7 @@ def test_compose_story_collage_unsupported_count_raises() -> None:
 
 
 def test_compose_story_collage_rejects_undecodable_image() -> None:
-    from core.telegram_client._media import (  # noqa: PLC0415
+    from core.telegram_client._story_image import (  # noqa: PLC0415
         StoryImageNormalisationError,
         _compose_story_collage,
     )
