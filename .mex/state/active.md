@@ -349,8 +349,16 @@ locale-neutral codes (`story_collage_requires_image`, `story_collage_too_many_im
 and `story_collage_unknown_layout` via a new typed `StoryCollageLayoutError`);
 `POST /accounts/{id}/story` now takes `files: list[UploadFile]` + `collage_layout`.
 Config `PROFILE_MEDIA__STORY_COLLAGE_{MAX_IMAGES=6,GAP_PX=8}`. Gates green (1263
-pytest, ruff/ty clean, API client regenerated). PR2 (frontend) — multi-select +
-reorder + layout picker in `AddStoryModal` — is next.
+pytest, ruff/ty clean, API client regenerated). PR2 (frontend, open) delivers the
+UI: `AddStoryModal` now does multi-select (≤6 photos, images XOR video), ordered
+preview tiles with ◀▶ reorder + remove, and a layout picker (SVG mini-icons drawn
+from `storyCollageLayouts.ts` — a byte-for-byte mirror of the backend
+`_COLLAGE_TEMPLATES`, so the id sent always resolves). Publish sends `files` in
+tile order + `collage_layout` (only for ≥2 images); the three `story_collage_*`
+codes are translated in ru/en. Gates green (297 vitest, eslint/boundaries/tsc
+clean). NOTE: a frontend-only rebuild does NOT restart the single-process uvicorn
+backend — the make-main fix (#244/#245) only takes effect after the backend
+process itself is restarted on current main.
 
 ## Not Yet Built (deliberate)
 

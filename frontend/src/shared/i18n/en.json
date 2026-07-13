@@ -194,9 +194,21 @@
       "stError": "Error",
       "retry": "Retry",
       "removeFile": "Remove file",
+      "photoCount": "{{n}}/{{max}}",
+      "addMore": "Add more media",
+      "collageHint": "Add up to {{max}} photos for a collage",
+      "maxReached": "Up to {{max}} photos — remove one to add another",
+      "layout": "Collage layout",
+      "layoutOption": "Layout {{id}}",
+      "removePhoto": "Remove photo {{n}}",
+      "moveLeft": "Move photo {{n}} left",
+      "moveRight": "Move photo {{n}} right",
       "code": {
         "story_image_invalid": "The image could not be read — choose a JPG/PNG/WebP file",
-        "story_video_invalid": "The video could not be processed — choose an MP4/MOV file"
+        "story_video_invalid": "The video could not be processed — choose an MP4/MOV file",
+        "story_collage_requires_image": "A collage can only contain photos, not video",
+        "story_collage_too_many_images": "Too many photos for one collage",
+        "story_collage_unknown_layout": "That collage layout is not available for this number of photos"
       }
     },
     "profile": {

@@ -195,9 +195,21 @@
       "stError": "Ошибка",
       "retry": "Повторить",
       "removeFile": "Убрать файл",
+      "photoCount": "{{n}}/{{max}}",
+      "addMore": "Добавить ещё",
+      "collageHint": "До {{max}} фото для коллажа",
+      "maxReached": "Максимум {{max}} фото — удалите одно, чтобы добавить",
+      "layout": "Раскладка коллажа",
+      "layoutOption": "Раскладка {{id}}",
+      "removePhoto": "Убрать фото {{n}}",
+      "moveLeft": "Переместить фото {{n}} влево",
+      "moveRight": "Переместить фото {{n}} вправо",
       "code": {
         "story_image_invalid": "Изображение не удалось прочитать — выберите JPG/PNG/WebP",
-        "story_video_invalid": "Видео не удалось обработать — выберите MP4/MOV"
+        "story_video_invalid": "Видео не удалось обработать — выберите MP4/MOV",
+        "story_collage_requires_image": "Коллаж может содержать только фото, не видео",
+        "story_collage_too_many_images": "Слишком много фото для одного коллажа",
+        "story_collage_unknown_layout": "Эта раскладка коллажа недоступна для такого числа фото"
       }
     },
     "profile": {
