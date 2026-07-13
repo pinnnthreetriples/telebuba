@@ -198,6 +198,10 @@ class ProfileMediaSettings(BaseSettings):
     # Max tracks pulled by the profile-music preview. Low cap keeps the TL
     # response light — the tab is a preview list, not a media library.
     music_preview_limit: int = Field(default=50, ge=1, le=200)
+    # How deep to scan the profile-photo history when re-resolving a photo's
+    # fresh InputPhoto for «make main». The target must be within this many
+    # most-recent photos; 100 is Telegram's per-request ceiling.
+    set_main_history_limit: int = Field(default=100, ge=1, le=100)
     # Hard cap on each ffmpeg subprocess (encode / thumbnail / duration probe).
     # A stalling or maliciously-crafted video would otherwise hang the request
     # coroutine forever and orphan the process; on timeout we kill it and fail.

@@ -119,6 +119,10 @@ class ProfilePhotoView(BaseModel):
     access_hash: str
     file_reference: str = Field(min_length=1)  # base64
     thumb_url: str | None = None
+    # True for the photo Telegram currently shows as the avatar (matched by id
+    # against the authoritative ``current_photo_id``), so the SPA marks "main"
+    # by identity rather than guessing index 0.
+    is_main: bool = False
 
 
 class ProfileStoryView(BaseModel):

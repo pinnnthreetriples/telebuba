@@ -1268,6 +1268,10 @@ export type ProfilePhotoView = {
    * Thumb Url
    */
   thumb_url?: string | null;
+  /**
+   * Is Main
+   */
+  is_main?: boolean;
 };
 
 /**

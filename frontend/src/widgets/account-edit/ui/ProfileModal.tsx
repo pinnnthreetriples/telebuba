@@ -96,6 +96,15 @@ function DashedAdd({
   );
 }
 
+function dedupeById(photos: ProfilePhotoView[]): ProfilePhotoView[] {
+  const seen = new Set<string>();
+  return photos.filter((photo) => {
+    if (seen.has(photo.photo_id)) return false;
+    seen.add(photo.photo_id);
+    return true;
+  });
+}
+
 function tileStyle(uri: string | null | undefined, ratio: string): React.CSSProperties {
   if (!uri) return { aspectRatio: ratio, background: TILE };
   return {
@@ -137,7 +146,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       window.clearInterval(id);
     };
   }, []);
-  const photos = snapshot.data?.photos ?? [];
+  // Defensive dedup by photo_id: Telegram can momentarily echo a duplicate id
+  // during a make-main promotion, and a repeated tile would misrender.
+  const photos = dedupeById(snapshot.data?.photos ?? []);
   const stories = snapshot.data?.stories ?? [];
   const music = snapshot.data?.music ?? [];
   // A transport failure (snapshot.isError) or a Telegram refusal (200 carrying
@@ -147,10 +158,23 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // Older Telethon builds lack the saved-music TL methods; the snapshot flags
   // that so the UI shows an "unsupported" note instead of a picker that fails.
   const musicSupported = snapshot.data?.music_supported !== false;
+  // Force a live Telegram re-pull (bypasses the 30s read-cache) and write it into
+  // the rendered snapshot query. Shared by «Обновить» and every post-mutation
+  // refresh — an invalidate alone can hit the TTL cache and return a stale photo
+  // set (the make-main duplicate/loss bug surfaced exactly here).
+  const forcePull = () =>
+    queryClient.fetchQuery(
+      accountProfileSnapshotQueryOptions({
+        path: { account_id: account.account_id },
+        query: { refresh: true },
+      }),
+    );
   // Scoped: this account's snapshot + the accounts table (name/username/avatar
   // show in the list) — not the whole cache.
   const refresh = () => {
-    void queryClient.invalidateQueries({ queryKey: snapOpts.queryKey });
+    void forcePull().then((fresh) => {
+      queryClient.setQueryData(snapOpts.queryKey, fresh);
+    });
     void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
   };
   // "Обновлено {только что | N мин назад}" — from the snapshot query's last fetch.
@@ -239,12 +263,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const onRefresh = async () => {
     setRefreshState('loading');
     try {
-      const fresh = await queryClient.fetchQuery(
-        accountProfileSnapshotQueryOptions({
-          path: { account_id: account.account_id },
-          query: { refresh: true },
-        }),
-      );
+      const fresh = await forcePull();
       queryClient.setQueryData(snapOpts.queryKey, fresh);
       seedForm(fresh);
       // A 200 carrying an `error` field means Telegram refused the live pull —
@@ -270,9 +289,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const liveFirst = snapshot.data?.first_name ?? account.first_name;
   const liveLast = snapshot.data?.last_name ?? account.last_name;
   const liveUser = snapshot.data?.username ?? account.username;
-  // The current avatar is the first profile photo (index 0 = main); #227 serves
-  // its thumbnail from the cacheable image endpoint (thumb_url), not inline data.
-  const avatarUri = snapshot.data?.photos?.[0]?.thumb_url ?? undefined;
+  // The current avatar is the photo Telegram flags as main (by id, authoritative
+  // — not the history's index 0); #227 serves its thumbnail from the cacheable
+  // image endpoint (thumb_url), not inline data.
+  const avatarUri = (photos.find((photo) => photo.is_main) ?? photos[0])?.thumb_url ?? undefined;
   const initial = (liveFirst ?? account.phone ?? account.account_id).trim().charAt(0).toUpperCase();
   const fullName =
     [liveFirst, liveLast].filter(Boolean).join(' ') || (account.phone ?? account.account_id);
@@ -544,7 +564,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {t('accounts.profile.photoHint')}
                 </div>
                 <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
-                  {photos.map((photo, index) => (
+                  {photos.map((photo) => (
                     <div key={photo.photo_id} className="relative">
                       <div
                         className="rounded-[12px] border border-black/5"
@@ -560,7 +580,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       >
                         ×
                       </button>
-                      {index === 0 ? (
+                      {photo.is_main ? (
                         <span className="mt-[6px] block w-full py-[2px] text-[11px] font-medium text-primary">
                           {t('accounts.profile.mainPhoto')}
                         </span>

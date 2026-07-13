@@ -556,12 +556,24 @@ test('refresh syncs the bio even when other fresh fields are null', async () => 
   expect(screen.queryByDisplayValue('ivanov')).not.toBeInTheDocument();
 });
 
-test('«Сделать основным» promotes a non-first photo via the real endpoint', async () => {
+test('«Сделать основным» promotes a non-main photo via the real endpoint', async () => {
   const twoPhotos = {
     ...VIEW,
     photos: [
-      { photo_id: '111', access_hash: '222', file_reference: 'YWJj', thumb_url: null },
-      { photo_id: '333', access_hash: '444', file_reference: 'ZmZm', thumb_url: null },
+      {
+        photo_id: '111',
+        access_hash: '222',
+        file_reference: 'YWJj',
+        thumb_url: null,
+        is_main: true,
+      },
+      {
+        photo_id: '333',
+        access_hash: '444',
+        file_reference: 'ZmZm',
+        thumb_url: null,
+        is_main: false,
+      },
     ],
   };
   vi.mocked(fetch).mockImplementation((input) => {
@@ -574,7 +586,7 @@ test('«Сделать основным» promotes a non-first photo via the rea
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
   await userEvent.click(screen.getByText('Фото'));
 
-  // The first photo shows the static «Основное фото» marker; only the second
+  // The is_main photo shows the static «Основное фото» marker; only the other
   // exposes an actionable «Сделать основным» button.
   const makeMain = await screen.findByText('Сделать основным', { selector: 'button' });
   await userEvent.click(makeMain);
@@ -587,6 +599,125 @@ test('«Сделать основным» promotes a non-first photo via the rea
   const body = (await (call?.[0] as Request).clone().json()) as Record<string, unknown>;
   // The int64 id is carried as a string end-to-end (no JS rounding).
   expect(body).toMatchObject({ photo_id: '333', access_hash: '444' });
+});
+
+test('the "main" marker follows is_main, not the array position', async () => {
+  // The current avatar is the SECOND photo (is_main), not index 0 — the marker
+  // and the actionable button must track the flag, not the order.
+  const photos = {
+    ...VIEW,
+    photos: [
+      {
+        photo_id: '111',
+        access_hash: '222',
+        file_reference: 'YWJj',
+        thumb_url: null,
+        is_main: false,
+      },
+      {
+        photo_id: '333',
+        access_hash: '444',
+        file_reference: 'ZmZm',
+        thumb_url: null,
+        is_main: true,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(photos));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+
+  // Exactly one static marker, one actionable button (index 0 is NOT the main).
+  expect(await screen.findByText('Основное фото')).toBeInTheDocument();
+  const makeMain = screen.getByText('Сделать основным', { selector: 'button' });
+  await userEvent.click(makeMain);
+  const call = vi
+    .mocked(fetch)
+    .mock.calls.find(([input]) => (input as Request).url.includes('/photo/main'));
+  const body = (await (call?.[0] as Request).clone().json()) as Record<string, unknown>;
+  // The promoted photo is the non-main one (id 111), proving the button is on it.
+  expect(body).toMatchObject({ photo_id: '111' });
+});
+
+test('make-main refetches via the forced-refresh path (not the TTL cache)', async () => {
+  const twoPhotos = {
+    ...VIEW,
+    photos: [
+      {
+        photo_id: '111',
+        access_hash: '222',
+        file_reference: 'YWJj',
+        thumb_url: null,
+        is_main: true,
+      },
+      {
+        photo_id: '333',
+        access_hash: '444',
+        file_reference: 'ZmZm',
+        thumb_url: null,
+        is_main: false,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(twoPhotos));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+  await userEvent.click(await screen.findByText('Сделать основным', { selector: 'button' }));
+
+  // The post-mutation refresh MUST bypass the 30s read cache — a bare invalidate
+  // could return the stale photo set (the make-main duplicate/loss bug).
+  await waitFor(() => {
+    const forced = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('refresh=true'));
+    expect(forced).toBe(true);
+  });
+});
+
+test('duplicate photo_ids in the snapshot render only once', async () => {
+  const dupes = {
+    ...VIEW,
+    photos: [
+      {
+        photo_id: '111',
+        access_hash: '222',
+        file_reference: 'YWJj',
+        thumb_url: null,
+        is_main: true,
+      },
+      {
+        photo_id: '111',
+        access_hash: '222',
+        file_reference: 'YWJj',
+        thumb_url: null,
+        is_main: true,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(dupes));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+
+  // Both rows share photo_id 111 → the tile (and its remove button) renders once.
+  expect(await screen.findAllByLabelText('Удалить фото')).toHaveLength(1);
 });
 
 test('the refresh button flashes a success state on a clean re-pull', async () => {

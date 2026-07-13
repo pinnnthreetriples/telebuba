@@ -13,6 +13,7 @@ from telethon import utils
 from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import (
     DeletePhotosRequest,
+    GetUserPhotosRequest,
     UpdateProfilePhotoRequest,
     UploadProfilePhotoRequest,
 )
@@ -33,8 +34,10 @@ from telethon.tl.types import (
     InputPrivacyValueAllowAll,
     InputPrivacyValueAllowCloseFriends,
     InputPrivacyValueAllowContacts,
+    InputUserSelf,
 )
 
+from core.config import settings
 from core.telegram_client._video import normalize_story_video_for_telegram
 from schemas.telegram_actions import (
     AddProfileMusic,
@@ -316,27 +319,59 @@ async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePho
         raise RuntimeError(msg)
 
 
+async def _resolve_history_photo(client: TelegramClient, photo_id: int) -> InputPhoto | None:
+    """Re-resolve a fresh ``InputPhoto`` (id/access_hash/file_reference) by id.
+
+    A ``file_reference`` from the UI snapshot can be stale — they expire — and a
+    stale reference makes ``updateProfilePhoto`` misbehave. Pull the current
+    history and rebuild the ``InputPhoto`` from live server data, or ``None`` if
+    the id is no longer present.
+    """
+    result = await client(
+        GetUserPhotosRequest(
+            user_id=InputUserSelf(),
+            offset=0,
+            max_id=0,
+            limit=settings.profile_media.set_main_history_limit,
+        ),
+    )
+    for photo in getattr(result, "photos", []) or []:
+        if int(getattr(photo, "id", 0) or 0) == photo_id:
+            return InputPhoto(
+                id=photo_id,
+                access_hash=int(getattr(photo, "access_hash", 0) or 0),
+                file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
+            )
+    return None
+
+
 async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:
     """Promote an existing history photo to the current avatar — no duplicate left.
 
-    Raw ``photos.updateProfilePhoto`` on a photo already in the account's
-    history does NOT reorder it: the server mints a brand-new photo (fresh id)
-    at the front and leaves the original entry behind, so a naive call leaves
-    two identical photos in the history. Official clients (TDLib's
-    ``inputChatPhotoPrevious``) compensate by deleting the stale original right
-    after promoting. We mirror that: promote, then delete the old id — but only
-    when the server actually minted a new one (``new_id != old``), so a future
-    server that reorders in place stays a no-op instead of nuking the avatar.
+    Live-confirmed semantics: raw ``photos.updateProfilePhoto`` on a photo
+    already in the account's history does NOT reorder it in place — the server
+    mints a brand-new photo (fresh id) at the front and leaves the original
+    entry behind, so a naive call leaves two identical photos in the history.
+
+    We re-resolve a FRESH ``InputPhoto`` for the target from a live
+    ``GetUserPhotos`` (never trusting the possibly-stale snapshot reference),
+    promote it, then delete the now-redundant original — but ONLY when the
+    server actually minted a new id (``new_id != target``), and we verify that
+    delete like :func:`_remove_profile_photo` does. If a server ever reorders in
+    place (``new_id == target``) we delete nothing, and we never touch any other
+    photo (the previous avatar stays put).
     """
-    old = InputPhoto(
-        id=action.photo_id,
-        access_hash=action.access_hash,
-        file_reference=action.file_reference,
-    )
-    result = await client(UpdateProfilePhotoRequest(id=old))
+    fresh = await _resolve_history_photo(client, action.photo_id)
+    if fresh is None:
+        msg = "Target profile photo is no longer in the account's history"
+        raise RuntimeError(msg)
+    result = await client(UpdateProfilePhotoRequest(id=fresh))
     new_id = getattr(getattr(result, "photo", None), "id", None)
     if isinstance(new_id, int) and new_id != action.photo_id:
-        await client(DeletePhotosRequest(id=[old]))
+        deleted = await client(DeletePhotosRequest(id=[fresh]))
+        if action.photo_id not in (deleted or []):
+            msg = "Telegram did not delete the superseded duplicate photo"
+            raise RuntimeError(msg)
 
 
 async def _remove_story(client: TelegramClient, action: RemoveStory) -> None:

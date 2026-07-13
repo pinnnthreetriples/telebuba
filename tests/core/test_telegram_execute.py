@@ -23,6 +23,7 @@ from telethon.tl.functions.channels import (
 )
 from telethon.tl.functions.photos import (
     DeletePhotosRequest,
+    GetUserPhotosRequest,
     UpdateProfilePhotoRequest,
     UploadProfilePhotoRequest,
 )
@@ -833,19 +834,27 @@ async def test_execute_remove_profile_photo_errors_when_telegram_deletes_nothing
     assert result.error_message
 
 
-@pytest.mark.asyncio
-async def test_execute_set_main_photo_promotes_then_deletes_stale_duplicate(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """«Сделать основным» promotes the photo, then removes the stale duplicate.
+# Fresh id triple the fake GetUserPhotos re-resolves — deliberately different
+# from the stale snapshot ref the action carries, to prove re-resolution.
+_FRESH_ACCESS_HASH = 99
+_FRESH_REFERENCE = b"\xaa\xbb"
 
-    Raw ``updateProfilePhoto`` mints a NEW photo (here id 555) at the front and
-    leaves the original (``big_id``) behind, so we must follow up with a
-    ``DeletePhotosRequest`` for the old id. The int64 id also has to survive
-    intact (carried as a string across the JSON edge), so we use a value past
-    2^53.
+
+def _set_main_client(
+    captured: list[object],
+    *,
+    target_id: int,
+    updated_id: int,
+    deleted_vector: list[int] | None = None,
+    history_ids: list[int] | None = None,
+) -> object:
+    """Fake client for the make-main flow: GetUserPhotos → updateProfilePhoto → delete.
+
+    ``history_ids`` seeds the fresh ``GetUserPhotos`` (default: just ``target_id``);
+    ``updated_id`` is the id ``updateProfilePhoto`` returns; ``deleted_vector`` is
+    what ``DeletePhotosRequest`` reports removed.
     """
-    captured: list[object] = []
+    ids = history_ids if history_ids is not None else [target_id]
 
     class FakeClient:
         async def connect(self) -> None:
@@ -853,29 +862,60 @@ async def test_execute_set_main_photo_promotes_then_deletes_stale_duplicate(
 
         async def __call__(self, request: object) -> object:
             captured.append(request)
-            # updateProfilePhoto returns photos.Photo with a freshly-minted id.
-            return SimpleNamespace(photo=SimpleNamespace(id=555))
+            if isinstance(request, GetUserPhotosRequest):
+                photos = [
+                    SimpleNamespace(
+                        id=pid,
+                        access_hash=_FRESH_ACCESS_HASH,
+                        file_reference=_FRESH_REFERENCE,
+                    )
+                    for pid in ids
+                ]
+                return SimpleNamespace(photos=photos)
+            if isinstance(request, DeletePhotosRequest):
+                return deleted_vector if deleted_vector is not None else []
+            # updateProfilePhoto returns photos.Photo with (maybe fresh) id.
+            return SimpleNamespace(photo=SimpleNamespace(id=updated_id))
 
-    _patch_client(monkeypatch, FakeClient())
+    return FakeClient()
 
+
+@pytest.mark.asyncio
+async def test_execute_set_main_photo_promotes_then_deletes_stale_duplicate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """«Сделать основным» re-resolves a fresh ref, promotes, deletes the duplicate.
+
+    Live-confirmed: ``updateProfilePhoto`` mints a NEW photo (here id 555) and
+    leaves the original (``big_id``) behind, so we follow up with a verified
+    ``DeletePhotosRequest`` for the old id. The gateway re-resolves the target's
+    ``InputPhoto`` from a fresh ``GetUserPhotos`` (never trusting the snapshot
+    ref), and the int64 id must survive intact (past 2^53).
+    """
+    captured: list[object] = []
     big_id = 9_007_199_254_740_993  # 2^53 + 1
+    _patch_client(
+        monkeypatch,
+        _set_main_client(captured, target_id=big_id, updated_id=555, deleted_vector=[big_id]),
+    )
+
     result = await execute(
         "acc-photo-main",
-        SetMainProfilePhoto(
-            photo_id=big_id,
-            access_hash=7,
-            file_reference=b"\x01\x02",
-        ),
+        # Snapshot ref is intentionally STALE — the gateway must ignore it.
+        SetMainProfilePhoto(photo_id=big_id, access_hash=7, file_reference=b"\x01\x02"),
     )
 
     assert result.status == "ok"
+    # A fresh GetUserPhotos is pulled to re-resolve the target.
+    assert len([req for req in captured if isinstance(req, GetUserPhotosRequest)]) == 1
     updates = [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]
     assert len(updates) == 1
     sent = updates[0].id
     assert isinstance(sent, InputPhoto)
     assert sent.id == big_id
-    assert sent.access_hash == 7
-    assert sent.file_reference == b"\x01\x02"
+    # The FRESH access_hash / file_reference are used, not the stale snapshot ones.
+    assert sent.access_hash == _FRESH_ACCESS_HASH
+    assert sent.file_reference == _FRESH_REFERENCE
     # The stale original (old id) is deleted; the new current photo is untouched.
     deletes = [req for req in captured if isinstance(req, DeletePhotosRequest)]
     assert len(deletes) == 1
@@ -891,18 +931,12 @@ async def test_execute_set_main_photo_promotes_then_deletes_stale_duplicate(
 async def test_execute_set_main_photo_skips_delete_when_reordered_in_place(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """If a server ever reorders in place (returned id == old id), delete nothing."""
+    """If a server ever reorders in place (returned id == target id), delete nothing."""
     captured: list[object] = []
-
-    class FakeClient:
-        async def connect(self) -> None:
-            return None
-
-        async def __call__(self, request: object) -> object:
-            captured.append(request)
-            return SimpleNamespace(photo=SimpleNamespace(id=4242))
-
-    _patch_client(monkeypatch, FakeClient())
+    _patch_client(
+        monkeypatch,
+        _set_main_client(captured, target_id=4242, updated_id=4242),
+    )
 
     result = await execute(
         "acc-photo-main",
@@ -912,6 +946,59 @@ async def test_execute_set_main_photo_skips_delete_when_reordered_in_place(
     assert result.status == "ok"
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
     assert len([req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]) == 1
+
+
+@pytest.mark.asyncio
+async def test_execute_set_main_photo_raises_when_target_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A target id no longer in the history is a surfaced error, not a silent no-op."""
+    captured: list[object] = []
+    _patch_client(
+        monkeypatch,
+        _set_main_client(
+            captured,
+            target_id=4242,
+            updated_id=4242,
+            history_ids=[9999],  # some OTHER photo, not the target
+        ),
+    )
+
+    result = await execute(
+        "acc-photo-main",
+        SetMainProfilePhoto(photo_id=4242, access_hash=7, file_reference=b"\x01\x02"),
+    )
+
+    assert result.status != "ok"
+    assert result.error_message
+    # Never promote or delete when the target can't be re-resolved.
+    assert [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)] == []
+    assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
+
+
+@pytest.mark.asyncio
+async def test_execute_set_main_photo_raises_when_delete_unverified(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A minted-new-id promotion whose duplicate delete isn't confirmed raises."""
+    captured: list[object] = []
+    _patch_client(
+        monkeypatch,
+        _set_main_client(
+            captured,
+            target_id=4242,
+            updated_id=555,
+            deleted_vector=[],  # Telegram reported nothing deleted.
+        ),
+    )
+
+    result = await execute(
+        "acc-photo-main",
+        SetMainProfilePhoto(photo_id=4242, access_hash=7, file_reference=b"\x01\x02"),
+    )
+
+    assert result.status != "ok"
+    assert result.error_message
 
 
 @pytest.mark.asyncio

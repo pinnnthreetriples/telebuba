@@ -165,6 +165,9 @@ class AccountProfileSnapshot(BaseModel):
     username: str | None = None
     phone: str | None = None
     bio: str | None = None
+    # Authoritative current-avatar id (from ``UserFull.profile_photo.id``) used to
+    # flag which history photo is "main" — see ``TelegramProfileSnapshot``.
+    current_photo_id: int | None = None
     stories: list[TelegramStoryThumb] = Field(default_factory=list)
     music: list[TelegramMusicItem] = Field(default_factory=list)
     photos: list[TelegramProfilePhoto] = Field(default_factory=list)

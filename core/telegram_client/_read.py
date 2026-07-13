@@ -283,6 +283,10 @@ async def _dispatch_get_user_profile(client: TelegramClient) -> TelegramProfileS
     full = await client(GetFullUserRequest(InputUserSelf()))
     full_user = getattr(full, "full_user", None)
     bio = _optional_str(getattr(full_user, "about", None))
+    # ``UserFull.profile_photo`` is the current avatar; its id is authoritative
+    # for marking which history photo is "main" (reused read — no extra request).
+    raw_photo_id = getattr(getattr(full_user, "profile_photo", None), "id", None)
+    current_photo_id = raw_photo_id if isinstance(raw_photo_id, int) else None
     users = getattr(full, "users", []) or []
     user = users[0] if users else None
     return TelegramProfileSnapshot(
@@ -291,6 +295,7 @@ async def _dispatch_get_user_profile(client: TelegramClient) -> TelegramProfileS
         username=_optional_str(getattr(user, "username", None)),
         phone=_optional_str(getattr(user, "phone", None)),
         bio=bio,
+        current_photo_id=current_photo_id,
     )
 
 

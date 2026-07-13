@@ -6382,6 +6382,11 @@
               }
             ],
             "title": "Thumb Url"
+          },
+          "is_main": {
+            "type": "boolean",
+            "title": "Is Main",
+            "default": false
           }
         },
         "type": "object",

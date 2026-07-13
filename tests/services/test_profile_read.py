@@ -359,6 +359,55 @@ async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatc
 
 
 @pytest.mark.asyncio
+async def test_account_profile_view_marks_exactly_one_main_by_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The view flags is_main on the photo whose id matches current_photo_id — only it.
+
+    The current avatar need NOT be index 0 (Telegram's history order and the
+    real current-avatar are independent), so the flag is matched by identity.
+    """
+
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return AccountProfileSnapshot(
+            account_id=account_id,
+            current_photo_id=2,
+            photos=[
+                TelegramProfilePhoto(photo_id=1, access_hash=1, file_reference=b"a"),
+                TelegramProfilePhoto(photo_id=2, access_hash=2, file_reference=b"b"),
+                TelegramProfilePhoto(photo_id=3, access_hash=3, file_reference=b"c"),
+            ],
+        )
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+    view = await account_profile_view("acc-1")
+
+    assert [photo.is_main for photo in view.photos] == [False, True, False]
+    assert sum(photo.is_main for photo in view.photos) == 1
+    # Ordering is preserved (not reordered so main is first).
+    assert [photo.photo_id for photo in view.photos] == ["1", "2", "3"]
+
+
+@pytest.mark.asyncio
+async def test_account_profile_view_no_main_when_current_id_absent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No photo is flagged main when the account has no current avatar id."""
+
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        return AccountProfileSnapshot(
+            account_id=account_id,
+            current_photo_id=None,
+            photos=[TelegramProfilePhoto(photo_id=1, access_hash=1, file_reference=b"a")],
+        )
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
+    view = await account_profile_view("acc-1")
+
+    assert [photo.is_main for photo in view.photos] == [False]
+
+
+@pytest.mark.asyncio
 async def test_account_profile_view_thumb_url_none_without_thumb_bytes(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
