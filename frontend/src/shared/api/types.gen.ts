@@ -338,7 +338,14 @@ export type ActionResult = {
   /**
    * Status
    */
-  status: 'ok' | 'flood_wait' | 'slow_mode_wait' | 'premium_wait' | 'peer_flood' | 'failed';
+  status:
+    | 'ok'
+    | 'flood_wait'
+    | 'slow_mode_wait'
+    | 'premium_wait'
+    | 'peer_flood'
+    | 'failed'
+    | 'unavailable';
   /**
    * Action Type
    */

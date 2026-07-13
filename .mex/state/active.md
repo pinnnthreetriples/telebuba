@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-13
+last_updated: 2026-07-14
 ---
 
 # Active State
@@ -374,6 +374,37 @@ clean). NOTE: a frontend-only rebuild does NOT restart the single-process uvicor
 backend — the make-main fix (#244/#245) only takes effect after the backend
 process itself is restarted on current main.
 
+A 2026-07-14 account-edit **backend hardening batch** (PR open, branch
+`fix/account-edit-backend-batch`; a parallel PR covers the frontend) fixed ten
+audited defects around the edit-profile modal: (1) profile-snapshot **cache race**
+— an in-flight fetch that started before a mutation could re-store pre-mutation
+state right after `invalidate_account_profile_cache` ran; now a per-account
+generation counter gates the store, plus single-flight dedup of concurrent
+fetches (modal open + N cold thumbs used to fire N+1 full 5-action fetches);
+(2) every media mutation + `update_account_profile` now invalidates BEFORE
+raising (the #249 pattern; DB-write failure after a successful Telegram write
+also invalidates); (3) `UpdateUsernameRequest` is sent FIRST (the fallible call)
+so an occupied username can no longer half-apply name/bio, and
+`USERNAME_NOT_MODIFIED` is treated as a no-op; (4) thumb downloads are bounded by
+`PROFILE_MEDIA__THUMB_CONCURRENCY` (new `_thumbs.py`; default 4) and the first
+FloodWait trips a per-batch breaker (one `telegram_thumb_download_flood_wait`
+event, siblings degrade to None thumbs); (5) `_post_story` now extracts the real
+story id from the `Updates` container (`UpdateStory.story.id`; the old
+`result.id` was always None — fakes remodelled to the real shape); (6) stale
+pre-#249 docstrings rewritten to the REPLACE/never-delete model (mint inherits
+the original's date; `UserFull.profile_photo.id` is the avatar authority);
+(7) `execute_read_many` wraps pool/socket/timeout errors into
+`TelegramReadError`; (8) new `ActionStatus` **`unavailable`** — pool/connection
+failures map to 503 (`api/errors.py`) instead of 400 client-fault; warming
+counts it like `failed` (`_FAILURE_STATUSES`); the `telegram_action_unavailable`
+event + ru/en labels added; (9) music unsave verifies the server Bool and raises
+on False (mirror of the photo-remove guard); (10) the vacuous per-extra collage
+suffix check (validated the PRIMARY's filename) was dropped — size caps stay,
+the decode is the format gate — and the API pre-checks the collage count cap
+before buffering uploads into RAM. `_actions.py` result builders were split to
+`_action_results.py` (aislop size budget). Gates: 1293 pytest / 95% branch,
+ruff+ty+aislop clean, API client regenerated (only the `unavailable` enum).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.
@@ -381,9 +412,9 @@ process itself is restarted on current main.
 - Proxy unassign-from-account: backend exists (`POST /proxies/unassign`), no UI trigger.
 - `ListenerEditModal` persists the picked listener only while the runtime runs.
 - Accounts table status filter / column sort / bulk actions — backend supports, UI gap.
-- Photo «сделать главной» — implemented as promote-then-delete-old (raw
-  `updateProfilePhoto` mints a new photo + leaves the original, so we delete the
-  stale id after, mirroring TDLib `inputChatPhotoPrevious`).
+- Photo «сделать главной» — promote-only (`updateProfilePhoto` REPLACES: the
+  original id is consumed, the mint inherits its date; nothing is ever deleted —
+  see the #249 data-loss fix).
 - Warming per-action numeric limits stay auto/config (read-only in UI, auto-cap ADR).
 - **Interest-partitioned channel catalog** — the durable fix for cross-account channel overlap (joins are permanent + the pool is shared, so churn/exploration only bound convergence, not eliminate it). Explicitly deferred by #203 as a separate follow-up.
 

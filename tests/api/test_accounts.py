@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import httpx
 import pytest
 
+from core.config import settings
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.phone_login import PhoneCodeRequestResult
 from schemas.profile_media import (
@@ -594,6 +595,67 @@ async def test_post_story_collage_multipart_reaches_service(
     assert seen["content"] == b"first"
     assert seen["extra_images"] == [b"second"]
     assert seen["collage_layout"] == "v2"
+
+
+@pytest.mark.asyncio
+async def test_post_story_collage_count_cap_rejected_before_read(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Too many collage files are refused BEFORE buffering uploads into RAM.
+
+    The service re-checks after decode; this API-level gate exists so N
+    oversized uploads never get read into memory first. Same stable code on
+    the wire as the service check.
+    """
+    monkeypatch.setattr(settings.profile_media, "story_collage_max_images", 2)
+
+    async def _fake(upload: object) -> ActionResult:  # noqa: ARG001
+        msg = "service must not be reached when the count cap fails"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.post_account_story", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story",
+            files=[
+                ("files", ("a.jpg", b"1", "image/jpeg")),
+                ("files", ("b.jpg", b"2", "image/jpeg")),
+                ("files", ("c.jpg", b"3", "image/jpeg")),
+            ],
+            data={"media_kind": "image"},
+        )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "story_collage_too_many_images"
+
+
+@pytest.mark.asyncio
+async def test_action_unavailable_maps_to_503(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The ``unavailable`` action code is a 503, not a 400 client fault.
+
+    Pool/socket failures inside the gateway are an internal outage; billing
+    them as ``bad_request`` blamed the operator's input for infra downtime.
+    """
+
+    async def _unavailable(data: object) -> ActionResult:  # noqa: ARG001
+        code = "unavailable"
+        raise AccountActionError(code)
+
+    monkeypatch.setattr("services.accounts.set_account_story_pinned", _unavailable)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story/pin",
+            json={"story_id": 9, "pinned": True},
+        )
+    assert resp.status_code == 503
+    body = resp.json()
+    assert body["error"]["code"] == "unavailable"
+    assert body["error"]["message"] == "unavailable"
 
 
 @pytest.mark.asyncio

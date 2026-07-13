@@ -62,6 +62,11 @@ async def _handle_account_action_error(
         if exc.retry_after_seconds is not None
         else None
     )
+    if exc.code == "unavailable":
+        # Gateway infrastructure failure (pool/socket/timeout): a server-side
+        # outage, not a client fault — 503 so the SPA offers retry instead of
+        # blaming the input.
+        return _envelope(code="unavailable", message=exc.code, status_code=503, fields=fields)
     return _envelope(code="bad_request", message=exc.code, status_code=400, fields=fields)
 
 

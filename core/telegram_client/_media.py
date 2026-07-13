@@ -111,8 +111,25 @@ async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
             noforwards=action.protect_content,
         ),
     )
-    story_id = getattr(result, "id", None)
-    return story_id if isinstance(story_id, int) else None
+    return _story_id_from_updates(result)
+
+
+def _story_id_from_updates(result: object) -> int | None:
+    """Pull the new story's id out of Telethon's ``Updates`` container.
+
+    ``stories.sendStory`` returns an ``Updates`` (which has no ``.id`` of its
+    own — a bare ``getattr(result, "id")`` always came back ``None``); the
+    minted id rides inside ``result.updates`` as an ``UpdateStory`` carrying
+    ``.story.id``. Guarded iteration: first update with a story id wins.
+    """
+    updates = getattr(result, "updates", None)
+    if not isinstance(updates, (list, tuple)):
+        return None
+    for update in updates:
+        story_id = getattr(getattr(update, "story", None), "id", None)
+        if isinstance(story_id, int):
+            return story_id
+    return None
 
 
 async def _story_media(
@@ -213,8 +230,13 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
     ``account.saveMusic`` is dual-purpose — passing ``unsave=True`` removes
     the document from the saved list. We reuse it instead of pulling a
     separate ``DeleteSavedMusicRequest`` (which Telethon doesn't ship in 1.43.2).
+
+    The server answers ``False`` for a stale/unknown ``InputDocument`` — a
+    silent no-op that would otherwise be logged as a successful removal while
+    the track stays on the profile. Raising surfaces it instead (mirrors
+    ``_remove_profile_photo``'s deleted-vector check).
     """
-    await client(
+    removed = await client(
         SaveMusicRequest(
             id=InputDocument(
                 id=action.file_id,
@@ -224,6 +246,9 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
             unsave=True,
         ),
     )
+    if not removed:
+        msg = "Telegram did not remove the track (unknown or expired reference)"
+        raise RuntimeError(msg)
 
 
 async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePhoto) -> None:

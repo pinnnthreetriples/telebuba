@@ -28,12 +28,13 @@ from telethon.tl.types import (
 from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
-from core.telegram_client._pool import get_client
+from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
 from core.telegram_client._read_stories import (
     dispatch_list_active_stories,
     dispatch_list_pinned_stories,
 )
+from core.telegram_client._thumbs import download_thumb_bounded, thumb_limiter
 from schemas.telegram_actions import (
     BanCheckResult,
     CheckBannedInChannel,
@@ -130,6 +131,11 @@ async def execute_read_many(
         raise TelegramReadError(reason) from exc
     except errors.RPCError as exc:
         reason = f"RPC: {type(exc).__name__}"
+        raise TelegramReadError(reason) from exc
+    except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
+        # Pool/socket failures must not leak raw past the gateway — services
+        # only handle ``TelegramReadError`` (layer contract, non-negotiable #6).
+        reason = f"{type(exc).__name__}: {exc}"
         raise TelegramReadError(reason) from exc
     else:
         return results
@@ -344,10 +350,12 @@ async def _dispatch_list_profile_photos(
 ) -> TelegramProfilePhotos:
     """Pull the account's profile-photo history with a small thumb per photo.
 
-    ``GetUserPhotosRequest`` returns newest-first; the first item is the
-    photo Telegram currently shows as the avatar. Each photo carries the
-    ``InputPhoto`` id triple needed for the matching ``RemoveProfilePhoto``
-    write action.
+    ``GetUserPhotosRequest`` returns the history newest-first by date, but the
+    first item is NOT necessarily the current avatar: a set-main mints a new
+    id that inherits the ORIGINAL photo's date, so the avatar can sit anywhere
+    in the list — ``UserFull.profile_photo.id`` is the only avatar authority
+    (see ``_dispatch_get_user_profile``). Each photo carries the ``InputPhoto``
+    id triple needed for the matching ``RemoveProfilePhoto`` write action.
     """
     result = await client(
         GetUserPhotosRequest(
@@ -362,19 +370,32 @@ async def _dispatch_list_profile_photos(
         for photo in (getattr(result, "photos", []) or [])
         if int(getattr(photo, "id", 0) or 0)
     ]
-    # Fetch every thumbnail concurrently — serial awaits made the modal open
-    # scale linearly with the number of history photos.
-    items = await asyncio.gather(*(_profile_photo(client, photo) for photo in raw_photos))
+    # Fetch thumbnails concurrently (serial awaits made the modal open scale
+    # linearly with history size) but bounded — see ``_thumbs``.
+    semaphore, flood_stop = thumb_limiter()
+    items = await asyncio.gather(
+        *(_profile_photo(client, photo, semaphore, flood_stop) for photo in raw_photos),
+    )
     return TelegramProfilePhotos(items=list(items))
 
 
-async def _profile_photo(client: TelegramClient, photo: object) -> TelegramProfilePhoto:
+async def _profile_photo(
+    client: TelegramClient,
+    photo: object,
+    semaphore: asyncio.Semaphore,
+    flood_stop: asyncio.Event,
+) -> TelegramProfilePhoto:
     return TelegramProfilePhoto(
         photo_id=int(getattr(photo, "id", 0) or 0),
         access_hash=int(getattr(photo, "access_hash", 0) or 0),
         file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
         date_unix=_photo_date_unix(photo),
-        thumb_bytes=await _download_photo_thumb(client, photo),
+        thumb_bytes=await download_thumb_bounded(
+            semaphore,
+            flood_stop,
+            "photos",
+            lambda: _download_photo_thumb(client, photo),
+        ),
     )
 
 
@@ -406,6 +427,10 @@ async def _download_photo_thumb(client: TelegramClient, photo: object) -> bytes 
     try:
         # ``file=bytes`` (the type) is Telethon's in-memory download mode.
         data = await client.download_media(photo, file=bytes, thumb=-1)  # ty: ignore[invalid-argument-type]
+    except errors.FloodWaitError:
+        # Rate limits must reach the batch breaker in ``_thumbs`` — swallowing
+        # them here let sibling downloads keep hammering a flooded connection.
+        raise
     except (errors.RPCError, ValueError, TypeError):
         return None
     return data if isinstance(data, (bytes, bytearray)) else None

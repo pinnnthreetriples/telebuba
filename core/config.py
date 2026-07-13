@@ -190,6 +190,10 @@ class ProfileMediaSettings(BaseSettings):
     story_collage_max_images: int = Field(default=6, ge=2, le=6)
     story_collage_gap_px: int = Field(default=8, ge=0)
     music_max_bytes: int = Field(default=30_000_000, ge=1)
+    # Concurrent thumbnail downloads per read batch (photo history / stories).
+    # Unbounded gather over up to 100 downloads hammered the DC in parallel and
+    # tripped flood limits; 4 keeps the modal open fast without the stampede.
+    thumb_concurrency: int = Field(default=4, ge=1)
     # .session files = effective credentials. Cap to deter accidental large uploads.
     session_max_bytes: int = Field(default=5_000_000, ge=1)
     # How long a live-fetched profile snapshot is reused before the next

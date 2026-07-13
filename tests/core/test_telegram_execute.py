@@ -41,6 +41,7 @@ from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client import create_telegram_client, execute
 from core.telegram_client._actions import _typing_seconds
+from core.telegram_client._pool import TelegramClientPoolError
 from schemas.device_fingerprint import TelegramClientProfile
 from schemas.telegram_actions import (
     AddProfileMusic,
@@ -51,6 +52,7 @@ from schemas.telegram_actions import (
     LeaveChannel,
     PostComment,
     PostStory,
+    RemoveProfileMusic,
     RemoveProfilePhoto,
     RemoveStory,
     SendDirectMessage,
@@ -533,6 +535,92 @@ async def test_execute_update_profile_empty_strings_clear(
 
 
 @pytest.mark.asyncio
+async def test_execute_update_profile_sends_username_before_profile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The fallible ``UpdateUsernameRequest`` must be dispatched FIRST.
+
+    Sending it after ``UpdateProfileRequest`` half-applied the edit whenever
+    the username was occupied/invalid: name/bio had already changed on
+    Telegram while the UI reported "nothing saved" and the DB snapshot
+    stayed stale.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-4-order",
+        UpdateProfile(first_name="Alice", username="alice", bio="Bio"),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], UpdateUsernameRequest)
+    assert isinstance(captured[1], UpdateProfileRequest)
+
+
+@pytest.mark.asyncio
+async def test_execute_update_profile_occupied_username_leaves_profile_untouched(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused username fails the action BEFORE any profile field changes."""
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+            if isinstance(request, UpdateUsernameRequest):
+                raise errors.UsernameOccupiedError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-4-occupied",
+        UpdateProfile(first_name="Alice", username="taken", bio="Bio"),
+    )
+
+    assert result.status != "ok"
+    assert not any(isinstance(req, UpdateProfileRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_execute_update_profile_username_not_modified_is_ok(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-sending the current username (USERNAME_NOT_MODIFIED) is a no-op, not a failure."""
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+            if isinstance(request, UpdateUsernameRequest):
+                raise errors.UsernameNotModifiedError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-4-same-username",
+        UpdateProfile(first_name="Alice", username="alice", bio="Bio"),
+    )
+
+    assert result.status == "ok"
+    assert any(isinstance(req, UpdateProfileRequest) for req in captured)
+
+
+@pytest.mark.asyncio
 async def test_execute_set_profile_photo_uploads_photo(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -581,7 +669,18 @@ async def test_execute_post_story_dispatches_story_request(
 
         async def __call__(self, request: object) -> object:
             captured.append(request)
-            return MagicMock(id=777)
+            if isinstance(request, SendStoryRequest):
+                # Real shape: ``stories.sendStory`` answers an ``Updates``
+                # container (no ``.id`` of its own); the minted story id rides
+                # inside as an ``UpdateStory`` carrying ``.story.id``. A filler
+                # update first proves the extraction skips non-story updates.
+                return SimpleNamespace(
+                    updates=[
+                        SimpleNamespace(),
+                        SimpleNamespace(story=SimpleNamespace(id=777)),
+                    ],
+                )
+            return MagicMock()
 
     _patch_client(monkeypatch, FakeClient())
 
@@ -798,7 +897,12 @@ async def test_execute_post_story_collage_uploads_single_composite(
 
         async def __call__(self, request: object) -> object:
             captured.append(request)
-            return MagicMock(id=555)
+            if isinstance(request, SendStoryRequest):
+                # Real Updates shape — see the single-photo story test above.
+                return SimpleNamespace(
+                    updates=[SimpleNamespace(story=SimpleNamespace(id=555))],
+                )
+            return MagicMock()
 
     _patch_client(monkeypatch, FakeClient())
 
@@ -904,6 +1008,59 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
     assert result.status == "ok"
     assert deleted == [99]
     assert any(isinstance(req, SaveMusicRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_execute_remove_profile_music_ok_when_server_confirms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            assert isinstance(request, SaveMusicRequest)
+            assert request.unsave is True
+            return True
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-music-remove",
+        RemoveProfileMusic(file_id=5, access_hash=6, file_reference=b"\x01"),
+    )
+
+    assert result.status == "ok"
+
+
+@pytest.mark.asyncio
+async def test_execute_remove_profile_music_errors_when_server_says_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``account.saveMusic(unsave=True)`` answering ``False`` must surface an error.
+
+    Telegram answers ``False`` for a stale/unknown ``InputDocument`` — a silent
+    no-op that used to be logged as a successful removal while the track stayed
+    on the profile (mirrors the photo-remove empty-vector guard).
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            assert isinstance(request, SaveMusicRequest)
+            return False
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-music-remove-noop",
+        RemoveProfileMusic(file_id=5, access_hash=6, file_reference=b"\x01"),
+    )
+
+    assert result.status != "ok"
+    assert result.error_message
 
 
 @pytest.mark.asyncio
@@ -1481,6 +1638,41 @@ async def test_execute_handles_generic_failure(monkeypatch: pytest.MonkeyPatch) 
     assert result.status == "failed"
     assert result.error_type == "RuntimeError"
     assert result.error_message == "boom"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "exc",
+    [
+        TelegramClientPoolError("acc-7", RuntimeError("connect failed")),
+        ConnectionError("socket closed"),
+        TimeoutError("handshake timed out"),
+    ],
+)
+async def test_execute_classifies_infrastructure_failures_unavailable(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+) -> None:
+    """Pool/socket/timeout failures are ``unavailable``, not a client-fault ``failed``.
+
+    ``failed`` reaches the API as 400 bad_request; an internal outage must map
+    to 503 instead (see ``api/errors.py``), so the executor classifies the
+    infrastructure family separately from generic action failures.
+    """
+
+    async def failing_get_client(_account_id: str) -> object:
+        raise exc
+
+    async def fake_fetch(account_id: str) -> object:
+        return MagicMock(session_name=account_id)
+
+    monkeypatch.setattr("core.telegram_client._actions.get_client", failing_get_client)
+    monkeypatch.setattr("core.telegram_client._actions.fetch_account", fake_fetch)
+
+    result = await execute("acc-7", JoinChannel(channel="@hot"))
+
+    assert result.status == "unavailable"
+    assert result.error_type == type(exc).__name__
 
 
 # --------------------------------------------------------------------------- #

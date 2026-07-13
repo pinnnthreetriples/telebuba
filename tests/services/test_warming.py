@@ -1725,6 +1725,33 @@ async def test_cycle_marks_failed_when_every_action_failed(
 
 
 @pytest.mark.asyncio
+async def test_cycle_counts_unavailable_actions_as_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``unavailable`` (pool/socket outage) is accounted like ``failed``.
+
+    The status exists so the API can 503 instead of 400; warming must not let
+    it fall through its ``== "failed"`` checks as a silent no-op that reports
+    an all-dead cycle as ok.
+    """
+    recorder = _StatusRecorder()
+    recorder.status_by_type = {
+        "set_online": "ok",
+        "join_channel": "unavailable",
+        "read_channel": "unavailable",
+    }
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=False, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.status == "failed"
+    assert result.failures >= 2
+    assert result.last_failed_action is not None
+
+
+@pytest.mark.asyncio
 async def test_cycle_sets_offline_even_when_inner_step_raises(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

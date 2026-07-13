@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
+from core.config import settings
 from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfileMusicUpload,
@@ -122,6 +123,13 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
     if not files:
         raise HTTPException(
             status_code=http_status.HTTP_400_BAD_REQUEST, detail="no files uploaded"
+        )
+    if len(files) > settings.profile_media.story_collage_max_images:
+        # Count-cap check BEFORE buffering every upload into RAM; the service
+        # re-checks after decode (same stable locale-neutral code).
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST,
+            detail="story_collage_too_many_images",
         )
     primary, *extras = files
     upload = AccountStoryUpload(

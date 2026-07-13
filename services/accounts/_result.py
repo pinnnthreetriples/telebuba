@@ -29,5 +29,11 @@ def raise_for_result(result: ActionResult) -> None:
     """Raise :class:`AccountActionError` unless ``result`` is ``ok``."""
     if result.status == "ok":
         return
+    if result.status == "unavailable":
+        # Infrastructure failure (pool/socket) — keep the stable status code,
+        # not the raw exception message, so the API maps it to 503 unavailable
+        # instead of billing an internal outage as a 400 client fault.
+        code = "unavailable"
+        raise AccountActionError(code)
     code = result.error_message or result.status
     raise AccountActionError(code, retry_after_seconds=result.flood_wait_seconds)

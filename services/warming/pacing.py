@@ -55,6 +55,10 @@ _WAIT_STATUSES: Final = frozenset({"flood_wait", "slow_mode_wait", "premium_wait
 # Any status that should halt the current channel/cycle pass. ``peer_flood`` is
 # a moderation restriction (no duration) handled by quarantine, not a wait.
 _HALT_STATUSES: Final = _WAIT_STATUSES | {"peer_flood"}
+# Plain per-action failures (no wait semantics). ``unavailable`` is a gateway
+# infrastructure failure (pool/socket) — for warming accounting it counts like
+# any other failed action rather than silently falling through as a no-op.
+_FAILURE_STATUSES: Final = frozenset({"failed", "unavailable"})
 
 
 def _now_iso() -> str:

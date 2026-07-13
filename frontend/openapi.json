@@ -4970,7 +4970,8 @@
               "slow_mode_wait",
               "premium_wait",
               "peer_flood",
-              "failed"
+              "failed",
+              "unavailable"
             ],
             "title": "Status"
           },
