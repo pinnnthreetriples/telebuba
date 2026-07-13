@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import type { TFunction } from 'i18next';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -50,6 +51,22 @@ function mono(id: string): string {
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
   const value = extra?.[key];
   return typeof value === 'string' ? value : undefined;
+}
+
+// Human-readable tail for a log line: why a reaction was/wasn't placed, or how
+// many stories were seen — the honest "the engine considered this" breadcrumb.
+function lineDetail(t: TFunction, line: LogEntry): string {
+  const skip =
+    extraStr(line.extra, 'reaction_skip') ??
+    (line.event === 'warming_reaction_skipped' ? extraStr(line.extra, 'reason') : undefined);
+  if (skip) return t(`logEventReason.${skip}`, { defaultValue: '' });
+  const seen = line.extra?.stories_seen;
+  if (line.event === 'telegram_watch_peer_stories' && typeof seen === 'number') {
+    return seen > 0
+      ? t('warming.card.storiesSeen', { count: seen })
+      : t('warming.card.storiesNone');
+  }
+  return '';
 }
 
 // The rail reflects the engine's real cycle progress: waiting states park on
@@ -436,13 +453,16 @@ function WarmingCard({
                 ) : (
                   visibleLines.map((line) => {
                     // "Which channel" — the gateway logs the touched channel in
-                    // extra.channel; show its label when configured, else the handle.
-                    const rawChannel = extraStr(line.extra, 'channel');
+                    // extra.channel (or extra.peer for stories); show its label
+                    // when configured, else the handle.
+                    const rawChannel =
+                      extraStr(line.extra, 'channel') ?? extraStr(line.extra, 'peer');
                     const channel = rawChannel
                       ? (channelLabels[rawChannel] ?? rawChannel)
                       : undefined;
                     // "Which reaction" — the emoji the gateway actually placed.
                     const reaction = extraStr(line.extra, 'reaction');
+                    const detail = lineDetail(t, line);
                     return (
                       <div key={line.id} className="flex gap-2">
                         <span className="shrink-0 text-[#5c5c66]">
@@ -455,6 +475,9 @@ function WarmingCard({
                           {eventLabel(t, line.event)}
                         </span>
                         {reaction ? <span className="shrink-0">{reaction}</span> : null}
+                        {detail ? (
+                          <span className="truncate text-[#8a8a92]">· {detail}</span>
+                        ) : null}
                       </div>
                     );
                   })

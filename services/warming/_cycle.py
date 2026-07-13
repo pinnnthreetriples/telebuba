@@ -150,6 +150,16 @@ async def _read_and_react(  # noqa: PLR0913
             out.reactions = 1
         elif react_result.status == "failed":
             out.failures += 1
+    elif can_react and reactions_enabled:
+        # We could have reacted, but the persona's reaction dice missed this
+        # cycle. Log it so the activity feed shows the decision (a human doesn't
+        # react to every post) rather than silent inaction the operator can't see.
+        await log_event(
+            "INFO",
+            "warming_reaction_skipped",
+            account_id=account_id,
+            extra={"channel": channel, "reason": "chance"},
+        )
     return out
 
 

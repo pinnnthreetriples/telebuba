@@ -113,6 +113,16 @@ recorded before: the gateway's `execute` now merges a `_DispatchResult.log_extra
 (`{reaction: <emoji>}` from `_dispatch_react_to_post`) into the `telegram_react_to_post`
 log row. +1 backend test / +1 Vitest.
 
+A 2026-07-13 follow-up made the warming activity log **honest about non-actions**:
+reactions now log why nothing was placed — `warming_reaction_skipped` reason=`chance`
+(persona dice missed; written by the *service*, since the gateway isn't called), or
+a gateway `reaction_skip` of `no_posts`/`no_emoji` — and story views log `stories_seen`
+(N vs 0 → "watched N" vs "no active stories"). Reuses the `_DispatchResult.log_extra`
+seam; `dispatch_watch_peer_stories` now returns the seen count. Note: story viewing has
+**no probability gate** (attempted once per cycle), so there's deliberately no "chance
+missed" line for it. Cold-start spread was also lowered 24h→8h (#239) so the first cycle
+lands the same evening/next morning. +3 backend tests / +1 Vitest / i18n ru+en.
+
 A 2026-07-11 feature added **phone-number authentication as a third add-account
 method** (branch `phone-authentication`). The phone-code gateway/service/cache
 (`_auth.py`, `services/accounts/login.py`, `_login_state.py`) and the

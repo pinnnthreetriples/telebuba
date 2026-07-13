@@ -39,6 +39,7 @@ from core.db import (
     upsert_warming_state,
 )
 from core.logging import reset_logging_for_tests, setup_logging
+from core.repositories.logs import list_recent_logs
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.gemini import GeminiResult
 from schemas.proxy import ProxyCheckUpdate
@@ -264,6 +265,30 @@ async def test_cycle_does_not_count_skipped_reaction(monkeypatch: pytest.MonkeyP
     assert result.status == "ok"
     assert result.reactions_sent == 0
     assert "react_to_post" in recorder.types()  # it did attempt
+
+
+@pytest.mark.asyncio
+async def test_cycle_logs_reaction_skip_when_chance_misses(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Reactions on + read ok but the persona dice missed → a 'chance' skip is logged.
+
+    The engine never even dispatches react_to_post here, so this honest breadcrumb
+    can only come from the service (not the gateway) — the activity feed shows the
+    decision instead of silent inaction.
+    """
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(_seams.rng, "random", lambda: 1.0)  # reaction dice always miss
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+
+    result = await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    assert result.reactions_sent == 0
+    assert "react_to_post" not in recorder.types()  # dice missed → never dispatched
+    skips = [r for r in await list_recent_logs(limit=50) if r.event == "warming_reaction_skipped"]
+    assert skips
+    assert skips[0].extra["reason"] == "chance"
+    assert skips[0].extra["channel"] == "channel_one"
 
 
 @pytest.mark.asyncio
