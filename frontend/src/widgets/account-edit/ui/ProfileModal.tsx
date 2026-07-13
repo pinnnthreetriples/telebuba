@@ -299,9 +299,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     refresh();
   };
   const onPhotosPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
+    // Materialise the array BEFORE resetting the input — event.target.files is
+    // a live FileList, and value='' empties it, so reading it afterwards yields
+    // nothing. (jsdom doesn't emulate that clear, which is why tests missed it.)
+    const files = Array.from(event.target.files ?? []);
     event.target.value = '';
-    void uploadPhotos(Array.from(files ?? []));
+    void uploadPhotos(files);
   };
 
   const onMusicPicked = (event: React.ChangeEvent<HTMLInputElement>) => {

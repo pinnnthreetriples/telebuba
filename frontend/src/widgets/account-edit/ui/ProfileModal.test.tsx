@@ -138,6 +138,30 @@ test('the photo tab bulk-uploads every picked file', async () => {
   });
 });
 
+test('the picker still uploads when the browser clears the live FileList on reset', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Фото'));
+
+  // Real browsers: input.files is a live FileList and value='' EMPTIES it in
+  // place. jsdom doesn't, so we emulate it — the handler must read files before
+  // the reset, or this drops to zero uploads (the shipped-and-reverted bug).
+  const fileInput = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  const live: File[] = [new File(['a'], 'a.jpg', { type: 'image/jpeg' })];
+  Object.defineProperty(fileInput, 'files', { configurable: true, get: () => live });
+  Object.defineProperty(fileInput, 'value', {
+    configurable: true,
+    get: () => '',
+    set: () => {
+      live.length = 0;
+    },
+  });
+  fireEvent.change(fileInput);
+  await waitFor(() => {
+    expect(fired('/accounts/photo')).toBe(true);
+  });
+});
+
 test('dropping image files on the photo tab uploads each one', async () => {
   routeApi();
   renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
