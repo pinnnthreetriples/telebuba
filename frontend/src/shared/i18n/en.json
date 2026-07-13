@@ -225,6 +225,8 @@
       "makeMain": "Make main",
       "makingMain": "Setting…",
       "upload": "Upload",
+      "uploadingCount": "Uploading {{done}}/{{total}}",
+      "dropPhotos": "Drop to upload",
       "storiesHint": "Current account stories",
       "removeStory": "Remove story",
       "removeStoryTitle": "Remove story?",
