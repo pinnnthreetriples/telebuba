@@ -319,6 +319,66 @@ test('names which channel and which reaction each log action touched', async () 
   expect(screen.getByText('🔥')).toBeInTheDocument();
 });
 
+test('shows reaction-skip reasons and stories-seen detail in the log', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: '2026-06-30T12:00:00+00:00',
+              level: 'INFO',
+              status: 'success',
+              account_id: '79051184490',
+              event: 'warming_reaction_skipped',
+              extra: { channel: '@news', reason: 'chance' },
+            },
+            {
+              id: 2,
+              created_at: '2026-06-30T12:01:00+00:00',
+              level: 'INFO',
+              status: 'success',
+              account_id: '79051184490',
+              event: 'telegram_watch_peer_stories',
+              extra: { peer: '@durov', stories_seen: 3 },
+            },
+            {
+              id: 3,
+              created_at: '2026-06-30T12:02:00+00:00',
+              level: 'INFO',
+              status: 'success',
+              account_id: '79051184490',
+              event: 'telegram_watch_peer_stories',
+              extra: { peer: '@news', stories_seen: 0 },
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(
+    <WarmingBoard
+      warming={[account('79051184490', 'active')]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+    />,
+  );
+  await userEvent.click(screen.getByText('Лог активности'));
+  await waitFor(() => {
+    expect(screen.getByText('Реакция не поставлена')).toBeInTheDocument();
+  });
+  // "chance didn't hit" breadcrumb, and the two honest stories outcomes.
+  expect(screen.getByText('· не выпал шанс')).toBeInTheDocument();
+  expect(screen.getByText('· просмотрено историй: 3')).toBeInTheDocument();
+  expect(screen.getByText('· нет активных историй')).toBeInTheDocument();
+});
+
 test('clear button hides the existing log lines', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

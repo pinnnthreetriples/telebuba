@@ -250,7 +250,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case ReadChannel():
             await _dispatch_read_channel(client, action)
         case WatchPeerStories():
-            await dispatch_watch_peer_stories(client, action)
+            log_extra = {"stories_seen": await dispatch_watch_peer_stories(client, action)}
         case ReactToPost():
             react = await _dispatch_react_to_post(client, action)
             message_id = react.message_id
@@ -297,8 +297,9 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     channels that restrict reactions (e.g. @durov). We first read the channel's
     allowed set and prefer one of our emoji from it; if none overlap we still
     react with one of the channel's own (non-negative) emoji so a reaction lands.
-    Only a channel that permits nothing usable skips (empty result). On success
-    the placed emoji rides back in ``log_extra`` so the activity log can show it.
+    The outcome always rides back in ``log_extra`` so the activity log can show
+    it: the placed emoji on success, or a ``reaction_skip`` reason (no recent
+    posts / no usable emoji) when nothing landed.
     """
     messages = await client.get_messages(action.channel, limit=action.message_limit)
     candidates = [
@@ -307,11 +308,11 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
         if getattr(m, "id", None)
     ]
     if not candidates:
-        return _DispatchResult()
+        return _DispatchResult(log_extra={"reaction_skip": "no_posts"})
     allowed = await _channel_reaction_whitelist(client, action.channel)
     emoji = _pick_reaction(action.reactions, allowed)
     if emoji is None:
-        return _DispatchResult()
+        return _DispatchResult(log_extra={"reaction_skip": "no_emoji"})
     message_id = _rng.choice(candidates)
     peer = await client.get_input_entity(action.channel)
     await client(

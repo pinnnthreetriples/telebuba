@@ -457,6 +457,7 @@
     "warming_cycle_not_ready": "Warming cycle not ready",
     "warming_no_channels": "No channels to warm",
     "warming_subscribe": "Subscribed to channel",
+    "warming_reaction_skipped": "No reaction placed",
     "warming_channels_added": "Channels added",
     "warming_channel_removed": "Channel removed",
     "warming_channel_limit_reached": "Channel limit reached",
@@ -540,6 +541,9 @@
     "tdata_import_rolled_back": "Import rolled back"
   },
   "logEventReason": {
+    "chance": "chance didn't hit",
+    "no_posts": "no recent posts",
+    "no_emoji": "channel rejects our emoji",
     "forward": "repost",
     "media_no_caption": "media without text",
     "empty": "empty post",
@@ -889,6 +893,8 @@
       "actionsTip": "Today's actions out of the daily limit: going online, reading, reactions, viewing stories, messages. The limit depends on the warming phase and grows as the account matures. At the cap the account sleeps until the next day, then the counter resets.",
       "cfgTitle": "Warming settings",
       "logToggle": "Activity log",
+      "storiesSeen": "stories viewed: {{count}}",
+      "storiesNone": "no active stories",
       "logLoading": "Loading log…",
       "logEmpty": "No events yet",
       "logClear": "Clear",

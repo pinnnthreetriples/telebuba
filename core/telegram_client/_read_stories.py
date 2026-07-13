@@ -57,14 +57,15 @@ async def dispatch_list_pinned_stories(
     return TelegramPinnedStories(items=[item for item in items if item is not None])
 
 
-async def dispatch_watch_peer_stories(client: TelegramClient, action: WatchPeerStories) -> None:
+async def dispatch_watch_peer_stories(client: TelegramClient, action: WatchPeerStories) -> int:
     """View a subscribed peer's active stories and mark them seen.
 
     ``stories.getPeerStories`` returns ``stories.PeerStories`` whose actual
     ``StoryItem`` list sits one level deeper at ``result.stories.stories``
     (same double-nesting as ``dispatch_list_active_stories``). We mark
     everything up to the newest id read; a peer with no active stories is a
-    silent no-op.
+    silent no-op. Returns how many active stories were seen (0 = none), so the
+    activity log can say "watched N" vs "peer had no stories".
     """
     peer = await client.get_input_entity(action.peer)
     result = await client(GetPeerStoriesRequest(peer=peer))
@@ -74,6 +75,7 @@ async def dispatch_watch_peer_stories(client: TelegramClient, action: WatchPeerS
     ids = [story_id for story_id in ids if story_id]
     if ids:
         await client(ReadStoriesRequest(peer=peer, max_id=max(ids)))
+    return len(ids)
 
 
 async def dispatch_list_active_stories(client: TelegramClient) -> TelegramActiveStories:

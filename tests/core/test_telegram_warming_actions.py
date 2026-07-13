@@ -175,6 +175,9 @@ async def test_react_to_post_no_messages_returns_ok_without_reaction(
     assert result.status == "ok"
     assert result.message_id is None
     assert captured == []
+    rows = await list_recent_logs(limit=20)
+    react_rows = [r for r in rows if r.event == "telegram_react_to_post"]
+    assert react_rows[0].extra["reaction_skip"] == "no_posts"
 
 
 def _react_fake_client(captured: list[object], available: object) -> object:
@@ -316,6 +319,9 @@ async def test_react_to_post_skips_when_reactions_disabled(
     assert result.status == "ok"
     assert result.message_id is None
     assert _sent_reactions(captured) == []
+    rows = await list_recent_logs(limit=20)
+    react_rows = [r for r in rows if r.event == "telegram_react_to_post"]
+    assert react_rows[0].extra["reaction_skip"] == "no_emoji"
 
 
 @pytest.mark.asyncio
@@ -364,6 +370,9 @@ async def test_watch_peer_stories_marks_up_to_newest(monkeypatch: pytest.MonkeyP
     reads = [req for req in captured if isinstance(req, ReadStoriesRequest)]
     assert reads
     assert reads[0].max_id == 7
+    rows = await list_recent_logs(limit=20)
+    watch_rows = [r for r in rows if r.event == "telegram_watch_peer_stories"]
+    assert watch_rows[0].extra["stories_seen"] == 2
 
 
 @pytest.mark.asyncio
@@ -389,3 +398,6 @@ async def test_watch_peer_stories_no_stories_is_noop(monkeypatch: pytest.MonkeyP
 
     assert result.status == "ok"
     assert not any(isinstance(req, ReadStoriesRequest) for req in captured)
+    rows = await list_recent_logs(limit=20)
+    watch_rows = [r for r in rows if r.event == "telegram_watch_peer_stories"]
+    assert watch_rows[0].extra["stories_seen"] == 0
