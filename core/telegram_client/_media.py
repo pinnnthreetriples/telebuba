@@ -356,10 +356,12 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
     We re-resolve a FRESH ``InputPhoto`` for the target from a live
     ``GetUserPhotos`` (never trusting the possibly-stale snapshot reference),
     promote it, then delete the now-redundant original — but ONLY when the
-    server actually minted a new id (``new_id != target``), and we verify that
-    delete like :func:`_remove_profile_photo` does. If a server ever reorders in
-    place (``new_id == target``) we delete nothing, and we never touch any other
-    photo (the previous avatar stays put).
+    server actually minted a new id (``new_id != target``). Because the promote
+    rotates every file_reference, the delete re-resolves the leftover original a
+    SECOND time (post-promote) and verifies the removal like
+    :func:`_remove_profile_photo`. If a server ever reorders in place
+    (``new_id == target``) we delete nothing, and we never touch any other photo
+    (the previous avatar stays put).
     """
     fresh = await _resolve_history_photo(client, action.photo_id)
     if fresh is None:
@@ -368,10 +370,17 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
     result = await client(UpdateProfilePhotoRequest(id=fresh))
     new_id = getattr(getattr(result, "photo", None), "id", None)
     if isinstance(new_id, int) and new_id != action.photo_id:
-        deleted = await client(DeletePhotosRequest(id=[fresh]))
-        if action.photo_id not in (deleted or []):
-            msg = "Telegram did not delete the superseded duplicate photo"
-            raise RuntimeError(msg)
+        # updateProfilePhoto rotates every photo's file_reference, so the
+        # pre-promote `fresh` ref is already stale for the delete (a live run
+        # showed the delete silently no-op with it). Re-resolve the leftover
+        # original from live history and delete THAT. If it's gone, Telegram
+        # moved the photo rather than duplicating it — nothing to clean up.
+        superseded = await _resolve_history_photo(client, action.photo_id)
+        if superseded is not None:
+            deleted = await client(DeletePhotosRequest(id=[superseded]))
+            if action.photo_id not in (deleted or []):
+                msg = "Telegram did not delete the superseded duplicate photo"
+                raise RuntimeError(msg)
 
 
 async def _remove_story(client: TelegramClient, action: RemoveStory) -> None:
