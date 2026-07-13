@@ -17,6 +17,9 @@ interface WarmingBoardProps {
   busyId: string | null;
   feedback?: Record<string, FeedbackResult>;
   logLimit?: number;
+  // Maps a configured channel handle → its friendly label, so the activity log
+  // can show "which channel" a join/read/react touched by name, not raw handle.
+  channelLabels?: Record<string, string>;
 }
 
 type WarmingState = WarmingAccountState['state'];
@@ -42,6 +45,11 @@ const WARM_STATUS: Record<WarmingState, { color: string; bg: string }> = {
 
 function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
+}
+
+function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
+  const value = extra?.[key];
+  return typeof value === 'string' ? value : undefined;
 }
 
 // The rail reflects the engine's real cycle progress: waiting states park on
@@ -114,6 +122,7 @@ function WarmingCard({
   busy,
   result,
   logLimit,
+  channelLabels,
 }: {
   account: WarmingAccountState;
   onStop: (id: string) => void;
@@ -121,6 +130,7 @@ function WarmingCard({
   busy: boolean;
   result?: FeedbackResult;
   logLimit: number;
+  channelLabels: Record<string, string>;
 }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
@@ -423,16 +433,30 @@ function WarmingCard({
                     {logQuery.isPending ? t('warming.card.logLoading') : t('warming.card.logEmpty')}
                   </div>
                 ) : (
-                  visibleLines.map((line) => (
-                    <div key={line.id} className="flex gap-2">
-                      <span className="shrink-0 text-[#5c5c66]">
-                        {formatLocalTime(line.created_at)}
-                      </span>
-                      <span style={{ color: LOG_COLOR[line.status] }}>
-                        {eventLabel(t, line.event)}
-                      </span>
-                    </div>
-                  ))
+                  visibleLines.map((line) => {
+                    // "Which channel" — the gateway logs the touched channel in
+                    // extra.channel; show its label when configured, else the handle.
+                    const rawChannel = extraStr(line.extra, 'channel');
+                    const channel = rawChannel
+                      ? (channelLabels[rawChannel] ?? rawChannel)
+                      : undefined;
+                    // "Which reaction" — the emoji the gateway actually placed.
+                    const reaction = extraStr(line.extra, 'reaction');
+                    return (
+                      <div key={line.id} className="flex gap-2">
+                        <span className="shrink-0 text-[#5c5c66]">
+                          {formatLocalTime(line.created_at)}
+                        </span>
+                        {channel ? (
+                          <span className="shrink-0 text-[#6ea8fe]">{channel}</span>
+                        ) : null}
+                        <span style={{ color: LOG_COLOR[line.status] }}>
+                          {eventLabel(t, line.event)}
+                        </span>
+                        {reaction ? <span className="shrink-0">{reaction}</span> : null}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             </div>
@@ -509,6 +533,7 @@ export function WarmingBoard({
   busyId,
   feedback = {},
   logLimit = DEFAULT_CARD_LOG_LIMIT,
+  channelLabels = {},
 }: WarmingBoardProps) {
   const { t } = useTranslation();
   return (
@@ -548,6 +573,7 @@ export function WarmingBoard({
             busy={busyId === account.account_id}
             result={feedback[account.account_id]}
             logLimit={logLimit}
+            channelLabels={channelLabels}
           />
         ))}
         {warming.length === 0 ? (

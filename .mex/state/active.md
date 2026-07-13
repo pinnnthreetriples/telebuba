@@ -104,6 +104,15 @@ same wait), and the card detects the pre-start hold (`active` + `cycles_complete
 + no `last_action`) to show «Выдержка перед стартом» + the real live countdown, with
 the step rail idle until the first action lands. +2 backend / +1 Vitest.
 
+A 2026-07-13 operator-reported follow-up (PR open): the warming card's activity
+log now names **which channel** each join/read/react touched and **which emoji** a
+reaction placed. The channel was already logged (`extra.channel`); the card just
+didn't render it — now shows the channel label (else `@handle`, via a new
+`channelLabels` prop from `WarmingPage`) and the reaction emoji. The emoji wasn't
+recorded before: the gateway's `execute` now merges a `_DispatchResult.log_extra`
+(`{reaction: <emoji>}` from `_dispatch_react_to_post`) into the `telegram_react_to_post`
+log row. +1 backend test / +1 Vitest.
+
 A 2026-07-11 feature added **phone-number authentication as a third add-account
 method** (branch `phone-authentication`). The phone-code gateway/service/cache
 (`_auth.py`, `services/accounts/login.py`, `_login_state.py`) and the

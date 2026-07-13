@@ -177,6 +177,11 @@ export function WarmingPage() {
   const idle = data.idle ?? [];
   const warming = data.warming ?? [];
   const channels = data.channels.channels ?? [];
+  // handle → friendly label, so the board's activity log can name the channel a
+  // join/read/react touched (the gateway logs the raw handle in extra.channel).
+  const channelLabels = Object.fromEntries(
+    channels.filter((c) => c.label).map((c) => [c.channel, c.label as string]),
+  );
   const errors = [...idle, ...warming].filter((a) => a.state === 'error').length;
   const poolOn = warming.length > 0;
 
@@ -586,6 +591,7 @@ export function WarmingPage() {
             busyId={busyId}
             feedback={accountFeedback.feedback}
             logLimit={data.card_log_limit}
+            channelLabels={channelLabels}
           />
           <DialogueFeed />
         </div>
