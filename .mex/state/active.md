@@ -24,6 +24,12 @@ item (telegram `_dispatch_action`/`_pick_reaction` tidy) was deliberately droppe
 during execution — the extraction didn't clear the lint suppression and tripped
 the file-size gate, i.e. net-negative churn on already-clear dispatch code.
 
+A 2026-07-13 test-harness cleanup made the Gemini/OpenAI gateway tests hermetic:
+shared fixtures now remove host HTTP proxy variables and close the reused clients
+after every test. This fixes 28 environment-dependent failures under a SOCKS
+`ALL_PROXY` without changing production gateway behaviour. Full backend and
+frontend gates are green (1242 pytest / 281 Vitest).
+
 A 2026-07-10 bug audit (parallel review of warming/neurocomment/core/api) then
 fixed four confirmed correctness defects (PR open, no auto-merge): warming
 `_gate_target_reached` no longer completes a quarantine/flood_wait account;
