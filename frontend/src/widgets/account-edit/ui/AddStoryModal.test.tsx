@@ -276,3 +276,69 @@ test('picking a video after photos replaces them (no mixing)', async () => {
   expect(await screen.findByText('clip.mp4')).toBeInTheDocument();
   expect(screen.queryByAltText('a.jpg')).not.toBeInTheDocument();
 });
+
+function storyPosts(): number {
+  return vi.mocked(fetch).mock.calls.filter(([request]) => {
+    const req = request as Request;
+    return req.url.endsWith('/accounts/acc-1/story') && req.method === 'POST';
+  }).length;
+}
+
+test('the publish button stays disabled through the success-close window (no double post)', async () => {
+  mockStoryOk();
+  const onPosted = vi.fn();
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={onPosted} />);
+  fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
+
+  const publishBtn = screen.getByText('Опубликовать');
+  await userEvent.click(publishBtn);
+  await waitFor(() => {
+    expect(onPosted).toHaveBeenCalled();
+  });
+
+  // The modal stays open ~900ms after success with isPending back to false —
+  // the button must stay locked or a second click posts the SAME story twice.
+  expect(publishBtn).toBeDisabled();
+  await userEvent.click(publishBtn);
+  expect(storyPosts()).toBe(1);
+});
+
+test('cancel and × are disabled while a publish is in flight (mid-publish close loses the refresh)', async () => {
+  let resolvePost!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolvePost = resolve;
+      }),
+  );
+  const onClose = vi.fn();
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={onClose} onPosted={vi.fn()} />);
+  fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
+  await userEvent.click(screen.getByText('Опубликовать'));
+
+  // Unmounting the mutation observer mid-flight would drop the onSuccess
+  // (RQ v5), leaving the story on Telegram without a grid refresh.
+  await waitFor(() => {
+    expect(screen.getByText('Отмена')).toBeDisabled();
+  });
+  expect(screen.getByLabelText('Закрыть')).toBeDisabled();
+
+  // Escape and backdrop-click go through Modal's own document/overlay handlers
+  // (not the disabled buttons) — they must not close the modal mid-flight either.
+  fireEvent.keyDown(document, { key: 'Escape' });
+  fireEvent.click(document.body.querySelector('[role="presentation"]') as HTMLElement);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByText('Новая сторис')).toBeInTheDocument();
+
+  resolvePost(
+    new Response(JSON.stringify({ status: 'ok', action_type: 'post_story', account_id: 'acc-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
+  // Once settled the exits unlock (the success window may auto-close later).
+  await waitFor(() => {
+    expect(screen.getByText('Отмена')).toBeEnabled();
+  });
+  expect(screen.getByLabelText('Закрыть')).toBeEnabled();
+});

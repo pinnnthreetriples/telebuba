@@ -1,5 +1,5 @@
 import { useMutation } from '@tanstack/react-query';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { postAccountStoryMutation } from '@/entities/account';
@@ -106,7 +106,6 @@ export function AddStoryModal({
   const [images, setImages] = useState<File[]>([]);
   const [video, setVideo] = useState<File | null>(null);
   const [collageLayout, setCollageLayout] = useState<string | null>(null);
-  const [previews, setPreviews] = useState<string[]>([]);
   const fileInput = useRef<HTMLInputElement>(null);
   const post = useMutation(postAccountStoryMutation());
   const busy = post.isPending;
@@ -117,17 +116,19 @@ export function AddStoryModal({
   const isCollage = video === null && count >= MIN_COLLAGE_IMAGES;
   const hasMedia = video !== null || count > 0;
 
-  // Object URLs for the image tiles; revoke the previous batch on every change
-  // (and unmount) so the blobs don't leak.
-  useEffect(() => {
-    const urls = images.map((file) => URL.createObjectURL(file));
-    setPreviews(urls);
-    return () => {
-      urls.forEach((url) => {
+  // Object URLs for the image tiles, derived synchronously with the images so
+  // a remove/reorder never renders one frame of previews[index] against the
+  // new order (wrong image under the number, briefly-revoked URL). The effect
+  // revokes the previous batch after commit (and on unmount) so blobs don't leak.
+  const previews = useMemo(() => images.map((file) => URL.createObjectURL(file)), [images]);
+  useEffect(
+    () => () => {
+      previews.forEach((url) => {
         URL.revokeObjectURL(url);
       });
-    };
-  }, [images]);
+    },
+    [previews],
+  );
 
   // Keep the selected layout valid for the current photo count: below the
   // collage floor there is no layout; otherwise snap to the count's default
@@ -221,15 +222,22 @@ export function AddStoryModal({
   };
 
   return (
-    <Modal onClose={onClose} z={75} backdrop={0.45} className="w-[460px]">
+    // Escape and backdrop-click route through Modal's onClose — guard them
+    // while a publish is in flight for the same reason Cancel/× are disabled:
+    // unmounting mid-flight drops the onSuccess and loses the grid refresh.
+    <Modal onClose={busy ? () => undefined : onClose} z={75} backdrop={0.45} className="w-[460px]">
       <div className="tb-scroll max-h-[88vh] overflow-y-auto px-6 py-[22px]">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[16px] font-bold">{t('accounts.addStory.title')}</span>
           <button
             type="button"
             onClick={onClose}
+            // Closing mid-publish unmounts the mutation observer, and RQ v5
+            // then drops the mutate-level onSuccess — the story would land on
+            // Telegram but the grid would never refresh. Lock the exits.
+            disabled={busy}
             aria-label={t('accounts.addStory.close')}
-            className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[16px] text-ink-muted"
+            className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[16px] text-ink-muted disabled:opacity-50"
           >
             ×
           </button>
@@ -600,14 +608,18 @@ export function AddStoryModal({
           <button
             type="button"
             onClick={onClose}
-            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+            disabled={busy}
+            className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink disabled:opacity-50"
           >
             {t('accounts.addStory.cancel')}
           </button>
           <button
             type="button"
             onClick={publish}
-            disabled={!hasMedia || post.isPending}
+            // `done` keeps the button locked through the 900ms success-close
+            // window — isPending is already false there, and a second click
+            // would publish the same story to the live account twice.
+            disabled={!hasMedia || busy || done}
             className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
           >
             {t('accounts.addStory.publish')}
