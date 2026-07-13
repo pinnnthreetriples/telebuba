@@ -163,9 +163,14 @@ class RemoveProfilePhoto(BaseModel):
 class SetMainProfilePhoto(BaseModel):
     """Promote an existing profile photo to the current avatar.
 
-    ``photos.updateProfilePhoto`` re-orders the history so this photo becomes
-    current — no re-upload needed. Same ``InputPhoto`` triple as
-    :class:`RemoveProfilePhoto`; all three id fields are required.
+    Live-confirmed: ``photos.updateProfilePhoto`` on a photo already in the
+    account's history does NOT re-order it in place — Telegram mints a brand-new
+    photo (fresh id) at the front and leaves the original behind. The gateway
+    re-resolves a fresh ``InputPhoto`` for this id, promotes it, and deletes the
+    now-redundant original only when a new id was minted. Same ``InputPhoto``
+    triple as :class:`RemoveProfilePhoto`; all three id fields are required
+    (the gateway re-fetches a fresh ``file_reference`` regardless, since the
+    snapshot's can be stale).
     """
 
     action_type: Literal["set_main_profile_photo"] = "set_main_profile_photo"

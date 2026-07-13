@@ -96,7 +96,7 @@ async def test_get_user_profile_returns_snapshot(monkeypatch: pytest.MonkeyPatch
             requested.append(request)
             if isinstance(request, GetFullUserRequest):
                 return MagicMock(
-                    full_user=MagicMock(about="Hi there"),
+                    full_user=MagicMock(about="Hi there", profile_photo=MagicMock(id=900)),
                     users=[
                         MagicMock(
                             first_name="Alice",
@@ -118,6 +118,8 @@ async def test_get_user_profile_returns_snapshot(monkeypatch: pytest.MonkeyPatch
     assert result.username == "alice"
     assert result.phone == "79991234567"
     assert result.bio == "Hi there"
+    # The current-avatar id is read authoritatively from UserFull.profile_photo.
+    assert result.current_photo_id == 900
     assert any(isinstance(req, GetFullUserRequest) for req in requested)
 
 

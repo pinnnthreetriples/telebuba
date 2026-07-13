@@ -86,6 +86,10 @@ async def account_profile_view(
                 thumb_url=(
                     _thumb_url(account_id, "photos", photo.photo_id) if photo.thumb_bytes else None
                 ),
+                is_main=(
+                    snapshot.current_photo_id is not None
+                    and photo.photo_id == snapshot.current_photo_id
+                ),
             )
             for photo in snapshot.photos
         ],

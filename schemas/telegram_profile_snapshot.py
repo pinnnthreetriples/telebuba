@@ -19,6 +19,11 @@ class TelegramProfileSnapshot(BaseModel):
     username: str | None = None
     phone: str | None = None
     bio: str | None = None
+    # Authoritative id of the photo Telegram currently shows as the avatar
+    # (``UserFull.profile_photo.id``), so the UI marks "main" by identity, not by
+    # relying on the history's index-0 position. ``None`` when the account has
+    # no avatar set.
+    current_photo_id: int | None = None
 
 
 StoryPrivacyPreset = Literal[
