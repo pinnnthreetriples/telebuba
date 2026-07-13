@@ -311,7 +311,8 @@ test('cancel and × are disabled while a publish is in flight (mid-publish close
         resolvePost = resolve;
       }),
   );
-  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  const onClose = vi.fn();
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={onClose} onPosted={vi.fn()} />);
   fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
   await userEvent.click(screen.getByText('Опубликовать'));
 
@@ -321,6 +322,13 @@ test('cancel and × are disabled while a publish is in flight (mid-publish close
     expect(screen.getByText('Отмена')).toBeDisabled();
   });
   expect(screen.getByLabelText('Закрыть')).toBeDisabled();
+
+  // Escape and backdrop-click go through Modal's own document/overlay handlers
+  // (not the disabled buttons) — they must not close the modal mid-flight either.
+  fireEvent.keyDown(document, { key: 'Escape' });
+  fireEvent.click(document.body.querySelector('[role="presentation"]') as HTMLElement);
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByText('Новая сторис')).toBeInTheDocument();
 
   resolvePost(
     new Response(JSON.stringify({ status: 'ok', action_type: 'post_story', account_id: 'acc-1' }), {
