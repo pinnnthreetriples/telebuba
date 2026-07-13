@@ -297,21 +297,30 @@ async def get_account_profile_snapshot(
 )
 async def post_account_story(  # noqa: PLR0913 - one Form param per story field
     account_id: str,
-    file: Annotated[UploadFile, File()],
+    files: Annotated[list[UploadFile], File()],
     media_kind: Annotated[StoryMediaKind, Form()] = "image",
     caption: Annotated[str | None, Form()] = None,
     privacy_preset: Annotated[StoryPrivacyPreset, Form()] = "contacts",
     protect_content: Annotated[bool, Form()] = False,  # noqa: FBT002 - multipart form field
+    collage_layout: Annotated[str | None, Form()] = None,
 ) -> ActionResult:
-    content = await file.read()
+    # First file = image #1; any remaining files = the collage's images 2..N.
+    # A single-file post is just a list of length 1 (the old single-photo path).
+    if not files:
+        raise HTTPException(
+            status_code=http_status.HTTP_400_BAD_REQUEST, detail="no files uploaded"
+        )
+    primary, *extras = files
     upload = AccountStoryUpload(
         account_id=account_id,
-        filename=file.filename or "story",
-        content=content,
+        filename=primary.filename or "story",
+        content=await primary.read(),
         media_kind=media_kind,
         caption=caption,
         privacy_preset=privacy_preset,
         protect_content=protect_content,
+        extra_images=[await extra.read() for extra in extras],
+        collage_layout=collage_layout,
     )
     try:
         return await accounts.post_account_story(upload)

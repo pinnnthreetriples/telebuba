@@ -22,7 +22,7 @@ from schemas.profile_media import (
     AccountStoryRemove,
     AccountStoryUpload,
 )
-from schemas.telegram_actions import UpdateProfile
+from schemas.telegram_actions import PostStory, UpdateProfile
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -118,3 +118,49 @@ def test_profile_media_account_id_charset(build: Callable[[str], object]) -> Non
     assert build("acc-1.ok_2") is not None
     with pytest.raises(ValidationError):
         build("acc|bad")
+
+
+def test_post_story_accepts_valid_collage() -> None:
+    action = PostStory(
+        filename="s.jpg",
+        content=b"first",
+        media_kind="image",
+        extra_images=[b"second"],
+        collage_layout="v2",
+    )
+    assert action.extra_images == [b"second"]
+    assert action.collage_layout == "v2"
+
+
+def test_post_story_single_photo_needs_no_collage_fields() -> None:
+    action = PostStory(filename="s.jpg", content=b"x", media_kind="image")
+    assert action.extra_images == []
+    assert action.collage_layout is None
+
+
+def test_post_story_rejects_extra_images_on_video() -> None:
+    with pytest.raises(ValidationError):
+        PostStory(
+            filename="s.mp4",
+            content=b"vid",
+            media_kind="video",
+            extra_images=[b"x"],
+        )
+
+
+def test_post_story_rejects_layout_without_extra_images() -> None:
+    with pytest.raises(ValidationError):
+        PostStory(filename="s.jpg", content=b"x", media_kind="image", collage_layout="v2")
+
+
+def test_account_story_upload_carries_collage_fields() -> None:
+    upload = AccountStoryUpload(
+        account_id="acc-1",
+        filename="s.jpg",
+        content=b"first",
+        media_kind="image",
+        extra_images=[b"second", b"third"],
+        collage_layout="v3",
+    )
+    assert upload.extra_images == [b"second", b"third"]
+    assert upload.collage_layout == "v3"

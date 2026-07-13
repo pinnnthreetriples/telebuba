@@ -14,6 +14,7 @@ from schemas.profile_media import (
     AccountProfilePhotoSetMain,
     AccountProfileView,
     AccountStoryPin,
+    AccountStoryUpload,
     ProfileImage,
     ProfileMusicView,
     ProfilePhotoView,
@@ -558,11 +559,41 @@ async def test_post_story_accepts_multipart(
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/acc-1/story",
-            files={"file": ("s.jpg", b"img", "image/jpeg")},
+            files={"files": ("s.jpg", b"img", "image/jpeg")},
             data={"media_kind": "image", "privacy_preset": "contacts"},
         )
     assert resp.status_code == 200
     assert resp.json()["status"] == "ok"
+
+
+@pytest.mark.asyncio
+async def test_post_story_collage_multipart_reaches_service(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Two+ files land on the service as image #1 + extra_images, with the layout."""
+    seen: dict[str, object] = {}
+
+    async def _fake(upload: AccountStoryUpload) -> ActionResult:
+        seen["content"] = upload.content
+        seen["extra_images"] = upload.extra_images
+        seen["collage_layout"] = upload.collage_layout
+        return ActionResult(status="ok", action_type="post_story", account_id="acc-1")
+
+    monkeypatch.setattr("services.accounts.post_account_story", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story",
+            files=[
+                ("files", ("a.jpg", b"first", "image/jpeg")),
+                ("files", ("b.jpg", b"second", "image/jpeg")),
+            ],
+            data={"media_kind": "image", "collage_layout": "v2"},
+        )
+    assert resp.status_code == 200
+    assert seen["content"] == b"first"
+    assert seen["extra_images"] == [b"second"]
+    assert seen["collage_layout"] == "v2"
 
 
 @pytest.mark.asyncio
@@ -586,7 +617,7 @@ async def test_post_story_surfaces_video_error_code_not_russian(
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/acc-1/story",
-            files={"file": ("s.mp4", b"vid", "video/mp4")},
+            files={"files": ("s.mp4", b"vid", "video/mp4")},
             data={"media_kind": "video", "privacy_preset": "contacts"},
         )
     assert resp.status_code == 400
@@ -617,7 +648,7 @@ async def test_post_story_surfaces_image_error_code_not_russian(
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/accounts/acc-1/story",
-            files={"file": ("s.jpg", b"img", "image/jpeg")},
+            files={"files": ("s.jpg", b"img", "image/jpeg")},
             data={"media_kind": "image", "privacy_preset": "contacts"},
         )
     assert resp.status_code == 400

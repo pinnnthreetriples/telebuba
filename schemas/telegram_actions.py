@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 # Runtime import (not TYPE_CHECKING): pydantic resolves the BotChallengeWaitResult
 # field annotation at class-build time, so the type must exist at runtime.
@@ -137,6 +137,22 @@ class PostStory(BaseModel):
     privacy_preset: Literal["contacts", "close_friends", "public"] = "contacts"
     period_seconds: int = Field(default=86_400, ge=21_600, le=86_400)
     protect_content: bool = False
+    # Collage images 2..N (``content`` is image #1). Non-empty turns the post
+    # into a client-side collage: the gateway stitches them into ONE composite
+    # photo (Telegram has no multi-photo story API). The business max count and
+    # per-image validation live in config + the service, not here.
+    extra_images: list[bytes] = Field(default_factory=list)
+    collage_layout: str | None = None
+
+    @model_validator(mode="after")
+    def _check_collage(self) -> PostStory:
+        if self.extra_images and self.media_kind != "image":
+            msg = "extra_images is only allowed for image stories"
+            raise ValueError(msg)
+        if not self.extra_images and self.collage_layout is not None:
+            msg = "collage_layout requires extra_images"
+            raise ValueError(msg)
+        return self
 
 
 class AddProfileMusic(BaseModel):

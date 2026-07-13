@@ -71,6 +71,19 @@ class StoryImageNormalisationError(ValueError):
         super().__init__(self.code)
 
 
+class StoryCollageLayoutError(ValueError):
+    """Raised when a collage's requested layout id can't be resolved.
+
+    Same contract as :class:`StoryImageNormalisationError`: ``str(exc)`` is the
+    stable, locale-neutral code the SPA translates. The unresolvable detail
+    (bad id / unsupported count) rides the chained cause into the failure log.
+    """
+
+    def __init__(self) -> None:
+        self.code = "story_collage_unknown_layout"
+        super().__init__(self.code)
+
+
 async def _dispatch_profile_media_action(
     client: TelegramClient,
     action: TelegramAction,
@@ -108,7 +121,7 @@ async def _set_profile_photo(client: TelegramClient, filename: str, content: byt
 async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
     peer = await client.get_input_entity("me")
     await client(CanSendStoryRequest(peer=peer))
-    media = await _story_media(client, action.filename, action.content, action.media_kind)
+    media = await _story_media(client, action)
     result = await client(
         SendStoryRequest(
             peer=peer,
@@ -125,18 +138,26 @@ async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
 
 async def _story_media(
     client: TelegramClient,
-    filename: str,
-    content: bytes,
-    media_kind: str,
+    action: PostStory,
 ) -> TypeInputMedia:
-    if media_kind == "image":
+    if action.media_kind == "image":
         # Telegram rejects story photos that don't match its narrow aspect
         # window with PHOTO_INVALID_DIMENSIONS. Telethon's send_file resize
         # only enforces the chat-photo 1280 px cap, and we go through the
         # lower-level upload_file path that skips it entirely — so we have
         # to normalise to 1080x1920 ourselves before the upload.
-        content = await asyncio.to_thread(_normalize_story_image_for_telegram, content)
-        uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
+        if action.extra_images:
+            # Multi-photo collage: Telegram has no native multi-photo story API,
+            # so we stitch every image into ONE composite photo and send that.
+            images = [action.content, *action.extra_images]
+            layout = action.collage_layout or _default_collage_layout(len(images))
+            content = await asyncio.to_thread(_compose_story_collage, images, layout)
+        else:
+            content = await asyncio.to_thread(_normalize_story_image_for_telegram, action.content)
+        uploaded = await client.upload_file(
+            _named_bytes(action.filename, content),
+            file_name=action.filename,
+        )
         return InputMediaUploadedPhoto(file=uploaded)
     # Video story — re-encode through ffmpeg to H.264/AAC MP4 at 720x1280
     # (matches the Android client) and pass an explicit JPEG thumbnail so
@@ -144,7 +165,7 @@ async def _story_media(
     # supports_streaming flag are both mandatory for stories: missing either
     # makes Telegram treat the upload as a generic document, not a video.
     video_bytes, thumb_bytes, duration, width, height = await normalize_story_video_for_telegram(
-        content
+        action.content
     )
     uploaded_video = await client.upload_file(
         _named_bytes("story.mp4", video_bytes),
@@ -169,6 +190,25 @@ async def _story_media(
     )
 
 
+def _decode_story_source(content: bytes) -> Image.Image:
+    """Decode arbitrary upload bytes into an RGB Pillow image, or raise.
+
+    Shared by the single-photo and collage paths so both surface the same
+    locale-neutral ``story_image_invalid`` code for undecodable input.
+    """
+    try:
+        with Image.open(BytesIO(content)) as opened:
+            opened.load()
+            return opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
+    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
+        # UnidentifiedImageError = container Pillow can't decode (e.g. HEIC/JXL
+        # renamed to .png); OSError from load() = truncated/corrupt bytes. The
+        # chained cause carries the Pillow reason plus the file's real magic
+        # bytes so the telegram_post_story_failed log shows what the file was.
+        detail = f"{type(exc).__name__}: {exc}; magic={content[:12].hex()}"
+        raise StoryImageNormalisationError from ValueError(detail)
+
+
 def _normalize_story_image_for_telegram(content: bytes) -> bytes:
     """Compose a photo onto Telegram's 1080x1920 story canvas (JPEG q90).
 
@@ -182,18 +222,7 @@ def _normalize_story_image_for_telegram(content: bytes) -> bytes:
     ``PHOTO_INVALID_DIMENSIONS``, so this step is required, not optional.
     """
     target_width, target_height = 1080, 1920
-    try:
-        with Image.open(BytesIO(content)) as opened:
-            opened.load()
-            source = opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
-        # UnidentifiedImageError = container Pillow can't decode (e.g. HEIC/JXL
-        # renamed to .png); OSError from load() = truncated/corrupt bytes. The
-        # chained cause carries the Pillow reason plus the file's real magic
-        # bytes so the telegram_post_story_failed log shows what the file was.
-        detail = f"{type(exc).__name__}: {exc}; magic={content[:12].hex()}"
-        raise StoryImageNormalisationError from ValueError(detail)
-
+    source = _decode_story_source(content)
     canvas = _blurred_story_background(source, target_width, target_height)
     fitted = source.copy()
     fitted.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
@@ -209,6 +238,18 @@ def _normalize_story_image_for_telegram(content: bytes) -> bytes:
     return output.getvalue()
 
 
+def _cover_crop(source: Image.Image, width: int, height: int) -> Image.Image:
+    """Scale-and-center-crop ``source`` to exactly ``width`` x ``height`` (no bars)."""
+    scale = max(width / source.width, height / source.height)
+    scaled = source.resize(
+        (max(int(source.width * scale), width), max(int(source.height * scale), height)),
+        Image.Resampling.LANCZOS,
+    )
+    left = (scaled.width - width) // 2
+    top = (scaled.height - height) // 2
+    return scaled.crop((left, top, left + width, top + height))
+
+
 def _blurred_story_background(
     source: Image.Image,
     target_width: int,
@@ -216,20 +257,106 @@ def _blurred_story_background(
 ) -> Image.Image:
     """Render the blurred-cover fill that goes behind the fitted source.
 
-    Scale-and-center-crops the source so it covers the full 1080x1920 canvas,
-    then applies a strong Gaussian blur so the edges read as ambient colour
-    rather than a recognisable second copy of the image. Mirrors the
-    official Android client's story background composition.
+    Cover-crops the source to the full 1080x1920 canvas, then applies a strong
+    Gaussian blur so the edges read as ambient colour rather than a recognisable
+    second copy of the image. Mirrors the official Android client's story
+    background composition.
     """
-    cover_scale = max(target_width / source.width, target_height / source.height)
-    scaled = source.resize(
-        (int(source.width * cover_scale), int(source.height * cover_scale)),
-        Image.Resampling.LANCZOS,
-    )
-    left = (scaled.width - target_width) // 2
-    top = (scaled.height - target_height) // 2
-    cropped = scaled.crop((left, top, left + target_width, top + target_height))
-    return cropped.filter(ImageFilter.GaussianBlur(radius=50))
+    cover = _cover_crop(source, target_width, target_height)
+    return cover.filter(ImageFilter.GaussianBlur(radius=50))
+
+
+# Collage layout templates: photo count → layout id → list of cells, each a
+# ``(x, y, w, h)`` rect in fractions of the 1080x1920 canvas. The first layout
+# for a count is that count's default when the client omits ``collage_layout``.
+# The number of source images must equal the number of cells (guaranteed by
+# keying on count; enforced by ``zip(strict=True)`` in the composer).
+_THIRD = 1 / 3
+_COLLAGE_TEMPLATES: dict[int, dict[str, list[tuple[float, float, float, float]]]] = {
+    2: {
+        "v2": [(0, 0, 1, 0.5), (0, 0.5, 1, 0.5)],
+        "h2": [(0, 0, 0.5, 1), (0.5, 0, 0.5, 1)],
+    },
+    3: {
+        "v3": [(0, 0, 1, _THIRD), (0, _THIRD, 1, _THIRD), (0, 2 * _THIRD, 1, _THIRD)],
+        "left1_right2": [(0, 0, 0.5, 1), (0.5, 0, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5)],
+        "top1_bottom2": [(0, 0, 1, 0.5), (0, 0.5, 0.5, 0.5), (0.5, 0.5, 0.5, 0.5)],
+    },
+    4: {
+        "grid2x2": [
+            (0, 0, 0.5, 0.5),
+            (0.5, 0, 0.5, 0.5),
+            (0, 0.5, 0.5, 0.5),
+            (0.5, 0.5, 0.5, 0.5),
+        ],
+        "v4": [(0, 0, 1, 0.25), (0, 0.25, 1, 0.25), (0, 0.5, 1, 0.25), (0, 0.75, 1, 0.25)],
+    },
+    5: {
+        "top2_bottom3": [
+            (0, 0, 0.5, 0.5),
+            (0.5, 0, 0.5, 0.5),
+            (0, 0.5, _THIRD, 0.5),
+            (_THIRD, 0.5, _THIRD, 0.5),
+            (2 * _THIRD, 0.5, _THIRD, 0.5),
+        ],
+    },
+    6: {
+        "grid2x3": [
+            (0, 0, 0.5, _THIRD),
+            (0.5, 0, 0.5, _THIRD),
+            (0, _THIRD, 0.5, _THIRD),
+            (0.5, _THIRD, 0.5, _THIRD),
+            (0, 2 * _THIRD, 0.5, _THIRD),
+            (0.5, 2 * _THIRD, 0.5, _THIRD),
+        ],
+    },
+}
+
+
+def _collage_cells(count: int, layout: str) -> list[tuple[float, float, float, float]]:
+    templates = _COLLAGE_TEMPLATES.get(count)
+    if templates is None:
+        raise StoryCollageLayoutError from ValueError(f"unsupported collage image count: {count}")
+    cells = templates.get(layout)
+    if cells is None:
+        raise StoryCollageLayoutError from ValueError(
+            f"unknown collage layout {layout!r} for {count} images"
+        )
+    return cells
+
+
+def _default_collage_layout(count: int) -> str:
+    """The first template id for ``count`` — the default when none is requested."""
+    templates = _COLLAGE_TEMPLATES.get(count)
+    if templates is None:
+        raise StoryCollageLayoutError from ValueError(f"unsupported collage image count: {count}")
+    return next(iter(templates))
+
+
+def _compose_story_collage(images: list[bytes], layout: str) -> bytes:
+    """Stitch 2..6 photos into one 1080x1920 JPEG (q90) per the ``layout`` template.
+
+    Each source is cover-crop-fitted into its cell rect with a config-driven gap
+    between cells, over a blurred background built from the first image. Raises
+    ``StoryCollageLayoutError`` when the count is unsupported or the layout id is
+    unknown for that count, and ``StoryImageNormalisationError`` on any
+    undecodable input.
+    """
+    target_width, target_height = 1080, 1920
+    cells = _collage_cells(len(images), layout)
+    sources = [_decode_story_source(image) for image in images]
+    canvas = _blurred_story_background(sources[0], target_width, target_height)
+    gap = settings.profile_media.story_collage_gap_px
+    for source, (x, y, w, h) in zip(sources, cells, strict=True):
+        px = round(x * target_width) + gap // 2
+        py = round(y * target_height) + gap // 2
+        pw = round(w * target_width) - gap
+        ph = round(h * target_height) - gap
+        if pw > 0 and ph > 0:
+            canvas.paste(_cover_crop(source, pw, ph), (px, py))
+    output = BytesIO()
+    canvas.save(output, format="JPEG", quality=90)
+    return output.getvalue()
 
 
 def _story_privacy_rules(preset: str) -> list[TypeInputPrivacyRule]:
