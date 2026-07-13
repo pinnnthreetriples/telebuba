@@ -18,6 +18,7 @@ from core.repositories.neurocomment._accounts import (
     remove_account_from_campaign,
     set_campaign_account_channels,
 )
+from core.repositories.neurocomment._bans import clear_pair_banned, mark_pair_banned
 from core.repositories.neurocomment._campaigns import (
     ChannelAlreadyAssignedError,
     create_campaign,
@@ -82,6 +83,7 @@ __all__ = [
     "ChannelNotInCampaignError",
     "assign_account_to_campaign",
     "claim_comment",
+    "clear_pair_banned",
     "count_account_channel_comments_since",
     "count_account_comments_since",
     "count_by_outcome",
@@ -117,6 +119,7 @@ __all__ = [
     "mark_comment_posted",
     "mark_comments_deleted",
     "mark_human_skipped",
+    "mark_pair_banned",
     "reclaim_stale_claims",
     "remove_account_from_campaign",
     "resolve_pending_outcome",

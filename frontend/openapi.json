@@ -4339,6 +4339,7 @@
               "bot_challenge_backoff",
               "joining",
               "human_skipped",
+              "banned",
               "failed"
             ],
             "title": "State"
@@ -5996,6 +5997,7 @@
               "join_by_request",
               "join_failed",
               "chat_restricted",
+              "banned",
               "bot_challenge",
               "bot_challenge_backoff",
               "throttled",

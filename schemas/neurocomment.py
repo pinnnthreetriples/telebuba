@@ -218,8 +218,9 @@ class NeurocommentReadiness(BaseModel):
     captcha_passed: bool
     ready: bool
     checked_at: str = Field(min_length=1)
-    # Operator skip (#148): the engine never selects a human-skipped pair.
+    # Operator skip (#148); auto-ban (#30). Both make the engine never select the pair.
     human_skipped: bool = False
+    banned: bool = False
 
 
 class ReadinessList(BaseModel):
@@ -280,6 +281,7 @@ OnboardingState = Literal[
     "bot_challenge_backoff",
     "joining",
     "human_skipped",
+    "banned",
     "failed",
 ]
 
@@ -318,6 +320,7 @@ ChannelStatus = Literal[
     "join_by_request",
     "join_failed",
     "chat_restricted",
+    "banned",  # no account ready here and at least one auto-banned (#30)
     "bot_challenge",
     "bot_challenge_backoff",
     "throttled",

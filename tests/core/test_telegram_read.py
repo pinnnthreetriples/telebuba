@@ -589,14 +589,46 @@ async def test_check_messages_alive_no_linked_group_reports_nothing(
 
 
 @pytest.mark.asyncio
-async def test_check_messages_alive_unresolved_group_reports_nothing(
+async def test_check_messages_alive_group_absent_from_chats_resolves_via_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Linked id present but its entity missing from ChatFull → no false positives."""
+    """Linked group missing from ChatFull → resolve off the warm cache and still read ids."""
+    group = MagicMock(id=999)
 
     class FakeClient:
         async def connect(self) -> None:
             return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return group
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(full_chat=MagicMock(linked_chat_id=999), chats=[MagicMock(id=111)])
+
+        async def get_messages(self, entity: object, *, ids: list[int]) -> list[object | None]:
+            assert entity is group  # resolved via the cache fallback
+            return [None if mid == 2 else MagicMock() for mid in ids]
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-x", CheckMessagesAlive(channel="@news", message_ids=[1, 2]))
+
+    assert isinstance(result, CheckMessagesAliveResult)
+    assert result.missing_ids == [2]
+
+
+@pytest.mark.asyncio
+async def test_check_messages_alive_unresolvable_group_reports_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Absent from ChatFull AND the cache can't resolve it → no false positives."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            raise ValueError
 
         async def __call__(self, _request: object) -> object:
             return MagicMock(full_chat=MagicMock(linked_chat_id=999), chats=[MagicMock(id=111)])
@@ -609,11 +641,20 @@ async def test_check_messages_alive_unresolved_group_reports_nothing(
     assert result.missing_ids == []
 
 
-def _ban_client(participant: object | None, *, linked: int | None = 999) -> object:
+def _ban_client(
+    participant: object | None,
+    *,
+    linked: int | None = 999,
+    in_chats: bool = True,
+    resolvable: bool = True,
+) -> object:
     """A FakeClient answering GetFullChannel then GetParticipant for the ban probe.
 
     ``participant`` None → raise UserNotParticipantError; otherwise return it
     wrapped as ``.participant``. ``linked`` None → channel has no linked group.
+    ``in_chats`` False → the linked group is absent from ``ChatFull.chats`` (so the
+    probe must fall back to ``get_input_entity``); ``resolvable`` False → that
+    fallback also fails.
     """
     from telethon.tl.functions.channels import (  # noqa: PLC0415
         GetFullChannelRequest,
@@ -626,9 +667,14 @@ def _ban_client(participant: object | None, *, linked: int | None = 999) -> obje
         async def connect(self) -> None:
             return None
 
+        async def get_input_entity(self, _peer: object) -> object:
+            if not resolvable:
+                raise ValueError
+            return group
+
         async def __call__(self, request: object) -> object:
             if isinstance(request, GetFullChannelRequest):
-                chats = [group] if linked is not None else []
+                chats = [group] if (linked is not None and in_chats) else []
                 return MagicMock(full_chat=MagicMock(linked_chat_id=linked), chats=chats)
             assert isinstance(request, GetParticipantRequest)
             if participant is None:
@@ -716,6 +762,32 @@ async def test_check_banned_no_linked_group_is_comments_disabled(
 ) -> None:
     """No linked discussion group / comments off → can't check → comments_disabled."""
     _patch_client(monkeypatch, _ban_client(MagicMock(), linked=None))
+
+    result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
+
+    assert isinstance(result, BanCheckResult)
+    assert result.state == "comments_disabled"
+
+
+@pytest.mark.asyncio
+async def test_check_banned_group_absent_from_chats_resolves_via_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Linked group missing from ChatFull.chats → resolve off the warm cache, not 'disabled'."""
+    _patch_client(monkeypatch, _ban_client(MagicMock(), in_chats=False))
+
+    result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
+
+    assert isinstance(result, BanCheckResult)
+    assert result.state == "can_send"
+
+
+@pytest.mark.asyncio
+async def test_check_banned_group_unresolvable_is_comments_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Absent from chats AND the cache can't resolve it → honest comments_disabled."""
+    _patch_client(monkeypatch, _ban_client(MagicMock(), in_chats=False, resolvable=False))
 
     result = await execute_read("acc-x", CheckBannedInChannel(channel="@news"))
 

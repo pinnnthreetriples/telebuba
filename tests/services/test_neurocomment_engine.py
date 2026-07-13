@@ -370,8 +370,8 @@ async def _latest_reason(event: str) -> object | None:
 
 
 @pytest.mark.asyncio
-async def test_no_account_reason_quota(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A healthy account that is merely maxed out reports ``quota`` (add accounts/raise cap)."""
+async def test_no_account_reason_quota_hour(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Hourly per-account cap full → ``quota_hour`` names the specific limit."""
     campaign_id = await _make_campaign("@chan", "acc-1")
     monkeypatch.setattr(settings.neurocomment, "max_comments_per_hour", 1)
     assert await claim_comment("@chan", 1, campaign_id, "acc-1") is True
@@ -380,7 +380,22 @@ async def test_no_account_reason_quota(monkeypatch: pytest.MonkeyPatch) -> None:
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
 
-    assert await _latest_reason("neurocomment_no_account_available") == "quota"
+    assert await _latest_reason("neurocomment_no_account_available") == "quota_hour"
+
+
+@pytest.mark.asyncio
+async def test_no_account_reason_quota_day(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Under the hourly cap but the per-channel daily cap is full → ``quota_day``."""
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    monkeypatch.setattr(settings.neurocomment, "max_comments_per_hour", 100)
+    monkeypatch.setattr(settings.neurocomment, "max_comments_per_channel_per_day", 1)
+    assert await claim_comment("@chan", 1, campaign_id, "acc-1") is True
+    await mark_comment_posted("@chan", 1, comment_text="x", comment_msg_id=1)
+    _patch_io(monkeypatch, comment=_CommentStub())
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    assert await _latest_reason("neurocomment_no_account_available") == "quota_day"
 
 
 @pytest.mark.asyncio
@@ -1437,8 +1452,10 @@ async def test_guest_send_forbidden_gate_registers_challenge_failure(
 
 
 @pytest.mark.asyncio
-async def test_user_banned_gate_does_not_park_channel(monkeypatch: pytest.MonkeyPatch) -> None:
-    """A ban flips readiness off but is NOT a solver failure: no backoff, pending stays."""
+async def test_user_banned_marks_pair_banned_not_a_solver_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A ban sticks the pair banned (ready=0, banned=1); it is NOT a solver failure."""
     monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
     await _make_campaign("@chan", "acc-1")
     await _seed_pending_challenge("acc-1", "@chan")
@@ -1453,7 +1470,27 @@ async def test_user_banned_gate_does_not_park_channel(monkeypatch: pytest.Monkey
     assert _challenge_outcome("acc-1") == "pending"
     readiness = await fetch_readiness("acc-1", "@chan")
     assert readiness is not None
-    assert readiness.ready is False  # a ban still flips the pair off for selection
+    assert readiness.ready is False  # a ban flips the pair off for selection
+    assert readiness.banned is True  # ...and sticks so a re-onboard can't revive it
+
+
+@pytest.mark.asyncio
+async def test_banned_pair_is_not_selected_for_the_next_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """After a ban, a fresh post on the same channel finds no eligible account."""
+    await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub(status="failed", error_type="UserBannedInChannelError")
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
+    assert len(comment.calls) == 1  # the ban was hit once
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    # No second attempt — the banned pair is excluded from selection.
+    assert len(comment.calls) == 1
+    assert await _latest_reason("neurocomment_no_account_available") == "not_ready"
 
 
 # --------------------------------------------------------------------------- #

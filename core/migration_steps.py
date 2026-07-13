@@ -332,5 +332,6 @@ from core.migration_steps_neurocomment import (  # noqa: E402, F401
     _add_neurocomment_runtime,
     _add_neurocomment_settings,
     _add_neurocomment_tables,
+    _add_readiness_banned,
     _add_readiness_human_skipped,
 )

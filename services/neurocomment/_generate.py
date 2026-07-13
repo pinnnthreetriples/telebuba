@@ -24,6 +24,7 @@ from core.db import (
     load_warming_settings,
     mark_comment_failed,
     mark_comment_posted,
+    mark_pair_banned,
     resolve_pending_outcome,
     upsert_readiness,
 )
@@ -52,15 +53,14 @@ class _GenOutcome(NamedTuple):
     reason: str | None  # set only when text is None (surfaced in the exhausted log)
 
 
-# Joined the group but writes are forbidden → a captcha/gate we detect and skip
-# (mirrors onboarding's set). Flip readiness so the pair is no longer selected.
-_GATE_ERRORS = frozenset(
-    {"ChatGuestSendForbiddenError", "ChatWriteForbiddenError", "UserBannedInChannelError"},
-)
-# A write gate that a captcha/solver click can clear — these are the challenge failures.
-# A ban (UserBannedInChannelError) also flips readiness off, but is NOT a solver failure:
-# it must not resolve a pending challenge to failed nor trip the challenge back-off.
-_CHALLENGE_GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
+# Solver-clearable write gates: joined the group but a captcha/gate forbids writing.
+# Flip readiness off so the pair is no longer selected, and count a challenge failure —
+# a solver click can clear these, so they can retry after re-onboarding.
+_GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
+# A hard ban: the account can't write here at all — NOT solver-clearable. It parks the
+# (account, channel) pair with a sticky ban (#30) instead of a recoverable gate, and is
+# never a challenge failure (no pending-resolve, no back-off).
+_BAN_ERROR = "UserBannedInChannelError"
 # Rate-limit families that carry (or imply) a cooldown rather than a hard fail.
 _COOLDOWN_STATUSES = frozenset(
     {"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"},
@@ -294,6 +294,12 @@ async def _classify_post(
         scope = event.channel if result.status == "slow_mode_wait" else None
         _apply_cooldown(account_id, result.flood_wait_seconds, scope)
         event_name = "neurocomment_post_cooldown"
+    elif result.error_type == _BAN_ERROR:
+        # Hard ban → park this pair with a sticky ban (#30): selection skips it and a
+        # re-onboard won't revive it. Not a solver failure, so no challenge back-off and
+        # the pending challenge is left as-is. Cleared by a can_send probe / operator retry.
+        await mark_pair_banned(account_id, event.channel)
+        event_name = "neurocomment_account_banned"
     elif result.error_type in _GATE_ERRORS:
         # Gate: stop selecting this pair until re-onboarded; the click did not work.
         await upsert_readiness(
@@ -303,9 +309,7 @@ async def _classify_post(
             captcha_passed=False,
             ready=False,
         )
-        if result.error_type in _CHALLENGE_GATE_ERRORS and await resolve_pending_outcome(
-            account_id, event.channel, "failed"
-        ):
+        if await resolve_pending_outcome(account_id, event.channel, "failed"):
             await _register_challenge_failure(event.channel)
         event_name = "neurocomment_post_gated"
     else:

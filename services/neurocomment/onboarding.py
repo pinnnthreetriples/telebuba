@@ -35,6 +35,7 @@ from core.db import (
     list_campaign_accounts,
     list_campaign_channels,
     list_campaign_readiness,
+    mark_pair_banned,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -50,11 +51,10 @@ from schemas.telegram_actions import (
 from services.neurocomment import _seams, _state, challenge
 from services.neurocomment._onboard_channel import OnboardContext, onboard_channel
 
-# Join failed because writes are Telegram-blocked → chat_restricted (Ф2 #120):
-# unsolvable by the challenge solver. The set is small and intentional.
-_GATE_ERRORS = frozenset(
-    {"ChatGuestSendForbiddenError", "ChatWriteForbiddenError", "UserBannedInChannelError"},
-)
+# Writes Telegram-blocked at join → chat_restricted (Ф2 #120); solver can't clear it.
+_GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
+# A hard ban at join → sticky ban (#30), same as a ban hit while commenting (never retried).
+_BAN_ERROR = "UserBannedInChannelError"
 # Rate-limit families: never terminal, retry later, must return promptly.
 _RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
 
@@ -104,17 +104,14 @@ async def _join_and_classify(
     join, no solver — until its cooldown expires; the board renders it
     ``bot_challenge_backoff`` from the in-memory back-off state.
 
-    An operator-skipped pair (#148) is also left alone: re-joining it would run the
-    solver and flip readiness back to ready, silently undoing the skip. The operator
-    un-skips via ``retry_pair`` (which clears the readiness row first).
+    An operator-skipped pair (#148) or an auto-banned pair (#30) is left alone:
+    re-joining would run the solver and flip readiness back to ready, undoing the
+    skip / reviving the ban. Cleared via ``retry_pair`` (skip) or a can_send probe (ban).
     """
     existing = await fetch_readiness(account_id, channel)
-    if existing is not None and existing.human_skipped:
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="human_skipped",
-        )
+    if existing is not None and (existing.human_skipped or existing.banned):
+        state = "human_skipped" if existing.human_skipped else "banned"
+        return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
     if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
@@ -196,10 +193,19 @@ async def _classify_join(
             channel=channel,
             state="join_by_request",
         )
+    if result.error_type == _BAN_ERROR:
+        # Hard ban at join → sticky ban (#30) so a re-onboard stops re-joining the group.
+        await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
+        await mark_pair_banned(account_id, channel)
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="banned",
+        )
     if result.error_type in _GATE_ERRORS:
-        # Telegram-level write block (mute / restrict / ban) → chat_restricted (Ф2
-        # #120). Unsolvable by the challenge solver, so it is never invoked here;
-        # joined stays True (we are a member) but ready is False.
+        # Telegram-level write block (mute / restrict) → chat_restricted (Ф2 #120).
+        # Unsolvable by the challenge solver, so it is never invoked here; joined stays
+        # True (we are a member) but ready is False.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
             account_id=account_id,
@@ -288,7 +294,7 @@ async def onboard_campaign(
     already_ready = {
         (r.account_id, r.channel)
         for r in (await list_campaign_readiness(campaign_id)).readiness
-        if r.ready and r.joined and r.captcha_passed and not r.human_skipped
+        if r.ready and r.joined and r.captcha_passed and not r.human_skipped and not r.banned
     }
 
     def report(event: OnboardingProgressEvent) -> None:

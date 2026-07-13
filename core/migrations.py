@@ -20,6 +20,7 @@ from core.migration_steps import (
     _add_neurocomment_runtime,
     _add_neurocomment_settings,
     _add_neurocomment_tables,
+    _add_readiness_banned,
     _add_readiness_human_skipped,
     _add_unique_session_name_index,
     _add_users_table,
@@ -87,6 +88,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (27, "add_neurocomment_comment_deleted_at", _add_neurocomment_comment_deleted_at),
     (28, "add_warming_settings_gemini_tuning", _add_warming_settings_gemini_tuning),
     (29, "add_campaign_account_channels_table", _add_campaign_account_channels_table),
+    (30, "add_readiness_banned", _add_readiness_banned),
 )
 
 

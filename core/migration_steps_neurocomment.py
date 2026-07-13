@@ -187,6 +187,16 @@ def _add_readiness_human_skipped(connection: Connection) -> None:
         )
 
 
+def _add_readiness_banned(connection: Connection) -> None:
+    # #30: auto-detected hard ban per (account, channel). Sticky so a re-onboard
+    # can't flip a banned pair back to selectable. Default 0 so existing rows are
+    # not banned; cleared when "Проверить каналы" sees the account can send again.
+    if "banned" not in _sqlite_columns(connection, "neurocomment_readiness"):
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_readiness ADD COLUMN banned INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 def _add_neurocomment_comment_deleted_at(connection: Connection) -> None:
     # #27: mark a posted comment that later vanished from the channel. NULL = still
     # live; an ISO timestamp = when we noticed it was deleted. The comments table is

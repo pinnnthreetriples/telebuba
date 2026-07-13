@@ -15,6 +15,7 @@ from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     assign_account_to_campaign,
     claim_comment,
+    clear_pair_banned,
     configure_database,
     count_account_channel_comments_since,
     count_account_comments_since,
@@ -42,6 +43,7 @@ from core.db import (  # type: ignore[attr-defined]
     mark_comment_failed,
     mark_comment_posted,
     mark_human_skipped,
+    mark_pair_banned,
     reclaim_stale_claims,
     remove_account_from_campaign,
     resolve_pending_outcome,
@@ -381,6 +383,94 @@ async def test_mark_human_skipped_clears_ready_and_sets_flag() -> None:
     assert readiness is not None
     assert readiness.ready is False
     assert readiness.human_skipped is True
+
+
+def test_migration_30_adds_banned_column() -> None:
+    engine = _get_engine()
+    with engine.connect() as connection:
+        columns = {
+            row["name"]
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_readiness)",
+            ).mappings()
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "banned" in columns
+    assert 30 in versions
+
+
+@pytest.mark.asyncio
+async def test_mark_pair_banned_clears_ready_and_sets_flag() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+
+    await mark_pair_banned("acc-1", "@chan")
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.ready is False
+    assert readiness.banned is True
+
+
+@pytest.mark.asyncio
+async def test_upsert_readiness_preserves_banned_so_a_reonboard_cannot_revive_it() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@chan")
+
+    # A re-onboard writes readiness again — the ban must survive it.
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.banned is True
+
+
+@pytest.mark.asyncio
+async def test_clear_pair_banned_restores_ready_only_for_a_banned_row() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@chan")
+
+    await clear_pair_banned("acc-1", "@chan")
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.banned is False
+    assert readiness.ready is True  # can_send proof restores selectability
+
+
+@pytest.mark.asyncio
+async def test_clear_pair_banned_keeps_ready_off_for_a_human_skipped_pair() -> None:
+    # ban → operator skip → can_send probe: the un-ban must not resurrect ready, or the
+    # board would show a skipped pair as "ready" while the engine still excludes it.
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
+    await mark_pair_banned("acc-1", "@chan")
+    await mark_human_skipped("acc-1", "@chan")
+
+    await clear_pair_banned("acc-1", "@chan")
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.banned is False  # ban lifted
+    assert readiness.human_skipped is True  # ...but the operator skip survives
+    assert readiness.ready is False  # ...so the pair stays unselectable
+
+
+@pytest.mark.asyncio
+async def test_clear_pair_banned_is_a_noop_when_not_banned() -> None:
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)
+
+    await clear_pair_banned("acc-1", "@chan")
+
+    # Never banned → the row is untouched (no spurious ready flip).
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert readiness.ready is False
 
 
 @pytest.mark.asyncio

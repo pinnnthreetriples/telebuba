@@ -33,6 +33,7 @@ export type AccountChannelOnboarding = {
     | 'bot_challenge_backoff'
     | 'joining'
     | 'human_skipped'
+    | 'banned'
     | 'failed';
   /**
    * Reason
@@ -1005,6 +1006,7 @@ export type NeurocommentChannelRow = {
     | 'join_by_request'
     | 'join_failed'
     | 'chat_restricted'
+    | 'banned'
     | 'bot_challenge'
     | 'bot_challenge_backoff'
     | 'throttled'
