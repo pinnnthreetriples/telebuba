@@ -926,6 +926,7 @@
       "error": "error"
     },
     "activity": {
+      "hold": "Pre-start hold",
       "subscribe": "Joining channels",
       "read": "Reading the feed",
       "stories": "Viewing stories",

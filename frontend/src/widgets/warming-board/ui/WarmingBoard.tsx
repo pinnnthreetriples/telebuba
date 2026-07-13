@@ -138,7 +138,13 @@ function WarmingCard({
     clearedAt == null
       ? logLines
       : logLines.filter((line) => new Date(line.created_at).getTime() > clearedAt);
-  const active = activeStage(account);
+  // Pre-start hold: the account is queued (active) but its first cycle hasn't run
+  // yet, so the engine is idle-waiting up to cold_start_spread_hours (~24h) before
+  // the first subscribe. Show that honestly with a countdown instead of a blinking
+  // "subscribe" step that implies work is happening (services/warming _runner.py).
+  const hold =
+    account.state === 'active' && (account.cycles_completed ?? 0) === 0 && !account.last_action;
+  const active = hold ? -1 : activeStage(account);
   // Real elapsed warming days vs the operator-chosen target (the start slider);
   // the card auto-flips to "complete" once the account reaches its own target.
   const target = account.target_days ?? WARMING_DAYS;
@@ -148,7 +154,7 @@ function WarmingCard({
   const filled = Math.round((DAY_SEGMENTS.length * days) / target);
   const dayTicks =
     target === WARMING_DAYS ? DAY_TICKS : [...new Set([0, Math.round(target / 2), target])];
-  const connectorPct = (active / (STAGES.length - 1)) * 100;
+  const connectorPct = hold ? 0 : (active / (STAGES.length - 1)) * 100;
   const status = WARM_STATUS[account.state];
   // Real daily-actions / cap counter (design: "X/N действий"); guard a 0/absent cap.
   const dailyActions = account.daily_actions ?? 0;
@@ -353,9 +359,9 @@ function WarmingCard({
           <div className="mt-[11px] flex items-center gap-[9px] rounded-[9px] border border-[#dce7fb] bg-[#eef4ff] px-[10px] py-[7px]">
             <span className="tb-livedot h-2 w-2 shrink-0 rounded-full bg-primary" />
             <span className="tb-pulse text-[11.5px] font-semibold text-primary">
-              {t(`warming.activity.${STAGES[active]}`)}
+              {hold ? t('warming.activity.hold') : t(`warming.activity.${STAGES[active]}`)}
             </span>
-            {STAGES[active] === 'pause' && account.next_run_at ? (
+            {(hold || STAGES[active] === 'pause') && account.next_run_at ? (
               <PauseCountdown nextRunAt={account.next_run_at} />
             ) : null}
           </div>

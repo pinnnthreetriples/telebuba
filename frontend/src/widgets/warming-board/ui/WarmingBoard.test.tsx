@@ -54,6 +54,25 @@ test('renders an in-progress card per warming account with the stage labels', ()
   expect(screen.queryByText('Отчёт')).not.toBeInTheDocument();
 });
 
+test('shows a pre-start hold with a countdown, not a fake subscribe step', () => {
+  const held: WarmingAccountState = {
+    account_id: '79990001122',
+    label: '79990001122',
+    state: 'active',
+    health: 'ok',
+    cycles_completed: 0,
+    next_run_at: new Date(Date.now() + 3_600_000).toISOString(),
+  };
+  renderWithClient(
+    <WarmingBoard warming={[held]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Выдержка перед стартом')).toBeInTheDocument();
+  // The misleading "actively subscribing" activity text is gone during the hold…
+  expect(screen.queryByText('Подписка на каналы')).not.toBeInTheDocument();
+  // …and the real wait shows a live countdown.
+  expect(screen.getByText(/ещё/)).toBeInTheDocument();
+});
+
 test('stops the clicked account', async () => {
   const onStop = vi.fn();
   renderWithClient(
