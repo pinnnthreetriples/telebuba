@@ -2830,10 +2830,10 @@ async def test_initial_delay_cold_start_spreads_over_hours(monkeypatch: pytest.M
 
 
 @pytest.mark.asyncio
-async def test_initial_delay_cold_start_spans_full_day(monkeypatch: pytest.MonkeyPatch) -> None:
-    # #203: the widened default cold-start spread (~24h) fans a bulk overnight
-    # import across the whole day, not the first morning. Active hours off so the
-    # raw spread is under test, not the window snap.
+async def test_initial_delay_cold_start_spans_the_window(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The default cold-start spread fans a bulk import across its whole window
+    # (so the first cycles land the same evening / by next morning, not all at
+    # once). Active hours off so the raw spread is under test, not the window snap.
     monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
     monkeypatch.setattr(_seams.rng, "random", random.random)  # live draw over the span
 
@@ -2845,7 +2845,7 @@ async def test_initial_delay_cold_start_spans_full_day(monkeypatch: pytest.Monke
     span = settings.warming.cold_start_spread_hours * 3600
     delays = [await warming._initial_delay_seconds("acc-1", None, now) for _ in range(50)]
 
-    assert max(delays) > 12 * 3600  # reaches well past the old few-hour window
+    assert max(delays) > 0.75 * span  # reaches the upper part of the window, not just early
     assert all(0 <= d <= span for d in delays)
 
 

@@ -149,9 +149,10 @@ function WarmingCard({
       ? logLines
       : logLines.filter((line) => new Date(line.created_at).getTime() > clearedAt);
   // Pre-start hold: the account is queued (active) but its first cycle hasn't run
-  // yet, so the engine is idle-waiting up to cold_start_spread_hours (~24h) before
-  // the first subscribe. Show that honestly with a countdown instead of a blinking
-  // "subscribe" step that implies work is happening (services/warming _runner.py).
+  // yet, so the engine is idle-waiting up to cold_start_spread_hours (plus a snap
+  // into the account's morning window) before the first subscribe. Show that
+  // honestly with a countdown instead of a blinking "subscribe" step that implies
+  // work is happening (services/warming _runner.py).
   const hold =
     account.state === 'active' && (account.cycles_completed ?? 0) === 0 && !account.last_action;
   const active = hold ? -1 : activeStage(account);
