@@ -1,8 +1,0 @@
-# Tests — fixture data (e.g. literal passwords) trips SAST rules; not shipped
-# code. Mirrors bandit's exclude_dirs, which already excludes tests.
-tests/
-# CI gate helpers (trusted tooling that shells out to dev tools); not app code.
-tools/
-# React SPA — governed by its own gate set (eslint/tsc/vitest); the generated
-# API client is machine-output. Not Python-side SAST scope.
-frontend/
