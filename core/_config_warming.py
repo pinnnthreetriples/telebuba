@@ -31,11 +31,11 @@ class WarmingSettings(BaseSettings):
     startup_jitter_max_seconds: float = Field(default=8.0, ge=0.0)
     # Cold-start spread: a fresh account (no persisted schedule) picks its first
     # run uniformly across this many hours instead of a few seconds, so a bulk
-    # overnight onboarding of N accounts neither all fires at once nor collapses
-    # into the next morning window. Spanning ~a full day means the candidates that
-    # already fall in the active window stay spread across it; only the night ones
-    # snap forward, so the fleet's first runs fan out across the whole window.
-    cold_start_spread_hours: float = Field(default=24.0, ge=0.0)
+    # onboarding of N accounts neither all fires at once nor collapses into the
+    # next morning window. Kept well under a full day so the first cycle lands the
+    # same evening or by next morning — a night-time candidate still snaps forward
+    # to the active window, but the ceiling no longer stretches past ~a day.
+    cold_start_spread_hours: float = Field(default=8.0, ge=0.0)
     channels_per_cycle_min: int = Field(default=1, ge=1)
     channels_per_cycle_max: int = Field(default=3, ge=1)
     # Fraction of the global channel pool that forms one account's *stable*
