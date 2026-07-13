@@ -623,7 +623,7 @@ def test_normalize_story_image_renders_blurred_background_canvas() -> None:
     - Centre pixel reads back close to the source colour because the fitted
       copy sits on top of the blurred background.
     """
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         _normalize_story_image_for_telegram,
     )
 
@@ -657,7 +657,7 @@ def test_normalize_story_image_rejects_non_image_bytes_with_stable_code() -> Non
     translates, because it travels the ``execute`` → ``error_message`` →
     error-envelope path verbatim.
     """
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         StoryImageNormalisationError,
         _normalize_story_image_for_telegram,
     )
@@ -678,7 +678,7 @@ def test_normalize_story_image_rejects_truncated_file_with_stable_code() -> None
     ``UnidentifiedImageError`` — both must collapse into the same
     locale-neutral ``story_image_invalid`` code.
     """
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         StoryImageNormalisationError,
         _normalize_story_image_for_telegram,
     )
@@ -696,7 +696,7 @@ def test_normalize_story_image_rejects_decompression_bomb_with_stable_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """Pillow's decompression-bomb guard maps to the stable code too."""
-    from core.telegram_client._media import (  # noqa: PLC0415 — internal helper
+    from core.telegram_client._story_image import (  # noqa: PLC0415 — internal helper
         StoryImageNormalisationError,
         _normalize_story_image_for_telegram,
     )
@@ -709,6 +709,154 @@ def test_normalize_story_image_rejects_decompression_bomb_with_stable_code(
     with pytest.raises(StoryImageNormalisationError) as excinfo:
         _normalize_story_image_for_telegram(buffer.getvalue())
     assert str(excinfo.value) == "story_image_invalid"
+
+
+def _jpeg(size: tuple[int, int], colour: tuple[int, int, int]) -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", size, colour).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+@pytest.mark.parametrize(
+    ("count", "layout"),
+    [(2, "v2"), (4, "grid2x2"), (6, "grid2x3")],
+)
+def test_compose_story_collage_produces_canvas_jpeg(count: int, layout: str) -> None:
+    """A collage of representative counts renders one 1080x1920 JPEG."""
+    from core.telegram_client._story_image import _compose_story_collage  # noqa: PLC0415
+
+    images = [_jpeg((400, 500), (10 * i, 20, 30)) for i in range(count)]
+    out = _compose_story_collage(images, layout)
+
+    with Image.open(BytesIO(out)) as result:
+        assert result.size == (1080, 1920)
+        assert result.format == "JPEG"
+
+
+def test_compose_story_collage_default_layout_is_first_for_count() -> None:
+    from core.telegram_client._story_image import _default_collage_layout  # noqa: PLC0415
+
+    assert _default_collage_layout(2) == "v2"
+    assert _default_collage_layout(3) == "v3"
+
+
+def test_compose_story_collage_unknown_layout_raises() -> None:
+    from core.telegram_client._story_image import (  # noqa: PLC0415
+        StoryCollageLayoutError,
+        _compose_story_collage,
+    )
+
+    images = [_jpeg((100, 100), (0, 0, 0)), _jpeg((100, 100), (255, 255, 255))]
+    with pytest.raises(StoryCollageLayoutError) as excinfo:
+        _compose_story_collage(images, "grid2x2")  # grid2x2 is a count-4 layout
+    assert str(excinfo.value) == "story_collage_unknown_layout"
+    assert "unknown collage layout" in str(excinfo.value.__cause__)
+
+
+def test_compose_story_collage_unsupported_count_raises() -> None:
+    from core.telegram_client._story_image import (  # noqa: PLC0415
+        StoryCollageLayoutError,
+        _compose_story_collage,
+    )
+
+    images = [_jpeg((100, 100), (0, 0, 0))] * 7
+    with pytest.raises(StoryCollageLayoutError) as excinfo:
+        _compose_story_collage(images, "v2")
+    assert "unsupported collage image count" in str(excinfo.value.__cause__)
+
+
+def test_compose_story_collage_rejects_undecodable_image() -> None:
+    from core.telegram_client._story_image import (  # noqa: PLC0415
+        StoryImageNormalisationError,
+        _compose_story_collage,
+    )
+
+    with pytest.raises(StoryImageNormalisationError):
+        _compose_story_collage([_jpeg((100, 100), (0, 0, 0)), b"not an image"], "v2")
+
+
+@pytest.mark.asyncio
+async def test_execute_post_story_collage_uploads_single_composite(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A collage PostStory stitches its images into ONE uploaded 1080x1920 photo."""
+    captured: list[object] = []
+    uploaded_bytes: list[bytes] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, entity: str) -> object:
+            assert entity == "me"
+            return MagicMock()
+
+        async def upload_file(self, file: BytesIO, *, file_name: str) -> object:  # noqa: ARG002
+            uploaded_bytes.append(file.read())
+            return MagicMock()
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            return MagicMock(id=555)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-collage",
+        PostStory(
+            filename="story.jpg",
+            content=_jpeg((400, 500), (200, 0, 0)),
+            media_kind="image",
+            extra_images=[_jpeg((400, 500), (0, 200, 0))],
+            collage_layout="h2",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert result.message_id == 555
+    assert any(isinstance(req, SendStoryRequest) for req in captured)
+    # Exactly one photo hit upload_file, already normalised to the story canvas.
+    assert len(uploaded_bytes) == 1
+    with Image.open(BytesIO(uploaded_bytes[0])) as sent:
+        assert sent.size == (1080, 1920)
+
+
+@pytest.mark.asyncio
+async def test_execute_post_story_collage_unknown_layout_surfaces_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bad collage layout id fails with the stable locale-neutral code (#12)."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, entity: str) -> object:
+            assert entity == "me"
+            return MagicMock()
+
+        async def upload_file(self, _file: BytesIO, *, file_name: str) -> object:  # noqa: ARG002
+            msg = "upload must not run for an unresolved layout"
+            raise AssertionError(msg)
+
+        async def __call__(self, _request: object) -> object:
+            return MagicMock(id=1)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-collage-bad",
+        PostStory(
+            filename="story.jpg",
+            content=_jpeg((400, 500), (200, 0, 0)),
+            media_kind="image",
+            extra_images=[_jpeg((400, 500), (0, 200, 0))],
+            collage_layout="grid2x2",  # a count-4 layout requested for 2 images
+        ),
+    )
+
+    assert result.status == "failed"
+    assert result.error_message == "story_collage_unknown_layout"
 
 
 @pytest.mark.asyncio

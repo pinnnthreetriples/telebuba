@@ -440,9 +440,9 @@ export type BodyImportAccountTdata = {
  */
 export type BodyPostAccountStory = {
   /**
-   * File
+   * Files
    */
-  file: Blob | File;
+  files: Array<Blob | File>;
   /**
    * Media Kind
    */
@@ -459,6 +459,10 @@ export type BodyPostAccountStory = {
    * Protect Content
    */
   protect_content?: boolean;
+  /**
+   * Collage Layout
+   */
+  collage_layout?: string | null;
 };
 
 /**

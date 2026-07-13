@@ -335,6 +335,23 @@ channel-aggregate) ban badge in the work-row would need a `deriveRows` rework.
 Gates: 1232 pytest (strict, ≥90% branch), 271 vitest + tsc green, ruff+ty clean,
 API client regenerated (`banned` state + `quota_*` reasons drift-free).
 
+A 2026-07-13 operator-requested story feature — **multi-photo "collage" stories**
+(Telegram has no native multi-photo story API; the app stitches 2–6 photos into
+ONE composite and posts that, so we replicate the compositing server-side). PR1
+(backend, open) adds a Pillow collage composer in `core/telegram_client/_media.py`
+(`_compose_story_collage` + `_COLLAGE_TEMPLATES`: named layouts per count —
+2:`v2`/`h2`, 3:`v3`/`left1_right2`/`top1_bottom2`, 4:`grid2x2`/`v4`, 5:`top2_bottom3`,
+6:`grid2x3`, first id = default), routed from `_story_media` when `PostStory`
+carries `extra_images`; single-photo/video paths unchanged; `_decode_story_source`
++ `_cover_crop` factored out and shared. `PostStory`/`AccountStoryUpload` gain
+`extra_images` + `collage_layout`; the service validates media-kind/count/size with
+locale-neutral codes (`story_collage_requires_image`, `story_collage_too_many_images`,
+and `story_collage_unknown_layout` via a new typed `StoryCollageLayoutError`);
+`POST /accounts/{id}/story` now takes `files: list[UploadFile]` + `collage_layout`.
+Config `PROFILE_MEDIA__STORY_COLLAGE_{MAX_IMAGES=6,GAP_PX=8}`. Gates green (1263
+pytest, ruff/ty clean, API client regenerated). PR2 (frontend) — multi-select +
+reorder + layout picker in `AddStoryModal` — is next.
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.

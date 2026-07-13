@@ -85,7 +85,7 @@ export function AddStoryModal({
       {
         path: { account_id: accountId },
         body: {
-          file,
+          files: [file],
           media_kind: file.type.startsWith('video') ? 'video' : 'image',
           caption: caption.trim() || null,
           privacy_preset: PRIVACY[audience],

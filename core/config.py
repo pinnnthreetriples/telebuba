@@ -185,6 +185,10 @@ class ProfileMediaSettings(BaseSettings):
     photo_max_bytes: int = Field(default=10_000_000, ge=1)
     story_image_max_bytes: int = Field(default=10_000_000, ge=1)
     story_video_max_bytes: int = Field(default=100_000_000, ge=1)
+    # Multi-photo "collage" stories: hard cap on how many photos stitch into one
+    # composite, and the gap (px) drawn between cells on the 1080x1920 canvas.
+    story_collage_max_images: int = Field(default=6, ge=2, le=6)
+    story_collage_gap_px: int = Field(default=8, ge=0)
     music_max_bytes: int = Field(default=30_000_000, ge=1)
     # .session files = effective credentials. Cap to deter accidental large uploads.
     session_max_bytes: int = Field(default=5_000_000, ge=1)

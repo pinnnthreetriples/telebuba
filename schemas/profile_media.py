@@ -34,6 +34,11 @@ class AccountStoryUpload(BaseModel):
     privacy_preset: StoryPrivacyPreset = "contacts"
     period_seconds: int = Field(default=86_400, ge=21_600, le=86_400)
     protect_content: bool = False
+    # Collage images 2..N (``content``/``filename`` is image #1). Empty = the
+    # existing single-photo/video path; non-empty = a multi-photo collage. The
+    # count cap + per-image validation are enforced in the service.
+    extra_images: list[bytes] = Field(default_factory=list)
+    collage_layout: str | None = None
 
 
 class AccountProfileMusicUpload(BaseModel):

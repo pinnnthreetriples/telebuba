@@ -887,6 +887,130 @@ async def test_post_account_story_executes_story_action(
 
 
 @pytest.mark.asyncio
+async def test_post_account_story_collage_passes_extra_images(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A collage upload threads image #1 + extra_images + layout into ``PostStory``."""
+    captured: list[object] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="post_story", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    result = await post_account_story(
+        AccountStoryUpload(
+            account_id="acc-collage",
+            filename="s.jpg",
+            content=b"first",
+            media_kind="image",
+            extra_images=[b"second", b"third"],
+            collage_layout="v3",
+        ),
+    )
+
+    assert result.status == "ok"
+    assert isinstance(captured[0], PostStory)
+    assert captured[0].extra_images == [b"second", b"third"]
+    assert captured[0].collage_layout == "v3"
+
+
+@pytest.mark.asyncio
+async def test_post_account_story_collage_rejects_too_many_images(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.profile_media, "story_collage_max_images", 3)
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        msg = "execute should not be reached"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await post_account_story(
+            AccountStoryUpload(
+                account_id="acc-collage",
+                filename="s.jpg",
+                content=b"first",
+                media_kind="image",
+                extra_images=[b"a", b"b", b"c"],  # total 4 > cap 3
+            ),
+        )
+    assert str(excinfo.value) == "story_collage_too_many_images"
+
+
+@pytest.mark.asyncio
+async def test_post_account_story_rejects_extra_images_on_video(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_execute(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        msg = "execute should not be reached"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await post_account_story(
+            AccountStoryUpload(
+                account_id="acc-collage",
+                filename="s.mp4",
+                content=b"vid",
+                media_kind="video",
+                extra_images=[b"x"],
+            ),
+        )
+    assert str(excinfo.value) == "story_collage_requires_image"
+
+
+@pytest.mark.asyncio
+async def test_post_account_story_collage_rejects_oversize_extra(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.profile_media, "story_image_max_bytes", 3)
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        msg = "execute should not be reached"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    with pytest.raises(ValueError, match="too large"):
+        await post_account_story(
+            AccountStoryUpload(
+                account_id="acc-collage",
+                filename="s.jpg",
+                content=b"ok",  # 2 bytes, under the 3-byte cap
+                media_kind="image",
+                extra_images=[b"way-too-big"],
+            ),
+        )
+
+
+@pytest.mark.asyncio
+async def test_post_account_story_collage_rejects_bad_suffix(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_execute(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        msg = "execute should not be reached"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.media.execute", fake_execute)
+
+    with pytest.raises(ValueError, match="must be one of"):
+        await post_account_story(
+            AccountStoryUpload(
+                account_id="acc-collage",
+                filename="s.txt",  # not an image suffix
+                content=b"first",
+                media_kind="image",
+                extra_images=[b"second"],
+            ),
+        )
+
+
+@pytest.mark.asyncio
 async def test_add_account_profile_music_executes_music_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

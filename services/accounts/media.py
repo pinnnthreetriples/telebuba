@@ -21,7 +21,7 @@ from schemas.telegram_actions import (
     SetProfilePhoto,
     ToggleStoryPinned,
 )
-from services.accounts._result import raise_for_result
+from services.accounts._result import AccountActionError, raise_for_result
 from services.accounts._uploads import (
     _PROFILE_MUSIC_SUFFIXES,
     _PROFILE_PHOTO_SUFFIXES,
@@ -95,6 +95,23 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
         allowed_suffixes=allowed_suffixes,
         label=f"story {data.media_kind}",
     )
+    if data.extra_images:
+        # Collage: only images can carry extra photos, and the whole set must fit
+        # the count window. Codes are locale-neutral (non-negotiable #12).
+        if data.media_kind != "image":
+            code = "story_collage_requires_image"
+            raise AccountActionError(code)
+        for extra in data.extra_images:
+            _validate_upload(
+                filename=data.filename,
+                content=extra,
+                max_bytes=settings.profile_media.story_image_max_bytes,
+                allowed_suffixes=_STORY_IMAGE_SUFFIXES,
+                label="story image",
+            )
+        if 1 + len(data.extra_images) > settings.profile_media.story_collage_max_images:
+            code = "story_collage_too_many_images"
+            raise AccountActionError(code)
     result = await execute(
         data.account_id,
         PostStory(
@@ -105,6 +122,8 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
             privacy_preset=data.privacy_preset,
             period_seconds=data.period_seconds,
             protect_content=data.protect_content,
+            extra_images=data.extra_images,
+            collage_layout=data.collage_layout,
         ),
     )
     raise_for_result(result)
@@ -117,6 +136,7 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
             "filename": data.filename,
             "media_kind": data.media_kind,
             "privacy_preset": data.privacy_preset,
+            "image_count": 1 + len(data.extra_images),
         },
     )
     return result
