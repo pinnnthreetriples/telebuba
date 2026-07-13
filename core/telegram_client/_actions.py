@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import random
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from telethon import errors
@@ -59,6 +60,19 @@ if TYPE_CHECKING:
 # SystemRandom: non-cryptographic jitter/selection, but avoids the module-level
 # `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
 _rng = random.SystemRandom()
+
+
+@dataclass(frozen=True)
+class _DispatchResult:
+    """One action's dispatch outcome.
+
+    Carries the ``message_id`` (if any) plus dynamic log fields the static
+    ``_action_log_extra`` can't know — e.g. the reaction emoji the gateway
+    actually placed, chosen at dispatch time.
+    """
+
+    message_id: int | None = None
+    log_extra: dict[str, object] | None = None
 
 
 async def _flood_action_result(
@@ -129,7 +143,7 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
 
     try:
         client = await get_client(account_id)
-        message_id = await _dispatch_action(client, action)
+        outcome = await _dispatch_action(client, action)
     except errors.SlowModeWaitError as exc:
         return await _flood_action_result(
             account_id, action, status="slow_mode_wait", seconds=exc.seconds
@@ -157,17 +171,20 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
     except Exception as exc:  # noqa: BLE001
         return await _generic_error(account_id, action, exc)
 
+    extra = _action_log_extra(action)
+    if outcome.log_extra:
+        extra |= outcome.log_extra
     await log_event(
         "INFO",
         f"telegram_{action.action_type}",
         account_id=account_id,
-        extra=_action_log_extra(action),
+        extra=extra,
     )
     return ActionResult(
         status="ok",
         action_type=action.action_type,
         account_id=account_id,
-        message_id=message_id,
+        message_id=outcome.message_id,
     )
 
 
@@ -189,16 +206,19 @@ async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage
     return int(getattr(message, "id", 0)) or None
 
 
-async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> int | None:  # noqa: C901, PLR0912
-    """Run one action against an already-connected client. Returns message_id if any.
+async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _DispatchResult:  # noqa: C901, PLR0912
+    """Run one action against an already-connected client.
 
     Pattern-matches on the concrete action model so ty narrows ``action`` inside
     each branch; a single exit keeps the return count lint-friendly as the action
     set grows, and bodies are delegated to helpers where more than a one-liner.
+    Returns the ``message_id`` (if any) and any dynamic log fields the action
+    produced at dispatch time (e.g. the reaction emoji actually placed).
     """
     # Telethon resolves usernames / chat refs at runtime; ty insists on the
     # narrow InputChannel union, so the str/int passthrough needs an ignore.
     message_id: int | None = None
+    log_extra: dict[str, object] | None = None
     match action:
         case JoinChannel():
             hash_str = extract_invite_hash(action.channel)
@@ -231,14 +251,16 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> in
         case WatchPeerStories():
             await dispatch_watch_peer_stories(client, action)
         case ReactToPost():
-            message_id = await _dispatch_react_to_post(client, action)
+            react = await _dispatch_react_to_post(client, action)
+            message_id = react.message_id
+            log_extra = react.log_extra
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
         case _:
             # Everything else is a profile-media write (photo / story / music);
             # its own dispatcher raises for anything genuinely unhandled.
             message_id = await _dispatch_profile_media_action(client, action)
-    return message_id
+    return _DispatchResult(message_id=message_id, log_extra=log_extra)
 
 
 async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
@@ -318,14 +340,15 @@ def _pick_reaction(preferred: list[str], allowed: set[str] | None) -> str | None
     return _rng.choice(fallback) if fallback else None
 
 
-async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> int | None:
+async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> _DispatchResult:
     """React to a random recent post with an emoji the channel actually permits.
 
     Picking blindly from the configured set trips ``ReactionInvalidError`` on
     channels that restrict reactions (e.g. @durov). We first read the channel's
     allowed set and prefer one of our emoji from it; if none overlap we still
     react with one of the channel's own (non-negative) emoji so a reaction lands.
-    Only a channel that permits nothing usable skips (returns ``None``).
+    Only a channel that permits nothing usable skips (empty result). On success
+    the placed emoji rides back in ``log_extra`` so the activity log can show it.
     """
     messages = await client.get_messages(action.channel, limit=action.message_limit)
     candidates = [
@@ -334,11 +357,11 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
         if getattr(m, "id", None)
     ]
     if not candidates:
-        return None
+        return _DispatchResult()
     allowed = await _channel_reaction_whitelist(client, action.channel)
     emoji = _pick_reaction(action.reactions, allowed)
     if emoji is None:
-        return None
+        return _DispatchResult()
     message_id = _rng.choice(candidates)
     peer = await client.get_input_entity(action.channel)
     await client(
@@ -348,7 +371,7 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
             reaction=[ReactionEmoji(emoticon=emoji)],
         ),
     )
-    return message_id
+    return _DispatchResult(message_id=message_id, log_extra={"reaction": emoji})
 
 
 async def _dispatch_join_discussion_group(

@@ -267,6 +267,58 @@ test('expanding a card fetches that account real activity log', async () => {
   expect(fetched).toBe(true);
 });
 
+test('names which channel and which reaction each log action touched', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: '2026-06-30T12:04:00+00:00',
+              level: 'INFO',
+              status: 'success',
+              account_id: '79051184490',
+              event: 'telegram_join_channel',
+              extra: { channel: '@durov' },
+            },
+            {
+              id: 2,
+              created_at: '2026-06-30T12:05:00+00:00',
+              level: 'INFO',
+              status: 'success',
+              account_id: '79051184490',
+              event: 'telegram_react_to_post',
+              extra: { channel: '@news', reaction: '🔥' },
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(
+    <WarmingBoard
+      warming={[account('79051184490', 'active')]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+      channelLabels={{ '@durov': 'Дуров' }}
+    />,
+  );
+  await userEvent.click(screen.getByText('Лог активности'));
+  await waitFor(() => {
+    // The join line names the channel by its configured label…
+    expect(screen.getByText('Дуров')).toBeInTheDocument();
+  });
+  // …and the react line shows the (unlabelled) handle plus the emoji actually placed.
+  expect(screen.getByText('@news')).toBeInTheDocument();
+  expect(screen.getByText('🔥')).toBeInTheDocument();
+});
+
 test('clear button hides the existing log lines', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

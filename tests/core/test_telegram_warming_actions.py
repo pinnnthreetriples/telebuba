@@ -15,6 +15,7 @@ from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, ReactionEmoj
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from core.repositories.logs import list_recent_logs
 from core.telegram_client import execute
 from schemas.telegram_actions import (
     ReactToPost,
@@ -281,6 +282,25 @@ async def test_react_to_post_skips_when_only_negative_reactions_allowed(
     assert result.status == "ok"
     assert result.message_id is None
     assert _sent_reactions(captured) == []
+
+
+@pytest.mark.asyncio
+async def test_react_to_post_logs_chosen_emoji_and_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The react log row records which emoji landed in which channel (card display)."""
+    captured: list[object] = []
+    allowed = ChatReactionsSome(reactions=[ReactionEmoji(emoticon="🔥")])
+    _patch_client(monkeypatch, _react_fake_client(captured, allowed))
+
+    result = await execute("acc-3h", ReactToPost(channel="@durov", reactions=["👍", "🔥"]))
+
+    assert result.status == "ok"
+    rows = await list_recent_logs(limit=20)
+    react_rows = [r for r in rows if r.event == "telegram_react_to_post"]
+    assert react_rows
+    assert react_rows[0].extra["channel"] == "@durov"
+    assert react_rows[0].extra["reaction"] == "🔥"
 
 
 @pytest.mark.asyncio
