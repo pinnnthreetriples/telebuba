@@ -23,6 +23,23 @@ from schemas.accounts import (
 )
 from schemas.challenge import BotChallengeMessage  # noqa: TC001
 
+# The channel-management action cluster lives in a sibling module (file-size
+# cap); importing the names here keeps
+# ``from schemas.telegram_actions import CreateChannel`` working unchanged.
+from schemas.telegram_actions_channels import (
+    CheckChannelUsername,
+    CreateChannel,
+    DeleteChannel,
+    DeleteChannelPost,
+    EditChannel,
+    EditChannelPost,
+    GetOwnChannel,
+    ListChannelPosts,
+    ListOwnChannels,
+    PublishChannelPost,
+    SetChannelPhoto,
+)
+
 # The profile-media / story action cluster lives in a sibling module (file-size
 # cap); the discriminated unions below reference every name, so importing them
 # here keeps ``from schemas.telegram_actions import PostStory`` working unchanged.
@@ -224,7 +241,14 @@ TelegramAction = Annotated[
     | SetMainProfilePhoto
     | RemoveStory
     | ToggleStoryPinned
-    | WatchPeerStories,
+    | WatchPeerStories
+    | CreateChannel
+    | EditChannel
+    | SetChannelPhoto
+    | DeleteChannel
+    | PublishChannelPost
+    | EditChannelPost
+    | DeleteChannelPost,
     Field(discriminator="action_type"),
 ]
 
@@ -237,7 +261,11 @@ TelegramReadAction = Annotated[
     | ListActiveStories
     | ListProfileMusic
     | ListProfilePhotos
-    | WaitForBotChallenge,
+    | WaitForBotChallenge
+    | ListOwnChannels
+    | GetOwnChannel
+    | ListChannelPosts
+    | CheckChannelUsername,
     Field(discriminator="action_type"),
 ]
 
@@ -300,6 +328,10 @@ class ActionResult(BaseModel):
     action_type: str = Field(min_length=1)
     account_id: str = Field(min_length=1)
     message_id: int | None = None
+    # The new channel's id, set only by ``channel_create``. Telegram ids are
+    # int64 (past JS's 2^53 safe-integer window), so it crosses the JSON
+    # boundary as a decimal string — same rationale as profile_media._Int64Str.
+    channel_id: str | None = None
     flood_wait_seconds: int | None = None
     error_type: str | None = None
     error_message: str | None = None

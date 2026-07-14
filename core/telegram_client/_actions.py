@@ -5,7 +5,6 @@ from __future__ import annotations
 import asyncio
 import random
 from contextlib import suppress
-from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from telethon import errors
@@ -26,10 +25,12 @@ from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._action_results import (
+    _DispatchResult,
     _flood_action_result,
     _generic_error,
     _unavailable_result,
 )
+from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
 from core.telegram_client._media import _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._react import _channel_reaction_whitelist, _pick_reaction
@@ -67,19 +68,6 @@ if TYPE_CHECKING:
 # SystemRandom: non-cryptographic jitter/selection, but avoids the module-level
 # `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
 _rng = random.SystemRandom()
-
-
-@dataclass(frozen=True)
-class _DispatchResult:
-    """One action's dispatch outcome.
-
-    Carries the ``message_id`` (if any) plus dynamic log fields the static
-    ``_action_log_extra`` can't know — e.g. the reaction emoji the gateway
-    actually placed, chosen at dispatch time.
-    """
-
-    message_id: int | None = None
-    log_extra: dict[str, object] | None = None
 
 
 async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: C901, PLR0911 - one except per Telegram error family
@@ -148,6 +136,8 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
         action_type=action.action_type,
         account_id=account_id,
         message_id=outcome.message_id,
+        # int64 → decimal string at the JSON boundary (see ActionResult).
+        channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
     )
 
 
@@ -219,6 +209,10 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             log_extra = react.log_extra
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
+        case _ if action.action_type.startswith("channel_"):
+            # Channel management (create/edit/post/delete) — its own dispatcher
+            # builds the full result (channel_create carries the new id).
+            return await _dispatch_channel_action(client, action)
         case _:
             # Everything else is a profile-media write (photo / story / music);
             # its own dispatcher raises for anything genuinely unhandled.
@@ -374,6 +368,8 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             extra = {"story_id": action.story_id}
         case ToggleStoryPinned():
             extra = {"story_id": action.story_id, "pinned": action.pinned}
+        case _ if action.action_type.startswith("channel_"):
+            extra = _channel_log_extra(action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             extra = {}
     return extra

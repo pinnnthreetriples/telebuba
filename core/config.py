@@ -220,6 +220,23 @@ class ProfileMediaSettings(BaseSettings):
     thumb_cache_max_age_seconds: int = Field(default=3600, ge=0)
 
 
+class ChannelsSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CHANNELS__", extra="ignore")
+
+    avatar_max_bytes: int = Field(default=10_000_000, ge=1)
+    post_photo_max_bytes: int = Field(default=10_000_000, ge=1)
+    post_video_max_bytes: int = Field(default=100_000_000, ge=1)
+    # Default page size for the channel-posts list endpoint.
+    posts_page_limit: int = Field(default=20, ge=1, le=100)
+    # Max own channels returned by the list endpoint (ceiling: the
+    # ListOwnChannels action's le=200).
+    list_limit: int = Field(default=100, ge=1, le=200)
+    # How many dialogs to scan when discovering the account's own channels —
+    # owned channels are found by filtering the dialog list (creator+broadcast),
+    # so the scan depth bounds how far down an old channel can still be found.
+    dialogs_scan_limit: int = Field(default=500, ge=1)
+
+
 class LoggingSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LOGGING__", extra="ignore")
 
@@ -239,6 +256,7 @@ class Settings(BaseSettings):
     db: DbSettings = Field(default_factory=DbSettings)
     proxy: ProxySettings = Field(default_factory=ProxySettings)
     profile_media: ProfileMediaSettings = Field(default_factory=ProfileMediaSettings)
+    channels: ChannelsSettings = Field(default_factory=ChannelsSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)

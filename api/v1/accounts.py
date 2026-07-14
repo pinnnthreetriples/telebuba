@@ -13,6 +13,8 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
+from api.v1._accounts_channel_posts import channel_posts_router
+from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
 from schemas.accounts import (
     AccountCheckRequest,
@@ -212,3 +214,6 @@ async def import_account_session(
 # this file under the size cap. Mounted last so the OpenAPI path order matches
 # the pre-split single-router layout; paths are unique so order is irrelevant.
 router.include_router(media_router)
+# Own-channel management + channel posts (same split-sibling pattern).
+router.include_router(channels_router)
+router.include_router(channel_posts_router)
