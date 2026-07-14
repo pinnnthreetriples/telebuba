@@ -425,7 +425,7 @@ the 7 `account_channel_*` log codes + 7 `channel_*` action types.
 `ActionResult` gained `channel_id` (int64-as-string, set only by
 `channel_create`); `_DispatchResult` moved to `_action_results.py`; the profile
 music/photo read dispatchers were extracted to `_read_profile.py` (pure move,
-file-size budget). Gates: 1439 pytest / 95% branch, ruff+ty+aislop clean,
+file-size budget). Gates: 1389 pytest / 95% branch, ruff+ty+aislop clean,
 API client regenerated (11 ops), frontend gates green (no UI consumes them yet).
 
 ## Not Yet Built (deliberate)
