@@ -12,29 +12,27 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
-import asyncio
 from typing import TYPE_CHECKING, cast
 
 from telethon import errors
 from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantRequest
-from telethon.tl.functions.photos import GetUserPhotosRequest
 from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     ChannelParticipantBanned,
-    DocumentAttributeAudio,
     InputUserSelf,
 )
 
-from core.config import settings
 from core.db import fetch_account
-from core.logging import log_event
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
+from core.telegram_client._read_profile import (
+    dispatch_list_profile_music,
+    dispatch_list_profile_photos,
+)
 from core.telegram_client._read_stories import (
     dispatch_list_active_stories,
     dispatch_list_pinned_stories,
 )
-from core.telegram_client._thumbs import download_thumb_bounded, thumb_limiter
 from schemas.telegram_actions import (
     BanCheckResult,
     CheckBannedInChannel,
@@ -49,13 +47,7 @@ from schemas.telegram_actions import (
     ListProfilePhotos,
     WaitForBotChallenge,
 )
-from schemas.telegram_profile_snapshot import (
-    TelegramMusicItem,
-    TelegramProfileMusic,
-    TelegramProfilePhoto,
-    TelegramProfilePhotos,
-    TelegramProfileSnapshot,
-)
+from schemas.telegram_profile_snapshot import TelegramProfileSnapshot
 
 if TYPE_CHECKING:
     from pydantic import BaseModel
@@ -161,9 +153,12 @@ async def _dispatch_read_action(  # noqa: PLR0911 - one return per read-action c
         case ListActiveStories():
             return await dispatch_list_active_stories(client)
         case ListProfileMusic():
-            return await _dispatch_list_profile_music(client)
+            # The optional-import flag + request class live in THIS module (the
+            # patch seam tests target); the dispatcher itself moved out.
+            request_cls = GetSavedMusicRequest if _MUSIC_API_AVAILABLE else None
+            return await dispatch_list_profile_music(client, request_cls)
         case ListProfilePhotos():
-            return await _dispatch_list_profile_photos(client, action)
+            return await dispatch_list_profile_photos(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)
@@ -303,134 +298,3 @@ async def _dispatch_get_user_profile(client: TelegramClient) -> TelegramProfileS
         bio=bio,
         current_photo_id=current_photo_id,
     )
-
-
-async def _dispatch_list_profile_music(client: TelegramClient) -> TelegramProfileMusic:
-    if not _MUSIC_API_AVAILABLE or GetSavedMusicRequest is None:
-        await log_event("INFO", "telegram_list_profile_music_unsupported")
-        return TelegramProfileMusic(items=[], supported=False)
-    result = await client(
-        GetSavedMusicRequest(
-            id=InputUserSelf(),
-            offset=0,
-            limit=settings.profile_media.music_preview_limit,
-            hash=0,
-        ),
-    )
-    documents = getattr(result, "documents", []) or []
-    items: list[TelegramMusicItem] = []
-    for document in documents:
-        file_id = int(getattr(document, "id", 0) or 0)
-        if file_id == 0:
-            continue
-        audio = _find_audio_attribute(document)
-        items.append(
-            TelegramMusicItem(
-                file_id=file_id,
-                title=_optional_str(getattr(audio, "title", None)),
-                performer=_optional_str(getattr(audio, "performer", None)),
-                duration_seconds=int(getattr(audio, "duration", 0) or 0) or None,
-                access_hash=int(getattr(document, "access_hash", 0) or 0),
-                file_reference=bytes(getattr(document, "file_reference", b"") or b""),
-            ),
-        )
-    return TelegramProfileMusic(items=items, supported=True)
-
-
-def _find_audio_attribute(document: object) -> object | None:
-    for attribute in getattr(document, "attributes", []) or []:
-        if isinstance(attribute, DocumentAttributeAudio):
-            return attribute
-    return None
-
-
-async def _dispatch_list_profile_photos(
-    client: TelegramClient,
-    action: ListProfilePhotos,
-) -> TelegramProfilePhotos:
-    """Pull the account's profile-photo history with a small thumb per photo.
-
-    ``GetUserPhotosRequest`` returns the history newest-first by date, but the
-    first item is NOT necessarily the current avatar: a set-main mints a new
-    id that inherits the ORIGINAL photo's date, so the avatar can sit anywhere
-    in the list — ``UserFull.profile_photo.id`` is the only avatar authority
-    (see ``_dispatch_get_user_profile``). Each photo carries the ``InputPhoto``
-    id triple needed for the matching ``RemoveProfilePhoto`` write action.
-    """
-    result = await client(
-        GetUserPhotosRequest(
-            user_id=InputUserSelf(),
-            offset=0,
-            max_id=0,
-            limit=action.limit,
-        ),
-    )
-    raw_photos = [
-        photo
-        for photo in (getattr(result, "photos", []) or [])
-        if int(getattr(photo, "id", 0) or 0)
-    ]
-    # Fetch thumbnails concurrently (serial awaits made the modal open scale
-    # linearly with history size) but bounded — see ``_thumbs``.
-    semaphore, flood_stop = thumb_limiter()
-    items = await asyncio.gather(
-        *(_profile_photo(client, photo, semaphore, flood_stop) for photo in raw_photos),
-    )
-    return TelegramProfilePhotos(items=list(items))
-
-
-async def _profile_photo(
-    client: TelegramClient,
-    photo: object,
-    semaphore: asyncio.Semaphore,
-    flood_stop: asyncio.Event,
-) -> TelegramProfilePhoto:
-    return TelegramProfilePhoto(
-        photo_id=int(getattr(photo, "id", 0) or 0),
-        access_hash=int(getattr(photo, "access_hash", 0) or 0),
-        file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
-        date_unix=_photo_date_unix(photo),
-        thumb_bytes=await download_thumb_bounded(
-            semaphore,
-            flood_stop,
-            "photos",
-            lambda: _download_photo_thumb(client, photo),
-        ),
-    )
-
-
-def _photo_date_unix(photo: object) -> int:
-    """Coerce Telethon's ``photo.date`` (a ``datetime``) into a Unix int."""
-    raw = getattr(photo, "date", None)
-    if raw is None:
-        return 0
-    if isinstance(raw, int):
-        return raw
-    timestamp = getattr(raw, "timestamp", None)
-    if callable(timestamp):
-        try:
-            return int(timestamp())
-        except (TypeError, ValueError):
-            return 0
-    return 0
-
-
-async def _download_photo_thumb(client: TelegramClient, photo: object) -> bytes | None:
-    """Pull the largest cached preview for a profile photo.
-
-    ``thumb=-1`` selects the largest available size in ``photo.sizes`` —
-    for profile photos that's the 640 px ``c`` variant, which renders
-    crisp inside the 112 px poster card (and on retina). ``thumb=0``
-    used to fetch the ~160 px stripped preview but stretching it 2x came
-    out visibly pixelated.
-    """
-    try:
-        # ``file=bytes`` (the type) is Telethon's in-memory download mode.
-        data = await client.download_media(photo, file=bytes, thumb=-1)  # ty: ignore[invalid-argument-type]
-    except errors.FloodWaitError:
-        # Rate limits must reach the batch breaker in ``_thumbs`` — swallowing
-        # them here let sibling downloads keep hammering a flooded connection.
-        raise
-    except (errors.RPCError, ValueError, TypeError):
-        return None
-    return data if isinstance(data, (bytes, bytearray)) else None
