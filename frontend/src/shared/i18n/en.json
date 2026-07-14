@@ -351,6 +351,7 @@
         "chat_admin_required": "Channel admin rights are required",
         "channel_read_failed": "Couldn't read the channel data from Telegram",
         "channel_create_failed": "Couldn't create the channel",
+        "channel_username_assign_failed": "Channel was created as private — the username could not be assigned",
         "unavailable": "Telegram is temporarily unavailable — try again"
       }
     },

@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-14
+last_updated: 2026-07-15
 ---
 
 # Active State
@@ -455,6 +455,20 @@ helpers in `_channelsShared.ts` (error.message = stable code →
 clean; prettier clean on changed files (repo-wide `--check` fails locally only
 from the Windows CRLF worktree smudge — CI checks out LF).
 
+A 2026-07-15 hardening + UX pass (one PR): (1) channel ids past int64 are
+rejected up front in `_input_channel` (`channel_not_found`, was an OverflowError
+500) and the resolve also catches `OverflowError`; (2) an UNMAPPED RPC refusal
+on the post-create username assignment now surfaces as stable
+`channel_username_assign_failed` still carrying the created channel's id
+(flood-family re-raised unchanged for the flood ladder — id lost there by
+design); (3) «Сделать основным» switched from promote (`updateProfilePhoto`) to
+**re-upload as a new photo** — the promote-mint inherits the original's date, so
+viewers saw the new main mid-carousel and cached mobile galleries showed
+old-id/new-id duplicates of the same image (live repro 2026-07-15); the re-upload
+gets a fresh date (first slide everywhere) and the ORIGINAL stays in the history
+as a visible duplicate the operator deletes manually — the action still never
+deletes anything (#249 rule).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.
@@ -462,9 +476,10 @@ from the Windows CRLF worktree smudge — CI checks out LF).
 - Proxy unassign-from-account: backend exists (`POST /proxies/unassign`), no UI trigger.
 - `ListenerEditModal` persists the picked listener only while the runtime runs.
 - Accounts table status filter / column sort / bulk actions — backend supports, UI gap.
-- Photo «сделать главной» — promote-only (`updateProfilePhoto` REPLACES: the
-  original id is consumed, the mint inherits its date; nothing is ever deleted —
-  see the #249 data-loss fix).
+- Photo «сделать главной» — re-uploads the photo's bytes as a NEW photo (fresh
+  date → first slide for viewers); the original stays in the history and is
+  deleted manually if unwanted. Nothing is ever auto-deleted — see the #249
+  data-loss fix.
 - Warming per-action numeric limits stay auto/config (read-only in UI, auto-cap ADR).
 - **Interest-partitioned channel catalog** — the durable fix for cross-account channel overlap (joins are permanent + the pool is shared, so churn/exploration only bound convergence, not eliminate it). Explicitly deferred by #203 as a separate follow-up.
 

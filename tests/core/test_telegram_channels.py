@@ -312,6 +312,110 @@ async def test_channel_unmapped_rpc_error_passes_through(
     assert result.error_type == "ChatWriteForbiddenError"
 
 
+@pytest.mark.asyncio
+async def test_create_channel_unmapped_username_failure_still_carries_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An UNMAPPED refusal on the username assignment must not lose the id.
+
+    The channel already exists as private at that point — a raw pass-through
+    (the pre-fix behaviour) dropped ``channel_id`` from the failed result and
+    leaked Telethon prose; a generic stable code keeps both contracts.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, CheckUsernameRequest):
+                return True
+            if isinstance(request, CreateChannelRequest):
+                return SimpleNamespace(chats=[SimpleNamespace(id=987)])
+            if isinstance(request, UpdateUsernameRequest):
+                raise errors.ChatWriteForbiddenError(request=None)
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-ch-postfail-unmapped",
+        CreateChannel(title="Public", username="my_channel"),
+    )
+
+    assert result.status == "failed"
+    assert result.error_message == "channel_username_assign_failed"
+    assert result.channel_id == "987"
+    assert not any(isinstance(r, DeleteChannelRequest) for r in captured)
+
+
+@pytest.mark.asyncio
+async def test_create_channel_flood_on_username_reaches_flood_ladder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FloodWait on the username assignment must keep its dedicated handling.
+
+    Wrapping it into ``ChannelGatewayError`` would hide the wait-seconds from
+    the flood ladder; the created (private) channel still surfaces via
+    list-own-channels on the next refresh.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            if isinstance(request, CheckUsernameRequest):
+                return True
+            if isinstance(request, CreateChannelRequest):
+                return SimpleNamespace(chats=[SimpleNamespace(id=987)])
+            if isinstance(request, UpdateUsernameRequest):
+                raise errors.FloodWaitError(request=None, capture=44)
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-ch-postflood",
+        CreateChannel(title="Public", username="my_channel"),
+    )
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 44
+
+
+@pytest.mark.asyncio
+async def test_channel_action_rejects_beyond_int64_id_with_stable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An id past int64 is ``channel_not_found``, not an OverflowError 500.
+
+    ``get_input_entity`` must not even be called: the sqlite session lookup
+    raises OverflowError (not ValueError) for such ids, which used to escape
+    the guard and surface as a 500.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            msg = "must not be called for an out-of-range id"
+            raise AssertionError(msg)
+
+        async def __call__(self, _request: object) -> object:  # pragma: no cover
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-ch-huge", DeleteChannel(channel_id=2**63))
+
+    assert result.status == "failed"
+    assert result.error_message == "channel_not_found"
+
+
 # --------------------------------------------------------------------------- #
 # EditChannel / SetChannelPhoto / DeleteChannel
 # --------------------------------------------------------------------------- #

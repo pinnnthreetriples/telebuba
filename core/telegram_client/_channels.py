@@ -128,11 +128,19 @@ async def _run_channel_action(
     return _DispatchResult()
 
 
+# int64 ceiling — a larger id cannot exist on Telegram, and the session-cache
+# lookup would raise OverflowError (sqlite binding), not ValueError.
+_TELEGRAM_ID_MAX = 2**63 - 1
+
+
 async def _input_channel(client: TelegramClient, channel_id: int) -> object:
     """Resolve an owned channel's input entity from the session cache by id."""
+    if not 0 < channel_id <= _TELEGRAM_ID_MAX:
+        code = "channel_not_found"
+        raise ChannelGatewayError(code)
     try:
         return await client.get_input_entity(PeerChannel(channel_id))
-    except ValueError as exc:
+    except (ValueError, OverflowError) as exc:
         code = "channel_not_found"
         raise ChannelGatewayError(code) from exc
 
@@ -171,11 +179,16 @@ async def _create_channel(client: TelegramClient, action: CreateChannel) -> _Dis
     if action.username is not None:
         try:
             await client(UpdateUsernameRequest(channel=entity, username=action.username))  # ty: ignore[invalid-argument-type]
+        except (errors.FloodWaitError, errors.PeerFloodError):
+            # Must reach execute's flood ladder unchanged; the created channel
+            # still surfaces via list-own-channels on the next refresh.
+            raise
         except errors.RPCError as exc:
+            # Mapped or not, the channel already exists — the id must ride the
+            # failure so the caller can adopt it instead of re-creating.
             mapped = _map_telethon_error(exc)
-            if mapped is None:
-                raise
-            raise ChannelGatewayError(mapped.code, channel_id=new_id) from exc
+            code = mapped.code if mapped is not None else "channel_username_assign_failed"
+            raise ChannelGatewayError(code, channel_id=new_id) from exc
     return _DispatchResult(channel_id=new_id)
 
 

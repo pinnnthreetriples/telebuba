@@ -1154,27 +1154,39 @@ def _set_main_client(  # noqa: PLR0913 - keyword-only knobs for the make-main fa
     history_ids: list[int] | None = None,
     history_ids_after: list[int] | None = None,
     avatar_ids: tuple[int | None, int | None] = (None, None),
+    photo_bytes: bytes | None = b"jpeg-bytes",
 ) -> object:
-    """Fake client for the make-main flow: GetUserPhotos → getFullUser → promote.
+    """Fake client for the make-main flow: GetUserPhotos → download → re-upload.
 
     ``history_ids`` seeds the FIRST ``GetUserPhotos`` (default: just ``target_id``);
-    ``history_ids_after`` seeds later ones — a fresh read models REPLACE (the
-    promote consumed the original id), while one still listing the original id
-    models replication lag of the read. ``avatar_ids`` is what
-    ``users.getFullUser`` reports before/after the promote. ``updated_id`` is
-    the id ``updateProfilePhoto`` returns (``None`` → a bare result without
-    ``photo``). Any ``DeletePhotosRequest`` would "succeed" (returns the asked
-    ids) — on live Telegram exactly such a delete, issued against a lagged read,
-    destroyed the previous main avatar, so the tests must prove it is never
-    even sent.
+    ``history_ids_after`` seeds later ones — a re-upload puts a NEW id at the
+    front while the original id STAYS in the history. ``avatar_ids`` is what
+    ``users.getFullUser`` reports before/after. ``updated_id`` is the id
+    ``uploadProfilePhoto`` returns (``None`` → a bare result without ``photo``);
+    ``photo_bytes`` is what ``download_media`` yields for the target. Any
+    ``DeletePhotosRequest`` would "succeed" (returns the asked ids) — on live
+    Telegram exactly such a delete destroyed the previous main avatar, so the
+    tests must prove it is never even sent.
     """
     ids = history_ids if history_ids is not None else [target_id]
     ids_after = history_ids_after if history_ids_after is not None else ids
     calls = {"get_user_photos": 0, "get_full_user": 0}
 
     class FakeClient:
+        def __init__(self) -> None:
+            self.downloaded: list[object] = []
+
         async def connect(self) -> None:
             return None
+
+        async def download_media(self, media: object, *, file: object = None) -> bytes | None:
+            del file
+            self.downloaded.append(media)
+            return photo_bytes
+
+        async def upload_file(self, stream: object, *, file_name: str | None = None) -> object:
+            del stream, file_name
+            return MagicMock(name="uploaded-avatar")
 
         async def __call__(self, request: object) -> object:
             captured.append(request)
@@ -1198,7 +1210,7 @@ def _set_main_client(  # noqa: PLR0913 - keyword-only knobs for the make-main fa
             if isinstance(request, DeletePhotosRequest):
                 # A live server would report success here — and the data is gone.
                 return [photo.id for photo in request.id if isinstance(photo, InputPhoto)]
-            # updateProfilePhoto returns photos.Photo with (maybe fresh) id.
+            # uploadProfilePhoto returns photos.Photo with the freshly minted id.
             photo = SimpleNamespace(id=updated_id) if updated_id is not None else None
             return SimpleNamespace(photo=photo)
 
@@ -1224,35 +1236,34 @@ def _patch_id_flow_log(
 
 
 @pytest.mark.asyncio
-async def test_execute_set_main_photo_replaces_photo_and_logs_id_flow(
+async def test_execute_set_main_photo_reuploads_as_new_and_logs_id_flow(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """«Сделать основным» = REPLACE: promote consumes the original id, deletes nothing.
+    """«Сделать основным» = RE-UPLOAD: fresh photo at the front, deletes nothing.
 
-    True server semantics (official-client parity): ``updateProfilePhoto`` on a
-    history photo consumes the original id (``big_id``) and mints a NEW id (555)
-    at the front — count unchanged, previous main keeps its id one slot down.
-    The gateway promotes from a fresh re-resolved ``InputPhoto`` (int64 id
-    intact past 2^53), sends no delete, and logs the id flow before/after so a
-    live run is verifiable from debug.log (new avatar id == promoted id).
+    The gateway downloads the target's bytes from the FRESH server-resolved
+    history object (int64 id intact past 2^53, stale snapshot refs ignored)
+    and re-uploads them via ``uploadProfilePhoto`` — a brand-new id (555) with
+    a fresh date lands at the front while the ORIGINAL id stays in the
+    history. No ``updateProfilePhoto`` promote, no delete of any kind, and the
+    id flow is logged before/after so a live run is verifiable from debug.log
+    (new avatar id == promoted id).
     """
     captured: list[object] = []
     big_id = 9_007_199_254_740_993  # 2^53 + 1
     old_main = 111
     filler = 222
     events = _patch_id_flow_log(monkeypatch)
-    _patch_client(
-        monkeypatch,
-        _set_main_client(
-            captured,
-            target_id=big_id,
-            updated_id=555,
-            history_ids=[old_main, filler, big_id],
-            # Fresh post-promote read: original id CONSUMED, new id at front.
-            history_ids_after=[555, old_main, filler],
-            avatar_ids=(old_main, 555),
-        ),
+    client = _set_main_client(
+        captured,
+        target_id=big_id,
+        updated_id=555,
+        history_ids=[old_main, filler, big_id],
+        # Post-re-upload read: NEW id at the front, original id still there.
+        history_ids_after=[555, old_main, filler, big_id],
+        avatar_ids=(old_main, 555),
     )
+    _patch_client(monkeypatch, client)
 
     result = await execute(
         "acc-photo-main",
@@ -1262,17 +1273,12 @@ async def test_execute_set_main_photo_replaces_photo_and_logs_id_flow(
 
     assert result.status == "ok"
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
-    updates = [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]
-    assert len(updates) == 1
-    sent = updates[0].id
-    # ``UpdateProfilePhotoRequest.id`` is typed as ``InputPhoto | InputPhotoEmpty``;
-    # narrow with an isinstance so ty knows the access_hash / file_reference
-    # attributes are present.
-    assert isinstance(sent, InputPhoto)
-    assert sent.id == big_id
-    # The FRESH access_hash / file_reference are used, not the stale snapshot ones.
-    assert sent.access_hash == _FRESH_ACCESS_HASH
-    assert sent.file_reference == _FRESH_REFERENCE
+    # No promote request — the whole point of the re-upload strategy.
+    assert [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)] == []
+    assert len([req for req in captured if isinstance(req, UploadProfilePhotoRequest)]) == 1
+    # The bytes came from the server-resolved history object, not the snapshot.
+    downloaded = client.downloaded  # ty: ignore[unresolved-attribute]
+    assert [getattr(media, "id", None) for media in downloaded] == [big_id]
     # Two GetUserPhotos (before + after) — the "after" one only feeds the log.
     assert len([req for req in captured if isinstance(req, GetUserPhotosRequest)]) == 2
     assert len([req for req in captured if isinstance(req, GetFullUserRequest)]) == 2
@@ -1289,8 +1295,9 @@ async def test_execute_set_main_photo_replaces_photo_and_logs_id_flow(
     assert before["current_avatar_id"] == old_main
     assert after["phase"] == "after"
     assert after["target_photo_id"] == big_id
-    assert after["history_ids"] == [555, old_main, filler]
-    # The promoted photo's NEW identity — must match the new current avatar.
+    # The original id STAYS in the history; the fresh upload leads it.
+    assert after["history_ids"] == [555, old_main, filler, big_id]
+    # The freshly uploaded photo's identity — must match the new current avatar.
     assert after["promoted_photo_id"] == 555
     assert after["current_avatar_id"] == after["promoted_photo_id"]
 
@@ -1299,14 +1306,14 @@ async def test_execute_set_main_photo_replaces_photo_and_logs_id_flow(
 async def test_set_main_profile_photo_never_deletes_anything(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Data-loss regression: even on a LAGGED post-promote read, never delete.
+    """Data-loss regression: the history now ALWAYS holds a duplicate — never delete.
 
-    Live evidence (debug.log 2026-07-13): a post-promote ``GetUserPhotos`` can
-    still list the consumed original id — replication lag of the read, not a
-    real leftover. The old "dedup" step deleted against exactly this view and,
-    because own-profile deletes resolve by id alone, destroyed the UNRELATED
-    previous main avatar (18:37:17 run). Whatever the post-promote read says,
-    ``DeletePhotosRequest`` must never be issued from this action.
+    Live evidence (debug.log 2026-07-13): an auto-"dedup" delete here destroyed
+    the UNRELATED previous main avatar, because own-profile deletes resolve by
+    id alone. Under the re-upload strategy the original id staying in the
+    history is the NORMAL outcome, not lag — deleting it is the operator's
+    explicit dashboard action, and ``DeletePhotosRequest`` must never be issued
+    from this action.
     """
     captured: list[object] = []
     big_id = 9_007_199_254_740_993  # 2^53 + 1
@@ -1318,7 +1325,7 @@ async def test_set_main_profile_photo_never_deletes_anything(
             target_id=big_id,
             updated_id=555,
             history_ids=[old_main, big_id],
-            # LAGGED post-promote read: the consumed original id still listed.
+            # Post-re-upload read: the original id is still listed — by design.
             history_ids_after=[555, old_main, big_id],
             avatar_ids=(old_main, 555),
         ),
@@ -1332,7 +1339,7 @@ async def test_set_main_profile_photo_never_deletes_anything(
     assert result.status == "ok"
     # THE regression assertion: no delete request of any kind, ever.
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
-    assert len([req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]) == 1
+    assert len([req for req in captured if isinstance(req, UploadProfilePhotoRequest)]) == 1
 
 
 @pytest.mark.asyncio
@@ -1341,15 +1348,13 @@ async def test_execute_set_main_photo_raises_when_target_absent(
 ) -> None:
     """A target id no longer in the history is a surfaced error, not a silent no-op."""
     captured: list[object] = []
-    _patch_client(
-        monkeypatch,
-        _set_main_client(
-            captured,
-            target_id=4242,
-            updated_id=4242,
-            history_ids=[9999],  # some OTHER photo, not the target
-        ),
+    client = _set_main_client(
+        captured,
+        target_id=4242,
+        updated_id=4242,
+        history_ids=[9999],  # some OTHER photo, not the target
     )
+    _patch_client(monkeypatch, client)
 
     result = await execute(
         "acc-photo-main",
@@ -1358,8 +1363,9 @@ async def test_execute_set_main_photo_raises_when_target_absent(
 
     assert result.status != "ok"
     assert result.error_message
-    # Never promote or delete when the target can't be re-resolved.
-    assert [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)] == []
+    # Never download, upload or delete when the target can't be re-resolved.
+    assert client.downloaded == []  # ty: ignore[unresolved-attribute]
+    assert [req for req in captured if isinstance(req, UploadProfilePhotoRequest)] == []
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
 
 
@@ -1367,9 +1373,9 @@ async def test_execute_set_main_photo_raises_when_target_absent(
 async def test_execute_set_main_photo_tolerates_bare_server_responses(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No avatar and a bare promote result still succeed — ids logged as None.
+    """No avatar and a bare upload result still succeed — ids logged as None.
 
-    ``getFullUser`` without a ``profile_photo`` and an ``updateProfilePhoto``
+    ``getFullUser`` without a ``profile_photo`` and an ``uploadProfilePhoto``
     result without ``photo.id`` must not break the action; the id-flow log
     records ``None`` and, as always, nothing is deleted.
     """
@@ -1387,11 +1393,33 @@ async def test_execute_set_main_photo_tolerates_bare_server_responses(
 
     assert result.status == "ok"
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
-    assert len([req for req in captured if isinstance(req, UpdateProfilePhotoRequest)]) == 1
+    assert len([req for req in captured if isinstance(req, UploadProfilePhotoRequest)]) == 1
     before, after = (extra for _level, _event, extra in events)
     assert before["current_avatar_id"] is None
     assert after["current_avatar_id"] is None
     assert after["promoted_photo_id"] is None
+
+
+@pytest.mark.asyncio
+async def test_execute_set_main_photo_fails_when_download_returns_nothing(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``download_media`` yielding no bytes is a surfaced error — never upload air."""
+    captured: list[object] = []
+    _patch_client(
+        monkeypatch,
+        _set_main_client(captured, target_id=4242, updated_id=555, photo_bytes=None),
+    )
+
+    result = await execute(
+        "acc-photo-main",
+        SetMainProfilePhoto(photo_id=4242, access_hash=7, file_reference=b"\x01\x02"),
+    )
+
+    assert result.status != "ok"
+    assert result.error_message
+    assert [req for req in captured if isinstance(req, UploadProfilePhotoRequest)] == []
+    assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
 
 
 @pytest.mark.asyncio
