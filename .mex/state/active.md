@@ -430,6 +430,31 @@ music/photo read dispatchers were extracted to `_read_profile.py` (pure move,
 file-size budget). Gates: 1389 pytest / 95% branch, ruff+ty+aislop clean,
 API client regenerated (11 ops), frontend gates green (no UI consumes them yet).
 
+A 2026-07-14 **channel-management UI** (PR B, branch
+`feat/account-channels-frontend`) puts the PR A backend on screen: the profile
+modal gained a fifth «Каналы» tab (`ChannelsTab.tsx` — own-channel list with
+public/private badges + participant counts, translated `channel_read_failed`
+error + retry, create/edit/delete; runs on its own queries, excluded from the
+snapshot busy scrim and its loadError banner). `ChannelCreateModal.tsx`: title
+≤128 / about ≤255 / public toggle with a 500 ms-debounced live username check
+(`checkAccountChannelUsername`, verdict codes translated); on success it hands
+`ActionResult.channel_id` straight into the editor; a create-after-create
+failure (envelope `fields.channel_id`) still invalidates the list so the
+private channel is adopted, never re-created. `ChannelEditModal.tsx`: partial
+save (only changed fields; omitted = unchanged), avatar upload behind the
+client photo gate (10 MB, jpg/jpeg/png/webp → `toastError`), dirty-close
+confirm. `ChannelPostsPanel.tsx`: composer (4096 text / 1024 caption cap,
+single photo ≤10 MB or video ≤100 MB with object-URL preview + revoke),
+newest-first history with cursor «Показать ещё» (accumulated pages reset on
+any post mutation), inline post edit + confirmed delete. Shared gates/envelope
+helpers in `_channelsShared.ts` (error.message = stable code →
+`accounts.channel.code.*`, 12 codes ru/en). Entity seam: +4 query re-exports
+(renamed `accountChannel*QueryOptions/Key`) and +7 mutation re-exports in
+`entities/account`. Gates: 336 vitest (57 files, +30 new tests), coverage
+96.6% lines / 90.9% branch (new files each ≥82%), steiger+eslint+tsc+build
+clean; prettier clean on changed files (repo-wide `--check` fails locally only
+from the Windows CRLF worktree smudge — CI checks out LF).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.
