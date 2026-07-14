@@ -55,8 +55,7 @@ function requests(fragment: string, method = 'POST'): Request[] {
     .mocked(fetch)
     .mock.calls.map(([input]) => input as Request)
     .filter(
-      (request) =>
-        new URL(request.url).pathname.endsWith(fragment) && request.method === method,
+      (request) => new URL(request.url).pathname.endsWith(fragment) && request.method === method,
     );
 }
 
@@ -87,9 +86,10 @@ test('saving a retitled channel sends ONLY the changed field', async () => {
   await waitFor(() => {
     expect(requests('/channels/123/update')).toHaveLength(1);
   });
-  const body = (await (requests('/channels/123/update')[0] as Request)
-    .clone()
-    .json()) as Record<string, unknown>;
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
   // Unchanged fields are omitted — the backend treats absent as "leave as is".
   expect(body).toEqual({ title: 'Новое имя' });
   // Settled → detail + list re-pull (initial detail GET + refetch).
@@ -110,9 +110,10 @@ test('editing only the about sends only the about', async () => {
   await waitFor(() => {
     expect(requests('/channels/123/update')).toHaveLength(1);
   });
-  const body = (await (requests('/channels/123/update')[0] as Request)
-    .clone()
-    .json()) as Record<string, unknown>;
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
   expect(body).toEqual({ about: 'Новое описание' });
 });
 

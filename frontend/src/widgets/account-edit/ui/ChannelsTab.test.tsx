@@ -49,9 +49,7 @@ function routeApi() {
     if (pathname === '/api/v1/accounts/acc-1/channels/123/posts' && request.method === 'GET') {
       return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
     }
-    return Promise.resolve(
-      jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }),
-    );
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
   });
 }
 

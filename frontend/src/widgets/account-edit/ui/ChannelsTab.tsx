@@ -83,9 +83,13 @@ export function ChannelsTab({ accountId }: { accountId: string }) {
                       ? t('accounts.channel.publicBadge')
                       : t('accounts.channel.privateBadge')}
                   </span>
-                  {channel.username != null && <span className="truncate">@{channel.username}</span>}
+                  {channel.username != null && (
+                    <span className="truncate">@{channel.username}</span>
+                  )}
                   {channel.participants_count != null && (
-                    <span>{t('accounts.channel.participants', { n: channel.participants_count })}</span>
+                    <span>
+                      {t('accounts.channel.participants', { n: channel.participants_count })}
+                    </span>
                   )}
                 </div>
               </div>

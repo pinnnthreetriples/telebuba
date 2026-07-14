@@ -63,8 +63,7 @@ function requests(fragment: string, method = 'POST'): Request[] {
     .mocked(fetch)
     .mock.calls.map(([input]) => input as Request)
     .filter(
-      (request) =>
-        new URL(request.url).pathname.endsWith(fragment) && request.method === method,
+      (request) => new URL(request.url).pathname.endsWith(fragment) && request.method === method,
     );
 }
 

@@ -50,8 +50,7 @@ export function ChannelEditModal({
 
   const shownTitle = title ?? detail.data?.title ?? '';
   const shownAbout = about ?? detail.data?.about ?? '';
-  const titleChanged =
-    detail.data != null && title !== null && title.trim() !== detail.data.title;
+  const titleChanged = detail.data != null && title !== null && title.trim() !== detail.data.title;
   const aboutChanged =
     detail.data != null && about !== null && about.trim() !== (detail.data.about ?? '');
   const dirty = titleChanged || aboutChanged;
