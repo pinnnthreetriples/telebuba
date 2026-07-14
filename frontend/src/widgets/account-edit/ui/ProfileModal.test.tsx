@@ -1071,3 +1071,28 @@ test('picking only rejected files uploads nothing', async () => {
   expect(screen.queryByRole('status')).not.toBeInTheDocument();
   expect(fired('/accounts/photo')).toBe(false);
 });
+
+test('the channels tab renders its own list outside the snapshot scrim', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts/acc-1/channels') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            { channel_id: '5', title: 'Канал профиля', username: null, participants_count: null },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Каналы'));
+  expect(await screen.findByText('Канал профиля')).toBeInTheDocument();
+  expect(screen.getByText('Создать канал')).toBeInTheDocument();
+});
