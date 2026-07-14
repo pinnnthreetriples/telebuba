@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
+from unittest.mock import MagicMock
 
 import httpx
 import pytest
@@ -510,3 +511,96 @@ async def test_channel_unavailable_maps_to_503(
     assert resp.status_code == 503
     body = resp.json()
     assert body["error"]["code"] == "unavailable"
+
+
+def _patch_read_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
+    """Route the REAL read gateway at a fake Telethon client (integration path)."""
+
+    async def fake_get_client(_account_id: str) -> object:
+        return client
+
+    async def fake_fetch(account_id: str):
+        return MagicMock(session_name=account_id)
+
+    monkeypatch.setattr("core.telegram_client._read.get_client", fake_get_client)
+    monkeypatch.setattr("core.telegram_client._read.fetch_account", fake_fetch)
+
+
+class _UnresolvableClient:
+    """Session-cache miss: get_input_entity raises Telethon's raw ValueError."""
+
+    async def connect(self) -> None:
+        return None
+
+    async def get_input_entity(self, peer: object) -> object:
+        msg = f"Could not find the input entity for {peer!r}"
+        raise ValueError(msg)
+
+
+@pytest.mark.asyncio
+async def test_get_channel_unknown_id_surfaces_stable_code(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GET detail on an unknown channel id: 400 + stable code, no Telethon prose."""
+    _patch_read_client(monkeypatch, _UnresolvableClient())
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/channels/424242")
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["code"] == "bad_request"
+    assert body["error"]["message"] == "channel_read_failed"
+    assert "Could not find" not in resp.text, "raw Telethon prose must never cross the wire"
+
+
+@pytest.mark.asyncio
+async def test_list_posts_unknown_channel_id_surfaces_stable_code(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """GET posts on an unknown channel id: 400 + stable code, no Telethon prose."""
+    _patch_read_client(monkeypatch, _UnresolvableClient())
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/channels/424242/posts")
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["message"] == "channel_read_failed"
+    assert "Could not find" not in resp.text
+
+
+@pytest.mark.asyncio
+async def test_list_posts_oversized_numeric_cursor_is_400(app: FastAPI) -> None:
+    """A numeric cursor past the int32 message-id window is malformed, not a 500.
+
+    Runs the REAL service - the cursor is rejected before any Telegram call.
+    """
+    async with _client(app) as client:
+        resp = await client.get(
+            "/api/v1/accounts/acc-1/channels/42/posts",
+            params={"cursor": "8589934592"},
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "invalid pagination cursor"
+
+
+@pytest.mark.asyncio
+async def test_create_failure_envelope_carries_created_channel_id(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-create username refusal delivers the created id to the UI."""
+
+    async def _refused(account_id: str, body: object) -> ActionResult:  # noqa: ARG001
+        code = "channels_admin_public_too_much"
+        raise AccountActionError(code, channel_id="987")
+
+    monkeypatch.setattr("services.accounts.create_account_channel", _refused)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/channels",
+            json={"title": "Public", "username": "my_channel"},
+        )
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["message"] == "channels_admin_public_too_much"
+    assert body["error"]["fields"]["channel_id"] == "987"

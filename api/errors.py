@@ -56,12 +56,15 @@ async def _handle_account_action_error(
 ) -> JSONResponse:
     # Telegram refused the action: ``message`` is the stable code (the SPA
     # translates it); a flood-family retry duration travels in ``fields``
-    # instead of being dropped with the str() collapse.
-    fields = (
-        {"retry_after_seconds": str(exc.retry_after_seconds)}
-        if exc.retry_after_seconds is not None
-        else None
-    )
+    # instead of being dropped with the str() collapse. A partially-completed
+    # channel_create rides its already-created channel id along the same way,
+    # so the UI can adopt the private channel instead of re-creating it.
+    extra: dict[str, str] = {}
+    if exc.retry_after_seconds is not None:
+        extra["retry_after_seconds"] = str(exc.retry_after_seconds)
+    if exc.channel_id is not None:
+        extra["channel_id"] = exc.channel_id
+    fields = extra or None
     if exc.code == "unavailable":
         # Gateway infrastructure failure (pool/socket/timeout): a server-side
         # outage, not a client fault — 503 so the SPA offers retry instead of

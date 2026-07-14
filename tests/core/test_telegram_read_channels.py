@@ -15,7 +15,7 @@ from telethon.tl.types import InputChannelEmpty
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
-from core.telegram_client import execute_read
+from core.telegram_client import TelegramReadError, execute_read
 from schemas.telegram_actions import (
     CheckChannelUsername,
     GetOwnChannel,
@@ -172,6 +172,9 @@ async def test_get_own_channel_maps_about_and_participants(
         async def connect(self) -> None:
             return None
 
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
+
         async def __call__(self, request: object) -> object:
             requested.append(request)
             return SimpleNamespace(
@@ -199,6 +202,9 @@ async def test_get_own_channel_tolerates_missing_chats(
     class FakeClient:
         async def connect(self) -> None:
             return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
 
         async def __call__(self, _request: object) -> object:
             return SimpleNamespace(
@@ -262,6 +268,9 @@ async def test_list_channel_posts_maps_media_kind_and_views(
         async def connect(self) -> None:
             return None
 
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
+
         async def get_messages(self, _peer: object, *, limit: int, offset_id: int) -> object:
             captured["limit"] = limit
             captured["offset_id"] = offset_id
@@ -301,6 +310,9 @@ async def test_list_channel_posts_coerces_odd_dates(
     class FakeClient:
         async def connect(self) -> None:
             return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
 
         async def get_messages(self, _peer: object, *, limit: int, offset_id: int) -> object:  # noqa: ARG002
             return messages
@@ -383,3 +395,37 @@ async def test_check_channel_username_maps_rpc_refusals_to_codes(
     assert isinstance(result, ChannelUsernameCheck)
     assert result.available is False
     assert result.code == code
+
+
+class _UnresolvableClient:
+    """Session-cache miss: get_input_entity raises Telethon's raw ValueError."""
+
+    async def connect(self) -> None:
+        return None
+
+    async def get_input_entity(self, peer: object) -> object:
+        msg = f"Could not find the input entity for {peer!r}"
+        raise ValueError(msg)
+
+
+@pytest.mark.asyncio
+async def test_get_own_channel_unresolvable_id_raises_stable_read_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unknown id must ride out as the stable code, never a raw ValueError."""
+    _patch_client(monkeypatch, _UnresolvableClient())
+
+    with pytest.raises(TelegramReadError) as excinfo:
+        await execute_read("acc-gone", GetOwnChannel(channel_id=999))
+    assert excinfo.value.reason == "channel_not_found"
+
+
+@pytest.mark.asyncio
+async def test_list_channel_posts_unresolvable_id_raises_stable_read_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_client(monkeypatch, _UnresolvableClient())
+
+    with pytest.raises(TelegramReadError) as excinfo:
+        await execute_read("acc-gone", ListChannelPosts(channel_id=999))
+    assert excinfo.value.reason == "channel_not_found"

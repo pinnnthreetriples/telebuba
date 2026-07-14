@@ -352,3 +352,26 @@ async def test_normalize_channel_video_keeps_source_resolution(tmp_path: Path) -
     assert 1 <= duration <= 3, "duration probe must read the full encoded length"
     assert video[4:8] == b"ftyp", "normaliser must output a real MP4"
     assert thumb[:2] == b"\xff\xd8", "thumbnail must be a real JPEG"
+
+
+@pytest.mark.asyncio
+async def test_output_resolution_probe_timeout_degrades_to_zero(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A hung PROBE must not fail a post whose encode already succeeded."""
+    monkeypatch.setattr(settings.profile_media, "ffmpeg_timeout_seconds", 0.05)
+    proc = _HangingProc()
+
+    async def fake_exec(*_args: object, **_kwargs: object) -> _HangingProc:
+        return proc
+
+    monkeypatch.setattr(
+        "core.telegram_client._video.asyncio.create_subprocess_exec",
+        fake_exec,
+    )
+
+    width, height = await _output_resolution("ffmpeg", "unparseable", tmp_path / "out.mp4")
+
+    assert (width, height) == (0, 0)
+    assert proc.killed is True, "the hung probe process must still be killed"

@@ -93,6 +93,10 @@ async def _unavailable_result(
 async def _generic_error(account_id: str, action: TelegramAction, exc: Exception) -> ActionResult:
     # Stable-code wrappers chain the real reason (Pillow error + magic bytes) as __cause__.
     cause = str(exc.__cause__) if exc.__cause__ is not None else None
+    # A partially-completed channel_create carries the already-created id
+    # (ChannelGatewayError.channel_id) so the caller can adopt the private
+    # channel instead of re-creating a duplicate.
+    created_id = getattr(exc, "channel_id", None)
     await log_event(
         "ERROR",
         f"telegram_{action.action_type}_failed",
@@ -103,6 +107,7 @@ async def _generic_error(account_id: str, action: TelegramAction, exc: Exception
         status="failed",
         action_type=action.action_type,
         account_id=account_id,
+        channel_id=str(created_id) if isinstance(created_id, int) else None,
         error_type=type(exc).__name__,
         error_message=str(exc),
     )

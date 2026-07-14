@@ -2,7 +2,8 @@
 
 Extracted-sibling pattern (see ``_read_stories.py``): ``_read.py`` keeps the
 match and imports these dispatchers. Errors ride the ``execute_read_many``
-ladder (RPC → ``TelegramReadError``) untouched.
+ladder untouched (RPC → ``TelegramReadError``; the shared entity guard's
+``ChannelGatewayError`` is wrapped there too).
 """
 
 from __future__ import annotations
@@ -11,9 +12,10 @@ from typing import TYPE_CHECKING, Literal
 
 from telethon import errors
 from telethon.tl.functions.channels import CheckUsernameRequest, GetFullChannelRequest
-from telethon.tl.types import InputChannelEmpty, PeerChannel
+from telethon.tl.types import InputChannelEmpty
 
 from core.config import settings
+from core.telegram_client._channels import _input_channel
 from schemas.telegram_actions_channels import (
     ChannelUsernameCheck,
     TelegramChannelPost,
@@ -67,8 +69,14 @@ async def dispatch_get_own_channel(
     client: TelegramClient,
     action: GetOwnChannel,
 ) -> TelegramOwnChannelDetail:
-    """One owned channel's detail — about/participants from the full chat."""
-    full = await client(GetFullChannelRequest(channel=PeerChannel(action.channel_id)))  # ty: ignore[invalid-argument-type]
+    """One owned channel's detail — about/participants from the full chat.
+
+    The id resolves through the shared ``_input_channel`` guard: an unknown /
+    unresolvable id raises the stable ``channel_not_found`` code instead of
+    letting Telethon's raw ``ValueError`` prose escape the read ladder.
+    """
+    entity = await _input_channel(client, action.channel_id)
+    full = await client(GetFullChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
     full_chat = getattr(full, "full_chat", None)
     chats = getattr(full, "chats", []) or []
     chat = chats[0] if chats else None
@@ -85,9 +93,14 @@ async def dispatch_list_channel_posts(
     client: TelegramClient,
     action: ListChannelPosts,
 ) -> TelegramChannelPosts:
-    """Recent posts newest-first; ``offset_id`` pages strictly below that id."""
+    """Recent posts newest-first; ``offset_id`` pages strictly below that id.
+
+    Same shared entity guard as the detail read — an unknown id surfaces the
+    stable ``channel_not_found`` code, never raw Telethon prose.
+    """
+    entity = await _input_channel(client, action.channel_id)
     messages = await client.get_messages(
-        PeerChannel(action.channel_id),
+        entity,
         limit=action.limit,
         offset_id=action.offset_id,
     )

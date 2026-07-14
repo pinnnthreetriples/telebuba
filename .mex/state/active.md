@@ -407,9 +407,11 @@ ruff+ty+aislop clean, API client regenerated (only the `unavailable` enum).
 
 A 2026-07-14 **channel-management backend** (PR A, branch
 `feat/account-channels-backend`; PR B will do the UI) lets the dashboard manage
-an account's OWN broadcast channels end-to-end: create (with a username
-availability pre-check BEFORE creating, so a refused handle never leaves an
-orphaned private channel), edit title/about (NotModified-idempotent), set
+an account's OWN broadcast channels end-to-end: create (username availability
+pre-checked BEFORE creating, so the deterministic occupied case fails before
+anything exists; a post-create username failure carries the created private
+channel's id on the error — envelope `fields.channel_id` — so the UI can adopt
+it; never auto-deletes), edit title/about (NotModified-idempotent), set
 photo, delete, and publish/edit/delete posts (text, photo, or video —
 `normalize_channel_video_for_telegram` re-encodes H.264/AAC +faststart at the
 SOURCE resolution, no 9:16 crop / no 60 s cap, resolution parsed from ffmpeg's

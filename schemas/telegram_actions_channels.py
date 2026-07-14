@@ -18,6 +18,9 @@ CHANNEL_TITLE_MAX_LENGTH = 128
 CHANNEL_ABOUT_MAX_LENGTH = 255
 CHANNEL_POST_TEXT_MAX_LENGTH = 4096
 CHANNEL_POST_CAPTION_MAX_LENGTH = 1024
+# Telegram message ids are int32 — anything above cannot exist, and letting a
+# larger value through would blow up in TL struct packing instead of a 400.
+CHANNEL_POST_ID_MAX = 2**31 - 1
 # Telegram public-handle rules: 5..32 chars, starts with a letter,
 # letters/digits/underscore after that.
 CHANNEL_USERNAME_PATTERN = r"^[A-Za-z][A-Za-z0-9_]{4,31}$"
@@ -27,8 +30,10 @@ class CreateChannel(BaseModel):
     """Create a broadcast channel owned by the account.
 
     ``username`` is optional — set, it makes the channel public under that
-    handle; the gateway pre-checks availability before creating so a refused
-    handle never leaves an orphaned private channel behind.
+    handle. The gateway pre-checks availability before creating, so the
+    deterministic occupied-handle case fails before anything exists; if the
+    post-create username assignment still fails, the created (private)
+    channel's id is carried on the error instead of being silently orphaned.
     """
 
     action_type: Literal["channel_create"] = "channel_create"
@@ -102,14 +107,14 @@ class PublishChannelPost(BaseModel):
 class EditChannelPost(BaseModel):
     action_type: Literal["channel_post_edit"] = "channel_post_edit"
     channel_id: int = Field(gt=0)
-    post_id: int = Field(gt=0)
+    post_id: int = Field(gt=0, le=CHANNEL_POST_ID_MAX)
     text: str = Field(min_length=1, max_length=CHANNEL_POST_TEXT_MAX_LENGTH)
 
 
 class DeleteChannelPost(BaseModel):
     action_type: Literal["channel_post_delete"] = "channel_post_delete"
     channel_id: int = Field(gt=0)
-    post_id: int = Field(gt=0)
+    post_id: int = Field(gt=0, le=CHANNEL_POST_ID_MAX)
 
 
 class ListOwnChannels(BaseModel):
@@ -120,7 +125,7 @@ class ListOwnChannels(BaseModel):
 
 
 class GetOwnChannel(BaseModel):
-    """Read-only: one owned channel's detail (title/username/about/участники)."""
+    """Read-only: one owned channel's detail (title/username/about/participants)."""
 
     action_type: Literal["get_own_channel"] = "get_own_channel"
     channel_id: int = Field(gt=0)
@@ -136,7 +141,7 @@ class ListChannelPosts(BaseModel):
     action_type: Literal["list_channel_posts"] = "list_channel_posts"
     channel_id: int = Field(gt=0)
     limit: int = Field(default=20, ge=1, le=100)
-    offset_id: int = Field(default=0, ge=0)
+    offset_id: int = Field(default=0, ge=0, le=CHANNEL_POST_ID_MAX)
 
 
 class CheckChannelUsername(BaseModel):

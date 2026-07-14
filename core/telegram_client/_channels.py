@@ -65,10 +65,19 @@ _TELETHON_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
 
 
 class ChannelGatewayError(ValueError):
-    """A channel action was refused; ``str(exc)`` is the stable code."""
+    """A channel action was refused; ``str(exc)`` is the stable code.
 
-    def __init__(self, code: str) -> None:
+    ``channel_id`` is set when the refusal happened AFTER a channel was
+    created (``channel_create``'s post-create username assignment): the
+    channel exists as private, so the id rides along and the executor
+    threads it into the failed ``ActionResult`` — the caller can adopt the
+    channel instead of re-creating a duplicate. Nothing is ever rolled back
+    (never auto-delete — repo data-safety rule).
+    """
+
+    def __init__(self, code: str, *, channel_id: int | None = None) -> None:
         self.code = code
+        self.channel_id = channel_id
         super().__init__(code)
 
 
@@ -131,10 +140,16 @@ async def _input_channel(client: TelegramClient, channel_id: int) -> object:
 async def _create_channel(client: TelegramClient, action: CreateChannel) -> _DispatchResult:
     """Create a broadcast channel; pre-check the handle BEFORE creating.
 
-    The pre-check keeps a refused username from leaving an orphaned private
-    channel behind: ``CheckUsernameRequest`` with ``InputChannelEmpty`` probes
-    global availability without touching anything. A plain ``False`` answer
-    (no RPC error) is an occupied handle.
+    ``CheckUsernameRequest`` with ``InputChannelEmpty`` probes global
+    availability without touching anything, so the deterministic occupied
+    case fails before anything exists. A plain ``False`` answer (no RPC
+    error) is an occupied handle.
+
+    The pre-check cannot cover everything: ``UpdateUsernameRequest`` can
+    still fail AFTER the create (e.g. ``CHANNELS_ADMIN_PUBLIC_TOO_MUCH`` is
+    only raised by the assignment, not the probe). The channel then exists
+    as private — the refusal carries its id (see
+    :class:`ChannelGatewayError`) and nothing is rolled back.
     """
     if action.username is not None:
         available = await client(
@@ -152,9 +167,16 @@ async def _create_channel(client: TelegramClient, action: CreateChannel) -> _Dis
         ),
     )
     entity = _created_channel(result)
+    new_id = int(getattr(entity, "id", 0) or 0) or None
     if action.username is not None:
-        await client(UpdateUsernameRequest(channel=entity, username=action.username))  # ty: ignore[invalid-argument-type]
-    return _DispatchResult(channel_id=int(getattr(entity, "id", 0) or 0) or None)
+        try:
+            await client(UpdateUsernameRequest(channel=entity, username=action.username))  # ty: ignore[invalid-argument-type]
+        except errors.RPCError as exc:
+            mapped = _map_telethon_error(exc)
+            if mapped is None:
+                raise
+            raise ChannelGatewayError(mapped.code, channel_id=new_id) from exc
+    return _DispatchResult(channel_id=new_id)
 
 
 def _created_channel(result: object) -> object:

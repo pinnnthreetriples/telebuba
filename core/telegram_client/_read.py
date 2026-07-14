@@ -23,6 +23,7 @@ from telethon.tl.types import (
 )
 
 from core.db import fetch_account
+from core.telegram_client._channels import ChannelGatewayError
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
 from core.telegram_client._read_channels import (
@@ -134,6 +135,11 @@ async def execute_read_many(
     except errors.RPCError as exc:
         reason = f"RPC: {type(exc).__name__}"
         raise TelegramReadError(reason) from exc
+    except ChannelGatewayError as exc:
+        # The channel read dispatchers resolve ids via the shared write-side
+        # entity guard; its stable code must ride the read contract instead
+        # of escaping as a raw ValueError (500 / Telethon English prose).
+        raise TelegramReadError(exc.code) from exc
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
         # Pool/socket failures must not leak raw past the gateway — services
         # only handle ``TelegramReadError`` (layer contract, non-negotiable #6).

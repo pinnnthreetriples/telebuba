@@ -17,12 +17,22 @@ class AccountActionError(ValueError):
     non-negotiable #12). For the flood family it also carries the
     server-mandated ``retry_after_seconds`` so the API error envelope can tell
     the client how long to wait instead of dropping the duration.
+    ``channel_id`` rides along when a ``channel_create`` failed AFTER the
+    channel was created (post-create username refusal): the channel exists as
+    private, so the UI can adopt it instead of re-creating a duplicate.
     """
 
-    def __init__(self, code: str, *, retry_after_seconds: int | None = None) -> None:
+    def __init__(
+        self,
+        code: str,
+        *,
+        retry_after_seconds: int | None = None,
+        channel_id: str | None = None,
+    ) -> None:
         super().__init__(code)
         self.code = code
         self.retry_after_seconds = retry_after_seconds
+        self.channel_id = channel_id
 
 
 def raise_for_result(result: ActionResult) -> None:
@@ -36,4 +46,8 @@ def raise_for_result(result: ActionResult) -> None:
         code = "unavailable"
         raise AccountActionError(code)
     code = result.error_message or result.status
-    raise AccountActionError(code, retry_after_seconds=result.flood_wait_seconds)
+    raise AccountActionError(
+        code,
+        retry_after_seconds=result.flood_wait_seconds,
+        channel_id=result.channel_id,
+    )

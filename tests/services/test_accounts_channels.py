@@ -177,6 +177,32 @@ async def test_create_account_channel_failed_result_raises_code(
 
 
 @pytest.mark.asyncio
+async def test_create_failed_after_create_carries_channel_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A post-create username refusal keeps the created id on the error."""
+    _patch_execute(
+        monkeypatch,
+        "channels",
+        ActionResult(
+            status="failed",
+            action_type="channel_create",
+            account_id="acc-1",
+            channel_id="987",
+            error_message="channels_admin_public_too_much",
+        ),
+    )
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await create_account_channel(
+            "acc-1",
+            ChannelCreateRequest(title="Mine", username="my_channel"),
+        )
+    assert excinfo.value.code == "channels_admin_public_too_much"
+    assert excinfo.value.channel_id == "987"
+
+
+@pytest.mark.asyncio
 async def test_list_account_channels_maps_ids_to_strings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -577,7 +603,7 @@ async def test_list_posts_cursor_becomes_offset_id(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("cursor", ["abc", "-5", "0"])
+@pytest.mark.parametrize("cursor", ["abc", "-5", "0", "8589934592"])
 async def test_list_posts_malformed_cursor_raises_value_error(
     monkeypatch: pytest.MonkeyPatch,
     cursor: str,

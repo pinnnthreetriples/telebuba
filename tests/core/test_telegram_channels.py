@@ -191,6 +191,46 @@ async def test_create_channel_occupied_username_creates_nothing(
 
 
 @pytest.mark.asyncio
+async def test_create_channel_username_failure_after_create_carries_id(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """CHANNELS_ADMIN_PUBLIC_TOO_MUCH fires on the ASSIGNMENT, not the pre-check.
+
+    The channel then already exists (private): the failed result must carry
+    its id so the caller can adopt it instead of re-creating a duplicate, and
+    NOTHING may be deleted (never auto-delete - repo data-safety rule).
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, CheckUsernameRequest):
+                return True
+            if isinstance(request, CreateChannelRequest):
+                return SimpleNamespace(chats=[SimpleNamespace(id=987)])
+            if isinstance(request, UpdateUsernameRequest):
+                raise errors.ChannelsAdminPublicTooMuchError(request=None)
+            return MagicMock()
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-ch-postfail",
+        CreateChannel(title="Public", username="my_channel"),
+    )
+
+    assert result.status == "failed"
+    assert result.error_message == "channels_admin_public_too_much"
+    # The created channel id rides the FAILED result (int64 as string).
+    assert result.channel_id == "987"
+    assert not any(isinstance(r, DeleteChannelRequest) for r in captured)
+
+
+@pytest.mark.asyncio
 async def test_create_channel_without_returned_entity_surfaces_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

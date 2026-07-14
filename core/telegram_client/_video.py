@@ -273,7 +273,12 @@ async def _output_resolution(
         stdout=asyncio.subprocess.DEVNULL,
         stderr=asyncio.subprocess.PIPE,
     )
-    stderr_bytes = await _communicate_or_kill(proc, "story_video_invalid")
+    try:
+        stderr_bytes = await _communicate_or_kill(proc, "story_video_invalid")
+    except StoryVideoNormalisationError:
+        # The encode already succeeded - a hung/failed PROBE must degrade to
+        # "unknown resolution", never fail the whole post.
+        return (0, 0)
     parsed = _parse_stream_resolution(stderr_bytes.decode("utf-8", errors="replace"))
     return parsed if parsed is not None else (0, 0)
 

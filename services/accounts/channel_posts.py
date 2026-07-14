@@ -20,6 +20,7 @@ from schemas.telegram_actions import (
     ListChannelPosts,
     PublishChannelPost,
 )
+from schemas.telegram_actions_channels import CHANNEL_POST_ID_MAX
 from services.accounts._result import AccountActionError, raise_for_result
 from services.accounts._uploads import (
     _PROFILE_PHOTO_SUFFIXES,
@@ -111,7 +112,12 @@ async def publish_account_channel_post(
 
 
 def _decode_cursor(cursor: str | None) -> int:
-    """Cursor = the previous page's last post id (paging strictly below it)."""
+    """Cursor = the previous page's last post id (paging strictly below it).
+
+    Bounded to the int32 message-id window - a numeric-but-oversized cursor is
+    just as malformed as a non-numeric one (it can't name a real post and
+    would blow up in TL struct packing instead of a 400).
+    """
     if cursor is None:
         return 0
     try:
@@ -119,7 +125,7 @@ def _decode_cursor(cursor: str | None) -> int:
     except ValueError as exc:
         msg = "invalid pagination cursor"
         raise ValueError(msg) from exc
-    if offset_id <= 0:
+    if offset_id <= 0 or offset_id > CHANNEL_POST_ID_MAX:
         msg = "invalid pagination cursor"
         raise ValueError(msg)
     return offset_id
