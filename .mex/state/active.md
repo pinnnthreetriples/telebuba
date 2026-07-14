@@ -405,6 +405,29 @@ before buffering uploads into RAM. `_actions.py` result builders were split to
 `_action_results.py` (aislop size budget). Gates: 1293 pytest / 95% branch,
 ruff+ty+aislop clean, API client regenerated (only the `unavailable` enum).
 
+A 2026-07-14 **channel-management backend** (PR A, branch
+`feat/account-channels-backend`; PR B will do the UI) lets the dashboard manage
+an account's OWN broadcast channels end-to-end: create (with a username
+availability pre-check BEFORE creating, so a refused handle never leaves an
+orphaned private channel), edit title/about (NotModified-idempotent), set
+photo, delete, and publish/edit/delete posts (text, photo, or video —
+`normalize_channel_video_for_telegram` re-encodes H.264/AAC +faststart at the
+SOURCE resolution, no 9:16 crop / no 60 s cap, resolution parsed from ffmpeg's
+own stderr with an `-i` probe fallback, reusing the `story_video_*` codes).
+New action cluster `schemas/telegram_actions_channels.py` (7 writes + 4 reads),
+gateway `_channels.py` (Telethon refusals → stable codes via
+`ChannelGatewayError`) + `_read_channels.py` (own channels = dialog scan for
+creator+broadcast incl. private; posts page by `offset_id`; username check),
+services `channels.py`/`channel_posts.py` (no profile-cache involvement — channel
+data isn't in the snapshot), 11 `/api/v1/accounts/{id}/channels*` routes
+(channel ids as int64 strings), `CHANNELS__` config namespace, ru/en labels for
+the 7 `account_channel_*` log codes + 7 `channel_*` action types.
+`ActionResult` gained `channel_id` (int64-as-string, set only by
+`channel_create`); `_DispatchResult` moved to `_action_results.py`; the profile
+music/photo read dispatchers were extracted to `_read_profile.py` (pure move,
+file-size budget). Gates: 1439 pytest / 95% branch, ruff+ty+aislop clean,
+API client regenerated (11 ops), frontend gates green (no UI consumes them yet).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.
