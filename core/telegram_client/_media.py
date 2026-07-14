@@ -13,7 +13,6 @@ from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import (
     DeletePhotosRequest,
     GetUserPhotosRequest,
-    UpdateProfilePhotoRequest,
     UploadProfilePhotoRequest,
 )
 from telethon.tl.functions.stories import (
@@ -298,21 +297,16 @@ def _photo_ids(photos: list[object]) -> list[int]:
     return [int(getattr(photo, "id", 0) or 0) for photo in photos]
 
 
-def _resolve_history_photo(photos: list[object], photo_id: int) -> InputPhoto | None:
-    """Rebuild a fresh ``InputPhoto`` (id/access_hash/file_reference) by id.
+def _find_history_photo(photos: list[object], photo_id: int) -> object | None:
+    """The raw history ``Photo`` object by id, from live server data.
 
-    A ``file_reference`` from the UI snapshot can be stale — they expire — and a
-    stale reference makes ``updateProfilePhoto`` misbehave. Rebuild the
-    ``InputPhoto`` from live server data, or ``None`` if the id is no longer
-    present.
+    A ``file_reference`` from the UI snapshot can be stale — they expire — so
+    the target is always re-resolved from a fresh ``GetUserPhotos`` read;
+    ``None`` if the id is no longer present.
     """
     for photo in photos:
         if int(getattr(photo, "id", 0) or 0) == photo_id:
-            return InputPhoto(
-                id=photo_id,
-                access_hash=int(getattr(photo, "access_hash", 0) or 0),
-                file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
-            )
+            return photo
     return None
 
 
@@ -324,27 +318,25 @@ async def _current_avatar_id(client: TelegramClient) -> int | None:
 
 
 async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:
-    """Promote an existing history photo to the current avatar. Delete NOTHING.
+    """Make a history photo the avatar by RE-UPLOADING its bytes as a new photo.
 
-    True server semantics (official-client parity): ``photos.updateProfilePhoto``
-    on a photo already in the history REPLACES it — the original id is consumed
-    and a brand-new id is minted at the front; the total count is unchanged and
-    the previous main keeps its own id one slot down. TDLib swaps old id → new
-    id in its cache and tdesktop does the same in-place replace; NEITHER client
-    ever calls ``photos.deletePhotos`` as part of set-as-main — and neither do we.
+    The official promote (``photos.updateProfilePhoto``) mints a new id that
+    INHERITS the original photo's upload date, so viewers see the new main
+    mid-carousel instead of first, and clients with a cached gallery show the
+    old and new id of the same image side by side until they refetch (live
+    repro 2026-07-15). Re-uploading the same bytes as a NEW photo gives it a
+    fresh date — first slide everywhere, plain "user picked a new avatar"
+    semantics with no id replacement to confuse caches.
 
-    A post-promote ``GetUserPhotos`` can still list the consumed original id:
-    that is replication lag of the read, not a real leftover. A previous "dedup"
-    step here deleted against exactly such a stale view — and because
-    own-profile deletes resolve by id alone, it destroyed the UNRELATED previous
-    main avatar on a live account (debug.log, 2026-07-13). Permanent data loss;
-    never delete anything in this action.
+    The original stays in the history as a visible duplicate; the operator
+    deletes it from the dashboard if unwanted. This action itself deletes
+    NOTHING — an earlier auto-"dedup" here destroyed the unrelated previous
+    main avatar on a live account (debug.log, 2026-07-13); permanent data
+    loss, never again.
 
-    We only re-resolve a FRESH ``InputPhoto`` for the target (snapshot refs
-    expire), promote it, and log the id flow before/after
-    (``telegram_set_main_id_flow``) so a live run can be verified from
-    ``debug.log`` — the "after" event's ``promoted_photo_id`` is the target's
-    NEW identity (tdesktop's old id → new id model) and should match the new
+    The id flow is still logged before/after (``telegram_set_main_id_flow``)
+    so a live run is verifiable from ``debug.log`` — ``promoted_photo_id`` is
+    the freshly uploaded photo's id and should match the new
     ``current_avatar_id``.
     """
     photos = await _history_photos(client)
@@ -358,11 +350,21 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
             "current_avatar_id": await _current_avatar_id(client),
         },
     )
-    fresh = _resolve_history_photo(photos, action.photo_id)
-    if fresh is None:
+    target = _find_history_photo(photos, action.photo_id)
+    if target is None:
         msg = "Target profile photo is no longer in the account's history"
         raise RuntimeError(msg)
-    result = await client(UpdateProfilePhotoRequest(id=fresh))
+    # Full-size download (no thumb arg = largest stored size, the same
+    # rendition every viewer sees), then the standard new-avatar upload.
+    data = await client.download_media(target, file=bytes)  # ty: ignore[invalid-argument-type]
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        msg = "Telegram did not return the photo bytes"
+        raise RuntimeError(msg)
+    uploaded = await client.upload_file(
+        _named_bytes("avatar.jpg", bytes(data)),
+        file_name="avatar.jpg",
+    )
+    result = await client(UploadProfilePhotoRequest(file=uploaded))
     new_id = getattr(getattr(result, "photo", None), "id", None)
     await log_event(
         "INFO",

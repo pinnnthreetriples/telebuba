@@ -672,9 +672,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                                   file_reference: photo.file_reference,
                                 },
                               },
-                              // Settled: make-main REPLACES the photo id on
-                              // Telegram; after a failure the old id may be
-                              // dead, so the grid must re-pull either way.
+                              // Settled: make-main RE-UPLOADS the photo as a
+                              // new one (fresh id at the front, the original
+                              // stays as a visible duplicate the operator may
+                              // delete), so the grid must re-pull either way.
                               { onSettled: refresh },
                             );
                           }}

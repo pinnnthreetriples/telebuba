@@ -352,6 +352,7 @@
         "chat_admin_required": "Нужны права администратора канала",
         "channel_read_failed": "Не удалось получить данные канала из Telegram",
         "channel_create_failed": "Не удалось создать канал",
+        "channel_username_assign_failed": "Канал создан как приватный — не удалось присвоить имя пользователя",
         "unavailable": "Telegram временно недоступен — попробуйте ещё раз"
       }
     },
