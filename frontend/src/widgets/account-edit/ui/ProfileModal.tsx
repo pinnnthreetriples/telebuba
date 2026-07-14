@@ -26,6 +26,7 @@ import type {
 import { ConfirmModal, FieldError, FormField, Modal, toastError } from '@/shared/ui';
 
 import { AddStoryModal } from './AddStoryModal';
+import { ChannelsTab } from './ChannelsTab';
 
 // Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
 // bio ≤70, username 5–32 chars of [A-Za-z0-9_] starting with a letter
@@ -45,12 +46,14 @@ const profileSchema = z.object({
   bio: z.string().trim().max(70, 'accounts.profile.errBioMax'),
 });
 
-// The design's profile-edit modal: hero header, a 4-tab segmented header
-// (text / photo / stories / music), per-tab bodies, and a save→saved swap
-// footer. Every tab is wired to /api/v1: Текст persists the profile, and the
-// photo / stories / music tabs render the account's live media (the
-// profile-snapshot view) with real upload + remove.
-type Tab = 'text' | 'photo' | 'stories' | 'music';
+// The design's profile-edit modal: hero header, a 5-tab segmented header
+// (text / photo / stories / music / channels), per-tab bodies, and a
+// save→saved swap footer. Every tab is wired to /api/v1: Текст persists the
+// profile, the photo / stories / music tabs render the account's live media
+// (the profile-snapshot view) with real upload + remove, and the channels tab
+// manages the account's own channels (its own queries — outside the snapshot
+// busy scrim).
+type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels';
 
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
@@ -500,7 +503,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
           {/* tabs */}
           <div className="flex gap-5 border-b border-[#f0eeeb] px-5">
-            {(['text', 'photo', 'stories', 'music'] as const).map((value) => (
+            {(['text', 'photo', 'stories', 'music', 'channels'] as const).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -521,8 +524,9 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 spinner signals "still working" and blocks input to stop double-
                 submits. It sits inside the overflow container, so `inset-0` pins it
                 to the visible viewport rather than scrolling away. The text tab is
-                excluded — its Save keeps the footer's own spinner/✓. */}
-            {busy && tab !== 'text' && (
+                excluded — its Save keeps the footer's own spinner/✓ — and so is
+                the channels tab, which runs on its own queries. */}
+            {busy && tab !== 'text' && tab !== 'channels' && (
               <div
                 role="status"
                 aria-live="polite"
@@ -537,7 +541,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 </span>
               </div>
             )}
-            {loadError && (
+            {loadError && tab !== 'channels' && (
               <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                 <span>{t('accounts.profile.loadError')}</span>
                 <button
@@ -864,6 +868,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 />
               </div>
             )}
+
+            {tab === 'channels' && <ChannelsTab accountId={account.account_id} />}
           </div>
 
           {/* footer */}
