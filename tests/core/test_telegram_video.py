@@ -16,9 +16,14 @@ import pytest
 from core.config import settings
 from core.telegram_client._video import (
     StoryVideoNormalisationError,
+    _channel_encode_args,
+    _channel_thumbnail_args,
     _communicate_or_kill,
     _extract_duration_seconds,
+    _output_resolution,
+    _parse_stream_resolution,
     _resolve_ffmpeg_binary,
+    normalize_channel_video_for_telegram,
     normalize_story_video_for_telegram,
 )
 
@@ -222,3 +227,128 @@ def test_duration_regex_matches_expected_ffmpeg_format() -> None:
     # Sanity-check the pattern isn't a one-off — confirm with a fresh
     # compiled regex too.
     assert re.search(r"Duration:\s*\d+:\d+:\d+", line)
+
+
+# --------------------------------------------------------------------------- #
+# Channel-post video normaliser
+# --------------------------------------------------------------------------- #
+
+# A realistic encode stderr: input stream first, output stream (with the
+# encoded resolution) last, plus a hex codec tag that must NOT match the
+# resolution regex.
+_ENCODE_STDERR = (
+    "Input #0, mov,mp4,m4a, from 'input.bin':\n"
+    "  Duration: 00:00:02.03, start: 0.000000, bitrate: 973 kb/s\n"
+    "  Stream #0:0[0x1](und): Video: h264 (High) (avc1 / 0x31637661), "
+    "yuv420p(progressive), 854x480 [SAR 1:1 DAR 427:240], 25 fps\n"
+    "Output #0, mp4, to 'post.mp4':\n"
+    "  Stream #0:0(und): Video: h264 (avc1 / 0x31637661), yuv420p(progressive), "
+    "854x480 [SAR 1:1 DAR 427:240], q=2-31, 25 fps\n"
+)
+
+
+def test_channel_encode_args_keep_source_geometry(tmp_path: Path) -> None:
+    """No 9:16 crop and no duration cap — channel posts keep the source shape."""
+    args = _channel_encode_args(tmp_path / "in.bin", tmp_path / "out.mp4")
+    vf = args[args.index("-vf") + 1]
+    assert "crop" not in vf, "channel posts must not be cropped to the story canvas"
+    assert "trunc(iw/2)*2" in vf, "dimensions are only snapped to even values"
+    assert "-t" not in args, "channel posts must not be time-capped"
+    assert "+faststart" in args
+
+    thumb_args = _channel_thumbnail_args(tmp_path / "in.bin", tmp_path / "thumb.jpg")
+    thumb_vf = thumb_args[thumb_args.index("-vf") + 1]
+    assert "crop" not in thumb_vf
+
+
+def test_parse_stream_resolution_takes_output_stream_line() -> None:
+    """The LAST Stream/Video match wins (the output mapping), not the input."""
+    assert _parse_stream_resolution(_ENCODE_STDERR) == (854, 480)
+    # Hex codec tags alone must not produce a bogus match.
+    assert _parse_stream_resolution("Video: h264 (avc1 / 0x31637661)") is None
+    assert _parse_stream_resolution("no streams here") is None
+
+
+@pytest.mark.asyncio
+async def test_output_resolution_prefers_encode_stderr(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """When the encode stderr parses, no probe subprocess is spawned."""
+
+    async def no_spawn(*_args: object, **_kwargs: object) -> object:  # pragma: no cover
+        msg = "probe must not run when the encode stderr parses"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(
+        "core.telegram_client._video.asyncio.create_subprocess_exec",
+        no_spawn,
+    )
+
+    width, height = await _output_resolution("ffmpeg", _ENCODE_STDERR, tmp_path / "out.mp4")
+    assert (width, height) == (854, 480)
+
+
+class _StderrProc:
+    """Fake subprocess answering ``communicate`` with canned stderr."""
+
+    returncode = 1  # `ffmpeg -i` exits non-zero without an output target
+
+    def __init__(self, stderr: bytes) -> None:
+        self._stderr = stderr
+
+    async def communicate(self) -> tuple[bytes, bytes]:
+        return (b"", self._stderr)
+
+
+@pytest.mark.asyncio
+async def test_output_resolution_falls_back_to_probe(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    probe_stderr = b"Stream #0:0: Video: h264, yuv420p, 640x360, 25 fps"
+
+    async def fake_exec(*_args: object, **_kwargs: object) -> _StderrProc:
+        return _StderrProc(probe_stderr)
+
+    monkeypatch.setattr(
+        "core.telegram_client._video.asyncio.create_subprocess_exec",
+        fake_exec,
+    )
+
+    width, height = await _output_resolution("ffmpeg", "unparseable", tmp_path / "out.mp4")
+    assert (width, height) == (640, 360)
+
+
+@pytest.mark.asyncio
+async def test_output_resolution_degrades_to_zero_when_unparseable(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fake_exec(*_args: object, **_kwargs: object) -> _StderrProc:
+        return _StderrProc(b"still nothing useful")
+
+    monkeypatch.setattr(
+        "core.telegram_client._video.asyncio.create_subprocess_exec",
+        fake_exec,
+    )
+
+    width, height = await _output_resolution("ffmpeg", "unparseable", tmp_path / "out.mp4")
+    assert (width, height) == (0, 0)
+
+
+@pytest.mark.asyncio
+async def test_normalize_channel_video_keeps_source_resolution(tmp_path: Path) -> None:
+    """End-to-end: a 640x360 source stays 640x360 (no 9:16 crop), full length."""
+    ffmpeg = _resolve_ffmpeg_binary()
+    source_path = tmp_path / "src.mp4"
+    _generate_test_video(ffmpeg, source_path, width=640, height=360)
+
+    video, thumb, duration, width, height = await normalize_channel_video_for_telegram(
+        source_path.read_bytes(),
+    )
+
+    assert (width, height) == (640, 360), "channel encode must keep the source resolution"
+    assert 1 <= duration <= 3, "duration probe must read the full encoded length"
+    assert video[4:8] == b"ftyp", "normaliser must output a real MP4"
+    assert thumb[:2] == b"\xff\xd8", "thumbnail must be a real JPEG"
