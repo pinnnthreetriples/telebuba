@@ -10,6 +10,8 @@ The implementations live in per-concern submodules:
 - :mod:`.sessions`  — ``.session`` and tdata-archive imports + liveness check
 - :mod:`.profile`   — profile-field updates (name / username / bio)
 - :mod:`.media`     — profile photo / story / music uploads
+- :mod:`.channels`  — own-channel management (create / edit / photo / delete)
+- :mod:`.channel_posts` — own-channel posts (publish / list / edit / delete)
 
 Proxies are a fleet-level pool, not an account sub-concern — that logic lives in
 :mod:`services.proxies` over the ``proxies`` table.
@@ -29,6 +31,21 @@ from services.accounts._table import (
     account_stats,
     list_accounts_page,
     list_listener_accounts,
+)
+from services.accounts.channel_posts import (
+    delete_account_channel_post,
+    edit_account_channel_post,
+    list_account_channel_posts,
+    publish_account_channel_post,
+)
+from services.accounts.channels import (
+    check_account_channel_username,
+    create_account_channel,
+    delete_account_channel,
+    get_account_channel,
+    list_account_channels,
+    set_account_channel_photo,
+    update_account_channel,
 )
 from services.accounts.lifecycle import add_account, evaluate_account_geo, remove_account
 from services.accounts.login import (
@@ -73,27 +90,38 @@ __all__ = [
     "account_stats",
     "add_account",
     "add_account_profile_music",
+    "check_account_channel_username",
     "check_account_session",
+    "create_account_channel",
+    "delete_account_channel",
+    "delete_account_channel_post",
+    "edit_account_channel_post",
     "evaluate_account_geo",
     "fetch_live_account_profile",
+    "get_account_channel",
     "import_account_session",
     "import_account_tdata",
     "invalidate_account_profile_cache",
+    "list_account_channel_posts",
+    "list_account_channels",
     "list_accounts",
     "list_accounts_page",
     "list_listener_accounts",
     "logout_account",
     "post_account_story",
+    "publish_account_channel_post",
     "remove_account",
     "remove_account_profile_music",
     "remove_account_profile_photo",
     "remove_account_story",
     "request_login_code",
     "reset_account_session",
+    "set_account_channel_photo",
     "set_account_main_profile_photo",
     "set_account_profile_photo",
     "set_account_story_pinned",
     "start_phone_login",
     "submit_login_code",
+    "update_account_channel",
     "update_account_profile",
 ]
