@@ -61,6 +61,19 @@ _FFMPEG_ENCODE_FILTER: Final[str] = (
     f"scale={_TARGET_WIDTH}:{_TARGET_HEIGHT}:flags=lanczos,format=yuv420p"
 )
 
+_CHANNEL_ENCODE_FILTER: Final[str] = (
+    # Channel posts keep the SOURCE resolution (they aren't 9:16 stories) —
+    # only snap both dimensions to even values (libx264/yuv420p requirement).
+    "scale=trunc(iw/2)*2:trunc(ih/2)*2,format=yuv420p"
+)
+
+# Video-stream line ffmpeg writes to stderr — e.g. ``Stream #0:0 ... Video:
+# h264 ..., 640x360 [SAR ...``. Used to recover the encoded resolution without
+# ffprobe. ``{2,5}`` digits keeps hex codec tags (``0x31637661``) from matching.
+_STREAM_RESOLUTION_RE: Final[re.Pattern[str]] = re.compile(
+    r"Stream\s+#\d+:\d+.*?Video:.*?(\d{2,5})x(\d{2,5})",
+)
+
 # Duration line ffmpeg writes to stderr — e.g. ``Duration: 00:00:08.04,``.
 # ffmpeg is the only binary we strictly require; ffprobe ships separately on
 # many distros (and not at all with imageio-ffmpeg), so we parse the encoder's
@@ -128,6 +141,141 @@ async def normalize_story_video_for_telegram(
             _TARGET_WIDTH,
             _TARGET_HEIGHT,
         )
+
+
+async def normalize_channel_video_for_telegram(
+    content: bytes,
+) -> tuple[bytes, bytes, int, int, int]:
+    """Transform arbitrary video bytes into a sendable channel-post MP4.
+
+    Returns ``(video_bytes, thumb_bytes, duration_sec, width, height)``.
+    Unlike the story path there is no 9:16 crop and no 60 s cap — a channel
+    post keeps the source resolution and length; dimensions are only snapped
+    to even values and the streams re-encoded to H.264/AAC ``+faststart``.
+
+    The output resolution is parsed from the encode run's own stderr
+    (``Stream ... Video: ... WxH``); when that fails we probe the OUTPUT file
+    with a bare ``-i`` run, and finally degrade to ``0x0`` — Telegram still
+    accepts the upload, the player just can't pre-size.
+
+    Failures raise :class:`StoryVideoNormalisationError` with the EXISTING
+    stable ``story_video_*`` codes — one shared video pipeline, no new
+    i18n codes (non-negotiable #12).
+    """
+    ffmpeg_bin = _resolve_ffmpeg_binary()
+    with tempfile.TemporaryDirectory() as tempdir:
+        td = Path(tempdir)
+        source_path = td / "input.bin"
+        output_path = td / "post.mp4"
+        thumb_path = td / "thumb.jpg"
+        source_path.write_bytes(content)
+        encode_stderr = await _run_ffmpeg(
+            ffmpeg_bin,
+            _channel_encode_args(source_path, output_path),
+            failure_code="story_video_invalid",
+        )
+        await _run_ffmpeg(
+            ffmpeg_bin,
+            _channel_thumbnail_args(source_path, thumb_path),
+            failure_code="story_video_thumb_failed",
+        )
+        duration = await _extract_duration_seconds(ffmpeg_bin, output_path)
+        width, height = await _output_resolution(ffmpeg_bin, encode_stderr, output_path)
+        return (
+            output_path.read_bytes(),
+            thumb_path.read_bytes(),
+            int(duration),
+            width,
+            height,
+        )
+
+
+def _channel_encode_args(source: Path, output: Path) -> list[str]:
+    # Same codec/container settings as the story encode, minus the 9:16 crop,
+    # the 60 s time cap, and the forced 30 fps (source cadence is kept).
+    return [
+        "-y",
+        "-i",
+        str(source),
+        "-vf",
+        _CHANNEL_ENCODE_FILTER,
+        "-c:v",
+        "libx264",
+        "-profile:v",
+        "main",
+        "-level",
+        "4.0",
+        "-preset",
+        "veryfast",
+        "-crf",
+        "23",
+        "-c:a",
+        "aac",
+        "-b:a",
+        "128k",
+        "-ac",
+        "2",
+        "-ar",
+        "44100",
+        "-movflags",
+        "+faststart",
+        "-pix_fmt",
+        "yuv420p",
+        str(output),
+    ]
+
+
+def _channel_thumbnail_args(source: Path, thumb: Path) -> list[str]:
+    # One frame from the source at the channel filter (no crop) — mirrors the
+    # story thumbnail's "from source, not the re-encode" quality rationale.
+    return [
+        "-y",
+        "-ss",
+        "0.5",
+        "-i",
+        str(source),
+        "-vf",
+        _CHANNEL_ENCODE_FILTER,
+        "-frames:v",
+        "1",
+        "-q:v",
+        "2",
+        str(thumb),
+    ]
+
+
+def _parse_stream_resolution(stderr: str) -> tuple[int, int] | None:
+    """The LAST ``Stream ... Video: ... WxH`` match — the output stream's line.
+
+    An encode run prints the input stream mapping first and the output mapping
+    last, so the final match is the encoded file's real resolution.
+    """
+    matches = _STREAM_RESOLUTION_RE.findall(stderr)
+    if not matches:
+        return None
+    width, height = matches[-1]
+    return int(width), int(height)
+
+
+async def _output_resolution(
+    binary: str,
+    encode_stderr: str,
+    output: Path,
+) -> tuple[int, int]:
+    """Encoded resolution: encode stderr first, then an ``-i`` probe, then 0x0."""
+    parsed = _parse_stream_resolution(encode_stderr)
+    if parsed is not None:
+        return parsed
+    proc = await asyncio.create_subprocess_exec(
+        binary,
+        "-i",
+        str(output),
+        stdout=asyncio.subprocess.DEVNULL,
+        stderr=asyncio.subprocess.PIPE,
+    )
+    stderr_bytes = await _communicate_or_kill(proc, "story_video_invalid")
+    parsed = _parse_stream_resolution(stderr_bytes.decode("utf-8", errors="replace"))
+    return parsed if parsed is not None else (0, 0)
 
 
 def _encode_args(source: Path, output: Path) -> list[str]:

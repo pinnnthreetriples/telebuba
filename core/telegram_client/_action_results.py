@@ -7,6 +7,7 @@ family), infrastructure (``unavailable``), and generic failure.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
@@ -14,6 +15,22 @@ from schemas.telegram_actions import ActionResult
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionStatus, TelegramAction
+
+
+@dataclass(frozen=True)
+class _DispatchResult:
+    """One action's dispatch outcome.
+
+    Carries the ``message_id`` (if any), the new ``channel_id`` (set only by
+    ``channel_create``), plus dynamic log fields the static
+    ``_action_log_extra`` can't know — e.g. the reaction emoji the gateway
+    actually placed, chosen at dispatch time. Lives here (not ``_actions``)
+    so the channel dispatcher can build one without a circular import.
+    """
+
+    message_id: int | None = None
+    channel_id: int | None = None
+    log_extra: dict[str, object] | None = None
 
 
 async def _flood_action_result(

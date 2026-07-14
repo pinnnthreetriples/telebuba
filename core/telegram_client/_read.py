@@ -25,6 +25,12 @@ from telethon.tl.types import (
 from core.db import fetch_account
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
+from core.telegram_client._read_channels import (
+    dispatch_check_channel_username,
+    dispatch_get_own_channel,
+    dispatch_list_channel_posts,
+    dispatch_list_own_channels,
+)
 from core.telegram_client._read_profile import (
     dispatch_list_profile_music,
     dispatch_list_profile_photos,
@@ -36,12 +42,16 @@ from core.telegram_client._read_stories import (
 from schemas.telegram_actions import (
     BanCheckResult,
     CheckBannedInChannel,
+    CheckChannelUsername,
     CheckMessagesAlive,
     CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
+    GetOwnChannel,
     GetUserProfile,
     LinkedDiscussionGroupResult,
     ListActiveStories,
+    ListChannelPosts,
+    ListOwnChannels,
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
@@ -133,7 +143,7 @@ async def execute_read_many(
         return results
 
 
-async def _dispatch_read_action(  # noqa: PLR0911 - one return per read-action case
+async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return per read-action case
     client: TelegramClient,
     action: TelegramReadAction,
 ) -> BaseModel:
@@ -159,6 +169,14 @@ async def _dispatch_read_action(  # noqa: PLR0911 - one return per read-action c
             return await dispatch_list_profile_music(client, request_cls)
         case ListProfilePhotos():
             return await dispatch_list_profile_photos(client, action)
+        case ListOwnChannels():
+            return await dispatch_list_own_channels(client, action)
+        case GetOwnChannel():
+            return await dispatch_get_own_channel(client, action)
+        case ListChannelPosts():
+            return await dispatch_list_channel_posts(client, action)
+        case CheckChannelUsername():
+            return await dispatch_check_channel_username(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)
