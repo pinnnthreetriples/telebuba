@@ -1,30 +1,20 @@
 ---
-name: architecture
-description: System flow and enforced layer boundaries.
-triggers: [architecture, flow, layers, imports, integration]
-edges:
-  - target: context/conventions.md
-    condition: implementation rules
-  - target: context/frontend.md
-    condition: frontend structure
-  - target: context/decisions.md
-    condition: rationale
 last_updated: 2026-07-16
 ---
 
 # Architecture
 
 ```text
-React SPA → HTTP /api/v1 → api/ → services/ → core/ → SQLite, Telegram, AI providers
-                                  ↘ schemas/ shared Pydantic contracts
+React SPA → /api/v1 → api/ → services/ → core/ → SQLite, Telegram, OpenAI/Gemini
+                         ↘ schemas/ shared Pydantic contracts
 ```
 
-- `main.py`: FastAPI composition root, lifespan runtimes, routers, SSE, and static SPA serving.
-- `api/`: request binding, dependencies, error mapping, serialization. No business logic or direct I/O.
-- `services/`: business rules, state transitions, orchestration, and runtime ownership.
-- `core/`: repositories/migrations, Telegram, LLM, auth, logging, SSE, proxy and other adapters.
-- `schemas/`: pure Pydantic contracts; no project-layer imports or I/O.
-- `frontend/`: independent React/FSD tree; reaches Python only through `/api/v1`.
+- `main.py`: FastAPI composition root, lifespan runtimes, SSE, routers, static SPA.
+- `api/`: request/dependency/error/serialization only.
+- `services/`: account, auth, proxy, warming, neurocomment, content, dialogue, logs/events, spam/trust policy and orchestration.
+- `core/`: repositories/migrations and all external adapters: Telegram, AI, auth, logging/Sentry, SSE, proxy checks.
+- `schemas/`: pure contracts; no project-layer imports or I/O.
+- `frontend/`: React 19, strict TypeScript, Vite and FSD; reaches Python only over `/api/v1`.
 
 ## Import law
 | Layer | May import |
@@ -34,4 +24,4 @@ React SPA → HTTP /api/v1 → api/ → services/ → core/ → SQLite, Telegram
 | `core/` | `schemas`, stdlib, third-party packages |
 | `schemas/` | Pydantic and typing/stdlib only |
 
-All cross-layer values use Pydantic models. Database, Telegram, provider, auth, logging, and event access goes through the owning `core/` gateway. API responses are locale-neutral. Run one uvicorn worker while runtimes and SQLite remain process-local. `tests/test_architecture.py` is the executable source of truth for boundaries.
+Runtime is deliberately single-process: SQLite plus in-process tasks require one uvicorn worker. Cross-layer values are typed; API data is locale-neutral. Business logs go through `core/logging.py`; history is `/api/v1/logs`, live updates are authenticated `/api/v1/events`. `tests/test_architecture.py`, manifests, workflows, and code are the executable source of truth.
