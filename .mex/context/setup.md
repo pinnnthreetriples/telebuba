@@ -1,80 +1,74 @@
 ---
 name: setup
-description: Dev environment setup and commands. Load when setting up the project for the first time or when environment issues arise.
-triggers:
-  - "setup"
-  - "install"
-  - "environment"
-  - "getting started"
-  - "how do I run"
-  - "local development"
+description: Supported local-development setup and commands.
+triggers: [setup, install, environment, getting started, local development]
 edges:
   - target: context/stack.md
-    condition: when specific technology versions or library details are needed
-  - target: context/architecture.md
-    condition: when understanding how components connect during setup
-  - target: context/logging.md
-    condition: when configuring Sentry DSN or log file location
-last_updated: 2026-06-28
+    condition: dependency or runtime-version details
+  - target: context/ci.md
+    condition: reproducing CI locally
+last_updated: 2026-07-16
 ---
 
 # Setup
 
 ## Prerequisites
 
-- Python 3.13 (dev machine on 3.13.13)
-- `uv` 0.10+ (https://github.com/astral-sh/uv)
-- Telegram API credentials (api_id + api_hash from my.telegram.org)
-- One SOCKS5/HTTP proxy per account
-- Gemini API key
+- Python 3.13 and `uv` 0.10+.
+- Node.js 24 and npm for the frontend and aislop gate.
+- Telegram `api_id`/`api_hash`; optional Gemini/OpenAI keys depending on enabled AI features.
+- `ffmpeg` is supplied through `imageio-ffmpeg`; no separate system install is normally required.
 
-## First-time Setup
+## First Run
 
-1. `uv sync` — installs the full stack from `pyproject.toml` into `.venv`.
-2. Copy `.env.example` → `.env` and fill in keys (see below).
-3. `uv run pre-commit install` — installs the git hooks (already wired on this machine; new clones need to run it once).
-4. SQLite tables are created lazily by `core/db.py` on first DB access.
-5. `uv run uvicorn main:app --reload` — starts the FastAPI/uvicorn API (single-worker; runtimes reconcile via lifespan).
-6. Frontend (from `frontend/`): `npm install` then `npm run dev` — Vite dev server with a `/api` proxy to uvicorn.
+```bash
+uv sync --frozen
+cp .env.example .env
+uv run pre-commit install
+cd frontend && npm ci && cd ..
+uv run uvicorn main:app --reload
+```
 
-## Environment Variables
+In another terminal:
 
-Uses double-underscore namespace convention (`NAMESPACE__FIELD`) via `pydantic-settings`. Full list in `.env.example`; key ones:
+```bash
+cd frontend
+npm run dev
+```
 
-- `TELEGRAM__API_ID` (required) — Telegram API id from my.telegram.org.
-- `TELEGRAM__API_HASH` (required) — Telegram API hash.
-- `TELEGRAM__SESSION_DIR` (optional) — Telethon session directory, default `sessions`.
-- `DB__PATH` (optional) — SQLite file path, default `telebuba.db`.
-- `GEMINI__API_KEY` (required) — key for httpx → Gemini text generation.
-- `LOGGING__SENTRY_DSN` (optional) — if set, errors are sent to Sentry; otherwise local-only.
-- `API__PORT` (optional) — uvicorn port, default 8080.
-- `AUTH__SECRET` (required) — JWT signing secret (see `settings.auth`).
+Backend defaults to `127.0.0.1:8080`; Vite proxies `/api`. SQLite tables and migrations are applied during startup.
 
-All namespaces: `TELEGRAM__`, `API__`, `AUTH__`, `DB__`, `PROXY__`, `PROFILE_MEDIA__`, `LOGGING__`, `WARMING__`, `GEMINI__`, `TRUST__`. See `core/config.py` for the full nested settings model. (`UI__*` was retired with NiceGUI in the split-stack pivot; frontend config is `VITE_*`.)
+## Required Configuration
 
-## Common Commands
+- `TELEGRAM__API_ID`, `TELEGRAM__API_HASH` for Telegram operations.
+- `AUTH__ADMIN_USERNAME`, `AUTH__ADMIN_PASSWORD`, and a 32+ byte `AUTH__SECRET` to enable seeded login. An empty secret disables token issuance.
+- `GEMINI__API_KEY` and/or `OPENAI__API_KEY` only for the enabled generation/solver provider.
+- Production HTTPS should keep `AUTH__COOKIE_SECURE=true`; local plain HTTP may set it to `false`.
 
-- `uv sync` — install / refresh dependencies from `pyproject.toml` + `uv.lock`.
-- `uv add <pkg>` / `uv add --dev <pkg>` — add a runtime / dev dependency.
-- `uv run uvicorn main:app --reload` — run the API (single-worker; runtimes reconcile via lifespan).
-- `uv run pytest` — full test suite. Strict mode is baked into `pyproject.toml`: warnings → errors, branch coverage ≥ 90%, `asyncio_mode = strict`, Hypothesis `strict` profile (200 examples).
-- `uv run pytest -p no:cacheprovider --hypothesis-profile=dev` — fast inner-loop run (50 Hypothesis examples, fresh cache).
-- `uv run ruff check .` — lint.
-- `uv run ruff format .` — format.
-- `uv run ty check .` — type check.
-- `uv run bandit -r .` — security (SAST).
-- `uv run pip-audit` — known CVEs in dependencies.
-- `uv run semgrep --config auto .` — security rules (slow, usually CI).
-- `uv run vulture .` — dead code.
-- `uv run deptry .` — unused / missing dependencies.
-- `uv run radon cc -a .` — complexity (A–F).
-- `uv run python -m aislop .` — AI-slop detector (see Known Issues — the `aislop` CLI is broken on Windows, hence `python -m`).
-- `uv run pre-commit run --all-files` — run all hooks manually.
+`.env.example` is the complete typed-settings reference and is architecture-tested against config.
 
-## Common Issues
+## Commands
 
-**`aislop --version` complains about a space in the path** — on Windows the `aislop.exe` wrapper script does not quote the Python path correctly when it contains a space. Workaround: `uv run python -m aislop ...`.
+```bash
+uv run pytest
+uv run ruff check .
+uv run ruff format --check .
+uv run ty check .
+uv run pre-commit run --all-files
+uv run python tools/aislop_gate.py
+uv run python -m tools.gen_api
+cd frontend && npm run gates && npm run build
+```
 
-**`uv sync` after changing Python version** — if you changed `.python-version`, delete `.venv` and re-run `uv sync`.
+MEX requires Node 20+; this repository already targets Node 24:
 
-[More issues — TO BE DETERMINED after first real runs. Expected: Telethon session file locking, "database is locked" under concurrent async tasks, uvicorn port conflicts, Vite/uvicorn dev-proxy CORS.]
+```bash
+npx mex-agent check
+npx mex-agent doctor
+```
+
+## Operational Constraints
+
+- Run one uvicorn worker: runtime tasks and SQLite are process-local.
+- Telethon session files are credentials; never commit, print, or copy them into logs.
+- Use one coherent environment on Windows; current MEX supports native PowerShell/CMD through `npx mex-agent`.
