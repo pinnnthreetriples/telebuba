@@ -27,6 +27,10 @@ _ROOT = Path(__file__).resolve().parent.parent
 _TEST_FILE_MAX_LINES = 700
 
 
+def _is_frontend_test_source(path: Path) -> bool:
+    return path.suffix in {".ts", ".tsx"} and ".test" in path.stem
+
+
 def _imported_modules(path: Path) -> set[str]:
     """All absolute imports in ``path`` as fully-qualified module names."""
     tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -200,10 +204,7 @@ def test_test_sources_stay_within_the_line_limit() -> None:
     """Keep test modules local: files over 700 lines must split by behaviour."""
     backend = [path for path in (_ROOT / "tests").rglob("*.py") if path.name != "__init__.py"]
     frontend_root = _ROOT / "frontend" / "src"
-    frontend = [
-        *frontend_root.rglob("*.test.ts"),
-        *frontend_root.rglob("*.test.tsx"),
-    ]
+    frontend = [path for path in frontend_root.rglob("*.ts*") if _is_frontend_test_source(path)]
     oversized = {
         path.relative_to(_ROOT).as_posix(): len(path.read_text(encoding="utf-8").splitlines())
         for path in [*backend, *frontend]
@@ -212,3 +213,29 @@ def test_test_sources_stay_within_the_line_limit() -> None:
     assert oversized == {}, (
         f"test source files must not exceed {_TEST_FILE_MAX_LINES} lines; split: {oversized}"
     )
+
+
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "widget.test.ts",
+        "widget.test.tsx",
+        "widget.test-helpers.tsx",
+        "widget.testHelpers.tsx",
+        "widget.test-utils.tsx",
+        "widget.test-fixtures.ts",
+        "widget.testCustom.tsx",
+    ],
+)
+def test_frontend_test_source_detection_includes_tests_and_helpers(filename: str) -> None:
+    assert _is_frontend_test_source(Path(filename))
+
+
+@pytest.mark.parametrize(
+    "filename",
+    ["widget.ts", "widget.tsx", "contest.tsx", "widget.test.js"],
+)
+def test_frontend_test_source_detection_excludes_production_and_other_languages(
+    filename: str,
+) -> None:
+    assert not _is_frontend_test_source(Path(filename))

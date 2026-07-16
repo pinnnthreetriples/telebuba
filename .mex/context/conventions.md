@@ -21,7 +21,7 @@ edges:
     condition: when adding a backend endpoint
   - target: patterns/add-frontend-slice.md
     condition: when adding a frontend screen/widget/entity
-last_updated: 2026-07-13
+last_updated: 2026-07-16
 ---
 
 # Conventions
