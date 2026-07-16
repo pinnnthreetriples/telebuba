@@ -338,7 +338,14 @@ export type ActionResult = {
   /**
    * Status
    */
-  status: 'ok' | 'flood_wait' | 'slow_mode_wait' | 'premium_wait' | 'peer_flood' | 'failed';
+  status:
+    | 'ok'
+    | 'flood_wait'
+    | 'slow_mode_wait'
+    | 'premium_wait'
+    | 'peer_flood'
+    | 'failed'
+    | 'unavailable';
   /**
    * Action Type
    */
@@ -351,6 +358,10 @@ export type ActionResult = {
    * Message Id
    */
   message_id?: number | null;
+  /**
+   * Channel Id
+   */
+  channel_id?: string | null;
   /**
    * Flood Wait Seconds
    */
@@ -440,9 +451,9 @@ export type BodyImportAccountTdata = {
  */
 export type BodyPostAccountStory = {
   /**
-   * File
+   * Files
    */
-  file: Blob | File;
+  files: Array<Blob | File>;
   /**
    * Media Kind
    */
@@ -459,6 +470,34 @@ export type BodyPostAccountStory = {
    * Protect Content
    */
   protect_content?: boolean;
+  /**
+   * Collage Layout
+   */
+  collage_layout?: string | null;
+};
+
+/**
+ * Body_publishAccountChannelPost
+ */
+export type BodyPublishAccountChannelPost = {
+  /**
+   * Text
+   */
+  text?: string;
+  /**
+   * File
+   */
+  file?: Blob | File | null;
+};
+
+/**
+ * Body_setAccountChannelPhoto
+ */
+export type BodySetAccountChannelPhoto = {
+  /**
+   * File
+   */
+  file: Blob | File;
 };
 
 /**
@@ -610,6 +649,50 @@ export type ChannelBanCheckList = {
 };
 
 /**
+ * ChannelCreateRequest
+ */
+export type ChannelCreateRequest = {
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * About
+   */
+  about?: string;
+  /**
+   * Username
+   */
+  username?: string | null;
+};
+
+/**
+ * ChannelDetailView
+ */
+export type ChannelDetailView = {
+  /**
+   * Channel Id
+   */
+  channel_id: string;
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Participants Count
+   */
+  participants_count?: number | null;
+  /**
+   * About
+   */
+  about?: string;
+};
+
+/**
  * ChannelLinkOutcome
  *
  * Result of attaching a channel to a campaign.
@@ -627,6 +710,107 @@ export type ChannelLinkOutcome = {
    * Channel
    */
   channel: string;
+};
+
+/**
+ * ChannelPostEditRequest
+ */
+export type ChannelPostEditRequest = {
+  /**
+   * Text
+   */
+  text: string;
+};
+
+/**
+ * ChannelPostView
+ *
+ * One channel post. ``post_id`` is a Telegram message id (int32-safe).
+ */
+export type ChannelPostView = {
+  /**
+   * Post Id
+   */
+  post_id: number;
+  /**
+   * Date Unix
+   */
+  date_unix: number;
+  /**
+   * Text
+   */
+  text?: string;
+  /**
+   * Media Kind
+   */
+  media_kind?: 'none' | 'photo' | 'video' | 'other';
+  /**
+   * Views
+   */
+  views?: number | null;
+};
+
+/**
+ * ChannelUpdateRequest
+ *
+ * Partial edit: ``None`` leaves a field unchanged, ``""`` clears the about.
+ *
+ * "At least one field set" is enforced by the ``EditChannel`` action model
+ * the service builds — a no-op request fails there with a 400.
+ */
+export type ChannelUpdateRequest = {
+  /**
+   * Title
+   */
+  title?: string | null;
+  /**
+   * About
+   */
+  about?: string | null;
+};
+
+/**
+ * ChannelUsernameCheckView
+ *
+ * Availability verdict for a public handle.
+ *
+ * ``code`` is the stable refusal reason (``channel_username_invalid`` /
+ * ``channel_username_occupied``) when ``available`` is False; the SPA
+ * translates it (non-negotiable #12).
+ */
+export type ChannelUsernameCheckView = {
+  /**
+   * Available
+   */
+  available: boolean;
+  /**
+   * Code
+   */
+  code?: string | null;
+};
+
+/**
+ * ChannelView
+ *
+ * One owned channel in the list view (id as int64-string, see module doc).
+ */
+export type ChannelView = {
+  /**
+   * Channel Id
+   */
+  channel_id: string;
+  /**
+   * Title
+   */
+  title: string;
+  /**
+   * Username
+   */
+  username?: string | null;
+  /**
+   * Participants Count
+   */
+  participants_count?: number | null;
 };
 
 /**
@@ -1131,6 +1315,34 @@ export type PageAccountRead = {
    * Items
    */
   items: Array<AccountRead>;
+  /**
+   * Next Cursor
+   */
+  next_cursor?: string | null;
+};
+
+/**
+ * Page[ChannelPostView]
+ */
+export type PageChannelPostView = {
+  /**
+   * Items
+   */
+  items: Array<ChannelPostView>;
+  /**
+   * Next Cursor
+   */
+  next_cursor?: string | null;
+};
+
+/**
+ * Page[ChannelView]
+ */
+export type PageChannelView = {
+  /**
+   * Items
+   */
+  items: Array<ChannelView>;
   /**
    * Next Cursor
    */
@@ -2969,6 +3181,410 @@ export type SetAccountPhotoMainResponses = {
 
 export type SetAccountPhotoMainResponse =
   SetAccountPhotoMainResponses[keyof SetAccountPhotoMainResponses];
+
+export type ListAccountChannelsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels';
+};
+
+export type ListAccountChannelsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListAccountChannelsError = ListAccountChannelsErrors[keyof ListAccountChannelsErrors];
+
+export type ListAccountChannelsResponses = {
+  /**
+   * Successful Response
+   */
+  200: PageChannelView;
+};
+
+export type ListAccountChannelsResponse =
+  ListAccountChannelsResponses[keyof ListAccountChannelsResponses];
+
+export type CreateAccountChannelData = {
+  body: ChannelCreateRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels';
+};
+
+export type CreateAccountChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CreateAccountChannelError =
+  CreateAccountChannelErrors[keyof CreateAccountChannelErrors];
+
+export type CreateAccountChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type CreateAccountChannelResponse =
+  CreateAccountChannelResponses[keyof CreateAccountChannelResponses];
+
+export type CheckAccountChannelUsernameData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query: {
+    /**
+     * Username
+     */
+    username: string;
+  };
+  url: '/api/v1/accounts/{account_id}/channel-username-check';
+};
+
+export type CheckAccountChannelUsernameErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type CheckAccountChannelUsernameError =
+  CheckAccountChannelUsernameErrors[keyof CheckAccountChannelUsernameErrors];
+
+export type CheckAccountChannelUsernameResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChannelUsernameCheckView;
+};
+
+export type CheckAccountChannelUsernameResponse =
+  CheckAccountChannelUsernameResponses[keyof CheckAccountChannelUsernameResponses];
+
+export type GetAccountChannelData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}';
+};
+
+export type GetAccountChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetAccountChannelError = GetAccountChannelErrors[keyof GetAccountChannelErrors];
+
+export type GetAccountChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: ChannelDetailView;
+};
+
+export type GetAccountChannelResponse =
+  GetAccountChannelResponses[keyof GetAccountChannelResponses];
+
+export type UpdateAccountChannelData = {
+  body: ChannelUpdateRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}/update';
+};
+
+export type UpdateAccountChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type UpdateAccountChannelError =
+  UpdateAccountChannelErrors[keyof UpdateAccountChannelErrors];
+
+export type UpdateAccountChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type UpdateAccountChannelResponse =
+  UpdateAccountChannelResponses[keyof UpdateAccountChannelResponses];
+
+export type SetAccountChannelPhotoData = {
+  body: BodySetAccountChannelPhoto;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}/photo';
+};
+
+export type SetAccountChannelPhotoErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetAccountChannelPhotoError =
+  SetAccountChannelPhotoErrors[keyof SetAccountChannelPhotoErrors];
+
+export type SetAccountChannelPhotoResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type SetAccountChannelPhotoResponse =
+  SetAccountChannelPhotoResponses[keyof SetAccountChannelPhotoResponses];
+
+export type DeleteAccountChannelData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}/delete';
+};
+
+export type DeleteAccountChannelErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteAccountChannelError =
+  DeleteAccountChannelErrors[keyof DeleteAccountChannelErrors];
+
+export type DeleteAccountChannelResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type DeleteAccountChannelResponse =
+  DeleteAccountChannelResponses[keyof DeleteAccountChannelResponses];
+
+export type ListAccountChannelPostsData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+  };
+  query?: {
+    /**
+     * Cursor
+     */
+    cursor?: string | null;
+    /**
+     * Limit
+     */
+    limit?: number | null;
+  };
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts';
+};
+
+export type ListAccountChannelPostsErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type ListAccountChannelPostsError =
+  ListAccountChannelPostsErrors[keyof ListAccountChannelPostsErrors];
+
+export type ListAccountChannelPostsResponses = {
+  /**
+   * Successful Response
+   */
+  200: PageChannelPostView;
+};
+
+export type ListAccountChannelPostsResponse =
+  ListAccountChannelPostsResponses[keyof ListAccountChannelPostsResponses];
+
+export type PublishAccountChannelPostData = {
+  body?: BodyPublishAccountChannelPost;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts';
+};
+
+export type PublishAccountChannelPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type PublishAccountChannelPostError =
+  PublishAccountChannelPostErrors[keyof PublishAccountChannelPostErrors];
+
+export type PublishAccountChannelPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type PublishAccountChannelPostResponse =
+  PublishAccountChannelPostResponses[keyof PublishAccountChannelPostResponses];
+
+export type EditAccountChannelPostData = {
+  body: ChannelPostEditRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+    /**
+     * Post Id
+     */
+    post_id: number;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts/{post_id}/edit';
+};
+
+export type EditAccountChannelPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type EditAccountChannelPostError =
+  EditAccountChannelPostErrors[keyof EditAccountChannelPostErrors];
+
+export type EditAccountChannelPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type EditAccountChannelPostResponse =
+  EditAccountChannelPostResponses[keyof EditAccountChannelPostResponses];
+
+export type DeleteAccountChannelPostData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+    /**
+     * Channel Id
+     */
+    channel_id: string;
+    /**
+     * Post Id
+     */
+    post_id: number;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts/{post_id}/delete';
+};
+
+export type DeleteAccountChannelPostErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type DeleteAccountChannelPostError =
+  DeleteAccountChannelPostErrors[keyof DeleteAccountChannelPostErrors];
+
+export type DeleteAccountChannelPostResponses = {
+  /**
+   * Successful Response
+   */
+  200: ActionResult;
+};
+
+export type DeleteAccountChannelPostResponse =
+  DeleteAccountChannelPostResponses[keyof DeleteAccountChannelPostResponses];
 
 export type ListProxiesData = {
   body?: never;

@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-13
+last_updated: 2026-07-16
 ---
 
 # Active State
@@ -29,6 +29,12 @@ shared fixtures now remove host HTTP proxy variables and close the reused client
 after every test. This fixes 28 environment-dependent failures under a SOCKS
 `ALL_PROXY` without changing production gateway behaviour. Full backend and
 frontend gates are green (1242 pytest / 281 Vitest).
+
+A 2026-07-16 test-suite refactor split every test source over 700 lines into
+behaviour-focused, co-located modules with shared fixtures/helpers. The updated
+`main` scenarios were preserved: no missing or duplicate test names. An
+architecture gate now enforces the 700-line ceiling. Full gates are green:
+1407 pytest (95.42% coverage) and 336 Vitest tests.
 
 A 2026-07-10 bug audit (parallel review of warming/neurocomment/core/api) then
 fixed four confirmed correctness defects (PR open, no auto-merge): warming
@@ -132,6 +138,20 @@ Operator also doubled the persona session presets (`persona_sessions`): calm 2-4
 normal 5-8→10-16, active 10-14→20-28 (config + `.env.example` + the picker hints in
 ru/en). Mature accounts run ~2× the daily cycles with ~half the inter-cycle pause; the
 age/phase safety cap (`min(persona, phase)`) still throttles young accounts unchanged.
+
+A 2026-07-13 data-loss fix (PR open, do not merge unattended): «Сделать основным»
+(`_set_main_profile_photo`) **no longer deletes anything, ever**. Live debug.log
+evidence + official-client research established the true `photos.updateProfilePhoto`
+semantics: promoting a history photo REPLACES it — the original id is consumed and a
+new id minted at the front (TDLib/tdesktop do an old→new id swap; neither calls
+`photos.deletePhotos`). Post-promote `GetUserPhotos` reads can still list the consumed
+id (replication lag), and the old "dedup" delete issued against that stale view —
+own-profile deletes resolve by id alone — destroyed the account's previous main
+avatar. The delete block is gone; the action now logs `telegram_set_main_id_flow`
+(phase before/after, target/history/current-avatar/promoted ids) as the live
+acceptance instrument, and `set_account_main_profile_photo` invalidates the profile
+cache even on failure so the dialog stops offering dead photo ids. Tests remodelled
+to REPLACE semantics + a never-deletes regression on a lagged read.
 
 A 2026-07-11 feature added **phone-number authentication as a third add-account
 method** (branch `phone-authentication`). The phone-code gateway/service/cache
@@ -341,6 +361,126 @@ channel-aggregate) ban badge in the work-row would need a `deriveRows` rework.
 Gates: 1232 pytest (strict, ≥90% branch), 271 vitest + tsc green, ruff+ty clean,
 API client regenerated (`banned` state + `quota_*` reasons drift-free).
 
+A 2026-07-13 operator-requested story feature — **multi-photo "collage" stories**
+(Telegram has no native multi-photo story API; the app stitches 2–6 photos into
+ONE composite and posts that, so we replicate the compositing server-side). PR1
+(backend, open) adds a Pillow collage composer in `core/telegram_client/_media.py`
+(`_compose_story_collage` + `_COLLAGE_TEMPLATES`: named layouts per count —
+2:`v2`/`h2`, 3:`v3`/`left1_right2`/`top1_bottom2`, 4:`grid2x2`/`v4`, 5:`top2_bottom3`,
+6:`grid2x3`, first id = default), routed from `_story_media` when `PostStory`
+carries `extra_images`; single-photo/video paths unchanged; `_decode_story_source`
++ `_cover_crop` factored out and shared. `PostStory`/`AccountStoryUpload` gain
+`extra_images` + `collage_layout`; the service validates media-kind/count/size with
+locale-neutral codes (`story_collage_requires_image`, `story_collage_too_many_images`,
+and `story_collage_unknown_layout` via a new typed `StoryCollageLayoutError`);
+`POST /accounts/{id}/story` now takes `files: list[UploadFile]` + `collage_layout`.
+Config `PROFILE_MEDIA__STORY_COLLAGE_{MAX_IMAGES=6,GAP_PX=8}`. Gates green (1263
+pytest, ruff/ty clean, API client regenerated). PR2 (frontend, open) delivers the
+UI: `AddStoryModal` now does multi-select (≤6 photos, images XOR video), ordered
+preview tiles with ◀▶ reorder + remove, and a layout picker (SVG mini-icons drawn
+from `storyCollageLayouts.ts` — a byte-for-byte mirror of the backend
+`_COLLAGE_TEMPLATES`, so the id sent always resolves). Publish sends `files` in
+tile order + `collage_layout` (only for ≥2 images); the three `story_collage_*`
+codes are translated in ru/en. Gates green (297 vitest, eslint/boundaries/tsc
+clean). NOTE: a frontend-only rebuild does NOT restart the single-process uvicorn
+backend — the make-main fix (#244/#245) only takes effect after the backend
+process itself is restarted on current main.
+
+A 2026-07-14 account-edit **backend hardening batch** (PR open, branch
+`fix/account-edit-backend-batch`; a parallel PR covers the frontend) fixed ten
+audited defects around the edit-profile modal: (1) profile-snapshot **cache race**
+— an in-flight fetch that started before a mutation could re-store pre-mutation
+state right after `invalidate_account_profile_cache` ran; now a per-account
+generation counter gates the store, plus single-flight dedup of concurrent
+fetches (modal open + N cold thumbs used to fire N+1 full 5-action fetches);
+(2) every media mutation + `update_account_profile` now invalidates BEFORE
+raising (the #249 pattern; DB-write failure after a successful Telegram write
+also invalidates); (3) `UpdateUsernameRequest` is sent FIRST (the fallible call)
+so an occupied username can no longer half-apply name/bio, and
+`USERNAME_NOT_MODIFIED` is treated as a no-op; (4) thumb downloads are bounded by
+`PROFILE_MEDIA__THUMB_CONCURRENCY` (new `_thumbs.py`; default 4) and the first
+FloodWait trips a per-batch breaker (one `telegram_thumb_download_flood_wait`
+event, siblings degrade to None thumbs); (5) `_post_story` now extracts the real
+story id from the `Updates` container (`UpdateStory.story.id`; the old
+`result.id` was always None — fakes remodelled to the real shape); (6) stale
+pre-#249 docstrings rewritten to the REPLACE/never-delete model (mint inherits
+the original's date; `UserFull.profile_photo.id` is the avatar authority);
+(7) `execute_read_many` wraps pool/socket/timeout errors into
+`TelegramReadError`; (8) new `ActionStatus` **`unavailable`** — pool/connection
+failures map to 503 (`api/errors.py`) instead of 400 client-fault; warming
+counts it like `failed` (`_FAILURE_STATUSES`); the `telegram_action_unavailable`
+event + ru/en labels added; (9) music unsave verifies the server Bool and raises
+on False (mirror of the photo-remove guard); (10) the vacuous per-extra collage
+suffix check (validated the PRIMARY's filename) was dropped — size caps stay,
+the decode is the format gate — and the API pre-checks the collage count cap
+before buffering uploads into RAM. `_actions.py` result builders were split to
+`_action_results.py` (aislop size budget). Gates: 1293 pytest / 95% branch,
+ruff+ty+aislop clean, API client regenerated (only the `unavailable` enum).
+
+A 2026-07-14 **channel-management backend** (PR A, branch
+`feat/account-channels-backend`; PR B will do the UI) lets the dashboard manage
+an account's OWN broadcast channels end-to-end: create (username availability
+pre-checked BEFORE creating, so the deterministic occupied case fails before
+anything exists; a post-create username failure carries the created private
+channel's id on the error — envelope `fields.channel_id` — so the UI can adopt
+it; never auto-deletes), edit title/about (NotModified-idempotent), set
+photo, delete, and publish/edit/delete posts (text, photo, or video —
+`normalize_channel_video_for_telegram` re-encodes H.264/AAC +faststart at the
+SOURCE resolution, no 9:16 crop / no 60 s cap, resolution parsed from ffmpeg's
+own stderr with an `-i` probe fallback, reusing the `story_video_*` codes).
+New action cluster `schemas/telegram_actions_channels.py` (7 writes + 4 reads),
+gateway `_channels.py` (Telethon refusals → stable codes via
+`ChannelGatewayError`) + `_read_channels.py` (own channels = dialog scan for
+creator+broadcast incl. private; posts page by `offset_id`; username check),
+services `channels.py`/`channel_posts.py` (no profile-cache involvement — channel
+data isn't in the snapshot), 11 `/api/v1/accounts/{id}/channels*` routes
+(channel ids as int64 strings), `CHANNELS__` config namespace, ru/en labels for
+the 7 `account_channel_*` log codes + 7 `channel_*` action types.
+`ActionResult` gained `channel_id` (int64-as-string, set only by
+`channel_create`); `_DispatchResult` moved to `_action_results.py`; the profile
+music/photo read dispatchers were extracted to `_read_profile.py` (pure move,
+file-size budget). Gates: 1389 pytest / 95% branch, ruff+ty+aislop clean,
+API client regenerated (11 ops), frontend gates green (no UI consumes them yet).
+
+A 2026-07-14 **channel-management UI** (PR B, branch
+`feat/account-channels-frontend`) puts the PR A backend on screen: the profile
+modal gained a fifth «Каналы» tab (`ChannelsTab.tsx` — own-channel list with
+public/private badges + participant counts, translated `channel_read_failed`
+error + retry, create/edit/delete; runs on its own queries, excluded from the
+snapshot busy scrim and its loadError banner). `ChannelCreateModal.tsx`: title
+≤128 / about ≤255 / public toggle with a 500 ms-debounced live username check
+(`checkAccountChannelUsername`, verdict codes translated); on success it hands
+`ActionResult.channel_id` straight into the editor; a create-after-create
+failure (envelope `fields.channel_id`) still invalidates the list so the
+private channel is adopted, never re-created. `ChannelEditModal.tsx`: partial
+save (only changed fields; omitted = unchanged), avatar upload behind the
+client photo gate (10 MB, jpg/jpeg/png/webp → `toastError`), dirty-close
+confirm. `ChannelPostsPanel.tsx`: composer (4096 text / 1024 caption cap,
+single photo ≤10 MB or video ≤100 MB with object-URL preview + revoke),
+newest-first history with cursor «Показать ещё» (accumulated pages reset on
+any post mutation), inline post edit + confirmed delete. Shared gates/envelope
+helpers in `_channelsShared.ts` (error.message = stable code →
+`accounts.channel.code.*`, 12 codes ru/en). Entity seam: +4 query re-exports
+(renamed `accountChannel*QueryOptions/Key`) and +7 mutation re-exports in
+`entities/account`. Gates: 336 vitest (57 files, +30 new tests), coverage
+96.6% lines / 90.9% branch (new files each ≥82%), steiger+eslint+tsc+build
+clean; prettier clean on changed files (repo-wide `--check` fails locally only
+from the Windows CRLF worktree smudge — CI checks out LF).
+
+A 2026-07-15 hardening + UX pass (one PR): (1) channel ids past int64 are
+rejected up front in `_input_channel` (`channel_not_found`, was an OverflowError
+500) and the resolve also catches `OverflowError`; (2) an UNMAPPED RPC refusal
+on the post-create username assignment now surfaces as stable
+`channel_username_assign_failed` still carrying the created channel's id
+(flood-family re-raised unchanged for the flood ladder — id lost there by
+design); (3) «Сделать основным» switched from promote (`updateProfilePhoto`) to
+**re-upload as a new photo** — the promote-mint inherits the original's date, so
+viewers saw the new main mid-carousel and cached mobile galleries showed
+old-id/new-id duplicates of the same image (live repro 2026-07-15); the re-upload
+gets a fresh date (first slide everywhere) and the ORIGINAL stays in the history
+as a visible duplicate the operator deletes manually — the action still never
+deletes anything (#249 rule).
+
 ## Not Yet Built (deliberate)
 
 - **#149 HITL captcha canary** — operator-run; never an agent task.
@@ -348,9 +488,10 @@ API client regenerated (`banned` state + `quota_*` reasons drift-free).
 - Proxy unassign-from-account: backend exists (`POST /proxies/unassign`), no UI trigger.
 - `ListenerEditModal` persists the picked listener only while the runtime runs.
 - Accounts table status filter / column sort / bulk actions — backend supports, UI gap.
-- Photo «сделать главной» — implemented as promote-then-delete-old (raw
-  `updateProfilePhoto` mints a new photo + leaves the original, so we delete the
-  stale id after, mirroring TDLib `inputChatPhotoPrevious`).
+- Photo «сделать главной» — re-uploads the photo's bytes as a NEW photo (fresh
+  date → first slide for viewers); the original stays in the history and is
+  deleted manually if unwanted. Nothing is ever auto-deleted — see the #249
+  data-loss fix.
 - Warming per-action numeric limits stay auto/config (read-only in UI, auto-cap ADR).
 - **Interest-partitioned channel catalog** — the durable fix for cross-account channel overlap (joins are permanent + the pool is shared, so churn/exploration only bound convergence, not eliminate it). Explicitly deferred by #203 as a separate follow-up.
 

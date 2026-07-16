@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import base64
 from typing import TYPE_CHECKING
 
@@ -66,78 +67,82 @@ def _stub_execute_read_many(
         actions: list[object],
     ) -> list[object]:
         calls.append(list(actions))
-        results: list[object] = []
-        for action in actions:
-            if isinstance(action, GetUserProfile):
-                results.append(
-                    TelegramProfileSnapshot(
-                        first_name="Alice",
-                        last_name="Liddell",
-                        username="alice",
-                        phone="79991234567",
-                        bio="Hi there",
-                    ),
-                )
-            elif isinstance(action, ListPinnedStories):
-                results.append(
-                    TelegramPinnedStories(
-                        items=[
-                            TelegramStoryThumb(
-                                story_id=101,
-                                kind="image",
-                                caption="hi",
-                                date_unix=1_600_000_000,
-                                is_pinned=True,
-                            ),
-                        ],
-                    ),
-                )
-            elif isinstance(action, ListActiveStories):
-                results.append(
-                    TelegramActiveStories(
-                        items=[
-                            TelegramStoryThumb(
-                                story_id=202,
-                                kind="video",
-                                caption="active",
-                                date_unix=1_700_000_000,
-                                is_active=True,
-                            ),
-                        ],
-                    ),
-                )
-            elif isinstance(action, ListProfileMusic):
-                results.append(
-                    TelegramProfileMusic(
-                        items=[
-                            TelegramMusicItem(file_id=555, title="Track", performer="Artist"),
-                        ],
-                        supported=True,
-                    ),
-                )
-            elif isinstance(action, ListProfilePhotos):
-                results.append(
-                    TelegramProfilePhotos(
-                        items=[
-                            TelegramProfilePhoto(
-                                photo_id=900,
-                                access_hash=1,
-                                file_reference=b"\x01",
-                                date_unix=1_700_000_000,
-                                thumb_bytes=b"thumb",
-                            ),
-                        ],
-                    ),
-                )
-            else:
-                msg = f"unexpected action {action}"
-                raise TypeError(msg)
-        return results
+        return _fake_read_results(actions)
 
     monkeypatch.setattr(
         "services.accounts.profile_read.execute_read_many",
         fake_execute_read_many,
     )
+
+
+def _fake_read_results(actions: list[object]) -> list[object]:
+    results: list[object] = []
+    for action in actions:
+        if isinstance(action, GetUserProfile):
+            results.append(
+                TelegramProfileSnapshot(
+                    first_name="Alice",
+                    last_name="Liddell",
+                    username="alice",
+                    phone="79991234567",
+                    bio="Hi there",
+                ),
+            )
+        elif isinstance(action, ListPinnedStories):
+            results.append(
+                TelegramPinnedStories(
+                    items=[
+                        TelegramStoryThumb(
+                            story_id=101,
+                            kind="image",
+                            caption="hi",
+                            date_unix=1_600_000_000,
+                            is_pinned=True,
+                        ),
+                    ],
+                ),
+            )
+        elif isinstance(action, ListActiveStories):
+            results.append(
+                TelegramActiveStories(
+                    items=[
+                        TelegramStoryThumb(
+                            story_id=202,
+                            kind="video",
+                            caption="active",
+                            date_unix=1_700_000_000,
+                            is_active=True,
+                        ),
+                    ],
+                ),
+            )
+        elif isinstance(action, ListProfileMusic):
+            results.append(
+                TelegramProfileMusic(
+                    items=[
+                        TelegramMusicItem(file_id=555, title="Track", performer="Artist"),
+                    ],
+                    supported=True,
+                ),
+            )
+        elif isinstance(action, ListProfilePhotos):
+            results.append(
+                TelegramProfilePhotos(
+                    items=[
+                        TelegramProfilePhoto(
+                            photo_id=900,
+                            access_hash=1,
+                            file_reference=b"\x01",
+                            date_unix=1_700_000_000,
+                            thumb_bytes=b"thumb",
+                        ),
+                    ],
+                ),
+            )
+        else:
+            msg = f"unexpected action {action}"
+            raise TypeError(msg)
+    return results
 
 
 @pytest.mark.asyncio
@@ -306,6 +311,98 @@ async def test_invalidate_cache_drops_entry(monkeypatch: pytest.MonkeyPatch) -> 
     await fetch_live_account_profile("acc-1")
 
     assert len(calls) == 2, "Invalidated cache must trigger a fresh fetch"
+
+
+def _gated_execute_read_many(
+    monkeypatch: pytest.MonkeyPatch,
+    calls: list[int],
+    started: asyncio.Event,
+    release: asyncio.Event,
+) -> None:
+    """Stub whose fetch blocks on ``release`` — lets tests order events mid-flight."""
+
+    async def gated(_account_id: str, actions: list[object]) -> list[object]:
+        calls.append(1)
+        started.set()
+        await release.wait()
+        return _fake_read_results(actions)
+
+    monkeypatch.setattr("services.accounts.profile_read.execute_read_many", gated)
+
+
+@pytest.mark.asyncio
+async def test_invalidate_mid_flight_prevents_stale_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A fetch that started BEFORE a mutation must NOT re-populate the cache.
+
+    Regression (cache race): the fetch is seconds long; a mutation +
+    ``invalidate_account_profile_cache`` landing mid-flight used to be
+    overwritten when the in-flight fetch completed and stored its
+    pre-mutation snapshot — pinning the dialog to dead ids for a full TTL.
+    """
+    calls: list[int] = []
+    started = asyncio.Event()
+    release = asyncio.Event()
+    _gated_execute_read_many(monkeypatch, calls, started, release)
+
+    task = asyncio.create_task(fetch_live_account_profile("acc-race"))
+    await started.wait()
+    # Mutation lands while the fetch is still in flight.
+    invalidate_account_profile_cache("acc-race")
+    release.set()
+    snapshot = await task
+    assert snapshot.error is None
+
+    # The pre-mutation snapshot must NOT have been cached: the next open
+    # re-fetches instead of serving stale state until the TTL lapses.
+    await fetch_live_account_profile("acc-race")
+    assert len(calls) == 2, "stale in-flight snapshot must not survive invalidation"
+
+
+@pytest.mark.asyncio
+async def test_global_invalidate_mid_flight_prevents_stale_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The account_id=None (clear-everything) form must also stop mid-flight stores."""
+    calls: list[int] = []
+    started = asyncio.Event()
+    release = asyncio.Event()
+    _gated_execute_read_many(monkeypatch, calls, started, release)
+
+    task = asyncio.create_task(fetch_live_account_profile("acc-race-all"))
+    await started.wait()
+    invalidate_account_profile_cache()
+    release.set()
+    await task
+
+    await fetch_live_account_profile("acc-race-all")
+    assert len(calls) == 2, "global invalidation must not be overwritten mid-flight"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_fetches_share_single_flight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Concurrent cold fetches coalesce into ONE gateway round-trip.
+
+    Modal open + N cold thumb requests used to fire N+1 full 5-action
+    Telegram fetches in parallel (stampede).
+    """
+    calls: list[int] = []
+    started = asyncio.Event()
+    release = asyncio.Event()
+    _gated_execute_read_many(monkeypatch, calls, started, release)
+
+    tasks = [asyncio.create_task(fetch_live_account_profile("acc-flight")) for _ in range(3)]
+    await started.wait()
+    # Let the remaining callers reach the in-flight join before releasing.
+    await asyncio.sleep(0)
+    release.set()
+    snapshots = await asyncio.gather(*tasks)
+
+    assert len(calls) == 1, "concurrent callers must share the in-flight fetch"
+    assert all(snapshot is snapshots[0] for snapshot in snapshots)
 
 
 @pytest.mark.asyncio

@@ -16,16 +16,22 @@ import {
   assignCampaignAccount,
   assignProxy,
   checkAccount,
+  checkAccountChannelUsername,
   checkCampaignChannelBans,
   checkProxy,
   clearLogs,
   clearNeurocommentListener,
   countCampaignChallengeOutcomes,
+  createAccountChannel,
   createCampaign,
   createProxy,
   deleteAccount,
+  deleteAccountChannel,
+  deleteAccountChannelPost,
   deleteCampaign,
   deleteProxy,
+  editAccountChannelPost,
+  getAccountChannel,
   getAccountProfileSnapshot,
   getHealth,
   getMe,
@@ -37,6 +43,8 @@ import {
   importAccountSession,
   importAccountTdata,
   linkCampaignChannel,
+  listAccountChannelPosts,
+  listAccountChannels,
   listAccounts,
   listCampaignChallenges,
   listCampaigns,
@@ -54,6 +62,7 @@ import {
   postAccountStory,
   probeProxy,
   promoteToNeurocomment,
+  publishAccountChannelPost,
   removeAccountMusic,
   removeAccountPhoto,
   removeAccountStory,
@@ -63,6 +72,7 @@ import {
   requestLoginCode,
   resetAccountSession,
   retryChallenge,
+  setAccountChannelPhoto,
   setAccountPhoto,
   setAccountPhotoMain,
   setAccountStoryPinned,
@@ -79,6 +89,7 @@ import {
   submitLoginCode,
   unassignProxy,
   unpromoteFromNeurocomment,
+  updateAccountChannel,
   updateAccountProfile,
   updateCampaignPrompt,
   updateNeurocommentSettings,
@@ -100,6 +111,9 @@ import type {
   AssignProxyData,
   AssignProxyError,
   AssignProxyResponse,
+  CheckAccountChannelUsernameData,
+  CheckAccountChannelUsernameError,
+  CheckAccountChannelUsernameResponse,
   CheckAccountData,
   CheckAccountError,
   CheckAccountResponse,
@@ -118,12 +132,21 @@ import type {
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesError,
   CountCampaignChallengeOutcomesResponse,
+  CreateAccountChannelData,
+  CreateAccountChannelError,
+  CreateAccountChannelResponse,
   CreateCampaignData,
   CreateCampaignError,
   CreateCampaignResponse,
   CreateProxyData,
   CreateProxyError,
   CreateProxyResponse,
+  DeleteAccountChannelData,
+  DeleteAccountChannelError,
+  DeleteAccountChannelPostData,
+  DeleteAccountChannelPostError,
+  DeleteAccountChannelPostResponse,
+  DeleteAccountChannelResponse,
   DeleteAccountData,
   DeleteAccountError,
   DeleteAccountResponse,
@@ -133,6 +156,12 @@ import type {
   DeleteProxyData,
   DeleteProxyError,
   DeleteProxyResponse,
+  EditAccountChannelPostData,
+  EditAccountChannelPostError,
+  EditAccountChannelPostResponse,
+  GetAccountChannelData,
+  GetAccountChannelError,
+  GetAccountChannelResponse,
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotError,
   GetAccountProfileSnapshotResponse,
@@ -165,6 +194,12 @@ import type {
   LinkCampaignChannelData,
   LinkCampaignChannelError,
   LinkCampaignChannelResponse,
+  ListAccountChannelPostsData,
+  ListAccountChannelPostsError,
+  ListAccountChannelPostsResponse,
+  ListAccountChannelsData,
+  ListAccountChannelsError,
+  ListAccountChannelsResponse,
   ListAccountsData,
   ListAccountsError,
   ListAccountsResponse,
@@ -213,6 +248,9 @@ import type {
   PromoteToNeurocommentData,
   PromoteToNeurocommentError,
   PromoteToNeurocommentResponse,
+  PublishAccountChannelPostData,
+  PublishAccountChannelPostError,
+  PublishAccountChannelPostResponse,
   RemoveAccountMusicData,
   RemoveAccountMusicError,
   RemoveAccountMusicResponse,
@@ -240,6 +278,9 @@ import type {
   RetryChallengeData,
   RetryChallengeError,
   RetryChallengeResponse,
+  SetAccountChannelPhotoData,
+  SetAccountChannelPhotoError,
+  SetAccountChannelPhotoResponse,
   SetAccountPhotoData,
   SetAccountPhotoError,
   SetAccountPhotoMainData,
@@ -288,6 +329,9 @@ import type {
   UnpromoteFromNeurocommentData,
   UnpromoteFromNeurocommentError,
   UnpromoteFromNeurocommentResponse,
+  UpdateAccountChannelData,
+  UpdateAccountChannelError,
+  UpdateAccountChannelResponse,
   UpdateAccountProfileData,
   UpdateAccountProfileError,
   UpdateAccountProfileResponse,
@@ -1088,6 +1132,346 @@ export const setAccountPhotoMainMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountPhotoMain({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listAccountChannelsQueryKey = (options: Options<ListAccountChannelsData>) =>
+  createQueryKey('listAccountChannels', options);
+
+/**
+ * List Account Channels
+ */
+export const listAccountChannelsOptions = (options: Options<ListAccountChannelsData>) =>
+  queryOptions<
+    ListAccountChannelsResponse,
+    ListAccountChannelsError,
+    ListAccountChannelsResponse,
+    ReturnType<typeof listAccountChannelsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listAccountChannels({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listAccountChannelsQueryKey(options),
+  });
+
+/**
+ * Create Account Channel
+ */
+export const createAccountChannelMutation = (
+  options?: Partial<Options<CreateAccountChannelData>>,
+): UseMutationOptions<
+  CreateAccountChannelResponse,
+  CreateAccountChannelError,
+  Options<CreateAccountChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    CreateAccountChannelResponse,
+    CreateAccountChannelError,
+    Options<CreateAccountChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await createAccountChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const checkAccountChannelUsernameQueryKey = (
+  options: Options<CheckAccountChannelUsernameData>,
+) => createQueryKey('checkAccountChannelUsername', options);
+
+/**
+ * Check Account Channel Username
+ */
+export const checkAccountChannelUsernameOptions = (
+  options: Options<CheckAccountChannelUsernameData>,
+) =>
+  queryOptions<
+    CheckAccountChannelUsernameResponse,
+    CheckAccountChannelUsernameError,
+    CheckAccountChannelUsernameResponse,
+    ReturnType<typeof checkAccountChannelUsernameQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await checkAccountChannelUsername({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: checkAccountChannelUsernameQueryKey(options),
+  });
+
+export const getAccountChannelQueryKey = (options: Options<GetAccountChannelData>) =>
+  createQueryKey('getAccountChannel', options);
+
+/**
+ * Get Account Channel
+ */
+export const getAccountChannelOptions = (options: Options<GetAccountChannelData>) =>
+  queryOptions<
+    GetAccountChannelResponse,
+    GetAccountChannelError,
+    GetAccountChannelResponse,
+    ReturnType<typeof getAccountChannelQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountChannel({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountChannelQueryKey(options),
+  });
+
+/**
+ * Update Account Channel
+ */
+export const updateAccountChannelMutation = (
+  options?: Partial<Options<UpdateAccountChannelData>>,
+): UseMutationOptions<
+  UpdateAccountChannelResponse,
+  UpdateAccountChannelError,
+  Options<UpdateAccountChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    UpdateAccountChannelResponse,
+    UpdateAccountChannelError,
+    Options<UpdateAccountChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await updateAccountChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set Account Channel Photo
+ */
+export const setAccountChannelPhotoMutation = (
+  options?: Partial<Options<SetAccountChannelPhotoData>>,
+): UseMutationOptions<
+  SetAccountChannelPhotoResponse,
+  SetAccountChannelPhotoError,
+  Options<SetAccountChannelPhotoData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountChannelPhotoResponse,
+    SetAccountChannelPhotoError,
+    Options<SetAccountChannelPhotoData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountChannelPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Account Channel
+ */
+export const deleteAccountChannelMutation = (
+  options?: Partial<Options<DeleteAccountChannelData>>,
+): UseMutationOptions<
+  DeleteAccountChannelResponse,
+  DeleteAccountChannelError,
+  Options<DeleteAccountChannelData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteAccountChannelResponse,
+    DeleteAccountChannelError,
+    Options<DeleteAccountChannelData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteAccountChannel({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const listAccountChannelPostsQueryKey = (options: Options<ListAccountChannelPostsData>) =>
+  createQueryKey('listAccountChannelPosts', options);
+
+/**
+ * List Account Channel Posts
+ */
+export const listAccountChannelPostsOptions = (options: Options<ListAccountChannelPostsData>) =>
+  queryOptions<
+    ListAccountChannelPostsResponse,
+    ListAccountChannelPostsError,
+    ListAccountChannelPostsResponse,
+    ReturnType<typeof listAccountChannelPostsQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await listAccountChannelPosts({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: listAccountChannelPostsQueryKey(options),
+  });
+
+export const listAccountChannelPostsInfiniteQueryKey = (
+  options: Options<ListAccountChannelPostsData>,
+): QueryKey<Options<ListAccountChannelPostsData>> =>
+  createQueryKey('listAccountChannelPosts', options, true);
+
+/**
+ * List Account Channel Posts
+ */
+export const listAccountChannelPostsInfiniteOptions = (
+  options: Options<ListAccountChannelPostsData>,
+) =>
+  infiniteQueryOptions<
+    ListAccountChannelPostsResponse,
+    ListAccountChannelPostsError,
+    InfiniteData<ListAccountChannelPostsResponse>,
+    QueryKey<Options<ListAccountChannelPostsData>>,
+    | string
+    | null
+    | Pick<QueryKey<Options<ListAccountChannelPostsData>>[0], 'body' | 'headers' | 'path' | 'query'>
+  >(
+    // @ts-ignore
+    {
+      queryFn: async ({ pageParam, queryKey, signal }) => {
+        // @ts-ignore
+        const page: Pick<
+          QueryKey<Options<ListAccountChannelPostsData>>[0],
+          'body' | 'headers' | 'path' | 'query'
+        > =
+          typeof pageParam === 'object'
+            ? pageParam
+            : {
+                query: {
+                  cursor: pageParam,
+                },
+              };
+        const params = createInfiniteParams(queryKey, page);
+        const { data } = await listAccountChannelPosts({
+          ...options,
+          ...params,
+          signal,
+          throwOnError: true,
+        });
+        return data;
+      },
+      queryKey: listAccountChannelPostsInfiniteQueryKey(options),
+    },
+  );
+
+/**
+ * Publish Account Channel Post
+ */
+export const publishAccountChannelPostMutation = (
+  options?: Partial<Options<PublishAccountChannelPostData>>,
+): UseMutationOptions<
+  PublishAccountChannelPostResponse,
+  PublishAccountChannelPostError,
+  Options<PublishAccountChannelPostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    PublishAccountChannelPostResponse,
+    PublishAccountChannelPostError,
+    Options<PublishAccountChannelPostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await publishAccountChannelPost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Edit Account Channel Post
+ */
+export const editAccountChannelPostMutation = (
+  options?: Partial<Options<EditAccountChannelPostData>>,
+): UseMutationOptions<
+  EditAccountChannelPostResponse,
+  EditAccountChannelPostError,
+  Options<EditAccountChannelPostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    EditAccountChannelPostResponse,
+    EditAccountChannelPostError,
+    Options<EditAccountChannelPostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await editAccountChannelPost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Delete Account Channel Post
+ */
+export const deleteAccountChannelPostMutation = (
+  options?: Partial<Options<DeleteAccountChannelPostData>>,
+): UseMutationOptions<
+  DeleteAccountChannelPostResponse,
+  DeleteAccountChannelPostError,
+  Options<DeleteAccountChannelPostData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    DeleteAccountChannelPostResponse,
+    DeleteAccountChannelPostError,
+    Options<DeleteAccountChannelPostData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await deleteAccountChannelPost({
         ...options,
         ...fnOptions,
         throwOnError: true,

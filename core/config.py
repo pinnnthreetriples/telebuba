@@ -185,7 +185,15 @@ class ProfileMediaSettings(BaseSettings):
     photo_max_bytes: int = Field(default=10_000_000, ge=1)
     story_image_max_bytes: int = Field(default=10_000_000, ge=1)
     story_video_max_bytes: int = Field(default=100_000_000, ge=1)
+    # Multi-photo "collage" stories: hard cap on how many photos stitch into one
+    # composite, and the gap (px) drawn between cells on the 1080x1920 canvas.
+    story_collage_max_images: int = Field(default=6, ge=2, le=6)
+    story_collage_gap_px: int = Field(default=8, ge=0)
     music_max_bytes: int = Field(default=30_000_000, ge=1)
+    # Concurrent thumbnail downloads per read batch (photo history / stories).
+    # Unbounded gather over up to 100 downloads hammered the DC in parallel and
+    # tripped flood limits; 4 keeps the modal open fast without the stampede.
+    thumb_concurrency: int = Field(default=4, ge=1)
     # .session files = effective credentials. Cap to deter accidental large uploads.
     session_max_bytes: int = Field(default=5_000_000, ge=1)
     # How long a live-fetched profile snapshot is reused before the next
@@ -212,6 +220,23 @@ class ProfileMediaSettings(BaseSettings):
     thumb_cache_max_age_seconds: int = Field(default=3600, ge=0)
 
 
+class ChannelsSettings(BaseSettings):
+    model_config = SettingsConfigDict(env_prefix="CHANNELS__", extra="ignore")
+
+    avatar_max_bytes: int = Field(default=10_000_000, ge=1)
+    post_photo_max_bytes: int = Field(default=10_000_000, ge=1)
+    post_video_max_bytes: int = Field(default=100_000_000, ge=1)
+    # Default page size for the channel-posts list endpoint.
+    posts_page_limit: int = Field(default=20, ge=1, le=100)
+    # Max own channels returned by the list endpoint (ceiling: the
+    # ListOwnChannels action's le=200).
+    list_limit: int = Field(default=100, ge=1, le=200)
+    # How many dialogs to scan when discovering the account's own channels —
+    # owned channels are found by filtering the dialog list (creator+broadcast),
+    # so the scan depth bounds how far down an old channel can still be found.
+    dialogs_scan_limit: int = Field(default=500, ge=1)
+
+
 class LoggingSettings(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="LOGGING__", extra="ignore")
 
@@ -231,6 +256,7 @@ class Settings(BaseSettings):
     db: DbSettings = Field(default_factory=DbSettings)
     proxy: ProxySettings = Field(default_factory=ProxySettings)
     profile_media: ProfileMediaSettings = Field(default_factory=ProfileMediaSettings)
+    channels: ChannelsSettings = Field(default_factory=ChannelsSettings)
     logging: LoggingSettings = Field(default_factory=LoggingSettings)
     warming: WarmingSettings = Field(default_factory=WarmingSettings)
     gemini: GeminiSettings = Field(default_factory=GeminiSettings)

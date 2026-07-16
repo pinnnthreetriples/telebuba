@@ -21,7 +21,7 @@ edges:
     condition: when adding a backend endpoint
   - target: patterns/add-frontend-slice.md
     condition: when adding a frontend screen/widget/entity
-last_updated: 2026-06-28
+last_updated: 2026-07-13
 ---
 
 # Conventions
@@ -101,6 +101,10 @@ Each rule states the rule, then a one-line **Why** where it is not obvious.
     `schemas`, `services`.
 - Adding a `filterwarnings` ignore requires a one-line justification comment naming the
   upstream library and why it cannot be fixed at the source. Blanket ignores are forbidden.
+- Test source files are capped at **700 lines**. A larger file must be split by the
+  production module or behaviour it exercises; moving bulk into an oversized test helper
+  is not an acceptable workaround. The architecture gate enforces this for backend tests,
+  their helpers/fixtures, and frontend `*.test.ts(x)` files.
 - **Frontend** has its own test floor (Vitest ≥ 80%) — see `context/frontend.md`.
 
 ### 8. Async & Type Safety

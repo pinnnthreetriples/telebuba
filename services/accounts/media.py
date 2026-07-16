@@ -21,12 +21,13 @@ from schemas.telegram_actions import (
     SetProfilePhoto,
     ToggleStoryPinned,
 )
-from services.accounts._result import raise_for_result
+from services.accounts._result import AccountActionError, raise_for_result
 from services.accounts._uploads import (
     _PROFILE_MUSIC_SUFFIXES,
     _PROFILE_PHOTO_SUFFIXES,
     _STORY_IMAGE_SUFFIXES,
     _STORY_VIDEO_SUFFIXES,
+    _validate_content,
     _validate_upload,
 )
 from services.accounts.profile_read import invalidate_account_profile_cache
@@ -68,8 +69,11 @@ async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionRe
         data.account_id,
         SetProfilePhoto(filename=data.filename, content=data.content),
     )
-    raise_for_result(result)
+    # Every mutation invalidates BEFORE raising on failure (the #249 pattern,
+    # see set_account_main_profile_photo): a failed action can still have
+    # touched server state, and a kept-stale snapshot keeps offering dead ids.
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_profile_photo_updated",
@@ -95,6 +99,24 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
         allowed_suffixes=allowed_suffixes,
         label=f"story {data.media_kind}",
     )
+    if data.extra_images:
+        # Collage: only images can carry extra photos, and the whole set must fit
+        # the count window. Codes are locale-neutral (non-negotiable #12).
+        if data.media_kind != "image":
+            code = "story_collage_requires_image"
+            raise AccountActionError(code)
+        for extra in data.extra_images:
+            # The API layer carries no per-extra filenames (only the primary's),
+            # so a suffix check here would vacuously re-test the primary's name.
+            # Size caps still apply; the collage decode is the real format gate.
+            _validate_content(
+                content=extra,
+                max_bytes=settings.profile_media.story_image_max_bytes,
+                label="story image",
+            )
+        if 1 + len(data.extra_images) > settings.profile_media.story_collage_max_images:
+            code = "story_collage_too_many_images"
+            raise AccountActionError(code)
     result = await execute(
         data.account_id,
         PostStory(
@@ -105,10 +127,12 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
             privacy_preset=data.privacy_preset,
             period_seconds=data.period_seconds,
             protect_content=data.protect_content,
+            extra_images=data.extra_images,
+            collage_layout=data.collage_layout,
         ),
     )
-    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_story_posted",
@@ -117,6 +141,7 @@ async def post_account_story(data: AccountStoryUpload) -> ActionResult:
             "filename": data.filename,
             "media_kind": data.media_kind,
             "privacy_preset": data.privacy_preset,
+            "image_count": 1 + len(data.extra_images),
         },
     )
     return result
@@ -139,8 +164,8 @@ async def add_account_profile_music(data: AccountProfileMusicUpload) -> ActionRe
             performer=data.performer,
         ),
     )
-    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_profile_music_added",
@@ -159,8 +184,8 @@ async def remove_account_profile_music(data: AccountProfileMusicRemove) -> Actio
             file_reference=data.file_reference,
         ),
     )
-    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_profile_music_removed",
@@ -179,8 +204,8 @@ async def remove_account_profile_photo(data: AccountProfilePhotoRemove) -> Actio
             file_reference=data.file_reference,
         ),
     )
-    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_profile_photo_removed",
@@ -199,8 +224,11 @@ async def set_account_main_profile_photo(data: AccountProfilePhotoSetMain) -> Ac
             file_reference=data.file_reference,
         ),
     )
-    raise_for_result(result)
+    # Invalidate BEFORE raising on failure: a failed promote can still have
+    # touched server state, and a kept-stale snapshot makes the operator
+    # re-click photo ids that no longer exist (log-proven 2026-07-13 18:11:39).
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_profile_photo_set_main",
@@ -212,8 +240,8 @@ async def set_account_main_profile_photo(data: AccountProfilePhotoSetMain) -> Ac
 
 async def remove_account_story(data: AccountStoryRemove) -> ActionResult:
     result = await execute(data.account_id, RemoveStory(story_id=data.story_id))
-    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_story_removed",
@@ -228,8 +256,8 @@ async def set_account_story_pinned(data: AccountStoryPin) -> ActionResult:
         data.account_id,
         ToggleStoryPinned(story_id=data.story_id, pinned=data.pinned),
     )
-    raise_for_result(result)
     invalidate_account_profile_cache(data.account_id)
+    raise_for_result(result)
     await log_event(
         "INFO",
         "account_story_pinned",

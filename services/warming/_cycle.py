@@ -27,6 +27,7 @@ from services.warming._chat import _run_chat_step
 from services.warming._fleet import _account_channel_affinity, _affinity_epoch, _maybe_explore
 from services.warming._stories import maybe_watch_stories
 from services.warming.pacing import (
+    _FAILURE_STATUSES,
     _HALT_STATUSES,
     _WAIT_STATUSES,
     _account_age_hours,
@@ -118,7 +119,7 @@ async def _read_and_react(  # noqa: PLR0913
     out.attempts += 1
     if read_result.status == "ok":
         out.reads = 1
-    elif read_result.status == "failed":
+    elif read_result.status in _FAILURE_STATUSES:
         out.failures += 1
     elif read_result.status in _HALT_STATUSES:
         out.flood = read_result
@@ -148,7 +149,7 @@ async def _read_and_react(  # noqa: PLR0913
         # message_id — don't count it as a reaction the board never actually placed.
         if react_result.status == "ok" and react_result.message_id is not None:
             out.reactions = 1
-        elif react_result.status == "failed":
+        elif react_result.status in _FAILURE_STATUSES:
             out.failures += 1
     elif can_react and reactions_enabled:
         # We could have reacted, but the persona's reaction dice missed this
@@ -201,7 +202,7 @@ def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str)
         return False
     tally.last_failed_action = "join"
     tally.last_failed_channel = channel
-    if result.status == "failed":
+    if result.status in _FAILURE_STATUSES:
         tally.failures += 1
         return False
     if result.status == "peer_flood":

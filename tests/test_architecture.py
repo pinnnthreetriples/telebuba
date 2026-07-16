@@ -24,6 +24,7 @@ import pytest
 from core.config import Settings, settings
 
 _ROOT = Path(__file__).resolve().parent.parent
+_TEST_FILE_MAX_LINES = 700
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -193,3 +194,21 @@ def test_subpackage_modules_are_checked(layer: str, subpath: str) -> None:
     subpkg = (_ROOT / layer / subpath).resolve()
     reached = [p for p in _python_modules(layer) if p.resolve().is_relative_to(subpkg)]
     assert reached, f"{layer}/{subpath} submodules are not being checked"
+
+
+def test_test_sources_stay_within_the_line_limit() -> None:
+    """Keep test modules local: files over 700 lines must split by behaviour."""
+    backend = [path for path in (_ROOT / "tests").rglob("*.py") if path.name != "__init__.py"]
+    frontend_root = _ROOT / "frontend" / "src"
+    frontend = [
+        *frontend_root.rglob("*.test.ts"),
+        *frontend_root.rglob("*.test.tsx"),
+    ]
+    oversized = {
+        path.relative_to(_ROOT).as_posix(): len(path.read_text(encoding="utf-8").splitlines())
+        for path in [*backend, *frontend]
+        if len(path.read_text(encoding="utf-8").splitlines()) > _TEST_FILE_MAX_LINES
+    }
+    assert oversized == {}, (
+        f"test source files must not exceed {_TEST_FILE_MAX_LINES} lines; split: {oversized}"
+    )

@@ -23,6 +23,9 @@ import type {
   AssignProxyData,
   AssignProxyErrors,
   AssignProxyResponses,
+  CheckAccountChannelUsernameData,
+  CheckAccountChannelUsernameErrors,
+  CheckAccountChannelUsernameResponses,
   CheckAccountData,
   CheckAccountErrors,
   CheckAccountResponses,
@@ -41,12 +44,21 @@ import type {
   CountCampaignChallengeOutcomesData,
   CountCampaignChallengeOutcomesErrors,
   CountCampaignChallengeOutcomesResponses,
+  CreateAccountChannelData,
+  CreateAccountChannelErrors,
+  CreateAccountChannelResponses,
   CreateCampaignData,
   CreateCampaignErrors,
   CreateCampaignResponses,
   CreateProxyData,
   CreateProxyErrors,
   CreateProxyResponses,
+  DeleteAccountChannelData,
+  DeleteAccountChannelErrors,
+  DeleteAccountChannelPostData,
+  DeleteAccountChannelPostErrors,
+  DeleteAccountChannelPostResponses,
+  DeleteAccountChannelResponses,
   DeleteAccountData,
   DeleteAccountErrors,
   DeleteAccountResponses,
@@ -56,6 +68,12 @@ import type {
   DeleteProxyData,
   DeleteProxyErrors,
   DeleteProxyResponses,
+  EditAccountChannelPostData,
+  EditAccountChannelPostErrors,
+  EditAccountChannelPostResponses,
+  GetAccountChannelData,
+  GetAccountChannelErrors,
+  GetAccountChannelResponses,
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
@@ -88,6 +106,12 @@ import type {
   LinkCampaignChannelData,
   LinkCampaignChannelErrors,
   LinkCampaignChannelResponses,
+  ListAccountChannelPostsData,
+  ListAccountChannelPostsErrors,
+  ListAccountChannelPostsResponses,
+  ListAccountChannelsData,
+  ListAccountChannelsErrors,
+  ListAccountChannelsResponses,
   ListAccountsData,
   ListAccountsErrors,
   ListAccountsResponses,
@@ -136,6 +160,9 @@ import type {
   PromoteToNeurocommentData,
   PromoteToNeurocommentErrors,
   PromoteToNeurocommentResponses,
+  PublishAccountChannelPostData,
+  PublishAccountChannelPostErrors,
+  PublishAccountChannelPostResponses,
   RemoveAccountMusicData,
   RemoveAccountMusicErrors,
   RemoveAccountMusicResponses,
@@ -163,6 +190,9 @@ import type {
   RetryChallengeData,
   RetryChallengeErrors,
   RetryChallengeResponses,
+  SetAccountChannelPhotoData,
+  SetAccountChannelPhotoErrors,
+  SetAccountChannelPhotoResponses,
   SetAccountPhotoData,
   SetAccountPhotoErrors,
   SetAccountPhotoMainData,
@@ -211,6 +241,9 @@ import type {
   UnpromoteFromNeurocommentData,
   UnpromoteFromNeurocommentErrors,
   UnpromoteFromNeurocommentResponses,
+  UpdateAccountChannelData,
+  UpdateAccountChannelErrors,
+  UpdateAccountChannelResponses,
   UpdateAccountProfileData,
   UpdateAccountProfileErrors,
   UpdateAccountProfileResponses,
@@ -645,6 +678,176 @@ export const setAccountPhotoMain = <ThrowOnError extends boolean = false>(
       'Content-Type': 'application/json',
       ...options.headers,
     },
+  });
+
+/**
+ * List Account Channels
+ */
+export const listAccountChannels = <ThrowOnError extends boolean = false>(
+  options: Options<ListAccountChannelsData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    ListAccountChannelsResponses,
+    ListAccountChannelsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/channels', ...options });
+
+/**
+ * Create Account Channel
+ */
+export const createAccountChannel = <ThrowOnError extends boolean = false>(
+  options: Options<CreateAccountChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    CreateAccountChannelResponses,
+    CreateAccountChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/channels',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Check Account Channel Username
+ */
+export const checkAccountChannelUsername = <ThrowOnError extends boolean = false>(
+  options: Options<CheckAccountChannelUsernameData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    CheckAccountChannelUsernameResponses,
+    CheckAccountChannelUsernameErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/channel-username-check', ...options });
+
+/**
+ * Get Account Channel
+ */
+export const getAccountChannel = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<GetAccountChannelResponses, GetAccountChannelErrors, ThrowOnError>(
+    { url: '/api/v1/accounts/{account_id}/channels/{channel_id}', ...options },
+  );
+
+/**
+ * Update Account Channel
+ */
+export const updateAccountChannel = <ThrowOnError extends boolean = false>(
+  options: Options<UpdateAccountChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    UpdateAccountChannelResponses,
+    UpdateAccountChannelErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/channels/{channel_id}/update',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Set Account Channel Photo
+ */
+export const setAccountChannelPhoto = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountChannelPhotoData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    SetAccountChannelPhotoResponses,
+    SetAccountChannelPhotoErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/channels/{channel_id}/photo',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Account Channel
+ */
+export const deleteAccountChannel = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteAccountChannelData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    DeleteAccountChannelResponses,
+    DeleteAccountChannelErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/channels/{channel_id}/delete', ...options });
+
+/**
+ * List Account Channel Posts
+ */
+export const listAccountChannelPosts = <ThrowOnError extends boolean = false>(
+  options: Options<ListAccountChannelPostsData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    ListAccountChannelPostsResponses,
+    ListAccountChannelPostsErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts', ...options });
+
+/**
+ * Publish Account Channel Post
+ */
+export const publishAccountChannelPost = <ThrowOnError extends boolean = false>(
+  options: Options<PublishAccountChannelPostData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    PublishAccountChannelPostResponses,
+    PublishAccountChannelPostErrors,
+    ThrowOnError
+  >({
+    ...formDataBodySerializer,
+    url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts',
+    ...options,
+    headers: {
+      'Content-Type': null,
+      ...options.headers,
+    },
+  });
+
+/**
+ * Edit Account Channel Post
+ */
+export const editAccountChannelPost = <ThrowOnError extends boolean = false>(
+  options: Options<EditAccountChannelPostData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    EditAccountChannelPostResponses,
+    EditAccountChannelPostErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts/{post_id}/edit',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Delete Account Channel Post
+ */
+export const deleteAccountChannelPost = <ThrowOnError extends boolean = false>(
+  options: Options<DeleteAccountChannelPostData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    DeleteAccountChannelPostResponses,
+    DeleteAccountChannelPostErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts/{post_id}/delete',
+    ...options,
   });
 
 /**

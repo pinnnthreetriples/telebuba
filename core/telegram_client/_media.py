@@ -8,13 +8,11 @@ from contextlib import suppress
 from io import BytesIO
 from typing import TYPE_CHECKING
 
-from PIL import Image, ImageFilter, UnidentifiedImageError
 from telethon import utils
 from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import (
     DeletePhotosRequest,
     GetUserPhotosRequest,
-    UpdateProfilePhotoRequest,
     UploadProfilePhotoRequest,
 )
 from telethon.tl.functions.stories import (
@@ -23,6 +21,7 @@ from telethon.tl.functions.stories import (
     SendStoryRequest,
     TogglePinnedRequest,
 )
+from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
     DocumentAttributeVideo,
@@ -38,6 +37,12 @@ from telethon.tl.types import (
 )
 
 from core.config import settings
+from core.logging import log_event
+from core.telegram_client._story_image import (
+    _compose_story_collage,
+    _default_collage_layout,
+    _normalize_story_image_for_telegram,
+)
 from core.telegram_client._video import normalize_story_video_for_telegram
 from schemas.telegram_actions import (
     AddProfileMusic,
@@ -55,20 +60,6 @@ if TYPE_CHECKING:
     from telethon.tl.types import TypeInputMedia, TypeInputPrivacyRule
 
     from schemas.telegram_actions import TelegramAction
-
-
-class StoryImageNormalisationError(ValueError):
-    """Raised when a story image can't be decoded onto the 1080x1920 canvas.
-
-    Mirrors :class:`core.telegram_client._video.StoryVideoNormalisationError`:
-    ``str(exc)`` is the stable, locale-neutral code — it survives the
-    ``execute`` → ``ActionResult.error_message`` → API error-envelope path as a
-    code the SPA translates, never Russian prose (non-negotiable #12).
-    """
-
-    def __init__(self) -> None:
-        self.code = "story_image_invalid"
-        super().__init__(self.code)
 
 
 async def _dispatch_profile_media_action(
@@ -108,7 +99,7 @@ async def _set_profile_photo(client: TelegramClient, filename: str, content: byt
 async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
     peer = await client.get_input_entity("me")
     await client(CanSendStoryRequest(peer=peer))
-    media = await _story_media(client, action.filename, action.content, action.media_kind)
+    media = await _story_media(client, action)
     result = await client(
         SendStoryRequest(
             peer=peer,
@@ -119,24 +110,49 @@ async def _post_story(client: TelegramClient, action: PostStory) -> int | None:
             noforwards=action.protect_content,
         ),
     )
-    story_id = getattr(result, "id", None)
-    return story_id if isinstance(story_id, int) else None
+    return _story_id_from_updates(result)
+
+
+def _story_id_from_updates(result: object) -> int | None:
+    """Pull the new story's id out of Telethon's ``Updates`` container.
+
+    ``stories.sendStory`` returns an ``Updates`` (which has no ``.id`` of its
+    own — a bare ``getattr(result, "id")`` always came back ``None``); the
+    minted id rides inside ``result.updates`` as an ``UpdateStory`` carrying
+    ``.story.id``. Guarded iteration: first update with a story id wins.
+    """
+    updates = getattr(result, "updates", None)
+    if not isinstance(updates, (list, tuple)):
+        return None
+    for update in updates:
+        story_id = getattr(getattr(update, "story", None), "id", None)
+        if isinstance(story_id, int):
+            return story_id
+    return None
 
 
 async def _story_media(
     client: TelegramClient,
-    filename: str,
-    content: bytes,
-    media_kind: str,
+    action: PostStory,
 ) -> TypeInputMedia:
-    if media_kind == "image":
+    if action.media_kind == "image":
         # Telegram rejects story photos that don't match its narrow aspect
         # window with PHOTO_INVALID_DIMENSIONS. Telethon's send_file resize
         # only enforces the chat-photo 1280 px cap, and we go through the
         # lower-level upload_file path that skips it entirely — so we have
         # to normalise to 1080x1920 ourselves before the upload.
-        content = await asyncio.to_thread(_normalize_story_image_for_telegram, content)
-        uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
+        if action.extra_images:
+            # Multi-photo collage: Telegram has no native multi-photo story API,
+            # so we stitch every image into ONE composite photo and send that.
+            images = [action.content, *action.extra_images]
+            layout = action.collage_layout or _default_collage_layout(len(images))
+            content = await asyncio.to_thread(_compose_story_collage, images, layout)
+        else:
+            content = await asyncio.to_thread(_normalize_story_image_for_telegram, action.content)
+        uploaded = await client.upload_file(
+            _named_bytes(action.filename, content),
+            file_name=action.filename,
+        )
         return InputMediaUploadedPhoto(file=uploaded)
     # Video story — re-encode through ffmpeg to H.264/AAC MP4 at 720x1280
     # (matches the Android client) and pass an explicit JPEG thumbnail so
@@ -144,7 +160,7 @@ async def _story_media(
     # supports_streaming flag are both mandatory for stories: missing either
     # makes Telegram treat the upload as a generic document, not a video.
     video_bytes, thumb_bytes, duration, width, height = await normalize_story_video_for_telegram(
-        content
+        action.content
     )
     uploaded_video = await client.upload_file(
         _named_bytes("story.mp4", video_bytes),
@@ -167,69 +183,6 @@ async def _story_media(
             ),
         ],
     )
-
-
-def _normalize_story_image_for_telegram(content: bytes) -> bytes:
-    """Compose a photo onto Telegram's 1080x1920 story canvas (JPEG q90).
-
-    The source is fitted into the canvas without cropping; the empty
-    margins are filled with a heavily-blurred enlarged copy of the same
-    photo, matching how the official Telegram Android client composes
-    stories (StoryEntry.java: ``backgroundFile`` is a blurred upscale of
-    the source). Solid-color letterbox is functionally accepted by the
-    server but looks visibly cheaper than the official UX. Anything
-    outside the 9:16 aspect window gets rejected with
-    ``PHOTO_INVALID_DIMENSIONS``, so this step is required, not optional.
-    """
-    target_width, target_height = 1080, 1920
-    try:
-        with Image.open(BytesIO(content)) as opened:
-            opened.load()
-            source = opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
-        # UnidentifiedImageError = container Pillow can't decode (e.g. HEIC/JXL
-        # renamed to .png); OSError from load() = truncated/corrupt bytes. The
-        # chained cause carries the Pillow reason plus the file's real magic
-        # bytes so the telegram_post_story_failed log shows what the file was.
-        detail = f"{type(exc).__name__}: {exc}; magic={content[:12].hex()}"
-        raise StoryImageNormalisationError from ValueError(detail)
-
-    canvas = _blurred_story_background(source, target_width, target_height)
-    fitted = source.copy()
-    fitted.thumbnail((target_width, target_height), Image.Resampling.LANCZOS)
-    canvas.paste(
-        fitted,
-        (
-            (target_width - fitted.width) // 2,
-            (target_height - fitted.height) // 2,
-        ),
-    )
-    output = BytesIO()
-    canvas.save(output, format="JPEG", quality=90)
-    return output.getvalue()
-
-
-def _blurred_story_background(
-    source: Image.Image,
-    target_width: int,
-    target_height: int,
-) -> Image.Image:
-    """Render the blurred-cover fill that goes behind the fitted source.
-
-    Scale-and-center-crops the source so it covers the full 1080x1920 canvas,
-    then applies a strong Gaussian blur so the edges read as ambient colour
-    rather than a recognisable second copy of the image. Mirrors the
-    official Android client's story background composition.
-    """
-    cover_scale = max(target_width / source.width, target_height / source.height)
-    scaled = source.resize(
-        (int(source.width * cover_scale), int(source.height * cover_scale)),
-        Image.Resampling.LANCZOS,
-    )
-    left = (scaled.width - target_width) // 2
-    top = (scaled.height - target_height) // 2
-    cropped = scaled.crop((left, top, left + target_width, top + target_height))
-    return cropped.filter(ImageFilter.GaussianBlur(radius=50))
 
 
 def _story_privacy_rules(preset: str) -> list[TypeInputPrivacyRule]:
@@ -276,8 +229,13 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
     ``account.saveMusic`` is dual-purpose — passing ``unsave=True`` removes
     the document from the saved list. We reuse it instead of pulling a
     separate ``DeleteSavedMusicRequest`` (which Telethon doesn't ship in 1.43.2).
+
+    The server answers ``False`` for a stale/unknown ``InputDocument`` — a
+    silent no-op that would otherwise be logged as a successful removal while
+    the track stays on the profile. Raising surfaces it instead (mirrors
+    ``_remove_profile_photo``'s deleted-vector check).
     """
-    await client(
+    removed = await client(
         SaveMusicRequest(
             id=InputDocument(
                 id=action.file_id,
@@ -287,6 +245,9 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
             unsave=True,
         ),
     )
+    if not removed:
+        msg = "Telegram did not remove the track (unknown or expired reference)"
+        raise RuntimeError(msg)
 
 
 async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePhoto) -> None:
@@ -319,14 +280,8 @@ async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePho
         raise RuntimeError(msg)
 
 
-async def _resolve_history_photo(client: TelegramClient, photo_id: int) -> InputPhoto | None:
-    """Re-resolve a fresh ``InputPhoto`` (id/access_hash/file_reference) by id.
-
-    A ``file_reference`` from the UI snapshot can be stale — they expire — and a
-    stale reference makes ``updateProfilePhoto`` misbehave. Pull the current
-    history and rebuild the ``InputPhoto`` from live server data, or ``None`` if
-    the id is no longer present.
-    """
+async def _history_photos(client: TelegramClient) -> list[object]:
+    """Fetch the live profile-photo history page (newest first)."""
     result = await client(
         GetUserPhotosRequest(
             user_id=InputUserSelf(),
@@ -335,43 +290,93 @@ async def _resolve_history_photo(client: TelegramClient, photo_id: int) -> Input
             limit=settings.profile_media.set_main_history_limit,
         ),
     )
-    for photo in getattr(result, "photos", []) or []:
+    return list(getattr(result, "photos", []) or [])
+
+
+def _photo_ids(photos: list[object]) -> list[int]:
+    return [int(getattr(photo, "id", 0) or 0) for photo in photos]
+
+
+def _find_history_photo(photos: list[object], photo_id: int) -> object | None:
+    """The raw history ``Photo`` object by id, from live server data.
+
+    A ``file_reference`` from the UI snapshot can be stale — they expire — so
+    the target is always re-resolved from a fresh ``GetUserPhotos`` read;
+    ``None`` if the id is no longer present.
+    """
+    for photo in photos:
         if int(getattr(photo, "id", 0) or 0) == photo_id:
-            return InputPhoto(
-                id=photo_id,
-                access_hash=int(getattr(photo, "access_hash", 0) or 0),
-                file_reference=bytes(getattr(photo, "file_reference", b"") or b""),
-            )
+            return photo
     return None
 
 
+async def _current_avatar_id(client: TelegramClient) -> int | None:
+    """The current avatar's photo id per ``users.getFullUser`` (authoritative)."""
+    full = await client(GetFullUserRequest(InputUserSelf()))
+    photo_id = getattr(getattr(getattr(full, "full_user", None), "profile_photo", None), "id", None)
+    return photo_id if isinstance(photo_id, int) else None
+
+
 async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:
-    """Promote an existing history photo to the current avatar — no duplicate left.
+    """Make a history photo the avatar by RE-UPLOADING its bytes as a new photo.
 
-    Live-confirmed semantics: raw ``photos.updateProfilePhoto`` on a photo
-    already in the account's history does NOT reorder it in place — the server
-    mints a brand-new photo (fresh id) at the front and leaves the original
-    entry behind, so a naive call leaves two identical photos in the history.
+    The official promote (``photos.updateProfilePhoto``) mints a new id that
+    INHERITS the original photo's upload date, so viewers see the new main
+    mid-carousel instead of first, and clients with a cached gallery show the
+    old and new id of the same image side by side until they refetch (live
+    repro 2026-07-15). Re-uploading the same bytes as a NEW photo gives it a
+    fresh date — first slide everywhere, plain "user picked a new avatar"
+    semantics with no id replacement to confuse caches.
 
-    We re-resolve a FRESH ``InputPhoto`` for the target from a live
-    ``GetUserPhotos`` (never trusting the possibly-stale snapshot reference),
-    promote it, then delete the now-redundant original — but ONLY when the
-    server actually minted a new id (``new_id != target``), and we verify that
-    delete like :func:`_remove_profile_photo` does. If a server ever reorders in
-    place (``new_id == target``) we delete nothing, and we never touch any other
-    photo (the previous avatar stays put).
+    The original stays in the history as a visible duplicate; the operator
+    deletes it from the dashboard if unwanted. This action itself deletes
+    NOTHING — an earlier auto-"dedup" here destroyed the unrelated previous
+    main avatar on a live account (debug.log, 2026-07-13); permanent data
+    loss, never again.
+
+    The id flow is still logged before/after (``telegram_set_main_id_flow``)
+    so a live run is verifiable from ``debug.log`` — ``promoted_photo_id`` is
+    the freshly uploaded photo's id and should match the new
+    ``current_avatar_id``.
     """
-    fresh = await _resolve_history_photo(client, action.photo_id)
-    if fresh is None:
+    photos = await _history_photos(client)
+    await log_event(
+        "INFO",
+        "telegram_set_main_id_flow",
+        extra={
+            "phase": "before",
+            "target_photo_id": action.photo_id,
+            "history_ids": _photo_ids(photos),
+            "current_avatar_id": await _current_avatar_id(client),
+        },
+    )
+    target = _find_history_photo(photos, action.photo_id)
+    if target is None:
         msg = "Target profile photo is no longer in the account's history"
         raise RuntimeError(msg)
-    result = await client(UpdateProfilePhotoRequest(id=fresh))
+    # Full-size download (no thumb arg = largest stored size, the same
+    # rendition every viewer sees), then the standard new-avatar upload.
+    data = await client.download_media(target, file=bytes)  # ty: ignore[invalid-argument-type]
+    if not isinstance(data, (bytes, bytearray)) or not data:
+        msg = "Telegram did not return the photo bytes"
+        raise RuntimeError(msg)
+    uploaded = await client.upload_file(
+        _named_bytes("avatar.jpg", bytes(data)),
+        file_name="avatar.jpg",
+    )
+    result = await client(UploadProfilePhotoRequest(file=uploaded))
     new_id = getattr(getattr(result, "photo", None), "id", None)
-    if isinstance(new_id, int) and new_id != action.photo_id:
-        deleted = await client(DeletePhotosRequest(id=[fresh]))
-        if action.photo_id not in (deleted or []):
-            msg = "Telegram did not delete the superseded duplicate photo"
-            raise RuntimeError(msg)
+    await log_event(
+        "INFO",
+        "telegram_set_main_id_flow",
+        extra={
+            "phase": "after",
+            "target_photo_id": action.photo_id,
+            "history_ids": _photo_ids(await _history_photos(client)),
+            "current_avatar_id": await _current_avatar_id(client),
+            "promoted_photo_id": new_id if isinstance(new_id, int) else None,
+        },
+    )
 
 
 async def _remove_story(client: TelegramClient, action: RemoveStory) -> None:

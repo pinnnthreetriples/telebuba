@@ -21,6 +21,7 @@ from telethon.tl.functions.stories import (
 )
 from telethon.tl.types import InputPeerSelf, MessageMediaDocument, MessageMediaPhoto
 
+from core.telegram_client._thumbs import download_thumb_bounded, thumb_limiter
 from schemas.telegram_profile_snapshot import (
     StoryPrivacyPreset,
     TelegramActiveStories,
@@ -49,10 +50,14 @@ async def dispatch_list_pinned_stories(
         GetPinnedStoriesRequest(peer=InputPeerSelf(), offset_id=0, limit=action.limit),
     )
     raw_stories = getattr(result, "stories", []) or []
-    # Download every story's thumbnail concurrently — serial awaits here made
-    # the modal open scale linearly with the number of stories.
+    # Download thumbnails concurrently (serial awaits made the modal open scale
+    # linearly with story count) but bounded — see ``_thumbs``.
+    semaphore, flood_stop = thumb_limiter()
     items = await asyncio.gather(
-        *(_story_thumb(client, story, is_pinned=True) for story in raw_stories),
+        *(
+            _story_thumb(client, story, is_pinned=True, semaphore=semaphore, flood_stop=flood_stop)
+            for story in raw_stories
+        ),
     )
     return TelegramPinnedStories(items=[item for item in items if item is not None])
 
@@ -91,9 +96,16 @@ async def dispatch_list_active_stories(client: TelegramClient) -> TelegramActive
     result = await client(GetPeerStoriesRequest(peer=InputPeerSelf()))
     outer = getattr(result, "stories", None)
     raw_stories = getattr(outer, "stories", []) or []
+    semaphore, flood_stop = thumb_limiter()
     items = await asyncio.gather(
         *(
-            _story_thumb(client, story, is_pinned=bool(getattr(story, "pinned", False)))
+            _story_thumb(
+                client,
+                story,
+                is_pinned=bool(getattr(story, "pinned", False)),
+                semaphore=semaphore,
+                flood_stop=flood_stop,
+            )
             for story in raw_stories
         ),
     )
@@ -105,6 +117,8 @@ async def _story_thumb(
     story: object,
     *,
     is_pinned: bool,
+    semaphore: asyncio.Semaphore,
+    flood_stop: asyncio.Event,
 ) -> TelegramStoryThumb | None:
     """Build a snapshot row from a Telethon ``StoryItem``.
 
@@ -118,7 +132,12 @@ async def _story_thumb(
         story_id=story_id,
         kind=_story_kind(story),
         caption=_optional_str(getattr(story, "caption", None)),
-        thumb_bytes=await _download_story_thumb(client, story),
+        thumb_bytes=await download_thumb_bounded(
+            semaphore,
+            flood_stop,
+            "stories",
+            lambda: _download_story_thumb(client, story),
+        ),
         date_unix=_story_date_unix(story),
         is_pinned=is_pinned,
         is_active=_story_is_active(story),
@@ -220,6 +239,10 @@ async def _download_story_thumb(client: TelegramClient, story: object) -> bytes 
         # ``file=bytes`` (the type) is Telethon's in-memory mode; the stub
         # under-specifies the union so ty needs the override here.
         data = await client.download_media(media, file=bytes, thumb=-1)  # ty: ignore[invalid-argument-type]
+    except errors.FloodWaitError:
+        # Rate limits must reach the batch breaker in ``_thumbs`` — swallowing
+        # them here let sibling downloads keep hammering a flooded connection.
+        raise
     except (errors.RPCError, ValueError, TypeError):
         # Some media kinds reject thumbnail download (privacy-restricted,
         # cache evicted) — the UI shows a placeholder instead of crashing

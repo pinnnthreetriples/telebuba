@@ -23,9 +23,10 @@ import type {
   ProfilePhotoView,
   ProfileStoryView,
 } from '@/shared/api';
-import { ConfirmModal, FieldError, FormField, Modal } from '@/shared/ui';
+import { ConfirmModal, FieldError, FormField, Modal, toastError } from '@/shared/ui';
 
 import { AddStoryModal } from './AddStoryModal';
+import { ChannelsTab } from './ChannelsTab';
 
 // Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
 // bio ≤70, username 5–32 chars of [A-Za-z0-9_] starting with a letter
@@ -45,34 +46,49 @@ const profileSchema = z.object({
   bio: z.string().trim().max(70, 'accounts.profile.errBioMax'),
 });
 
-// The design's profile-edit modal: hero header, a 4-tab segmented header
-// (text / photo / stories / music), per-tab bodies, and a save→saved swap
-// footer. Every tab is wired to /api/v1: Текст persists the profile, and the
-// photo / stories / music tabs render the account's live media (the
-// profile-snapshot view) with real upload + remove.
-type Tab = 'text' | 'photo' | 'stories' | 'music';
+// The design's profile-edit modal: hero header, a 5-tab segmented header
+// (text / photo / stories / music / channels), per-tab bodies, and a
+// save→saved swap footer. Every tab is wired to /api/v1: Текст persists the
+// profile, the photo / stories / music tabs render the account's live media
+// (the profile-snapshot view) with real upload + remove, and the channels tab
+// manages the account's own channels (its own queries — outside the snapshot
+// busy scrim).
+type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels';
 
 const FIELD =
   'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
 const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
 // Fallback tile background when a media item carries no thumbnail.
 const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
+// Client-side mirror of the backend photo gate (services/accounts/_uploads.py
+// suffix allowlist + settings.profile_media.photo_max_bytes default) so a
+// GIF/HEIC/oversized file is rejected up front instead of uploading fully and
+// failing with an untranslated 400.
+const PHOTO_SUFFIXES = ['.jpg', '.jpeg', '.png', '.webp'];
+const PHOTO_MAX_BYTES = 10_000_000;
+
+function isUploadablePhoto(file: File): boolean {
+  const name = file.name.toLowerCase();
+  return file.size <= PHOTO_MAX_BYTES && PHOTO_SUFFIXES.some((suffix) => name.endsWith(suffix));
+}
 
 function DashedAdd({
   ratio,
   label,
   onClick,
   busy = false,
+  disabled = false,
 }: {
   ratio: string;
   label: string;
   onClick: () => void;
   busy?: boolean;
+  disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      disabled={busy}
+      disabled={busy || disabled}
       onClick={onClick}
       style={{ aspectRatio: ratio }}
       className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted disabled:opacity-60"
@@ -135,6 +151,13 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const snapshot = useQuery(snapOpts);
   // «Обновить» outcome: spin while loading, then flash a green ✓ / red ✗.
   const [refreshState, setRefreshState] = useState<'idle' | 'loading' | 'ok' | 'error'>('idle');
+  // The post-action background re-pull is fire-and-forget; this drives the
+  // content-body overlay so a media edit doesn't look frozen while it settles.
+  const [syncing, setSyncing] = useState(false);
+  // A failed background re-pull rejects on the refresh:true query key, which
+  // loadError (watching the plain key) can't see — track it here so the banner
+  // shows instead of silently presenting a pre-mutation grid as current.
+  const [syncError, setSyncError] = useState(false);
   // Re-render every 30s so the "Обновлено N мин назад" label keeps advancing —
   // it's derived from Date.now() and would otherwise freeze on "только что".
   const [, setNowTick] = useState(0);
@@ -154,7 +177,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // A transport failure (snapshot.isError) or a Telegram refusal (200 carrying
   // `error`) must show an explicit error + retry — otherwise the media tabs
   // render empty and read as "this account has no photos/stories/music".
-  const loadError = snapshot.isError || Boolean(snapshot.data?.error);
+  const loadError = snapshot.isError || Boolean(snapshot.data?.error) || syncError;
   // Older Telethon builds lack the saved-music TL methods; the snapshot flags
   // that so the UI shows an "unsupported" note instead of a picker that fails.
   const musicSupported = snapshot.data?.music_supported !== false;
@@ -172,9 +195,18 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // Scoped: this account's snapshot + the accounts table (name/username/avatar
   // show in the list) — not the whole cache.
   const refresh = () => {
-    void forcePull().then((fresh) => {
-      queryClient.setQueryData(snapOpts.queryKey, fresh);
-    });
+    setSyncing(true);
+    void forcePull()
+      .then((fresh) => {
+        queryClient.setQueryData(snapOpts.queryKey, fresh);
+        setSyncError(false);
+      })
+      .catch(() => {
+        setSyncError(true);
+      })
+      .finally(() => {
+        setSyncing(false);
+      });
     void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
   };
   // "Обновлено {только что | N мин назад}" — from the snapshot query's last fetch.
@@ -194,6 +226,19 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
   const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
   const [confirmMusic, setConfirmMusic] = useState<ProfileMusicView | null>(null);
+
+  // A single "media in flight" flag: any photo/story/music write plus the
+  // post-action background sync. Drives the content-body overlay and disables
+  // the media controls. Excludes the text Save (footer has its own spinner).
+  const busy =
+    syncing ||
+    Boolean(photoProgress) ||
+    setMainPhoto.isPending ||
+    removePhoto.isPending ||
+    removeStory.isPending ||
+    setStoryPinned.isPending ||
+    addMusic.isPending ||
+    removeMusic.isPending;
 
   const form = useForm({
     defaultValues: {
@@ -265,6 +310,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     try {
       const fresh = await forcePull();
       queryClient.setQueryData(snapOpts.queryKey, fresh);
+      setSyncError(false);
       seedForm(fresh);
       // A 200 carrying an `error` field means Telegram refused the live pull —
       // that's a failed refresh, not a success.
@@ -305,15 +351,27 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // skipped — the global mutation-error toast reports it — so one bad image
   // doesn't abort the batch. Snapshot refreshes once, after the batch.
   const uploadPhotos = async (files: File[]) => {
-    if (!files.length) return;
-    setPhotoProgress({ done: 0, total: files.length });
-    for (const [index, file] of files.entries()) {
+    // Prefilter by the backend's own suffix/size gate: a file it would 400 is
+    // rejected here with a translated toast instead of uploading fully first.
+    const uploadable: File[] = [];
+    for (const file of files) {
+      if (isUploadablePhoto(file)) {
+        uploadable.push(file);
+      } else {
+        toastError(
+          t('accounts.profile.photoRejected', { name: file.name, mb: PHOTO_MAX_BYTES / 1_000_000 }),
+        );
+      }
+    }
+    if (!uploadable.length) return;
+    setPhotoProgress({ done: 0, total: uploadable.length });
+    for (const [index, file] of uploadable.entries()) {
       try {
         await setPhoto.mutateAsync({ body: { account_id: account.account_id, file } });
       } catch {
         // reported by the global mutation-error toast; keep going
       }
-      setPhotoProgress({ done: index + 1, total: files.length });
+      setPhotoProgress({ done: index + 1, total: uploadable.length });
     }
     setPhotoProgress(null);
     refresh();
@@ -332,7 +390,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     if (!file) return;
     addMusic.mutate(
       { path: { account_id: account.account_id }, body: { file } },
-      { onSuccess: refresh },
+      // Settled, not success: a failure has already invalidated the server-side
+      // snapshot cache, so the grid must re-pull either way or it keeps serving
+      // ids Telegram has since replaced.
+      { onSettled: refresh },
     );
     event.target.value = '';
   };
@@ -442,7 +503,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
           {/* tabs */}
           <div className="flex gap-5 border-b border-[#f0eeeb] px-5">
-            {(['text', 'photo', 'stories', 'music'] as const).map((value) => (
+            {(['text', 'photo', 'stories', 'music', 'channels'] as const).map((value) => (
               <button
                 key={value}
                 type="button"
@@ -456,18 +517,31 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             ))}
           </div>
 
-          {/* Applying indicator: every edit calls refresh(), which re-pulls the
-              snapshot from Telegram in the background. Without this the modal
-              looks frozen during that (often multi-second) fetch. */}
-          <div className="relative h-[2px] overflow-hidden">
-            {snapshot.isFetching && (
-              <span className="tb-indbar absolute top-0 h-full w-[45%] rounded-full bg-primary" />
-            )}
-          </div>
-
           {/* content */}
-          <div className="tb-scroll flex-1 overflow-y-auto p-5">
-            {loadError && (
+          <div className="tb-scroll relative flex-1 overflow-y-auto p-5">
+            {/* Applying overlay: every media edit calls refresh(), which re-pulls
+                the snapshot from Telegram in the background. A greyed scrim with a
+                spinner signals "still working" and blocks input to stop double-
+                submits. It sits inside the overflow container, so `inset-0` pins it
+                to the visible viewport rather than scrolling away. The text tab is
+                excluded — its Save keeps the footer's own spinner/✓ — and so is
+                the channels tab, which runs on its own queries. */}
+            {busy && tab !== 'text' && tab !== 'channels' && (
+              <div
+                role="status"
+                aria-live="polite"
+                aria-label={t('accounts.profile.syncing')}
+                className="absolute inset-0 z-20 flex flex-col items-center justify-center gap-3 bg-black/10 [animation:ovfade_0.2s_ease]"
+              >
+                <span className="tb-spin inline-block h-8 w-8 rounded-full border-[3px] border-line-input border-t-primary" />
+                <span className="text-[12px] font-medium text-ink-muted">
+                  {photoProgress
+                    ? t('accounts.profile.uploadingCount', photoProgress)
+                    : t('accounts.profile.syncing')}
+                </span>
+              </div>
+            )}
+            {loadError && tab !== 'channels' && (
               <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                 <span>{t('accounts.profile.loadError')}</span>
                 <button
@@ -587,7 +661,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       ) : (
                         <button
                           type="button"
-                          disabled={setMainPhoto.isPending}
+                          disabled={busy}
                           onClick={() => {
                             setMainPhoto.mutate(
                               {
@@ -598,39 +672,31 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                                   file_reference: photo.file_reference,
                                 },
                               },
-                              { onSuccess: refresh },
+                              // Settled: make-main RE-UPLOADS the photo as a
+                              // new one (fresh id at the front, the original
+                              // stays as a visible duplicate the operator may
+                              // delete), so the grid must re-pull either way.
+                              { onSettled: refresh },
                             );
                           }}
                           className="mt-[6px] block w-full py-[2px] text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
                         >
-                          {setMainPhoto.isPending &&
-                          setMainPhoto.variables?.body?.photo_id === photo.photo_id ? (
-                            <span className="inline-flex items-center gap-[5px]">
-                              <span className="tb-spin inline-block h-[11px] w-[11px] rounded-full border-2 border-line-input border-t-primary" />
-                              {t('accounts.profile.makingMain')}
-                            </span>
-                          ) : (
-                            t('accounts.profile.makeMain')
-                          )}
+                          {t('accounts.profile.makeMain')}
                         </button>
                       )}
                     </div>
                   ))}
                   <DashedAdd
                     ratio="1"
-                    label={
-                      photoProgress
-                        ? t('accounts.profile.uploadingCount', photoProgress)
-                        : t('accounts.profile.upload')
-                    }
-                    busy={Boolean(photoProgress)}
+                    label={t('accounts.profile.upload')}
+                    disabled={busy}
                     onClick={() => photoInput.current?.click()}
                   />
                 </div>
                 <input
                   ref={photoInput}
                   type="file"
-                  accept="image/*"
+                  accept={PHOTO_SUFFIXES.join(',')}
                   multiple
                   onChange={onPhotosPicked}
                   className="hidden"
@@ -708,7 +774,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                               path: { account_id: account.account_id },
                               body: { story_id: story.story_id, pinned: !story.is_pinned },
                             },
-                            { onSuccess: refresh },
+                            { onSettled: refresh },
                           );
                         }}
                         className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-[6px] px-[5px] py-[2px] text-center text-[9px] font-medium disabled:opacity-50 ${
@@ -788,18 +854,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 )}
                 <button
                   type="button"
-                  disabled={addMusic.isPending}
+                  disabled={busy}
                   onClick={() => musicInput.current?.click()}
                   className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-60"
                 >
-                  {addMusic.isPending ? (
-                    <span className="inline-flex items-center gap-[6px]">
-                      <span className="tb-spin inline-block h-[13px] w-[13px] rounded-full border-2 border-line-input border-t-primary" />
-                      {t('accounts.profile.pickTrack')}
-                    </span>
-                  ) : (
-                    t('accounts.profile.pickTrack')
-                  )}
+                  {t('accounts.profile.pickTrack')}
                 </button>
                 <input
                   ref={musicInput}
@@ -810,6 +869,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 />
               </div>
             )}
+
+            {tab === 'channels' && <ChannelsTab accountId={account.account_id} />}
           </div>
 
           {/* footer */}
@@ -887,7 +948,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   file_reference: confirmPhoto.file_reference,
                 },
               })
-              .then(refresh)
+              // finally, not then: a failed remove has already invalidated the
+              // server-side cache, so the grid must re-pull or it keeps dead
+              // ids; the rejection still propagates so the dialog stays open.
+              .finally(refresh)
           }
         />
       ) : null}
@@ -906,7 +970,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 path: { account_id: account.account_id },
                 body: { story_id: confirmStory.story_id },
               })
-              .then(refresh)
+              .finally(refresh)
           }
         />
       ) : null}
@@ -929,7 +993,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   file_reference: confirmMusic.file_reference ?? '',
                 },
               })
-              .then(refresh)
+              .finally(refresh)
           }
         />
       ) : null}
