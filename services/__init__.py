@@ -1,1 +1,1 @@
-"""Business logic layer. See ``.mex/context/architecture.md``."""
+"""Business logic layer; see ``.mex/context/architecture.md`` and ``conventions.md``."""
