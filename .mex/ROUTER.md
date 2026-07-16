@@ -1,92 +1,85 @@
 ---
 name: router
-description: Session bootstrap and navigation hub. Stable — does not track live state. Read at the start of every session before any task.
+description: Session bootstrap, current project state, routing table, and compact behavioural contract.
 edges:
-  - target: state/active.md
-    condition: always — load current project state first
   - target: context/architecture.md
-    condition: when working on system design, integrations, or layer rules
-  - target: context/stack.md
-    condition: when working with specific technologies or making tech decisions
+    condition: system design, integrations, or layer boundaries
   - target: context/conventions.md
-    condition: when writing or reviewing backend code
+    condition: writing or reviewing backend code
   - target: context/frontend.md
-    condition: when writing or reviewing frontend code — frontend/ has its own FSD law
-  - target: context/services.md
-    condition: when writing or reviewing any business logic — services/ is where it lives
+    condition: writing or reviewing frontend code
   - target: context/decisions.md
-    condition: when making an architectural choice or understanding why something is built a certain way
+    condition: making or revisiting an architectural decision
   - target: context/setup.md
-    condition: when setting up the dev environment or running the project
-  - target: context/telegram.md
-    condition: when touching the platform gateway
-  - target: context/warming.md
-    condition: when working with warming/runtime workflows
-  - target: context/logging.md
-    condition: when emitting, querying, or displaying log entries
-  - target: context/kanban.md
-    condition: always at session start — protocol for the GitHub Project board
-  - target: context/skills.md
-    condition: when deciding whether to invoke a skill
-  - target: context/rtk.md
-    condition: when running a shell command and the global rtk hook is uncertain
-  - target: context/ci.md
-    condition: when modifying workflows, debugging red CI, or planning a heavy check
+    condition: installation, local run, or environment problems
   - target: patterns/INDEX.md
-    condition: when starting a task — check the pattern index for a matching pattern
-last_updated: 2026-06-28
+    condition: before implementing a recurring task type
+last_updated: 2026-07-16
 ---
 
 # Session Bootstrap
 
-`AGENTS.md` is always loaded (via root `CLAUDE.md` which imports `.mex/AGENTS.md`). After this file, load `state/active.md` for the live picture and `context/kanban.md` for the board protocol.
+Read `.mex/AGENTS.md`, then this file. Load only the task-specific files below; do not preload the whole scaffold.
+
+## Current Project State
+
+**Working:**
+- React 19 SPA over FastAPI `/api/v1`; generated OpenAPI client; RU/EN i18n; cookie auth.
+- Account/session import and phone login, proxy pool, profile media, stories, music, and owned-channel management.
+- Per-account warming runtime with personas, fleet de-correlation, persisted restart recovery, logs, and safety gates.
+- Event-driven neurocomment campaigns with listener, quotas, challenge/vision solver, deletion checks, and semantic dedup.
+- Strict CI: backend tests/coverage/security, frontend gates/build, API drift, nightly Hypothesis/Semgrep/mutation.
+
+**Not built / intentionally deferred:**
+- Public landing page (`#237`).
+- Multi-worker/runtime-worker architecture and remote database.
+- Full operator/deployment/backup documentation.
+
+**Known issues:**
+- Warming daily action cap may be exceeded after a mid-cycle restart (`#208`).
+- SQLite and in-process runtimes require one uvicorn worker.
+- Domain context and ADR statuses need periodic sync after fast product changes.
+
+History belongs in git, merged PRs, and `.mex/events/decisions.jsonl`, not in this snapshot.
 
 ## Routing Table
 
-| Task type | Load |
-|-----------|------|
-| Current project state (always first) | `state/active.md` |
-| Picking work / moving board items | `context/kanban.md` |
-| Understanding how the system works | `context/architecture.md` |
-| Working with a specific technology | `context/stack.md` |
-| Writing or reviewing backend code | `context/conventions.md` |
-| Writing or reviewing frontend code | `context/frontend.md` |
-| Writing or reviewing business logic | `context/services.md` |
-| Making a design decision | `context/decisions.md` |
-| Setting up or running the project | `context/setup.md` |
-| Anything platform-gateway related | `context/telegram.md` |
-| Anything warming/runtime-related | `context/warming.md` |
-| Anything log-related | `context/logging.md` |
-| Skills | `context/skills.md` |
+| Task | Load |
+|---|---|
+| System flow, folders, imports | `context/architecture.md` |
+| Libraries and versions | `context/stack.md` |
+| Backend rules and test policy | `context/conventions.md` |
+| Frontend/FSD/i18n | `context/frontend.md` |
+| Business services | `context/services.md` |
+| Telegram gateway | `context/telegram.md` |
+| Warming runtime | `context/warming.md` |
+| Neurocomment runtime | `context/neurocomment.md` |
+| Proxy pool | `context/proxy.md` |
+| Logs and SSE | `context/logging.md` |
 | CI/workflows | `context/ci.md` |
-| Shell command policy | `context/rtk.md` |
-| Any specific task | check `patterns/INDEX.md` |
+| Setup/run commands | `context/setup.md` |
+| Architecture rationale | `context/decisions.md` |
+| GitHub Project workflow | `context/kanban.md` |
+| Shell-output wrapper | `context/rtk.md` |
+| Agent skills | `context/skills.md` |
+| Repeatable implementation task | `patterns/INDEX.md` |
 
-## Methodology — Vertical Slice + Hexagonal-lite (split stack)
-
-Every code change MUST land in the right layer. Before writing code, the agent declares which layer is changing and why.
+## Layer Check
 
 ```text
-frontend/    React SPA (Feature-Sliced Design). Talks to the backend only over /api/v1. See context/frontend.md.
-api/         UI-thin /api/v1 routes. Validate → call service → serialize. No business logic.
-services/    Business logic. Async, Pydantic at edges, no SDK imports, transport-agnostic.
-core/        Infrastructure gateways: db/repositories, client gateways, auth, config, logging.
-schemas/     Pure Pydantic types. No project imports. The data contract.
+frontend/ → HTTP /api/v1 → api/ → services/ → core/
+                              ↘ schemas/ shared contracts
 ```
 
-**Hard layer check before writing backend code:**
-1. Where does this code belong? Name the layer and file path.
-2. What does it import? Cross-check `context/architecture.md` (and the api-layer allowlist).
-3. Is cross-layer input/output a Pydantic model from `schemas/`?
-4. Would the same logic be called from a runtime task, CLI, or test? If yes, it belongs in `services/`, not the api layer.
-
-For frontend code, run the FSD check in `context/frontend.md` (layer + slice public API).
-If any check fails, stop and re-plan.
+- `api/`: request binding and error mapping only.
+- `services/`: business policy and orchestration.
+- `core/`: DB, Telegram, LLM, auth, logging, SSE and other infrastructure gateways.
+- `schemas/`: pure Pydantic contracts.
 
 ## Behavioural Contract
 
-1. **CONTEXT** — Move board item to `In progress` when applicable. Load relevant context files. Always include `context/services.md` for business logic. Check `patterns/INDEX.md`.
-2. **BUILD** — Run the hard layer check, then write code.
-3. **VERIFY** — Load `context/conventions.md` and run the checklist item by item.
-4. **DEBUG** — If verification fails, follow a matching debug pattern if one exists.
-5. **GROW** — Record reality in `state/active.md`, update stale context/pattern files, bump `last_updated`, and move the board item when applicable.
+1. **CONTEXT** — run `npx mex-agent check --quiet`; load the routed context and matching pattern.
+2. **BUILD** — make the smallest coherent change in the owning layer.
+3. **VERIFY** — run relevant tests and gates; do not claim unrun checks passed.
+4. **DEBUG** — reproduce failures and add a regression test where feasible.
+5. **GROW** — update this state only when reality changed; refresh affected context/patterns; `mex log` durable rationale; keep history out of this file.
