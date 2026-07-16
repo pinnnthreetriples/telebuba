@@ -1,85 +1,52 @@
 ---
 name: router
-description: Session bootstrap, current project state, routing table, and compact behavioural contract.
+description: Session bootstrap, live state, and task routing.
 edges:
   - target: context/architecture.md
-    condition: system design, integrations, or layer boundaries
+    condition: system flow or layer boundaries
   - target: context/conventions.md
-    condition: writing or reviewing backend code
+    condition: backend implementation or review
   - target: context/frontend.md
-    condition: writing or reviewing frontend code
+    condition: frontend implementation or review
   - target: context/decisions.md
-    condition: making or revisiting an architectural decision
+    condition: architectural rationale
   - target: context/setup.md
-    condition: installation, local run, or environment problems
+    condition: setup or local commands
   - target: patterns/INDEX.md
-    condition: before implementing a recurring task type
+    condition: repeatable implementation task
 last_updated: 2026-07-16
 ---
 
 # Session Bootstrap
+Read `.mex/AGENTS.md`, then load only the files needed for the task.
 
-Read `.mex/AGENTS.md`, then this file. Load only the task-specific files below; do not preload the whole scaffold.
+## Current State
+- **Working:** React/FastAPI split stack; accounts, sessions, proxy pool, profile media, stories, music, owned channels; warming personas/runtime; neurocomment campaigns/listener/vision solver; strict CI/nightly.
+- **Deferred:** public landing `#237`, worker/remote-DB architecture, complete operator/deployment docs.
+- **Known:** warming daily cap can exceed after a mid-cycle restart (`#208`); run one uvicorn worker.
+- **History:** git, merged PRs, and `.mex/events/decisions.jsonl` only.
 
-## Current Project State
-
-**Working:**
-- React 19 SPA over FastAPI `/api/v1`; generated OpenAPI client; RU/EN i18n; cookie auth.
-- Account/session import and phone login, proxy pool, profile media, stories, music, and owned-channel management.
-- Per-account warming runtime with personas, fleet de-correlation, persisted restart recovery, logs, and safety gates.
-- Event-driven neurocomment campaigns with listener, quotas, challenge/vision solver, deletion checks, and semantic dedup.
-- Strict CI: backend tests/coverage/security, frontend gates/build, API drift, nightly Hypothesis/Semgrep/mutation.
-
-**Not built / intentionally deferred:**
-- Public landing page (`#237`).
-- Multi-worker/runtime-worker architecture and remote database.
-- Full operator/deployment/backup documentation.
-
-**Known issues:**
-- Warming daily action cap may be exceeded after a mid-cycle restart (`#208`).
-- SQLite and in-process runtimes require one uvicorn worker.
-- Domain context and ADR statuses need periodic sync after fast product changes.
-
-History belongs in git, merged PRs, and `.mex/events/decisions.jsonl`, not in this snapshot.
-
-## Routing Table
-
+## Route
 | Task | Load |
 |---|---|
-| System flow, folders, imports | `context/architecture.md` |
-| Libraries and versions | `context/stack.md` |
-| Backend rules and test policy | `context/conventions.md` |
-| Frontend/FSD/i18n | `context/frontend.md` |
-| Business services | `context/services.md` |
-| Telegram gateway | `context/telegram.md` |
-| Warming runtime | `context/warming.md` |
-| Neurocomment runtime | `context/neurocomment.md` |
-| Proxy pool | `context/proxy.md` |
-| Logs and SSE | `context/logging.md` |
-| CI/workflows | `context/ci.md` |
-| Setup/run commands | `context/setup.md` |
-| Architecture rationale | `context/decisions.md` |
-| GitHub Project workflow | `context/kanban.md` |
-| Shell-output wrapper | `context/rtk.md` |
-| Agent skills | `context/skills.md` |
-| Repeatable implementation task | `patterns/INDEX.md` |
+| Flow, layers, imports | `context/architecture.md` |
+| Libraries | `context/stack.md` |
+| Backend rules | `context/conventions.md` |
+| Frontend | `context/frontend.md` |
+| Services | `context/services.md` |
+| Telegram | `context/telegram.md` |
+| Warming | `context/warming.md` |
+| Neurocomment | `context/neurocomment.md` |
+| Proxy | `context/proxy.md` |
+| Logs/SSE | `context/logging.md` |
+| CI | `context/ci.md` |
+| Setup | `context/setup.md` |
+| Rationale | `context/decisions.md` |
+| Board / shell / skills | `context/kanban.md`, `context/rtk.md`, `context/skills.md` |
+| Repeatable task | `patterns/INDEX.md` |
 
-## Layer Check
-
-```text
-frontend/ → HTTP /api/v1 → api/ → services/ → core/
-                              ↘ schemas/ shared contracts
-```
-
-- `api/`: request binding and error mapping only.
-- `services/`: business policy and orchestration.
-- `core/`: DB, Telegram, LLM, auth, logging, SSE and other infrastructure gateways.
-- `schemas/`: pure Pydantic contracts.
-
-## Behavioural Contract
-
-1. **CONTEXT** — run `npx mex-agent check --quiet`; load the routed context and matching pattern.
-2. **BUILD** — make the smallest coherent change in the owning layer.
-3. **VERIFY** — run relevant tests and gates; do not claim unrun checks passed.
-4. **DEBUG** — reproduce failures and add a regression test where feasible.
-5. **GROW** — update this state only when reality changed; refresh affected context/patterns; `mex log` durable rationale; keep history out of this file.
+## Contract
+1. Run `npx mex-agent check --quiet`; load routed context and a matching pattern.
+2. Change the smallest coherent unit in its owning layer.
+3. Run relevant gates; never claim an unrun check passed.
+4. Update this snapshot only when current reality changes; put durable rationale in `mex log`.
