@@ -18,6 +18,6 @@ last_updated: 2026-07-16
 | Telegram, proxy, warming, neurocomment | `context/runtime.md` |
 | Setup, commands, CI reproduction | `context/setup.md` |
 | Repeatable implementation | `patterns/INDEX.md` |
-| Why/history | `mex timeline --kind decision --limit 5`, git, merged PRs |
+| Why/history | `mex timeline --kind decision --limit 3`, git, merged PRs |
 
 Load only one route plus one matching pattern when needed. Trust code/tests over memory. Update this state only when current reality changes.
