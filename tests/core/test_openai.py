@@ -3,26 +3,16 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
 import httpx
 import pytest
-import pytest_asyncio
 import respx
 
-from core.openai import close_openai_client, generate_text
+from core.openai import generate_text
 from schemas.gemini import GeminiRequest
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
 _ENDPOINT = r".*chat/completions.*"
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def _close_shared_client() -> AsyncIterator[None]:
-    yield
-    await close_openai_client()
+pytestmark = pytest.mark.usefixtures("isolated_openai_client")
 
 
 def _request(

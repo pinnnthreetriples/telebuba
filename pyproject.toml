@@ -59,6 +59,8 @@ exclude-newer = "7 days"
 # Each entry must reference a CVE / advisory and be revisited when the
 # upstream chain catches up.
 override-dependencies = [
+    # CVE-2026-52870 in mcp <1.27.2 (semgrep pins mcp==1.23.3).
+    "mcp>=1.27.2",
     # PYSEC-2026-175/177/178/179 in pyjwt 2.12.1 (pulled by semgrep -> mcp,
     # which upper-pins <2.13). Fix line is 2.13.0. Recheck on semgrep bumps.
     "pyjwt>=2.13.0",

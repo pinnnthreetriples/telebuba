@@ -3,28 +3,17 @@
 from __future__ import annotations
 
 import json
-from typing import TYPE_CHECKING
 
 import httpx
 import pytest
-import pytest_asyncio
 import respx
 
 from core.config import settings
 from core.gemini import _get_client, _throttle, close_gemini_client, generate_text
 from schemas.gemini import GeminiRequest
 
-if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
 _ENDPOINT = r".*generateContent.*"
-
-
-@pytest_asyncio.fixture(autouse=True)
-async def _close_shared_client() -> AsyncIterator[None]:
-    """The gateway reuses a module-level client; close it between tests."""
-    yield
-    await close_gemini_client()
+pytestmark = pytest.mark.usefixtures("isolated_gemini_client")
 
 
 def _request() -> GeminiRequest:

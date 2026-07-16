@@ -1,7 +1,7 @@
 ---
 name: active-state
 description: Live project state — what works, what is not yet built, known issues. Updated by the agent in the Record step of GROW after meaningful work.
-last_updated: 2026-07-15
+last_updated: 2026-07-16
 ---
 
 # Active State
@@ -23,6 +23,18 @@ shared `_enforce_start_readiness`, `_run_chat_step` C12→B via `_should_chat`,
 item (telegram `_dispatch_action`/`_pick_reaction` tidy) was deliberately dropped
 during execution — the extraction didn't clear the lint suppression and tripped
 the file-size gate, i.e. net-negative churn on already-clear dispatch code.
+
+A 2026-07-13 test-harness cleanup made the Gemini/OpenAI gateway tests hermetic:
+shared fixtures now remove host HTTP proxy variables and close the reused clients
+after every test. This fixes 28 environment-dependent failures under a SOCKS
+`ALL_PROXY` without changing production gateway behaviour. Full backend and
+frontend gates are green (1242 pytest / 281 Vitest).
+
+A 2026-07-16 test-suite refactor split every test source over 700 lines into
+behaviour-focused, co-located modules with shared fixtures/helpers. The updated
+`main` scenarios were preserved: no missing or duplicate test names. An
+architecture gate now enforces the 700-line ceiling. Full gates are green:
+1407 pytest (95.42% coverage) and 336 Vitest tests.
 
 A 2026-07-10 bug audit (parallel review of warming/neurocomment/core/api) then
 fixed four confirmed correctness defects (PR open, no auto-merge): warming
