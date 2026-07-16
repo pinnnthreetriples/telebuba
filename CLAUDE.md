@@ -1,9 +1,6 @@
-@.mex/AGENTS.md
+# Telebuba
+Read `.mex/ROUTER.md`; load only its task route.
 
-## Claude Code session rules
+Rules: `api → services → core`, Pydantic boundaries, external I/O through `core/`, tests for behavior changes, one uvicorn worker, no secret/session exposure.
 
-- Read `.mex/ROUTER.md` at session start; load only the routed context needed for the task.
-- Before code changes run `npx mex-agent check --quiet`; use `npx mex-agent sync --dry-run` when drift is reported.
-- Use Plan Mode for non-trivial or cross-layer changes.
-- After meaningful work, update the compact state in `ROUTER.md`, refresh affected context/patterns, and use `mex log` for durable history.
-- GitHub issues/PRDs: `docs/agents/issue-tracker.md`; labels: `docs/agents/triage-labels.md`; domain memory: `docs/agents/domain.md`.
+Before code run `npx mex-agent check --quiet`; report only checks actually run. Update `ROUTER.md` only when current state changes; keep each `mex log` message to one sentence.
