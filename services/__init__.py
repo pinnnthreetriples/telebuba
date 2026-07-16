@@ -1,1 +1,1 @@
-"""Business logic layer. See ``.mex/context/services.md``."""
+"""Business logic layer. See ``.mex/context/architecture.md``."""
