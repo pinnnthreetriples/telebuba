@@ -2,13 +2,22 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta, tzinfo
 
 import pytest
 
 from core.config import settings
 from schemas.warming import WarmingCycleResult, WarmingStateRecord
 from services.warming import _seams, _transitions
+
+
+class _FrozenDateTime(datetime):
+    @classmethod
+    def now(cls, tz: tzinfo | None = None) -> _FrozenDateTime:
+        return cls(2026, 7, 17, 12, tzinfo=tz)
+
+
+_NOW = _FrozenDateTime.now(UTC)
 
 
 def _record(state: str, run_id: str | None = "gen-a") -> WarmingStateRecord:
@@ -88,12 +97,13 @@ async def test_cycle_result_selects_safe_next_state(
     monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
     monkeypatch.setattr(settings.warming, "next_run_jitter_fraction", 0.0)
     monkeypatch.setattr(settings.warming, "flood_wait_margin_fraction", 0.0)
+    monkeypatch.setattr(_transitions, "datetime", _FrozenDateTime)
 
     actions, next_run, state = await _transitions._calculate_next_run("acc-1", result, "normal", 40)
 
     assert actions == result.attempted_actions
     assert state == expected_state
-    assert next_run > datetime.now(UTC)
+    assert next_run > _NOW
 
 
 @pytest.mark.asyncio
@@ -102,6 +112,7 @@ async def test_peer_flood_uses_quarantine_duration_without_active_hour_shift(
 ) -> None:
     monkeypatch.setattr(settings.warming, "quarantine_hours", 7.0)
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(_transitions, "datetime", _FrozenDateTime)
     shifted: list[datetime] = []
 
     def shift(value: datetime, *_args: object, **_kwargs: object) -> datetime:
@@ -109,14 +120,12 @@ async def test_peer_flood_uses_quarantine_duration_without_active_hour_shift(
         return value
 
     monkeypatch.setattr(_transitions, "_shift_to_active_hours", shift)
-    before = datetime.now(UTC)
-
     _, next_run, state = await _transitions._calculate_next_run(
         "acc-1", WarmingCycleResult(account_id="acc-1", status="peer_flood"), "normal", 40
     )
 
     assert state == "quarantine"
-    assert (next_run - before).total_seconds() == pytest.approx(7 * 3600, abs=2)
+    assert next_run == _NOW + timedelta(hours=7)
     assert shifted == []
 
 
@@ -127,7 +136,7 @@ async def test_flood_wait_zero_is_honoured_as_concrete_duration(
     monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
     monkeypatch.setattr(settings.warming, "flood_wait_margin_fraction", 0.0)
     monkeypatch.setattr(_seams.rng, "uniform", lambda _a, _b: 0.0)
-    before = datetime.now(UTC)
+    monkeypatch.setattr(_transitions, "datetime", _FrozenDateTime)
 
     _, next_run, state = await _transitions._calculate_next_run(
         "acc-1",
@@ -137,4 +146,4 @@ async def test_flood_wait_zero_is_honoured_as_concrete_duration(
     )
 
     assert state == "flood_wait"
-    assert 0 <= (next_run - before).total_seconds() < 2
+    assert next_run == _NOW

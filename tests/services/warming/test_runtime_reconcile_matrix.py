@@ -13,6 +13,16 @@ from services import warming
 from services.warming import _runtime
 
 
+async def _cancel_runtime_tasks() -> None:
+    tasks = list(warming._RUNTIME.values())
+    warming._RUNTIME.clear()
+    for task in tasks:
+        if not task.done():
+            task.cancel()
+    if tasks:
+        await asyncio.gather(*tasks, return_exceptions=True)
+
+
 @pytest.mark.asyncio
 async def test_reconcile_state_matrix_and_generation_refresh(
     monkeypatch: pytest.MonkeyPatch,
@@ -48,23 +58,26 @@ async def test_reconcile_state_matrix_and_generation_refresh(
             )
         )
 
-    await warming.reconcile_warming_runtime()
-    await asyncio.sleep(0)
+    try:
+        await warming.reconcile_warming_runtime()
+        await asyncio.sleep(0)
 
-    expected = {"active", "sleep", "wait", "quarantine"}
-    assert set(warming._RUNTIME) == expected
-    assert {account_id for account_id, _run_id in started} == expected
-    run_ids = dict(started)
-    assert all(run_ids[account_id] not in (None, "old-generation") for account_id in expected)
-    assert len(set(run_ids.values())) == len(expected)
-    for account_id, state in states.items():
-        record = await fetch_warming_state(account_id)
-        assert record is not None
-        assert record.state == state
-        if account_id in expected:
-            assert record.run_id == run_ids[account_id]
-        else:
-            assert record.run_id == "old-generation"
+        expected = {"active", "sleep", "wait", "quarantine"}
+        assert set(warming._RUNTIME) == expected
+        assert {account_id for account_id, _run_id in started} == expected
+        run_ids = dict(started)
+        assert all(run_ids[account_id] not in (None, "old-generation") for account_id in expected)
+        assert len(set(run_ids.values())) == len(expected)
+        for account_id, state in states.items():
+            record = await fetch_warming_state(account_id)
+            assert record is not None
+            assert record.state == state
+            if account_id in expected:
+                assert record.run_id == run_ids[account_id]
+            else:
+                assert record.run_id == "old-generation"
+    finally:
+        await _cancel_runtime_tasks()
 
 
 @pytest.mark.asyncio
@@ -98,16 +111,19 @@ async def test_reconcile_keeps_live_task_and_replaces_completed_task(
     await done_task
     warming._RUNTIME.update({"live": live_task, "done": done_task})
 
-    await warming.reconcile_warming_runtime()
+    try:
+        await warming.reconcile_warming_runtime()
 
-    assert warming._RUNTIME["live"] is live_task
-    assert warming._RUNTIME["done"] is not done_task
-    live_record = await fetch_warming_state("live")
-    done_record = await fetch_warming_state("done")
-    assert live_record is not None
-    assert live_record.run_id == "live-old"
-    assert done_record is not None
-    assert done_record.run_id != "done-old"
+        assert warming._RUNTIME["live"] is live_task
+        assert warming._RUNTIME["done"] is not done_task
+        live_record = await fetch_warming_state("live")
+        done_record = await fetch_warming_state("done")
+        assert live_record is not None
+        assert live_record.run_id == "live-old"
+        assert done_record is not None
+        assert done_record.run_id != "done-old"
+    finally:
+        await _cancel_runtime_tasks()
 
 
 @pytest.mark.asyncio
@@ -133,15 +149,18 @@ async def test_repeated_reconcile_is_idempotent_for_running_tasks(
         WarmingStateWrite(account_id="acc-1", state="sleeping", run_id="old")
     )
 
-    await warming.reconcile_warming_runtime()
-    first_task = warming._RUNTIME["acc-1"]
-    first_record = await fetch_warming_state("acc-1")
-    await asyncio.sleep(0)
-    await warming.reconcile_warming_runtime()
-    second_record = await fetch_warming_state("acc-1")
+    try:
+        await warming.reconcile_warming_runtime()
+        first_task = warming._RUNTIME["acc-1"]
+        first_record = await fetch_warming_state("acc-1")
+        await asyncio.sleep(0)
+        await warming.reconcile_warming_runtime()
+        second_record = await fetch_warming_state("acc-1")
 
-    assert warming._RUNTIME["acc-1"] is first_task
-    assert starts == 1
-    assert first_record is not None
-    assert second_record is not None
-    assert second_record.run_id == first_record.run_id
+        assert warming._RUNTIME["acc-1"] is first_task
+        assert starts == 1
+        assert first_record is not None
+        assert second_record is not None
+        assert second_record.run_id == first_record.run_id
+    finally:
+        await _cancel_runtime_tasks()

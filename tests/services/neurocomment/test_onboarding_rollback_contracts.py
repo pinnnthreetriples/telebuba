@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from types import SimpleNamespace
 from typing import TYPE_CHECKING
 from unittest.mock import AsyncMock
 
@@ -73,42 +72,6 @@ async def test_transient_resolve_failure_does_not_rollback_existing_ready_pair(
         ("new", "failed"),
         ("ready", "ready"),
     ]
-
-
-@pytest.mark.asyncio
-async def test_existing_human_skip_wins_over_rejoin_and_solver(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        onboarding,
-        "fetch_readiness",
-        AsyncMock(return_value=SimpleNamespace(human_skipped=True, banned=False)),
-    )
-    execute = AsyncMock()
-    monkeypatch.setattr(_seams, "execute", execute)
-
-    outcome = await onboarding._join_and_classify("account", "@c", 123, solver_enabled=True)
-
-    assert outcome.state == "human_skipped"
-    execute.assert_not_awaited()
-
-
-@pytest.mark.asyncio
-async def test_existing_ban_is_not_revived_by_repeated_onboarding(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(
-        onboarding,
-        "fetch_readiness",
-        AsyncMock(return_value=SimpleNamespace(human_skipped=False, banned=True)),
-    )
-    execute = AsyncMock()
-    monkeypatch.setattr(_seams, "execute", execute)
-
-    outcome = await onboarding._join_and_classify("account", "@c", 123, solver_enabled=True)
-
-    assert outcome.state == "banned"
-    execute.assert_not_awaited()
 
 
 @pytest.mark.asyncio

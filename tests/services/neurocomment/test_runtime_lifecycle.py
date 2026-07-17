@@ -207,6 +207,17 @@ async def test_start_continues_to_next_campaign_when_one_onboard_raises(
     assert set(onboarded) == {a.campaign_id, b.campaign_id}
     assert await get_listener_account_id() == "listener-1"
     assert spy.reconciled == ["listener-1"]
+    failures = [
+        row
+        for row in await list_recent_logs(limit=20)
+        if row.event == "neurocomment_start_onboard_failed"
+    ]
+    assert len(failures) == 1
+    assert failures[0].level == "ERROR"
+    assert failures[0].extra == {
+        "campaign_id": a.campaign_id,
+        "error_type": "RuntimeError",
+    }
 
 
 @pytest.mark.asyncio

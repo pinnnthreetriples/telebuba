@@ -71,11 +71,12 @@ async def test_read_exception_isolated_before_delete_write(
     await _sweep._sweep_channel("@channel", [_comment(1)], datetime.now(UTC))
 
     mark.assert_not_awaited()
-    log.assert_awaited_once()
-    call = log.await_args
-    assert call is not None
-    assert call.kwargs["account_id"] == "reader"
-    assert call.kwargs["extra"]["error_type"] == "RuntimeError"
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_sweep_read_failed",
+        account_id="reader",
+        extra={"channel": "@channel", "error_type": "RuntimeError"},
+    )
 
 
 @pytest.mark.asyncio
@@ -93,7 +94,8 @@ async def test_only_gateway_missing_ids_are_persisted_and_scanned(
     register = Mock(return_value=None)
     monkeypatch.setattr(_sweep, "mark_comments_deleted", mark)
     monkeypatch.setattr(_state, "register_channel_deletions", register)
-    monkeypatch.setattr(_sweep, "log_event", AsyncMock())
+    log = AsyncMock()
+    monkeypatch.setattr(_sweep, "log_event", log)
 
     await _sweep._sweep_channel("@channel", [_comment(1), _comment(2)], now)
 
@@ -101,6 +103,11 @@ async def test_only_gateway_missing_ids_are_persisted_and_scanned(
     scan = register.call_args.args[2]
     assert scan.window_ids == {1, 2}
     assert scan.missing_ids == {2}
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_comment_deleted",
+        extra={"channel": "@channel", "count": 1},
+    )
 
 
 @pytest.mark.asyncio
@@ -121,9 +128,15 @@ async def test_sweep_once_groups_campaign_read_once_and_isolates_channels(
     channel = AsyncMock(side_effect=[RuntimeError("a"), None])
     monkeypatch.setattr(_sweep, "list_posted_comments_since", listed)
     monkeypatch.setattr(_sweep, "_sweep_channel", channel)
-    monkeypatch.setattr(_sweep, "log_event", AsyncMock())
+    log = AsyncMock()
+    monkeypatch.setattr(_sweep, "log_event", log)
 
     await _sweep._sweep_once()
 
     assert listed.await_count == 1
     assert [call.args[0] for call in channel.await_args_list] == ["@a", "@b"]
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_sweep_channel_failed",
+        extra={"channel": "@a", "error_type": "RuntimeError"},
+    )

@@ -1,9 +1,31 @@
 {
   "mutmut_version": "3.6.0",
-  "source_paths": [
-    "services",
-    "schemas"
-  ],
+  "mutmut_config": {
+    "source_paths": [
+      "services",
+      "schemas"
+    ],
+    "paths_to_exclude": null,
+    "mutate_only_covered_lines": true,
+    "pytest_add_cli_args_test_selection": [
+      "tests"
+    ],
+    "pytest_add_cli_args": [
+      "-o",
+      "addopts="
+    ],
+    "also_copy": [
+      "api",
+      "core",
+      "main.py",
+      "tests",
+      "tools",
+      "conftest.py",
+      "pyproject.toml",
+      ".env.example",
+      "frontend/src/shared/i18n"
+    ]
+  },
   "stats": {
     "killed": 6524,
     "survived": 2303,

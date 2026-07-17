@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import AsyncMock, Mock
+from unittest.mock import AsyncMock, Mock, call
 
 import pytest
 
@@ -70,10 +70,12 @@ async def test_post_commit_failure_is_logged_without_rollback(
 
     failed.assert_not_awaited()
     released.assert_not_awaited()
-    log.assert_awaited_once()
-    call = log.await_args
-    assert call is not None
-    assert call.args == ("ERROR", "neurocomment_post_commit_failed")
+    log.assert_awaited_once_with(
+        "ERROR",
+        "neurocomment_post_commit_failed",
+        account_id="account",
+        extra={"channel": "@channel", "post_id": 7},
+    )
 
 
 @pytest.mark.asyncio
@@ -95,13 +97,20 @@ async def test_wait_families_fail_release_and_apply_correct_scope(
     monkeypatch.setattr(_generate, "mark_comment_failed", failed)
     monkeypatch.setattr(_generate, "release_sent_text", released)
     monkeypatch.setattr(_generate, "_apply_cooldown", cooldown)
-    monkeypatch.setattr(_generate, "log_event", AsyncMock())
+    log = AsyncMock()
+    monkeypatch.setattr(_generate, "log_event", log)
 
     await _generate._classify_post(_event(), "account", "comment", _result(status, seconds=30))
 
     released.assert_awaited_once_with("comment")
     failed.assert_awaited_once_with("@channel", 7)
     cooldown.assert_called_once_with("account", 30, scope)
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_post_cooldown",
+        account_id="account",
+        extra={"channel": "@channel", "post_id": 7, "status": status},
+    )
 
 
 @pytest.mark.asyncio
@@ -114,7 +123,8 @@ async def test_ban_and_gate_are_distinct_side_effects(monkeypatch: pytest.Monkey
     monkeypatch.setattr(_generate, "resolve_pending_outcome", resolved)
     monkeypatch.setattr(_generate, "mark_comment_failed", AsyncMock())
     monkeypatch.setattr(_generate, "release_sent_text", AsyncMock())
-    monkeypatch.setattr(_generate, "log_event", AsyncMock())
+    log = AsyncMock()
+    monkeypatch.setattr(_generate, "log_event", log)
 
     await _generate._classify_post(
         _event(), "account", "a", _result("failed", error_type="UserBannedInChannelError")
@@ -128,3 +138,17 @@ async def test_ban_and_gate_are_distinct_side_effects(monkeypatch: pytest.Monkey
         "account", "@channel", joined=True, captcha_passed=False, ready=False
     )
     resolved.assert_awaited_once_with("account", "@channel", "failed")
+    assert log.await_args_list == [
+        call(
+            "WARNING",
+            "neurocomment_account_banned",
+            account_id="account",
+            extra={"channel": "@channel", "post_id": 7, "status": "failed"},
+        ),
+        call(
+            "WARNING",
+            "neurocomment_post_gated",
+            account_id="account",
+            extra={"channel": "@channel", "post_id": 7, "status": "failed"},
+        ),
+    ]

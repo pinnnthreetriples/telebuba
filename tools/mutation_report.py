@@ -41,7 +41,15 @@ RESULT_STATUSES = frozenset(
         "not checked",
     },
 )
-RESULT_RE = re.compile(r"^\s+(?P<name>[A-Za-z0-9_.]+__mutmut_\d+): (?P<status>.+)$")
+RESULT_RE = re.compile(r"^\s+(?P<name>\S+__mutmut_\d+): (?P<status>.+)$")
+SCOPE_KEYS = (
+    "source_paths",
+    "paths_to_exclude",
+    "mutate_only_covered_lines",
+    "pytest_add_cli_args_test_selection",
+    "pytest_add_cli_args",
+    "also_copy",
+)
 
 
 class ReportError(ValueError):
@@ -55,14 +63,22 @@ class Result:
 
     @property
     def module(self) -> str:
-        return self.name.split(".x_", 1)[0]
+        if ".x_" in self.name:
+            return self.name.split(".x_", 1)[0]
+        if ".xǁ" in self.name:
+            return self.name.split(".xǁ", 1)[0]
+        raise ReportError(f"unsupported mutant name: {self.name}")
 
     @property
     def function(self) -> str:
-        if ".x_" not in self.name:
-            raise ReportError(f"unsupported mutant name: {self.name}")
-        body = self.name.split(".x_", 1)[1].rsplit("__mutmut_", 1)[0]
-        return body.replace("____", ".")
+        if ".x_" in self.name:
+            return self.name.split(".x_", 1)[1].rsplit("__mutmut_", 1)[0]
+        if ".xǁ" in self.name:
+            encoded = self.name.split(".x", 1)[1].rsplit("__mutmut_", 1)[0]
+            parts = [part for part in encoded.split("ǁ") if part]
+            if parts:
+                return ".".join(parts)
+        raise ReportError(f"unsupported mutant name: {self.name}")
 
 
 def _load_object(path: Path) -> dict[str, Any]:
@@ -91,11 +107,6 @@ def load_stats(path: Path) -> dict[str, int]:
         stats[key] = value
     if stats["total"] <= 0:
         raise ReportError("stats.total must be positive")
-    accounted = sum(stats[key] for key in STAT_KEYS if key != "total")
-    if accounted != stats["total"]:
-        raise ReportError(
-            f"mutmut run is incomplete: statuses total {accounted}, expected {stats['total']}",
-        )
     return stats
 
 
@@ -126,14 +137,13 @@ def load_results(path: Path) -> list[Result]:
 
 def load_baseline(path: Path) -> dict[str, Any]:
     raw = _load_object(path)
-    if set(raw) != {"mutmut_version", "source_paths", "stats"}:
-        raise ReportError("baseline must contain exactly mutmut_version, source_paths, and stats")
+    if set(raw) != {"mutmut_version", "mutmut_config", "stats"}:
+        raise ReportError("baseline must contain exactly mutmut_version, mutmut_config, and stats")
     if not isinstance(raw["mutmut_version"], str) or not raw["mutmut_version"]:
         raise ReportError("baseline.mutmut_version must be a non-empty string")
-    if not isinstance(raw["source_paths"], list) or not all(
-        isinstance(item, str) and item for item in raw["source_paths"]
-    ):
-        raise ReportError("baseline.source_paths must be a list of non-empty strings")
+    config = raw["mutmut_config"]
+    if not isinstance(config, dict) or set(config) != set(SCOPE_KEYS):
+        raise ReportError(f"baseline.mutmut_config must contain exactly {list(SCOPE_KEYS)!r}")
     expected_stats = {"killed", "survived", "timeout", "total"}
     stats = raw["stats"]
     if not isinstance(stats, dict) or set(stats) != expected_stats:
@@ -148,15 +158,16 @@ def load_baseline(path: Path) -> dict[str, Any]:
 def validate_baseline_integrity(baseline: dict[str, Any], project_path: Path) -> None:
     try:
         project = tomllib.loads(project_path.read_text(encoding="utf-8"))
-        source_paths = project["tool"]["mutmut"]["source_paths"]
+        project_config = project["tool"]["mutmut"]
     except (OSError, tomllib.TOMLDecodeError, KeyError, TypeError) as exc:
         raise ReportError(
-            f"cannot read tool.mutmut.source_paths from {project_path}: {exc}",
+            f"cannot read tool.mutmut from {project_path}: {exc}",
         ) from exc
-    if source_paths != baseline["source_paths"]:
+    current_config = {key: project_config.get(key) for key in SCOPE_KEYS}
+    if current_config != baseline["mutmut_config"]:
         raise ReportError(
-            f"baseline scope {baseline['source_paths']!r} does not match "
-            f"project scope {source_paths!r}",
+            f"baseline mutation config {baseline['mutmut_config']!r} does not match "
+            f"project config {current_config!r}",
         )
     try:
         installed_version = importlib.metadata.version("mutmut")
@@ -190,11 +201,28 @@ def build_report(
     if len(results) != stats["total"]:
         raise ReportError(f"results list has {len(results)} mutants, stats report {stats['total']}")
     result_counts = Counter(item.status.replace(" ", "_") for item in results)
-    for key in ("killed", "survived", "timeout", "no_tests", "skipped", "suspicious", "segfault"):
+    for key in (
+        "killed",
+        "survived",
+        "timeout",
+        "no_tests",
+        "skipped",
+        "suspicious",
+        "segfault",
+        "check_was_interrupted_by_user",
+    ):
         if result_counts[key] != stats[key]:
             raise ReportError(
                 f"results/status mismatch for {key}: {result_counts[key]} != {stats[key]}",
             )
+    if result_counts["not_checked"] or result_counts["check_was_interrupted_by_user"]:
+        raise ReportError("mutmut run is incomplete")
+    exported_total = sum(stats[key] for key in STAT_KEYS if key != "total")
+    omitted_total = result_counts["caught_by_type_check"]
+    if exported_total + omitted_total != stats["total"]:
+        raise ReportError(
+            "official stats plus caught-by-type-check results do not account for total",
+        )
     current_score = _score(stats["killed"], stats["total"])
     base = baseline["stats"]
     baseline_score = _score(base["killed"], base["total"])
@@ -295,12 +323,12 @@ def parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    args = parser().parse_args(argv)
+    cli = parser()
+    args = cli.parse_args(argv)
     try:
         return args.handler(args)
     except ReportError as exc:
-        print(f"mutation report error: {exc}", file=sys.stderr)
-        return 2
+        cli.error(f"mutation report error: {exc}")
 
 
 if __name__ == "__main__":

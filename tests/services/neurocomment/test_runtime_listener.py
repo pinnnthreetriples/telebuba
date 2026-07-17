@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -55,6 +56,46 @@ async def test_start_allows_listener_that_is_not_warming(monkeypatch: pytest.Mon
 
 
 @pytest.mark.asyncio
+async def test_stop_clears_running_flag_even_when_shutdown_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+
+    async def fail_shutdown(_account_id: str) -> None:
+        msg = "shutdown failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_runtime, "shutdown_neurocomment_runtime", fail_shutdown)
+
+    with pytest.raises(RuntimeError, match="shutdown failed"):
+        await _runtime.stop_neurocomment()
+
+    assert await get_listener_account_id() == "listener-1"
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
+async def test_clear_forgets_listener_even_when_shutdown_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+
+    async def fail_shutdown(_account_id: str) -> None:
+        msg = "shutdown failed"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_runtime, "shutdown_neurocomment_runtime", fail_shutdown)
+
+    with pytest.raises(RuntimeError, match="shutdown failed"):
+        await _runtime.clear_neurocomment_listener()
+
+    assert await get_listener_account_id() is None
+    assert await get_listener_running() is False
+
+
+@pytest.mark.asyncio
 async def test_reconcile_unsubscribes_a_warming_listener(monkeypatch: pytest.MonkeyPatch) -> None:
     # The guard lives at the reconcile choke point too, so a persisted listener that
     # is warming is stopped (never re-subscribed) on startup/channel-edit resume,
@@ -64,11 +105,17 @@ async def test_reconcile_unsubscribes_a_warming_listener(monkeypatch: pytest.Mon
     _patch_warming_ids(monkeypatch, {"listener-1"})
     campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     await link_channel_to_campaign(campaign.campaign_id, "@a")
+    channels = AsyncMock()
+    stop_sweep = AsyncMock()
+    monkeypatch.setattr(_runtime, "list_active_watch_channels", channels)
+    monkeypatch.setattr(_runtime, "_stop_sweep", stop_sweep)
 
     await _runtime.reconcile_neurocomment_runtime("listener-1")
 
     assert spy.subscribed == []
     assert spy.stopped == ["listener-1"]
+    channels.assert_not_awaited()
+    stop_sweep.assert_awaited_once_with()
 
 
 @pytest.mark.asyncio

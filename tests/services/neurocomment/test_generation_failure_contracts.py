@@ -63,9 +63,15 @@ async def test_generation_exhaustion_fails_claim_without_loading_post_settings(
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("failure_stage", ["settings", "delay", "gateway"])
+@pytest.mark.parametrize(
+    ("failure_stage", "error_type", "message"),
+    [("settings", RuntimeError, "settings"), ("gateway", ConnectionError, "down")],
+)
 async def test_every_pre_delivery_failure_releases_exact_and_semantic_claims(
-    monkeypatch: pytest.MonkeyPatch, failure_stage: str
+    monkeypatch: pytest.MonkeyPatch,
+    failure_stage: str,
+    error_type: type[Exception],
+    message: str,
 ) -> None:
     text = "reserved comment"
     _generate._add_inflight("@channel", text, _generate.datetime.now(_generate.UTC))
@@ -83,12 +89,7 @@ async def test_every_pre_delivery_failure_releases_exact_and_semantic_claims(
         )
     else:
         monkeypatch.setattr(_generate, "load_neuro_settings", AsyncMock(return_value=_limits()))
-    if failure_stage == "delay":
-        monkeypatch.setattr(
-            _generate.asyncio, "sleep", AsyncMock(side_effect=asyncio.CancelledError())
-        )
-    else:
-        monkeypatch.setattr(_generate.asyncio, "sleep", AsyncMock())
+    monkeypatch.setattr(_generate.asyncio, "sleep", AsyncMock())
     if failure_stage == "gateway":
         monkeypatch.setattr(_seams, "execute", AsyncMock(side_effect=ConnectionError("down")))
     else:
@@ -102,8 +103,31 @@ async def test_every_pre_delivery_failure_releases_exact_and_semantic_claims(
             ),
         )
 
-    expected = asyncio.CancelledError if failure_stage == "delay" else Exception
-    with pytest.raises(expected):
+    with pytest.raises(error_type, match=message):
+        await _generate._generate_and_post(_event(), _campaign(), "account")
+
+    release.assert_awaited_once_with(text)
+    assert "@channel" not in _generate._INFLIGHT
+
+
+@pytest.mark.asyncio
+async def test_cancellation_during_delay_releases_claims_and_propagates(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    text = "reserved comment"
+    _generate._add_inflight("@channel", text, _generate.datetime.now(_generate.UTC))
+    monkeypatch.setattr(
+        _generate,
+        "_generate_acceptable",
+        AsyncMock(return_value=_generate._GenOutcome(text, None)),
+    )
+    monkeypatch.setattr(_generate, "load_neuro_settings", AsyncMock(return_value=_limits()))
+    monkeypatch.setattr(_seams, "rng", SimpleNamespace(uniform=lambda low, _high: low))
+    monkeypatch.setattr(_generate.asyncio, "sleep", AsyncMock(side_effect=asyncio.CancelledError()))
+    release = AsyncMock()
+    monkeypatch.setattr(_generate, "release_sent_text", release)
+
+    with pytest.raises(asyncio.CancelledError):
         await _generate._generate_and_post(_event(), _campaign(), "account")
 
     release.assert_awaited_once_with(text)

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 
 import pytest
@@ -114,7 +115,50 @@ def test_selection_miss_reports_highest_priority_blocker(
     )
 
 
-def test_account_lock_is_stable_per_account_and_distinct_between_accounts() -> None:
-    first = engine._account_lock("a")
-    assert engine._account_lock("a") is first
-    assert engine._account_lock("b") is not first
+@pytest.mark.asyncio
+async def test_same_account_critical_sections_are_serialized() -> None:
+    first_entered = asyncio.Event()
+    release_first = asyncio.Event()
+    order: list[str] = []
+
+    async def first() -> None:
+        async with engine._account_lock("account"):
+            order.append("first-enter")
+            first_entered.set()
+            await release_first.wait()
+            order.append("first-exit")
+
+    async def second() -> None:
+        async with engine._account_lock("account"):
+            order.append("second-enter")
+
+    first_task = asyncio.create_task(first())
+    await asyncio.wait_for(first_entered.wait(), timeout=0.5)
+    second_task = asyncio.create_task(second())
+    await asyncio.sleep(0)
+    assert order == ["first-enter"]
+
+    release_first.set()
+    await asyncio.gather(first_task, second_task)
+    assert order == ["first-enter", "first-exit", "second-enter"]
+
+
+@pytest.mark.asyncio
+async def test_different_accounts_can_hold_critical_sections_concurrently() -> None:
+    both_entered = asyncio.Event()
+    active = 0
+    peak = 0
+
+    async def worker(account_id: str) -> None:
+        nonlocal active, peak
+        async with engine._account_lock(account_id):
+            active += 1
+            peak = max(peak, active)
+            if active == 2:
+                both_entered.set()
+            await both_entered.wait()
+            active -= 1
+
+    await asyncio.wait_for(asyncio.gather(worker("a"), worker("b")), timeout=0.5)
+
+    assert peak == 2

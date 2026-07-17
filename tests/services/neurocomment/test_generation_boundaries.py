@@ -101,8 +101,13 @@ async def test_inflight_reservation_uses_post_generation_time(
         def now(cls, _tz: object) -> datetime:
             return clock.now
 
+    calls = 0
+
     async def generate(_request: object) -> GeminiResult:
-        clock.now = finished
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            clock.now = finished
         return GeminiResult(status="ok", text="fresh comment")
 
     monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
@@ -110,12 +115,17 @@ async def test_inflight_reservation_uses_post_generation_time(
     monkeypatch.setattr(_generate, "datetime", ClockDateTime)
     monkeypatch.setattr(_generate, "_recent_channel_comments", AsyncMock(return_value=[]))
     monkeypatch.setattr(_generate, "load_warming_settings", AsyncMock(return_value=_secret()))
+    monkeypatch.setattr(_generate, "try_reserve_sent", AsyncMock(return_value=True))
     monkeypatch.setattr(_seams, "generate_text", generate)
 
-    outcome = await _generate._generate_acceptable(_campaign(), "@channel", "post")
+    first = await _generate._generate_acceptable(_campaign(), "@channel", "post")
+    # Still inside the configured 24-hour window measured from provider completion.
+    # With the old entry-time timestamp this is 25h old and would be accepted again.
+    clock.now = finished + timedelta(hours=23)
+    second = await _generate._generate_acceptable(_campaign(), "@channel", "post")
 
-    assert outcome.text == "fresh comment"
-    assert _generate._INFLIGHT["@channel"] == [("fresh comment", finished)]
+    assert first == ("fresh comment", None)
+    assert second == (None, "duplicate")
 
 
 @pytest.mark.asyncio
