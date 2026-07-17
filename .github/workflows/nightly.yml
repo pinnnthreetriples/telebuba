@@ -10,7 +10,9 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}
-  cancel-in-progress: true
+  # Mutation runs are expensive and form a comparable time series; a manual
+  # dispatch must not silently cancel the scheduled run whose report we need.
+  cancel-in-progress: false
 
 # Supply-chain hardening: drop default write scopes.
 permissions: read-all
@@ -114,8 +116,39 @@ jobs:
           df -h /
           sudo du -h -d 2 /tmp "$GITHUB_WORKSPACE" 2>/dev/null | sort -rh | head -25
 
-      # Always surface the kill/survive breakdown — a bare `mutmut run` leaves no
-      # visible signal, so surviving mutants (the whole point) went unseen.
-      - name: Show mutation results
+      - name: Build mutation report
         if: always()
-        run: uv run mutmut results
+        run: |
+          mkdir -p mutation-report
+          uv run mutmut results --all true > mutation-report/results-all.txt
+          uv run mutmut results > mutation-report/actionable.txt
+          uv run mutmut export-cicd-stats
+          cp mutants/mutmut-cicd-stats.json mutation-report/stats.json
+          uv run python tools/mutation_report.py report \
+            --stats mutation-report/stats.json \
+            --results mutation-report/results-all.txt \
+            --baseline .github/mutation-baseline.json \
+            --project pyproject.toml \
+            --output mutation-report/report.json \
+            --summary mutation-report/summary.md
+          cat mutation-report/summary.md >> "$GITHUB_STEP_SUMMARY"
+
+      # Upload before the gate so a regression still leaves complete evidence.
+      - name: Upload mutation report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: mutation-report-${{ github.run_id }}
+          path: mutation-report/
+          if-no-files-found: error
+          retention-days: 30
+
+      # Survivors remain actionable signal, not individual CI failures. Only an
+      # aggregate score regression below the reviewed baseline fails Nightly.
+      - name: Enforce mutation baseline
+        run: |
+          uv run python tools/mutation_report.py gate \
+            --stats mutation-report/stats.json \
+            --results mutation-report/results-all.txt \
+            --baseline .github/mutation-baseline.json \
+            --project pyproject.toml

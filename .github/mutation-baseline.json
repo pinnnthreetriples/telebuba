@@ -1,0 +1,13 @@
+{
+  "mutmut_version": "3.6.0",
+  "source_paths": [
+    "services",
+    "schemas"
+  ],
+  "stats": {
+    "killed": 6524,
+    "survived": 2303,
+    "timeout": 6,
+    "total": 8833
+  }
+}

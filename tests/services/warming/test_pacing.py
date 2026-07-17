@@ -53,6 +53,25 @@ def test_human_delay_is_bounded_and_right_skewed(monkeypatch: pytest.MonkeyPatch
     assert warming._human_delay(3.0, 3.0) == 3.0
 
 
+@pytest.mark.parametrize(
+    ("draw", "expected"),
+    [(0.0, 2.0), (0.25, 4.0), (1.0, 10.0), (4.0, 10.0)],
+)
+def test_human_delay_maps_and_clips_deterministic_draws(
+    monkeypatch: pytest.MonkeyPatch, draw: float, expected: float
+) -> None:
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: draw)
+    assert warming._human_delay(2.0, 10.0) == pytest.approx(expected)
+
+
+def test_human_delay_normalizes_reversed_and_negative_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.5)
+    assert warming._human_delay(10.0, 2.0) == pytest.approx(6.0)
+    assert warming._human_delay(-4.0, -2.0) == pytest.approx(-3.0)
+
+
 def test_shift_to_active_hours_moves_night_into_window(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
