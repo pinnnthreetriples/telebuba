@@ -1,0 +1,47 @@
+name: MEX memory
+
+on:
+  pull_request:
+    paths:
+      - '.mex/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.tool-configs/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.github/workflows/mex.yml'
+  push:
+    branches: [main]
+    paths:
+      - '.mex/**'
+      - 'AGENTS.md'
+      - 'CLAUDE.md'
+      - '.tool-configs/**'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.github/workflows/mex.yml'
+  schedule:
+    - cron: '0 6 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: MEX drift and diagnostics
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '24'
+
+      - name: Check MEX memory
+        run: npx --yes mex-agent@0.6.3 check --json
+
+      - name: MEX diagnostics
+        if: always()
+        run: npx --yes mex-agent@0.6.3 doctor

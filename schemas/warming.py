@@ -33,7 +33,7 @@ WarmingPhase = Literal["intro", "settling", "warming", "active", "warmed"]
 
 # Operator-chosen *target* cadence (sessions/day + reaction/DM frequency), bounded
 # by the phase ceiling (effective = min(persona, phase/trust)); orthogonal to
-# ``WarmingPhase``. See the 2026-07-01 ADR in ``.mex/context/decisions.md``.
+# ``WarmingPhase``. Current contract: ``.mex/context/runtime.md`` and ``services.warming.pacing``.
 ActivityPersona = Literal["calm", "normal", "active"]
 
 _ACTIVE_STATES: frozenset[WarmingState] = frozenset(
