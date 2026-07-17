@@ -1,21 +1,34 @@
-@.mex/AGENTS.md
+---
+name: agents
+description: Always-loaded project anchor with identity, hard rules, commands, and navigation.
+last_updated: 2026-07-17
+---
 
-## Claude Code — session rules
+# Telebuba
 
-- Before writing code: `npx mex-agent check --quiet`; on drift errors, `npx mex-agent sync --dry-run` first.
-- Plan Mode (`/plan`) for non-trivial tasks (new features, cross-layer changes); trivial fixes go straight to execution.
-- After meaningful work, run the GROW step: update `state/active.md`, bump `last_updated`, move board item.
+## What This Is
+Telegram operations dashboard for accounts, proxies, warming, neurocomment, profiles, and channels.
 
-## Agent skills
+## Non-Negotiables
+- Preserve `api → services → core` and typed Pydantic boundaries.
+- Keep external I/O in `core/`; API and frontend contain no runtime policy.
+- Never expose secrets, sessions, tdata, JWTs, or proxy credentials.
+- Add tests for behavior changes; test files stay at or below 700 lines.
+- Run one uvicorn worker; report only checks actually executed.
 
-### Issue tracker
+## Commands
+- Dev: `uv run uvicorn main:app --reload`; frontend: `cd frontend && npm run dev`
+- Backend: `uv run pytest`
+- Quality: `uv run pre-commit run --all-files`
+- Frontend: `cd frontend && npm run gates && npm run build`
+- Memory: `npx mex-agent check --quiet`
 
-Issues and PRDs live as **GitHub issues** in the telebuba repo (owner `pinnnthreetriples`), managed via the `gh` CLI. See `docs/agents/issue-tracker.md`.
+## GROW
+After meaningful work:
+- update `.mex/ROUTER.md` only when project state changes;
+- update affected `.mex/context/` facts;
+- create or improve a `.mex/patterns/` runbook for repeatable work;
+- bump `last_updated` and use `mex log` when rationale matters.
 
-### Triage labels
-
-Five canonical triage roles map 1:1 to GitHub labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
-
-### Domain docs
-
-Domain knowledge lives in the **`.mex/` scaffold** — entrypoint `.mex/ROUTER.md`, details in `.mex/context/`. See `docs/agents/domain.md`.
+## Navigation
+Read `.mex/ROUTER.md`, then load only its matching task route and at most one relevant pattern.

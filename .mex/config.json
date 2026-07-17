@@ -5,6 +5,17 @@
   ],
   "scaffold_id": "7653bd14-bcff-4c7f-897f-51bb60f2af56",
   "scaffold_name": "telebuba",
-  "origin": null,
-  "upstream": null
+  "origin": "https://github.com/pinnnthreetriples/telebuba",
+  "upstream": "https://github.com/mex-memory/mex",
+  "staleness": {
+    "warnDays": 14,
+    "errorDays": 30,
+    "warnCommits": 25,
+    "errorCommits": 50
+  },
+  "heartbeat": {
+    "staleDays": 14,
+    "memoryCleanupDays": 7,
+    "dailyMemoryRetentionDays": 14
+  }
 }

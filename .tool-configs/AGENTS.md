@@ -1,24 +1,34 @@
-# Telebuba — Agent Instructions
+---
+name: agents
+description: Always-loaded project anchor with identity, hard rules, commands, and navigation.
+last_updated: 2026-07-17
+---
 
-> **Read [`.mex/AGENTS.md`](.mex/AGENTS.md) in full before doing any work, then
-> follow the routing flow in [`.mex/ROUTER.md`](.mex/ROUTER.md).** Those files —
-> and the `.mex/context/*` files they reference — are the single source of truth
-> for this repository's architecture, conventions, and non-negotiables.
+# Telebuba
 
-This file is the entry point for `AGENTS.md`-aware agents (OpenAI Codex, Cursor,
-…). It is intentionally a thin pointer: the project keeps its canonical
-instructions under `.mex/` (the `mex` scaffold), and each tool gets its own thin
-entry point so the rules never drift between tools.
+## What This Is
+Telegram operations dashboard for accounts, proxies, warming, neurocomment, profiles, and channels.
 
-| Tool | Entry point | Mechanism |
-| --- | --- | --- |
-| OpenAI Codex / Cursor / other `AGENTS.md`-aware agents | `AGENTS.md` (this file) | the tool injects this file; you then open and follow `.mex/AGENTS.md` |
-| Claude Code | `CLAUDE.md` | imports `@.mex/AGENTS.md` directly |
+## Non-Negotiables
+- Preserve `api → services → core` and typed Pydantic boundaries.
+- Keep external I/O in `core/`; API and frontend contain no runtime policy.
+- Never expose secrets, sessions, tdata, JWTs, or proxy credentials.
+- Add tests for behavior changes; test files stay at or below 700 lines.
+- Run one uvicorn worker; report only checks actually executed.
 
-Why prose and not `@.mex/AGENTS.md` here: the `@import` syntax is a Claude Code
-feature. Codex and most other agents read `AGENTS.md` as plain Markdown and do
-**not** expand `@path` imports, so this file gives them an explicit, readable
-instruction to open `.mex/AGENTS.md` instead.
+## Commands
+- Dev: `uv run uvicorn main:app --reload`; frontend: `cd frontend && npm run dev`
+- Backend: `uv run pytest`
+- Quality: `uv run pre-commit run --all-files`
+- Frontend: `cd frontend && npm run gates && npm run build`
+- Memory: `npx mex-agent check --quiet`
 
-**Do not add project rules to this file.** Edit `.mex/AGENTS.md` and the
-`.mex/context/*` files — this entry point only routes agents to them.
+## GROW
+After meaningful work:
+- update `.mex/ROUTER.md` only when project state changes;
+- update affected `.mex/context/` facts;
+- create or improve a `.mex/patterns/` runbook for repeatable work;
+- bump `last_updated` and use `mex log` when rationale matters.
+
+## Navigation
+Read `.mex/ROUTER.md`, then load only its matching task route and at most one relevant pattern.
