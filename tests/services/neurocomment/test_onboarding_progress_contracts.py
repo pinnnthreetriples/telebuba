@@ -68,14 +68,16 @@ async def test_comments_off_fans_out_without_join(
         ),
     )
     outcomes = []
+    events = []
 
-    result = await onboarding._resolve_group_for_join(["a", "b"], "@off", outcomes)
+    result = await onboarding._resolve_group_for_join(["a", "b"], "@off", outcomes, events.append)
 
     assert result is None
     assert [(item.account_id, item.state) for item in outcomes] == [
         ("a", "comments_off"),
         ("b", "comments_off"),
     ]
+    assert [(event.code, event.channel) for event in events] == [("channel_comments_off", "@off")]
 
 
 @pytest.mark.asyncio
@@ -96,7 +98,9 @@ async def test_spam_probe_failure_isolated_and_progressed(
         ("spam_probe_failed", "a"),
         ("spam_probe_started", "b"),
     ]
-    log.assert_awaited_once()
-    call = log.await_args
-    assert call is not None
-    assert call.kwargs["account_id"] == "a"
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_onboard_spam_probe_failed",
+        account_id="a",
+        extra={"error_type": "RuntimeError"},
+    )

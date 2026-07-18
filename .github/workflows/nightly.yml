@@ -106,7 +106,25 @@ jobs:
           df -h /
 
       - name: Run mutmut
-        run: uv run mutmut run
+        shell: bash
+        run: |
+          uv run mutmut run
+
+          # mutmut 3.6 can occasionally leave generated mutants as
+          # "not checked" after a complete parallel sweep. A targeted rerun
+          # invalidates the statuses of every non-selected mutant, so retry the
+          # complete sweep once. The strict report still rejects an incomplete
+          # second run instead of publishing a misleading score.
+          incomplete_count=$(
+            uv run mutmut results --all true |
+              sed -n -E 's/^    (.*): not checked$/\1/p' |
+              wc -l
+          )
+          if (( incomplete_count > 0 )); then
+            printf 'Retrying complete sweep after %d not-checked mutants\n' \
+              "$incomplete_count"
+            uv run mutmut run
+          fi
 
       # If the sweep fails again, show where the disk went — the runner dies too
       # hard to upload step logs, so this is the only signal that survives.

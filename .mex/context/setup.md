@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-16
+last_updated: 2026-07-18
 ---
 
 # Setup and Checks
@@ -27,4 +27,11 @@ cd frontend && npm run gates && npm run build
 npx mex-agent check && npx mex-agent doctor
 ```
 
-CI workflows are the source of truth; nightly adds extended Hypothesis, Semgrep and mutation checks. `.mex/**` and Markdown do not trigger code CI. Run one uvicorn worker and treat `.session`, tdata, JWT secrets and proxy passwords as credentials.
+CI workflows are the source of truth; Nightly adds extended Hypothesis,
+Semgrep and mutation checks. The mutation job covers `services/` and
+`schemas/`, retries the complete sweep once when `mutmut 3.6` leaves incomplete
+entries, publishes the
+complete results/stats/readable hotspot summary as a 30-day artifact. Individual
+survivors do not fail the job; an aggregate score regression, incomplete run or
+inconsistent report does. `.mex/**` and Markdown do not trigger code CI. Run one uvicorn worker
+and treat `.session`, tdata, JWT secrets and proxy passwords as credentials.

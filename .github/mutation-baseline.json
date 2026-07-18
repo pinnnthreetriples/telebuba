@@ -27,9 +27,9 @@
     ]
   },
   "stats": {
-    "killed": 6524,
-    "survived": 2303,
-    "timeout": 6,
-    "total": 8833
+    "killed": 7774,
+    "survived": 1277,
+    "timeout": 1,
+    "total": 9052
   }
 }

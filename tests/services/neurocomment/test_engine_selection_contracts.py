@@ -133,14 +133,22 @@ async def test_same_account_critical_sections_are_serialized() -> None:
             order.append("second-enter")
 
     first_task = asyncio.create_task(first())
-    await asyncio.wait_for(first_entered.wait(), timeout=0.5)
-    second_task = asyncio.create_task(second())
-    await asyncio.sleep(0)
-    assert order == ["first-enter"]
+    tasks = [first_task]
+    blocked_order: list[str] = []
+    task_results: list[object] = []
+    try:
+        await asyncio.wait_for(first_entered.wait(), timeout=0.5)
+        second_task = asyncio.create_task(second())
+        tasks.append(second_task)
+        await asyncio.sleep(0)
+        blocked_order = list(order)
+    finally:
+        release_first.set()
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    release_first.set()
-    await asyncio.gather(first_task, second_task)
+    assert blocked_order == ["first-enter"]
     assert order == ["first-enter", "first-exit", "second-enter"]
+    assert task_results == [None, None]
 
 
 @pytest.mark.asyncio
@@ -159,6 +167,15 @@ async def test_different_accounts_can_hold_critical_sections_concurrently() -> N
             await both_entered.wait()
             active -= 1
 
-    await asyncio.wait_for(asyncio.gather(worker("a"), worker("b")), timeout=0.5)
+    tasks = [asyncio.create_task(worker("a")), asyncio.create_task(worker("b"))]
+    observed_peak = 0
+    task_results: list[object] = []
+    try:
+        await asyncio.wait_for(both_entered.wait(), timeout=0.5)
+        observed_peak = peak
+    finally:
+        both_entered.set()
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    assert peak == 2
+    assert observed_peak == 2
+    assert task_results == [None, None]

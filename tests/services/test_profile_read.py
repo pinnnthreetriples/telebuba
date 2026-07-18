@@ -11,7 +11,7 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
-from core.telegram_client import TelegramReadError
+from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.accounts import AccountProfileSnapshot
 from schemas.telegram_actions import (
     GetUserProfile,
@@ -99,6 +99,13 @@ def _fake_read_results(actions: list[object]) -> list[object]:
                             date_unix=1_600_000_000,
                             is_pinned=True,
                         ),
+                        TelegramStoryThumb(
+                            story_id=202,
+                            caption="stale",
+                            date_unix=1_650_000_000,
+                            is_pinned=True,
+                            views=1,
+                        ),
                     ],
                 ),
             )
@@ -162,6 +169,8 @@ async def test_fetch_live_profile_returns_combined_snapshot(
     # and active-only #202 appear once each in date-descending order.
     assert [story.story_id for story in snapshot.stories] == [202, 101]
     assert snapshot.stories[0].is_active is True
+    assert snapshot.stories[0].is_pinned is True
+    assert snapshot.stories[0].caption == "active"
     assert snapshot.stories[1].is_pinned is True
     assert [track.title for track in snapshot.music] == ["Track"]
     assert snapshot.music_supported is True
@@ -174,14 +183,14 @@ async def test_fetch_live_profile_returns_combined_snapshot(
     # Photo history and active-stories joined the batch later; the
     # one-session-per-fetch invariant must still hold for all five reads.
     assert len(calls) == 1, "fetch_live_account_profile must open ONE gateway session, not five"
-    action_types = {type(action).__name__ for action in calls[0]}
-    assert action_types == {
+    action_types = [type(action).__name__ for action in calls[0]]
+    assert action_types == [
         "GetUserProfile",
         "ListPinnedStories",
         "ListActiveStories",
         "ListProfileMusic",
         "ListProfilePhotos",
-    }
+    ]
 
 
 @pytest.mark.asyncio
@@ -253,6 +262,27 @@ async def test_fetch_live_profile_flood_wait_returns_error_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_fetch_live_profile_missing_account_is_retryable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    async def missing(_account_id: str, _actions: list[object]) -> list[object]:
+        nonlocal calls
+        calls += 1
+        message = "missing-account"
+        raise TelegramAccountNotFoundError(message)
+
+    monkeypatch.setattr("services.accounts.profile_read.execute_read_many", missing)
+
+    first = await fetch_live_account_profile("acc-missing")
+    second = await fetch_live_account_profile("acc-missing")
+
+    assert first.error == second.error == "missing-account"
+    assert calls == 2, "missing-account snapshots must not poison the TTL cache"
+
+
+@pytest.mark.asyncio
 async def test_fetch_live_profile_does_not_cache_errors(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -285,20 +315,39 @@ async def test_fetch_live_profile_does_not_cache_errors(
 async def test_fetch_live_profile_unexpected_error_returns_error_snapshot(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    events: list[tuple[str, str, str | None, dict[str, object] | None]] = []
+
     async def fake_execute_read_many(_account_id: str, _actions: list[object]) -> list[object]:
         msg = "boom"
         raise RuntimeError(msg)
+
+    async def log(
+        level: str,
+        event: str,
+        *,
+        account_id: str | None = None,
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        events.append((level, event, account_id, extra))
 
     monkeypatch.setattr(
         "services.accounts.profile_read.execute_read_many",
         fake_execute_read_many,
     )
+    monkeypatch.setattr("services.accounts.profile_read.log_event", log)
 
     snapshot = await fetch_live_account_profile("acc-broken")
 
-    assert snapshot.error is not None
-    assert "RuntimeError" in snapshot.error
+    assert snapshot.error == "RuntimeError: boom"
     assert snapshot.first_name is None
+    assert events == [
+        (
+            "ERROR",
+            "account_profile_read_failed_unexpected",
+            "acc-broken",
+            {"error_type": "RuntimeError", "error": "boom"},
+        ),
+    ]
 
 
 @pytest.mark.asyncio
@@ -324,7 +373,7 @@ def _gated_execute_read_many(
     async def gated(_account_id: str, actions: list[object]) -> list[object]:
         calls.append(1)
         started.set()
-        await release.wait()
+        await asyncio.wait_for(release.wait(), timeout=2.0)
         return _fake_read_results(actions)
 
     monkeypatch.setattr("services.accounts.profile_read.execute_read_many", gated)
@@ -334,28 +383,23 @@ def _gated_execute_read_many(
 async def test_invalidate_mid_flight_prevents_stale_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A fetch that started BEFORE a mutation must NOT re-populate the cache.
-
-    Regression (cache race): the fetch is seconds long; a mutation +
-    ``invalidate_account_profile_cache`` landing mid-flight used to be
-    overwritten when the in-flight fetch completed and stored its
-    pre-mutation snapshot — pinning the dialog to dead ids for a full TTL.
-    """
+    """A fetch that started before a mutation must not repopulate the cache."""
     calls: list[int] = []
     started = asyncio.Event()
     release = asyncio.Event()
     _gated_execute_read_many(monkeypatch, calls, started, release)
 
     task = asyncio.create_task(fetch_live_account_profile("acc-race"))
-    await started.wait()
-    # Mutation lands while the fetch is still in flight.
-    invalidate_account_profile_cache("acc-race")
-    release.set()
-    snapshot = await task
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2.0)
+        invalidate_account_profile_cache("acc-race")
+        release.set()
+        snapshot = await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        release.set()
+        await asyncio.gather(task, return_exceptions=True)
     assert snapshot.error is None
 
-    # The pre-mutation snapshot must NOT have been cached: the next open
-    # re-fetches instead of serving stale state until the TTL lapses.
     await fetch_live_account_profile("acc-race")
     assert len(calls) == 2, "stale in-flight snapshot must not survive invalidation"
 
@@ -371,10 +415,14 @@ async def test_global_invalidate_mid_flight_prevents_stale_cache(
     _gated_execute_read_many(monkeypatch, calls, started, release)
 
     task = asyncio.create_task(fetch_live_account_profile("acc-race-all"))
-    await started.wait()
-    invalidate_account_profile_cache()
-    release.set()
-    await task
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2.0)
+        invalidate_account_profile_cache()
+        release.set()
+        await asyncio.wait_for(task, timeout=2.0)
+    finally:
+        release.set()
+        await asyncio.gather(task, return_exceptions=True)
 
     await fetch_live_account_profile("acc-race-all")
     assert len(calls) == 2, "global invalidation must not be overwritten mid-flight"
@@ -384,22 +432,21 @@ async def test_global_invalidate_mid_flight_prevents_stale_cache(
 async def test_concurrent_fetches_share_single_flight(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Concurrent cold fetches coalesce into ONE gateway round-trip.
-
-    Modal open + N cold thumb requests used to fire N+1 full 5-action
-    Telegram fetches in parallel (stampede).
-    """
+    """Concurrent cold fetches coalesce into one gateway round-trip."""
     calls: list[int] = []
     started = asyncio.Event()
     release = asyncio.Event()
     _gated_execute_read_many(monkeypatch, calls, started, release)
 
     tasks = [asyncio.create_task(fetch_live_account_profile("acc-flight")) for _ in range(3)]
-    await started.wait()
-    # Let the remaining callers reach the in-flight join before releasing.
-    await asyncio.sleep(0)
-    release.set()
-    snapshots = await asyncio.gather(*tasks)
+    try:
+        await asyncio.wait_for(started.wait(), timeout=2.0)
+        await asyncio.sleep(0)
+        release.set()
+        snapshots = await asyncio.wait_for(asyncio.gather(*tasks), timeout=2.0)
+    finally:
+        release.set()
+        await asyncio.gather(*tasks, return_exceptions=True)
 
     assert len(calls) == 1, "concurrent callers must share the in-flight fetch"
     assert all(snapshot is snapshots[0] for snapshot in snapshots)
@@ -407,52 +454,83 @@ async def test_concurrent_fetches_share_single_flight(
 
 @pytest.mark.asyncio
 async def test_account_profile_view_encodes_bytes(monkeypatch: pytest.MonkeyPatch) -> None:
-    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+    calls: list[tuple[str, bool]] = []
+
+    async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:
+        calls.append((account_id, force_refresh))
         return AccountProfileSnapshot(
             account_id=account_id,
+            first_name="",
+            last_name=None,
+            username="u",
+            bio="",
+            current_photo_id=9_007_199_254_740_993,
             photos=[
                 TelegramProfilePhoto(
-                    photo_id=1, access_hash=2, file_reference=b"ref", thumb_bytes=b"\x89PNG"
+                    photo_id=9_007_199_254_740_993,
+                    access_hash=-9_007_199_254_740_993,
+                    file_reference=b"ref",
+                    thumb_bytes=b"\x89PNG",
                 ),
             ],
             stories=[
                 TelegramStoryThumb(
-                    story_id=3,
+                    story_id=0,
                     kind="image",
+                    caption="Rabbit hole",
                     privacy_preset="contacts",
                     thumb_bytes=b"\x89story",
                     is_pinned=True,
-                    views=137,
-                    reactions=12,
+                    views=0,
+                    reactions=0,
                 ),
             ],
-            music=[TelegramMusicItem(file_id=4, title="T", access_hash=5, file_reference=b"mref")],
-            music_supported=True,
+            music=[
+                TelegramMusicItem(
+                    file_id=9_007_199_254_740_993,
+                    title="T",
+                    performer="Artist",
+                    access_hash=-9_007_199_254_740_993,
+                    file_reference=b"mref",
+                ),
+            ],
+            music_supported=False,
         )
 
     monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
-    view = await account_profile_view("acc-1")
+    view = await account_profile_view("acc-1", force_refresh=True)
 
+    assert calls == [("acc-1", True)]
     assert view.error is None
+    assert (view.first_name, view.last_name, view.username, view.bio) == ("", None, "u", "")
     assert view.photos[0].file_reference == base64.b64encode(b"ref").decode()
     assert (
         view.photos[0].thumb_url
-        == f"/api/{settings.api.version}/accounts/acc-1/profile/photos/1/thumb"
+        == f"/api/{settings.api.version}/accounts/acc-1/profile/photos/9007199254740993/thumb"
     )
-    # int64 ids cross the JSON edge as strings so the SPA can't round them.
-    assert view.photos[0].photo_id == "1"
-    assert view.photos[0].access_hash == "2"
-    assert view.stories[0].story_id == 3
+    assert (view.photos[0].photo_id, view.photos[0].access_hash) == (
+        "9007199254740993",
+        "-9007199254740993",
+    )
+    assert view.stories[0].story_id == 0
+    assert (view.stories[0].kind, view.stories[0].caption, view.stories[0].privacy_preset) == (
+        "image",
+        "Rabbit hole",
+        "contacts",
+    )
     assert (
         view.stories[0].thumb_url
-        == f"/api/{settings.api.version}/accounts/acc-1/profile/stories/3/thumb"
+        == f"/api/{settings.api.version}/accounts/acc-1/profile/stories/0/thumb"
     )
-    # Pin state + engagement counts flow through to the view for the modal.
     assert view.stories[0].is_pinned is True
-    assert view.stories[0].views == 137
-    assert view.stories[0].reactions == 12
-    assert view.music[0].file_id == "4"
+    assert (view.stories[0].views, view.stories[0].reactions) == (0, 0)
+    assert (view.music[0].file_id, view.music[0].access_hash) == (
+        "9007199254740993",
+        "-9007199254740993",
+    )
+    assert (view.music[0].title, view.music[0].performer) == ("T", "Artist")
     assert view.music[0].file_reference == base64.b64encode(b"mref").decode()
+    assert view.music_supported is False
 
 
 @pytest.mark.asyncio
@@ -558,7 +636,10 @@ def _image_snapshot() -> AccountProfileSnapshot:
 async def test_account_profile_image_returns_photo_bytes_and_etag(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    requested: list[str] = []
+
     async def _snap(account_id: str, *, force_refresh: bool = False) -> AccountProfileSnapshot:  # noqa: ARG001
+        requested.append(account_id)
         return _image_snapshot()
 
     monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
@@ -566,6 +647,7 @@ async def test_account_profile_image_returns_photo_bytes_and_etag(
     image = await account_profile_image("acc-1", kind="photos", item_id=1)
 
     assert image is not None
+    assert requested == ["acc-1"]
     assert image.content == b"photo-thumb"
     assert image.media_type == "image/jpeg"
     assert image.etag  # non-empty content hash

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime
 
 import pytest
 
@@ -91,19 +92,26 @@ async def test_crash_is_persisted_only_for_still_live_generation(
     monkeypatch.setattr(_runner, "_set_state", set_state)
     monkeypatch.setattr(_runner, "log_event", log)
 
+    started = datetime.now(UTC)
     await _runner._warming_loop("acc-1", run_id="gen-a")
+    finished = datetime.now(UTC)
 
     assert events[0][0] == "warming_loop_crashed"
     assert events[0][1]["extra"] == {
         "error_type": "RuntimeError",
         "message": "schedule failed",
     }
+    heartbeat_at = writes[0]["heartbeat_at"]
+    assert isinstance(heartbeat_at, str)
+    heartbeat = datetime.fromisoformat(heartbeat_at)
+    assert heartbeat.utcoffset() == UTC.utcoffset(heartbeat)
+    assert started <= heartbeat <= finished
     assert writes == [
         {
             "state": "error",
             "last_event": "loop_crashed",
             "last_error": "RuntimeError: schedule failed",
-            "heartbeat_at": writes[0]["heartbeat_at"],
+            "heartbeat_at": heartbeat_at,
             "expected_run_id": "gen-a",
         }
     ]

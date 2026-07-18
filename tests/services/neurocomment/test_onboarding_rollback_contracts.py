@@ -52,6 +52,10 @@ async def test_transient_resolve_failure_does_not_rollback_existing_ready_pair(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     ctx, _events = _context(accounts=["ready", "new"], ready={("ready", "@c")})
+    onboard_pair = AsyncMock(
+        side_effect=AssertionError("resolve failure must not start pair onboarding")
+    )
+    monkeypatch.setattr(_onboard_channel, "_onboard_pair", onboard_pair)
 
     async def resolve(
         accounts: list[str], channel: str, outcomes: list[AccountChannelOnboarding], **_kw: object
@@ -68,6 +72,7 @@ async def test_transient_resolve_failure_does_not_rollback_existing_ready_pair(
     joined = await _onboard_channel.onboard_channel("@c", ctx, joined_once=True)
 
     assert joined is True
+    onboard_pair.assert_not_awaited()
     assert [(o.account_id, o.state) for o in ctx.outcomes] == [
         ("new", "failed"),
         ("ready", "ready"),
@@ -110,7 +115,12 @@ async def test_unexpected_pair_failure_becomes_local_failed_outcome(
         "state": "failed",
         "reason": "TimeoutError",
     }
-    log.assert_awaited_once()
+    log.assert_awaited_once_with(
+        "ERROR",
+        "neurocomment_onboard_pair_failed",
+        account_id="account",
+        extra={"channel": "@c", "error_type": "TimeoutError"},
+    )
 
 
 def test_pins_select_only_explicit_channel_while_empty_pin_selects_all() -> None:

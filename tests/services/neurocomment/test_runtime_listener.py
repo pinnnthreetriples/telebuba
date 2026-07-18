@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import asyncio
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -243,14 +243,30 @@ async def test_reconcile_join_failure_does_not_block_subscribe(
     campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     await link_channel_to_campaign(campaign.campaign_id, "@a")
     spy = _ListenerSpy()
+    audit = AsyncMock()
     _patch_listener(monkeypatch, spy)
     _patch_execute(monkeypatch, _ExecuteSpy(ok=False))
+    monkeypatch.setattr(_runtime, "log_event", audit)
 
     await _runtime.reconcile_neurocomment_runtime("listener-1")
 
     # A failed join must not stop the listener from subscribing.
     assert len(spy.subscribed) == 1
     assert spy.subscribed[0][1] == ["@a"]
+    assert audit.await_args_list == [
+        call(
+            "WARNING",
+            "neurocomment_listener_join_failed",
+            account_id="listener-1",
+            extra={"channel": "@a", "status": "failed"},
+        ),
+        call(
+            "INFO",
+            "neurocomment_runtime_reconciled",
+            account_id="listener-1",
+            extra={"channels": 1},
+        ),
+    ]
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 
@@ -312,17 +328,23 @@ async def test_on_post_spawns_task_and_returns_without_blocking(
 
     monkeypatch.setattr(_runtime, "handle_new_post", slow_handle)
 
-    # The callback must return immediately even though the handler blocks.
-    await asyncio.wait_for(
-        _runtime.on_post(NewPostEvent(channel="@a", post_id=1, text="hi")),
-        timeout=0.5,
-    )
-    await asyncio.wait_for(started.wait(), timeout=0.5)
-    assert len(_runtime._TASKS) == 1
+    in_flight = 0
+    task_results: list[object] = []
+    try:
+        # The callback must return immediately even though the handler blocks.
+        await asyncio.wait_for(
+            _runtime.on_post(NewPostEvent(channel="@a", post_id=1, text="hi")),
+            timeout=0.5,
+        )
+        await asyncio.wait_for(started.wait(), timeout=0.5)
+        in_flight = len(_runtime._TASKS)
+    finally:
+        tasks = list(_runtime._TASKS)
+        release.set()
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    release.set()
-    await asyncio.sleep(0)  # let the task finish + discard itself
-    await asyncio.sleep(0)
+    assert in_flight == 1
+    assert task_results == [None]
 
 
 @pytest.mark.asyncio
@@ -330,20 +352,41 @@ async def test_on_post_drops_when_at_capacity(monkeypatch: pytest.MonkeyPatch) -
     """At the concurrency cap, further posts are dropped (not spawned) — flood protection (L4)."""
     monkeypatch.setattr(settings.neurocomment, "max_concurrent_post_tasks", 2)
     release = asyncio.Event()
+    audit = AsyncMock()
 
     async def blocking_handle(_event: NewPostEvent) -> None:
         await release.wait()
 
     monkeypatch.setattr(_runtime, "handle_new_post", blocking_handle)
+    monkeypatch.setattr(_runtime, "log_event", audit)
 
-    for post_id in range(5):
-        await _runtime.on_post(NewPostEvent(channel="@a", post_id=post_id, text="hi"))
+    in_flight = 0
+    audit_calls = []
+    task_results: list[object] = []
+    try:
+        for post_id in range(5):
+            await _runtime.on_post(NewPostEvent(channel="@a", post_id=post_id, text="hi"))
+        in_flight = len(_runtime._TASKS)
+        audit_calls = list(audit.await_args_list)
+    finally:
+        tasks = list(_runtime._TASKS)
+        release.set()
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
     # Only the first two spawned; the remaining three were dropped at capacity.
-    assert len(_runtime._TASKS) == 2
-
-    release.set()
-    await asyncio.gather(*list(_runtime._TASKS), return_exceptions=True)
+    assert in_flight == 2
+    assert (
+        audit_calls
+        == [
+            call(
+                "WARNING",
+                "neurocomment_post_dropped_overloaded",
+                extra={"channel": "@a", "in_flight": 2},
+            )
+        ]
+        * 3
+    )
+    assert task_results == [None, None]
 
 
 @pytest.mark.asyncio
@@ -357,13 +400,19 @@ async def test_on_post_accepts_up_to_capacity(monkeypatch: pytest.MonkeyPatch) -
 
     monkeypatch.setattr(_runtime, "handle_new_post", blocking_handle)
 
-    for post_id in range(3):
-        await _runtime.on_post(NewPostEvent(channel="@a", post_id=post_id, text="hi"))
+    in_flight = 0
+    task_results: list[object] = []
+    try:
+        for post_id in range(3):
+            await _runtime.on_post(NewPostEvent(channel="@a", post_id=post_id, text="hi"))
+        in_flight = len(_runtime._TASKS)
+    finally:
+        tasks = list(_runtime._TASKS)
+        release.set()
+        task_results = await asyncio.gather(*tasks, return_exceptions=True)
 
-    assert len(_runtime._TASKS) == 3
-
-    release.set()
-    await asyncio.gather(*list(_runtime._TASKS), return_exceptions=True)
+    assert in_flight == 3
+    assert task_results == [None, None, None]
 
 
 @pytest.mark.asyncio

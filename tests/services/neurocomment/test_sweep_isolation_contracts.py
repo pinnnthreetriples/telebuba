@@ -8,6 +8,7 @@ from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from core.config import settings
 from schemas.neurocomment import CommentRecord
 from schemas.telegram_actions import CheckMessagesAliveResult
 from services.neurocomment import _state, _sweep
@@ -46,9 +47,17 @@ async def test_empty_fresh_delete_set_still_updates_window_without_delete_log(
     monkeypatch.setattr(_state, "register_channel_deletions", register)
     monkeypatch.setattr(_sweep, "log_event", log)
 
-    await _sweep._sweep_channel("@c", [_comment("@c", 1), _comment("@c", 2)], datetime.now(UTC))
+    now = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
+    await _sweep._sweep_channel("@c", [_comment("@c", 1), _comment("@c", 2)], now)
 
-    assert register.call_count == 1
+    register.assert_called_once_with(
+        "@c",
+        now,
+        _state.ChannelDeletionScan(window_ids={1, 2}, missing_ids={2}),
+        min_deletions=settings.neurocomment.channel_backoff_min_deletions,
+        base_seconds=settings.neurocomment.channel_backoff_base_seconds,
+        max_seconds=settings.neurocomment.channel_backoff_max_seconds,
+    )
     log.assert_not_awaited()
 
 
@@ -65,12 +74,22 @@ async def test_backoff_trip_logs_missing_count_and_duration(
     monkeypatch.setattr(
         _sweep, "mark_comments_deleted", AsyncMock(return_value=SimpleNamespace(comments=[]))
     )
-    monkeypatch.setattr(_state, "register_channel_deletions", Mock(return_value=600))
+    register = Mock(return_value=600)
+    monkeypatch.setattr(_state, "register_channel_deletions", register)
     log = AsyncMock()
     monkeypatch.setattr(_sweep, "log_event", log)
 
-    await _sweep._sweep_channel("@c", [_comment("@c", 1), _comment("@c", 2)], datetime.now(UTC))
+    now = datetime(2026, 7, 18, 12, 0, tzinfo=UTC)
+    await _sweep._sweep_channel("@c", [_comment("@c", 1), _comment("@c", 2)], now)
 
+    register.assert_called_once_with(
+        "@c",
+        now,
+        _state.ChannelDeletionScan(window_ids={1, 2}, missing_ids={1, 2}),
+        min_deletions=settings.neurocomment.channel_backoff_min_deletions,
+        base_seconds=settings.neurocomment.channel_backoff_base_seconds,
+        max_seconds=settings.neurocomment.channel_backoff_max_seconds,
+    )
     log.assert_awaited_once_with(
         "WARNING",
         "neurocomment_channel_backoff",
