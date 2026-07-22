@@ -145,8 +145,11 @@ def test_maybe_explore_swaps_in_off_affinity_channel(monkeypatch: pytest.MonkeyP
     pool = _affinity_pool(6)
     affinity = pool[:3]
     chosen = pool[:2]
+    rng = random.Random(0)  # noqa: S311 - deterministic test seam
+    monkeypatch.setattr(rng, "random", lambda: 0.0)
+    monkeypatch.setattr(rng, "randrange", lambda _stop: 0)
 
-    result = _fleet._maybe_explore(chosen, pool, affinity, "acc-1", _seams.rng)
+    result = _fleet._maybe_explore(chosen, pool, affinity, "acc-1", rng)
 
     off_names = {c.channel for c in pool[3:]}
     assert len(result) == len(chosen)
@@ -154,7 +157,7 @@ def test_maybe_explore_swaps_in_off_affinity_channel(monkeypatch: pytest.MonkeyP
     # the swapped-in channel is the account's stable top off-affinity pick, not a
     # uniform shared draw — so its permanent join stays de-correlated across the fleet.
     expected = min(pool[3:], key=lambda c: _fleet._stable_fraction(f"aff:acc-1:{c.channel}"))
-    assert any(c.channel == expected.channel for c in result)
+    assert result == [expected, chosen[1]]
 
 
 def test_maybe_explore_pick_is_decorrelated_across_fleet(

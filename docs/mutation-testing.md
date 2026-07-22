@@ -11,27 +11,35 @@ summary.
 | Result | Count |
 |---|---:|
 | Total | 9,056 |
-| Killed | 7,749 |
-| Survived | 1,306 |
-| Timeout | 1 |
-| Score | 85.5676% |
+| Killed | 7,745 |
+| Survived | 1,311 |
+| Timeout | 0 |
+| Score | 85.5234% |
 
 The previous baseline was 6,524 killed, 2,303 survived, 6 timeout, and 8,833
 total (73.8594%). The catalogue grew because additional covered production
 paths became eligible for mutation.
 
-This baseline was reproduced with CPython 3.13.14, mutmut 3.6.0, the
-deterministic `mutation` Hypothesis profile, and four mutmut workers. Its
-catalogue digest is
+Full GitHub Nightly `29920292371` first measured the 85.5234% score floor as
+7,745 killed, 1,310 survived, and one timeout. After the process environment
+was pinned, Nightly `29944434269` measured 7,744/1,312/0: the raw maps differed
+only because the artificial timeout became a survivor and deterministic RNG
+exposed one real exploration-invariant gap. The checked-in 7,745/1,311/0
+baseline is therefore the latter complete run plus the independently reviewed
+regression test for that exact gap; the next full Nightly is its confirmation,
+not an assumed measurement. The current contract uses CPython 3.13.14, mutmut
+3.6.0, the deterministic `mutation` Hypothesis profile, four mutmut workers,
+`PYTHONHASHSEED=0`, and `TZ=UTC`. Its catalogue digest is
 `dafc1da93243dc31095855748732ab3bd8c52dde160497e7a551a6d924f7bdf8`;
 the digest binds mutant identities to the exact Python source paths and bytes,
 so a semantic source change cannot silently reuse a reviewed timeout identity.
-The complete first attempt had 25 infrastructure-level `not checked` entries;
-a CLI-supported targeted repair resolved all of them (24 killed, 1 survived).
-Both raw snapshots remain separate in the Nightly artifact, and the project
-report overlays only those 25 identities. This is necessary because mutmut 3.6
-resets non-selected statuses during a targeted run and does not expose
-`not_checked` in `export-cicd-stats`.
+Both GitHub runs completed the whole catalogue without targeted repair. The
+previous 85.5676% calibration came from a local first-attempt/repair overlay and
+was not reproduced by either complete Nightly, so it was replaced rather than
+silently weakening the gate. Nightly still preserves separate first-attempt and
+repair snapshots when repair is needed because mutmut 3.6 resets non-selected
+statuses during a targeted run and omits `not_checked` from
+`export-cicd-stats`.
 
 ## Classification policy
 
@@ -78,16 +86,16 @@ exact diffs and selected tests:
 | `services.neurocomment._runtime.x__onboard_active_campaigns__mutmut_25`, `__mutmut_27` | Killed | The onboarding lifecycle contract now proves one scan completes without a queued trigger and that rerun/cleanup decisions remain observable; inverted loop conditions fail immediately instead of hanging. |
 | `services.warming._runner.x__is_live_generation__mutmut_2`, `__mutmut_8` | Killed | Generation identity, stale-task cancellation, and replacement-run contracts distinguish both altered live-generation decisions. |
 | `services.warming._graduation.x__stop_warming_locked__mutmut_7` | Killed | Graduation tests require stop/cleanup to complete under the lock and cover repeated promotion plus cleanup failure behavior. |
-| `services.warming._cycle.x__human_delay__mutmut_3` | Retained timeout | Equivalent boundary mutation, detailed below. |
+| `services.warming._cycle.x__human_delay__mutmut_3` | Resolved to survivor | Equivalent boundary mutation; the timeout was caused by the test RNG fixture, detailed below. |
 
 `services.warming._cycle.x__human_delay__mutmut_3` changes `hi <= lo` to
 `hi < lo`. For an equal valid range, both versions return the same delay; the
-mutant only consumes one extra draw from the process-global random generator.
-There is no seeded replay API or promised RNG-stream position, and the returned
-value and distribution remain unchanged. An independent review therefore
-classified this as an equivalent, low-value timeout. A test asserting the exact
-number of random draws would be implementation-coupled score padding, so the
-mutant is intentionally retained.
+mutant only consumes one extra random draw. The old fixture forced
+`Random.random()` to return zero, which makes the standard library's
+`lognormvariate()` rejection loop non-terminating. The fixture now provides a
+finite pinned lognormal draw, so the mutant completes as an equivalent survivor
+and the Nightly has no timeout. A test asserting the exact number of random
+draws would still be implementation-coupled score padding.
 
 ## Confirmed production bugs found by the audit
 
