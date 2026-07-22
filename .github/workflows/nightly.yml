@@ -18,7 +18,7 @@ concurrency:
 permissions: read-all
 
 env:
-  PYTHON_VERSION: "3.13"
+  PYTHON_VERSION: "3.13.14"
   UV_VERSION: "0.10.9"
 
 jobs:
@@ -83,6 +83,9 @@ jobs:
   mutation:
     name: mutation testing
     runs-on: ubuntu-latest
+    env:
+      HYPOTHESIS_PROFILE: mutation
+      MUTMUT_MAX_CHILDREN: "4"
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -108,22 +111,44 @@ jobs:
       - name: Run mutmut
         shell: bash
         run: |
-          uv run mutmut run
+          uv run mutmut run --max-children "$MUTMUT_MAX_CHILDREN"
 
-          # mutmut 3.6 can occasionally leave generated mutants as
-          # "not checked" after a complete parallel sweep. A targeted rerun
-          # invalidates the statuses of every non-selected mutant, so retry the
-          # complete sweep once. The strict report still rejects an incomplete
-          # second run instead of publishing a misleading score.
-          incomplete_count=$(
-            uv run mutmut results --all true |
-              sed -n -E 's/^    (.*): not checked$/\1/p' |
-              wc -l
+          # Preserve the complete first attempt before any repair. mutmut 3.6
+          # resets non-selected statuses during a targeted run, so its raw
+          # output is evidence for only the explicitly requested mutants.
+          mkdir -p mutation-report/attempt-1
+          uv run mutmut results --all true > mutation-report/attempt-1/results-all.txt
+          uv run mutmut results > mutation-report/attempt-1/actionable.txt
+          uv run mutmut export-cicd-stats
+          cp mutants/mutmut-cicd-stats.json mutation-report/attempt-1/stats.json
+
+          uv run python - <<'PY'
+          from pathlib import Path
+
+          from tools.mutation_report import load_results
+
+          results = load_results(Path("mutation-report/attempt-1/results-all.txt"))
+          incomplete = sorted(
+              result.name
+              for result in results
+              if result.status in {"not checked", "check was interrupted by user"}
           )
-          if (( incomplete_count > 0 )); then
-            printf 'Retrying complete sweep after %d not-checked mutants\n' \
-              "$incomplete_count"
-            uv run mutmut run
+          Path("mutation-report/repair-mutants.txt").write_text(
+              "".join(f"{name}\n" for name in incomplete),
+              encoding="utf-8",
+          )
+          print(f"First attempt has {len(incomplete)} incomplete mutants")
+          PY
+
+          if [[ -s mutation-report/repair-mutants.txt ]]; then
+            mapfile -t repair_mutants < mutation-report/repair-mutants.txt
+            printf 'Repairing %d incomplete mutants\n' "${#repair_mutants[@]}"
+            uv run mutmut run --max-children "$MUTMUT_MAX_CHILDREN" "${repair_mutants[@]}"
+            mkdir -p mutation-report/repair
+            uv run mutmut results --all true > mutation-report/repair/results-all.txt
+            uv run mutmut results > mutation-report/repair/actionable.txt
+            uv run mutmut export-cicd-stats
+            cp mutants/mutmut-cicd-stats.json mutation-report/repair/stats.json
           fi
 
       # If the sweep fails again, show where the disk went — the runner dies too
@@ -136,19 +161,47 @@ jobs:
 
       - name: Build mutation report
         if: always()
+        shell: bash
         run: |
           mkdir -p mutation-report
-          uv run mutmut results --all true > mutation-report/results-all.txt
-          uv run mutmut results > mutation-report/actionable.txt
-          uv run mutmut export-cicd-stats
-          cp mutants/mutmut-cicd-stats.json mutation-report/stats.json
+          cp mutation-report/attempt-1/results-all.txt mutation-report/results-all.txt
+          cp mutation-report/attempt-1/actionable.txt mutation-report/actionable.txt
+          cp mutation-report/attempt-1/stats.json mutation-report/stats.json
+          repair_args=()
+          if [[ -f mutation-report/repair/results-all.txt ]]; then
+            repair_args=(--repair-results mutation-report/repair/results-all.txt)
+          fi
           uv run python tools/mutation_report.py report \
             --stats mutation-report/stats.json \
             --results mutation-report/results-all.txt \
+            "${repair_args[@]}" \
+            --hypothesis-profile "$HYPOTHESIS_PROFILE" \
+            --max-children "$MUTMUT_MAX_CHILDREN" \
             --baseline .github/mutation-baseline.json \
             --project pyproject.toml \
             --output mutation-report/report.json \
             --summary mutation-report/summary.md
+          uv run python - <<'PY'
+          import importlib.metadata
+          import json
+          import os
+          import platform
+          from pathlib import Path
+
+          metadata = {
+              "commit_sha": os.environ["GITHUB_SHA"],
+              "github_run_attempt": os.environ["GITHUB_RUN_ATTEMPT"],
+              "github_run_id": os.environ["GITHUB_RUN_ID"],
+              "hypothesis_profile": os.environ["HYPOTHESIS_PROFILE"],
+              "max_children": int(os.environ["MUTMUT_MAX_CHILDREN"]),
+              "mutmut_version": importlib.metadata.version("mutmut"),
+              "python_version": platform.python_version(),
+          }
+          Path("mutation-report/metadata.json").write_text(
+              json.dumps(metadata, indent=2) + "\n",
+              encoding="utf-8",
+          )
+          PY
           cat mutation-report/summary.md >> "$GITHUB_STEP_SUMMARY"
 
       # Upload before the gate so a regression still leaves complete evidence.
@@ -161,12 +214,20 @@ jobs:
           if-no-files-found: error
           retention-days: 30
 
-      # Survivors remain actionable signal, not individual CI failures. Only an
-      # aggregate score regression below the reviewed baseline fails Nightly.
+      # Survivors remain actionable signal, not individual CI failures. The gate
+      # protects the aggregate score and the reviewed measurement identity.
       - name: Enforce mutation baseline
+        shell: bash
         run: |
+          repair_args=()
+          if [[ -f mutation-report/repair/results-all.txt ]]; then
+            repair_args=(--repair-results mutation-report/repair/results-all.txt)
+          fi
           uv run python tools/mutation_report.py gate \
             --stats mutation-report/stats.json \
             --results mutation-report/results-all.txt \
+            "${repair_args[@]}" \
+            --hypothesis-profile "$HYPOTHESIS_PROFILE" \
+            --max-children "$MUTMUT_MAX_CHILDREN" \
             --baseline .github/mutation-baseline.json \
             --project pyproject.toml

@@ -1,12 +1,25 @@
 {
   "mutmut_version": "3.6.0",
+  "python_version": "3.13.14",
+  "hypothesis_profile": "mutation",
+  "max_children": 4,
+  "mutant_catalog_sha256": "dafc1da93243dc31095855748732ab3bd8c52dde160497e7a551a6d924f7bdf8",
+  "reviewed_timeouts": [
+    "services.warming._cycle.x__human_delay__mutmut_3"
+  ],
   "mutmut_config": {
     "source_paths": [
       "services",
       "schemas"
     ],
-    "paths_to_exclude": null,
+    "only_mutate": [],
+    "do_not_mutate": [],
+    "do_not_mutate_patterns": [],
+    "max_stack_depth": -1,
     "mutate_only_covered_lines": true,
+    "timeout_multiplier": 15.0,
+    "timeout_constant": 1.0,
+    "type_check_command": [],
     "pytest_add_cli_args_test_selection": [
       "tests"
     ],
@@ -27,9 +40,9 @@
     ]
   },
   "stats": {
-    "killed": 7774,
-    "survived": 1277,
+    "killed": 7749,
+    "survived": 1306,
     "timeout": 1,
-    "total": 9052
+    "total": 9056
   }
 }

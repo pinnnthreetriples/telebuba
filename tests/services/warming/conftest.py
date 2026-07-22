@@ -35,6 +35,10 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     # acts on its affinity slice deterministically (the dedicated tests re-enable
     # it). Without this the pinned rng.random→0.0 would fire exploration every cycle.
     monkeypatch.setattr(settings.warming, "channel_exploration_probability", 0.0)
+    # Calendar-dependent quiet days are tested explicitly. Disable them for all
+    # other scenarios so the same behavioral path is exercised every date.
+    monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
+    monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
     # Deterministic probability rolls: the reaction + persona-DM gates always
     # "pass" so tests exercise the real gates (reactions_enabled / dm_ok /
     # pending / cap), not the RNG. Tests that need a roll to *fail* override this.

@@ -23,6 +23,8 @@ from services.accounts.profile_read import (
 if TYPE_CHECKING:
     from collections.abc import Iterator
 
+    from schemas.accounts import AccountProfileSnapshot
+
 
 def _empty_results(name: str = "Alice") -> list[object]:
     return [
@@ -106,12 +108,22 @@ async def test_force_refresh_joins_current_generation_single_flight(
 
     monkeypatch.setattr("services.accounts.profile_read.execute_read_many", execute)
     ordinary = asyncio.create_task(fetch_live_account_profile("acc-flight"))
-    await started.wait()
-    forced = asyncio.create_task(fetch_live_account_profile("acc-flight", force_refresh=True))
-    await asyncio.sleep(0)
-    release.set()
-
-    first, second = await asyncio.gather(ordinary, forced)
+    forced: asyncio.Task[AccountProfileSnapshot] | None = None
+    try:
+        await asyncio.wait_for(started.wait(), timeout=0.5)
+        forced = asyncio.create_task(
+            fetch_live_account_profile("acc-flight", force_refresh=True),
+        )
+        await asyncio.sleep(0)
+        release.set()
+        first, second = await asyncio.gather(ordinary, forced)
+    finally:
+        release.set()
+        pending = [ordinary, *([forced] if forced is not None else [])]
+        for task in pending:
+            if not task.done():
+                task.cancel()
+        await asyncio.gather(*pending, return_exceptions=True)
 
     assert calls == 1
     assert first is second
@@ -136,13 +148,19 @@ async def test_invalidation_starts_new_generation_without_joining_stale_fetch(
 
     monkeypatch.setattr("services.accounts.profile_read.execute_read_many", execute)
     stale_task = asyncio.create_task(fetch_live_account_profile("acc-generation"))
-    await first_started.wait()
-    invalidate_account_profile_cache("acc-generation")
+    try:
+        await asyncio.wait_for(first_started.wait(), timeout=0.5)
+        invalidate_account_profile_cache("acc-generation")
 
-    fresh = await fetch_live_account_profile("acc-generation")
-    release_first.set()
-    stale = await stale_task
-    cached = await fetch_live_account_profile("acc-generation")
+        fresh = await fetch_live_account_profile("acc-generation")
+        release_first.set()
+        stale = await stale_task
+        cached = await fetch_live_account_profile("acc-generation")
+    finally:
+        release_first.set()
+        if not stale_task.done():
+            stale_task.cancel()
+        await asyncio.gather(stale_task, return_exceptions=True)
 
     assert calls == 2
     assert stale.first_name == "stale"
