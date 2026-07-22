@@ -297,6 +297,8 @@ def _inputs(
         args.project,
         args.hypothesis_profile,
         args.max_children,
+        args.python_hash_seed,
+        args.timezone,
     )
     repair_results = load_results(args.repair_results) if args.repair_results else None
     return load_stats(args.stats), load_results(args.results), baseline, repair_results
@@ -367,6 +369,8 @@ def parser() -> argparse.ArgumentParser:
         sub.add_argument("--project", type=Path, required=True)
         sub.add_argument("--hypothesis-profile", required=True)
         sub.add_argument("--max-children", type=int, required=True)
+        sub.add_argument("--python-hash-seed", required=True)
+        sub.add_argument("--timezone", required=True)
         if command == "report":
             sub.add_argument("--output", type=Path, required=True)
             sub.add_argument("--summary", type=Path, required=True)

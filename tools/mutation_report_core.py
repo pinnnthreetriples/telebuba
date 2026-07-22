@@ -75,6 +75,8 @@ BASELINE_KEYS = frozenset(
     {
         "hypothesis_profile",
         "max_children",
+        "python_hash_seed",
+        "timezone",
         "mutmut_version",
         "python_version",
         "mutant_catalog_sha256",
@@ -199,7 +201,13 @@ def _validate_reviewed_timeouts(value: object) -> list[str]:
 def _validate_measurement_identity(raw: dict[str, Any]) -> list[str]:
     invalid_string_keys = [
         key
-        for key in ("mutmut_version", "python_version", "hypothesis_profile")
+        for key in (
+            "mutmut_version",
+            "python_version",
+            "hypothesis_profile",
+            "python_hash_seed",
+            "timezone",
+        )
         if not isinstance(raw[key], str) or not raw[key]
     ]
     if invalid_string_keys:
@@ -244,11 +252,13 @@ def load_baseline(path: Path) -> dict[str, Any]:
     return raw
 
 
-def validate_baseline_integrity(
+def validate_baseline_integrity(  # noqa: PLR0913
     baseline: dict[str, Any],
     project_path: Path,
     hypothesis_profile: str,
     max_children: int,
+    python_hash_seed: str = "0",
+    timezone: str = "UTC",
 ) -> None:
     """Validate all environment and configuration pins against the baseline."""
     try:
@@ -286,6 +296,15 @@ def validate_baseline_integrity(
         raise ReportError(
             f"baseline max_children {baseline['max_children']} does not match "
             f"requested {max_children}",
+        )
+    if python_hash_seed != baseline["python_hash_seed"]:
+        raise ReportError(
+            f"baseline Python hash seed {baseline['python_hash_seed']!r} does not match "
+            f"requested {python_hash_seed!r}",
+        )
+    if timezone != baseline["timezone"]:
+        raise ReportError(
+            f"baseline timezone {baseline['timezone']!r} does not match requested {timezone!r}",
         )
 
 

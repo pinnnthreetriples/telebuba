@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import random
 from typing import TYPE_CHECKING
 
 import pytest
@@ -39,10 +40,21 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     # other scenarios so the same behavioral path is exercised every date.
     monkeypatch.setattr(settings.warming, "quiet_day_weekday_probability", 0.0)
     monkeypatch.setattr(settings.warming, "quiet_day_weekend_probability", 0.0)
-    # Deterministic probability rolls: the reaction + persona-DM gates always
-    # "pass" so tests exercise the real gates (reactions_enabled / dm_ok /
-    # pending / cap), not the RNG. Tests that need a roll to *fail* override this.
-    monkeypatch.setattr(_seams.rng, "random", lambda: 0.0)
+    # Isolate every random operation per test.  Patching only SystemRandom.random
+    # leaves choice/sample/randrange backed by OS entropy, which can make the same
+    # behavioural scenario select a different channel or action across mutation
+    # workers.  A fresh seeded generator keeps those choices reproducible and
+    # prevents state leaking between the many pytest sessions mutmut runs.
+    test_rng = random.Random(0)  # noqa: S311 - deterministic test fixture
+    monkeypatch.setattr(_seams, "rng", test_rng)
+    # Probability gates still default to "pass" so tests exercise their business
+    # preconditions rather than a dice roll. Dedicated probability tests override
+    # this method or the whole seeded stream explicitly.
+    monkeypatch.setattr(test_rng, "random", lambda: 0.0)
+    # ``Random.lognormvariate`` rejects a pair of zero draws forever. Keep the
+    # default delay draw finite; pacing tests replace it with their own pinned
+    # values when the distribution itself is under test.
+    monkeypatch.setattr(test_rng, "lognormvariate", lambda _mu, _sigma: 0.5)
     reset_logging_for_tests()
     setup_logging()
     warming._RUNTIME.clear()

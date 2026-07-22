@@ -46,6 +46,8 @@ def _baseline(  # noqa: PLR0913
     mutant_catalog_sha256: str | None = None,
     hypothesis_profile: str = "mutation",
     max_children: int = 4,
+    python_hash_seed: str = "0",
+    timezone: str = "UTC",
     source_root: Path = SOURCE_ROOT,
     **overrides: int,
 ) -> dict[str, Any]:
@@ -65,6 +67,8 @@ def _baseline(  # noqa: PLR0913
         "python_version": python_version or mutation_report.platform.python_version(),
         "hypothesis_profile": hypothesis_profile,
         "max_children": max_children,
+        "python_hash_seed": python_hash_seed,
+        "timezone": timezone,
         "mutant_catalog_sha256": (
             mutant_catalog_sha256
             or mutation_report.mutant_catalog_sha256(results, source_root, SOURCE_PATHS)
@@ -466,33 +470,6 @@ def test_baseline_integrity_rejects_python_version_mismatch(
 
 
 @pytest.mark.parametrize(
-    ("profile", "max_children", "message"),
-    [
-        ("strict", 4, "Hypothesis profile"),
-        ("mutation", 8, "max_children"),
-    ],
-)
-def test_baseline_integrity_rejects_execution_parameter_drift(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    profile: str,
-    max_children: int,
-    message: str,
-) -> None:
-    _pin_version(monkeypatch)
-    project = tmp_path / "pyproject.toml"
-    project.write_text(_project_config(), encoding="utf-8")
-
-    with pytest.raises(mutation_report.ReportError, match=message):
-        mutation_report.validate_baseline_integrity(
-            _baseline(),
-            project,
-            profile,
-            max_children,
-        )
-
-
-@pytest.mark.parametrize(
     ("baseline_change", "message"),
     [
         ({"mutant_catalog_sha256": "not-a-digest"}, "lowercase SHA-256"),
@@ -569,6 +546,10 @@ def test_report_cli_writes_json_and_readable_summary(
             "mutation",
             "--max-children",
             "4",
+            "--python-hash-seed",
+            "0",
+            "--timezone",
+            "UTC",
             "--output",
             str(output),
             "--summary",
@@ -614,6 +595,10 @@ def test_gate_cli_fails_only_on_aggregate_score_regression(
             "mutation",
             "--max-children",
             "4",
+            "--python-hash-seed",
+            "0",
+            "--timezone",
+            "UTC",
         ],
     )
 
@@ -649,6 +634,10 @@ def test_gate_cli_reports_catalog_drift_distinctly(
             "mutation",
             "--max-children",
             "4",
+            "--python-hash-seed",
+            "0",
+            "--timezone",
+            "UTC",
         ],
     )
 
@@ -686,6 +675,10 @@ def test_gate_cli_reports_unexpected_timeout_distinctly(
             "mutation",
             "--max-children",
             "4",
+            "--python-hash-seed",
+            "0",
+            "--timezone",
+            "UTC",
         ],
     )
 

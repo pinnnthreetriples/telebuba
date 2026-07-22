@@ -150,6 +150,10 @@ def test_report_and_gate_cli_accept_targeted_repair_results(command: str) -> Non
         "mutation",
         "--max-children",
         "4",
+        "--python-hash-seed",
+        "0",
+        "--timezone",
+        "UTC",
     ]
     if command == "report":
         arguments.extend(["--output", "report.json", "--summary", "summary.md"])

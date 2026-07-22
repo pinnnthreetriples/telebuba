@@ -86,6 +86,8 @@ jobs:
     env:
       HYPOTHESIS_PROFILE: mutation
       MUTMUT_MAX_CHILDREN: "4"
+      PYTHONHASHSEED: "0"
+      TZ: UTC
     steps:
       - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
 
@@ -177,6 +179,8 @@ jobs:
             "${repair_args[@]}" \
             --hypothesis-profile "$HYPOTHESIS_PROFILE" \
             --max-children "$MUTMUT_MAX_CHILDREN" \
+            --python-hash-seed "$PYTHONHASHSEED" \
+            --timezone "$TZ" \
             --baseline .github/mutation-baseline.json \
             --project pyproject.toml \
             --output mutation-report/report.json \
@@ -195,7 +199,9 @@ jobs:
               "hypothesis_profile": os.environ["HYPOTHESIS_PROFILE"],
               "max_children": int(os.environ["MUTMUT_MAX_CHILDREN"]),
               "mutmut_version": importlib.metadata.version("mutmut"),
+              "python_hash_seed": os.environ["PYTHONHASHSEED"],
               "python_version": platform.python_version(),
+              "timezone": os.environ["TZ"],
           }
           Path("mutation-report/metadata.json").write_text(
               json.dumps(metadata, indent=2) + "\n",
@@ -229,5 +235,7 @@ jobs:
             "${repair_args[@]}" \
             --hypothesis-profile "$HYPOTHESIS_PROFILE" \
             --max-children "$MUTMUT_MAX_CHILDREN" \
+            --python-hash-seed "$PYTHONHASHSEED" \
+            --timezone "$TZ" \
             --baseline .github/mutation-baseline.json \
             --project pyproject.toml
