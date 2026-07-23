@@ -6,7 +6,7 @@ import json
 import ssl
 from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import quote
 
 import httpx
@@ -23,6 +23,11 @@ _PROXY_TYPE_BY_NAME: dict[ProxyType, SocksProxyType] = {
 _HTTP_STATUS_INDEX = 1
 _MAX_ERROR_LENGTH = 240
 _MAX_RESPONSE_BYTES = 64 * 1024
+_COUNTRY_CODE_LENGTH = 2
+
+
+class _AsyncReader(Protocol):
+    async def read(self, limit: int = -1) -> bytes: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -124,7 +129,7 @@ async def _fetch_https_through_proxy(
     try:
         writer.write(_http_request(host, path))
         await asyncio.wait_for(writer.drain(), timeout=timeout)
-        return await _read_limited(reader, timeout=timeout)
+        return await _read_limited(reader, timeout_seconds=timeout)
     finally:
         writer.close()
         with suppress(OSError, TimeoutError):
@@ -132,15 +137,18 @@ async def _fetch_https_through_proxy(
 
 
 async def _read_limited(
-    reader: asyncio.StreamReader,
+    reader: _AsyncReader,
     *,
-    timeout: float,
+    timeout_seconds: float,
 ) -> bytes:
     chunks: list[bytes] = []
     total = 0
     while True:
         remaining = _MAX_RESPONSE_BYTES + 1 - total
-        chunk = await asyncio.wait_for(reader.read(min(16_384, remaining)), timeout=timeout)
+        chunk = await asyncio.wait_for(
+            reader.read(min(16_384, remaining)),
+            timeout=timeout_seconds,
+        )
         if not chunk:
             return b"".join(chunks)
         chunks.append(chunk)
@@ -280,7 +288,7 @@ async def _lookup_ipinfo(exit_ip: str) -> _GeoRecord:
         payload = response.json()
     if not isinstance(payload, dict):
         msg = "IPinfo returned non-object JSON"
-        raise ValueError(msg)
+        raise TypeError(msg)
     country_code = _country_code(payload.get("country_code"), "IPinfo")
     country_name = _optional_payload_str(payload.get("country"))
     asn_number = _optional_payload_str(payload.get("asn"))
@@ -306,11 +314,11 @@ async def _lookup_maxmind(exit_ip: str) -> _GeoRecord:
         payload = response.json()
     if not isinstance(payload, dict):
         msg = "MaxMind returned non-object JSON"
-        raise ValueError(msg)
+        raise TypeError(msg)
     country = payload.get("country")
     if not isinstance(country, dict):
         msg = "MaxMind returned no country"
-        raise ValueError(msg)
+        raise TypeError(msg)
     country_code = _country_code(country.get("iso_code"), "MaxMind")
     names = country.get("names")
     country_name = _optional_payload_str(names.get("en")) if isinstance(names, dict) else None
@@ -324,7 +332,9 @@ def _merge_geo(records: dict[str, _GeoRecord], errors: list[str]) -> _GeoOutcome
     maxmind_code = maxmind.country_code if maxmind else None
 
     if ipinfo and maxmind and ipinfo.country_code != maxmind.country_code:
-        mismatch = f"Geolocation mismatch: IPinfo={ipinfo.country_code}, MaxMind={maxmind.country_code}"
+        mismatch = (
+            f"Geolocation mismatch: IPinfo={ipinfo.country_code}, MaxMind={maxmind.country_code}"
+        )
         return _GeoOutcome(
             status="conflict",
             asn=ipinfo.asn,
@@ -350,7 +360,7 @@ def _merge_geo(records: dict[str, _GeoRecord], errors: list[str]) -> _GeoOutcome
 
 def _country_code(value: object, provider: str) -> str:
     code = _optional_payload_str(value)
-    if code is None or len(code) != 2 or not code.isascii() or not code.isalpha():
+    if code is None or len(code) != _COUNTRY_CODE_LENGTH or not code.isascii() or not code.isalpha():
         msg = f"{provider} returned an invalid country code"
         raise ValueError(msg)
     return code.upper()
