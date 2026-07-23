@@ -5537,6 +5537,17 @@
             ],
             "title": "Last Name"
           },
+          "avatar_etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Etag"
+          },
           "last_checked_at": {
             "anyOf": [
               {

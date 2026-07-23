@@ -299,6 +299,17 @@ def _add_warming_state_nc_handed_off(connection: Connection) -> None:
         )
 
 
+def _add_account_avatar(connection: Connection) -> None:
+    # Cached small profile photo + its content-hash etag, captured on the
+    # session check. Two nullable columns → legacy rows show the initials
+    # fallback until their next check populates the avatar.
+    existing = _sqlite_columns(connection, "accounts")
+    if "avatar_thumb" not in existing:
+        connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN avatar_thumb BLOB")
+    if "avatar_etag" not in existing:
+        connection.exec_driver_sql("ALTER TABLE accounts ADD COLUMN avatar_etag VARCHAR")
+
+
 def _add_warming_state_target_days(connection: Connection) -> None:
     # Operator-chosen warming duration (the start modal's day slider). NULL on
     # legacy rows / no explicit pick → the board falls back to warmed_min_days.

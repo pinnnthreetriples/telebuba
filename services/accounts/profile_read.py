@@ -20,6 +20,7 @@ import time
 from typing import TYPE_CHECKING, Literal, cast
 
 from core.config import settings
+from core.db import fetch_account_avatar
 from core.logging import log_event
 from core.telegram_client import (
     TelegramAccountNotFoundError,
@@ -53,11 +54,25 @@ if TYPE_CHECKING:
     )
 
 __all__ = [
+    "account_avatar_image",
     "account_profile_image",
     "account_profile_view",
     "fetch_live_account_profile",
     "invalidate_account_profile_cache",
 ]
+
+
+async def account_avatar_image(account_id: str) -> ProfileImage | None:
+    """Serve the cached accounts-list avatar (DB-backed, no live Telegram call).
+
+    Populated by the session check; the etag is the stored content hash so the
+    ``/avatar?v={etag}`` URL is safely ``immutable``-cacheable.
+    """
+    row = await fetch_account_avatar(account_id)
+    if row is None:
+        return None
+    content, etag = row
+    return ProfileImage(content=content, etag=etag)
 
 
 def _thumb_url(account_id: str, kind: str, item_id: int | str) -> str:

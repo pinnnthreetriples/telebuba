@@ -31,6 +31,9 @@ class TelegramSessionCheckResult(BaseModel):
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+    # Small profile photo downloaded during the check (best-effort; None when the
+    # account has no avatar or the download was refused). Persisted verbatim.
+    avatar_thumb: bytes | None = None
     error_type: str | None = None
     error_message: str | None = None
     flood_wait_seconds: int | None = Field(default=None, ge=0)

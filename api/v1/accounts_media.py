@@ -50,6 +50,14 @@ def _image_response(request: Request, image: ProfileImage) -> Response:
     )
 
 
+@router.get("/accounts/{account_id}/avatar", include_in_schema=False)
+async def get_account_avatar(account_id: str, request: Request) -> Response:
+    image = await accounts.account_avatar_image(account_id)
+    if image is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="avatar not found")
+    return _image_response(request, image)
+
+
 @router.get("/accounts/{account_id}/profile/photos/{photo_id}/thumb", include_in_schema=False)
 async def get_account_photo_thumb(account_id: str, photo_id: str, request: Request) -> Response:
     image = await accounts.account_profile_image(

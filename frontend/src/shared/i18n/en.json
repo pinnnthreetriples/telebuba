@@ -18,7 +18,7 @@
     },
     "table": {
       "status": "Status",
-      "phone": "Phone",
+      "phone": "Account",
       "proxy": "Proxy",
       "device": "Device",
       "trust": "Trust",

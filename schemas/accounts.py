@@ -63,6 +63,9 @@ class AccountRead(BaseModel):
     username: str | None = None
     first_name: str | None = None
     last_name: str | None = None
+    # Content hash of the cached avatar (None = no photo captured yet). The SPA
+    # renders <img src=".../avatar?v={avatar_etag}"> when set, initials otherwise.
+    avatar_etag: str | None = None
     last_checked_at: str | None = None
     created_at: str
     updated_at: str
