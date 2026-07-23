@@ -271,6 +271,84 @@ test('removing a channel asks for confirmation, then calls the remove endpoint',
   });
 });
 
+test('disables the bulk pool button while a bulk operation is in flight', async () => {
+  // /warming/stop hangs so the stop mutation stays pending after the click.
+  let releaseStop: (() => void) | undefined;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/warming/stop') {
+      return new Promise<Response>((resolve) => {
+        releaseStop = () => {
+          resolve(jsonResponse({}));
+        };
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  // BOARD has a warming account, so the pool button is the bulk "stop" control.
+  const bulk = await screen.findByText('Остановить пул');
+  expect(bulk).not.toBeDisabled();
+  await userEvent.click(bulk);
+  await waitFor(() => {
+    expect(bulk).toBeDisabled();
+  });
+  releaseStop?.();
+});
+
+test('keeps the bulk button disabled until the whole batch settles, even if the last call resolves first', async () => {
+  // Two warming accounts: the bulk stop fires a per-account call for each on a
+  // single mutation observer. Its isPending reflects only the LAST call, so if
+  // the last-fired settles first the button would re-enable mid-batch — the bug.
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warming: [account('warm-1', 'active'), account('warm-2', 'active')],
+  };
+  const resolvers: Record<string, () => void> = {};
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    if (url.pathname === '/api/v1/warming/stop') {
+      return request
+        .clone()
+        .json()
+        .then(
+          (body: { account_id: string }) =>
+            new Promise<Response>((resolve) => {
+              resolvers[body.account_id] = () => {
+                resolve(jsonResponse({}));
+              };
+            }),
+        );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  const bulk = await screen.findByText('Остановить пул');
+  await userEvent.click(bulk);
+  // Both per-account stop calls are now in flight.
+  await waitFor(() => {
+    expect(Object.keys(resolvers)).toHaveLength(2);
+  });
+  // The LAST-fired account settles first while the earlier one is still pending.
+  act(() => {
+    resolvers['warm-2']?.();
+  });
+  await waitFor(() => {
+    // The observer's isPending has flipped false here — bulkBusy must hold the guard.
+    expect(bulk).toBeDisabled();
+  });
+  // Only once the earlier call also settles does the whole batch complete.
+  act(() => {
+    resolvers['warm-1']?.();
+  });
+  await waitFor(() => {
+    expect(bulk).not.toBeDisabled();
+  });
+});
+
 test('adds a channel', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);

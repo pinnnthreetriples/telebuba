@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import threading
 from datetime import UTC, datetime, timedelta
 
 import pytest
@@ -269,7 +270,7 @@ async def test_no_account_reason_quota_day(monkeypatch: pytest.MonkeyPatch) -> N
 @pytest.mark.asyncio
 async def test_no_account_reason_cooldown(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")
-    _state.set_cooldown("acc-1", datetime.now(UTC) + timedelta(hours=1))
+    await _state.set_cooldown("acc-1", datetime.now(UTC) + timedelta(hours=1))
     _patch_io(monkeypatch, comment=_CommentStub())
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
@@ -460,30 +461,94 @@ async def test_no_available_account_skips_with_no_claim(monkeypatch: pytest.Monk
     assert await fetch_comment("@chan", 10) is None
 
 
-def test_set_cooldown_keeps_the_later_expiry() -> None:
+@pytest.mark.asyncio
+async def test_set_cooldown_keeps_the_later_expiry() -> None:
     now = datetime.now(UTC)
-    _state.set_cooldown("acc-x", now + timedelta(hours=2))
+    await _state.set_cooldown("acc-x", now + timedelta(hours=2))
     # A shorter cooldown must not shorten an existing longer one.
-    _state.set_cooldown("acc-x", now + timedelta(minutes=1))
+    await _state.set_cooldown("acc-x", now + timedelta(minutes=1))
     assert _state.in_cooldown("acc-x", now + timedelta(hours=1)) is True
 
 
-def test_channel_cooldown_does_not_block_other_channels() -> None:
+@pytest.mark.asyncio
+async def test_channel_cooldown_does_not_block_other_channels() -> None:
     now = datetime.now(UTC)
-    _state.set_cooldown("acc-x", now + timedelta(hours=1), channel="@a")
+    await _state.set_cooldown("acc-x", now + timedelta(hours=1), channel="@a")
     assert _state.in_cooldown("acc-x", now, "@a") is True
     assert _state.in_cooldown("acc-x", now, "@b") is False
     # An account-wide cooldown (channel=None) blocks every channel.
-    _state.set_cooldown("acc-x", now + timedelta(hours=1))
+    await _state.set_cooldown("acc-x", now + timedelta(hours=1))
     assert _state.in_cooldown("acc-x", now, "@b") is True
 
 
-def test_in_cooldown_evicts_expired_keys() -> None:
+@pytest.mark.asyncio
+async def test_in_cooldown_evicts_expired_keys() -> None:
     now = datetime.now(UTC)
-    _state.set_cooldown("acc-x", now - timedelta(seconds=1), channel="@a")
+    await _state.set_cooldown("acc-x", now - timedelta(seconds=1), channel="@a")
     assert _state.in_cooldown("acc-x", now, "@a") is False
     # The expired key is dropped, not left to accumulate.
     assert ("acc-x", "@a") not in _state._COOLDOWN_UNTIL
+
+
+@pytest.mark.asyncio
+async def test_set_cooldown_writes_off_the_event_loop(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The durable SQLite write must never run inline on the single-worker loop:
+    # set_cooldown routes persist_cooldown through asyncio.to_thread, so it lands
+    # on a worker thread (never the loop's thread) while the in-memory deadline is
+    # already visible before the await resolves.
+    now = datetime.now(UTC)
+    loop_thread = threading.get_ident()
+    write_threads: list[int] = []
+    real_persist = _state.persist_cooldown
+
+    def _spy(account_id: str, channel: str | None, until: str) -> None:
+        write_threads.append(threading.get_ident())
+        real_persist(account_id, channel, until)
+
+    monkeypatch.setattr(_state, "persist_cooldown", _spy)
+
+    await _state.set_cooldown("acc-t", now + timedelta(hours=1))
+
+    assert _state.in_cooldown("acc-t", now) is True  # visible immediately
+    assert write_threads  # the durable write ran
+    assert loop_thread not in write_threads  # ...off the loop thread
+
+
+@pytest.mark.asyncio
+async def test_set_cooldown_rejects_naive_datetime() -> None:
+    # A naive deadline would serialize without an offset and break the prune's
+    # string comparison, so it is rejected before it can be stored.
+    with pytest.raises(ValueError, match="timezone-aware UTC"):
+        await _state.set_cooldown("acc-n", datetime.now())  # noqa: DTZ005 - deliberately naive
+
+
+@pytest.mark.asyncio
+async def test_cooldown_survives_restart_via_hydrate() -> None:
+    # #34: set_cooldown persists to the DB, so clearing the in-memory map (a
+    # process restart) and re-hydrating keeps a just-flooded account parked.
+    now = datetime.now(UTC)
+    await _state.set_cooldown("acc-r", now + timedelta(hours=1))  # account-wide flood
+    await _state.set_cooldown("acc-r", now + timedelta(minutes=30), channel="@slow")
+    _state._COOLDOWN_UNTIL.clear()  # simulate the restart wiping in-memory state
+    assert _state.in_cooldown("acc-r", now) is False  # gone until we hydrate
+
+    await _state.hydrate_cooldowns()
+
+    assert _state.in_cooldown("acc-r", now) is True  # account-wide restored
+    assert _state.in_cooldown("acc-r", now, "@slow") is True  # per-channel restored
+
+
+@pytest.mark.asyncio
+async def test_expired_cooldown_is_not_rehydrated() -> None:
+    # A deadline that has already lapsed is pruned on load, never rehydrated.
+    now = datetime.now(UTC)
+    await _state.set_cooldown("acc-e", now - timedelta(seconds=1))
+    _state._COOLDOWN_UNTIL.clear()
+
+    await _state.hydrate_cooldowns()
+
+    assert _state.in_cooldown("acc-e", now) is False
+    assert ("acc-e", None) not in _state._COOLDOWN_UNTIL
 
 
 def test_channel_backoff_escalates_and_caps() -> None:
@@ -524,7 +589,7 @@ def test_channel_backoff_evicts_expired() -> None:
 @pytest.mark.asyncio
 async def test_account_in_cooldown_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")
-    _state.set_cooldown("acc-1", datetime.now(UTC) + timedelta(hours=1))
+    await _state.set_cooldown("acc-1", datetime.now(UTC) + timedelta(hours=1))
     comment = _CommentStub()
     _patch_io(monkeypatch, comment=comment)
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from core.config import settings
 from core.db import (
     update_account_from_session_check,
     update_proxy_check,
@@ -25,6 +26,7 @@ from services.accounts import (
     evaluate_account_geo,
     list_accounts_page,
     list_listener_accounts,
+    remove_account,
 )
 from tests.factories import seed_account_proxy
 
@@ -45,6 +47,23 @@ async def test_add_account_creates_fingerprint_and_page_row() -> None:
     assert row.device_model is not None
     # A freshly added account has not been checked yet -> warn (amber).
     assert health_for_status(row.status) == "warn"
+
+
+@pytest.mark.asyncio
+async def test_remove_account_unlinks_session_file() -> None:
+    """Deleting an account must unlink its orphaned Telethon ``.session`` file.
+
+    The path is ``session_dir/<session_name>.session`` (session_name, not the
+    account_id), matching how the client builder resolves it.
+    """
+    await add_account(AccountCreate(account_id="acc-del", session_name="sess-del"))
+    session_file = settings.telegram.session_dir / "sess-del.session"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_bytes(b"sqlite session bytes")
+
+    await remove_account("acc-del")
+
+    assert not session_file.exists()
 
 
 @pytest.mark.asyncio

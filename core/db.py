@@ -315,6 +315,7 @@ from core.repositories.proxies import (  # noqa: E402, F401
     fetch_account_proxy_settings,
     fetch_proxy,
     fetch_proxy_settings,
+    list_account_ids_for_proxy,
     list_proxies,
     unassign_account_from_proxy,
     update_proxy_check,

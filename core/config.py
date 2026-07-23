@@ -215,6 +215,9 @@ class ProfileMediaSettings(BaseSettings):
     thumb_concurrency: int = Field(default=4, ge=1)
     # .session files = effective credentials. Cap to deter accidental large uploads.
     session_max_bytes: int = Field(default=5_000_000, ge=1)
+    # tdata.zip import: cap the *compressed* upload before it is buffered into RAM.
+    # (The extractor separately caps the *uncompressed* payload at 500 MiB.)
+    tdata_max_bytes: int = Field(default=200_000_000, ge=1)
     # How long a live-fetched profile snapshot is reused before the next
     # dialog-open triggers another GetFullUserRequest. Kept short: the snapshot
     # is only invalidated by THIS app's edits, so a change made in the Telegram

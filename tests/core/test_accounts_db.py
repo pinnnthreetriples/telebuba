@@ -22,6 +22,7 @@ from core.db import (
     update_account_from_session_check,
 )
 from core.repositories.accounts import _delete_account
+from core.repositories.neurocomment import load_active_cooldowns, persist_cooldown
 from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeInsert
 from schemas.telegram_session import TelegramSessionCheckResult
@@ -222,6 +223,26 @@ async def test_delete_account_purges_neurocomment_challenges(tmp_path: Path) -> 
 
     # After delete no challenge row remains, so the board no longer flags it.
     assert (await list_challenged_channels(["@chan"])).channels == []
+
+
+@pytest.mark.asyncio
+async def test_delete_account_purges_neurocomment_cooldowns(tmp_path: Path) -> None:
+    """Cooldown rows (migration #34, no FK) must not outlive the account.
+
+    A reimported account (same account_id) would otherwise inherit a stale
+    flood/slow-mode deadline and be wrongly parked after a restart.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-cool"))
+    persist_cooldown("acc-cool", None, "2999-01-01T00:00:00+00:00")
+    persist_cooldown("acc-cool", "@chan", "2999-01-01T00:00:00+00:00")
+    # Before delete both deadlines rehydrate as still in force.
+    assert len(await load_active_cooldowns("2026-01-01T00:00:00+00:00")) == 2
+
+    await asyncio.to_thread(_delete_account, "acc-cool")
+
+    # After delete no cooldown survives to re-park the account on restart.
+    assert await load_active_cooldowns("2026-01-01T00:00:00+00:00") == []
 
 
 @pytest.mark.asyncio

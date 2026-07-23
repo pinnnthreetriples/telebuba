@@ -23,6 +23,7 @@ from schemas.accounts import (
 )
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from schemas.telegram_session import TelegramSessionCheckRequest
+from services.accounts._import_locks import import_lock
 from services.accounts._tdata import (
     SessionAlreadyExistsError,
 )
@@ -54,19 +55,23 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
     filename = _session_filename(data.filename)
     session_name = Path(filename).stem
     session_path = settings.telegram.session_dir / filename
-    # Refuse to overwrite credentials. Check by account_id (DB) AND by file
-    # presence on disk — either being present means there is already an
-    # account whose session we would clobber.
-    if await fetch_account(session_name) is not None or session_path.exists():
-        msg = (
-            f"An account with session {session_name!r} already exists. "
-            "Delete it first if you want to replace the credentials."
+    # Serialize same-name imports across the check→write→add sequence so two
+    # concurrent uploads of the same session can't both pass the existence check
+    # and have the second overwrite the first's credential.
+    async with import_lock(session_name):
+        # Refuse to overwrite credentials. Check by account_id (DB) AND by file
+        # presence on disk — either being present means there is already an
+        # account whose session we would clobber.
+        if await fetch_account(session_name) is not None or session_path.exists():
+            msg = (
+                f"An account with session {session_name!r} already exists. "
+                "Delete it first if you want to replace the credentials."
+            )
+            raise SessionAlreadyExistsError(msg)
+        await asyncio.to_thread(_write_session_file, session_path, data.content)
+        return await add_account(
+            AccountCreate(account_id=session_name, label=data.label, session_name=session_name),
         )
-        raise SessionAlreadyExistsError(msg)
-    await asyncio.to_thread(_write_session_file, session_path, data.content)
-    return await add_account(
-        AccountCreate(account_id=session_name, label=data.label, session_name=session_name),
-    )
 
 
 async def check_account_session(data: AccountCheckRequest) -> AccountRead:

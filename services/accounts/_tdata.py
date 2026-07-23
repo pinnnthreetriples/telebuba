@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import shutil
 import tempfile
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -18,6 +18,7 @@ from core.config import settings
 from core.db import delete_account, fetch_account
 from core.logging import log_event
 from schemas.accounts import AccountCheckRequest, AccountCreate
+from services.accounts._import_locks import import_lock
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -142,33 +143,43 @@ async def _run_tdata_import(
         final_path = settings.telegram.session_dir / staging_path.name
         plans.append(_TdataAccountPlan(account_id, session_name, staging_path, final_path))
 
-    await _preflight_tdata_plans(plans)
-
+    # Hold one import lock per produced account_id across preflight→place→add and
+    # the rollback, so a concurrent same-key import (or its rollback) can't race
+    # this one — it will see the account exist at preflight and abort instead of
+    # deleting a row/file this import just wrote. Keys are locked in sorted order
+    # so two overlapping tdata imports can never deadlock on opposing orders.
+    keys = sorted({plan.account_id for plan in plans})
     placed_files: list[Path] = []
     added_account_ids: list[str] = []
     checked: list[AccountRead] = []
-    try:
-        for plan in plans:
-            if plan.staging_path.resolve() != plan.final_path.resolve():
-                plan.final_path.parent.mkdir(parents=True, exist_ok=True)
-                shutil.move(str(plan.staging_path), str(plan.final_path))
-            placed_files.append(plan.final_path)
-            await add_account(
-                AccountCreate(
-                    account_id=plan.account_id,
-                    label=data.label or plan.account_id,
-                    session_name=plan.session_name,
-                ),
-            )
-            added_account_ids.append(plan.account_id)
-            checked.append(
-                await check_account_session(
-                    AccountCheckRequest(account_id=plan.account_id),
-                ),
-            )
-    except Exception:
-        await _rollback_tdata_import(added_account_ids, placed_files)
-        raise
+    async with AsyncExitStack() as locks:
+        for key in keys:
+            await locks.enter_async_context(import_lock(key))
+
+        await _preflight_tdata_plans(plans)
+
+        try:
+            for plan in plans:
+                if plan.staging_path.resolve() != plan.final_path.resolve():
+                    plan.final_path.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(plan.staging_path), str(plan.final_path))
+                placed_files.append(plan.final_path)
+                await add_account(
+                    AccountCreate(
+                        account_id=plan.account_id,
+                        label=data.label or plan.account_id,
+                        session_name=plan.session_name,
+                    ),
+                )
+                added_account_ids.append(plan.account_id)
+                checked.append(
+                    await check_account_session(
+                        AccountCheckRequest(account_id=plan.account_id),
+                    ),
+                )
+        except Exception:
+            await _rollback_tdata_import(added_account_ids, placed_files)
+            raise
 
     await log_event(
         "INFO",

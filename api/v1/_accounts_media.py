@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
+from api.v1._uploads import reject_oversized_upload
 from core.config import settings
 from schemas.profile_media import (
     AccountProfileMusicRemove,
@@ -47,6 +48,11 @@ async def set_account_photo(
     account_id: Annotated[str, Form()],
     file: Annotated[UploadFile, File()],
 ) -> ActionResult:
+    reject_oversized_upload(
+        file,
+        max_bytes=settings.profile_media.photo_max_bytes,
+        detail="profile photo file is too large",
+    )
     content = await file.read()
     upload = AccountProfilePhotoUpload(
         account_id=account_id,
@@ -132,6 +138,22 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
             detail="story_collage_too_many_images",
         )
     primary, *extras = files
+    # Size-cap each part from the multipart size BEFORE buffering it into RAM;
+    # the service re-checks after decode (same messages, defense-in-depth).
+    primary_max_bytes = (
+        settings.profile_media.story_image_max_bytes
+        if media_kind == "image"
+        else settings.profile_media.story_video_max_bytes
+    )
+    reject_oversized_upload(
+        primary, max_bytes=primary_max_bytes, detail=f"story {media_kind} file is too large"
+    )
+    for extra in extras:
+        reject_oversized_upload(
+            extra,
+            max_bytes=settings.profile_media.story_image_max_bytes,
+            detail="story image file is too large",
+        )
     upload = AccountStoryUpload(
         account_id=account_id,
         filename=primary.filename or "story",
@@ -162,6 +184,11 @@ async def add_account_music(
     title: Annotated[str | None, Form()] = None,
     performer: Annotated[str | None, Form()] = None,
 ) -> ActionResult:
+    reject_oversized_upload(
+        file,
+        max_bytes=settings.profile_media.music_max_bytes,
+        detail="profile music file is too large",
+    )
     content = await file.read()
     upload = AccountProfileMusicUpload(
         account_id=account_id,

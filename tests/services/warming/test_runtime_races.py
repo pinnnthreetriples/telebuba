@@ -420,6 +420,150 @@ async def test_stale_cycle_started_cas_failure_prevents_telegram_io(
 
 
 @pytest.mark.asyncio
+async def test_start_warming_and_start_neurocomment_are_mutually_exclusive(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RACE 1: an account can't run as warming AND the NC listener at once.
+
+    ``start_neurocomment`` now takes the same per-account lifecycle lock
+    ``start_warming`` holds, wrapping its warming-check → listener-commit. Racing
+    the two for one account, exactly one wins: if warming commits first the NC
+    start sees the account warming and raises ``ListenerBusyWarmingError``; if the
+    listener commits first, ``start_warming`` sees the account is the running
+    listener and raises ``AccountIsListenerError``. Before the fix both could
+    commit (the NC check and commit were separated by awaits), leaving the account
+    claimed by both runtimes.
+    """
+    from contextlib import suppress  # noqa: PLC0415
+
+    from core.db import get_listener_running, list_warming_account_ids  # noqa: PLC0415
+    from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
+
+    async def fake_loop(account_id: str, *, run_id: str | None = None) -> None:  # noqa: ARG001
+        await asyncio.sleep(3600)
+
+    monkeypatch.setattr(_runtime, "_warming_loop", fake_loop)
+
+    # The listener commit is what races warming; stub start_neurocomment's
+    # post-commit network/task work so the test exercises only the guarded path.
+    async def _noop_reconcile(_listener: str) -> None:
+        return None
+
+    monkeypatch.setattr(nc_runtime, "reconcile_neurocomment_runtime", _noop_reconcile)
+    monkeypatch.setattr(nc_runtime, "_ensure_onboarding_running", lambda *a, **k: None)  # noqa: ARG005
+    await save_warming_settings(
+        inter_account_chat=False,
+        reactions_enabled=False,
+        enforce_readiness=False,
+        gemini_api_key="",
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    results = await asyncio.gather(
+        warming.start_warming(StartWarmingRequest(account_id="acc-1")),
+        nc_runtime.start_neurocomment("acc-1"),
+        return_exceptions=True,
+    )
+
+    errors = [r for r in results if isinstance(r, Exception)]
+    successes = [r for r in results if not isinstance(r, Exception)]
+    assert len(errors) == 1, results
+    assert len(successes) == 1, results
+    assert isinstance(
+        errors[0],
+        (warming.AccountIsListenerError, nc_runtime.ListenerBusyWarmingError),
+    )
+
+    # Exactly one runtime claims the account — never both.
+    is_warming_now = "acc-1" in await list_warming_account_ids()
+    listener_running = await get_listener_running()
+    assert is_warming_now != listener_running
+
+    # Hygiene: cancel any warming loop task the winning start spawned.
+    task = warming._RUNTIME.pop("acc-1", None)
+    if task is not None:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.asyncio
+async def test_start_neurocomment_stop_race_leaves_no_orphan_listener(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """RACE 2: a stop racing start's subscribe must not leave a live listener after pause.
+
+    Pre-fix, ``start_neurocomment`` set ``listener_running=True`` under the lifecycle
+    lock, RELEASED it, then subscribed outside the lock. A ``stop_neurocomment`` could
+    slot in after the release: it shut down (nothing subscribed yet → no-op) and cleared
+    the flag, and then start's late ``subscribe_posts`` created a LIVE listener while the
+    persisted flag said paused — an orphan that kept posting after the operator paused.
+
+    The fix holds the lock across reconcile/subscribe, so stop serializes AFTER the
+    subscription and its shutdown tears the listener down. We drive the exact window:
+    start is parked inside ``subscribe_posts``; whether stop can complete meanwhile is
+    precisely what the lock scope decides. Invariant asserted: if the persisted flag is
+    False, NO live subscription remains. The listener I/O is a real recorder (not a
+    no-op stub) so the orphan is observable — stubbing reconcile would mask this bug.
+    """
+    from core.db import (  # noqa: PLC0415
+        create_campaign,
+        get_listener_running,
+        link_channel_to_campaign,
+    )
+    from schemas.neurocomment import CampaignCreate  # noqa: PLC0415
+    from services.neurocomment import _runtime as nc_runtime  # noqa: PLC0415
+    from tests.services.neurocomment.runtime_support import (  # noqa: PLC0415
+        _ExecuteSpy,
+        _patch_execute,
+    )
+
+    nc_runtime.reset_for_tests()  # this file's conftest resets warming, not NC state
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", 0)
+    _patch_execute(monkeypatch, _ExecuteSpy())  # reconcile's JoinChannel seam → ok
+    monkeypatch.setattr(nc_runtime, "_ensure_onboarding_running", lambda *a, **k: None)  # noqa: ARG005
+
+    # One active watch channel so reconcile reaches subscribe (empty set → it stops+returns).
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+
+    # Real recorder: subscribe marks the listener live, stop clears it. Parked inside
+    # subscribe until released, so stop only proceeds if the lock is not held across it.
+    live = {"subscribed": False}
+    at_subscribe = asyncio.Event()
+    release = asyncio.Event()
+
+    async def fake_subscribe(account_id, channels, on_post):  # type: ignore[no-untyped-def]  # noqa: ARG001
+        at_subscribe.set()
+        await release.wait()
+        live["subscribed"] = True
+
+    async def fake_stop(account_id: str) -> None:  # noqa: ARG001
+        live["subscribed"] = False
+
+    monkeypatch.setattr(nc_runtime, "subscribe_posts", fake_subscribe)
+    monkeypatch.setattr(nc_runtime, "stop_post_listener", fake_stop)
+
+    start_task = asyncio.create_task(nc_runtime.start_neurocomment("acc-1"))
+    await asyncio.wait_for(at_subscribe.wait(), timeout=1.0)  # start is parked in subscribe
+    stop_task = asyncio.create_task(nc_runtime.stop_neurocomment())
+    # Give stop every chance to acquire the lock and finish: it can only do so while
+    # start is parked in subscribe if start already RELEASED the lock (the pre-fix
+    # bug). Bounded so the fixed path — stop blocked on the still-held lock — simply
+    # waits out the budget with the flag still True, then we release.
+    for _ in range(50):
+        if await get_listener_running() is False:
+            break
+        await asyncio.sleep(0.001)
+    release.set()  # subscribe completes → live=True
+    await asyncio.gather(start_task, stop_task)
+
+    # The invariant: paused persisted state ⇒ no live listener survives.
+    assert await get_listener_running() is False
+    assert live["subscribed"] is False
+
+
+@pytest.mark.asyncio
 async def test_stale_loop_crash_cannot_overwrite_new_generation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

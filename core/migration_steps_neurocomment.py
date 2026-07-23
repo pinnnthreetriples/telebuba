@@ -230,6 +230,21 @@ def _add_campaign_account_channel(connection: Connection) -> None:
         )
 
 
+def _add_neurocomment_cooldowns(connection: Connection) -> None:
+    # #34: durable backing for the in-memory engine cooldowns. Mirrors the
+    # SQLAlchemy table in _tables; created idempotently so existing databases gain
+    # it on the next engine init. channel='' = account-wide (flood/peer-flood); a
+    # handle = per-channel slow-mode. until is an ISO-8601 UTC deadline.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_cooldowns ("
+        "  account_id VARCHAR NOT NULL,"
+        "  channel VARCHAR NOT NULL,"
+        "  until VARCHAR NOT NULL,"
+        "  PRIMARY KEY (account_id, channel)"
+        ")",
+    )
+
+
 def _add_campaign_account_channels_table(connection: Connection) -> None:
     # #29: per-account channel SUBSET within a campaign — one row per pinned channel.
     # NO rows for a (campaign, account) pair = serves ALL campaign channels (default).

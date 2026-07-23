@@ -49,8 +49,9 @@ test('falls back to a translated message when the envelope has none', async () =
   expect(vi.mocked(toastError).mock.calls[0]?.[0]).not.toBe('network down');
 });
 
-test('does not toast on unauthorized (the query cache redirects instead)', async () => {
+test('redirects a mutation-only unauthorized to /login without toasting', async () => {
   vi.mocked(toastError).mockClear();
+  const assign = vi.spyOn(window.location, 'assign').mockImplementation(() => {});
   const { result } = renderHook(
     () =>
       useMutation({
@@ -60,7 +61,8 @@ test('does not toast on unauthorized (the query cache redirects instead)', async
   );
   result.current.mutate(undefined);
   await waitFor(() => {
-    expect(result.current.isError).toBe(true);
+    expect(assign).toHaveBeenCalledWith('/login');
   });
   expect(toastError).not.toHaveBeenCalled();
+  assign.mockRestore();
 });

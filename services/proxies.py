@@ -13,12 +13,14 @@ from core.db import (
     create_proxy,
     delete_proxy,
     fetch_proxy_settings,
+    list_account_ids_for_proxy,
     list_proxies,
     unassign_account_from_proxy,
     update_proxy_check,
 )
 from core.logging import log_event
 from core.proxy_check import check_proxy_connectivity
+from core.telegram_client import evict_client
 from schemas.proxy import (
     ProxyCheckResult,
     ProxyCheckUpdate,
@@ -59,6 +61,11 @@ async def probe_proxy(data: ProxyCreate) -> ProxyCheckResult:
 
 async def add_proxy(data: ProxyCreate) -> ProxyRead:
     proxy = await create_proxy(data)
+    # Re-adding an existing endpoint rotates its credentials on the same id; evict
+    # any pooled clients so they rebuild with the new creds. A fresh insert has no
+    # accounts assigned yet, so this list is empty and no eviction happens.
+    for account_id in await list_account_ids_for_proxy(proxy.id):
+        await evict_client(account_id)
     await log_event(
         "INFO",
         "proxy_added",
@@ -74,17 +81,27 @@ async def add_proxy(data: ProxyCreate) -> ProxyRead:
 
 async def assign_proxy(proxy_id: str, account_id: str) -> ProxyRead:
     proxy = await assign_account_to_proxy(proxy_id, account_id)
+    # Rebuild the pooled client with the new proxy on next use (no-op if none cached).
+    await evict_client(account_id)
     await log_event("INFO", "proxy_assigned", account_id=account_id, extra={"proxy_id": proxy_id})
     return proxy
 
 
 async def unassign_proxy(account_id: str) -> None:
     await unassign_account_from_proxy(account_id)
+    # Rebuild the pooled client without a proxy (direct) on next use.
+    await evict_client(account_id)
     await log_event("INFO", "proxy_unassigned", account_id=account_id)
 
 
 async def remove_proxy(proxy_id: str) -> None:
+    # Capture the accounts on this proxy before the delete nulls their proxy_id,
+    # then evict their pooled clients so they stop tunnelling through the dropped
+    # endpoint (they rebuild direct on next use).
+    account_ids = await list_account_ids_for_proxy(proxy_id)
     await delete_proxy(proxy_id)
+    for account_id in account_ids:
+        await evict_client(account_id)
     await log_event("INFO", "proxy_removed", extra={"proxy_id": proxy_id})
 
 

@@ -312,6 +312,79 @@ async def test_post_story_collage_count_cap_rejected_before_read(
 
 
 @pytest.mark.asyncio
+async def test_set_photo_oversized_rejected_before_read(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An over-cap photo is refused from the multipart size, before the read.
+
+    The service is patched to explode if reached, so the 400 proves the body
+    was never buffered. Message matches the service-layer size check.
+    """
+    monkeypatch.setattr(settings.profile_media, "photo_max_bytes", 1)
+
+    async def _fake(upload: object) -> ActionResult:  # noqa: ARG001
+        msg = "service must not be reached when the size cap fails"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.set_account_profile_photo", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/photo",
+            files={"file": ("photo.jpg", b"img-bytes", "image/jpeg")},
+            data={"account_id": "acc-1"},
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "profile photo file is too large"
+
+
+@pytest.mark.asyncio
+async def test_post_story_oversized_rejected_before_read(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An over-cap story image is refused pre-read; message keyed to media_kind."""
+    monkeypatch.setattr(settings.profile_media, "story_image_max_bytes", 1)
+
+    async def _fake(upload: object) -> ActionResult:  # noqa: ARG001
+        msg = "service must not be reached when the size cap fails"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.post_account_story", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story",
+            files={"files": ("s.jpg", b"img-bytes", "image/jpeg")},
+            data={"media_kind": "image", "privacy_preset": "contacts"},
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "story image file is too large"
+
+
+@pytest.mark.asyncio
+async def test_add_music_oversized_rejected_before_read(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An over-cap music track is refused pre-read (memory-exhaustion guard)."""
+    monkeypatch.setattr(settings.profile_media, "music_max_bytes", 1)
+
+    async def _fake(upload: object) -> ActionResult:  # noqa: ARG001
+        msg = "service must not be reached when the size cap fails"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.add_account_profile_music", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/music",
+            files={"file": ("t.mp3", b"snd-bytes", "audio/mpeg")},
+            data={"title": "Song"},
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "profile music file is too large"
+
+
+@pytest.mark.asyncio
 async def test_action_unavailable_maps_to_503(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,

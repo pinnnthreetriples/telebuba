@@ -60,6 +60,7 @@ from core.repositories.neurocomment._comments import (
     upsert_linked_group,
     upsert_readiness,
 )
+from core.repositories.neurocomment._cooldowns import load_active_cooldowns, persist_cooldown
 from core.repositories.neurocomment._deletions import mark_comments_deleted
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
@@ -113,6 +114,7 @@ __all__ = [
     "list_posted_comments_for_channel_since",
     "list_posted_comments_page",
     "list_posted_comments_since",
+    "load_active_cooldowns",
     "load_neurocomment_settings",
     "lookup_cached_decision",
     "mark_comment_failed",
@@ -120,6 +122,7 @@ __all__ = [
     "mark_comments_deleted",
     "mark_human_skipped",
     "mark_pair_banned",
+    "persist_cooldown",
     "reclaim_stale_claims",
     "remove_account_from_campaign",
     "resolve_pending_outcome",
