@@ -4,7 +4,8 @@ Kept in its own module so ``core.migration_steps`` stays under the file-size
 budget. Holds the proxy-pool migration (#18 — the shared ``proxies`` table +
 ``accounts.proxy_id`` FK, backfilled from the retired ``account_proxies``), the
 warming ``activity_persona`` column (#21) and the neurocomment
-``listener_running`` flag (#24). The generic SQLite helpers are imported from
+``listener_running`` flag (#24), and proxy geo consensus columns (#32). The
+generic SQLite helpers are imported from
 ``core.migration_steps``.
 """
 
@@ -130,4 +131,23 @@ def _add_warming_state_activity_persona(connection: Connection) -> None:
         connection.exec_driver_sql(
             "ALTER TABLE warming_account_state ADD COLUMN activity_persona VARCHAR "
             "NOT NULL DEFAULT 'normal'",
+        )
+
+
+def _add_proxy_geo_consensus(connection: Connection) -> None:
+    """Add independently persisted provider results for existing proxy pools."""
+    if not _sqlite_table_exists(connection, "proxies"):
+        return
+    columns = _sqlite_columns(connection, "proxies")
+    if "geo_status" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE proxies ADD COLUMN geo_status VARCHAR NOT NULL DEFAULT 'unknown'",
+        )
+    if "ipinfo_country_code" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE proxies ADD COLUMN ipinfo_country_code VARCHAR",
+        )
+    if "maxmind_country_code" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE proxies ADD COLUMN maxmind_country_code VARCHAR",
         )
