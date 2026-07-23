@@ -27,7 +27,7 @@ _COUNTRY_CODE_LENGTH = 2
 
 
 class _AsyncReader(Protocol):
-    async def read(self, limit: int = -1) -> bytes: ...
+    async def read(self, n: int = -1) -> bytes: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -360,7 +360,12 @@ def _merge_geo(records: dict[str, _GeoRecord], errors: list[str]) -> _GeoOutcome
 
 def _country_code(value: object, provider: str) -> str:
     code = _optional_payload_str(value)
-    if code is None or len(code) != _COUNTRY_CODE_LENGTH or not code.isascii() or not code.isalpha():
+    if (
+        code is None
+        or len(code) != _COUNTRY_CODE_LENGTH
+        or not code.isascii()
+        or not code.isalpha()
+    ):
         msg = f"{provider} returned an invalid country code"
         raise ValueError(msg)
     return code.upper()
