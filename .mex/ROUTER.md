@@ -1,92 +1,45 @@
 ---
 name: router
-description: Session bootstrap and navigation hub. Stable — does not track live state. Read at the start of every session before any task.
+description: Session bootstrap, current project state, task routing, and MEX work lifecycle.
 edges:
-  - target: state/active.md
-    condition: always — load current project state first
   - target: context/architecture.md
-    condition: when working on system design, integrations, or layer rules
-  - target: context/stack.md
-    condition: when working with specific technologies or making tech decisions
+    condition: backend flow, stack, services, gateways, or system design
   - target: context/conventions.md
-    condition: when writing or reviewing backend code
+    condition: backend implementation or review
   - target: context/frontend.md
-    condition: when writing or reviewing frontend code — frontend/ has its own FSD law
-  - target: context/services.md
-    condition: when writing or reviewing any business logic — services/ is where it lives
-  - target: context/decisions.md
-    condition: when making an architectural choice or understanding why something is built a certain way
+    condition: React, FSD, TypeScript, i18n, or frontend gates
+  - target: context/runtime.md
+    condition: Telegram, proxy, warming, or neurocomment runtime
   - target: context/setup.md
-    condition: when setting up the dev environment or running the project
-  - target: context/telegram.md
-    condition: when touching the platform gateway
-  - target: context/warming.md
-    condition: when working with warming/runtime workflows
-  - target: context/logging.md
-    condition: when emitting, querying, or displaying log entries
-  - target: context/kanban.md
-    condition: always at session start — protocol for the GitHub Project board
-  - target: context/skills.md
-    condition: when deciding whether to invoke a skill
-  - target: context/rtk.md
-    condition: when running a shell command and the global rtk hook is uncertain
-  - target: context/ci.md
-    condition: when modifying workflows, debugging red CI, or planning a heavy check
+    condition: setup, commands, CI, or verification
   - target: patterns/INDEX.md
-    condition: when starting a task — check the pattern index for a matching pattern
-last_updated: 2026-06-28
+    condition: repeatable implementation task
+last_updated: 2026-07-17
 ---
 
-# Session Bootstrap
+# Telebuba Router
 
-`AGENTS.md` is always loaded (via root `CLAUDE.md` which imports `.mex/AGENTS.md`). After this file, load `state/active.md` for the live picture and `context/kanban.md` for the board protocol.
+## State
+- Working: React/FastAPI; accounts, sessions, proxy pool, profile media, channels, warming runtime, neurocomment listener and vision solver, strict CI.
+- Deferred: landing #237, worker/remote DB architecture, full operator and deployment documentation.
+- Known: warming daily cap may undercount after a mid-cycle restart (#208); use one uvicorn worker.
 
-## Routing Table
+## Routing
+| Task | Load |
+|---|---|
+| Backend flow, stack, services, gateways | `context/architecture.md` |
+| Backend coding or review | `context/conventions.md` |
+| React, FSD, TypeScript, i18n | `context/frontend.md` |
+| Telegram, proxy, warming, neurocomment | `context/runtime.md` |
+| Setup, commands, CI reproduction | `context/setup.md` |
+| Repeatable implementation | `patterns/INDEX.md`, then one matching pattern |
+| Why or history | `mex timeline --kind decision --limit 3`, git, merged PRs |
 
-| Task type | Load |
-|-----------|------|
-| Current project state (always first) | `state/active.md` |
-| Picking work / moving board items | `context/kanban.md` |
-| Understanding how the system works | `context/architecture.md` |
-| Working with a specific technology | `context/stack.md` |
-| Writing or reviewing backend code | `context/conventions.md` |
-| Writing or reviewing frontend code | `context/frontend.md` |
-| Writing or reviewing business logic | `context/services.md` |
-| Making a design decision | `context/decisions.md` |
-| Setting up or running the project | `context/setup.md` |
-| Anything platform-gateway related | `context/telegram.md` |
-| Anything warming/runtime-related | `context/warming.md` |
-| Anything log-related | `context/logging.md` |
-| Skills | `context/skills.md` |
-| CI/workflows | `context/ci.md` |
-| Shell command policy | `context/rtk.md` |
-| Any specific task | check `patterns/INDEX.md` |
+Load only the matching route and at most one relevant pattern. Trust code, tests, manifests, and workflows over memory.
 
-## Methodology — Vertical Slice + Hexagonal-lite (split stack)
-
-Every code change MUST land in the right layer. Before writing code, the agent declares which layer is changing and why.
-
-```text
-frontend/    React SPA (Feature-Sliced Design). Talks to the backend only over /api/v1. See context/frontend.md.
-api/         UI-thin /api/v1 routes. Validate → call service → serialize. No business logic.
-services/    Business logic. Async, Pydantic at edges, no SDK imports, transport-agnostic.
-core/        Infrastructure gateways: db/repositories, client gateways, auth, config, logging.
-schemas/     Pure Pydantic types. No project imports. The data contract.
-```
-
-**Hard layer check before writing backend code:**
-1. Where does this code belong? Name the layer and file path.
-2. What does it import? Cross-check `context/architecture.md` (and the api-layer allowlist).
-3. Is cross-layer input/output a Pydantic model from `schemas/`?
-4. Would the same logic be called from a runtime task, CLI, or test? If yes, it belongs in `services/`, not the api layer.
-
-For frontend code, run the FSD check in `context/frontend.md` (layer + slice public API).
-If any check fails, stop and re-plan.
-
-## Behavioural Contract
-
-1. **CONTEXT** — Move board item to `In progress` when applicable. Load relevant context files. Always include `context/services.md` for business logic. Check `patterns/INDEX.md`.
-2. **BUILD** — Run the hard layer check, then write code.
-3. **VERIFY** — Load `context/conventions.md` and run the checklist item by item.
-4. **DEBUG** — If verification fails, follow a matching debug pattern if one exists.
-5. **GROW** — Record reality in `state/active.md`, update stale context/pattern files, bump `last_updated`, and move the board item when applicable.
+## Workflow
+1. **CONTEXT** — load the matching context; check `patterns/INDEX.md` for a relevant runbook.
+2. **BUILD** — follow the loaded rules and pattern; state any necessary deviation before implementing it.
+3. **VERIFY** — run relevant checks from `context/setup.md`; report only commands actually executed and their results.
+4. **DEBUG** — fix failures, use a matching debug pattern when available, and rerun failed verification.
+5. **GROW** — update this State only when reality changed; update affected context facts; create or improve a repeatable pattern; bump `last_updated`; use `mex log` when rationale matters.

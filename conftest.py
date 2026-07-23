@@ -1,12 +1,12 @@
 """Root pytest configuration.
 
-Test policy: see `.mex/context/conventions.md` rule 7 (Test Coverage).
-All knobs that affect pass/fail live in `pyproject.toml [tool.pytest.ini_options]`.
+Test policy: see ``.mex/context/conventions.md``.
+All knobs that affect pass/fail live in ``pyproject.toml [tool.pytest.ini_options]``.
 This file is for fixtures and Hypothesis profile registration only.
 
-Profile selection: set `HYPOTHESIS_PROFILE` to `dev` | `strict` | `extended`.
-Defaults to `strict` (CI on main, local runs). CI on PR sets `dev`; nightly
-sets `extended`.
+Profile selection: set ``HYPOTHESIS_PROFILE`` to ``dev`` | ``strict`` | ``extended``.
+Defaults to ``strict`` (CI on main, local runs). CI on PR sets ``dev``; nightly
+sets ``extended``.
 """
 
 from __future__ import annotations

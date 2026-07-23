@@ -1,0 +1,25 @@
+---
+last_updated: 2026-07-16
+---
+
+# Telegram Runtimes
+
+## Telegram and proxy
+- Only `core/telegram_client/` imports Telethon, owns clients/listeners, and returns typed Pydantic results.
+- Services choose policy and persist outcomes; never expose Telethon objects or session/tdata contents.
+- Device fingerprints are immutable. Proxy credentials resolve inside `core/` from the shared `proxies` pool; one account uses at most one proxy and capacity is config-driven.
+- Rate limits return classified outcomes; persist cooldowns and never retry immediately.
+
+## Warming
+- One persisted `asyncio.Task` per active account; FastAPI lifespan starts reconciliation and shutdown.
+- Persona sets target cadence; phase/trust remains the safety ceiling.
+- `pacing.py`/`_fleet.py` own scheduling and de-correlation; cycle modules own one testable session; runtime modules own state, sleep, cancellation, and recovery.
+- Board reads stay bulk-loaded. Loop failures must be logged and persisted. Known counter defect: `#208`.
+
+## Neurocomment
+- A persisted listener watches active campaign channels; each post runs in a tracked task.
+- Pipeline: map campaign → filter → choose healthy under-quota account → atomic post claim → generate/deduplicate → delay → comment → persist.
+- Challenge handling distinguishes Telegram restrictions from bot challenges and supports configured OpenAI/Gemini text/vision solving, retries, caching, operator actions, and channel backoff.
+- Atomic claims prevent duplicate comments; warming and listener roles are mutually exclusive; listener-safe handlers do not leak exceptions.
+
+API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.
