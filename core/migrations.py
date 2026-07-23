@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.migration_steps import (
+    _add_account_avatar,
     _add_account_bio,
     _add_account_proxy_geo,
     _add_logs_indexes,
@@ -92,7 +93,8 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (29, "add_campaign_account_channels_table", _add_campaign_account_channels_table),
     (30, "add_readiness_banned", _add_readiness_banned),
     (31, "add_warming_state_nc_handed_off", _add_warming_state_nc_handed_off),
-    (32, "add_proxy_geo_consensus", _add_proxy_geo_consensus),
+    (32, "add_account_avatar", _add_account_avatar),
+    (33, "add_proxy_geo_consensus", _add_proxy_geo_consensus),
 )
 
 

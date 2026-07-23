@@ -216,6 +216,7 @@ from core.repositories.accounts import (  # noqa: E402, F401
     create_account,
     delete_account,
     fetch_account,
+    fetch_account_avatar,
     list_accounts,
     list_accounts_by_ids,
     update_account_from_session_check,

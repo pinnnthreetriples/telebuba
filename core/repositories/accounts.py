@@ -11,6 +11,7 @@ unaffected.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 from typing import TYPE_CHECKING, Any, cast
 
 from sqlalchemy import func, insert, select, update
@@ -63,6 +64,7 @@ def _row_to_account(mapping: Mapping[str, object]) -> AccountRead:
         username=_optional_str(mapping.get("username")),
         first_name=_optional_str(mapping.get("first_name")),
         last_name=_optional_str(mapping.get("last_name")),
+        avatar_etag=_optional_str(mapping.get("avatar_etag")),
         bio=_optional_str(mapping.get("bio")),
         last_checked_at=_optional_str(mapping.get("last_checked_at")),
         created_at=str(mapping["created_at"]),
@@ -95,6 +97,9 @@ def _account_select_statement() -> Select[tuple[Any, ...]]:
         _accounts.c.username,
         _accounts.c.first_name,
         _accounts.c.last_name,
+        # Only the etag joins the read model — the avatar BLOB never rides a list
+        # query; it is served on demand by the /avatar endpoint.
+        _accounts.c.avatar_etag,
         _accounts.c.bio,
         _accounts.c.last_checked_at,
         _accounts.c.created_at,
@@ -135,6 +140,22 @@ def _fetch_account(account_id: str) -> AccountRead | None:
 
 async def fetch_account(account_id: str) -> AccountRead | None:
     return await asyncio.to_thread(_fetch_account, account_id)
+
+
+def _fetch_account_avatar(account_id: str) -> tuple[bytes, str] | None:
+    """Return ``(avatar_bytes, etag)`` for the /avatar endpoint, or ``None``."""
+    statement = select(_accounts.c.avatar_thumb, _accounts.c.avatar_etag).where(
+        _accounts.c.account_id == account_id,
+    )
+    with _get_engine().connect() as connection:
+        row = connection.execute(statement).first()
+    if row is None or row[0] is None or row[1] is None:
+        return None
+    return bytes(row[0]), str(row[1])
+
+
+async def fetch_account_avatar(account_id: str) -> tuple[bytes, str] | None:
+    return await asyncio.to_thread(_fetch_account_avatar, account_id)
 
 
 def _create_account(data: AccountCreate) -> AccountRead:
@@ -343,6 +364,11 @@ def _update_account_from_session_check(result: TelegramSessionCheckResult) -> Ac
                 "last_name": result.last_name,
             },
         )
+        # Only overwrite the avatar when the check actually returned bytes — a
+        # refused/absent download (None) must not wipe a good cached photo.
+        if result.avatar_thumb is not None:
+            values["avatar_thumb"] = result.avatar_thumb
+            values["avatar_etag"] = hashlib.blake2b(result.avatar_thumb, digest_size=16).hexdigest()
 
     with _get_engine().begin() as connection:
         connection.execute(

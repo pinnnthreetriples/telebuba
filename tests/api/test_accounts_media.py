@@ -178,6 +178,57 @@ async def test_story_thumb_returns_image(
 
 
 @pytest.mark.asyncio
+async def test_avatar_returns_image_with_cache_headers(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> ProfileImage | None:
+        assert account_id == "acc-1"
+        return ProfileImage(content=b"avatar-bytes", etag="av123")
+
+    monkeypatch.setattr("services.accounts.account_avatar_image", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/avatar")
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "image/jpeg"
+    assert resp.headers["etag"] == "av123"
+    assert resp.headers["cache-control"] == "private, max-age=3600, immutable"
+    assert resp.content == b"avatar-bytes"
+
+
+@pytest.mark.asyncio
+async def test_avatar_returns_304_on_matching_etag(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> ProfileImage | None:  # noqa: ARG001
+        return ProfileImage(content=b"avatar-bytes", etag="av123")
+
+    monkeypatch.setattr("services.accounts.account_avatar_image", _fake)
+    async with _client(app) as client:
+        resp = await client.get(
+            "/api/v1/accounts/acc-1/avatar",
+            headers={"If-None-Match": "av123"},
+        )
+    assert resp.status_code == 304
+    assert resp.content == b""
+
+
+@pytest.mark.asyncio
+async def test_avatar_missing_is_404(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _fake(account_id: str) -> ProfileImage | None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.accounts.account_avatar_image", _fake)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/avatar")
+    assert resp.status_code == 404
+
+
+@pytest.mark.asyncio
 async def test_post_story_accepts_multipart(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,

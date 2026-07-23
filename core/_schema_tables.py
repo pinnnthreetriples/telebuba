@@ -15,6 +15,7 @@ from sqlalchemy import (
     ForeignKey,
     Index,
     Integer,
+    LargeBinary,
     MetaData,
     String,
     Table,
@@ -45,6 +46,12 @@ _accounts = Table(
     Column("first_name", String, nullable=True),
     Column("last_name", String, nullable=True),
     Column("bio", String, nullable=True),
+    # Small (~160px) profile photo captured on the session check, served by the
+    # cacheable /avatar endpoint. ``avatar_etag`` (content hash) is what the list
+    # query selects and the SPA puts in the <img> URL as ?v= — the BLOB stays out
+    # of every list read and moves only through the dedicated endpoint.
+    Column("avatar_thumb", LargeBinary, nullable=True),
+    Column("avatar_etag", String, nullable=True),
     Column("last_checked_at", String, nullable=True),
     Column("created_at", String, nullable=False),
     Column("updated_at", String, nullable=False),
