@@ -17,7 +17,11 @@ from typing import TYPE_CHECKING
 from anyio import Path
 from telethon import TelegramClient, errors
 
-from core.telegram_client._client import create_telegram_client, prepare_telegram_client_profile
+from core.telegram_client._client import (
+    _session_path,
+    create_telegram_client,
+    prepare_telegram_client_profile,
+)
 from core.telegram_client._pool import evict_client
 from core.telegram_client._util import optional_str
 from schemas.device_fingerprint import TelegramClientRequest
@@ -154,6 +158,16 @@ async def _remove_session_file(session_path: str) -> None:
     session_file = Path(f"{session_path}.session")
     if await session_file.exists():
         await session_file.unlink()
+
+
+async def remove_account_session(account_id: str, session_name: str | None = None) -> None:
+    """Unlink an account's Telethon ``.session`` file from disk.
+
+    Path composition (and the ``session_name`` → ``account_id`` fallback) is shared
+    with client construction via ``_session_path``, so ``services`` callers never
+    re-derive the session-dir layout — they just name the account.
+    """
+    await _remove_session_file(_session_path(_login_request(account_id, session_name)))
 
 
 def _status_result(

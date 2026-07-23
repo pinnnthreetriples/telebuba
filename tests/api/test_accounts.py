@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.config import settings
 from schemas.accounts import AccountCreate, AccountRead
 from schemas.phone_login import PhoneCodeRequestResult
 from schemas.spam_status import SpamStatusVerdict
@@ -338,6 +339,54 @@ async def test_import_session_duplicate_is_409(
             files={"file": ("acc.session", b"x", "application/octet-stream")},
         )
     assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_import_session_oversized_rejected_before_read(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An over-cap .session upload is refused from the multipart size, pre-read.
+
+    The service is patched to explode if reached — so the 400 proves the body
+    was never buffered into the import flow. Message matches the service check.
+    """
+    monkeypatch.setattr(settings.profile_media, "session_max_bytes", 1)
+
+    async def _fake(data: object) -> AccountRead:  # noqa: ARG001
+        msg = "service must not be reached when the size cap fails"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.import_account_session", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            files={"file": ("acc.session", b"too-big", "application/octet-stream")},
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "Session file is too large (>1 bytes)"
+
+
+@pytest.mark.asyncio
+async def test_import_tdata_oversized_rejected_before_read(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An over-cap tdata.zip upload is refused pre-read (memory-exhaustion guard)."""
+    monkeypatch.setattr(settings.profile_media, "tdata_max_bytes", 1)
+
+    async def _fake(request: object) -> TdataImportResult:  # noqa: ARG001
+        msg = "service must not be reached when the size cap fails"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.import_account_tdata", _fake)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-tdata",
+            files={"file": ("tdata.zip", b"zip-bytes", "application/zip")},
+        )
+    assert resp.status_code == 400
+    assert resp.json()["error"]["message"] == "tdata archive is too large"
 
 
 @pytest.mark.asyncio

@@ -105,6 +105,17 @@ def _count_for_proxy(connection: Connection, proxy_id: str) -> int:
     return int(connection.execute(statement).scalar() or 0)
 
 
+def _list_account_ids_for_proxy(proxy_id: str) -> list[str]:
+    statement = select(_accounts.c.account_id).where(_accounts.c.proxy_id == proxy_id)
+    with _get_engine().connect() as connection:
+        return [str(row[0]) for row in connection.execute(statement).all()]
+
+
+async def list_account_ids_for_proxy(proxy_id: str) -> list[str]:
+    """Account ids currently assigned to ``proxy_id`` (for pooled-client eviction)."""
+    return await asyncio.to_thread(_list_account_ids_for_proxy, proxy_id)
+
+
 def _list_proxies() -> ProxyList:
     with _get_engine().connect() as connection:
         rows = connection.execute(select(_proxies)).mappings().all()

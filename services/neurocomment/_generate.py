@@ -292,7 +292,7 @@ async def _classify_post(
         # slow-mode is per-chat → cool only this channel; flood/peer-flood/premium
         # are account-wide.
         scope = event.channel if result.status == "slow_mode_wait" else None
-        _apply_cooldown(account_id, result.flood_wait_seconds, scope)
+        await _apply_cooldown(account_id, result.flood_wait_seconds, scope)
         event_name = "neurocomment_post_cooldown"
     elif result.error_type == _BAN_ERROR:
         # Hard ban → park this pair with a sticky ban (#30): selection skips it and a
@@ -322,13 +322,15 @@ async def _classify_post(
     )
 
 
-def _apply_cooldown(account_id: str, flood_wait_seconds: int | None, channel: str | None) -> None:
+async def _apply_cooldown(
+    account_id: str, flood_wait_seconds: int | None, channel: str | None
+) -> None:
     """Park ``(account, channel)``: flood duration, else the peer-flood config default."""
     seconds = flood_wait_seconds
     if seconds is None:
         # peer_flood (and any wait without a duration) → config cooldown.
         seconds = int(settings.neurocomment.peer_flood_cooldown_seconds)
-    _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds), channel)
+    await _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds), channel)
 
 
 async def _register_challenge_failure(channel: str) -> None:

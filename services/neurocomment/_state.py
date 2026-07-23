@@ -1,15 +1,22 @@
 """Transient per-account engine state — cooldowns after a flood/peer-flood.
 
-# ponytail: single-process, in-memory only. This is NOT persisted: a process
-# restart clears every cooldown (the DB claim table is the durable record, this
-# is only short-lived anti-ban pacing). A multi-process deployment would need
-# this in shared storage.
+The in-memory dicts below are the hot read path. The flood/peer-flood/slow-mode
+cooldowns (``_COOLDOWN_UNTIL``, set via ``set_cooldown``) are additionally
+mirrored to ``neurocomment_cooldowns`` and rehydrated at startup (#34), so a
+just-flooded account stays parked across a process restart. The channel/challenge
+back-offs stay in-memory only — they are recomputed each sweep and self-heal.
 """
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
+
+from core.repositories.neurocomment import load_active_cooldowns, persist_cooldown
+
+# ponytail: single-process. A multi-process deployment would still need shared
+# storage for the read path; the DB here is durability, not cross-process sharing.
 
 # (account_id, channel) -> earliest UTC time it may comment again. channel=None is
 # an account-wide cooldown (flood/peer-flood); a channel scopes it to that chat
@@ -34,12 +41,25 @@ _CHALLENGE_TRIPS: dict[str, int] = {}  # consecutive trips this process (escalat
 _CHALLENGE_BACKOFF_UNTIL: dict[str, datetime] = {}  # earliest UTC time to onboard again
 
 
-def set_cooldown(account_id: str, until: datetime, channel: str | None = None) -> None:
-    """Park ``(account, channel)`` until ``until`` (extends an existing, later cooldown)."""
+async def set_cooldown(account_id: str, until: datetime, channel: str | None = None) -> None:
+    """Park ``(account, channel)`` until ``until`` (extends an existing, later cooldown).
+
+    The in-memory map is updated first (so ``in_cooldown`` sees the deadline
+    immediately and it is never lost if the durable write fails), then the row is
+    persisted off the event loop via ``asyncio.to_thread`` — the single-worker
+    loop must never block on the SQLite write during a flood storm. Only a
+    genuinely-later deadline is written, matching the in-memory extend rule.
+    """
+    if until.tzinfo is None:
+        # A naive datetime would ISO-serialize without an offset; the prune's
+        # string comparison (``until <= now``) then breaks against aware rows.
+        msg = "set_cooldown 'until' must be timezone-aware UTC"
+        raise ValueError(msg)
     key = (account_id, channel)
     current = _COOLDOWN_UNTIL.get(key)
     if current is None or until > current:
         _COOLDOWN_UNTIL[key] = until
+        await asyncio.to_thread(persist_cooldown, account_id, channel, until.isoformat())
 
 
 def in_cooldown(account_id: str, now: datetime, channel: str | None = None) -> bool:
@@ -63,9 +83,25 @@ def in_cooldown(account_id: str, now: datetime, channel: str | None = None) -> b
 
 
 def clear_cooldown(account_id: str, channel: str | None = None) -> None:
-    """Drop an account's account-wide and ``channel`` cooldowns (called on a successful post)."""
+    """Drop an account's account-wide and ``channel`` cooldowns (called on a successful post).
+
+    In-memory only — no DB delete needed. A successful post is gated by
+    ``in_cooldown``, so a cleared cooldown is necessarily already expired; its
+    lapsed DB row is pruned by ``load_active_cooldowns`` on the next hydrate.
+    """
     _COOLDOWN_UNTIL.pop((account_id, None), None)
     _COOLDOWN_UNTIL.pop((account_id, channel), None)
+
+
+async def hydrate_cooldowns() -> None:
+    """Reload persisted cooldown deadlines into the in-memory map after a restart (#34).
+
+    Called once from the NC startup reconcile. Lapsed rows are pruned in the repo;
+    each surviving deadline repopulates ``_COOLDOWN_UNTIL`` so a just-flooded account
+    stays parked. The in-memory map remains the hot read path thereafter.
+    """
+    for record in await load_active_cooldowns(datetime.now(UTC).isoformat()):
+        _COOLDOWN_UNTIL[(record.account_id, record.channel)] = datetime.fromisoformat(record.until)
 
 
 def trip_channel_backoff(

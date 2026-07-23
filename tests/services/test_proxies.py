@@ -34,6 +34,101 @@ async def test_assign_and_unassign(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
+async def test_assign_and_unassign_evict_client(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Changing an account's proxy must evict its pooled client so it rebuilds."""
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="acc-1"))
+    proxy = await proxies.add_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080))
+
+    evicted: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        evicted.append(account_id)
+
+    monkeypatch.setattr("services.proxies.evict_client", fake_evict)
+
+    await proxies.assign_proxy(proxy.id, "acc-1")
+    await proxies.unassign_proxy("acc-1")
+
+    assert evicted == ["acc-1", "acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_remove_proxy_evicts_all_assigned_clients(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Deleting a proxy must evict the pooled client of every account on it."""
+    configure_database(tmp_path / "telebuba.db")
+    proxy = await proxies.add_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080))
+    for index in range(2):
+        await create_account(AccountCreate(account_id=f"acc-{index}"))
+        await proxies.assign_proxy(proxy.id, f"acc-{index}")
+
+    evicted: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        evicted.append(account_id)
+
+    monkeypatch.setattr("services.proxies.evict_client", fake_evict)
+
+    await proxies.remove_proxy(proxy.id)
+
+    assert set(evicted) == {"acc-0", "acc-1"}
+
+
+@pytest.mark.asyncio
+async def test_add_proxy_credential_rotation_evicts_clients(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Re-adding an endpoint rotates creds on the same id and must evict its clients."""
+    configure_database(tmp_path / "telebuba.db")
+    proxy = await proxies.add_proxy(
+        ProxyCreate(proxy_type="socks5", host="h", port=1080, password="old"),
+    )
+    await create_account(AccountCreate(account_id="acc-1"))
+    await proxies.assign_proxy(proxy.id, "acc-1")
+
+    evicted: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        evicted.append(account_id)
+
+    monkeypatch.setattr("services.proxies.evict_client", fake_evict)
+
+    rotated = await proxies.add_proxy(
+        ProxyCreate(proxy_type="socks5", host="h", port=1080, password="new"),
+    )
+
+    assert rotated.id == proxy.id
+    assert evicted == ["acc-1"]
+
+
+@pytest.mark.asyncio
+async def test_add_proxy_fresh_insert_evicts_nothing(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A brand-new proxy has no accounts, so adding it evicts no clients."""
+    configure_database(tmp_path / "telebuba.db")
+
+    evicted: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        evicted.append(account_id)
+
+    monkeypatch.setattr("services.proxies.evict_client", fake_evict)
+
+    await proxies.add_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080))
+
+    assert evicted == []
+
+
+@pytest.mark.asyncio
 async def test_assign_over_capacity_raises(tmp_path) -> None:
     configure_database(tmp_path / "telebuba.db")
     proxy = await proxies.add_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080))

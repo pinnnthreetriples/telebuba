@@ -16,6 +16,8 @@ from fastapi import status as http_status
 from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
+from api.v1._uploads import reject_oversized_upload
+from core.config import settings
 from schemas.accounts import (
     AccountCheckRequest,
     AccountProfileUpdateRequest,
@@ -175,6 +177,11 @@ async def import_account_tdata(
 ) -> TdataImportResult:
     # ponytail: reads the archive into memory; stream to a temp file + content_path
     # if multi-hundred-MB tdata archives become common.
+    reject_oversized_upload(
+        file,
+        max_bytes=settings.profile_media.tdata_max_bytes,
+        detail="tdata archive is too large",
+    )
     content = await file.read()
     request = TdataConvertRequest(
         filename=file.filename or "tdata.zip",
@@ -196,6 +203,11 @@ async def import_account_session(
     file: Annotated[UploadFile, File()],
     label: Annotated[str | None, Form()] = None,
 ) -> AccountRead:
+    reject_oversized_upload(
+        file,
+        max_bytes=settings.profile_media.session_max_bytes,
+        detail=(f"Session file is too large (>{settings.profile_media.session_max_bytes} bytes)"),
+    )
     content = await file.read()
     data = AccountSessionFileImport(
         filename=file.filename or "account.session",

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import io
 import zipfile
 from typing import TYPE_CHECKING
@@ -51,6 +52,41 @@ async def test_import_account_session_saves_file_and_creates_account() -> None:
     row = page.items[0]
     assert row.label == "Real account"
     assert row.session_name == "real-account"
+
+
+@pytest.mark.asyncio
+async def test_concurrent_identical_session_imports_serialize() -> None:
+    """Two same-name imports racing must not both pass the existence check.
+
+    The per-key import lock serializes check→write→add, so exactly one import
+    wins and the other observes the now-existing account and raises
+    SessionAlreadyExistsError — the winner's credential is never overwritten.
+    Without the lock both would pass the check and the second would clobber the
+    first's .session (or trip a DB integrity error, not the domain error).
+    """
+    results = await asyncio.gather(
+        import_account_session(
+            AccountSessionFileImport(filename="race.session", content=b"first", label="A"),
+        ),
+        import_account_session(
+            AccountSessionFileImport(filename="race.session", content=b"second", label="B"),
+        ),
+        return_exceptions=True,
+    )
+
+    successes = [r for r in results if not isinstance(r, BaseException)]
+    errors = [r for r in results if isinstance(r, BaseException)]
+    assert len(successes) == 1
+    assert len(errors) == 1
+    assert isinstance(errors[0], SessionAlreadyExistsError)
+
+    # Exactly one account row, and the stored credential is the winner's — the
+    # loser never overwrote it.
+    page = await list_accounts_page()
+    assert len(page.items) == 1
+    winner = successes[0]
+    expected = b"first" if winner.label == "A" else b"second"
+    assert (settings.telegram.session_dir / "race.session").read_bytes() == expected
 
 
 @pytest.mark.asyncio

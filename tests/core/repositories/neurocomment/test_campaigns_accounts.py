@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 from sqlalchemy.exc import IntegrityError
 
@@ -22,6 +24,7 @@ from core.db import (  # type: ignore[attr-defined]
     update_campaign_prompt,
     update_solver_enabled,
 )
+from core.repositories.accounts import _delete_account
 from core.repositories.neurocomment import (
     ChannelNotInCampaignError,
     set_campaign_account_channels,
@@ -136,6 +139,28 @@ async def test_set_campaign_account_channels_persists_and_clears() -> None:
     await set_campaign_account_channels(campaign.campaign_id, "acc-1", [])  # clear the subset
     cleared = (await list_campaign_accounts(campaign.campaign_id)).links
     assert [link.channels for link in cleared] == [[]]
+
+
+@pytest.mark.asyncio
+async def test_delete_account_removes_campaign_channel_subset() -> None:
+    """Deleting an account with a pinned-channel-subset row must succeed and purge it.
+
+    ``neurocomment_campaign_account_channels`` FKs ``accounts.account_id`` with no
+    ON DELETE CASCADE, so ``_delete_account`` must clear it before dropping the
+    account row — otherwise PRAGMA foreign_keys=ON raises IntegrityError (500).
+    """
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@news")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await set_campaign_account_channels(campaign.campaign_id, "acc-1", ["@news"])
+    pinned = (await list_campaign_accounts(campaign.campaign_id)).links
+    assert [link.channels for link in pinned] == [["@news"]]
+
+    await asyncio.to_thread(_delete_account, "acc-1")
+
+    # The account link (and its channel subset) is gone; no IntegrityError raised.
+    assert (await list_campaign_accounts(campaign.campaign_id)).links == []
 
 
 @pytest.mark.asyncio

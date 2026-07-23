@@ -29,7 +29,7 @@ from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
 from schemas.neurocomment import NeurocommentRuntimeStatus
 from schemas.telegram_actions import JoinChannel
-from services.neurocomment import _seams, _signals
+from services.neurocomment import _seams, _signals, _state
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_campaign
 
@@ -175,47 +175,41 @@ async def start_neurocomment(
 ) -> None:
     """Point the runtime at ``listener_account_id`` promptly; onboard in the background.
 
-    Persisting the listener + reconciling are fast, so Start returns at once and the
-    POST never blocks on the minutes of jittered join/challenge sleeps onboarding
-    incurs. Onboarding for every active campaign runs as a tracked background task
-    (progress is observable over the SSE log stream); shutdown cancels it cleanly.
+    Persisting the listener + reconciling are fast, so Start returns at once instead of
+    blocking on onboarding's minutes of jittered join/challenge sleeps; onboarding runs
+    as a tracked background task (progress on the SSE log stream, cancelled on shutdown).
+    Switching accounts stops the previous account's subscription first (listeners are
+    keyed per account); a rapid second Start won't spawn a duplicate onboarding task.
 
-    Switching the listener account: if a *different* account was the listener, stop its
-    subscription first — ``subscribe_posts``/``stop_post_listener`` are keyed per
-    account, so leaving the old one wired would have both accounts receive every post.
-
-    A rapid second Start does not spawn a duplicate onboarding task while the first is
-    still in flight; already-ready pairs are skipped inside onboarding regardless.
+    The warming-check → flag-commit → reconcile all run under the shared per-account
+    lifecycle lock (the one ``start_warming`` holds): a concurrent ``start_warming`` or
+    ``stop_neurocomment`` can't interleave, so no orphan listener survives a pause. No
+    deadlock — reconcile hits Telegram only via ``core.telegram_client``/``_seams``
+    (which never take this lock) and onboarding is fire-and-forget, not awaited.
     """
-    if listener_account_id in await list_warming_account_ids():
-        raise ListenerBusyWarmingError(listener_account_id)
-    previous = await get_listener_account_id()
-    if previous is not None and previous != listener_account_id:
-        await stop_post_listener(previous)
-    await set_listener_account_id(listener_account_id)
-    await set_listener_running(running=True)
-    await reconcile_neurocomment_runtime(listener_account_id)
+    from services.warming import account_lock  # noqa: PLC0415 - avoid a services import cycle.
+
+    async with account_lock(listener_account_id):
+        if listener_account_id in await list_warming_account_ids():
+            raise ListenerBusyWarmingError(listener_account_id)
+        previous = await get_listener_account_id()
+        if previous is not None and previous != listener_account_id:
+            await stop_post_listener(previous)
+        await set_listener_account_id(listener_account_id)
+        await set_listener_running(running=True)
+        await reconcile_neurocomment_runtime(listener_account_id)
     _ensure_onboarding_running(on_progress or _signals.signal_onboarding_progress)
 
 
 def is_onboarding_running() -> bool:
-    """True while the background campaign-onboarding pass is in flight.
-
-    The status read (and thus the SPA's live board animation) reflects the real
-    task handle, not a heuristic on readiness counts — a comments-off channel
-    never yields a readiness row, so a count would stall and mislead.
-    """
+    """True while the background campaign-onboarding pass is in flight."""
     return _ONBOARD_TASK is not None and not _ONBOARD_TASK.done()
 
 
 def _ensure_onboarding_running(
     on_progress: Callable[[OnboardingProgressEvent], None] | None,
 ) -> None:
-    """Spawn the background campaign-onboarding task unless one is already in flight.
-
-    A trigger while a task is in flight queues one coalesced rerun instead of being
-    dropped, so a channel/account added mid-run is still onboarded.
-    """
+    """Spawn the onboarding task unless one is in flight; a mid-pass trigger queues one rerun."""
     global _ONBOARD_TASK, _ONBOARD_RERUN  # noqa: PLW0603 - single module-level handles
     if _ONBOARD_TASK is not None and not _ONBOARD_TASK.done():
         _ONBOARD_RERUN = True
@@ -226,11 +220,7 @@ def _ensure_onboarding_running(
 async def _onboard_active_campaigns(
     on_progress: Callable[[OnboardingProgressEvent], None] | None,
 ) -> None:
-    """Onboard every active campaign (background). One campaign's failure is isolated.
-
-    Loops while a rerun was queued mid-pass (``_ensure_onboarding_running`` fired
-    during the run), so triggers arriving mid-run are never lost.
-    """
+    """Onboard every active campaign (background); failures isolated, mid-pass reruns honored."""
     global _ONBOARD_RERUN  # noqa: PLW0603 - single module-level rerun flag
     while True:
         for campaign in (await list_campaigns()).campaigns:
@@ -252,38 +242,36 @@ async def _onboard_active_campaigns(
         _ONBOARD_RERUN = False
 
 
-async def stop_neurocomment() -> None:
-    """PAUSE the runtime: unsubscribe but KEEP the remembered listener account.
+async def _teardown_listener_locked(listener_account_id: str, *, clear_account: bool) -> None:
+    """Tear down under the per-account lock; clear running (and the account when asked)."""
+    from services.warming import account_lock  # noqa: PLC0415 - see start_neurocomment.
 
-    The operator's play/pause button lands here. ``listener_running`` is cleared
-    even if shutdown raises, so a fresh boot never auto-resumes a paused listener
-    (``reconcile_neurocomment_on_startup`` gates on it). ``listener_account_id`` is
-    deliberately left intact so the strip survives a reload in the paused state —
-    that is what distinguishes pause from "снять слушателя" (see
-    :func:`clear_neurocomment_listener`).
-    """
-    listener_account_id = await get_listener_account_id()
-    try:
-        if listener_account_id is not None:
+    async with account_lock(listener_account_id):
+        try:
             await shutdown_neurocomment_runtime(listener_account_id)
-    finally:
+        finally:
+            if clear_account:
+                await set_listener_account_id(None)
+            await set_listener_running(running=False)
+
+
+async def stop_neurocomment() -> None:
+    """PAUSE: unsubscribe but KEEP the remembered account (unlike clear, which forgets it)."""
+    listener_account_id = await get_listener_account_id()
+    if listener_account_id is None:
         await set_listener_running(running=False)
+        return
+    await _teardown_listener_locked(listener_account_id, clear_account=False)
 
 
 async def clear_neurocomment_listener() -> None:
-    """REMOVE the listener ("снять слушателя"): unsubscribe and forget the account.
-
-    Unlike :func:`stop_neurocomment` (pause), this clears ``listener_account_id`` as
-    well as ``listener_running`` so the strip reverts to the "выберите аккаунт"
-    placeholder. Both are cleared even if shutdown raises.
-    """
+    """REMOVE the listener ("снять слушателя"): unsubscribe and forget the account."""
     listener_account_id = await get_listener_account_id()
-    try:
-        if listener_account_id is not None:
-            await shutdown_neurocomment_runtime(listener_account_id)
-    finally:
+    if listener_account_id is None:
         await set_listener_account_id(None)
         await set_listener_running(running=False)
+        return
+    await _teardown_listener_locked(listener_account_id, clear_account=True)
 
 
 async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
@@ -347,6 +335,9 @@ async def reconcile_neurocomment_on_startup() -> None:
     that must be cleaned up even for a runtime that boots paused.
     """
     await _reclaim_stale_claims_on_startup()
+    # Rehydrate cooldowns unconditionally (#34) — a just-flooded account stays parked
+    # across a restart even for a runtime that boots paused.
+    await _state.hydrate_cooldowns()
     if not await get_listener_running():
         return
     listener_account_id = await get_listener_account_id()

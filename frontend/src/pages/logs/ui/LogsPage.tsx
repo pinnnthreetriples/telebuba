@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { accountsQueryOptions } from '@/entities/account';
+import { allAccountsQueryOptions } from '@/entities/account';
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
 import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
@@ -32,7 +32,7 @@ export function LogsPage() {
   // list), NOT the loaded log page — so every account is selectable even when it
   // has no rows on the current page, and the column shows the phone, not the
   // internal session-stem id.
-  const accountsData = useQuery(accountsQueryOptions());
+  const accountsData = useQuery(allAccountsQueryOptions());
   const accountLabels = useMemo(() => {
     const map = new Map<string, string>();
     for (const acc of accountsData.data?.items ?? []) {

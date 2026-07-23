@@ -371,6 +371,42 @@ def test_campaign_account_channels_migration_backfills_legacy_pins(tmp_path: Pat
     assert rows == [("pinned", "@news")]  # only the non-NULL pin is backfilled
 
 
+def test_neurocomment_cooldowns_table_created() -> None:
+    """#34 adds the durable cooldown table and stamps its version."""
+    engine = _get_engine()
+    with engine.connect() as connection:
+        tables = {
+            str(row[0])
+            for row in connection.exec_driver_sql(
+                "SELECT name FROM sqlite_master WHERE type = 'table'",
+            )
+        }
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert "neurocomment_cooldowns" in tables
+    assert 34 in versions
+
+
+def test_neurocomment_cooldowns_migration_is_idempotent(tmp_path: Path) -> None:
+    """The #34 body uses IF NOT EXISTS, so re-running it against a legacy DB is clean."""
+    from core.migration_steps_neurocomment import _add_neurocomment_cooldowns  # noqa: PLC0415
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy.db'}", future=True)
+    with engine.begin() as connection:
+        _add_neurocomment_cooldowns(connection)
+        _add_neurocomment_cooldowns(connection)  # idempotent — must not raise.
+    with engine.connect() as connection:
+        columns = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_cooldowns)",
+            ).mappings()
+        }
+    engine.dispose()
+    assert {"account_id", "channel", "until"} == columns
+
+
 def test_append_only_versions_are_unique() -> None:
     """Two migrations sharing the same version would silently mask each other."""
     versions = [v for v, _name, _fn in MIGRATIONS]

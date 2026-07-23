@@ -67,6 +67,10 @@ export function WarmingPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Guards the bulk pool button for the WHOLE batch: useMutation.isPending tracks
+  // only the last-fired call, so it can re-enable mid-batch and re-fire on a
+  // second click. bulkBusy stays true until every batched call settles.
+  const [bulkBusy, setBulkBusy] = useState(false);
   const [channelInput, setChannelInput] = useState('');
   const [addingChannel, setAddingChannel] = useState(false);
   const [warmDaysFor, setWarmDaysFor] = useState<WarmingAccountState | null>(null);
@@ -153,18 +157,24 @@ export function WarmingPage() {
     );
   };
 
+  // Returns a never-rejecting promise so the bulk path can await the whole batch
+  // (single-account callers ignore it). mutateAsync (not mutate) makes it awaitable.
   const runOnAccount = (mutation: typeof start | typeof stop, accountId: string) => {
     setBusyId(accountId);
-    mutation.mutate(
-      { body: { account_id: accountId } },
-      {
-        onSettled: (_data, error) => {
-          setBusyId(null);
-          accountFeedback.mark(accountId, !error);
-          invalidate();
+    return mutation
+      .mutateAsync({ body: { account_id: accountId } })
+      .then(
+        () => {
+          accountFeedback.mark(accountId, true);
         },
-      },
-    );
+        () => {
+          accountFeedback.mark(accountId, false);
+        },
+      )
+      .finally(() => {
+        setBusyId(null);
+        invalidate();
+      });
   };
 
   if (isPending) return <p className="text-ink-muted">{t('warming.loading')}</p>;
@@ -203,12 +213,17 @@ export function WarmingPage() {
           </div>
           <button
             type="button"
+            disabled={bulkBusy || start.isPending || stop.isPending}
             onClick={() => {
-              (poolOn ? warming : idle).forEach((a) => {
-                runOnAccount(poolOn ? stop : start, a.account_id);
+              const mutation = poolOn ? stop : start;
+              setBulkBusy(true);
+              void Promise.allSettled(
+                (poolOn ? warming : idle).map((a) => runOnAccount(mutation, a.account_id)),
+              ).finally(() => {
+                setBulkBusy(false);
               });
             }}
-            className={`flex items-center gap-[7px] rounded-full px-4 py-2 text-[13px] font-semibold text-white ${poolOn ? 'bg-ink' : 'bg-primary'}`}
+            className={`flex items-center gap-[7px] rounded-full px-4 py-2 text-[13px] font-semibold text-white disabled:opacity-50 ${poolOn ? 'bg-ink' : 'bg-primary'}`}
           >
             {poolOn ? (
               <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">

@@ -32,9 +32,11 @@ def _delete_account(account_id: str) -> None:
     from core.db import _account_spam_status, _warming_account_state  # noqa: PLC0415
     from core.repositories.dialogues import dialogue_messages, dialogue_pairs  # noqa: PLC0415
     from core.repositories.neurocomment._tables import (  # noqa: PLC0415
+        _neurocomment_campaign_account_channels,
         _neurocomment_campaign_accounts,
         _neurocomment_challenges,
         _neurocomment_comments,
+        _neurocomment_cooldowns,
         _neurocomment_readiness,
         _neurocomment_runtime,
     )
@@ -45,6 +47,11 @@ def _delete_account(account_id: str) -> None:
         connection.execute(
             delete(_neurocomment_campaign_accounts).where(
                 _neurocomment_campaign_accounts.c.account_id == account_id,
+            ),
+        )
+        connection.execute(
+            delete(_neurocomment_campaign_account_channels).where(
+                _neurocomment_campaign_account_channels.c.account_id == account_id,
             ),
         )
         connection.execute(
@@ -64,6 +71,15 @@ def _delete_account(account_id: str) -> None:
         connection.execute(
             delete(_neurocomment_challenges).where(
                 _neurocomment_challenges.c.account_id == account_id,
+            ),
+        )
+        # neurocomment_cooldowns carries account_id but no FK (migration #34); a
+        # deleted-then-reimported account (same account_id) would inherit stale
+        # flood/slow-mode deadlines via hydrate_cooldowns and be wrongly parked
+        # after a restart. Purge its rows in the same transaction.
+        connection.execute(
+            delete(_neurocomment_cooldowns).where(
+                _neurocomment_cooldowns.c.account_id == account_id,
             ),
         )
         # If this account was the persisted listener, clear the pointer AND the

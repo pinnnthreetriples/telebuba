@@ -20,19 +20,29 @@ function isUnauthorized(error: unknown): boolean {
   return asEnvelope(error)?.code === 'unauthorized';
 }
 
+// A dead session sends the user to /login — from either cache, guarding against
+// a redirect loop when we're already on the login page.
+function redirectToLogin(): void {
+  if (window.location.pathname !== '/login') {
+    window.location.assign('/login');
+  }
+}
+
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
-      if (isUnauthorized(error) && window.location.pathname !== '/login') {
-        window.location.assign('/login');
-      }
+      if (isUnauthorized(error)) redirectToLogin();
     },
   }),
   // Mutations don't surface errors on their own — show the API envelope's
   // message (or a translated fallback) so failures aren't silently swallowed.
   mutationCache: new MutationCache({
     onError: (error) => {
-      if (isUnauthorized(error)) return; // the query cache already redirects
+      // A mutation-only 401 must redirect too — nothing else catches it.
+      if (isUnauthorized(error)) {
+        redirectToLogin();
+        return;
+      }
       const detail = asEnvelope(error);
       toastError(detail?.message ?? i18n.t('shell.mutationError'));
     },

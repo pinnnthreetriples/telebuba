@@ -173,3 +173,15 @@ _neurocomment_settings = Table(
     Column("updated_at", String, nullable=False),
     CheckConstraint("id = 1", name="ck_neurocomment_settings_single_row"),
 )
+# Durable backing for the in-memory engine cooldowns (migration #34). One row per
+# parked ``(account_id, channel)``: ``channel=''`` is the account-wide flood/peer-flood
+# cooldown, a handle scopes a slow-mode cooldown to that chat. ``until`` is an ISO-8601
+# UTC deadline. The in-memory map in ``services.neurocomment._state`` stays the hot read
+# path; this table only lets a just-flooded account survive a process restart still parked.
+_neurocomment_cooldowns = Table(
+    "neurocomment_cooldowns",
+    _metadata,
+    Column("account_id", String, primary_key=True),
+    Column("channel", String, primary_key=True),
+    Column("until", String, nullable=False),
+)

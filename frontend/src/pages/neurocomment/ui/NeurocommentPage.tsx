@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { accountsQueryOptions } from '@/entities/account';
+import { allAccountsQueryOptions } from '@/entities/account';
 import {
   assignCampaignAccountMutation,
   campaignChallengesQueryOptions,
@@ -126,7 +126,7 @@ export function NeurocommentPage() {
   const [startRejectedWarming, setStartRejectedWarming] = useState(false);
 
   const campaigns = useQuery(campaignsQueryOptions());
-  const accounts = useQuery(accountsQueryOptions());
+  const accounts = useQuery(allAccountsQueryOptions());
   // Only graduated accounts ("Прогреты" pool) are eligible for neurocommenting;
   // the idle counter and the assignable candidates come from here, not the full
   // account list.

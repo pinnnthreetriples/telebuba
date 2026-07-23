@@ -22,6 +22,7 @@ from __future__ import annotations
 from core.telegram_client._actions import execute
 from core.telegram_client._auth import (
     log_out_session,
+    remove_account_session,
     request_phone_code,
     submit_phone_code,
 )
@@ -66,6 +67,7 @@ __all__ = [
     "log_out_session",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
+    "remove_account_session",
     "request_phone_code",
     "shutdown_telegram_pool",
     "stop_post_listener",
