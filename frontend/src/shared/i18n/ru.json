@@ -47,6 +47,13 @@
         "tcp_working": "Работает",
         "failed": "Не работает",
         "unknown": "Не проверен"
+      },
+      "geo": {
+        "confirmed": "Страна подтверждена IPinfo и MaxMind",
+        "single_source": "Страна определена одним источником",
+        "conflict": "Страны расходятся: IPinfo — {{ipinfo}}, MaxMind — {{maxmind}}",
+        "unavailable": "Геолокация недоступна",
+        "unknown": "Геолокация ещё не проверена"
       }
     },
     "edit": {
