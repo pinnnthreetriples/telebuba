@@ -46,6 +46,13 @@
         "tcp_working": "Working",
         "failed": "Not working",
         "unknown": "Not checked"
+      },
+      "geo": {
+        "confirmed": "Country confirmed by IPinfo and MaxMind",
+        "single_source": "Country identified by one source",
+        "conflict": "Country mismatch: IPinfo — {{ipinfo}}, MaxMind — {{maxmind}}",
+        "unavailable": "Geolocation unavailable",
+        "unknown": "Geolocation has not been checked yet"
       }
     },
     "edit": {
