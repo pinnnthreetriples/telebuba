@@ -148,12 +148,18 @@ async def test_update_proxy_check_persists_geo(tmp_path) -> None:
             exit_ip="1.2.3.4",
             country_code="NL",
             country_name="Netherlands",
+            geo_status="confirmed",
+            ipinfo_country_code="NL",
+            maxmind_country_code="NL",
             asn="AS1 Hetzner",
             is_datacenter=True,
         ),
     )
     assert saved.status == "tcp_working"
     assert saved.country_code == "NL"
+    assert saved.geo_status == "confirmed"
+    assert saved.ipinfo_country_code == "NL"
+    assert saved.maxmind_country_code == "NL"
     assert saved.is_datacenter is True
 
     accounts = await list_accounts()
