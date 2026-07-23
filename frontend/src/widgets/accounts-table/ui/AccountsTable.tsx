@@ -32,8 +32,12 @@ const AVATAR_CLASS: Record<DesignStatus, string> = {
 function initials(account: AccountRead): string {
   const name = [account.first_name, account.last_name].filter(Boolean).join(' ').trim();
   if (name) {
+    // Spread to code points so an emoji / non-BMP initial isn't split into a
+    // lone surrogate half.
     const parts = name.split(/\s+/);
-    return (parts[0]!.charAt(0) + (parts[1]?.charAt(0) ?? '')).toUpperCase();
+    const first = [...(parts[0] ?? '')][0] ?? '';
+    const second = [...(parts[1] ?? '')][0] ?? '';
+    return (first + second).toUpperCase();
   }
   const digits = (account.phone ?? account.account_id).replace(/\D/g, '');
   return digits.slice(-2) || '#';
@@ -53,15 +57,19 @@ function displayName(account: AccountRead): string {
 // cacheable /avatar endpoint, ?v=etag makes it immutable), degrading to the
 // status-tinted mono initials on absence or a load error.
 function RowAvatar({ account }: { account: AccountRead }) {
-  const [broken, setBroken] = useState(false);
+  // Track WHICH etag failed to load, not a bare boolean — react-table keeps the
+  // row component mounted across refetches, so a transient error must not hide a
+  // later-recovered photo. A new avatar_etag makes `broken` recompute to false.
+  const [failedEtag, setFailedEtag] = useState<string | null>(null);
   const ds = accountDesignStatus(account.status);
+  const broken = failedEtag !== null && failedEtag === account.avatar_etag;
   if (account.avatar_etag && !broken) {
     return (
       <img
         src={`/api/v1/accounts/${account.account_id}/avatar?v=${account.avatar_etag}`}
         alt=""
         onError={() => {
-          setBroken(true);
+          setFailedEtag(account.avatar_etag ?? null);
         }}
         className="h-8 w-8 shrink-0 rounded-full object-cover"
       />
