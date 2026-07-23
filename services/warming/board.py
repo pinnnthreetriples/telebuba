@@ -90,6 +90,8 @@ def _to_card(
     return WarmingAccountState(
         account_id=account.account_id,
         label=account.label or account.account_id,
+        first_name=account.first_name,
+        last_name=account.last_name,
         state=state,
         health=warming_health(state),
         readiness=readiness,
@@ -198,6 +200,8 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
         WarmedAccount(
             account_id=card.account_id,
             label=card.label,
+            first_name=card.first_name,
+            last_name=card.last_name,
             warming_days=card.warming_days or 0,
             phone=card.phone,
             phone_country=card.phone_country,

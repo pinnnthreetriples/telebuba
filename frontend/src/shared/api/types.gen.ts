@@ -2012,6 +2012,14 @@ export type WarmedAccount = {
    */
   phone?: string | null;
   /**
+   * First Name
+   */
+  first_name?: string | null;
+  /**
+   * Last Name
+   */
+  last_name?: string | null;
+  /**
    * Phone Country
    */
   phone_country?: string | null;
@@ -2179,6 +2187,14 @@ export type WarmingAccountState = {
    * Phone
    */
   phone?: string | null;
+  /**
+   * First Name
+   */
+  first_name?: string | null;
+  /**
+   * Last Name
+   */
+  last_name?: string | null;
   /**
    * Proxy Type
    */

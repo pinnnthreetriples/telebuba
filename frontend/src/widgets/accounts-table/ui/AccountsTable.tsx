@@ -2,7 +2,12 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { accountDesignStatus, type DesignStatus, StatusBadge } from '@/entities/account';
+import {
+  accountDesignStatus,
+  accountDisplayName,
+  type DesignStatus,
+  StatusBadge,
+} from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
@@ -41,16 +46,6 @@ function initials(account: AccountRead): string {
   }
   const digits = (account.phone ?? account.account_id).replace(/\D/g, '');
   return digits.slice(-2) || '#';
-}
-
-// The Telegram display name (first + last), falling back to the phone/id for
-// accounts not yet checked — so the row always has a primary label.
-function displayName(account: AccountRead): string {
-  return (
-    [account.first_name, account.last_name].filter(Boolean).join(' ') ||
-    account.phone ||
-    account.account_id
-  );
 }
 
 // Row avatar: the cached Telegram profile photo when captured (served by the
@@ -139,7 +134,7 @@ export function AccountsTable({
             <div className="flex items-center gap-[11px]">
               <RowAvatar account={account} />
               <div>
-                <div className="text-[13px] font-semibold">{displayName(account)}</div>
+                <div className="text-[13px] font-semibold">{accountDisplayName(account)}</div>
                 <div className="text-[11px] text-ink-subtle">
                   {account.username ? `@${account.username}` : '—'}
                 </div>

@@ -5,7 +5,7 @@ import { ConfirmModal, FeedbackMark, Modal } from '@/shared/ui';
 
 export interface NeuroAccountRow {
   account_id: string;
-  phone: string;
+  name: string;
   linked: boolean;
   pinned_channels: string[];
 }
@@ -89,7 +89,7 @@ function AccountRow({
     <div className="flex items-center gap-[10px] border-b border-[#f4f2ef] py-[11px]">
       <FeedbackMark result={result} />
       <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
-        {account.phone}
+        {account.name}
       </span>
       {account.linked ? (
         // Each linked account gets a ~180px multi-select of the campaign's channels;
@@ -199,7 +199,7 @@ function AccountRow({
       </button>
       {confirmRemove ? (
         <ConfirmModal
-          title={t('neurocomment.modal.neuroAccounts.removeTitle', { phone: account.phone })}
+          title={t('neurocomment.modal.neuroAccounts.removeTitle', { name: account.name })}
           body={t('neurocomment.modal.neuroAccounts.removeBody')}
           confirmLabel={t('neurocomment.modal.neuroAccounts.removeConfirm')}
           cancelLabel={t('neurocomment.modal.cancel')}

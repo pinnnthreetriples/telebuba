@@ -3,6 +3,7 @@ import type { TFunction } from 'i18next';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { eventLabel, formatLocalTime, type FeedbackResult } from '@/shared/lib';
@@ -188,7 +189,7 @@ function WarmingCard({
   const dailyActions = account.daily_actions ?? 0;
   const dailyCap = account.daily_cap && account.daily_cap > 0 ? account.daily_cap : null;
   const actions = dailyCap ? Math.min(dailyActions, dailyCap) : dailyActions;
-  const primaryId = account.phone ?? account.label ?? account.account_id;
+  const primaryId = accountDisplayName(account);
 
   return (
     <div className="rounded-[14px] border border-[#e4ecfa] bg-[#f7faff] px-[17px] py-4">

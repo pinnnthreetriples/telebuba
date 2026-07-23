@@ -43,6 +43,7 @@ export {
   updateAccountChannelMutation,
   updateAccountProfileMutation,
 } from './api/accounts.mutations';
+export { accountDisplayName } from './model/displayName';
 export { StatusBadge } from './ui/StatusBadge';
 export {
   accountHealth,

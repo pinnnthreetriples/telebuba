@@ -172,7 +172,22 @@ test('shows a success or error mark from the feedback map', () => {
   expect(document.querySelector('.text-danger svg')).toBeInTheDocument();
 });
 
-test('renders the phone as the card id when present', () => {
+test('renders the Telegram display name when first/last name are present', () => {
+  const named: WarmingAccountState = {
+    ...account('a1', 'active'),
+    first_name: 'Vika',
+    last_name: 'Ix',
+    phone: '+79215532011',
+  };
+  renderWithClient(
+    <WarmingBoard warming={[named]} onStop={vi.fn()} onPromote={vi.fn()} busyId={null} />,
+  );
+  // The name wins over the phone/id, matching the Accounts table.
+  expect(screen.getByText('Vika Ix')).toBeInTheDocument();
+  expect(screen.queryByText('+79215532011')).not.toBeInTheDocument();
+});
+
+test('falls back to the phone as the card id when there is no name', () => {
   const withPhone: WarmingAccountState = {
     ...account('a1', 'active'),
     label: 'Label A',

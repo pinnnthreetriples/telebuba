@@ -922,7 +922,7 @@
         "channelsSelected": "Channels: {{count}}",
         "assign": "Add to campaign",
         "remove": "Remove from neurocommenting",
-        "removeTitle": "Remove {{phone}} from neurocommenting?",
+        "removeTitle": "Remove {{name}} from neurocommenting?",
         "removeBody": "The account will stop commenting in this campaign.",
         "removeConfirm": "Remove",
         "empty": "No accounts in neurocommenting",
