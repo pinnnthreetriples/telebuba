@@ -16,6 +16,7 @@ from core.proxy_check import (
     _lookup_maxmind,
     _merge_geo,
     _parse_http_json,
+    _read_limited,
     check_proxy_connectivity,
 )
 from schemas.proxy import ProxySettings
@@ -25,8 +26,10 @@ class _FakeReader:
     def __init__(self, payload: bytes) -> None:
         self.payload = payload
 
-    async def read(self, _limit: int) -> bytes:
-        return self.payload
+    async def read(self, limit: int) -> bytes:
+        chunk = self.payload[:limit]
+        self.payload = self.payload[limit:]
+        return chunk
 
 
 class _FakeWriter:
@@ -54,6 +57,12 @@ def _http_json(payload: bytes) -> bytes:
         + b"Content-Type: application/json\r\n\r\n"
         + payload
     )
+
+
+@pytest.mark.asyncio
+async def test_read_limited_collects_fragmented_response() -> None:
+    reader = _FakeReader(b"first second third")
+    assert await _read_limited(reader, timeout=1) == b"first second third"
 
 
 def test_parse_http_json_accepts_success_response() -> None:
