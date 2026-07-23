@@ -5736,8 +5736,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 100,
-                "minimum": 0
+                "maximum": 100.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -5804,31 +5804,31 @@
         "properties": {
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "default": 0
           },
           "active": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Active",
             "default": 0
           },
           "idle": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Idle",
             "default": 0
           },
           "needs_code": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Needs Code",
             "default": 0
           },
           "problem": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Problem",
             "default": 0
           }
@@ -6869,7 +6869,7 @@
         "properties": {
           "deleted": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Deleted"
           }
         },
@@ -7138,13 +7138,13 @@
           },
           "channel_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Channel Count",
             "default": 0
           },
           "account_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Account Count",
             "default": 0
           }
@@ -7232,7 +7232,7 @@
           },
           "log_limit": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Log Limit"
           },
           "onboarding": {
@@ -7253,28 +7253,28 @@
         "properties": {
           "max_comments_per_hour": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Max Comments Per Hour"
           },
           "max_comments_per_channel_per_day": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Max Comments Per Channel Per Day"
           },
           "reply_delay_min_seconds": {
             "type": "number",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Reply Delay Min Seconds"
           },
           "reply_delay_max_seconds": {
             "type": "number",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Reply Delay Max Seconds"
           },
           "min_trust_score": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Min Trust Score"
           },
           "updated_at": {
@@ -7299,28 +7299,28 @@
         "properties": {
           "max_comments_per_hour": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Max Comments Per Hour"
           },
           "max_comments_per_channel_per_day": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Max Comments Per Channel Per Day"
           },
           "reply_delay_min_seconds": {
             "type": "number",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Reply Delay Min Seconds"
           },
           "reply_delay_max_seconds": {
             "type": "number",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Reply Delay Max Seconds"
           },
           "min_trust_score": {
             "type": "integer",
-            "maximum": 100,
-            "minimum": 0,
+            "maximum": 100.0,
+            "minimum": 0.0,
             "title": "Min Trust Score"
           }
         },
@@ -7860,8 +7860,8 @@
           },
           "port": {
             "type": "integer",
-            "maximum": 65535,
-            "minimum": 1,
+            "maximum": 65535.0,
+            "minimum": 1.0,
             "title": "Port"
           },
           "username": {
@@ -7936,8 +7936,8 @@
           },
           "port": {
             "type": "integer",
-            "maximum": 65535,
-            "minimum": 1,
+            "maximum": 65535.0,
+            "minimum": 1.0,
             "title": "Port"
           },
           "username": {
@@ -8079,17 +8079,17 @@
           },
           "used": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Used"
           },
           "capacity": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Capacity"
           },
           "free": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Free"
           }
         },
@@ -8291,8 +8291,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 365,
-                "minimum": 1
+                "maximum": 365.0,
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -8335,7 +8335,7 @@
         "properties": {
           "story_id": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Story Id"
           },
           "pinned": {
@@ -8354,7 +8354,7 @@
         "properties": {
           "story_id": {
             "type": "integer",
-            "exclusiveMinimum": 0,
+            "exclusiveMinimum": 0.0,
             "title": "Story Id"
           }
         },
@@ -8499,7 +8499,7 @@
           },
           "warming_days": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Warming Days"
           },
           "phone": {
@@ -8550,8 +8550,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 100,
-                "minimum": 0
+                "maximum": 100.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -8561,7 +8561,7 @@
           },
           "target_days": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Target Days"
           },
           "nc_handed_off": {
@@ -8630,7 +8630,7 @@
           },
           "cycles_completed": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Cycles Completed",
             "default": 0
           },
@@ -8748,7 +8748,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -8780,7 +8780,7 @@
           },
           "daily_actions": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Daily Actions",
             "default": 0
           },
@@ -8797,7 +8797,7 @@
           },
           "quarantine_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Quarantine Count",
             "default": 0
           },
@@ -8805,8 +8805,8 @@
             "anyOf": [
               {
                 "type": "integer",
-                "maximum": 100,
-                "minimum": 0
+                "maximum": 100.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -8858,7 +8858,7 @@
             "anyOf": [
               {
                 "type": "number",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -8935,7 +8935,7 @@
           },
           "daily_cap": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Daily Cap",
             "default": 0
           },
@@ -8943,8 +8943,8 @@
             "anyOf": [
               {
                 "type": "number",
-                "maximum": 1,
-                "minimum": 0
+                "maximum": 1.0,
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -8956,7 +8956,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -8968,7 +8968,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 0
+                "minimum": 0.0
               },
               {
                 "type": "null"
@@ -8980,7 +8980,7 @@
             "anyOf": [
               {
                 "type": "integer",
-                "minimum": 1
+                "minimum": 1.0
               },
               {
                 "type": "null"
@@ -9059,12 +9059,12 @@
           },
           "channel_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Channel Count"
           },
           "active_count": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Active Count"
           },
           "summary": {
@@ -9072,7 +9072,7 @@
           },
           "card_log_limit": {
             "type": "integer",
-            "minimum": 1,
+            "minimum": 1.0,
             "title": "Card Log Limit",
             "default": 30
           }
@@ -9177,7 +9177,7 @@
           },
           "max_daily_actions": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Max Daily Actions",
             "default": 0
           },
@@ -9193,17 +9193,17 @@
           },
           "gemini_max_retries": {
             "type": "integer",
-            "maximum": 5,
-            "minimum": 0,
+            "maximum": 5.0,
+            "minimum": 0.0,
             "title": "Gemini Max Retries",
             "default": 1
           },
           "gemini_min_interval_seconds": {
             "type": "number",
-            "maximum": 60,
-            "minimum": 0,
+            "maximum": 60.0,
+            "minimum": 0.0,
             "title": "Gemini Min Interval Seconds",
-            "default": 0
+            "default": 0.0
           },
           "has_openai_key": {
             "type": "boolean",
@@ -9263,7 +9263,7 @@
           },
           "max_daily_actions": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Max Daily Actions",
             "default": 0
           },
@@ -9291,17 +9291,17 @@
           },
           "gemini_max_retries": {
             "type": "integer",
-            "maximum": 5,
-            "minimum": 0,
+            "maximum": 5.0,
+            "minimum": 0.0,
             "title": "Gemini Max Retries",
             "default": 1
           },
           "gemini_min_interval_seconds": {
             "type": "number",
-            "maximum": 60,
-            "minimum": 0,
+            "maximum": 60.0,
+            "minimum": 0.0,
             "title": "Gemini Min Interval Seconds",
-            "default": 0
+            "default": 0.0
           },
           "clear_gemini_key": {
             "type": "boolean",
@@ -9360,49 +9360,49 @@
         "properties": {
           "total": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Total",
             "default": 0
           },
           "warming": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Warming",
             "default": 0
           },
           "active": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Active",
             "default": 0
           },
           "ready": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Ready",
             "default": 0
           },
           "attention": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Attention",
             "default": 0
           },
           "trust_healthy": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Trust Healthy",
             "default": 0
           },
           "trust_watch": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Trust Watch",
             "default": 0
           },
           "trust_risk": {
             "type": "integer",
-            "minimum": 0,
+            "minimum": 0.0,
             "title": "Trust Risk",
             "default": 0
           }
