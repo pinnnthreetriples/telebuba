@@ -33,6 +33,7 @@ AccountStatus = Literal[
     "unauthorized",
     "session_error",
     "account_error",
+    "frozen",
     "flood_wait",
     "network_error",
     "proxy_error",
@@ -121,7 +122,7 @@ class AccountStats(BaseModel):
     - ``active``    — ``alive``.
     - ``idle``      — ``flood_wait`` (spam-limited, the "idle" tile).
     - ``needs_code`` — ``unauthorized`` / ``new`` (re-auth by login code).
-    - ``problem``   — every other non-alive status (banned / session / errors).
+    - ``problem``   — every other non-alive status (banned / session / frozen / errors).
     """
 
     total: int = Field(default=0, ge=0)
@@ -134,7 +135,7 @@ class AccountStats(BaseModel):
 AccountHealth = Literal["ok", "warn", "fail"]
 
 _PERMANENT_STATUSES: frozenset[AccountStatus] = frozenset(
-    {"unauthorized", "session_error", "account_error"},
+    {"unauthorized", "session_error", "account_error", "frozen"},
 )
 
 
@@ -142,7 +143,7 @@ def health_for_status(status: AccountStatus) -> AccountHealth:
     """Map an ``AccountStatus`` to a coarse traffic-light health value.
 
     - ``ok`` — alive (green).
-    - ``fail`` — permanent: unauthorized, session_error, account_error (red).
+    - ``fail`` — permanent: unauthorized, session_error, account_error, frozen (red).
     - ``warn`` — everything else: new + temporary issues (amber).
     """
     if status == "alive":

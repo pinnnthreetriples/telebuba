@@ -24,7 +24,7 @@ if TYPE_CHECKING:
     from schemas.accounts import AccountRead
 
 # Design stat-tile buckets (mirror the SPA's accountDesignStatus). Everything not
-# listed here falls into "problem" — the banned/errored catch-all.
+# listed here falls into "problem" — the banned/frozen/errored catch-all.
 _STATS_NEEDS_CODE = {"unauthorized", "new"}
 
 

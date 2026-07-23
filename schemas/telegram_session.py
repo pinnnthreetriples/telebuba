@@ -9,6 +9,7 @@ SessionCheckStatus = Literal[
     "unauthorized",
     "session_error",
     "account_error",
+    "frozen",
     "flood_wait",
     "network_error",
     "proxy_error",

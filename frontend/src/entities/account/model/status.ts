@@ -9,6 +9,7 @@ const PERMANENT: ReadonlySet<AccountStatus> = new Set([
   'unauthorized',
   'session_error',
   'account_error',
+  'frozen',
 ]);
 
 export function accountHealth(status: AccountStatus): AccountHealth {

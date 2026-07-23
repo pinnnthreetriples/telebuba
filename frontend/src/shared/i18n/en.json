@@ -11,6 +11,7 @@
       "unauthorized": "Unauthorized",
       "session_error": "Session error",
       "account_error": "Account error",
+      "frozen": "Frozen",
       "flood_wait": "Flood-wait",
       "network_error": "Network error",
       "proxy_error": "Proxy error",

@@ -11,6 +11,7 @@ describe('accountHealth', () => {
     expect(accountHealth('unauthorized')).toBe('fail');
     expect(accountHealth('session_error')).toBe('fail');
     expect(accountHealth('account_error')).toBe('fail');
+    expect(accountHealth('frozen')).toBe('fail');
   });
 
   it('maps everything else to warn', () => {
@@ -36,6 +37,7 @@ describe('accountDesignStatus', () => {
   it('maps every other status to the problem/banned bucket', () => {
     expect(accountDesignStatus('session_error')).toBe('banned');
     expect(accountDesignStatus('account_error')).toBe('banned');
+    expect(accountDesignStatus('frozen')).toBe('banned');
     expect(accountDesignStatus('network_error')).toBe('banned');
     expect(accountDesignStatus('proxy_error')).toBe('banned');
     expect(accountDesignStatus('unknown_error')).toBe('banned');
