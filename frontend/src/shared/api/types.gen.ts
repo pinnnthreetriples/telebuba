@@ -174,6 +174,7 @@ export type AccountRead = {
     | 'unauthorized'
     | 'session_error'
     | 'account_error'
+    | 'frozen'
     | 'flood_wait'
     | 'network_error'
     | 'proxy_error'
@@ -308,7 +309,7 @@ export type AccountRead = {
  * - ``active``    — ``alive``.
  * - ``idle``      — ``flood_wait`` (spam-limited, the "idle" tile).
  * - ``needs_code`` — ``unauthorized`` / ``new`` (re-auth by login code).
- * - ``problem``   — every other non-alive status (banned / session / errors).
+ * - ``problem``   — every other non-alive status (banned / session / frozen / errors).
  */
 export type AccountStats = {
   /**

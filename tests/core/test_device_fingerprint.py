@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
 import pytest
@@ -270,6 +271,56 @@ async def test_check_telegram_session_returns_unauthorized(tmp_path: Path, monke
 
 
 @pytest.mark.asyncio
+async def test_check_telegram_session_detects_frozen_via_app_config(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # get_me() succeeds but the app config carries a non-zero freeze_since_date —
+    # the authoritative freeze signal that the authorized-session probe misses.
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
+    fake_client = FakeSessionClient(
+        app_config={
+            "freeze_since_date": 1700000000,
+            "freeze_until_date": 1701000000,
+            "freeze_appeal_url": "https://t.me/spambot",
+        },
+    )
+    monkeypatch.setattr(
+        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
+    )
+
+    result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-frozen"))
+
+    assert result.status == "frozen"
+    assert result.is_temporary is False
+    assert result.error_type == "AccountFrozen"
+    assert "https://t.me/spambot" in (result.error_message or "")
+    assert fake_client.disconnected is True
+
+
+@pytest.mark.asyncio
+async def test_check_telegram_session_alive_when_no_freeze_field(
+    tmp_path: Path, monkeypatch
+) -> None:
+    # get_me() succeeds and the app config has no freeze marker — stays alive.
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
+    fake_client = FakeSessionClient(app_config={"some_other_key": 1})
+    monkeypatch.setattr(
+        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
+    )
+
+    result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-ok"))
+
+    assert result.status == "alive"
+    assert result.is_temporary is False
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize(
     ("exc", "status"),
     [
@@ -277,6 +328,7 @@ async def test_check_telegram_session_returns_unauthorized(tmp_path: Path, monke
         (ProxyConnectionError("proxy down"), "proxy_error"),
         (errors.SessionRevokedError(request=None), "session_error"),
         (errors.UserDeactivatedBanError(request=None), "account_error"),
+        (errors.FrozenMethodInvalidError(request=None), "frozen"),
         (errors.FloodWaitError(request=None, capture=42), "flood_wait"),
     ],
 )
@@ -313,15 +365,30 @@ class FakeTelegramUser:
     last_name = "Last"
 
 
+class _FakeJsonEntry:
+    def __init__(self, key: str, value: object) -> None:
+        self.key = key
+        self.value = SimpleNamespace(value=value)
+
+
+class _FakeAppConfig:
+    def __init__(self, fields: dict[str, object]) -> None:
+        self.config = SimpleNamespace(
+            value=[_FakeJsonEntry(key, value) for key, value in fields.items()],
+        )
+
+
 class FakeSessionClient:
     def __init__(
         self,
         *,
         authorized: bool = True,
         connect_error: Exception | None = None,
+        app_config: dict[str, object] | None = None,
     ) -> None:
         self.authorized = authorized
         self.connect_error = connect_error
+        self.app_config = app_config or {}
         self.disconnected = False
 
     async def connect(self) -> None:
@@ -333,6 +400,12 @@ class FakeSessionClient:
 
     async def get_me(self) -> FakeTelegramUser:
         return FakeTelegramUser()
+
+    async def download_profile_photo(self, *_args: object, **_kwargs: object) -> None:
+        return None
+
+    async def __call__(self, _request: object) -> _FakeAppConfig:
+        return _FakeAppConfig(self.app_config)
 
     async def disconnect(self) -> None:
         self.disconnected = True

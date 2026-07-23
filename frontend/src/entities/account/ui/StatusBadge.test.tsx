@@ -19,3 +19,8 @@ test('uses the design banned colour for a permanent-failure status', () => {
   render(<StatusBadge status="session_error" />);
   expect(screen.getByText('Ошибка сессии').className).toContain('text-[#e5372a]');
 });
+
+test('renders frozen with the localized label and banned colour', () => {
+  render(<StatusBadge status="frozen" />);
+  expect(screen.getByText('Заморожен').className).toContain('text-[#e5372a]');
+});

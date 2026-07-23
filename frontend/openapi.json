@@ -5475,6 +5475,7 @@
               "unauthorized",
               "session_error",
               "account_error",
+              "frozen",
               "flood_wait",
               "network_error",
               "proxy_error",
@@ -5846,7 +5847,7 @@
         },
         "type": "object",
         "title": "AccountStats",
-        "description": "Fleet-wide status roll-up for the Accounts page stat tiles.\n\nCounts span the whole ``accounts`` table (a single grouped SQL query), not\nthe currently-loaded page, so the tiles stay correct across pagination. The\nbuckets mirror the design's status vocabulary (``accountDesignStatus``):\n\n- ``active``    \u2014 ``alive``.\n- ``idle``      \u2014 ``flood_wait`` (spam-limited, the \"idle\" tile).\n- ``needs_code`` \u2014 ``unauthorized`` / ``new`` (re-auth by login code).\n- ``problem``   \u2014 every other non-alive status (banned / session / errors)."
+        "description": "Fleet-wide status roll-up for the Accounts page stat tiles.\n\nCounts span the whole ``accounts`` table (a single grouped SQL query), not\nthe currently-loaded page, so the tiles stay correct across pagination. The\nbuckets mirror the design's status vocabulary (``accountDesignStatus``):\n\n- ``active``    \u2014 ``alive``.\n- ``idle``      \u2014 ``flood_wait`` (spam-limited, the \"idle\" tile).\n- ``needs_code`` \u2014 ``unauthorized`` / ``new`` (re-auth by login code).\n- ``problem``   \u2014 every other non-alive status (banned / session / frozen / errors)."
       },
       "ActionResult": {
         "properties": {

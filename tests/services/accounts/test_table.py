@@ -147,7 +147,7 @@ async def test_account_stats_counts_whole_fleet_across_pages() -> None:
     counts are the fleet-wide totals, independent of pagination.
     """
     # 10 alive, 6 flood_wait (idle/spam), 5 unauthorized + 4 new (needs_code),
-    # 3 session_error + 2 account_error (problem) = 30 accounts (> one 20-row page).
+    # 3 session_error + 2 account_error + 2 frozen (problem) = 32 accounts (> one page).
     plan: list[tuple[str, AccountStatus, int]] = [
         ("alive", "alive", 10),
         ("flood", "flood_wait", 6),
@@ -155,6 +155,7 @@ async def test_account_stats_counts_whole_fleet_across_pages() -> None:
         ("new", "new", 4),
         ("serr", "session_error", 3),
         ("aerr", "account_error", 2),
+        ("frozen", "frozen", 2),
     ]
     for prefix, status, count in plan:
         for i in range(count):
@@ -165,11 +166,11 @@ async def test_account_stats_counts_whole_fleet_across_pages() -> None:
 
     stats = await account_stats()
 
-    assert stats.total == 30
+    assert stats.total == 32
     assert stats.active == 10  # alive
     assert stats.idle == 6  # flood_wait (spam-limited)
     assert stats.needs_code == 9  # 5 unauthorized + 4 new
-    assert stats.problem == 5  # 3 session_error + 2 account_error
+    assert stats.problem == 7  # 3 session_error + 2 account_error + 2 frozen
 
     # Independence from pagination: a single page never sees the whole fleet.
     first_page = await list_accounts_page(limit=20)
@@ -236,6 +237,7 @@ async def test_list_accounts_page_search_uses_db_filter() -> None:
         ("unauthorized", "fail"),
         ("session_error", "fail"),
         ("account_error", "fail"),
+        ("frozen", "fail"),
     ],
 )
 async def test_health_taxonomy_matches_status(
