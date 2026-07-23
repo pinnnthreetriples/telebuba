@@ -1,24 +1,24 @@
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
-import { useTranslation } from "react-i18next";
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import {
   checkProxyMutation,
   deleteProxyMutation,
   proxyPoolQueryOptions,
   proxyTypeLabel,
-} from "@/entities/proxy";
-import type { ProxyRead } from "@/shared/api";
+} from '@/entities/proxy';
+import type { ProxyRead } from '@/shared/api';
 
-import { ProxyDeleteModal } from "./ProxyDeleteModal";
+import { ProxyDeleteModal } from './ProxyDeleteModal';
 
 // Proxy connectivity status → dot/label colour (design status palette). A failed
 // check drops the geo flag, so this is the only cue the proxy is dead — surface
 // it explicitly instead of letting the flag silently vanish.
-const PROXY_STATUS_COLOR: Record<ProxyRead["status"], string> = {
-  tcp_working: "#12a150",
-  failed: "#c0473f",
-  unknown: "#9a9893",
+const PROXY_STATUS_COLOR: Record<ProxyRead['status'], string> = {
+  tcp_working: '#12a150',
+  failed: '#c0473f',
+  unknown: '#9a9893',
 };
 
 // The design's proxy-pool card: one card per pool proxy with a usage bar
@@ -67,11 +67,9 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
     <div className="mb-4 rounded-2xl border border-line bg-white px-[18px] py-4">
       <div className="mb-[13px] flex flex-wrap items-center justify-between gap-3">
         <div>
-          <span className="text-[14px] font-semibold">
-            {t("accounts.proxyPool.title")}
-          </span>
+          <span className="text-[14px] font-semibold">{t('accounts.proxyPool.title')}</span>
           <span className="ml-2 text-[12px] text-ink-subtle">
-            {t("accounts.proxyPool.subtitle")}
+            {t('accounts.proxyPool.subtitle')}
           </span>
         </div>
         {!empty && (
@@ -90,7 +88,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             >
               <path d="M12 5v14M5 12h14" />
             </svg>
-            {t("accounts.proxyPool.add")}
+            {t('accounts.proxyPool.add')}
           </button>
         )}
       </div>
@@ -110,10 +108,10 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             </svg>
           </div>
           <div className="mb-1 text-[13.5px] font-semibold">
-            {t("accounts.proxyPool.emptyTitle")}
+            {t('accounts.proxyPool.emptyTitle')}
           </div>
           <div className="mb-4 max-w-[300px] text-[12px] text-ink-subtle">
-            {t("accounts.proxyPool.emptyBody")}
+            {t('accounts.proxyPool.emptyBody')}
           </div>
           <button
             type="button"
@@ -130,7 +128,7 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
             >
               <path d="M12 5v14M5 12h14" />
             </svg>
-            {t("accounts.proxyPool.emptyAdd")}
+            {t('accounts.proxyPool.emptyAdd')}
           </button>
         </div>
       ) : (
@@ -179,25 +177,24 @@ function ProxyCard({
 }) {
   const { t } = useTranslation();
   const full = proxy.free <= 0;
-  const failed = proxy.status === "failed";
+  const failed = proxy.status === 'failed';
   const problem = full || failed;
-  const geoStatus = proxy.geo_status ?? "unknown";
-  const geoConflict = geoStatus === "conflict";
+  const geoStatus = proxy.geo_status ?? 'unknown';
+  const geoConflict = geoStatus === 'conflict';
   const geoTitle = t(`accounts.proxyPool.geo.${geoStatus}`, {
-    ipinfo: proxy.ipinfo_country_code ?? "—",
-    maxmind: proxy.maxmind_country_code ?? "—",
+    ipinfo: proxy.ipinfo_country_code ?? '—',
+    maxmind: proxy.maxmind_country_code ?? '—',
   });
   const statusColor = PROXY_STATUS_COLOR[proxy.status];
-  const pct =
-    proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
+  const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
       className={`flex flex-col gap-[9px] rounded-[13px] border px-[14px] py-[13px] ${
         problem
-          ? "border-[#f0d9d6] bg-[#fcf6f5]"
+          ? 'border-[#f0d9d6] bg-[#fcf6f5]'
           : geoConflict
-            ? "border-[#ead9a8] bg-[#fffaf0]"
-            : "border-line bg-white"
+            ? 'border-[#ead9a8] bg-[#fffaf0]'
+            : 'border-line bg-white'
       }`}
     >
       <div className="flex items-center gap-[9px]">
@@ -237,10 +234,7 @@ function ProxyCard({
             </svg>
           </span>
         ) : (
-          <span
-            title={geoTitle}
-            className="h-4 w-[22px] shrink-0 rounded-[3px] bg-[#e6e5e3]"
-          />
+          <span title={geoTitle} className="h-4 w-[22px] shrink-0 rounded-[3px] bg-[#e6e5e3]" />
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12.5px] font-semibold">
@@ -266,7 +260,7 @@ function ProxyCard({
           type="button"
           onClick={onCheck}
           disabled={busy}
-          aria-label={t("accounts.proxyForm.detect")}
+          aria-label={t('accounts.proxyForm.detect')}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-ink-subtle disabled:opacity-50"
         >
           {busy ? (
@@ -289,7 +283,7 @@ function ProxyCard({
           type="button"
           onClick={onDelete}
           disabled={busy}
-          aria-label={t("accounts.actions.delete")}
+          aria-label={t('accounts.actions.delete')}
           className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[#b6b4af] disabled:opacity-50"
         >
           <svg
@@ -306,27 +300,23 @@ function ProxyCard({
       </div>
       <div>
         <div className="mb-[5px] flex items-center justify-between">
-          <span className="text-[11px] text-ink-muted">
-            {t("accounts.proxyPool.accounts")}
-          </span>
+          <span className="text-[11px] text-ink-muted">{t('accounts.proxyPool.accounts')}</span>
           <span
-            className={`text-[11.5px] font-semibold ${full ? "text-danger" : "text-[#2e7d55]"}`}
+            className={`text-[11.5px] font-semibold ${full ? 'text-danger' : 'text-[#2e7d55]'}`}
           >
             {proxy.used} / {proxy.capacity}
           </span>
         </div>
         <div className="h-[5px] overflow-hidden rounded-full bg-track">
           <div
-            className={`h-full rounded-full ${full ? "bg-danger" : "bg-primary"}`}
+            className={`h-full rounded-full ${full ? 'bg-danger' : 'bg-primary'}`}
             style={{ width: `${String(pct)}%` }}
           />
         </div>
-        <div
-          className={`mt-[5px] text-[10.5px] ${full ? "text-danger" : "text-[#2e7d55]"}`}
-        >
+        <div className={`mt-[5px] text-[10.5px] ${full ? 'text-danger' : 'text-[#2e7d55]'}`}>
           {full
-            ? t("accounts.proxyPool.full")
-            : t("accounts.proxyPool.free", { count: proxy.free })}
+            ? t('accounts.proxyPool.full')
+            : t('accounts.proxyPool.free', { count: proxy.free })}
         </div>
       </div>
     </div>
