@@ -179,17 +179,47 @@ function ProxyCard({
   const full = proxy.free <= 0;
   const failed = proxy.status === 'failed';
   const problem = full || failed;
+  const geoStatus = proxy.geo_status ?? 'unknown';
+  const geoConflict = geoStatus === 'conflict';
+  const geoTitle = t(`accounts.proxyPool.geo.${geoStatus}`, {
+    ipinfo: proxy.ipinfo_country_code ?? '—',
+    maxmind: proxy.maxmind_country_code ?? '—',
+  });
   const statusColor = PROXY_STATUS_COLOR[proxy.status];
   const pct = proxy.capacity > 0 ? Math.round((proxy.used / proxy.capacity) * 100) : 0;
   return (
     <div
-      className={`flex flex-col gap-[9px] rounded-[13px] border px-[14px] py-[13px] ${problem ? 'border-[#f0d9d6] bg-[#fcf6f5]' : 'border-line bg-white'}`}
+      className={`flex flex-col gap-[9px] rounded-[13px] border px-[14px] py-[13px] ${
+        problem
+          ? 'border-[#f0d9d6] bg-[#fcf6f5]'
+          : geoConflict
+            ? 'border-[#ead9a8] bg-[#fffaf0]'
+            : 'border-line bg-white'
+      }`}
     >
       <div className="flex items-center gap-[9px]">
         {proxy.country_code ? (
           <span
             className={`fi fi-${proxy.country_code.toLowerCase()} h-4 w-[22px] shrink-0 rounded-[3px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+            title={geoTitle}
           />
+        ) : geoConflict ? (
+          <span
+            data-testid="geo-conflict"
+            title={geoTitle}
+            className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-[#fff0c2] text-[#9a6700]"
+          >
+            <svg
+              width="11"
+              height="11"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2.4"
+            >
+              <path d="M12 9v4M12 17h.01M10.3 3.9 1.8 18a2 2 0 0 0 1.7 3h17a2 2 0 0 0 1.7-3L13.7 3.9a2 2 0 0 0-3.4 0z" />
+            </svg>
+          </span>
         ) : failed ? (
           <span className="flex h-4 w-[22px] shrink-0 items-center justify-center rounded-[3px] bg-[#fbecec] text-danger">
             <svg
@@ -204,7 +234,10 @@ function ProxyCard({
             </svg>
           </span>
         ) : (
-          <span className="h-4 w-[22px] shrink-0 rounded-[3px] bg-[#e6e5e3]" />
+          <span
+            title={geoTitle}
+            className="h-4 w-[22px] shrink-0 rounded-[3px] bg-[#e6e5e3]"
+          />
         )}
         <div className="min-w-0 flex-1">
           <div className="truncate text-[12.5px] font-semibold">
