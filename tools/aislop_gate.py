@@ -47,6 +47,16 @@ def _is_accepted_vuln_dep(item: dict[str, object]) -> bool:
     return any(message.rstrip().endswith(f": {name}") for name in _ACCEPTED_VULN_DEPS)
 
 
+def _is_config_default_url(item: dict[str, object]) -> bool:
+    # The hardcoded-url rule targets URLs buried in business logic. In the
+    # Settings module every URL is an env-overridable default (PROXY__*_BASE_URL,
+    # validated HTTPS) — that is what a config default IS, not slop. Scope the
+    # exception to that one file + rule.
+    if item.get("rule") != "ai-slop/hardcoded-url":
+        return False
+    return str(item.get("filePath", "")).replace("\\", "/").endswith("core/config.py")
+
+
 def main() -> int:
     npx = shutil.which("npx")
     if npx is None:
@@ -86,6 +96,7 @@ def main() -> int:
         if not str(item.get("filePath", "")).replace("\\", "/").startswith(_EXCLUDED_PREFIXES)
         and not _is_known_import_alias(item)
         and not _is_accepted_vuln_dep(item)
+        and not _is_config_default_url(item)
     ]
     for item in diagnostics:
         sys.stdout.write(

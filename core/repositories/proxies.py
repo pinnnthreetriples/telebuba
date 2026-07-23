@@ -18,6 +18,7 @@ from sqlalchemy import delete, func, insert, select, update
 from core.config import settings
 from core.db import _accounts, _get_engine, _now_iso, _optional_str, _proxies, _required_int
 from schemas.proxy import (
+    GeoStatus,
     ProxyCheckUpdate,
     ProxyCreate,
     ProxyList,
@@ -66,6 +67,9 @@ def _row_to_proxy(mapping: Mapping[str, object], used: int) -> ProxyRead:
         exit_ip=_optional_str(mapping.get("exit_ip")),
         country_code=_optional_str(mapping.get("country_code")),
         country_name=_optional_str(mapping.get("country_name")),
+        geo_status=cast("GeoStatus", mapping.get("geo_status") or "unknown"),
+        ipinfo_country_code=_optional_str(mapping.get("ipinfo_country_code")),
+        maxmind_country_code=_optional_str(mapping.get("maxmind_country_code")),
         asn=_optional_str(mapping.get("asn")),
         is_datacenter=bool(mapping.get("is_datacenter")),
         created_at=str(mapping["created_at"]),
@@ -291,6 +295,9 @@ def _update_proxy_check(data: ProxyCheckUpdate) -> ProxyRead:
         "exit_ip": data.exit_ip,
         "country_code": data.country_code,
         "country_name": data.country_name,
+        "geo_status": data.geo_status,
+        "ipinfo_country_code": data.ipinfo_country_code,
+        "maxmind_country_code": data.maxmind_country_code,
         "asn": data.asn,
         "is_datacenter": int(data.is_datacenter),
         "updated_at": now,

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-16
+last_updated: 2026-07-23
 ---
 
 # Telegram Runtimes
@@ -7,7 +7,7 @@ last_updated: 2026-07-16
 ## Telegram and proxy
 - Only `core/telegram_client/` imports Telethon, owns clients/listeners, and returns typed Pydantic results.
 - Services choose policy and persist outcomes; never expose Telethon objects or session/tdata contents.
-- Device fingerprints are immutable. Proxy credentials resolve inside `core/` from the shared `proxies` pool; one account uses at most one proxy and capacity is config-driven.
+- Device fingerprints are immutable. Proxy credentials resolve inside `core/` from the shared `proxies` pool; one account uses at most one proxy and capacity is config-driven. Proxy checks discover the public exit IP over a TLS tunnel, then persist IPinfo/MaxMind country consensus without exposing credentials.
 - Rate limits return classified outcomes; persist cooldowns and never retry immediately.
 
 ## Warming

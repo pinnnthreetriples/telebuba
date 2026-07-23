@@ -25,6 +25,9 @@ interface ProxyOverrides {
   free?: number;
   status?: 'unknown' | 'tcp_working' | 'failed';
   country_code?: string | null;
+  geo_status?: 'unknown' | 'single_source' | 'confirmed' | 'conflict' | 'unavailable';
+  ipinfo_country_code?: string | null;
+  maxmind_country_code?: string | null;
   last_error?: string | null;
 }
 
@@ -37,6 +40,9 @@ function proxy(over: ProxyOverrides = {}) {
     has_password: false,
     status: 'tcp_working',
     country_code: 'NL',
+    geo_status: 'confirmed',
+    ipinfo_country_code: 'NL',
+    maxmind_country_code: 'NL',
     used: 2,
     capacity: 3,
     free: 1,
@@ -72,6 +78,27 @@ test('warns clearly when a proxy check failed (flag gone, no silent card)', asyn
   // The dead proxy is called out in words, and the raw reason is on hover.
   expect(screen.getByText('Не работает')).toBeInTheDocument();
   expect(screen.getByTitle('connect timeout')).toBeInTheDocument();
+});
+
+test('shows a provider conflict instead of a misleading flag', async () => {
+  vi.mocked(fetch).mockResolvedValue(
+    jsonResponse({
+      proxies: [
+        proxy({
+          country_code: null,
+          geo_status: 'conflict',
+          ipinfo_country_code: 'MX',
+          maxmind_country_code: 'US',
+        }),
+      ],
+    }),
+  );
+  renderWithClient(<ProxyPool onAdd={vi.fn()} />);
+
+  await waitFor(() => {
+    expect(screen.getByTestId('geo-conflict')).toBeInTheDocument();
+  });
+  expect(screen.getByTitle('Страны расходятся: IPinfo — MX, MaxMind — US')).toBeInTheDocument();
 });
 
 test('shows the empty state and triggers add', async () => {

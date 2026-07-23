@@ -150,13 +150,24 @@ class ProxySettings(BaseSettings):
     # Pool capacity: how many accounts may share one proxy. The design's
     # "до N аккаунтов на прокси". Global (no per-proxy override — YAGNI).
     max_accounts_per_proxy: int = Field(default=3, ge=1)
-    check_host: str = Field(default="ip-api.com", min_length=1)
-    check_path: str = Field(default="/json?fields=status,message,query,country,countryCode,as")
-    check_port: int = Field(default=80, ge=1, le=65535)
+    # Resolve the real proxy egress through a TLS-authenticated endpoint first.
+    exit_ip_host: str = Field(default="api64.ipify.org", min_length=1)
+    exit_ip_path: str = Field(default="/?format=json", min_length=1)
+    exit_ip_port: int = Field(default=443, ge=1, le=65535)
     check_timeout_seconds: float = Field(default=8.0, gt=0)
-    # Substrings (case-insensitive) in the ASN string that mark a hosting /
-    # datacenter network — lower trust than residential/mobile. ip-api's free
-    # endpoint only exposes the ``as`` string, so we classify by known names.
+    # Free country providers. IPinfo Lite has no query quota; GeoLite Country
+    # allows 1,000 lookups/day. Empty credentials disable that provider without
+    # turning a reachable proxy into a failed proxy.
+    ipinfo_token: str = ""
+    ipinfo_base_url: str = Field(default="https://api.ipinfo.io/lite", min_length=1)
+    maxmind_account_id: str = ""
+    maxmind_license_key: str = ""
+    maxmind_base_url: str = Field(
+        default="https://geolite.info/geoip/v2.1/country",
+        min_length=1,
+    )
+    # IPinfo Lite exposes an ASN number/name but not a network-type flag, so
+    # datacenter classification remains a conservative name-based signal.
     datacenter_asn_keywords: list[str] = Field(
         default_factory=lambda: [
             "amazon",
@@ -177,6 +188,14 @@ class ProxySettings(BaseSettings):
             "scaleway",
         ],
     )
+
+    @model_validator(mode="after")
+    def _require_https_geo_endpoints(self) -> ProxySettings:
+        for field_name in ("ipinfo_base_url", "maxmind_base_url"):
+            if not getattr(self, field_name).startswith("https://"):
+                msg = f"PROXY__{field_name.upper()} must use HTTPS"
+                raise ValueError(msg)
+        return self
 
 
 class ProfileMediaSettings(BaseSettings):

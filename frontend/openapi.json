@@ -7797,6 +7797,40 @@
             ],
             "title": "Country Name"
           },
+          "geo_status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "single_source",
+              "confirmed",
+              "conflict",
+              "unavailable"
+            ],
+            "title": "Geo Status",
+            "default": "unknown"
+          },
+          "ipinfo_country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipinfo Country Code"
+          },
+          "maxmind_country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxmind Country Code"
+          },
           "asn": {
             "anyOf": [
               {
@@ -7995,6 +8029,40 @@
               }
             ],
             "title": "Country Name"
+          },
+          "geo_status": {
+            "type": "string",
+            "enum": [
+              "unknown",
+              "single_source",
+              "confirmed",
+              "conflict",
+              "unavailable"
+            ],
+            "title": "Geo Status",
+            "default": "unknown"
+          },
+          "ipinfo_country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Ipinfo Country Code"
+          },
+          "maxmind_country_code": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Maxmind Country Code"
           },
           "asn": {
             "anyOf": [

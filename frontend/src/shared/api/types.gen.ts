@@ -1575,6 +1575,18 @@ export type ProxyCheckResult = {
    */
   country_name?: string | null;
   /**
+   * Geo Status
+   */
+  geo_status?: 'unknown' | 'single_source' | 'confirmed' | 'conflict' | 'unavailable';
+  /**
+   * Ipinfo Country Code
+   */
+  ipinfo_country_code?: string | null;
+  /**
+   * Maxmind Country Code
+   */
+  maxmind_country_code?: string | null;
+  /**
    * Asn
    */
   asn?: string | null;
@@ -1676,6 +1688,18 @@ export type ProxyRead = {
    * Country Name
    */
   country_name?: string | null;
+  /**
+   * Geo Status
+   */
+  geo_status?: 'unknown' | 'single_source' | 'confirmed' | 'conflict' | 'unavailable';
+  /**
+   * Ipinfo Country Code
+   */
+  ipinfo_country_code?: string | null;
+  /**
+   * Maxmind Country Code
+   */
+  maxmind_country_code?: string | null;
   /**
    * Asn
    */
