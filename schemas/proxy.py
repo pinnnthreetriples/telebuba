@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 ProxyType = Literal["socks5", "https"]
 ProxyStatus = Literal["unknown", "tcp_working", "failed"]
+GeoStatus = Literal["unknown", "single_source", "confirmed", "conflict", "unavailable"]
 
 
 class ProxyCreate(BaseModel):
@@ -33,11 +34,13 @@ class ProxyRead(BaseModel):
     exit_ip: str | None = None
     country_code: str | None = None
     country_name: str | None = None
+    geo_status: GeoStatus = "unknown"
+    ipinfo_country_code: str | None = None
+    maxmind_country_code: str | None = None
     asn: str | None = None
     is_datacenter: bool = False
     created_at: str
     updated_at: str
-    # Pool usage: how many accounts use this proxy vs the global capacity.
     used: int = Field(ge=0)
     capacity: int = Field(ge=1)
     free: int = Field(ge=0)
@@ -67,6 +70,9 @@ class ProxyCheckResult(BaseModel):
     exit_ip: str | None = None
     country_code: str | None = None
     country_name: str | None = None
+    geo_status: GeoStatus = "unknown"
+    ipinfo_country_code: str | None = None
+    maxmind_country_code: str | None = None
     asn: str | None = None
     is_datacenter: bool = False
 
@@ -78,5 +84,8 @@ class ProxyCheckUpdate(BaseModel):
     exit_ip: str | None = None
     country_code: str | None = None
     country_name: str | None = None
+    geo_status: GeoStatus = "unknown"
+    ipinfo_country_code: str | None = None
+    maxmind_country_code: str | None = None
     asn: str | None = None
     is_datacenter: bool = False
