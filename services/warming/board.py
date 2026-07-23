@@ -187,6 +187,11 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
     progress, not used to gate visibility (a below-target graduation is the
     operator's call, not an accident). ``min_days`` only supplies the target
     fallback for a card that never had one.
+
+    ``nc_handed_off`` rides each row so the two consumers can split the pool:
+    the warming page's warmed card shows only NOT-yet-handed accounts, the
+    neurocomment page counts/offers only handed ones (the warmed card's
+    «в нейрокомментинг» button flips it).
     """
     cards, _channels, _masked = await _load_cards()
     warmed = [
@@ -200,6 +205,7 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
             proxy_country=card.proxy_country,
             trust_score=card.trust_score,
             target_days=card.target_days or min_days,
+            nc_handed_off=card.nc_handed_off,
         )
         for card in cards
         if card.promoted_to_nc

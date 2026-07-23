@@ -126,9 +126,11 @@ export function routeApiRunning() {
       );
     }
     if (url.pathname === '/api/v1/warming/warmed') {
-      // acc-2 is graduated ("Прогреты") and unlinked → the idle account.
+      // acc-2 is graduated + handed off to NC and unlinked → the idle account.
       return Promise.resolve(
-        jsonResponse({ accounts: [{ account_id: 'acc-2', label: '+79261119999' }] }),
+        jsonResponse({
+          accounts: [{ account_id: 'acc-2', label: '+79261119999', nc_handed_off: true }],
+        }),
       );
     }
     return Promise.resolve(jsonResponse({}));

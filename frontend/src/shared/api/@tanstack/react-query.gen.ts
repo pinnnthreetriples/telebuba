@@ -40,6 +40,7 @@ import {
   getNeurocommentSettings,
   getWarmingBoard,
   getWarmingSettings,
+  handoffToNeurocomment,
   importAccountSession,
   importAccountTdata,
   linkCampaignChannel,
@@ -185,6 +186,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsError,
   GetWarmingSettingsResponse,
+  HandoffToNeurocommentData,
+  HandoffToNeurocommentError,
+  HandoffToNeurocommentResponse,
   ImportAccountSessionData,
   ImportAccountSessionError,
   ImportAccountSessionResponse,
@@ -1716,6 +1720,35 @@ export const promoteToNeurocommentMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await promoteToNeurocomment({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Handoff Account
+ *
+ * Second stage: move a warmed-card account into the neurocomment idle pool.
+ */
+export const handoffToNeurocommentMutation = (
+  options?: Partial<Options<HandoffToNeurocommentData>>,
+): UseMutationOptions<
+  HandoffToNeurocommentResponse,
+  HandoffToNeurocommentError,
+  Options<HandoffToNeurocommentData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    HandoffToNeurocommentResponse,
+    HandoffToNeurocommentError,
+    Options<HandoffToNeurocommentData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await handoffToNeurocomment({
         ...options,
         ...fnOptions,
         throwOnError: true,

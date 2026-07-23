@@ -46,6 +46,20 @@ async def promote_account(body: PromoteRequest) -> WarmingAccountState:
 
 
 @router.post(
+    "/handoff",
+    response_model=WarmingAccountState,
+    operation_id="handoffToNeurocomment",
+)
+async def handoff_account(body: PromoteRequest) -> WarmingAccountState:
+    """Second stage: move a warmed-card account into the neurocomment idle pool."""
+    try:
+        return await warming_service.handoff_to_neurocomment(body.account_id)
+    except ValueError as exc:
+        # Not graduated / unknown account — a stale client racing an un-promote.
+        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+
+@router.post(
     "/unpromote",
     response_model=WarmingAccountState,
     operation_id="unpromoteFromNeurocomment",

@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     fetch_account,
+    mark_nc_handed_off,
     mark_promoted_to_nc,
     unmark_promoted_to_nc,
 )
@@ -110,8 +111,22 @@ async def promote_to_neurocomment(account_id: str) -> WarmingAccountState:
     return await _current_card(account_id)
 
 
+async def handoff_to_neurocomment(account_id: str) -> WarmingAccountState:
+    """Second hand-off stage: move a warmed-card account into the neurocomment idle pool.
+
+    Only flips ``nc_handed_off`` — the account must already be graduated
+    (``promoted_to_nc``); the repository raises ``ValueError`` (→ 400) otherwise.
+    The warming page hides the account, the neurocomment page starts counting
+    and offering it. ``unmark_neurocomment`` reverses both flags at once.
+    """
+    async with _account_lock(account_id):
+        await mark_nc_handed_off(account_id)
+    await log_event("INFO", "warming_nc_handoff", account_id=account_id)
+    return await _current_card(account_id)
+
+
 async def unmark_neurocomment(account_id: str) -> WarmingAccountState:
-    """Reverse a graduation: clear ``promoted_to_nc`` (Group C un-promote button).
+    """Reverse a graduation: clear ``promoted_to_nc`` + ``nc_handed_off`` (un-promote button).
 
     Held under the per-account lock for symmetry with ``promote_to_neurocomment``
     so a concurrent re-promote / restart does not race the flip.

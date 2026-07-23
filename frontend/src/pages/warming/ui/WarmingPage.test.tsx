@@ -8,12 +8,6 @@ import '@/shared/i18n';
 
 import type { WarmingAccountState, WarmingBoardState } from '@/shared/api';
 
-const navigate = vi.fn();
-vi.mock('@tanstack/react-router', () => ({
-  useNavigate: () => navigate,
-}));
-
-// Imported after the mock so WarmingPage picks up the stubbed useNavigate.
 const { WarmingPage } = await import('./WarmingPage');
 
 function renderWithClient(ui: ReactElement) {
@@ -137,8 +131,7 @@ test('ready card: phone flag sits with the number, proxy flag with the proxy typ
   expect(proxyFlag?.parentElement?.textContent).toContain('HTTPS');
 });
 
-test('shows graduated accounts and wires return-to-warming + navigate', async () => {
-  navigate.mockClear();
+test('shows graduated accounts and wires return-to-warming + handoff', async () => {
   const warmed = {
     accounts: [
       {
@@ -181,7 +174,40 @@ test('shows graduated accounts and wires return-to-warming + navigate', async ()
   });
 
   await userEvent.click(screen.getByText('В нейрокомментинг'));
-  expect(navigate).toHaveBeenCalledWith({ to: '/neurocomment' });
+  await waitFor(() => {
+    const handed = vi
+      .mocked(fetch)
+      .mock.calls.some(([input]) => (input as Request).url.includes('/warming/handoff'));
+    expect(handed).toBe(true);
+  });
+});
+
+test('a handed-off account disappears from the warmed card', async () => {
+  const warmed = {
+    accounts: [
+      {
+        account_id: 'gone',
+        label: 'Gone',
+        warming_days: 20,
+        phone: '+70001112233',
+        trust_score: 90,
+        target_days: 14,
+        nc_handed_off: true,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-1')).toBeInTheDocument();
+  });
+  // Handed off → lives on the neurocomment page now, not the warmed card here.
+  expect(screen.queryByText('+70001112233')).not.toBeInTheDocument();
 });
 
 test('refetches the board on a live SSE event', async () => {

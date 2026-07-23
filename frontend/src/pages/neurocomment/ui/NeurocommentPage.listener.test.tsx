@@ -53,9 +53,11 @@ test('an idle account (loaded but not linked) can be assigned to the campaign', 
       );
     }
     if (url.pathname === '/api/v1/warming/warmed') {
-      // acc-2 is graduated ("Прогреты") and unlinked → the idle account.
+      // acc-2 is graduated + handed off to NC and unlinked → the idle account.
       return Promise.resolve(
-        jsonResponse({ accounts: [{ account_id: 'acc-2', label: '+79261119999' }] }),
+        jsonResponse({
+          accounts: [{ account_id: 'acc-2', label: '+79261119999', nc_handed_off: true }],
+        }),
       );
     }
     return Promise.resolve(jsonResponse({}));
@@ -78,6 +80,38 @@ test('an idle account (loaded but not linked) can be assigned to the campaign', 
       );
     expect(assigned).toBe(true);
   });
+});
+
+test('a graduated account NOT handed off does not count as idle here', async () => {
+  // acc-2 is warmed/graduated but nc_handed_off:false → it still lives on the
+  // warming page's warmed card, not in the neurocomment idle pool.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/warming/warmed') {
+      return Promise.resolve(
+        jsonResponse({
+          accounts: [{ account_id: 'acc-2', label: '+79261119999', nc_handed_off: false }],
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+  // No idle banner: the only warmed account has not been handed off.
+  expect(screen.queryByText(/простаива/)).not.toBeInTheDocument();
 });
 
 test('picking a listener account enables the start button', async () => {

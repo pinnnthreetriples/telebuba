@@ -2931,6 +2931,66 @@
         }
       }
     },
+    "/api/v1/warming/handoff": {
+      "post": {
+        "tags": [
+          "warming"
+        ],
+        "summary": "Handoff Account",
+        "description": "Second stage: move a warmed-card account into the neurocomment idle pool.",
+        "operationId": "handoffToNeurocomment",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PromoteRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WarmingAccountState"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/warming/unpromote": {
       "post": {
         "tags": [
@@ -8435,6 +8495,11 @@
             "type": "integer",
             "minimum": 0.0,
             "title": "Target Days"
+          },
+          "nc_handed_off": {
+            "type": "boolean",
+            "title": "Nc Handed Off",
+            "default": false
           }
         },
         "type": "object",
@@ -8884,6 +8949,11 @@
           "promoted_to_nc": {
             "type": "boolean",
             "title": "Promoted To Nc",
+            "default": false
+          },
+          "nc_handed_off": {
+            "type": "boolean",
+            "title": "Nc Handed Off",
             "default": false
           }
         },

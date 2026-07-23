@@ -195,6 +195,65 @@ async def test_unmark_neurocomment_removes_from_warmed_list() -> None:
 
 
 @pytest.mark.asyncio
+async def test_handoff_flags_account_and_survives_in_warmed_list() -> None:
+    """Second stage: «в нейрокомментинг» flips nc_handed_off but keeps the graduation."""
+    from services.warming import handoff_to_neurocomment, promote_to_neurocomment  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="handed", label="Handed"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="handed", state="active", started_at=_days_ago(30)),
+    )
+    await promote_to_neurocomment("handed")
+
+    card = await handoff_to_neurocomment("handed")
+
+    assert card.promoted_to_nc is True
+    assert card.nc_handed_off is True
+    # Still in the raw warmed list — the split into the two UI columns is done by
+    # the frontend on nc_handed_off, so the backend keeps returning the account.
+    warmed = (await list_warmed_accounts(14)).accounts
+    assert [a.account_id for a in warmed] == ["handed"]
+    assert warmed[0].nc_handed_off is True
+
+
+@pytest.mark.asyncio
+async def test_handoff_rejects_account_not_graduated() -> None:
+    """Handing off an un-graduated account is a caller error (400), not a silent flag."""
+    from services.warming import handoff_to_neurocomment  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="raw", label="Raw"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="raw", state="idle", started_at=_days_ago(3)),
+    )
+
+    with pytest.raises(ValueError, match="not in the warmed pool"):
+        await handoff_to_neurocomment("raw")
+
+
+@pytest.mark.asyncio
+async def test_unmark_neurocomment_clears_handoff_flag() -> None:
+    """Un-promoting a handed-off account clears BOTH flags (no NC idle-pool leak)."""
+    from services.warming import (  # noqa: PLC0415
+        handoff_to_neurocomment,
+        promote_to_neurocomment,
+        unmark_neurocomment,
+    )
+
+    await create_account(AccountCreate(account_id="round", label="Round"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="round", state="active", started_at=_days_ago(30)),
+    )
+    await promote_to_neurocomment("round")
+    await handoff_to_neurocomment("round")
+
+    card = await unmark_neurocomment("round")
+
+    assert card.promoted_to_nc is False
+    assert card.nc_handed_off is False
+    assert (await list_warmed_accounts(14)).accounts == []
+
+
+@pytest.mark.asyncio
 async def test_start_warming_clears_promotion_flag(monkeypatch: pytest.MonkeyPatch) -> None:
     """Dragging a graduated card back into warming must drop it from the NC pool (Bug 2)."""
     import asyncio  # noqa: PLC0415

@@ -211,6 +211,27 @@ async def test_promote_graduates_account(app: FastAPI, monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_handoff_moves_account_to_nc_pool(
+    app: FastAPI, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def _fake(account_id: str) -> WarmingAccountState:
+        return WarmingAccountState(
+            account_id=account_id,
+            label="X",
+            state="idle",
+            health="idle",
+            promoted_to_nc=True,
+            nc_handed_off=True,
+        )
+
+    monkeypatch.setattr("services.warming.handoff_to_neurocomment", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/warming/handoff", json={"account_id": "acc-1"})
+    assert resp.status_code == 200
+    assert resp.json()["nc_handed_off"] is True
+
+
+@pytest.mark.asyncio
 async def test_unpromote_clears_flag(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
     async def _fake(account_id: str) -> WarmingAccountState:
         return WarmingAccountState(

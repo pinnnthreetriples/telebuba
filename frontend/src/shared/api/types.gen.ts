@@ -2002,6 +2002,10 @@ export type WarmedAccount = {
    * Target Days
    */
   target_days: number;
+  /**
+   * Nc Handed Off
+   */
+  nc_handed_off?: boolean;
 };
 
 /**
@@ -2183,6 +2187,10 @@ export type WarmingAccountState = {
    * Promoted To Nc
    */
   promoted_to_nc?: boolean;
+  /**
+   * Nc Handed Off
+   */
+  nc_handed_off?: boolean;
 };
 
 /**
@@ -3853,6 +3861,33 @@ export type PromoteToNeurocommentResponses = {
 
 export type PromoteToNeurocommentResponse =
   PromoteToNeurocommentResponses[keyof PromoteToNeurocommentResponses];
+
+export type HandoffToNeurocommentData = {
+  body: PromoteRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/warming/handoff';
+};
+
+export type HandoffToNeurocommentErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type HandoffToNeurocommentError =
+  HandoffToNeurocommentErrors[keyof HandoffToNeurocommentErrors];
+
+export type HandoffToNeurocommentResponses = {
+  /**
+   * Successful Response
+   */
+  200: WarmingAccountState;
+};
+
+export type HandoffToNeurocommentResponse =
+  HandoffToNeurocommentResponses[keyof HandoffToNeurocommentResponses];
 
 export type UnpromoteFromNeurocommentData = {
   body: PromoteRequest;

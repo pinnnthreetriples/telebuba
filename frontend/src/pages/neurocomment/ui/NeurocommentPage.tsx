@@ -197,8 +197,10 @@ export function NeurocommentPage() {
   const warmingIds = new Set((warmingBoard.data?.warming ?? []).map((a) => a.account_id));
   // Listener candidates exclude accounts that are actively warming.
   const listenerOptions = accountOptions.filter((a) => !warmingIds.has(a.account_id));
-  // The graduated pool — what neurocomment may actually put to work.
-  const warmedAccounts = warmed.data?.accounts ?? [];
+  // The hand-off pool — what neurocomment may actually put to work. Graduated
+  // accounts stay on the warming page's warmed card until the operator presses
+  // «в нейрокомментинг» there (nc_handed_off); only then do they count/appear here.
+  const warmedAccounts = (warmed.data?.accounts ?? []).filter((a) => a.nc_handed_off);
   const running = runtime.data?.running ?? false;
   // The listener id survives reload/pause: it comes from the persisted runtime
   // status (returned even when paused) and only falls back to a fresh local pick.

@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { proxyTypeLabel } from '@/entities/proxy';
 import {
   addWarmingChannelsMutation,
+  handoffToNeurocommentMutation,
   promoteToNeurocommentMutation,
   removeWarmingChannelMutation,
   startWarmingMutation,
@@ -95,13 +95,15 @@ export function WarmingPage() {
   const removeChannel = useMutation(removeWarmingChannelMutation());
   const promote = useMutation(promoteToNeurocommentMutation());
   const unpromote = useMutation(unpromoteFromNeurocommentMutation());
-  const navigate = useNavigate();
+  const handoff = useMutation(handoffToNeurocommentMutation());
 
   const warmedQuery = useQuery({
     ...warmedAccountsQueryOptions(),
     refetchInterval: FALLBACK_POLL_MS,
   });
-  const warmed = warmedQuery.data?.accounts ?? [];
+  // A handed-off account lives on the neurocomment page's idle pool from that
+  // point on — the warmed card here shows only the not-yet-handed ones.
+  const warmed = (warmedQuery.data?.accounts ?? []).filter((acc) => !acc.nc_handed_off);
 
   // promote (graduate) / unpromote (return to warming) share the {account_id} body.
   const runGraduation = (mutation: typeof promote, accountId: string) => {
@@ -510,10 +512,11 @@ export function WarmingPage() {
                   <div className="mt-[13px] flex items-center gap-[9px]">
                     <button
                       type="button"
+                      disabled={busyId === acc.account_id}
                       onClick={() => {
-                        void navigate({ to: '/neurocomment' });
+                        runGraduation(handoff, acc.account_id);
                       }}
-                      className="flex flex-1 items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white"
+                      className="flex flex-1 items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white disabled:opacity-50"
                     >
                       {t('warming.warmed.toNeuro')}
                       <svg

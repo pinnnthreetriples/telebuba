@@ -562,6 +562,7 @@
     "warming_dialogue_reply": "Dialogue reply",
     "warming_dialogue_faded": "Dialogue faded",
     "warming_promoted_to_neurocomment": "Account promoted to neurocommenting",
+    "warming_nc_handoff": "Account moved to the neurocommenting idle pool",
     "warming_unpromoted_from_neurocomment": "Account returned from neurocommenting",
     "warming_quarantine_recovered": "Account recovered from quarantine",
     "warming_quarantine_exhausted": "Quarantine exhausted",
