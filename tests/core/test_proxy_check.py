@@ -28,9 +28,9 @@ class _FakeReader:
     def __init__(self, payload: bytes) -> None:
         self.payload = payload
 
-    async def read(self, limit: int) -> bytes:
-        chunk = self.payload[:limit]
-        self.payload = self.payload[limit:]
+    async def read(self, n: int = -1) -> bytes:
+        chunk = self.payload[:n]
+        self.payload = self.payload[n:]
         return chunk
 
 
