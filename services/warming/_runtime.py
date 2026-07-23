@@ -416,6 +416,7 @@ async def _stop_purge_task() -> None:
 # the package root) keep resolving these, and tests keep patching seams here.
 from services.warming._graduation import (  # noqa: E402, F401 - re-export after globals are defined.
     _stop_warming_locked,
+    handoff_to_neurocomment,
     promote_to_neurocomment,
     stop_warming,
     unmark_neurocomment,

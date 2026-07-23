@@ -563,6 +563,7 @@
     "warming_dialogue_reply": "Ответ в диалоге",
     "warming_dialogue_faded": "Диалог завершён",
     "warming_promoted_to_neurocomment": "Аккаунт передан в нейрокомментинг",
+    "warming_nc_handoff": "Аккаунт перемещён в простаивающие нейрокомментинга",
     "warming_unpromoted_from_neurocomment": "Аккаунт возвращён из нейрокомментинга",
     "warming_quarantine_recovered": "Аккаунт восстановлен после карантина",
     "warming_quarantine_exhausted": "Карантин исчерпан",

@@ -156,6 +156,10 @@ class WarmingStateRecord(BaseModel):
     # this so accounts only appear there after an explicit hand-off, not when they
     # silently cross ``warmed_min_days``.
     promoted_to_nc: bool = False
+    # Second hand-off stage: True after the warmed card's «в нейрокомментинг»
+    # button. Moves the account off the warming page's warmed card and into the
+    # neurocomment idle pool; cleared together with ``promoted_to_nc``.
+    nc_handed_off: bool = False
     # Operator-chosen warming duration (days). Stamped by ``start_warming`` from
     # the day slider; the loop auto-completes the account once warming reaches it.
     # ``None`` on legacy rows / no explicit pick → falls back to warmed_min_days.
@@ -291,6 +295,8 @@ class WarmingAccountState(BaseModel):
     # Operator-set: account has been graduated to the neurocomment pool. Drives
     # the "переместить в нейрокомментинг" button on the card (hidden once True).
     promoted_to_nc: bool = False
+    # See WarmingStateRecord.nc_handed_off — handed to the neurocomment idle pool.
+    nc_handed_off: bool = False
 
 
 class WarmingSummary(BaseModel):
@@ -337,6 +343,9 @@ class WarmedAccount(BaseModel):
     trust_score: int | None = Field(default=None, ge=0, le=100)
     # The warming target (days) the account graduated against — the "X / Y дней" Y.
     target_days: int = Field(ge=0)
+    # True once handed to the neurocomment idle pool: the warming page hides the
+    # account, the neurocomment page starts counting/offering it.
+    nc_handed_off: bool = False
 
 
 class WarmedAccountList(BaseModel):

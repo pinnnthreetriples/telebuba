@@ -131,6 +131,7 @@ def _row_to_warming_state_record(mapping: Mapping[str, object]) -> WarmingStateR
         current_phase=cast("WarmingPhase | None", phase_raw),
         phase_entered_at=_optional_str(mapping.get("phase_entered_at")),
         promoted_to_nc=bool(mapping.get("promoted_to_nc") or 0),
+        nc_handed_off=bool(mapping.get("nc_handed_off") or 0),
         target_days=_optional_int(mapping.get("target_days")),
         activity_persona=cast(
             "ActivityPersona",
@@ -230,17 +231,46 @@ async def mark_promoted_to_nc(account_id: str) -> None:
     await asyncio.to_thread(_mark_promoted_to_nc, account_id)
 
 
+def _mark_nc_handed_off(account_id: str) -> None:
+    """Set the second hand-off flag: warmed card → neurocomment idle pool.
+
+    Update-only and gated on ``promoted_to_nc`` — handing off an account that
+    is not on the warmed card is a caller error, surfaced as ``ValueError``
+    (same contract as ``_mark_promoted_to_nc``'s unknown-account guard).
+    """
+    now = _now_iso()
+    statement = (
+        update(_warming_account_state)
+        .where(
+            _warming_account_state.c.account_id == account_id,
+            _warming_account_state.c.promoted_to_nc == 1,
+        )
+        .values(nc_handed_off=1, updated_at=now)
+    )
+    with _get_engine().begin() as connection:
+        result = connection.execute(statement)
+        if result.rowcount == 0:
+            msg = f"account is not in the warmed pool: {account_id!r}"
+            raise ValueError(msg)
+
+
+async def mark_nc_handed_off(account_id: str) -> None:
+    """Hand a graduated account to the neurocomment idle pool (operator action)."""
+    await asyncio.to_thread(_mark_nc_handed_off, account_id)
+
+
 def _mark_unpromoted(account_id: str) -> None:
-    """Clear the operator graduation flag (Bug 2: stops the dual-pool leak).
+    """Clear the graduation + hand-off flags (Bug 2: stops the dual-pool leak).
 
     Update-only — un-promoting an account that was never promoted is a no-op,
-    not a chance to create a stub row.
+    not a chance to create a stub row. Clears BOTH flags: a returned-to-warming
+    account must not linger in the neurocomment idle pool.
     """
     now = _now_iso()
     statement = (
         update(_warming_account_state)
         .where(_warming_account_state.c.account_id == account_id)
-        .values(promoted_to_nc=0, updated_at=now)
+        .values(promoted_to_nc=0, nc_handed_off=0, updated_at=now)
     )
     with _get_engine().begin() as connection:
         connection.execute(statement)

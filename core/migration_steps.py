@@ -287,6 +287,18 @@ def _add_warming_state_promoted_to_nc(connection: Connection) -> None:
         )
 
 
+def _add_warming_state_nc_handed_off(connection: Connection) -> None:
+    # Second hand-off stage after graduation: set by the warmed card's
+    # «в нейрокомментинг» button; default 0 keeps existing graduates on the
+    # warmed card until the operator explicitly hands them off.
+    if not _sqlite_table_exists(connection, "warming_account_state"):
+        return
+    if "nc_handed_off" not in _sqlite_columns(connection, "warming_account_state"):
+        connection.exec_driver_sql(
+            "ALTER TABLE warming_account_state ADD COLUMN nc_handed_off INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 def _add_warming_state_target_days(connection: Connection) -> None:
     # Operator-chosen warming duration (the start modal's day slider). NULL on
     # legacy rows / no explicit pick → the board falls back to warmed_min_days.

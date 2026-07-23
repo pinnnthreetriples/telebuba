@@ -30,6 +30,7 @@ from core.migration_steps import (
     _add_warming_phase_columns,
     _add_warming_settings_gemini_tuning,
     _add_warming_settings_llm_columns,
+    _add_warming_state_nc_handed_off,
     _add_warming_state_promoted_to_nc,
     _add_warming_state_run_id,
     _add_warming_state_runtime_columns,
@@ -89,6 +90,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (28, "add_warming_settings_gemini_tuning", _add_warming_settings_gemini_tuning),
     (29, "add_campaign_account_channels_table", _add_campaign_account_channels_table),
     (30, "add_readiness_banned", _add_readiness_banned),
+    (31, "add_warming_state_nc_handed_off", _add_warming_state_nc_handed_off),
 )
 
 

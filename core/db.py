@@ -332,6 +332,7 @@ from core.repositories.warming import (  # noqa: E402, F401
     list_warming_states,
     list_warming_states_by_ids,
     load_warming_settings,
+    mark_nc_handed_off,
     mark_promoted_to_nc,
     remove_warming_channel,
     save_warming_settings,

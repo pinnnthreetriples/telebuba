@@ -165,6 +165,9 @@ _warming_account_state = Table(
     # this so accounts only appear there after an explicit graduation, not on
     # crossing ``warmed_min_days`` alone. Default 0 keeps existing rows opt-in.
     Column("promoted_to_nc", Integer, nullable=False, server_default="0"),
+    # Second hand-off stage: the warmed card's «в нейрокомментинг» button moves
+    # a graduated account into the neurocomment idle pool and off the warmed card.
+    Column("nc_handed_off", Integer, nullable=False, server_default="0"),
     # Operator-chosen warming duration (days) from the start modal's slider; the
     # loop auto-completes the account once warming reaches it. NULL = no pick →
     # the board falls back to ``settings.neurocomment.warmed_min_days``.

@@ -97,6 +97,9 @@ import type {
   GetWarmingSettingsData,
   GetWarmingSettingsErrors,
   GetWarmingSettingsResponses,
+  HandoffToNeurocommentData,
+  HandoffToNeurocommentErrors,
+  HandoffToNeurocommentResponses,
   ImportAccountSessionData,
   ImportAccountSessionErrors,
   ImportAccountSessionResponses,
@@ -982,6 +985,27 @@ export const promoteToNeurocomment = <ThrowOnError extends boolean = false>(
     ThrowOnError
   >({
     url: '/api/v1/warming/promote',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Handoff Account
+ *
+ * Second stage: move a warmed-card account into the neurocomment idle pool.
+ */
+export const handoffToNeurocomment = <ThrowOnError extends boolean = false>(
+  options: Options<HandoffToNeurocommentData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    HandoffToNeurocommentResponses,
+    HandoffToNeurocommentErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/warming/handoff',
     ...options,
     headers: {
       'Content-Type': 'application/json',
