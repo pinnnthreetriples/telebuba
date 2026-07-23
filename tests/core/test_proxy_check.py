@@ -149,9 +149,22 @@ async def test_fetch_exit_ip_uses_authenticated_tls_tunnel(
 
 
 @pytest.mark.asyncio
-async def test_fetch_exit_ip_rejects_private_address(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    "addr",
+    [
+        "127.0.0.1",  # IPv4 loopback
+        "10.0.0.1",  # IPv4 private
+        "::1",  # IPv6 loopback
+        "fc00::1",  # IPv6 unique-local
+        "::ffff:10.0.0.1",  # IPv4-mapped IPv6 (the pre-3.13 is_global bypass)
+    ],
+)
+async def test_fetch_exit_ip_rejects_private_address(
+    monkeypatch: pytest.MonkeyPatch,
+    addr: str,
+) -> None:
     async def fake_fetch(*_args: object, **_kwargs: object) -> bytes:
-        return _http_json(b'{"ip":"127.0.0.1"}')
+        return _http_json(f'{{"ip":"{addr}"}}'.encode())
 
     monkeypatch.setattr(proxy_check_module, "_fetch_https_through_proxy", fake_fetch)
     with pytest.raises(OSError, match="non-public"):
@@ -289,6 +302,31 @@ async def test_geo_failure_does_not_mark_reachable_proxy_dead(
     assert result.exit_ip == "45.130.253.151"
     assert result.geo_status == "unavailable"
     assert result.last_error == "IPinfo lookup failed"
+
+
+@pytest.mark.asyncio
+async def test_geo_lookup_raising_does_not_mark_reachable_proxy_dead(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # Even an exception that escapes the per-provider guards (e.g. a misconfigured
+    # base URL raising httpx.InvalidURL) must not fail a reachable proxy.
+    async def fake_fetch(_proxy: ProxySettings) -> str:
+        return "45.130.253.151"
+
+    async def boom_geo(_exit_ip: str) -> _GeoOutcome:
+        msg = "unexpected"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", fake_fetch)
+    monkeypatch.setattr(proxy_check_module, "_lookup_geolocation", boom_geo)
+
+    result = await check_proxy_connectivity(
+        ProxySettings(proxy_type="socks5", host="proxy.example", port=1080),
+    )
+
+    assert result.status == "tcp_working"
+    assert result.exit_ip == "45.130.253.151"
+    assert result.geo_status == "unavailable"
 
 
 def test_datacenter_asn_is_flagged_from_ipinfo_name() -> None:

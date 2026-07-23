@@ -59,7 +59,14 @@ async def check_proxy_connectivity(proxy: ProxySettings) -> ProxyCheckResult:
     except Exception as exc:  # noqa: BLE001 - proxy libraries expose mixed exception types.
         return ProxyCheckResult(status="failed", last_error=_short_error(exc))
 
-    geo = await _lookup_geolocation(exit_ip)
+    # A reachable proxy must never be marked failed because geolocation errored.
+    # The per-provider helpers already degrade to "unavailable", but guard the
+    # whole lookup so any unexpected escape (e.g. a misconfigured base URL) can
+    # never turn a working proxy into a failed one.
+    try:
+        geo = await _lookup_geolocation(exit_ip)
+    except Exception:  # noqa: BLE001 - geo is best-effort; connectivity already succeeded.
+        geo = _GeoOutcome(status="unavailable", error="Geolocation failed")
     return ProxyCheckResult(
         status="tcp_working",
         last_error=geo.error,
@@ -279,9 +286,12 @@ async def _lookup_ipinfo(exit_ip: str) -> _GeoRecord:
     base_url = settings.proxy.ipinfo_base_url.rstrip("/")
     url = f"{base_url}/{quote(exit_ip, safe='')}"
     headers = {"Authorization": f"Bearer {settings.proxy.ipinfo_token}"}
+    # trust_env=False: keep this lookup unconditionally direct — never route it
+    # through an ambient HTTPS_PROXY env var (which would leak the exit IP).
     async with httpx.AsyncClient(
         timeout=settings.proxy.check_timeout_seconds,
         follow_redirects=False,
+        trust_env=False,
     ) as client:
         response = await client.get(url, headers=headers)
         response.raise_for_status()
@@ -308,6 +318,7 @@ async def _lookup_maxmind(exit_ip: str) -> _GeoRecord:
         timeout=settings.proxy.check_timeout_seconds,
         follow_redirects=False,
         auth=auth,
+        trust_env=False,
     ) as client:
         response = await client.get(url)
         response.raise_for_status()
