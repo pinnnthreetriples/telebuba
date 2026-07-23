@@ -14,14 +14,14 @@ edges:
     condition: setup, commands, CI, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-07-17
+last_updated: 2026-07-23
 ---
 
 # Telebuba Router
 
 ## State
 - Working: React/FastAPI; accounts, sessions, proxy pool, profile media, channels, warming runtime, neurocomment listener and vision solver, strict CI.
-- Deferred: landing #237, worker/remote DB architecture, full operator and deployment documentation.
+- Deferred: landing #237, worker/remote DB architecture, full operator and deployment documentation, persistent neurocomment post queue + catch-up, send↔DB idempotency reconciliation, backup readiness/off-site.
 - Known: warming daily cap may undercount after a mid-cycle restart (#208); use one uvicorn worker.
 
 ## Routing
