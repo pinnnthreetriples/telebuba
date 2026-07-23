@@ -117,6 +117,9 @@ async def check_proxy(proxy_id: str) -> ProxyRead:
             "status": saved.status,
             "exit_ip": saved.exit_ip,
             "country_code": saved.country_code,
+            "geo_status": saved.geo_status,
+            "ipinfo_country_code": saved.ipinfo_country_code,
+            "maxmind_country_code": saved.maxmind_country_code,
             "last_error": saved.last_error,
         },
     )
