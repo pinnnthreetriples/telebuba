@@ -11,6 +11,7 @@ written on each ``set_cooldown`` and reloaded once at startup.
 from __future__ import annotations
 
 import asyncio
+from dataclasses import dataclass
 from typing import TYPE_CHECKING, cast
 
 from sqlalchemy import delete, select
@@ -18,10 +19,22 @@ from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine
 from core.repositories.neurocomment._tables import _neurocomment_cooldowns
-from schemas.neurocomment import CooldownDeadline
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
+
+
+@dataclass(frozen=True, slots=True)
+class CooldownDeadline:
+    """One persisted engine cooldown row (internal persistence↔hydrate type).
+
+    ``channel is None`` is the account-wide flood/peer-flood cooldown; a handle
+    scopes a slow-mode cooldown to that chat. ``until`` is an ISO-8601 UTC string.
+    """
+
+    account_id: str
+    channel: str | None
+    until: str
 
 
 def persist_cooldown(account_id: str, channel: str | None, until: str) -> None:

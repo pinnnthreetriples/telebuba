@@ -25,19 +25,6 @@ CampaignStatus = Literal["active", "paused", "archived"]
 CommentStatus = Literal["claimed", "posted", "failed"]
 
 
-class CooldownDeadline(BaseModel):
-    """One persisted engine cooldown — durable backing for the in-memory map.
-
-    ``channel is None`` is the account-wide flood/peer-flood cooldown; a handle
-    scopes a slow-mode cooldown to that chat. ``until`` is an ISO-8601 UTC string:
-    the earliest time the account may comment again.
-    """
-
-    account_id: str
-    channel: str | None
-    until: str
-
-
 class CampaignCreate(BaseModel):
     """User input to open a campaign — the product mention lives in the prompt."""
 
