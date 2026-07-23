@@ -4,6 +4,7 @@ import asyncio
 import ipaddress
 import json
 import ssl
+from contextlib import suppress
 from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
@@ -123,14 +124,30 @@ async def _fetch_https_through_proxy(
     try:
         writer.write(_http_request(host, path))
         await asyncio.wait_for(writer.drain(), timeout=timeout)
-        raw = await asyncio.wait_for(reader.read(_MAX_RESPONSE_BYTES + 1), timeout=timeout)
-        if len(raw) > _MAX_RESPONSE_BYTES:
-            msg = "Exit-IP endpoint response is too large"
-            raise OSError(msg)
-        return raw
+        return await _read_limited(reader, timeout=timeout)
     finally:
         writer.close()
-        await writer.wait_closed()
+        with suppress(OSError, TimeoutError):
+            await asyncio.wait_for(writer.wait_closed(), timeout=timeout)
+
+
+async def _read_limited(
+    reader: asyncio.StreamReader,
+    *,
+    timeout: float,
+) -> bytes:
+    chunks: list[bytes] = []
+    total = 0
+    while True:
+        remaining = _MAX_RESPONSE_BYTES + 1 - total
+        chunk = await asyncio.wait_for(reader.read(min(16_384, remaining)), timeout=timeout)
+        if not chunk:
+            return b"".join(chunks)
+        chunks.append(chunk)
+        total += len(chunk)
+        if total > _MAX_RESPONSE_BYTES:
+            msg = "Exit-IP endpoint response is too large"
+            raise OSError(msg)
 
 
 def _http_request(host: str, path: str) -> bytes:
