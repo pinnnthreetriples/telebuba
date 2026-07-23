@@ -9,6 +9,7 @@ from sqlalchemy import create_engine
 
 from core.db import _get_engine, configure_database  # type: ignore[attr-defined]
 from core.migration_steps import _add_users_token_version
+from core.migration_steps_pool import _add_proxy_geo_consensus
 from core.migrations import MIGRATIONS, _rename_proxy_type_http_to_https, apply_migrations
 
 if TYPE_CHECKING:
@@ -376,3 +377,26 @@ def test_append_only_versions_are_unique() -> None:
     assert len(versions) == len(set(versions))
     # Should also be a strictly increasing sequence — catches an off-by-one.
     assert versions == sorted(versions)
+
+
+def test_proxy_geo_consensus_migration_is_idempotent(tmp_path: Path) -> None:
+    """#32 adds provider-specific country results and an unknown status default."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-proxy.db'}", future=True)
+    with engine.begin() as connection:
+        connection.exec_driver_sql("CREATE TABLE proxies (id VARCHAR PRIMARY KEY)")
+        _add_proxy_geo_consensus(connection)
+        _add_proxy_geo_consensus(connection)
+        connection.exec_driver_sql("INSERT INTO proxies (id) VALUES ('proxy-1')")
+
+    with engine.connect() as connection:
+        columns = {
+            str(row["name"])
+            for row in connection.exec_driver_sql("PRAGMA table_info(proxies)").mappings()
+        }
+        status = connection.exec_driver_sql(
+            "SELECT geo_status FROM proxies WHERE id = 'proxy-1'",
+        ).scalar_one()
+    engine.dispose()
+
+    assert {"geo_status", "ipinfo_country_code", "maxmind_country_code"} <= columns
+    assert status == "unknown"
