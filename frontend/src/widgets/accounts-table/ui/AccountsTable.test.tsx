@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { fireEvent, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -36,6 +36,49 @@ test('renders a row per account with handle and country flag', () => {
   expect(screen.getByText('@mainuser')).toBeInTheDocument();
   expect(screen.getByText('acc-2')).toBeInTheDocument();
   expect(container.querySelector('.fi-ru')).not.toBeNull();
+});
+
+test('shows the telegram name on top, username below, and the captured photo', () => {
+  const named: AccountRead[] = [
+    {
+      account_id: 'acc-3',
+      status: 'alive',
+      first_name: 'Vika',
+      last_name: 'M',
+      username: 'vikamn',
+      avatar_etag: 'abc123',
+      created_at: 'now',
+      updated_at: 'now',
+    },
+  ];
+  const { container } = render(
+    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyId={null} />,
+  );
+  expect(screen.getByText('Vika M')).toBeInTheDocument();
+  expect(screen.getByText('@vikamn')).toBeInTheDocument();
+  const img = container.querySelector('img');
+  expect(img?.getAttribute('src')).toBe('/api/v1/accounts/acc-3/avatar?v=abc123');
+});
+
+test('falls back to name initials when no photo is captured, and on a broken image', () => {
+  const named: AccountRead[] = [
+    {
+      account_id: 'acc-4',
+      status: 'alive',
+      first_name: 'Ann',
+      last_name: 'Lee',
+      avatar_etag: 'zzz',
+      created_at: 'now',
+      updated_at: 'now',
+    },
+  ];
+  const { container } = render(
+    <AccountsTable data={named} onCheck={vi.fn()} onDelete={vi.fn()} busyId={null} />,
+  );
+  // A failed image load swaps the <img> for the mono initials avatar.
+  fireEvent.error(container.querySelector('img')!);
+  expect(container.querySelector('img')).toBeNull();
+  expect(screen.getByText('AL')).toBeInTheDocument();
 });
 
 test('renders the real trust score and device, dashes when absent', () => {

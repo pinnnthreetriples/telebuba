@@ -68,6 +68,7 @@ from services.accounts.media import (
 )
 from services.accounts.profile import update_account_profile
 from services.accounts.profile_read import (
+    account_avatar_image,
     account_profile_image,
     account_profile_view,
     fetch_live_account_profile,
@@ -85,6 +86,7 @@ __all__ = [
     "InvalidCursorError",
     "PhoneLoginError",
     "SessionAlreadyExistsError",
+    "account_avatar_image",
     "account_profile_image",
     "account_profile_view",
     "account_stats",

@@ -31,6 +31,7 @@ from schemas.telegram_profile_snapshot import (
     TelegramStoryThumb,
 )
 from services.accounts.profile_read import (
+    account_avatar_image,
     account_profile_image,
     account_profile_view,
     fetch_live_account_profile,
@@ -611,3 +612,25 @@ async def test_account_profile_image_no_thumb_bytes_returns_none(
     monkeypatch.setattr("services.accounts.profile_read.fetch_live_account_profile", _snap)
 
     assert await account_profile_image("acc-1", kind="photos", item_id=2) is None
+
+
+@pytest.mark.asyncio
+async def test_account_avatar_image_wraps_db_row(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(account_id: str) -> tuple[bytes, str] | None:
+        assert account_id == "acc-1"
+        return b"avatar-bytes", "etag-xyz"
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_account_avatar", _fake)
+    image = await account_avatar_image("acc-1")
+    assert image is not None
+    assert image.content == b"avatar-bytes"
+    assert image.etag == "etag-xyz"
+
+
+@pytest.mark.asyncio
+async def test_account_avatar_image_none_when_absent(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def _fake(account_id: str) -> tuple[bytes, str] | None:  # noqa: ARG001
+        return None
+
+    monkeypatch.setattr("services.accounts.profile_read.fetch_account_avatar", _fake)
+    assert await account_avatar_image("acc-1") is None

@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from core.db import (
     configure_database,
     create_account,
+    fetch_account_avatar,
     get_listener_account_id,
     get_listener_running,
     insert_challenge,
@@ -123,6 +124,49 @@ async def test_update_account_from_alive_session_check(tmp_path: Path) -> None:
     assert updated.user_id == 123
     assert updated.username == "username"
     assert updated.last_checked_at is not None
+
+
+@pytest.mark.asyncio
+async def test_session_check_persists_and_serves_avatar(tmp_path: Path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="account-av"))
+
+    updated = await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="account-av",
+            session_path="sessions/account-av",
+            status="alive",
+            is_temporary=False,
+            avatar_thumb=b"jpeg-bytes",
+        ),
+    )
+
+    # The list read exposes only the etag, never the BLOB.
+    assert updated.avatar_etag is not None
+    served = await fetch_account_avatar("account-av")
+    assert served is not None
+    content, etag = served
+    assert content == b"jpeg-bytes"
+    assert etag == updated.avatar_etag
+
+
+@pytest.mark.asyncio
+async def test_session_check_without_avatar_keeps_existing(tmp_path: Path) -> None:
+    configure_database(tmp_path / "telebuba.db")
+    await create_account(AccountCreate(account_id="account-keep"))
+    base = TelegramSessionCheckResult(
+        account_id="account-keep",
+        session_path="sessions/account-keep",
+        status="alive",
+        is_temporary=False,
+    )
+    await update_account_from_session_check(base.model_copy(update={"avatar_thumb": b"first"}))
+    # A later check with no photo (None) must not wipe the cached avatar.
+    await update_account_from_session_check(base)
+
+    served = await fetch_account_avatar("account-keep")
+    assert served is not None
+    assert served[0] == b"first"
 
 
 @pytest.mark.asyncio

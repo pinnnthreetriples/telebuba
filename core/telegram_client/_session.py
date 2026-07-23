@@ -40,7 +40,10 @@ async def check_telegram_session(
         if not await client.is_user_authorized():
             result = _status_session_check_result(profile, status="unauthorized")
         else:
-            result = _alive_session_check_result(profile, await client.get_me())
+            me = await client.get_me()
+            result = _alive_session_check_result(
+                profile, me, await _download_avatar_thumb(client, me)
+            )
     except _SESSION_ERRORS as exc:
         result = _error_session_check_result(profile, exc, status="session_error")
     except _ACCOUNT_ERRORS as exc:
@@ -107,9 +110,26 @@ def _status_session_check_result(
     )
 
 
+async def _download_avatar_thumb(client: object, me: object) -> bytes | None:
+    """Best-effort small-size avatar download for the accounts-list thumbnail.
+
+    ``download_big=False`` fetches the ~160px photo (compact JPEG, crisp at the
+    32px list size). Never fails the check: any refusal (FloodWait, no photo,
+    RPC) degrades to ``None`` and the row falls back to initials.
+    """
+    try:
+        data = await client.download_profile_photo(me, file=bytes, download_big=False)  # ty: ignore[unresolved-attribute]
+    except Exception:  # noqa: BLE001 - avatar is cosmetic; the check must still classify.
+        return None
+    if isinstance(data, (bytes, bytearray)) and data:
+        return bytes(data)
+    return None
+
+
 def _alive_session_check_result(
     profile: TelegramClientProfile,
     me: object,
+    avatar_thumb: bytes | None,
 ) -> TelegramSessionCheckResult:
     user_id = getattr(me, "id", None)
     return TelegramSessionCheckResult(
@@ -122,6 +142,7 @@ def _alive_session_check_result(
         username=optional_str(getattr(me, "username", None)),
         first_name=optional_str(getattr(me, "first_name", None)),
         last_name=optional_str(getattr(me, "last_name", None)),
+        avatar_thumb=avatar_thumb,
     )
 
 

@@ -1,5 +1,5 @@
 import { type ColumnDef } from '@tanstack/react-table';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { accountDesignStatus, type DesignStatus, StatusBadge } from '@/entities/account';
@@ -27,10 +27,53 @@ const AVATAR_CLASS: Record<DesignStatus, string> = {
   banned: 'bg-[#fbecec] text-[#c0473f]',
 };
 
-// last two phone digits → the mono avatar initials, matching the design.
-function mono(account: AccountRead): string {
+// Mono-avatar fallback initials: name initials when the Telegram name is known
+// (first + last initial), else the last two phone digits (matching the design).
+function initials(account: AccountRead): string {
+  const name = [account.first_name, account.last_name].filter(Boolean).join(' ').trim();
+  if (name) {
+    const parts = name.split(/\s+/);
+    return (parts[0]!.charAt(0) + (parts[1]?.charAt(0) ?? '')).toUpperCase();
+  }
   const digits = (account.phone ?? account.account_id).replace(/\D/g, '');
   return digits.slice(-2) || '#';
+}
+
+// The Telegram display name (first + last), falling back to the phone/id for
+// accounts not yet checked — so the row always has a primary label.
+function displayName(account: AccountRead): string {
+  return (
+    [account.first_name, account.last_name].filter(Boolean).join(' ') ||
+    account.phone ||
+    account.account_id
+  );
+}
+
+// Row avatar: the cached Telegram profile photo when captured (served by the
+// cacheable /avatar endpoint, ?v=etag makes it immutable), degrading to the
+// status-tinted mono initials on absence or a load error.
+function RowAvatar({ account }: { account: AccountRead }) {
+  const [broken, setBroken] = useState(false);
+  const ds = accountDesignStatus(account.status);
+  if (account.avatar_etag && !broken) {
+    return (
+      <img
+        src={`/api/v1/accounts/${account.account_id}/avatar?v=${account.avatar_etag}`}
+        alt=""
+        onError={() => {
+          setBroken(true);
+        }}
+        className="h-8 w-8 shrink-0 rounded-full object-cover"
+      />
+    );
+  }
+  return (
+    <div
+      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${AVATAR_CLASS[ds]}`}
+    >
+      {initials(account)}
+    </div>
+  );
 }
 
 // Trust Score is real (computed by the backend from session/spam/age signals).
@@ -84,20 +127,13 @@ export function AccountsTable({
         meta: LEFT_META,
         cell: ({ row }) => {
           const account = row.original;
-          const ds = accountDesignStatus(account.status);
           return (
             <div className="flex items-center gap-[11px]">
-              <div
-                className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${AVATAR_CLASS[ds]}`}
-              >
-                {mono(account)}
-              </div>
+              <RowAvatar account={account} />
               <div>
-                <div className="text-[13px] font-semibold">
-                  {account.phone ?? account.account_id}
-                </div>
+                <div className="text-[13px] font-semibold">{displayName(account)}</div>
                 <div className="text-[11px] text-ink-subtle">
-                  {account.username ? `@${account.username}` : (account.label ?? '—')}
+                  {account.username ? `@${account.username}` : '—'}
                 </div>
               </div>
             </div>
