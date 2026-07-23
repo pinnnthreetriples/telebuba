@@ -380,7 +380,7 @@ def test_append_only_versions_are_unique() -> None:
 
 
 def test_proxy_geo_consensus_migration_is_idempotent(tmp_path: Path) -> None:
-    """#32 adds provider-specific country results and an unknown status default."""
+    """#33 adds provider-specific country results and an unknown status default."""
     engine = create_engine(f"sqlite:///{tmp_path / 'legacy-proxy.db'}", future=True)
     with engine.begin() as connection:
         connection.exec_driver_sql("CREATE TABLE proxies (id VARCHAR PRIMARY KEY)")
