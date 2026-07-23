@@ -1022,7 +1022,7 @@
           "accounts"
         ],
         "summary": "Get Account Profile Snapshot",
-        "description": "Live profile (name / bio / photos / stories / music) for the edit modal.\n\n``refresh=true`` (the modal's «Обновить» button) bypasses the read cache and\nre-pulls from Telegram.",
+        "description": "Live profile (name / bio / photos / stories / music) for the edit modal.\n\n``refresh=true`` (the modal's \u00ab\u041e\u0431\u043d\u043e\u0432\u0438\u0442\u044c\u00bb button) bypasses the read cache and\nre-pulls from Telegram.",
         "operationId": "getAccountProfileSnapshot",
         "parameters": [
           {
@@ -2827,7 +2827,7 @@
           "warming"
         ],
         "summary": "Get Warmed Accounts",
-        "description": "Operator-graduated accounts (the warming page's \"Прогретые аккаунты\" card).",
+        "description": "Operator-graduated accounts (the warming page's \"\u041f\u0440\u043e\u0433\u0440\u0435\u0442\u044b\u0435 \u0430\u043a\u043a\u0430\u0443\u043d\u0442\u044b\" card).",
         "operationId": "listWarmedAccounts",
         "parameters": [
           {
@@ -2997,7 +2997,7 @@
           "warming"
         ],
         "summary": "Unpromote Account",
-        "description": "Reverse a graduation: clear the promotion flag (the warmed card's «вернуть»).",
+        "description": "Reverse a graduation: clear the promotion flag (the warmed card's \u00ab\u0432\u0435\u0440\u043d\u0443\u0442\u044c\u00bb).",
         "operationId": "unpromoteFromNeurocomment",
         "parameters": [
           {
@@ -3672,7 +3672,7 @@
           "neurocomment"
         ],
         "summary": "Check Channel Bans",
-        "description": "Live-probe each campaign channel for account bans (the \"Проверить каналы\" button).",
+        "description": "Live-probe each campaign channel for account bans (the \"\u041f\u0440\u043e\u0432\u0435\u0440\u0438\u0442\u044c \u043a\u0430\u043d\u0430\u043b\u044b\" button).",
         "operationId": "checkCampaignChannelBans",
         "parameters": [
           {
@@ -3731,7 +3731,7 @@
           "neurocomment"
         ],
         "summary": "List Comments",
-        "description": "One cursor page of a campaign's posted comments (newest first) — the history modal.",
+        "description": "One cursor page of a campaign's posted comments (newest first) \u2014 the history modal.",
         "operationId": "listNeurocommentComments",
         "parameters": [
           {
@@ -4324,7 +4324,7 @@
           "neurocomment"
         ],
         "summary": "Retry Challenge",
-        "description": "Operator retry of one challenged (account, channel) pair (the captcha «Решить»).\n\nRe-onboards the pair (re-running the solver) — account+channel scoped, so it\nis campaign-agnostic.",
+        "description": "Operator retry of one challenged (account, channel) pair (the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb).\n\nRe-onboards the pair (re-running the solver) \u2014 account+channel scoped, so it\nis campaign-agnostic.",
         "operationId": "retryChallenge",
         "parameters": [
           {
@@ -4524,7 +4524,7 @@
           "neurocomment"
         ],
         "summary": "List Channel Challenges",
-        "description": "Recent unsolved bot-challenges for one channel — the work-view drill-down (#148).",
+        "description": "Recent unsolved bot-challenges for one channel \u2014 the work-view drill-down (#148).",
         "operationId": "listChannelChallenges",
         "parameters": [
           {
@@ -4869,7 +4869,7 @@
           "neurocomment"
         ],
         "summary": "Clear Listener",
-        "description": "Remove the listener (\"снять слушателя\"): unsubscribe and forget the account.",
+        "description": "Remove the listener (\"\u0441\u043d\u044f\u0442\u044c \u0441\u043b\u0443\u0448\u0430\u0442\u0435\u043b\u044f\"): unsubscribe and forget the account.",
         "operationId": "clearNeurocommentListener",
         "parameters": [
           {
@@ -5835,7 +5835,7 @@
         },
         "type": "object",
         "title": "AccountStats",
-        "description": "Fleet-wide status roll-up for the Accounts page stat tiles.\n\nCounts span the whole ``accounts`` table (a single grouped SQL query), not\nthe currently-loaded page, so the tiles stay correct across pagination. The\nbuckets mirror the design's status vocabulary (``accountDesignStatus``):\n\n- ``active``    — ``alive``.\n- ``idle``      — ``flood_wait`` (spam-limited, the \"idle\" tile).\n- ``needs_code`` — ``unauthorized`` / ``new`` (re-auth by login code).\n- ``problem``   — every other non-alive status (banned / session / errors)."
+        "description": "Fleet-wide status roll-up for the Accounts page stat tiles.\n\nCounts span the whole ``accounts`` table (a single grouped SQL query), not\nthe currently-loaded page, so the tiles stay correct across pagination. The\nbuckets mirror the design's status vocabulary (``accountDesignStatus``):\n\n- ``active``    \u2014 ``alive``.\n- ``idle``      \u2014 ``flood_wait`` (spam-limited, the \"idle\" tile).\n- ``needs_code`` \u2014 ``unauthorized`` / ``new`` (re-auth by login code).\n- ``problem``   \u2014 every other non-alive status (banned / session / errors)."
       },
       "ActionResult": {
         "properties": {
@@ -5941,7 +5941,7 @@
           "raw"
         ],
         "title": "AddChannelsRequest",
-        "description": "Raw user input — one or many links/usernames, newline- or comma-separated."
+        "description": "Raw user input \u2014 one or many links/usernames, newline- or comma-separated."
       },
       "AssignAccountRequest": {
         "properties": {
@@ -6196,7 +6196,7 @@
           "prompt"
         ],
         "title": "CampaignCreate",
-        "description": "User input to open a campaign — the product mention lives in the prompt."
+        "description": "User input to open a campaign \u2014 the product mention lives in the prompt."
       },
       "CampaignList": {
         "properties": {
@@ -6541,7 +6541,7 @@
         },
         "type": "object",
         "title": "ChannelUpdateRequest",
-        "description": "Partial edit: ``None`` leaves a field unchanged, ``\"\"`` clears the about.\n\n\"At least one field set\" is enforced by the ``EditChannel`` action model\nthe service builds — a no-op request fails there with a 400."
+        "description": "Partial edit: ``None`` leaves a field unchanged, ``\"\"`` clears the about.\n\n\"At least one field set\" is enforced by the ``EditChannel`` action model\nthe service builds \u2014 a no-op request fails there with a 400."
       },
       "ChannelUsernameCheckView": {
         "properties": {
@@ -6695,7 +6695,7 @@
           "updated_at"
         ],
         "title": "CommentRecord",
-        "description": "One row of ``neurocomment_comments`` — the claim + outcome for a post."
+        "description": "One row of ``neurocomment_comments`` \u2014 the claim + outcome for a post."
       },
       "DialogueFeed": {
         "properties": {
@@ -6709,7 +6709,7 @@
         },
         "type": "object",
         "title": "DialogueFeed",
-        "description": "Recent inter-account messages, newest first — the live conversation feed."
+        "description": "Recent inter-account messages, newest first \u2014 the live conversation feed."
       },
       "DialogueFeedMessage": {
         "properties": {
@@ -7247,7 +7247,7 @@
           "log_limit"
         ],
         "title": "NeurocommentRuntimeStatus",
-        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: it reflects the\npersisted ``listener_running`` flag (the engine is actively subscribed), NOT\nmerely whether an account is remembered. ``listener_account_id`` is the\n*remembered* listener and is returned even when ``running`` is False — that is a\nPAUSED runtime, and the SPA keeps the listener strip visible (distinct from \"no\nlistener\", where the field is null). ``active_channels`` is the size of the\nwatch set across all active campaigns (populated only while running).\n``log_limit`` is the operator-configured activity-log row cap the SPA reads\ninstead of hardcoding one (from ``settings.neurocomment.log_limit``)."
+        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: it reflects the\npersisted ``listener_running`` flag (the engine is actively subscribed), NOT\nmerely whether an account is remembered. ``listener_account_id`` is the\n*remembered* listener and is returned even when ``running`` is False \u2014 that is a\nPAUSED runtime, and the SPA keeps the listener strip visible (distinct from \"no\nlistener\", where the field is null). ``active_channels`` is the size of the\nwatch set across all active campaigns (populated only while running).\n``log_limit`` is the operator-configured activity-log row cap the SPA reads\ninstead of hardcoding one (from ``settings.neurocomment.log_limit``)."
       },
       "NeurocommentSettings": {
         "properties": {
@@ -7293,7 +7293,7 @@
           "updated_at"
         ],
         "title": "NeurocommentSettings",
-        "description": "Operator-editable neurocomment limits — the engine reads these at selection."
+        "description": "Operator-editable neurocomment limits \u2014 the engine reads these at selection."
       },
       "NeurocommentSettingsUpdate": {
         "properties": {
@@ -7490,7 +7490,7 @@
           "phone"
         ],
         "title": "PhoneCodeRequestResult",
-        "description": "API response after a code is sent — confirmation only, no secrets."
+        "description": "API response after a code is sent \u2014 confirmation only, no secrets."
       },
       "PhotoMainRequest": {
         "properties": {
@@ -7517,7 +7517,7 @@
           "file_reference"
         ],
         "title": "PhotoMainRequest",
-        "description": "Promote an existing profile photo to the current avatar.\n\nSame ``InputPhoto`` triple as :class:`PhotoRemoveRequest` — the id fields\narrive as int64 strings from the view (see :data:`_Int64Str`)."
+        "description": "Promote an existing profile photo to the current avatar.\n\nSame ``InputPhoto`` triple as :class:`PhotoRemoveRequest` \u2014 the id fields\narrive as int64 strings from the view (see :data:`_Int64Str`)."
       },
       "PhotoRemoveRequest": {
         "properties": {
@@ -8144,7 +8144,7 @@
           "channel"
         ],
         "title": "RetryPairRequest",
-        "description": "Operator retry of one (account, channel) challenge — the captcha «Решить»."
+        "description": "Operator retry of one (account, channel) challenge \u2014 the captcha \u00ab\u0420\u0435\u0448\u0438\u0442\u044c\u00bb."
       },
       "SetAccountChannelRequest": {
         "properties": {
@@ -8278,7 +8278,7 @@
           "phone"
         ],
         "title": "StartPhoneLoginRequest",
-        "description": "API body for ``POST /accounts/start-login`` — provision an account by phone."
+        "description": "API body for ``POST /accounts/start-login`` \u2014 provision an account by phone."
       },
       "StartWarmingRequest": {
         "properties": {
@@ -9151,7 +9151,7 @@
           "ready"
         ],
         "title": "WarmingReadiness",
-        "description": "Pre-start verdict for an account: can it safely begin warming?\n\n``reasons`` is empty iff ``ready`` is True — each entry is a short,\nhuman-readable blocker (``\"session new\"``, ``\"no proxy\"``, ``\"no channels\"``)."
+        "description": "Pre-start verdict for an account: can it safely begin warming?\n\n``reasons`` is empty iff ``ready`` is True \u2014 each entry is a short,\nhuman-readable blocker (``\"session new\"``, ``\"no proxy\"``, ``\"no channels\"``)."
       },
       "WarmingSettings": {
         "properties": {
@@ -9237,7 +9237,7 @@
           "updated_at"
         ],
         "title": "WarmingSettings",
-        "description": "Masked, UI-facing warming settings — never carries the raw Gemini key."
+        "description": "Masked, UI-facing warming settings \u2014 never carries the raw Gemini key."
       },
       "WarmingSettingsUpdate": {
         "properties": {
@@ -9354,7 +9354,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "WarmingSettingsUpdate",
-        "description": "Caller-supplied settings change from the UI.\n\n``gemini_api_key`` semantics: ``None`` leaves the stored key untouched, an\nempty string clears it, any other value replaces it. Same applies to\n``gemini_model`` — ``None`` keeps current value, non-empty overrides.\nAn explicit ``clear_gemini_key`` flag is provided so the UI can clear the\nstored key without ambiguity."
+        "description": "Caller-supplied settings change from the UI.\n\n``gemini_api_key`` semantics: ``None`` leaves the stored key untouched, an\nempty string clears it, any other value replaces it. Same applies to\n``gemini_model`` \u2014 ``None`` keeps current value, non-empty overrides.\nAn explicit ``clear_gemini_key`` flag is provided so the UI can clear the\nstored key without ambiguity."
       },
       "WarmingSummary": {
         "properties": {
