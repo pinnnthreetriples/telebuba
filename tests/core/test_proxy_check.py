@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import cast
+
 import httpx
 import pytest
 import respx
@@ -7,10 +9,10 @@ import respx
 from core import proxy_check as proxy_check_module
 from core.config import settings
 from core.proxy_check import (
-    _GeoOutcome,
-    _GeoRecord,
     _decode_chunked,
     _fetch_exit_ip,
+    _GeoOutcome,
+    _GeoRecord,
     _http_request,
     _lookup_ipinfo,
     _lookup_maxmind,
@@ -62,7 +64,7 @@ def _http_json(payload: bytes) -> bytes:
 @pytest.mark.asyncio
 async def test_read_limited_collects_fragmented_response() -> None:
     reader = _FakeReader(b"first second third")
-    assert await _read_limited(reader, timeout=1) == b"first second third"
+    assert await _read_limited(reader, timeout_seconds=1) == b"first second third"
 
 
 def test_parse_http_json_accepts_success_response() -> None:
@@ -139,8 +141,7 @@ async def test_fetch_exit_ip_uses_authenticated_tls_tunnel(
         "dest_port": 443,
         "timeout": settings.proxy.check_timeout_seconds,
     }
-    open_kwargs = captured["open_kwargs"]
-    assert isinstance(open_kwargs, dict)
+    open_kwargs = cast("dict[str, object]", captured["open_kwargs"])
     assert open_kwargs["ssl"] is not None
     assert open_kwargs["server_hostname"] == "example.test"
     assert b"GET /ip HTTP/1.1" in writer.request
