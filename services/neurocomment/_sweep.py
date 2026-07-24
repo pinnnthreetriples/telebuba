@@ -16,7 +16,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import (
-    fetch_active_campaign_for_channel,
+    fetch_active_campaigns_for_channels,
     list_active_watch_channels,
     list_posted_comments_since,
     mark_comments_deleted,
@@ -55,10 +55,14 @@ async def _sweep_once() -> None:
         now - timedelta(hours=settings.neurocomment.deletion_sweep_lookback_hours)
     ).isoformat()
     # Group watched channels by active campaign so each campaign's recent comments
-    # are read once, then bucketed back per channel for the deletion check.
+    # are read once, then bucketed back per channel for the deletion check. One bulk
+    # query maps the whole watch set to its active campaigns (no per-channel fan-out);
+    # a channel with no active campaign is absent from the map and dropped, as before.
+    watch_channels = (await list_active_watch_channels()).channels
+    campaigns = await fetch_active_campaigns_for_channels(watch_channels)
     by_campaign: dict[str, list[str]] = defaultdict(list)
-    for channel in (await list_active_watch_channels()).channels:
-        campaign = await fetch_active_campaign_for_channel(channel)
+    for channel in watch_channels:
+        campaign = campaigns.get(channel)
         if campaign is not None:
             by_campaign[campaign.campaign_id].append(channel)
     for campaign_id, channels in by_campaign.items():

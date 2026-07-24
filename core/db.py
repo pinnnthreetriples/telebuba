@@ -271,6 +271,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     delete_campaign,
     delete_readiness,
     fetch_active_campaign_for_channel,
+    fetch_active_campaigns_for_channels,
     fetch_campaign,
     fetch_comment,
     fetch_linked_group,
