@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from io import BytesIO
 from types import SimpleNamespace
 from unittest.mock import MagicMock
 
 import pytest
+from PIL import Image
 from telethon.tl.functions.account import (
     SaveMusicRequest,
 )
@@ -16,9 +18,11 @@ from telethon.tl.functions.photos import (
     UploadProfilePhotoRequest,
 )
 from telethon.tl.functions.users import GetFullUserRequest
-from telethon.tl.types import InputPhoto
+from telethon.tl.types import InputPhoto, UserProfilePhotoEmpty
 
-from core.telegram_client import execute
+from core.db import create_account, fetch_account, update_account_avatar
+from core.telegram_client import execute, refresh_account_avatar
+from schemas.accounts import AccountCreate
 from schemas.telegram_actions import (
     AddProfileMusic,
     RemoveProfileMusic,
@@ -27,6 +31,12 @@ from schemas.telegram_actions import (
     SetProfilePhoto,
 )
 from tests.core.telegram_client.helpers import patch_action_client as _patch_client
+
+
+def _jpeg_bytes() -> bytes:
+    buffer = BytesIO()
+    Image.new("RGB", (32, 32), (200, 30, 30)).save(buffer, format="JPEG")
+    return buffer.getvalue()
 
 
 @pytest.mark.asyncio
@@ -48,10 +58,43 @@ async def test_execute_set_profile_photo_uploads_photo(
 
     _patch_client(monkeypatch, FakeClient())
 
-    result = await execute("acc-photo", SetProfilePhoto(filename="avatar.jpg", content=b"jpg"))
+    result = await execute(
+        "acc-photo",
+        SetProfilePhoto(filename="avatar.jpg", content=_jpeg_bytes()),
+    )
 
     assert result.status == "ok"
     assert any(isinstance(req, UploadProfilePhotoRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_execute_set_profile_photo_rejects_undecodable_bytes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The Pillow gate refuses a renamed/corrupt image with a stable code."""
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def upload_file(self, _file: object, *, file_name: str) -> object:
+            del file_name
+            return MagicMock()
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-photo-bad",
+        SetProfilePhoto(filename="avatar.jpg", content=b"not-an-image"),
+    )
+
+    assert result.status == "failed"
+    assert result.error_message == "profile_photo_invalid"
+    assert captured == []
 
 
 @pytest.mark.asyncio
@@ -145,7 +188,7 @@ async def test_execute_remove_profile_music_errors_when_server_says_false(
     )
 
     assert result.status != "ok"
-    assert result.error_message
+    assert result.error_message == "profile_music_stale_reference"
 
 
 @pytest.mark.asyncio
@@ -222,7 +265,7 @@ async def test_execute_remove_profile_photo_errors_when_telegram_deletes_nothing
     )
 
     assert result.status != "ok"
-    assert result.error_message
+    assert result.error_message == "profile_photo_stale_reference"
 
 
 # Fresh id triple the fake GetUserPhotos re-resolves — deliberately different
@@ -337,8 +380,10 @@ async def test_execute_set_main_photo_reuploads_as_new_and_logs_id_flow(
     assert [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)] == []
     assert len([req for req in captured if isinstance(req, UploadProfilePhotoRequest)]) == 1
     assert [getattr(media, "id", None) for media in client.downloaded] == [big_id]  # ty: ignore[unresolved-attribute]
-    assert len([req for req in captured if isinstance(req, GetUserPhotosRequest)]) == 2
-    assert len([req for req in captured if isinstance(req, GetFullUserRequest)]) == 2
+    # One history read + one full-user read: the "after" phase no longer
+    # re-fetches either purely for the debug log.
+    assert len([req for req in captured if isinstance(req, GetUserPhotosRequest)]) == 1
+    assert len([req for req in captured if isinstance(req, GetFullUserRequest)]) == 1
     flow = [(event, extra) for _level, event, extra in events]
     assert [event for event, _extra in flow] == [
         "telegram_set_main_id_flow",
@@ -351,9 +396,7 @@ async def test_execute_set_main_photo_reuploads_as_new_and_logs_id_flow(
     assert before["current_avatar_id"] == old_main
     assert after["phase"] == "after"
     assert after["target_photo_id"] == big_id
-    assert after["history_ids"] == [555, old_main, filler, big_id]
     assert after["promoted_photo_id"] == 555
-    assert after["current_avatar_id"] == after["promoted_photo_id"]
 
 
 @pytest.mark.asyncio
@@ -405,7 +448,7 @@ async def test_execute_set_main_photo_raises_when_target_absent(
     )
 
     assert result.status != "ok"
-    assert result.error_message
+    assert result.error_message == "profile_photo_not_found"
     assert client.downloaded == []  # ty: ignore[unresolved-attribute]
     assert [req for req in captured if isinstance(req, UploadProfilePhotoRequest)] == []
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
@@ -429,7 +472,6 @@ async def test_execute_set_main_photo_tolerates_bare_server_responses(
     assert len([req for req in captured if isinstance(req, UploadProfilePhotoRequest)]) == 1
     before, after = (extra for _level, _event, extra in events)
     assert before["current_avatar_id"] is None
-    assert after["current_avatar_id"] is None
     assert after["promoted_photo_id"] is None
 
 
@@ -449,6 +491,114 @@ async def test_execute_set_main_photo_fails_when_download_returns_nothing(
     )
 
     assert result.status != "ok"
-    assert result.error_message
+    assert result.error_message == "profile_photo_download_failed"
     assert [req for req in captured if isinstance(req, UploadProfilePhotoRequest)] == []
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
+
+
+def _patch_avatar_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
+    async def fake_get_client(_account_id: str) -> object:
+        return client
+
+    monkeypatch.setattr("core.telegram_client._media.get_client", fake_get_client)
+
+
+def _avatar_client(*, photo: object, thumb: bytes | None) -> object:
+    class FakeClient:
+        async def get_me(self) -> object:
+            return SimpleNamespace(id=1, photo=photo)
+
+        async def download_profile_photo(
+            self,
+            _me: object,
+            *,
+            file: object = None,
+            download_big: bool = True,
+        ) -> bytes | None:
+            del file, download_big
+            return thumb
+
+    return FakeClient()
+
+
+async def _seeded_account(account_id: str) -> None:
+    await create_account(AccountCreate(account_id=account_id))
+    await update_account_avatar(account_id, b"old-thumb")
+
+
+@pytest.mark.asyncio
+async def test_refresh_account_avatar_stores_new_thumb(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _seeded_account("acc-avatar-new")
+    before = await fetch_account("acc-avatar-new")
+    assert before is not None
+    _patch_avatar_client(
+        monkeypatch,
+        _avatar_client(photo=SimpleNamespace(photo_id=1), thumb=b"fresh-thumb"),
+    )
+
+    await refresh_account_avatar("acc-avatar-new")
+
+    account = await fetch_account("acc-avatar-new")
+    assert account is not None
+    assert account.avatar_etag is not None
+    assert account.avatar_etag != before.avatar_etag
+
+
+@pytest.mark.asyncio
+async def test_refresh_account_avatar_clears_when_no_photo_left(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Removing the last photo must clear the cached list avatar, not keep it."""
+    await _seeded_account("acc-avatar-gone")
+    _patch_avatar_client(
+        monkeypatch,
+        _avatar_client(photo=UserProfilePhotoEmpty(), thumb=None),
+    )
+
+    await refresh_account_avatar("acc-avatar-gone")
+
+    account = await fetch_account("acc-avatar-gone")
+    assert account is not None
+    assert account.avatar_etag is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_account_avatar_keeps_cache_on_refused_download(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Photo exists but the thumb download was refused — keep the cached one."""
+    await _seeded_account("acc-avatar-refused")
+    before = await fetch_account("acc-avatar-refused")
+    assert before is not None
+    _patch_avatar_client(
+        monkeypatch,
+        _avatar_client(photo=SimpleNamespace(photo_id=1), thumb=None),
+    )
+
+    await refresh_account_avatar("acc-avatar-refused")
+
+    account = await fetch_account("acc-avatar-refused")
+    assert account is not None
+    assert account.avatar_etag == before.avatar_etag
+
+
+@pytest.mark.asyncio
+async def test_refresh_account_avatar_swallows_pool_failures(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The refresh is cosmetic — a dead pool must not fail the mutation."""
+    await _seeded_account("acc-avatar-dead")
+
+    async def broken_get_client(_account_id: str) -> object:
+        msg = "pool down"
+        raise ConnectionError(msg)
+
+    monkeypatch.setattr("core.telegram_client._media.get_client", broken_get_client)
+
+    await refresh_account_avatar("acc-avatar-dead")
+
+    account = await fetch_account("acc-avatar-dead")
+    assert account is not None
+    assert account.avatar_etag is not None

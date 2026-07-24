@@ -283,7 +283,15 @@
       "updatedMinAgo": "Updated {{n}} min ago",
       "discardTitle": "Discard changes?",
       "discardBody": "You have unsaved profile edits. Close without saving?",
-      "discardConfirm": "Discard"
+      "discardConfirm": "Discard",
+      "saveError": "Couldn't save the profile",
+      "code": {
+        "username_occupied": "That username is already taken",
+        "username_invalid": "That username is not allowed",
+        "about_too_long": "The bio is too long for Telegram",
+        "account_frozen": "The account is frozen by Telegram — editing is unavailable",
+        "flood_wait": "Telegram rate-limited the account — retry in {{s}} s"
+      }
     },
     "channel": {
       "hint": "Channels this account owns",
@@ -596,6 +604,7 @@
     "account_profile_photo_updated": "Profile photo updated",
     "account_profile_photo_removed": "Profile photo removed",
     "account_profile_photo_set_main": "Profile photo set as main",
+    "account_avatar_refresh_failed": "Failed to refresh avatar thumbnail",
     "account_profile_music_added": "Profile music added",
     "account_profile_music_removed": "Profile music removed",
     "account_profile_read_failed_unexpected": "Failed to read profile",

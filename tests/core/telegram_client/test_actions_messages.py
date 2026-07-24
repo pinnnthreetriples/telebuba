@@ -13,8 +13,10 @@ from telethon.tl.functions.account import (
 )
 
 from core.config import settings
+from core.db import create_account, fetch_account
 from core.telegram_client import execute
 from core.telegram_client._actions import _typing_seconds
+from schemas.accounts import AccountCreate
 from schemas.telegram_actions import (
     ClickButton,
     CommentOnPost,
@@ -376,6 +378,8 @@ async def test_execute_update_profile_occupied_username_leaves_profile_untouched
     )
 
     assert result.status != "ok"
+    # Stable locale-neutral code, not Telethon's English prose (the SPA translates).
+    assert result.error_message == "username_occupied"
     assert not any(isinstance(req, UpdateProfileRequest) for req in captured)
 
 
@@ -404,6 +408,85 @@ async def test_execute_update_profile_username_not_modified_is_ok(
 
     assert result.status == "ok"
     assert any(isinstance(req, UpdateProfileRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_execute_update_profile_invalid_username_yields_stable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            if isinstance(request, UpdateUsernameRequest):
+                raise errors.UsernameInvalidError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-4-invalid",
+        UpdateProfile(first_name="Alice", username="sobad"),
+    )
+
+    assert result.status == "failed"
+    assert result.error_message == "username_invalid"
+
+
+@pytest.mark.asyncio
+async def test_execute_frozen_account_yields_stable_code_and_marks_db(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A frozen refusal returns ``account_frozen`` AND flips the stored status.
+
+    Previously the Frozen* family fell into the generic ladder: raw English
+    prose on the wire and an accounts list that stayed "alive" until the next
+    manual session check.
+    """
+    await create_account(AccountCreate(account_id="acc-frozen"))
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.FrozenMethodInvalidError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-frozen", UpdateProfile(first_name="Alice"))
+
+    assert result.status == "failed"
+    assert result.error_message == "account_frozen"
+    account = await fetch_account("acc-frozen")
+    assert account is not None
+    assert account.status == "frozen"
+    assert account.last_checked_at is not None
+
+
+@pytest.mark.asyncio
+async def test_execute_flood_wait_marks_db_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flood-limited action stores ``flood_wait`` so the list/tiles reflect it."""
+    await create_account(AccountCreate(account_id="acc-flooded"))
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.FloodWaitError(request=None, capture=30)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-flooded", UpdateProfile(first_name="Alice"))
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 30
+    account = await fetch_account("acc-flooded")
+    assert account is not None
+    assert account.status == "flood_wait"
 
 
 def test_typing_seconds_scales_and_clamps(monkeypatch: pytest.MonkeyPatch) -> None:

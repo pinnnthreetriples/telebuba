@@ -34,3 +34,20 @@ def _isolate_runtime(
     yield
     _IMPORT_LOCKS.clear()
     reset_logging_for_tests()
+
+
+@pytest.fixture(autouse=True)
+def avatar_refresh_calls(monkeypatch: pytest.MonkeyPatch) -> list[str]:
+    """Stub the post-mutation avatar refresh (it borrows the real client pool).
+
+    Autouse so no media test accidentally opens a Telethon connection; tests
+    that care about the refresh request the fixture and assert on the recorded
+    account ids.
+    """
+    calls: list[str] = []
+
+    async def _record(account_id: str) -> None:
+        calls.append(account_id)
+
+    monkeypatch.setattr("services.accounts.media.refresh_account_avatar", _record)
+    return calls

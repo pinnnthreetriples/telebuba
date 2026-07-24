@@ -16,6 +16,7 @@ from fastapi import status as http_status
 from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
+from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload
 from core.config import settings
 from schemas.accounts import (
@@ -148,13 +149,8 @@ async def reset_account_session(account_id: str) -> AccountRead:
 
 @router.post("/accounts/profile", response_model=AccountRead, operation_id="updateAccountProfile")
 async def update_account_profile(body: AccountProfileUpdateRequest) -> AccountRead:
-    try:
+    with service_errors_to_http():
         return await accounts.update_account_profile(body)
-    except accounts.AccountActionError:
-        # api.errors maps it to the envelope: stable code + retry seconds in fields.
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.delete(

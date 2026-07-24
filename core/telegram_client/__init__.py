@@ -37,6 +37,7 @@ from core.telegram_client._listener import (
     subscribe_posts,
     update_post_subscription,
 )
+from core.telegram_client._media import refresh_account_avatar
 from core.telegram_client._pool import (
     TelegramClientPoolError,
     evict_client,
@@ -67,6 +68,7 @@ __all__ = [
     "log_out_session",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
+    "refresh_account_avatar",
     "remove_account_session",
     "request_phone_code",
     "shutdown_telegram_pool",
