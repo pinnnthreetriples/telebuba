@@ -19,19 +19,15 @@ from core.db import (
     list_active_watch_channels,
     list_campaigns,
     list_warming_account_ids,
-    record_join,
     set_listener_account_id,
     set_listener_running,
 )
 from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
-from schemas.telegram_actions import JoinChannel
-from services.neurocomment import _seams, _signals
-from services.neurocomment._generate import _COOLDOWN_STATUSES
+from services.neurocomment import _signals
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import (
-    _at_join_cap,
-    _join_jitter_seconds,
+    _join_jitter_seconds,  # noqa: F401 - re-exported: read by _join + patched by tests via _runtime.
     onboard_campaign,
 )
 
@@ -71,6 +67,16 @@ _ONBOARD_TASK: asyncio.Task[None] | None = None
 # of waiting for the next mutation. ponytail: one coalescing bool, not a queue.
 _ONBOARD_RERUN = False
 
+# The single in-flight paced channel-join task. Running the jittered per-channel joins
+# inline blocked Start (under the per-account lock) and channel-edit requests for minutes,
+# so it runs off the hot path. Single-flighted so concurrent reconciles never pace in
+# parallel (bursting joins) and the cap check-then-record can't race across passes.
+_JOIN_TASK: asyncio.Task[None] | None = None
+
+# A trigger while a join pass is in flight queues one rerun, so channels linked mid-pace
+# are joined by the coalesced rerun (which re-reads the watch set). Mirrors _ONBOARD_RERUN.
+_JOIN_RERUN = False
+
 # (listener, channel) pairs successfully joined this process, so reconcile does not
 # re-join every channel on every call (10 rapid channel links = dozens of join RPCs
 # before this guard — a real Telegram flood risk). Joins are idempotent, so this is
@@ -99,10 +105,14 @@ async def on_post(event: NewPostEvent) -> None:
 
 
 async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
-    """(Re)point the listener at the current active watch set. Idempotent.
+    """(Re)point the listener at the current active watch set. Idempotent, returns promptly.
 
     No active channels → stop the listener (idempotent). Safe to call on every
     boot; ``subscribe_posts`` itself drops any prior handler before registering.
+    Subscribing before the paced joins land is fine: Telethon only delivers updates
+    for channels the account has actually joined, and ``subscribe_posts`` is
+    idempotent, so the single-flighted background join task making channels live as
+    it paces is acceptable — and keeps this call off the multi-minute join path.
     """
     # Warming and neurocomment are mutually exclusive per account. This is the
     # single choke point every subscription path funnels through (start, channel
@@ -112,6 +122,7 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     if listener_account_id in await list_warming_account_ids():
         await stop_post_listener(listener_account_id)
         await _stop_sweep()
+        await _stop_join()
         await log_event(
             "WARNING",
             "neurocomment_listener_warming_skipped",
@@ -122,63 +133,11 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     if not channels:
         await stop_post_listener(listener_account_id)
         await _stop_sweep()
+        await _stop_join()
         return
-    # The listener account only receives NewMessage updates for channels it has
-    # joined, so subscribe (join) it to each one first. Join is idempotent
-    # (already-participant → ok); a per-channel failure is logged, not fatal.
-    # Gated on ``_JOINED_CHANNELS`` so repeated reconciles (every channel link
-    # re-runs this) cost one join per (account, channel) per process, not per call.
-    # Jittered pause between *actual* joins (cache-hits skip it, no pause before
-    # the first) so a large watch set never fires as one join burst — the freeze
-    # vector. Mirrors the campaign-onboarding pacing.
-    first_join = True
-    for channel in channels:
-        if (listener_account_id, channel) in _JOINED_CHANNELS:
-            continue
-        # Rolling-24h join cap (anti-freeze): once the single listener account hits
-        # its cap, stop the burst — remaining channels retry on the next reconcile as
-        # the window rolls. Checked before the sleep so a capped run wastes no wait.
-        if await _at_join_cap(listener_account_id):
-            await log_event(
-                "WARNING",
-                "neurocomment_join_daily_cap",
-                account_id=listener_account_id,
-                extra={"channel": channel},
-            )
-            break
-        if not first_join:
-            await asyncio.sleep(_join_jitter_seconds())
-        first_join = False
-        result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
-        if result.status in {"ok", "already_participant"}:
-            # Either way the account IS in the channel → cache it so we stop
-            # re-joining. Only a real join counts against the rolling-24h cap;
-            # an already-participant no-op (e.g. every channel on a restart) must
-            # not, else the count pins near the cap and starves genuine joins.
-            _JOINED_CHANNELS.add((listener_account_id, channel))
-            if result.status == "ok":
-                await record_join(listener_account_id)
-            continue
-        if result.status in _COOLDOWN_STATUSES:
-            # Telegram is rate-limiting this account: stop the join burst now
-            # rather than fire the next RPC and escalate a soft flood-wait into a
-            # hard freeze. Unjoined channels retry on the next reconcile (only ok
-            # joins are cached).
-            await log_event(
-                "WARNING",
-                "neurocomment_listener_join_flood",
-                account_id=listener_account_id,
-                extra={"channel": channel, "status": result.status},
-            )
-            break
-        await log_event(
-            "WARNING",
-            "neurocomment_listener_join_failed",
-            account_id=listener_account_id,
-            extra={"channel": channel, "status": result.status},
-        )
     await subscribe_posts(listener_account_id, channels, on_post)
     _ensure_sweep_running()
+    _ensure_join_running(listener_account_id)
     await log_event(
         "INFO",
         "neurocomment_runtime_reconciled",
@@ -192,6 +151,7 @@ async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
     await stop_post_listener(listener_account_id)
     await _stop_sweep()
     await _stop_onboarding()
+    await _stop_join()
     if not _TASKS:
         return
     tasks = list(_TASKS)
@@ -280,6 +240,29 @@ async def _onboard_active_campaigns(
         _ONBOARD_RERUN = False
 
 
+def _ensure_join_running(listener_account_id: str) -> None:
+    """Spawn the paced join task unless one is in flight; a mid-pace trigger queues one rerun."""
+    global _JOIN_TASK, _JOIN_RERUN  # noqa: PLW0603 - single module-level handles
+    if _JOIN_TASK is not None and not _JOIN_TASK.done():
+        _JOIN_RERUN = True
+        return
+    _JOIN_TASK = asyncio.create_task(_join_watch_channels(listener_account_id))
+
+
+async def _join_watch_channels(listener_account_id: str) -> None:
+    """Paced join task (background); reruns once if a channel was linked mid-pace.
+
+    Single-flighted, so only one pacing stream runs at a time (no concurrent bursts)
+    and the per-join cap check-then-record is serialized across passes.
+    """
+    global _JOIN_RERUN  # noqa: PLW0603 - single module-level rerun flag
+    while True:
+        await run_join_pass(listener_account_id)
+        if not _JOIN_RERUN:
+            return
+        _JOIN_RERUN = False
+
+
 async def _teardown_listener_locked(listener_account_id: str, *, clear_account: bool) -> None:
     """Tear down under the per-account lock; clear running (and the account when asked)."""
     from services.warming import account_lock  # noqa: PLC0415 - see start_neurocomment.
@@ -352,19 +335,43 @@ async def _stop_onboarding() -> None:
         )
 
 
+async def _stop_join() -> None:
+    """Cancel the background paced join task (bounded wait), if in flight."""
+    global _JOIN_TASK, _JOIN_RERUN  # noqa: PLW0603 - single module-level handles
+    _JOIN_RERUN = False  # shutdown discards any queued rerun
+    task = _JOIN_TASK
+    _JOIN_TASK = None
+    if task is None or task.done():
+        return
+    task.cancel()
+    with suppress(TimeoutError):
+        await asyncio.wait_for(
+            asyncio.gather(task, return_exceptions=True),
+            timeout=settings.neurocomment.stop_cancel_timeout_seconds,
+        )
+
+
 def reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
-    global _SWEEP_TASK, _ONBOARD_TASK, _ONBOARD_RERUN  # noqa: PLW0603 - module-level handles
+    global _SWEEP_TASK, _ONBOARD_TASK, _ONBOARD_RERUN, _JOIN_TASK, _JOIN_RERUN  # noqa: PLW0603 - module-level handles
     _TASKS.clear()
     _JOINED_CHANNELS.clear()
     _ONBOARD_RERUN = False
+    _JOIN_RERUN = False
     if _SWEEP_TASK is not None:  # pragma: no cover - tests await shutdown, so it's already None
         _SWEEP_TASK.cancel()
         _SWEEP_TASK = None
     if _ONBOARD_TASK is not None:
         _ONBOARD_TASK.cancel()
         _ONBOARD_TASK = None
+    if _JOIN_TASK is not None:
+        _JOIN_TASK.cancel()
+        _JOIN_TASK = None
 
+
+# The paced join loop body lives in ``_join`` (file-size cap); the handle + start/stop
+# stay above. Re-exported so ``_join_watch_channels`` finds ``run_join_pass``.
+from services.neurocomment._join import run_join_pass  # noqa: E402 - re-export after body.
 
 # The app-lifecycle hooks + reconcile trigger + UI status query live in ``_lifecycle``
 # (file-size cap); they call back into this module's core machinery. Re-exported so

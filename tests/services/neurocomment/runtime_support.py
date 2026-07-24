@@ -87,3 +87,16 @@ def _patch_warming_ids(monkeypatch: pytest.MonkeyPatch, ids: set[str]) -> None:
         return set(ids)
 
     monkeypatch.setattr(_runtime, "list_warming_account_ids", _ids)
+
+
+async def _drain_joins() -> None:
+    """Await the background paced-join task so join/sleep/cache assertions see it finish.
+
+    Since the paced join loop moved off reconcile's hot path (it now returns before the
+    joins land), tests that assert ``exec_spy.joined`` / ``_JOINED_CHANNELS`` / sleep
+    counts must drain the coalescing task first. The task loops until no rerun is queued,
+    so awaiting it once covers any coalesced rerun. No-op when no pass is in flight.
+    """
+    task = _runtime._JOIN_TASK
+    if task is not None:
+        await task
