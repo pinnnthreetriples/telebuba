@@ -251,16 +251,18 @@ async def test_injection_payload_post_still_posts_clean_comment(
 
 
 async def _select_then_rival_claims(
-    original: Callable[[NeurocommentCampaign, str], Awaitable[engine._Selection]],
-) -> Callable[[NeurocommentCampaign, str], Awaitable[engine._Selection]]:
+    original: Callable[..., Awaitable[engine._Selection]],
+) -> Callable[..., Awaitable[engine._Selection]]:
     """Wrap ``_select_account`` so a rival claims the account's last slot after selection.
 
     Deterministically reproduces the burst race the under-lock re-read must catch (fails
     against the pre-fix select->claim, which had no re-read).
     """
 
-    async def _wrapped(campaign: NeurocommentCampaign, channel: str) -> engine._Selection:
-        selection = await original(campaign, channel)
+    async def _wrapped(
+        campaign: NeurocommentCampaign, channel: str, limits: object
+    ) -> engine._Selection:
+        selection = await original(campaign, channel, limits)
         if selection.account_id is not None:
             await claim_comment(channel, 999, campaign.campaign_id, selection.account_id)
         return selection

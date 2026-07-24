@@ -38,11 +38,10 @@ from services.content import (
     try_reserve_sent,
 )
 from services.neurocomment import _seams, _state
-from services.neurocomment.settings_store import load_settings as load_neuro_settings
 
 if TYPE_CHECKING:
     from schemas.gemini import GeminiResult
-    from schemas.neurocomment import NeurocommentCampaign
+    from schemas.neurocomment import NeurocommentCampaign, NeurocommentSettings
     from schemas.warming import WarmingSettingsSecret
 
 
@@ -104,8 +103,13 @@ async def _generate_and_post(
     event: NewPostEvent,
     campaign: NeurocommentCampaign,
     account_id: str,
+    limits: NeurocommentSettings,
 ) -> None:
-    """Generate + light-check a comment, pause, post, and classify the outcome."""
+    """Generate + light-check a comment, pause, post, and classify the outcome.
+
+    ``limits`` is loaded once per post by the caller and threaded in — only the reply
+    delay bounds are read here, so no separate settings read is needed.
+    """
     outcome = await _generate_acceptable(campaign, event.channel, event.text)
     text = outcome.text
     if text is None:
@@ -122,7 +126,6 @@ async def _generate_and_post(
     # releases it — a delayed/cancelled attempt must not leave the hash reserved, or a
     # later regeneration of the same text is filtered as its own duplicate.
     try:
-        limits = await load_neuro_settings()
         await asyncio.sleep(
             _seams.rng.uniform(limits.reply_delay_min_seconds, limits.reply_delay_max_seconds),
         )

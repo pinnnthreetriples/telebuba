@@ -76,6 +76,30 @@ async def test_posted_with_unknown_msg_id_stores_none(monkeypatch: pytest.Monkey
     assert record.comment_msg_id is None
 
 
+@pytest.mark.asyncio
+async def test_settings_loaded_once_per_post(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The operator caps are read once per post, then threaded through the whole pipeline.
+
+    Selection, the under-lock quota re-check, and the reply delay all used to read the
+    settings independently (3 DB reads); loading once up front collapses that to one.
+    """
+    await _make_campaign("@chan", "acc-1")
+    _patch_io(monkeypatch, comment=_CommentStub(status="ok", message_id=1))
+    original = engine.load_neuro_settings
+    calls = 0
+
+    async def _counting() -> object:
+        nonlocal calls
+        calls += 1
+        return await original()
+
+    monkeypatch.setattr(engine, "load_neuro_settings", _counting)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    assert calls == 1
+
+
 # --------------------------------------------------------------------------- #
 # Idempotency
 # --------------------------------------------------------------------------- #
@@ -350,7 +374,7 @@ async def test_generation_exhausted_reason_too_long(monkeypatch: pytest.MonkeyPa
 async def test_missing_account_row_is_skipped(monkeypatch: pytest.MonkeyPatch) -> None:
     await _make_campaign("@chan", "acc-1")
     # Account is assigned + ready, but absent from the bulk account read → skipped.
-    monkeypatch.setattr(engine, "list_accounts", _async_return(AccountList(accounts=[])))
+    monkeypatch.setattr(engine, "list_accounts_by_ids", _async_return(AccountList(accounts=[])))
     comment = _CommentStub()
     _patch_io(monkeypatch, comment=comment)
 

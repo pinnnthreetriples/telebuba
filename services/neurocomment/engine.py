@@ -24,16 +24,18 @@ from typing import TYPE_CHECKING, NamedTuple
 
 from core.db import (
     claim_comment,
+    count_account_channel_comments_since,
+    count_account_comments_since,
     count_channel_comments_per_account_since,
     count_comments_per_account_since,
     fetch_active_campaign_for_channel,
-    list_accounts,
+    list_accounts_by_ids,
     list_campaign_accounts,
     list_campaign_channels,
     list_campaign_readiness,
-    list_device_fingerprints,
-    list_spam_statuses,
-    list_warming_states,
+    list_device_fingerprints_by_ids,
+    list_spam_statuses_by_ids,
+    list_warming_states_by_ids,
     mark_comment_failed,
 )
 from core.logging import log_event
@@ -115,7 +117,13 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         )
         return
 
-    selection = await _select_account(campaign, event.channel)
+    # Read the operator-editable limits ONCE per post (a DB read via to_thread) and
+    # thread them through selection, the under-lock re-check, and the reply delay. The
+    # caps can't change within one post, and reading once here preserves the "an override
+    # takes effect on the next post" guarantee.
+    limits = await load_neuro_settings()
+
+    selection = await _select_account(campaign, event.channel, limits)
     account_id = selection.account_id
     if account_id is None:
         await log_event(
@@ -131,7 +139,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         # the lock so a serialized sibling sees the prior claim's row and can't stack
         # past the cap. ponytail: if the re-check finds the account now over-cap we drop
         # the post rather than re-selecting another (rare burst edge; not worth a loop).
-        quota_reason = await _account_quota_block_reason(account_id, event.channel)
+        quota_reason = await _account_quota_block_reason(account_id, event.channel, limits)
         if quota_reason is not None:
             await log_event(
                 "INFO",
@@ -149,7 +157,7 @@ async def _handle_new_post(event: NewPostEvent) -> None:
     # consumed for the window). A CancelledError on shutdown is cleaned up then re-raised
     # so the task still cancels; other faults are handled by the outer listener guard.
     try:
-        await _generate_and_post(event, campaign, account_id)
+        await _generate_and_post(event, campaign, account_id, limits)
     except BaseException:
         await mark_comment_failed(event.channel, event.post_id)
         raise
@@ -168,10 +176,19 @@ class _SelectionPool(NamedTuple):
     limits: NeurocommentSettings  # operator-editable caps/min-trust (saved or config)
 
 
-async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) -> _SelectionPool:
-    """Bulk-read every selection signal once (mirrors ``services.neurocomment.board``)."""
-    limits = await load_neuro_settings()
-    accounts = {acc.account_id: acc for acc in (await list_accounts()).accounts}
+async def _load_selection_pool(
+    campaign_id: str,
+    channel: str,
+    account_ids: list[str],
+    now: datetime,
+    limits: NeurocommentSettings,
+) -> _SelectionPool:
+    """Bulk-read every selection signal once (mirrors ``services.neurocomment.board``).
+
+    Signals are read only for ``account_ids`` — the campaign's channel-eligible
+    candidates — so per-post cost is O(candidates), not O(fleet), as accounts scale.
+    """
+    accounts = {acc.account_id: acc for acc in (await list_accounts_by_ids(account_ids)).accounts}
     ready_account_ids = frozenset(
         r.account_id
         for r in (await list_campaign_readiness(campaign_id)).readiness
@@ -179,9 +196,9 @@ async def _load_selection_pool(campaign_id: str, channel: str, now: datetime) ->
         # re-enable left ready=1: a human-skipped or banned pair is never selected.
         if r.channel == channel and r.ready and not r.human_skipped and not r.banned
     )
-    states = {rec.account_id: rec for rec in await list_warming_states()}
-    spam = await list_spam_statuses()
-    fingerprints = await list_device_fingerprints()
+    states = {rec.account_id: rec for rec in await list_warming_states_by_ids(account_ids)}
+    spam = await list_spam_statuses_by_ids(account_ids)
+    fingerprints = await list_device_fingerprints_by_ids(account_ids)
 
     hour_ago = (now - timedelta(hours=1)).isoformat()
     hourly_rows = (await count_comments_per_account_since(hour_ago)).counts
@@ -210,7 +227,9 @@ class _Selection(NamedTuple):
     reason: str | None  # set only when account_id is None (surfaced in the miss log)
 
 
-async def _select_account(campaign: NeurocommentCampaign, channel: str) -> _Selection:
+async def _select_account(
+    campaign: NeurocommentCampaign, channel: str, limits: NeurocommentSettings
+) -> _Selection:
     """Pick one ready, healthy, under-quota, non-cooled account at random.
 
     Every signal is bulk-loaded once (mirroring ``services.neurocomment.board``), so
@@ -233,7 +252,7 @@ async def _select_account(campaign: NeurocommentCampaign, channel: str) -> _Sele
         return _Selection(None, "no_accounts_linked")
     channel_count = max(1, len((await list_campaign_channels(campaign.campaign_id)).links))
     now = datetime.now(UTC)
-    pool = await _load_selection_pool(campaign.campaign_id, channel, now)
+    pool = await _load_selection_pool(campaign.campaign_id, channel, account_ids, now, limits)
     candidates = [
         account_id
         for account_id in account_ids
@@ -336,22 +355,26 @@ def _quota_block_reason(
     return None
 
 
-async def _account_quota_block_reason(account_id: str, channel: str) -> str | None:
-    """Fresh single-account quota re-read (which cap, if any) under the lock before the claim."""
-    limits = await load_neuro_settings()
+async def _account_quota_block_reason(
+    account_id: str, channel: str, limits: NeurocommentSettings
+) -> str | None:
+    """Fresh single-account quota re-read (which cap, if any) under the lock before the claim.
+
+    Reads only this account's fresh counts (not the whole fleet's grouped counts) — the
+    re-check is per-account by nature, so the narrow single-account readers keep it
+    O(1) rather than scanning every account's window. ``quota_hour`` outranks
+    ``quota_day`` (same order as :func:`_quota_block_reason`).
+    """
     now = datetime.now(UTC)
     hour_ago = (now - timedelta(hours=1)).isoformat()
-    hourly = {
-        c.account_id: c.count for c in (await count_comments_per_account_since(hour_ago)).counts
-    }
-    daily: dict[str, int] = {}
-    if limits.max_comments_per_channel_per_day > 0:
+    if await count_account_comments_since(account_id, hour_ago) >= limits.max_comments_per_hour:
+        return "quota_hour"
+    day_cap = limits.max_comments_per_channel_per_day
+    if day_cap > 0:
         day_ago = (now - timedelta(days=1)).isoformat()
-        daily = {
-            c.account_id: c.count
-            for c in (await count_channel_comments_per_account_since(channel, day_ago)).counts
-        }
-    return _quota_block_reason(account_id, limits, hourly, daily)
+        if await count_account_channel_comments_since(account_id, channel, day_ago) >= day_cap:
+            return "quota_day"
+    return None
 
 
 # The generation + outcome-classification back half lives in ``_generate`` (file-
