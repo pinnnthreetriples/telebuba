@@ -11,6 +11,7 @@ import asyncio
 import dataclasses
 from typing import TYPE_CHECKING
 
+from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding
 from schemas.neurocomment_progress import OnboardingProgressEvent
 
@@ -109,6 +110,30 @@ async def _onboard_pair(
         ctx.outcomes.append(
             AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
         )
+        return joined_once
+    # Rolling-24h join cap (anti-freeze): an account at its cap has this join skipped —
+    # no RPC, no jitter sleep, joined_once unchanged — and retries once the window rolls.
+    # Reuses the non-terminal "joining" outcome so the pair is retried, not stuck.
+    if await onboarding._at_join_cap(account_id):  # noqa: SLF001 - peer module
+        await log_event(
+            "WARNING",
+            "neurocomment_join_daily_cap",
+            account_id=account_id,
+            extra={"channel": channel},
+        )
+        outcome = AccountChannelOnboarding(
+            account_id=account_id, channel=channel, state="joining", reason="daily_join_cap"
+        )
+        ctx.report(
+            OnboardingProgressEvent(
+                code="pair_result",
+                account_id=account_id,
+                channel=channel,
+                state=outcome.state,
+                reason=outcome.reason,
+            )
+        )
+        ctx.outcomes.append(outcome)
         return joined_once
     if joined_once:
         jitter = onboarding._join_jitter_seconds()  # noqa: SLF001 - peer module

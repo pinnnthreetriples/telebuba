@@ -62,6 +62,7 @@ from core.repositories.neurocomment._comments import (
 )
 from core.repositories.neurocomment._cooldowns import load_active_cooldowns, persist_cooldown
 from core.repositories.neurocomment._deletions import mark_comments_deleted
+from core.repositories.neurocomment._joins import count_account_joins_since, record_join
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
     count_account_comments_since,
@@ -87,6 +88,7 @@ __all__ = [
     "clear_pair_banned",
     "count_account_channel_comments_since",
     "count_account_comments_since",
+    "count_account_joins_since",
     "count_by_outcome",
     "count_channel_comments_per_account_since",
     "count_comments_per_account_since",
@@ -124,6 +126,7 @@ __all__ = [
     "mark_pair_banned",
     "persist_cooldown",
     "reclaim_stale_claims",
+    "record_join",
     "remove_account_from_campaign",
     "resolve_pending_outcome",
     "save_neurocomment_settings",

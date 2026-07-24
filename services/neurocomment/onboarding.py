@@ -21,7 +21,7 @@ place; the inter-join sleep uses ``asyncio.sleep`` (patched in tests).
 from __future__ import annotations
 
 import asyncio  # noqa: F401 - re-exported so tests can patch onboarding.asyncio.sleep
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -29,6 +29,7 @@ if TYPE_CHECKING:
 
 from core.config import settings
 from core.db import (
+    count_account_joins_since,
     fetch_active_campaign_for_channel,
     fetch_campaign,
     fetch_readiness,
@@ -36,6 +37,7 @@ from core.db import (
     list_campaign_channels,
     list_campaign_readiness,
     mark_pair_banned,
+    record_join,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -84,6 +86,21 @@ async def onboard_account_channel(account_id: str, channel: str) -> AccountChann
             channel=channel,
             state="comments_off",
         )
+    # Rolling-24h join cap (anti-freeze): both operator single-pair paths
+    # (direct call + retry_pair) funnel through here, so the gate lives here to
+    # cover them — the campaign loop gates in _onboard_pair before its jitter
+    # sleep. At cap: skip the join RPC (no record), retry once the window rolls.
+    # Non-terminal "joining" so the pair is reconsidered, not stuck.
+    if await _at_join_cap(account_id):
+        await log_event(
+            "WARNING",
+            "neurocomment_join_daily_cap",
+            account_id=account_id,
+            extra={"channel": channel},
+        )
+        return AccountChannelOnboarding(
+            account_id=account_id, channel=channel, state="joining", reason="daily_join_cap"
+        )
     campaign = await fetch_active_campaign_for_channel(channel)
     solver_enabled = _effective_solver_enabled(campaign.solver_enabled if campaign else None)
     return await _join_and_classify(
@@ -120,6 +137,11 @@ async def _join_and_classify(
             state="bot_challenge_backoff",
         )
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
+    if result.status == "ok":
+        # A real join RPC landed → count it against the account's rolling-24h cap.
+        # (Already-participant no-ops also return ok and aren't cheaply distinguishable
+        # here; recording them is the conservative, ban-safe choice.)
+        await record_join(account_id)
     return await _classify_join(
         account_id, channel, result, group_id, solver_enabled=solver_enabled
     )
@@ -385,6 +407,20 @@ def _join_jitter_seconds() -> float:
     """Jittered anti-ban pause between discussion-group joins (config-driven)."""
     nc = settings.neurocomment
     return _seams.rng.uniform(nc.join_delay_min_seconds, nc.join_delay_max_seconds)
+
+
+async def _at_join_cap(account_id: str) -> bool:
+    """True when ``account_id`` has hit its rolling-24h channel-join cap (0 = no cap).
+
+    Telegram freezes an account after ~20-50 channel joins a day, so both join sites
+    gate on this before sending a real join RPC — an over-cap account has its
+    remaining joins skipped this run and resumes as the 24h window rolls.
+    """
+    cap = settings.neurocomment.max_joins_per_account_per_day
+    if cap <= 0:
+        return False
+    since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    return await count_account_joins_since(account_id, since) >= cap
 
 
 async def _join_pair_safely(

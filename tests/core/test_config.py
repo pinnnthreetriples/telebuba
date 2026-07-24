@@ -18,6 +18,15 @@ def test_join_delay_min_must_not_exceed_max() -> None:
         NeurocommentSettings(join_delay_min_seconds=60.0, join_delay_max_seconds=30.0)
 
 
+def test_max_joins_per_account_per_day_defaults_to_conservative_cap() -> None:
+    assert NeurocommentSettings().max_joins_per_account_per_day == 20
+
+
+def test_max_joins_per_account_per_day_rejects_negative() -> None:
+    with pytest.raises(ValidationError):
+        NeurocommentSettings(max_joins_per_account_per_day=-1)
+
+
 def test_auth_secret_must_be_at_least_32_bytes_when_set() -> None:
     with pytest.raises(ValidationError):
         AuthSettings(secret="too-short")

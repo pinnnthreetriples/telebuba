@@ -185,3 +185,15 @@ _neurocomment_cooldowns = Table(
     Column("channel", String, primary_key=True),
     Column("until", String, nullable=False),
 )
+# Append-only per-account channel-join log (migration #35). One row per real
+# JoinChannel/JoinDiscussionGroup RPC that returned ok, backing the rolling-24h
+# per-account join cap: Telegram freezes an account after ~20-50 channel joins a
+# day, so both join sites gate on this count. ``joined_at`` is an ISO-8601 UTC
+# string; the (account_id, joined_at) index (migration #35) serves the window count.
+_neurocomment_join_log = Table(
+    "neurocomment_join_log",
+    _metadata,
+    Column("id", Integer, primary_key=True, autoincrement=True),
+    Column("account_id", String, nullable=False),
+    Column("joined_at", String, nullable=False),
+)

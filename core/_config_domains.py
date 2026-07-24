@@ -96,6 +96,12 @@ class NeurocommentSettings(BaseSettings):
     # as one burst (a Telegram freeze vector).
     join_delay_min_seconds: float = Field(default=30.0, ge=0.0)
     join_delay_max_seconds: float = Field(default=120.0, ge=0.0)
+    # Per-account rolling-24h channel-join cap (0 = no cap). Telegram freezes an
+    # account after roughly 20-50 channel joins a day, so both join sites (campaign
+    # onboarding + the listener reconcile) skip further joins for an account once it
+    # hits this; skipped joins resume as the window rolls / on the next reconcile.
+    # 20 is a conservative safe default.
+    max_joins_per_account_per_day: int = Field(default=20, ge=0)
     # Per-account throughput ceiling.
     max_comments_per_hour: int = Field(default=10, ge=1)
     # Cap on how many recent posted comments the board's published-comments feed

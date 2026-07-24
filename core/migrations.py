@@ -44,6 +44,7 @@ from core.migration_steps_neurocomment import (
     _add_campaign_account_channels_table,
     _add_neurocomment_comment_deleted_at,
     _add_neurocomment_cooldowns,
+    _add_neurocomment_join_log,
 )
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
@@ -97,6 +98,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (32, "add_account_avatar", _add_account_avatar),
     (33, "add_proxy_geo_consensus", _add_proxy_geo_consensus),
     (34, "add_neurocomment_cooldowns", _add_neurocomment_cooldowns),
+    (35, "add_neurocomment_join_log", _add_neurocomment_join_log),
 )
 
 

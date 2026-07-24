@@ -328,6 +328,33 @@ async def test_reconcile_stops_join_burst_on_flood(
 
 
 @pytest.mark.asyncio
+async def test_reconcile_stops_joining_once_listener_at_daily_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The single listener account stops joining once it hits its rolling-24h cap.
+
+    Remaining channels retry on the next reconcile as the window rolls; the listener
+    still subscribes to the full watch set (mirrors the flood-guard break).
+    """
+    monkeypatch.setattr(settings.neurocomment, "max_joins_per_account_per_day", 1)
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    for ch in ("@a", "@b", "@c"):
+        await link_channel_to_campaign(campaign.campaign_id, ch)
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
+    exec_spy = _ExecuteSpy()
+    _patch_execute(monkeypatch, exec_spy)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    # Cap of 1: one join lands, then the loop breaks before the next.
+    assert len(exec_spy.joined) == 1
+    # The listener still subscribes to every watched channel after the break.
+    assert set(spy.subscribed[0][1]) == {"@a", "@b", "@c"}
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
 async def test_on_post_spawns_task_and_returns_without_blocking(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

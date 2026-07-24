@@ -33,6 +33,7 @@ def test_neurocomment_settings_have_issue_defaults() -> None:
     assert nc.max_comments_per_hour == 10
     assert nc.comment_max_words == 30
     assert nc.max_comments_per_channel_per_day == 3
+    assert nc.max_joins_per_account_per_day == 20
     assert nc.max_retries == 2
 
 
@@ -150,3 +151,16 @@ def test_migration_30_adds_banned_column() -> None:
         }
     assert "banned" in columns
     assert 30 in versions
+
+
+def test_migration_35_adds_join_log_table_and_index() -> None:
+    engine = _get_engine()
+    inspector = inspect(engine)
+    assert "neurocomment_join_log" in inspector.get_table_names()
+    index_names = {ix["name"] for ix in inspector.get_indexes("neurocomment_join_log")}
+    assert "ix_nc_join_log_account_joined" in index_names
+    with engine.connect() as connection:
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert 35 in versions

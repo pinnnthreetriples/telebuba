@@ -22,6 +22,7 @@ from core.db import (
     list_campaigns,
     list_warming_account_ids,
     reclaim_stale_claims,
+    record_join,
     set_listener_account_id,
     set_listener_running,
 )
@@ -32,7 +33,11 @@ from schemas.telegram_actions import JoinChannel
 from services.neurocomment import _seams, _signals, _state
 from services.neurocomment._generate import _COOLDOWN_STATUSES
 from services.neurocomment.engine import handle_new_post
-from services.neurocomment.onboarding import _join_jitter_seconds, onboard_campaign
+from services.neurocomment.onboarding import (
+    _at_join_cap,
+    _join_jitter_seconds,
+    onboard_campaign,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -134,12 +139,24 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     for channel in channels:
         if (listener_account_id, channel) in _JOINED_CHANNELS:
             continue
+        # Rolling-24h join cap (anti-freeze): once the single listener account hits
+        # its cap, stop the burst — remaining channels retry on the next reconcile as
+        # the window rolls. Checked before the sleep so a capped run wastes no wait.
+        if await _at_join_cap(listener_account_id):
+            await log_event(
+                "WARNING",
+                "neurocomment_join_daily_cap",
+                account_id=listener_account_id,
+                extra={"channel": channel},
+            )
+            break
         if not first_join:
             await asyncio.sleep(_join_jitter_seconds())
         first_join = False
         result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
         if result.status == "ok":
             _JOINED_CHANNELS.add((listener_account_id, channel))
+            await record_join(listener_account_id)
             continue
         if result.status in _COOLDOWN_STATUSES:
             # Telegram is rate-limiting this account: stop the join burst now
