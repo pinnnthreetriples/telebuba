@@ -159,6 +159,52 @@ test('ready card: Telegram name on top, phone + flag on the line beneath', async
   expect(phoneFlag?.parentElement?.textContent).not.toContain('Maria');
 });
 
+test('ready card: shows the captured Telegram photo when an avatar etag is set', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    idle: [{ ...account('idle-pic', 'idle'), avatar_etag: 'v9' }],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    return Promise.resolve(jsonResponse({}));
+  });
+  const { container } = renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('idle-pic')).toBeInTheDocument();
+  });
+  const img = container.querySelector('img');
+  expect(img?.getAttribute('src')).toBe('/api/v1/accounts/idle-pic/avatar?v=v9');
+});
+
+test('warmed card: shows the Telegram name, with the phone on the subtitle', async () => {
+  const warmed = {
+    accounts: [
+      {
+        account_id: 'grad-named',
+        label: 'Graduate',
+        warming_days: 20,
+        first_name: 'Nadia',
+        phone: '+79261112233',
+        trust_score: 88,
+        target_days: 14,
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Nadia')).toBeInTheDocument();
+  });
+  // Named now → the phone drops to the subtitle beneath the name.
+  expect(screen.getByText('+79261112233')).toBeInTheDocument();
+});
+
 test('shows graduated accounts and wires return-to-warming + handoff', async () => {
   const warmed = {
     accounts: [

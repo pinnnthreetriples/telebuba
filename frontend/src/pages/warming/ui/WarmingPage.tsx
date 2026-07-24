@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { accountDisplayName } from '@/entities/account';
+import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import {
   addWarmingChannelsMutation,
@@ -27,10 +27,6 @@ const FALLBACK_POLL_MS = 30000;
 // The only queries this page reads (createQueryKey stamps _id on key[0]); a live
 // event refreshes just these, never the whole cache.
 const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmedAccounts', 'listWarmingChannels'];
-
-function mono(id: string): string {
-  return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
-}
 
 // Trust 3-tier colour (design): healthy / watch / risk.
 function trustColor(trust: number): string {
@@ -285,9 +281,11 @@ export function WarmingPage() {
                       key={account.account_id}
                       className="flex items-center gap-[10px] rounded-xl border border-line bg-white px-3 py-[11px]"
                     >
-                      <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-[12px] font-semibold text-primary">
-                        {mono(name)}
-                      </div>
+                      <AccountAvatar
+                        account={account}
+                        className="h-[30px] w-[30px] shrink-0 rounded-full"
+                        fallbackClassName="text-[12px] font-semibold bg-primary-tint text-primary"
+                      />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-[5px]">
                           <span className="truncate text-[13px] font-semibold">{name}</span>
@@ -474,117 +472,136 @@ export function WarmingPage() {
             }
           >
             <div className="flex flex-col gap-3">
-              {warmed.map((acc) => (
-                <div key={acc.account_id} className="rounded-[14px] border border-line p-[14px]">
-                  <div className="flex items-start gap-[11px]">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary-tint text-[11.5px] font-bold text-primary ring-2 ring-success">
-                      {mono(acc.phone ?? acc.label)}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-[5px]">
-                        <span className="truncate text-[14px] font-bold leading-tight">
-                          {acc.phone ?? acc.label}
-                        </span>
-                        {acc.phone_country ? (
-                          <span
-                            className={`fi fi-${acc.phone_country.toLowerCase()} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                          />
+              {warmed.map((acc) => {
+                // Telegram name on top; the phone (with its country flag) drops
+                // to a subtitle — same pattern as the ready card. When there is
+                // no name, accountDisplayName falls back to the phone, so keep
+                // the flag on the primary line and skip the duplicate subtitle.
+                const name = accountDisplayName(acc);
+                const showPhone = acc.phone != null && acc.phone !== name;
+                const flag = acc.phone_country ? (
+                  <span
+                    className={`fi fi-${acc.phone_country.toLowerCase()} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                  />
+                ) : null;
+                return (
+                  <div key={acc.account_id} className="rounded-[14px] border border-line p-[14px]">
+                    <div className="flex items-start gap-[11px]">
+                      <AccountAvatar
+                        account={acc}
+                        className="h-8 w-8 shrink-0 rounded-full ring-2 ring-success"
+                        fallbackClassName="text-[11.5px] font-bold bg-primary-tint text-primary"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-[5px]">
+                          <span className="truncate text-[14px] font-bold leading-tight">
+                            {name}
+                          </span>
+                          {showPhone ? null : flag}
+                        </div>
+                        {showPhone ? (
+                          <div className="mt-[1px] flex items-center gap-[5px]">
+                            <span className="truncate text-[11px] text-ink-subtle">
+                              {acc.phone}
+                            </span>
+                            {flag}
+                          </div>
                         ) : null}
+                        <div className="mt-[5px] flex items-center gap-[6px]">
+                          {acc.proxy_country ? (
+                            <span
+                              className={`fi fi-${acc.proxy_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
+                            />
+                          ) : null}
+                          <span className="text-[11.5px] text-ink-subtle">
+                            {acc.proxy_type ? proxyTypeLabel(acc.proxy_type) : '—'}
+                          </span>
+                        </div>
                       </div>
-                      <div className="mt-[5px] flex items-center gap-[6px]">
-                        {acc.proxy_country ? (
-                          <span
-                            className={`fi fi-${acc.proxy_country.toLowerCase()} h-[10px] w-[14px] rounded-[2px]`}
-                          />
-                        ) : null}
-                        <span className="text-[11.5px] text-ink-subtle">
-                          {acc.proxy_type ? proxyTypeLabel(acc.proxy_type) : '—'}
-                        </span>
+                      <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[9.5px] font-bold tracking-[0.03em] text-success">
+                        <svg
+                          width="9"
+                          height="9"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#12a150"
+                          strokeWidth="3.4"
+                        >
+                          <path d="M20 6 9 17l-5-5" />
+                        </svg>
+                        {t('warming.warmed.badge')}
+                      </span>
+                    </div>
+                    <div className="mt-[13px] flex items-center rounded-[10px] bg-[#f7f6f4] px-[14px] py-[10px]">
+                      <div className="flex-1">
+                        <div className="text-[10.5px] text-ink-subtle">
+                          {t('warming.warmed.days')}
+                        </div>
+                        <div className="text-[13px] font-bold">
+                          {t('warming.warmed.daysValue', {
+                            days: acc.warming_days,
+                            target: acc.target_days,
+                          })}
+                        </div>
+                      </div>
+                      <span className="h-[26px] w-px bg-[#e4e2de]" />
+                      <div className="flex-1 pl-[14px]">
+                        <div className="text-[10.5px] text-ink-subtle">
+                          {t('warming.warmed.trust')}
+                        </div>
+                        <div className="text-[13px] font-bold text-success">
+                          {acc.trust_score ?? '—'}
+                        </div>
                       </div>
                     </div>
-                    <span className="inline-flex items-center gap-1 rounded-full bg-success-tint px-[9px] py-[3px] text-[9.5px] font-bold tracking-[0.03em] text-success">
-                      <svg
-                        width="9"
-                        height="9"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="#12a150"
-                        strokeWidth="3.4"
+                    <div className="mt-[13px] flex items-center gap-[9px]">
+                      <button
+                        type="button"
+                        disabled={busyId === acc.account_id}
+                        onClick={() => {
+                          runGraduation(handoff, acc.account_id);
+                        }}
+                        className="flex flex-1 items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white disabled:opacity-50"
                       >
-                        <path d="M20 6 9 17l-5-5" />
-                      </svg>
-                      {t('warming.warmed.badge')}
-                    </span>
-                  </div>
-                  <div className="mt-[13px] flex items-center rounded-[10px] bg-[#f7f6f4] px-[14px] py-[10px]">
-                    <div className="flex-1">
-                      <div className="text-[10.5px] text-ink-subtle">
-                        {t('warming.warmed.days')}
-                      </div>
-                      <div className="text-[13px] font-bold">
-                        {t('warming.warmed.daysValue', {
-                          days: acc.warming_days,
-                          target: acc.target_days,
-                        })}
-                      </div>
+                        {t('warming.warmed.toNeuro')}
+                        <svg
+                          width="13"
+                          height="13"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2.2"
+                        >
+                          <path d="M5 12h14M13 6l6 6-6 6" />
+                        </svg>
+                      </button>
+                      <FeedbackMark result={accountFeedback.feedback[acc.account_id]} />
+                      <button
+                        type="button"
+                        title={t('warming.warmed.backToWarm')}
+                        aria-label={t('warming.warmed.backToWarm')}
+                        disabled={busyId === acc.account_id}
+                        onClick={() => {
+                          runGraduation(unpromote, acc.account_id);
+                        }}
+                        className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line-input bg-white text-ink-muted disabled:opacity-50"
+                      >
+                        <svg
+                          width="15"
+                          height="15"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
+                          <path d="M3 3v5h5" />
+                        </svg>
+                      </button>
                     </div>
-                    <span className="h-[26px] w-px bg-[#e4e2de]" />
-                    <div className="flex-1 pl-[14px]">
-                      <div className="text-[10.5px] text-ink-subtle">
-                        {t('warming.warmed.trust')}
-                      </div>
-                      <div className="text-[13px] font-bold text-success">
-                        {acc.trust_score ?? '—'}
-                      </div>
-                    </div>
                   </div>
-                  <div className="mt-[13px] flex items-center gap-[9px]">
-                    <button
-                      type="button"
-                      disabled={busyId === acc.account_id}
-                      onClick={() => {
-                        runGraduation(handoff, acc.account_id);
-                      }}
-                      className="flex flex-1 items-center justify-center gap-[6px] rounded-full bg-ink px-[14px] py-[10px] text-[12.5px] font-semibold text-white disabled:opacity-50"
-                    >
-                      {t('warming.warmed.toNeuro')}
-                      <svg
-                        width="13"
-                        height="13"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2.2"
-                      >
-                        <path d="M5 12h14M13 6l6 6-6 6" />
-                      </svg>
-                    </button>
-                    <FeedbackMark result={accountFeedback.feedback[acc.account_id]} />
-                    <button
-                      type="button"
-                      title={t('warming.warmed.backToWarm')}
-                      aria-label={t('warming.warmed.backToWarm')}
-                      disabled={busyId === acc.account_id}
-                      onClick={() => {
-                        runGraduation(unpromote, acc.account_id);
-                      }}
-                      className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-full border border-line-input bg-white text-ink-muted disabled:opacity-50"
-                    >
-                      <svg
-                        width="15"
-                        height="15"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                      >
-                        <path d="M3 12a9 9 0 1 0 3-6.7L3 8" />
-                        <path d="M3 3v5h5" />
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </CollapsibleCard>
 

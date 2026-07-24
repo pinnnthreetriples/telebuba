@@ -1,8 +1,9 @@
 import { type ColumnDef } from '@tanstack/react-table';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
+  AccountAvatar,
   accountDesignStatus,
   accountDisplayName,
   type DesignStatus,
@@ -32,50 +33,16 @@ const AVATAR_CLASS: Record<DesignStatus, string> = {
   banned: 'bg-[#fbecec] text-[#c0473f]',
 };
 
-// Mono-avatar fallback initials: name initials when the Telegram name is known
-// (first + last initial), else the last two phone digits (matching the design).
-function initials(account: AccountRead): string {
-  const name = [account.first_name, account.last_name].filter(Boolean).join(' ').trim();
-  if (name) {
-    // Spread to code points so an emoji / non-BMP initial isn't split into a
-    // lone surrogate half.
-    const parts = name.split(/\s+/);
-    const first = [...(parts[0] ?? '')][0] ?? '';
-    const second = [...(parts[1] ?? '')][0] ?? '';
-    return (first + second).toUpperCase();
-  }
-  const digits = (account.phone ?? account.account_id).replace(/\D/g, '');
-  return digits.slice(-2) || '#';
-}
-
-// Row avatar: the cached Telegram profile photo when captured (served by the
-// cacheable /avatar endpoint, ?v=etag makes it immutable), degrading to the
-// status-tinted mono initials on absence or a load error.
+// Row avatar: the shared account avatar (cached Telegram photo, else initials),
+// with the status-tinted fallback the design specifies for this table.
 function RowAvatar({ account }: { account: AccountRead }) {
-  // Track WHICH etag failed to load, not a bare boolean — react-table keeps the
-  // row component mounted across refetches, so a transient error must not hide a
-  // later-recovered photo. A new avatar_etag makes `broken` recompute to false.
-  const [failedEtag, setFailedEtag] = useState<string | null>(null);
   const ds = accountDesignStatus(account.status);
-  const broken = failedEtag !== null && failedEtag === account.avatar_etag;
-  if (account.avatar_etag && !broken) {
-    return (
-      <img
-        src={`/api/v1/accounts/${account.account_id}/avatar?v=${account.avatar_etag}`}
-        alt=""
-        onError={() => {
-          setFailedEtag(account.avatar_etag ?? null);
-        }}
-        className="h-8 w-8 shrink-0 rounded-full object-cover"
-      />
-    );
-  }
   return (
-    <div
-      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-[12px] font-semibold ${AVATAR_CLASS[ds]}`}
-    >
-      {initials(account)}
-    </div>
+    <AccountAvatar
+      account={account}
+      className="h-8 w-8 shrink-0 rounded-full"
+      fallbackClassName={`text-[12px] font-semibold ${AVATAR_CLASS[ds]}`}
+    />
   );
 }
 
