@@ -652,7 +652,7 @@ export function NeurocommentPage() {
         <ListenerEditModal
           options={listenerOptions.map((a) => ({
             id: a.account_id,
-            phone: a.label ?? a.account_id,
+            name: accountDisplayName(a),
           }))}
           selected={listenerId || null}
           onClose={() => {

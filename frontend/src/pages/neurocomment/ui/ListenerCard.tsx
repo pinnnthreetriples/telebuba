@@ -1,5 +1,6 @@
 import { useTranslation } from 'react-i18next';
 
+import { accountDisplayName } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
 
 import { SurfHover } from './SurfHover';
@@ -221,7 +222,7 @@ export function ListenerCard({
                   }}
                   className="flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff]"
                 >
-                  <span className="font-medium">{account.label ?? account.account_id}</span>
+                  <span className="font-medium">{accountDisplayName(account)}</span>
                 </button>
               ))
             )}
