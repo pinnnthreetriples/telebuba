@@ -114,8 +114,7 @@ async def _read_and_react(  # noqa: PLR0913
     out = _ReadReactOutcome()
     read_result = await _seams.execute(
         account_id,
-        # Fetch enough to cover the reaction's candidate pool in a single read;
-        # the react below reuses these ids instead of re-fetching the channel.
+        # One read covers the reaction pool too; the react below reuses these ids.
         ReadChannel(
             channel=channel,
             message_limit=max(warm.read_message_limit, warm.reaction_message_limit),
@@ -349,7 +348,7 @@ async def _build_cycle_result(
     return result
 
 
-async def run_one_cycle(  # noqa: C901 - the optional-settings fallback adds one branch to an already-linear pass.
+async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
     secret: WarmingSettingsSecret | None = None,
@@ -357,15 +356,13 @@ async def run_one_cycle(  # noqa: C901 - the optional-settings fallback adds one
 ) -> WarmingCycleResult:
     """Perform exactly one warming pass for an account. The testable core.
 
-    ``secret`` (optional) is the warming settings row; the loop threads in the
-    copy it already loaded so the cycle doesn't re-fetch it. Falls back to a
-    fresh load for direct callers that don't have one.
+    ``secret`` (optional) is the settings row the loop already loaded, threaded
+    in to avoid a re-fetch; direct callers without one fall back to a load.
     ``on_step`` (optional) is fired with the canonical step name after each
     successful action so the loop can persist live mid-cycle progress.
     """
     account_id = data.account_id
-    if secret is None:
-        secret = await load_warming_settings()
+    secret = secret or await load_warming_settings()
     channels = (await list_warming_channels()).channels
     if not channels:
         await log_event("WARNING", "warming_no_channels", account_id=account_id)
