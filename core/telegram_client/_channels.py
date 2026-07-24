@@ -31,7 +31,7 @@ from telethon.tl.types import (
 )
 
 from core.telegram_client._action_results import _DispatchResult
-from core.telegram_client._media import _named_bytes
+from core.telegram_client._io import _named_bytes
 from core.telegram_client._video import normalize_channel_video_for_telegram
 from schemas.telegram_actions import (
     CreateChannel,
