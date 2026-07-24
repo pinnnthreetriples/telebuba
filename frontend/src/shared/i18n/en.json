@@ -548,6 +548,8 @@
     "neurocomment_onboard_pair_failed": "Could not pair account to channel",
     "neurocomment_onboard_spam_probe_failed": "Spam probe failed",
     "neurocomment_listener_join_failed": "Listener failed to join channel",
+    "neurocomment_listener_join_flood": "Listener joins paused (flood control)",
+    "neurocomment_join_daily_cap": "Daily join limit reached",
     "neurocomment_runtime_reconciled": "Engine reconciled",
     "neurocomment_start_onboard_failed": "Onboarding start failed",
     "neurocomment_sweep_failed": "Deleted-comment sweep failed",

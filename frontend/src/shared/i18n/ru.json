@@ -549,6 +549,8 @@
     "neurocomment_onboard_pair_failed": "Не удалось привязать аккаунт к каналу",
     "neurocomment_onboard_spam_probe_failed": "Ошибка проверки на спам",
     "neurocomment_listener_join_failed": "Слушатель не вступил в канал",
+    "neurocomment_listener_join_flood": "Вступления слушателя приостановлены (флуд-контроль)",
+    "neurocomment_join_daily_cap": "Достигнут суточный лимит вступлений",
     "neurocomment_runtime_reconciled": "Движок восстановлен",
     "neurocomment_start_onboard_failed": "Ошибка запуска онбординга",
     "neurocomment_sweep_failed": "Ошибка проверки удалённых комментариев",
