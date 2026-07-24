@@ -10,6 +10,7 @@ last_updated: 2026-07-24
 - Device fingerprints are immutable. Proxy credentials resolve inside `core/` from the shared `proxies` pool; one account uses at most one proxy and capacity is config-driven. Proxy checks discover the public exit IP over a TLS tunnel, then persist IPinfo/MaxMind country consensus without exposing credentials.
 - Rate limits return classified outcomes; persist cooldowns and never retry immediately.
 - A frozen account stays authorized and `get_me()` succeeds; classify it via `help.getAppConfig` `freeze_since_date` (plus `FrozenMethodInvalidError`, matched by class and ordered above `FloodWaitError`) into the permanent `frozen` status.
+- Profile-edit failures surface stable snake_case codes in the error envelope (`username_occupied`, `username_invalid`, `about_too_long`, `account_frozen`, `flood_wait`; media via `ProfileGatewayError`), translated in the SPA under `accounts.profile.code.*`. The typed-action executor persists `frozen`/`flood_wait` status at edit time (`update_account_status`); photo set/remove/set-main refresh `avatar_thumb`/`avatar_etag` immediately (`refresh_account_avatar`); a partial update (username applied, profile request failed) re-reads and stores confirmed values (#272).
 
 ## Warming
 - One persisted `asyncio.Task` per active account; FastAPI lifespan starts reconciliation and shutdown.
