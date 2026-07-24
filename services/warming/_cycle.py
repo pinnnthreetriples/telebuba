@@ -112,13 +112,10 @@ async def _read_and_react(  # noqa: PLR0913
     """Read a channel and maybe react, tallying reads / reactions / fails / flood."""
     warm = settings.warming
     out = _ReadReactOutcome()
+    # Read the larger reaction pool in one pass so the react reuses these ids.
     read_result = await _seams.execute(
         account_id,
-        # One read covers the reaction pool too; the react below reuses these ids.
-        ReadChannel(
-            channel=channel,
-            message_limit=max(warm.read_message_limit, warm.reaction_message_limit),
-        ),
+        ReadChannel(channel=channel, message_limit=warm.reaction_message_limit),
     )
     out.attempts += 1
     if read_result.status == "ok":
@@ -137,14 +134,13 @@ async def _read_and_react(  # noqa: PLR0913
         can_react = False
 
     if can_react and reactions_enabled and _seams.rng.random() < reaction_probability:
-        recent = read_result.recent_message_ids
         react_result = await _seams.execute(
             account_id,
             ReactToPost(
                 channel=channel,
                 reactions=warm.default_reactions,
                 message_limit=warm.reaction_message_limit,
-                message_ids=[int(x) for x in recent] if recent else None,
+                message_ids=[int(x) for x in read_result.recent_message_ids or []] or None,
             ),
         )
         out.attempts += 1
@@ -351,18 +347,15 @@ async def _build_cycle_result(
 async def run_one_cycle(
     data: WarmingCycleRequest,
     *,
-    secret: WarmingSettingsSecret | None = None,
     on_step: _OnStep | None = None,
 ) -> WarmingCycleResult:
     """Perform exactly one warming pass for an account. The testable core.
 
-    ``secret`` (optional) is the settings row the loop already loaded, threaded
-    in to avoid a re-fetch; direct callers without one fall back to a load.
     ``on_step`` (optional) is fired with the canonical step name after each
     successful action so the loop can persist live mid-cycle progress.
     """
     account_id = data.account_id
-    secret = secret or await load_warming_settings()
+    secret = await load_warming_settings()
     channels = (await list_warming_channels()).channels
     if not channels:
         await log_event("WARNING", "warming_no_channels", account_id=account_id)

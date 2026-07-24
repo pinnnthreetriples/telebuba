@@ -420,9 +420,6 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
                 dm_allowed=intensity.dm_allowed,
                 activity_persona=persona,
             ),
-            # M3: reuse the settings row already loaded above instead of a second
-            # ``load_warming_settings`` round-trip inside the cycle.
-            secret=controls,
             on_step=_on_step,
         )
     schedule = await _calculate_next_run(account_id, result, persona, effective_cap)

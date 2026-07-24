@@ -177,8 +177,11 @@ test('ready card: shows the captured Telegram photo when an avatar etag is set',
 });
 
 test('warmed card: shows the Telegram name, with the phone on the subtitle', async () => {
-  const warmed = {
-    accounts: [
+  // The warmed pool rides the board payload now, so the named account is seeded
+  // there rather than on the retired /warmed fetch.
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [
       {
         account_id: 'grad-named',
         label: 'Graduate',
@@ -192,8 +195,7 @@ test('warmed card: shows the Telegram name, with the phone on the subtitle', asy
   };
   vi.mocked(fetch).mockImplementation((input) => {
     const url = new URL((input as Request).url);
-    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
-    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
     return Promise.resolve(jsonResponse({}));
   });
   renderWithClient(<WarmingPage />);
