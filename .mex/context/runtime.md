@@ -22,5 +22,9 @@ last_updated: 2026-07-24
 - Pipeline: map campaign → filter → choose healthy under-quota account → atomic post claim → generate/deduplicate → delay → comment → persist.
 - Challenge handling distinguishes Telegram restrictions from bot challenges and supports configured OpenAI/Gemini text/vision solving, retries, caching, operator actions, and channel backoff.
 - Atomic claims prevent duplicate comments; warming and listener roles are mutually exclusive; listener-safe handlers do not leak exceptions.
+- Anti-freeze joins (#270): every channel-join site (campaign onboarding, operator/retry, listener) paces with a jittered delay, breaks the burst on FloodWait/cooldown, and is gated by a persisted rolling-24h per-account cap (`neurocomment_join_log`, `max_joins_per_account_per_day`, default 20). `already_participant` no-op re-joins are a success but not counted. The cap counts NC joins only (warming joins uncounted → same-day carryover uncounted).
+- The listener join pass runs as a single-flighted background task (coalescing rerun, mirrors onboarding), so reconcile returns off the request/lock path; peer-id resolution is cached across reconciles.
+- Per-post hot path is O(campaign candidates), not O(fleet): candidate-scoped signal reads, narrow single-account quota queries, settings loaded once per post. The deletion sweep buckets channels by campaign in one query.
+- File-size gate (aislop max 400) drives the `_runtime`/`onboarding` splits into `_join`/`_lifecycle`/`_classify`/`_sweep` via E402 re-export-after-body; task-handle globals stay in `_runtime` (tests rebind them).
 
 API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.
