@@ -20,6 +20,7 @@ from schemas.accounts import AccountCreate
 from schemas.telegram_actions import (
     ClickButton,
     CommentOnPost,
+    MarkDirectMessageRead,
     PostComment,
     SendDirectMessage,
     UpdateProfile,
@@ -560,6 +561,38 @@ def test_typing_seconds_scales_and_clamps(monkeypatch: pytest.MonkeyPatch) -> No
     assert _typing_seconds("") == 0.5  # clamp to min
     assert _typing_seconds("x" * 20) == pytest.approx(20 * 60 / (5 * 45))
     assert _typing_seconds("x" * 1000) == 12.0  # clamp to max
+
+
+def test_typing_seconds_uses_passed_wpm(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.warming, "typing_wpm", 45)
+    monkeypatch.setattr(settings.warming, "typing_sim_min_seconds", 0.0)
+    monkeypatch.setattr(settings.warming, "typing_sim_max_seconds", 100.0)
+    # A per-message wpm overrides the global default...
+    assert _typing_seconds("x" * 20, 60) == pytest.approx(20 * 60 / (5 * 60))
+    assert _typing_seconds("x" * 20, 30) != _typing_seconds("x" * 20, 60)
+    # ...and None falls back to the global typing_wpm.
+    assert _typing_seconds("x" * 20, None) == pytest.approx(20 * 60 / (5 * 45))
+
+
+@pytest.mark.asyncio
+async def test_execute_mark_dm_read_acknowledges(monkeypatch: pytest.MonkeyPatch) -> None:
+    acked: list[int] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_read_acknowledge(self, user_id: int) -> object:
+            acked.append(user_id)
+            return True
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-read", MarkDirectMessageRead(user_id=77))
+
+    assert result.status == "ok"
+    assert result.action_type == "mark_dm_read"
+    assert acked == [77]
 
 
 @pytest.mark.asyncio

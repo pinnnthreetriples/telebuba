@@ -112,9 +112,10 @@ async def _read_and_react(  # noqa: PLR0913
     """Read a channel and maybe react, tallying reads / reactions / fails / flood."""
     warm = settings.warming
     out = _ReadReactOutcome()
+    # Read the larger reaction pool in one pass so the react reuses these ids.
     read_result = await _seams.execute(
         account_id,
-        ReadChannel(channel=channel, message_limit=warm.read_message_limit),
+        ReadChannel(channel=channel, message_limit=warm.reaction_message_limit),
     )
     out.attempts += 1
     if read_result.status == "ok":
@@ -139,6 +140,7 @@ async def _read_and_react(  # noqa: PLR0913
                 channel=channel,
                 reactions=warm.default_reactions,
                 message_limit=warm.reaction_message_limit,
+                message_ids=[int(x) for x in read_result.recent_message_ids or []] or None,
             ),
         )
         out.attempts += 1

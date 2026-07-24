@@ -157,13 +157,18 @@ class NeurocommentSettings(BaseSettings):
     challenge_wait_timeout_seconds: float = Field(default=20.0, gt=0.0)
     # Hard cutoff on the Gemini decision call.
     challenge_gemini_timeout_seconds: float = Field(default=10.0, gt=0.0)
+    # Hard cutoff on the click/send dispatch (the only unbounded Telethon await in
+    # the solver); a hung click times out and is treated as a failed dispatch.
+    challenge_dispatch_timeout_seconds: float = Field(default=15.0, gt=0.0)
     # Log-normal humanization pause before answering, clamped to [min, max]. Range
     # widened to ~human solve times (8-40s): instant/uniform solves read as a bot.
     challenge_click_delay_min_seconds: float = Field(default=8.0, ge=0.0)
     challenge_click_delay_max_seconds: float = Field(default=40.0, ge=0.0)
     # Default captcha-solver LLM (the operator overrides it via the DB setting).
     # "openai" uses settings.openai + the OpenAI key; "gemini" uses the Gemini one.
-    challenge_llm_provider: Literal["gemini", "openai"] = "gemini"
+    # Named to match the DB/runtime `captcha_llm_provider` secret (the DB value wins;
+    # this is only the fallback default).
+    captcha_llm_provider: Literal["gemini", "openai"] = "gemini"
     # Attempts before giving up: on a wrong answer the guardian bot usually
     # re-challenges, so we retry with the fresh challenge up to this many times
     # (a wrong click can get the account kicked — do not retry forever).

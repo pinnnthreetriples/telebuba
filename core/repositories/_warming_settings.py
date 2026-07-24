@@ -46,7 +46,7 @@ def _captcha_provider(value: object) -> CaptchaLlmProvider:
     text = "" if value is None else str(value)
     if text in ("gemini", "openai"):
         return cast("CaptchaLlmProvider", text)
-    return settings.neurocomment.challenge_llm_provider
+    return settings.neurocomment.captcha_llm_provider
 
 
 def _keep(new: str | None, current: object) -> str:
@@ -75,7 +75,6 @@ def _row_to_warming_settings_secret(mapping: Mapping[str, object]) -> WarmingSet
         reactions_enabled=bool(mapping["reactions_enabled"]),
         join_enabled=_bool_or(mapping.get("join_enabled"), default=True),
         enforce_readiness=_bool_or(mapping.get("enforce_readiness"), warm.enforce_readiness),
-        max_daily_actions=_int_or(mapping.get("max_daily_actions"), warm.max_daily_actions),
         gemini_api_key=_str_or(mapping.get("gemini_api_key"), settings.gemini.api_key),
         gemini_model=_str_or(mapping.get("gemini_model"), settings.gemini.model),
         gemini_max_retries=_int_or(mapping.get("gemini_max_retries"), settings.gemini.max_retries),
@@ -97,27 +96,45 @@ def _default_warming_settings_values() -> dict[str, object]:
         "reactions_enabled": 1,
         "join_enabled": 1,
         "enforce_readiness": int(warm.enforce_readiness),
-        "max_daily_actions": warm.max_daily_actions,
         "gemini_api_key": "",
         "gemini_model": settings.gemini.model,
         "gemini_max_retries": settings.gemini.max_retries,
         "gemini_min_interval_seconds": settings.gemini.min_interval_seconds,
         "openai_api_key": "",
         "openai_model": settings.openai.model,
-        "captcha_llm_provider": settings.neurocomment.challenge_llm_provider,
+        "captcha_llm_provider": settings.neurocomment.captcha_llm_provider,
         "updated_at": _now_iso(),
     }
 
 
+# Cache the singleton settings row so the per-challenge LLM path (challenge.py) does
+# not re-open a SQLite transaction on every decision. Populated on read, dropped by
+# _invalidate_warming_settings_cache() on any write or DB reconfigure.
+_cached_settings: WarmingSettingsSecret | None = None
+
+
+def _invalidate_warming_settings_cache() -> None:
+    """Drop the cached settings row; call after any write or a DB reconfigure."""
+    global _cached_settings  # noqa: PLW0603 - module-level singleton cache
+    _cached_settings = None
+
+
 def _load_warming_settings() -> WarmingSettingsSecret:
+    global _cached_settings  # noqa: PLW0603 - module-level singleton cache
+    if _cached_settings is not None:
+        return _cached_settings
     statement = select(_warming_settings).where(_warming_settings.c.id == _WARMING_SETTINGS_ID)
-    with _get_engine().begin() as connection:
+    with _get_engine().connect() as connection:
         row = connection.execute(statement).mappings().first()
-        if row is None:
-            values = _default_warming_settings_values()
+    if row is None:
+        # Seeding the defaults row is the only path that needs a write transaction.
+        values = _default_warming_settings_values()
+        with _get_engine().begin() as connection:
             connection.execute(insert(_warming_settings).values(**values))
-            return _row_to_warming_settings_secret(cast("Mapping[str, object]", values))
-    return _row_to_warming_settings_secret(cast("Mapping[str, object]", row))
+        _cached_settings = _row_to_warming_settings_secret(cast("Mapping[str, object]", values))
+        return _cached_settings
+    _cached_settings = _row_to_warming_settings_secret(cast("Mapping[str, object]", row))
+    return _cached_settings
 
 
 async def load_warming_settings() -> WarmingSettingsSecret:
@@ -131,7 +148,6 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
     reactions_enabled: bool,
     join_enabled: bool = True,
     enforce_readiness: bool = True,
-    max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
     gemini_max_retries: int = 1,
@@ -158,7 +174,6 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
             "reactions_enabled": int(reactions_enabled),
             "join_enabled": int(join_enabled),
             "enforce_readiness": int(enforce_readiness),
-            "max_daily_actions": max_daily_actions,
             "gemini_api_key": _keep(gemini_api_key, cur.get("gemini_api_key")),
             "gemini_model": _keep_nonempty(
                 gemini_model, cur.get("gemini_model"), settings.gemini.model
@@ -172,7 +187,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
             "captcha_llm_provider": _keep_nonempty(
                 captcha_llm_provider,
                 cur.get("captcha_llm_provider"),
-                settings.neurocomment.challenge_llm_provider,
+                settings.neurocomment.captcha_llm_provider,
             ),
             "updated_at": _now_iso(),
         }
@@ -181,6 +196,7 @@ def _save_warming_settings(  # noqa: PLR0913 - one explicit column per setting r
             .where(_warming_settings.c.id == _WARMING_SETTINGS_ID)
             .values(**values),
         )
+    _invalidate_warming_settings_cache()
     return _load_warming_settings()
 
 
@@ -190,7 +206,6 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
     reactions_enabled: bool,
     join_enabled: bool = True,
     enforce_readiness: bool = True,
-    max_daily_actions: int = 0,
     gemini_api_key: str | None,
     gemini_model: str | None = None,
     gemini_max_retries: int = 1,
@@ -210,7 +225,6 @@ async def save_warming_settings(  # noqa: PLR0913 - mirrors the explicit column 
         reactions_enabled=reactions_enabled,
         join_enabled=join_enabled,
         enforce_readiness=enforce_readiness,
-        max_daily_actions=max_daily_actions,
         gemini_api_key=gemini_api_key,
         gemini_model=gemini_model,
         gemini_max_retries=gemini_max_retries,

@@ -17,6 +17,7 @@ from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from core.repositories.logs import list_recent_logs
 from core.telegram_client import execute
+from core.telegram_client._react import _whitelist_cache
 from schemas.telegram_actions import (
     ReactToPost,
     ReadChannel,
@@ -38,7 +39,11 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
     reset_logging_for_tests()
     setup_logging()
+    # The reaction whitelist is module-level TTL-cached; clear it so a channel's
+    # allowed set from one test never bleeds into the next (@durov reused).
+    _whitelist_cache.clear()
     yield
+    _whitelist_cache.clear()
     reset_logging_for_tests()
 
 
@@ -93,6 +98,8 @@ async def test_read_channel_marks_history_read(monkeypatch: pytest.MonkeyPatch) 
 
     assert result.status == "ok"
     assert acks == [9]
+    # Ids ride back (decimal strings) so a following react reuses them.
+    assert result.recent_message_ids == ["5", "9"]
 
 
 @pytest.mark.asyncio
@@ -145,6 +152,40 @@ async def test_react_to_post_sends_reaction(monkeypatch: pytest.MonkeyPatch) -> 
 
     assert result.status == "ok"
     assert result.message_id in {11, 12}
+    assert any(isinstance(req, SendReactionRequest) for req in captured)
+
+
+@pytest.mark.asyncio
+async def test_react_to_post_reuses_provided_message_ids(monkeypatch: pytest.MonkeyPatch) -> None:
+    """When ``message_ids`` are supplied the reactor never re-fetches the channel."""
+    captured: list[object] = []
+    get_messages_calls = 0
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_messages(self, _channel: str, **_kwargs: object) -> list[object]:
+            nonlocal get_messages_calls
+            get_messages_calls += 1
+            return []  # pragma: no cover - must not be reached
+
+        async def get_input_entity(self, channel: str) -> str:
+            return f"peer:{channel}"
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-3r",
+        ReactToPost(channel="@news", reactions=["👍"], message_ids=[21, 22]),
+    )
+
+    assert result.status == "ok"
+    assert result.message_id in {21, 22}
+    assert get_messages_calls == 0
     assert any(isinstance(req, SendReactionRequest) for req in captured)
 
 
@@ -322,6 +363,53 @@ async def test_react_to_post_skips_when_reactions_disabled(
     rows = await list_recent_logs(limit=20)
     react_rows = [r for r in rows if r.event == "telegram_react_to_post"]
     assert react_rows[0].extra["reaction_skip"] == "no_emoji"
+
+
+@pytest.mark.asyncio
+async def test_channel_whitelist_is_cached_across_reactions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A second react on the same channel within TTL reuses the cached whitelist."""
+    captured: list[object] = []
+    allowed = ChatReactionsSome(reactions=[ReactionEmoji(emoticon="🔥")])
+    _patch_client(monkeypatch, _react_fake_client(captured, allowed))
+
+    await execute("acc-w1", ReactToPost(channel="@cached", reactions=["🔥"], message_ids=[11]))
+    await execute("acc-w1", ReactToPost(channel="@cached", reactions=["🔥"], message_ids=[11]))
+
+    full_reqs = [r for r in captured if isinstance(r, GetFullChannelRequest)]
+    assert len(full_reqs) == 1
+    assert len(_sent_reactions(captured)) == 2
+
+
+@pytest.mark.asyncio
+async def test_channel_whitelist_failure_is_not_cached(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A failed whitelist fetch is not cached — the next react re-probes the channel."""
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, channel: str) -> str:
+            return f"peer:{channel}"
+
+        async def __call__(self, request: object) -> object:
+            captured.append(request)
+            if isinstance(request, GetFullChannelRequest):
+                msg = "boom"
+                raise ConnectionError(msg)  # simulates a transient fetch failure
+            return None
+
+    _patch_client(monkeypatch, FakeClient())
+
+    await execute("acc-w2", ReactToPost(channel="@flaky", reactions=["👍"], message_ids=[11]))
+    await execute("acc-w2", ReactToPost(channel="@flaky", reactions=["👍"], message_ids=[11]))
+
+    full_reqs = [r for r in captured if isinstance(r, GetFullChannelRequest)]
+    assert len(full_reqs) == 2
 
 
 @pytest.mark.asyncio

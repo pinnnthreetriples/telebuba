@@ -36,6 +36,21 @@ class WarmingSettings(BaseSettings):
     # same evening or by next morning — a night-time candidate still snaps forward
     # to the active window, but the ceiling no longer stretches past ~a day.
     cold_start_spread_hours: float = Field(default=8.0, ge=0.0)
+    # Restart catch-up spread: after downtime (deploy/crash) every account whose
+    # persisted ``next_run_at`` already elapsed is past-due, and ``_seconds_until``
+    # clamps that to 0 — so reconcile would fire them all in the same second (an
+    # activity spike + a fingerprint tell) and hammer SQLite. A past-due first
+    # cycle instead waits a random point across this window so the fleet's
+    # catch-up cycles fan out. Kept to ~30 min: long enough to smear the burst,
+    # short enough that resumed accounts don't idle noticeably after a restart.
+    catch_up_spread_seconds: float = Field(default=1800.0, ge=0.0, le=86400.0)
+    # Fleet-wide ceiling on Telegram-heavy warming cycles running at once. Each
+    # active account owns its own loop task, so without a cap a restart (or an
+    # aligned schedule) could drive dozens of concurrent cycles — a connection
+    # spike across the pool. Only the cycle itself is gated, never the long
+    # inter-cycle sleep, so a small bound throttles bursts without stalling the
+    # fleet's steady-state cadence.
+    cycle_concurrency: int = Field(default=8, ge=1, le=128)
     channels_per_cycle_min: int = Field(default=1, ge=1)
     channels_per_cycle_max: int = Field(default=3, ge=1)
     # Fraction of the global channel pool that forms one account's *stable*
@@ -58,7 +73,8 @@ class WarmingSettings(BaseSettings):
     # a perfectly closed set and cross-account overlap stays noisy.
     channel_exploration_probability: float = Field(default=0.1, ge=0.0, le=1.0)
     reaction_probability: float = Field(default=0.6, ge=0.0, le=1.0)
-    read_message_limit: int = Field(default=15, ge=1, le=100)
+    # Recent posts fetched per channel in one read; the read reuses this pool for
+    # the following reaction, so it also bounds the reaction's candidate set.
     reaction_message_limit: int = Field(default=20, ge=1, le=100)
     # Telegram's reaction emoticons omit the U+FE0F variation selector (bare "❤",
     # not "❤️"); keep this set in that canonical form so it matches a channel's
@@ -84,10 +100,6 @@ class WarmingSettings(BaseSettings):
     # Refuse to start warming an account that is not ready (dead session, no
     # proxy, no channels). Set False to bypass the pre-start gate.
     enforce_readiness: bool = True
-    # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
-    # When the day's count reaches the cap the account parks until the next daily
-    # reset (UTC date rollover), shifted into its local active-hours window.
-    max_daily_actions: int = Field(default=0, ge=0)
     # Watch subscribed channels' stories once per session (a low-risk, very human
     # signal). Applies to every persona; disable to skip the story-view step.
     story_view_enabled: bool = True
@@ -131,6 +143,16 @@ class WarmingSettings(BaseSettings):
     # once the window passes the pair may start talking again (resumption).
     dialogue_max_turns: int = Field(default=12, ge=1)
     dialogue_conversation_window_hours: float = Field(default=48.0, gt=0.0)
+    # How many recent pair messages are fed to Gemini as conversation context so
+    # replies/openers reference prior turns instead of being context-free. 0 = off.
+    dialogue_context_messages: int = Field(default=6, ge=0)
+    # Near-duplicate gate: reject a generated line whose token-set Jaccard against
+    # any recent pair message is >= this (catches "привет как дела" vs "привет, как дела!").
+    dialogue_similarity_max: float = Field(default=0.8, ge=0.0, le=1.0)
+    # Read-to-reply realism: mark the incoming DM read, then pause this many
+    # seconds (uniform) before replying — a real user reads before answering.
+    dm_read_reply_delay_min_seconds: float = Field(default=2.0, ge=0.0)
+    dm_read_reply_delay_max_seconds: float = Field(default=15.0, ge=0.0)
     # Human-like pacing: inter-action pauses are drawn from a clipped log-normal
     # (heavy right tail — many short pauses, the occasional long one) instead of
     # a flat uniform, which is the most detectable timing pattern.
@@ -140,6 +162,11 @@ class WarmingSettings(BaseSettings):
     # time before sending a DM (≈ WPM), clamped to a sane window.
     typing_simulation_enabled: bool = True
     typing_wpm: int = Field(default=45, ge=1)
+    # Per-account typing tempo: each account draws a stable-but-distinct WPM from
+    # this range (hashed off its id) so the fleet doesn't type at one uniform speed.
+    # ``typing_wpm`` stays the fallback when no per-message value is supplied.
+    typing_wpm_min: int = Field(default=32, ge=1)
+    typing_wpm_max: int = Field(default=58, ge=1)
     typing_sim_min_seconds: float = Field(default=0.5, ge=0.0)
     typing_sim_max_seconds: float = Field(default=12.0, ge=0.0)
     # Time-of-day cadence: bias the next cycle to land inside an active local-time

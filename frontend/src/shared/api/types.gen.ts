@@ -369,6 +369,10 @@ export type ActionResult = {
    */
   channel_id?: string | null;
   /**
+   * Recent Message Ids
+   */
+  recent_message_ids?: Array<string> | null;
+  /**
    * Flood Wait Seconds
    */
   flood_wait_seconds?: number | null;
@@ -2276,6 +2280,10 @@ export type WarmingBoardState = {
    * Card Log Limit
    */
   card_log_limit?: number;
+  /**
+   * Warmed
+   */
+  warmed?: Array<WarmedAccount>;
 };
 
 /**
@@ -2350,10 +2358,6 @@ export type WarmingSettings = {
    */
   enforce_readiness?: boolean;
   /**
-   * Max Daily Actions
-   */
-  max_daily_actions?: number;
-  /**
    * Has Gemini Key
    */
   has_gemini_key?: boolean;
@@ -2415,10 +2419,6 @@ export type WarmingSettingsUpdate = {
    * Enforce Readiness
    */
   enforce_readiness?: boolean;
-  /**
-   * Max Daily Actions
-   */
-  max_daily_actions?: number;
   /**
    * Gemini Api Key
    */

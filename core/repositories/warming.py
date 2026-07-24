@@ -349,15 +349,23 @@ def _upsert_warming_state(data: WarmingStateWrite) -> WarmingStateWriteResult:
             index_elements=[_warming_account_state.c.account_id],
             set_=update_values,
         )
+    select_stmt = select(_warming_account_state).where(
+        _warming_account_state.c.account_id == data.account_id,
+    )
     with _get_engine().begin() as connection:
         result = connection.execute(stmt)
         # SQLite reports rowcount=1 for both the INSERT branch and a matching
         # ON CONFLICT DO UPDATE; rowcount=0 when the UPDATE's WHERE rejected.
         applied = result.rowcount > 0
-    record = _fetch_warming_state(data.account_id)
-    if record is None:
+        # Read the written row back on the *same* connection instead of opening a
+        # fresh one via ``_fetch_warming_state`` — the values (incl. the atomic
+        # ``cycles_completed`` bump) are already committed here, so this drops a
+        # DB round-trip per state write.
+        row = connection.execute(select_stmt).mappings().first()
+    if row is None:
         msg = f"Warming state was not persisted: {data.account_id}"
         raise RuntimeError(msg)
+    record = _row_to_warming_state_record(cast("Mapping[str, object]", row))
     return WarmingStateWriteResult(record=record, applied=applied)
 
 

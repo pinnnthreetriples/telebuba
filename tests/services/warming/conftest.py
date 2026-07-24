@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -9,8 +10,9 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from core.telegram_client._react import _whitelist_cache
 from services import warming
-from services.warming import _runtime, _seams
+from services.warming import _fleet, _loop, _runtime, _seams
 from tests.services.warming._support import _ZERO_DELAY_FIELDS
 
 if TYPE_CHECKING:
@@ -42,13 +44,22 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     reset_logging_for_tests()
     setup_logging()
     warming._RUNTIME.clear()
+    # Module-level reaction-whitelist TTL cache — clear so channel reaction sets
+    # never carry across tests.
+    _whitelist_cache.clear()
     # _ACCOUNT_LOCKS are module-level and bound to the loop alive when created;
     # clear them too so each test gets fresh locks — needed when a runner like
     # mutmut drives several pytest sessions in one process (the loop changes).
     warming._ACCOUNT_LOCKS.clear()
+    # Memoised affinity subsets and the fleet-wide cycle semaphore are module-
+    # level; the semaphore is loop-bound like the locks. Reset both so each test
+    # gets a fresh cache and a semaphore bound to this test's event loop.
+    _fleet._AFFINITY_CACHE.clear()
+    _loop._cycle_semaphore = asyncio.Semaphore(settings.warming.cycle_concurrency)
     yield
     warming._RUNTIME.clear()
     warming._ACCOUNT_LOCKS.clear()
+    _fleet._AFFINITY_CACHE.clear()
     # Abandon the periodic purge task (reconcile starts one) like the per-account
     # loops above, so it doesn't leak across tests.
     if _runtime._PURGE_TASK is not None:

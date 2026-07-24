@@ -35,7 +35,6 @@ const BOARD: WarmingBoardState = {
     reactions_enabled: true,
     join_enabled: true,
     enforce_readiness: true,
-    max_daily_actions: 0,
     has_gemini_key: false,
     gemini_model: 'gemini-2.5-flash',
     updated_at: 'now',
@@ -178,8 +177,11 @@ test('ready card: shows the captured Telegram photo when an avatar etag is set',
 });
 
 test('warmed card: shows the Telegram name, with the phone on the subtitle', async () => {
-  const warmed = {
-    accounts: [
+  // The warmed pool rides the board payload now, so the named account is seeded
+  // there rather than on the retired /warmed fetch.
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [
       {
         account_id: 'grad-named',
         label: 'Graduate',
@@ -193,8 +195,7 @@ test('warmed card: shows the Telegram name, with the phone on the subtitle', asy
   };
   vi.mocked(fetch).mockImplementation((input) => {
     const url = new URL((input as Request).url);
-    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
-    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
     return Promise.resolve(jsonResponse({}));
   });
   renderWithClient(<WarmingPage />);
@@ -206,8 +207,10 @@ test('warmed card: shows the Telegram name, with the phone on the subtitle', asy
 });
 
 test('shows graduated accounts and wires return-to-warming + handoff', async () => {
-  const warmed = {
-    accounts: [
+  // The warmed pool rides the board payload now (no separate /warmed fetch here).
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [
       {
         account_id: 'grad',
         label: 'Graduate',
@@ -223,8 +226,7 @@ test('shows graduated accounts and wires return-to-warming + handoff', async () 
   };
   vi.mocked(fetch).mockImplementation((input) => {
     const url = new URL((input as Request).url);
-    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
-    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
     return Promise.resolve(jsonResponse({}));
   });
   const { container } = renderWithClient(<WarmingPage />);
@@ -257,8 +259,9 @@ test('shows graduated accounts and wires return-to-warming + handoff', async () 
 });
 
 test('a handed-off account disappears from the warmed card', async () => {
-  const warmed = {
-    accounts: [
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [
       {
         account_id: 'gone',
         label: 'Gone',
@@ -272,8 +275,7 @@ test('a handed-off account disappears from the warmed card', async () => {
   };
   vi.mocked(fetch).mockImplementation((input) => {
     const url = new URL((input as Request).url);
-    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(BOARD));
-    if (url.pathname === '/api/v1/warming/warmed') return Promise.resolve(jsonResponse(warmed));
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
     return Promise.resolve(jsonResponse({}));
   });
   renderWithClient(<WarmingPage />);

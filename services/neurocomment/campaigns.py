@@ -16,13 +16,12 @@ from core.repositories.neurocomment import (
     set_campaign_account_channels,
     set_campaign_status,
 )
-from schemas.challenge import ChallengeRowList
 from schemas.neurocomment import ChannelLinkOutcome
 from services.neurocomment import _runtime
 from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
-    from schemas.challenge import ChallengeOutcomeCounts
+    from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
     from schemas.neurocomment import (
         CampaignAccountList,
         CampaignChannelList,
@@ -97,19 +96,13 @@ async def list_channel_challenges(channel: str, limit: int) -> ChallengeRowList:
 async def list_campaign_challenges(campaign_id: str, limit: int) -> ChallengeRowList:
     """Recent non-solved challenges across a campaign's active channels (the captcha queue).
 
-    Merges each active channel's drill-down (``list_failed_for_channel``), newest
-    first, capped at ``limit``. A campaign has a handful of channels, so the
-    per-channel fan-out is cheap and avoids a bespoke multi-channel query.
+    One repository query over the campaign's active channels, newest first, capped at
+    ``limit`` — replaces the former per-channel fan-out (one query per channel).
     """
-    channel_links = await db.list_campaign_channels(campaign_id)
-    merged = ChallengeRowList()
-    for link in channel_links.links:
-        if not link.active:
-            continue
-        result = await db.list_failed_for_channel(link.channel, limit)
-        merged.rows.extend(result.rows)
-    merged.rows.sort(key=lambda row: row.decided_at, reverse=True)
-    return ChallengeRowList(rows=merged.rows[:limit])
+    channels = [
+        link.channel for link in (await db.list_campaign_channels(campaign_id)).links if link.active
+    ]
+    return await db.list_failed_for_channels(channels, limit)
 
 
 async def count_campaign_challenge_outcomes(

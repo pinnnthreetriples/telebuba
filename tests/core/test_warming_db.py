@@ -110,6 +110,12 @@ async def test_gemini_tuning_null_column_falls_back_to_config(
                 gemini_max_retries=None, gemini_min_interval_seconds=None
             )
         )
+    # This raw update bypasses the writer, so the read cache must be dropped by hand.
+    from core.repositories._warming_settings import (  # noqa: PLC0415
+        _invalidate_warming_settings_cache,
+    )
+
+    _invalidate_warming_settings_cache()
 
     secret = await load_warming_settings()
     assert secret.gemini_max_retries == 2
@@ -156,6 +162,25 @@ async def test_save_settings_can_clear_key_with_empty_string() -> None:
     )
 
     assert cleared.gemini_api_key == ""
+
+
+@pytest.mark.asyncio
+async def test_save_invalidates_the_read_cache() -> None:
+    # Prime the in-process cache, then save a new value; the next read must reflect it
+    # rather than serving the stale cached row.
+    primed = await load_warming_settings()
+    assert primed.gemini_api_key == ""  # .env fallback is "" under the fixture
+
+    await save_warming_settings(
+        inter_account_chat=True,
+        reactions_enabled=True,
+        gemini_api_key="rotated-key",
+        captcha_llm_provider="openai",
+    )
+
+    reloaded = await load_warming_settings()
+    assert reloaded.gemini_api_key == "rotated-key"
+    assert reloaded.captcha_llm_provider == "openai"
 
 
 @pytest.mark.asyncio
@@ -217,18 +242,15 @@ async def test_settings_join_enabled_defaults_on_and_roundtrips() -> None:
 async def test_settings_warming_controls_default_and_roundtrip() -> None:
     secret = await load_warming_settings()
     assert secret.enforce_readiness is True
-    assert secret.max_daily_actions == 0
 
     saved = await save_warming_settings(
         inter_account_chat=False,
         reactions_enabled=True,
         enforce_readiness=False,
-        max_daily_actions=30,
         gemini_api_key=None,
     )
 
     assert saved.enforce_readiness is False
-    assert saved.max_daily_actions == 30
 
 
 @pytest.mark.asyncio

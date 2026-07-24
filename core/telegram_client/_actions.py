@@ -44,6 +44,7 @@ from schemas.telegram_actions import (
     JoinChannel,
     JoinDiscussionGroup,
     LeaveChannel,
+    MarkDirectMessageRead,
     PostComment,
     PostStory,
     ReactToPost,
@@ -154,13 +155,21 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
         message_id=outcome.message_id,
         # int64 → decimal string at the JSON boundary (see ActionResult).
         channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
+        recent_message_ids=(
+            [str(i) for i in outcome.recent_message_ids]
+            if outcome.recent_message_ids is not None
+            else None
+        ),
     )
 
 
-def _typing_seconds(text: str) -> float:
-    """Length-proportional typing time (≈ WPM), clamped to a sane window."""
+def _typing_seconds(text: str, wpm: int | None = None) -> float:
+    """Length-proportional typing time (≈ WPM), clamped to a sane window.
+
+    ``wpm`` is the per-account tempo; ``None`` falls back to the global default.
+    """
     warm = settings.warming
-    base = len(text) * 60.0 / (5.0 * warm.typing_wpm)
+    base = len(text) * 60.0 / (5.0 * (wpm or warm.typing_wpm))
     return max(warm.typing_sim_min_seconds, min(warm.typing_sim_max_seconds, base))
 
 
@@ -168,7 +177,7 @@ async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage
     """Send a DM, optionally preceded by a length-proportional "typing…" action."""
     if settings.warming.typing_simulation_enabled:
         async with client.action(action.user_id, "typing"):  # ty: ignore[invalid-context-manager]
-            await asyncio.sleep(_typing_seconds(action.text))
+            await asyncio.sleep(_typing_seconds(action.text, action.typing_wpm))
             message = await client.send_message(action.user_id, action.text)
     else:
         message = await client.send_message(action.user_id, action.text)
@@ -216,7 +225,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
-            await _dispatch_read_channel(client, action)
+            return await _dispatch_read_channel(client, action)
         case WatchPeerStories():
             log_extra = {"stories_seen": await dispatch_watch_peer_stories(client, action)}
         case ReactToPost():
@@ -225,6 +234,9 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             log_extra = react.log_extra
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
+        case MarkDirectMessageRead():
+            # send_read_acknowledge on a user peer marks the DM conversation read.
+            await client.send_read_acknowledge(action.user_id)
         case _ if action.action_type.startswith("channel_"):
             # Channel management (create/edit/post/delete) — its own dispatcher
             # builds the full result (channel_create carries the new id).
@@ -236,17 +248,24 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
     return _DispatchResult(message_id=message_id, log_extra=log_extra)
 
 
-async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> None:
-    """Fetch recent posts and mark them read — the "reading a feed" emulation."""
+async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> _DispatchResult:
+    """Fetch recent posts and mark them read — the "reading a feed" emulation.
+
+    Returns the ids fetched so a following react on the same channel reuses them
+    instead of issuing a second identical ``get_messages``.
+    """
     messages = await client.get_messages(action.channel, limit=action.message_limit)
     # get_messages(limit=...) returns an iterable TotalList; the stub union also
     # admits a single Message / None for the by-id form, which we never use here.
-    max_id = max(
-        (int(getattr(message, "id", 0)) for message in messages),  # ty: ignore[not-iterable]
-        default=0,
-    )
+    ids = [
+        int(getattr(message, "id", 0))
+        for message in messages  # ty: ignore[not-iterable]
+        if getattr(message, "id", None)
+    ]
+    max_id = max(ids, default=0)
     if max_id:
         await client.send_read_acknowledge(action.channel, max_id=max_id)
+    return _DispatchResult(recent_message_ids=ids)
 
 
 async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> _DispatchResult:
@@ -260,12 +279,15 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     it: the placed emoji on success, or a ``reaction_skip`` reason (no recent
     posts / no usable emoji) when nothing landed.
     """
-    messages = await client.get_messages(action.channel, limit=action.message_limit)
-    candidates = [
-        int(getattr(m, "id", 0))
-        for m in messages  # ty: ignore[not-iterable]
-        if getattr(m, "id", None)
-    ]
+    if action.message_ids is None:
+        messages = await client.get_messages(action.channel, limit=action.message_limit)
+        candidates = [
+            int(getattr(m, "id", 0))
+            for m in messages  # ty: ignore[not-iterable]
+            if getattr(m, "id", None)
+        ]
+    else:
+        candidates = action.message_ids
     if not candidates:
         return _DispatchResult(log_extra={"reaction_skip": "no_posts"})
     allowed = await _channel_reaction_whitelist(client, action.channel)
@@ -316,7 +338,7 @@ async def _dispatch_join_discussion_group(
 async def _dispatch_click_button(client: TelegramClient, action: ClickButton) -> None:
     """Click an inline button on a stored message; no-op if the message is gone.
 
-    Index-first selector: ``button_index`` if set, else ``button_text``, else
+    Text-first selector: ``button_text`` if set, else ``button_index``, else
     the first button. We don't surface the callback answer.
     """
     message = await client.get_messages(action.chat_id, ids=action.message_id)
@@ -345,7 +367,7 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             extra = {"chat_id": action.chat_id, "message_id": action.message_id}
         case SetOnline():
             extra = {"online": action.online}
-        case SendDirectMessage():
+        case SendDirectMessage() | MarkDirectMessageRead():
             extra = {"user_id": action.user_id}
         case UpdateProfile():
             extra = {

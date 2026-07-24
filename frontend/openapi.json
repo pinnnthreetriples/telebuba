@@ -5897,6 +5897,20 @@
             ],
             "title": "Channel Id"
           },
+          "recent_message_ids": {
+            "anyOf": [
+              {
+                "items": {
+                  "type": "string"
+                },
+                "type": "array"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Recent Message Ids"
+          },
           "flood_wait_seconds": {
             "anyOf": [
               {
@@ -9154,6 +9168,13 @@
             "minimum": 1.0,
             "title": "Card Log Limit",
             "default": 30
+          },
+          "warmed": {
+            "items": {
+              "$ref": "#/components/schemas/WarmedAccount"
+            },
+            "type": "array",
+            "title": "Warmed"
           }
         },
         "type": "object",
@@ -9254,12 +9275,6 @@
             "title": "Enforce Readiness",
             "default": true
           },
-          "max_daily_actions": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Max Daily Actions",
-            "default": 0
-          },
           "has_gemini_key": {
             "type": "boolean",
             "title": "Has Gemini Key",
@@ -9339,12 +9354,6 @@
             "type": "boolean",
             "title": "Enforce Readiness",
             "default": true
-          },
-          "max_daily_actions": {
-            "type": "integer",
-            "minimum": 0.0,
-            "title": "Max Daily Actions",
-            "default": 0
           },
           "gemini_api_key": {
             "anyOf": [

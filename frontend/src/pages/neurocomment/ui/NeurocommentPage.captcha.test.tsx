@@ -79,7 +79,7 @@ test('the captcha solver toggle reflects the persisted value after a real round 
   });
 });
 
-test('Решить retries a challenged pair', async () => {
+test('Повторить retries a challenged pair', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const url = new URL(request.url);
@@ -111,9 +111,9 @@ test('Решить retries a challenged pair', async () => {
   });
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
-    expect(screen.getByText('Пройти')).toBeInTheDocument();
+    expect(screen.getByText('Повторить')).toBeInTheDocument();
   });
-  await userEvent.click(screen.getByText('Пройти'));
+  await userEvent.click(screen.getByText('Повторить'));
   await waitFor(() => {
     const retried = vi
       .mocked(fetch)
@@ -171,7 +171,7 @@ test('the captcha queue shows the account phone, not the raw id', async () => {
   });
   renderWithClient(<NeurocommentPage />);
   await waitFor(() => {
-    expect(screen.getByText('Пройти')).toBeInTheDocument();
+    expect(screen.getByText('Повторить')).toBeInTheDocument();
   });
   // Phone from the accounts list, not the raw "acc-1" id.
   expect(screen.getAllByText('+79261112233').length).toBeGreaterThan(0);

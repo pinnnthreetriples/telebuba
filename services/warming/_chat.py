@@ -19,15 +19,17 @@ from core.db import (
     mark_message_replied,
     mark_message_unreplied,
     pair_key,
+    recent_pair_messages,
     record_dialogue_message,
     try_claim_message_reply,
 )
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
-from schemas.telegram_actions import ActionResult, SendDirectMessage
-from services.content import is_acceptable, release_sent_text, try_reserve_sent
+from schemas.telegram_actions import ActionResult, MarkDirectMessageRead, SendDirectMessage
+from services.content import is_acceptable, release_sent_text, similarity, try_reserve_sent
 from services.dialogues import get_partners
 from services.warming import _seams
+from services.warming._fleet import _stable_fraction
 from services.warming.pacing import _HALT_STATUSES, _classify_flood, persona_dm_probability
 
 if TYPE_CHECKING:
@@ -53,6 +55,24 @@ _REPLY_PROMPT = (
     "«{incoming}». Только текст ответа, без кавычек."
 )
 
+# History-aware prompt: given the recent transcript («Я» = this account) the
+# model continues THIS conversation instead of emitting a generic greeting. Only
+# the instruction line differs — replying to the last message vs. reopening.
+_HISTORY_PROMPT = (
+    "Ты и твой друг переписываетесь в Telegram. Вот последние сообщения "
+    "(«Я» — это ты):\n{transcript}\n\n{instruction}"
+)
+_REPLY_INSTRUCTION = (
+    "Продолжи разговор естественно: коротко ответь по-дружески на последнюю "
+    "реплику собеседника. 1-2 предложения, без кавычек, без хэштегов, без "
+    "эмодзи-спама. Только текст ответа."
+)
+_OPENER_INSTRUCTION = (
+    "Напиши короткое сообщение, чтобы естественно возобновить разговор, учитывая "
+    "то, что вы обсуждали ранее. 1-2 предложения, без кавычек, без хэштегов. "
+    "Только текст."
+)
+
 
 @dataclasses.dataclass
 class GenerateResult:
@@ -67,6 +87,38 @@ class ChatResult:
     attempted_actions: int = 0
     flood_result: ActionResult | None = None
     last_failed_action: str | None = None
+
+
+async def _build_transcript(sender_id: str, partner_id: str) -> tuple[str, list[str]]:
+    """Recent pair transcript from ``sender_id``'s POV, plus the raw message texts.
+
+    Labels each line "Я:" when the sender wrote it, else "Собеседник:". Returns
+    ``("", [])`` when context is disabled or the pair has no history — the caller
+    then falls back to the context-free opener/reply prompt. The texts are reused
+    as the near-duplicate corpus (Task D) so no extra DB query is issued.
+    """
+    limit = settings.warming.dialogue_context_messages
+    if limit <= 0:
+        return "", []
+    history = await recent_pair_messages(pair_key(sender_id, partner_id), limit)
+    if not history:
+        return "", []
+    lines = [
+        f"{'Я' if message.from_account == sender_id else 'Собеседник'}: {message.text}"
+        for message in history
+    ]
+    return "\n".join(lines), [message.text for message in history]
+
+
+def _account_typing_wpm(account_id: str) -> int:
+    """Stable-but-distinct typing tempo for an account, uniform in [min, max].
+
+    Reuses the salted, process-stable fleet hash so each account keeps the same
+    WPM across cycles while the fleet spreads across the range.
+    """
+    warm = settings.warming
+    span = warm.typing_wpm_max - warm.typing_wpm_min + 1
+    return warm.typing_wpm_min + int(_stable_fraction(f"wpm:{account_id}") * span)
 
 
 def _sanitize_chat_text(raw: str) -> str | None:
@@ -87,13 +139,18 @@ async def _generate_chat_text(
     secret: WarmingSettingsSecret,
     *,
     prompt: str | None = None,
+    recent_texts: list[str] | None = None,
 ) -> GenerateResult:
     """Generate a chat line, retrying until it passes the filter and dedup.
 
     ``prompt`` overrides the random opener (used for context-aware replies).
+    ``recent_texts`` is this conversation's recent lines: a candidate too similar
+    to any of them (Task D near-duplicate gate) is rejected and regenerated.
     Returns ``GenerateResult`` with text if successful, or the specific
     failure reason.
     """
+    recent_texts = recent_texts or []
+    threshold = settings.warming.dialogue_similarity_max
     failure = "generate_chat_text"
     for _ in range(settings.warming.content_max_attempts):
         generated = await _seams.generate_text(
@@ -120,6 +177,10 @@ async def _generate_chat_text(
             await log_event("INFO", "warming_chat_filtered", account_id=sender_id)
             failure = "chat_content_filtered"
             continue
+        if any(similarity(candidate, prior) >= threshold for prior in recent_texts):
+            await log_event("INFO", "warming_chat_too_similar", account_id=sender_id)
+            failure = "chat_too_similar"
+            continue
         if not await try_reserve_sent(candidate):
             await log_event("INFO", "warming_chat_duplicate", account_id=sender_id)
             failure = "chat_duplicate"
@@ -145,6 +206,11 @@ async def _maybe_inter_account_chat(
     incoming = await latest_unreplied_for(sender_id)
     if incoming is not None and incoming.from_account in partners:
         return await _reply_to_partner(sender_id, incoming, secret, accounts)
+    if incoming is not None and incoming.from_account not in partners:
+        # Orphan: the newest unreplied message is from a NON-partner (e.g. an
+        # ex-partner after a reshuffle). Left alone it stays newest and shadows
+        # the inbox forever, so mark it replied before opening a fresh thread.
+        await mark_message_replied(incoming.id)
     return await _open_with_partner(sender_id, partners, secret, accounts)
 
 
@@ -224,11 +290,29 @@ async def _reply_to_partner(  # noqa: PLR0911
             extra={"with": incoming.from_account},
         )
         return ChatResult()
-    gen = await _generate_chat_text(
-        sender_id,
-        secret,
-        prompt=_REPLY_PROMPT.format(incoming=incoming.text),
+    # Read receipt + read-to-reply delay: a real user opens and reads the DM
+    # before answering, so mark it read then pause briefly. A failed read-ack is
+    # not a dialogue failure — proceed to reply regardless.
+    read = await _seams.execute(sender_id, MarkDirectMessageRead(user_id=target.user_id))
+    if read.status != "ok":
+        await log_event(
+            "INFO",
+            "warming_dialogue_read_ack_skipped",
+            account_id=sender_id,
+            extra={"with": incoming.from_account},
+        )
+    warm = settings.warming
+    delay = _seams.rng.uniform(
+        warm.dm_read_reply_delay_min_seconds, warm.dm_read_reply_delay_max_seconds
     )
+    await _seams.sleep(delay)
+    transcript, recent_texts = await _build_transcript(sender_id, incoming.from_account)
+    prompt = (
+        _HISTORY_PROMPT.format(transcript=transcript, instruction=_REPLY_INSTRUCTION)
+        if transcript
+        else _REPLY_PROMPT.format(incoming=incoming.text)
+    )
+    gen = await _generate_chat_text(sender_id, secret, prompt=prompt, recent_texts=recent_texts)
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
     text = gen.text
@@ -243,7 +327,12 @@ async def _reply_to_partner(  # noqa: PLR0911
         await release_sent_text(text)
         return ChatResult()
     # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
-    result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
+    result = await _seams.execute(
+        sender_id,
+        SendDirectMessage(
+            user_id=target.user_id, text=text, typing_wpm=_account_typing_wpm(sender_id)
+        ),
+    )
 
     if result.status in _HALT_STATUSES:
         await mark_message_unreplied(incoming.id)
@@ -309,12 +398,25 @@ async def _open_with_partner(
     target = _seams.rng.choice(eligible)
     if target.user_id is None:
         return ChatResult()
-    gen = await _generate_chat_text(sender_id, secret)
+    # Resumed opener: if the pair has recent history, continue it with context;
+    # a genuinely fresh pair (no history) falls back to a random cold opener.
+    transcript, recent_texts = await _build_transcript(sender_id, target.account_id)
+    prompt = (
+        _HISTORY_PROMPT.format(transcript=transcript, instruction=_OPENER_INSTRUCTION)
+        if transcript
+        else None
+    )
+    gen = await _generate_chat_text(sender_id, secret, prompt=prompt, recent_texts=recent_texts)
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
     text = gen.text
     # The text was already reserved by `try_reserve_sent` inside `_generate_chat_text`.
-    result = await _seams.execute(sender_id, SendDirectMessage(user_id=target.user_id, text=text))
+    result = await _seams.execute(
+        sender_id,
+        SendDirectMessage(
+            user_id=target.user_id, text=text, typing_wpm=_account_typing_wpm(sender_id)
+        ),
+    )
 
     if result.status in _HALT_STATUSES:
         # P2.6: drop the reservation so the next opener retry isn't shadowed.

@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from core.db import mark_pair_banned, upsert_readiness
 from core.logging import log_event
-from schemas.neurocomment import AccountChannelOnboarding
+from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
 from services.neurocomment import challenge
 
 if TYPE_CHECKING:
@@ -111,20 +111,24 @@ async def _solve_and_record(
     leaves the pair not-ready — the audit row drives the board's ``bot_challenge``;
     ``no_challenge`` / ``solved`` means comment-able → ``ready``.
     """
-    if not solver_enabled:
-        await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
-        return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
-    outcome = await challenge.solve_if_present(account_id, channel, group_id)
-    if outcome in ("give_up", "failed"):
-        # Detected but unsolved (or the click errored) → not comment-able; the
-        # solver's audit row is what the board reads to render bot_challenge.
-        await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="bot_challenge",
-        )
-    # no_challenge, or solved (click dispatched, audit pending) → optimistically
-    # comment-able; the engine confirms a solved click on the first comment.
+
+    def _result(state: OnboardingState) -> AccountChannelOnboarding:
+        return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
+
+    if solver_enabled:
+        outcome = await challenge.solve_if_present(account_id, channel, group_id)
+        if outcome == "rate_limited":
+            # LLM gateway 429'd: transient, not a solver failure — retry-later, no
+            # readiness written, un-penalized (no bot_challenge, no #147 back-off).
+            return _result("joining").model_copy(update={"reason": "llm_rate_limited"})
+        if outcome in ("give_up", "failed"):
+            # Detected but unsolved (or click errored) → not comment-able; the solver's
+            # audit row is what the board reads to render bot_challenge.
+            await upsert_readiness(
+                account_id, channel, joined=True, captcha_passed=False, ready=False
+            )
+            return _result("bot_challenge")
+    # Solver disabled, or no_challenge/solved (click dispatched, audit pending) →
+    # optimistically comment-able; the engine confirms a solved click on first comment.
     await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
-    return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
+    return _result("ready")

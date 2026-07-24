@@ -147,6 +147,9 @@ class ReactToPost(BaseModel):
     channel: str = Field(min_length=1)
     reactions: list[str] = Field(min_length=1)
     message_limit: int = Field(default=20, ge=1, le=100)
+    # Candidate post ids from a preceding read; when set the reactor picks from
+    # these instead of re-fetching the channel (``message_limit`` then unused).
+    message_ids: list[int] | None = None
 
 
 class SendDirectMessage(BaseModel):
@@ -155,6 +158,16 @@ class SendDirectMessage(BaseModel):
     action_type: Literal["send_dm"] = "send_dm"
     user_id: int
     text: str = Field(min_length=1)
+    # Per-account typing tempo (WPM) for the "typing…" simulation; ``None`` falls
+    # back to the global ``typing_wpm``.
+    typing_wpm: int | None = None
+
+
+class MarkDirectMessageRead(BaseModel):
+    """Mark a private conversation read — emulates opening a DM before replying."""
+
+    action_type: Literal["mark_dm_read"] = "mark_dm_read"
+    user_id: int
 
 
 class GetLinkedDiscussionGroup(BaseModel):
@@ -233,6 +246,7 @@ TelegramAction = Annotated[
     | ReadChannel
     | ReactToPost
     | SendDirectMessage
+    | MarkDirectMessageRead
     | SetProfilePhoto
     | PostStory
     | AddProfileMusic
@@ -336,6 +350,10 @@ class ActionResult(BaseModel):
     # int64 (past JS's 2^53 safe-integer window), so it crosses the JSON
     # boundary as a decimal string — same rationale as profile_media._Int64Str.
     channel_id: str | None = None
+    # Recent post ids a read fetched, so a following react reuses them instead of
+    # re-fetching. int64 ids cross the JSON boundary as decimal strings, same
+    # rationale as ``channel_id``.
+    recent_message_ids: list[str] | None = None
     flood_wait_seconds: int | None = None
     error_type: str | None = None
     error_message: str | None = None

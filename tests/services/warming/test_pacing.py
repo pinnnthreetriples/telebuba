@@ -198,6 +198,42 @@ async def test_initial_delay_respects_future_next_run() -> None:
 
 
 @pytest.mark.asyncio
+async def test_initial_delay_spreads_past_due_schedule(monkeypatch: pytest.MonkeyPatch) -> None:
+    # FIX #1: a next_run_at that already elapsed (downtime) must NOT resume at 0 —
+    # every past-due account would fire in the same reconcile second. Spread it
+    # across catch_up_spread_seconds instead. Pin uniform() so the draw is a
+    # provably-nonzero, deterministic point inside the window.
+    monkeypatch.setattr(settings.warming, "catch_up_spread_seconds", 1800.0)
+    monkeypatch.setattr(_seams.rng, "uniform", lambda lo, hi: (lo + hi) / 2)
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    record = WarmingStateRecord(
+        account_id="a",
+        state="sleeping",
+        updated_at="t",
+        next_run_at=(now - timedelta(seconds=5000)).isoformat(),  # long past due
+    )
+    assert await warming._initial_delay_seconds("a", record, now) == pytest.approx(900.0)
+
+
+@pytest.mark.asyncio
+async def test_initial_delay_past_due_spread_varies(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The past-due draws fan out across the window (independent, not a synchronized
+    # burst) and always stay within [0, catch_up_spread_seconds].
+    monkeypatch.setattr(settings.warming, "catch_up_spread_seconds", 1800.0)
+    monkeypatch.setattr(_seams.rng, "uniform", random.uniform)  # live draw
+    now = datetime(2026, 6, 12, 12, 0, tzinfo=UTC)
+    record = WarmingStateRecord(
+        account_id="a",
+        state="sleeping",
+        updated_at="t",
+        next_run_at=(now - timedelta(seconds=10)).isoformat(),
+    )
+    delays = {await warming._initial_delay_seconds("a", record, now) for _ in range(20)}
+    assert len(delays) > 1  # fanned out, not all zero
+    assert all(0.0 <= d <= 1800.0 for d in delays)
+
+
+@pytest.mark.asyncio
 async def test_initial_delay_cold_start_shifts_into_window(monkeypatch: pytest.MonkeyPatch) -> None:
     # FIX #10: a cold start (no schedule) at 03:00 local must not fire in the
     # middle of the night — it is routed through the active-hours window.

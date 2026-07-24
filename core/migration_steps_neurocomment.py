@@ -245,6 +245,18 @@ def _add_neurocomment_cooldowns(connection: Connection) -> None:
     )
 
 
+def _add_neurocomment_challenges_channel_index(connection: Connection) -> None:
+    # #35: composite index leading with `channel` for the channel-scoped challenge
+    # reads (list_failed_for_channel(s), list_challenged_channels, count_by_outcome).
+    # The existing indexes lead with challenge_hash or account_id, so a channel-first
+    # filter full-scans the append-only table. Column order matches those query shapes:
+    # channel filter, outcome filter, decided_at sort.
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_challenges_channel_outcome_decided "
+        "ON neurocomment_challenges(channel, outcome, decided_at DESC)",
+    )
+
+
 def _add_campaign_account_channels_table(connection: Connection) -> None:
     # #29: per-account channel SUBSET within a campaign — one row per pinned channel.
     # NO rows for a (campaign, account) pair = serves ALL campaign channels (default).

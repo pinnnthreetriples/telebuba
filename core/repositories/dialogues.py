@@ -61,19 +61,46 @@ def _replace_dialogue_pairs(pairs: list[tuple[str, str]]) -> None:
     now = _now_iso()
     with _get_engine().begin() as connection:
         connection.execute(delete(dialogue_pairs))
-        for account_a, account_b in pairs:
+        if pairs:
             connection.execute(
-                insert(dialogue_pairs).values(
-                    account_a=account_a,
-                    account_b=account_b,
-                    assigned_at=now,
-                ),
+                insert(dialogue_pairs),
+                [
+                    {"account_a": account_a, "account_b": account_b, "assigned_at": now}
+                    for account_a, account_b in pairs
+                ],
             )
 
 
 async def replace_dialogue_pairs(pairs: list[tuple[str, str]]) -> None:
     """Atomically replace all pairs with ``pairs`` (each canonical: a < b)."""
     await asyncio.to_thread(_replace_dialogue_pairs, pairs)
+
+
+def _prune_and_add_pairs(removed: set[str], added: list[tuple[str, str]]) -> None:
+    now = _now_iso()
+    with _get_engine().begin() as connection:
+        if removed:
+            connection.execute(
+                delete(dialogue_pairs).where(
+                    dialogue_pairs.c.account_a.in_(removed)
+                    | dialogue_pairs.c.account_b.in_(removed),
+                ),
+            )
+        if added:
+            connection.execute(
+                insert(dialogue_pairs),
+                [{"account_a": a, "account_b": b, "assigned_at": now} for a, b in added],
+            )
+
+
+async def prune_and_add_pairs(removed: set[str], added: list[tuple[str, str]]) -> None:
+    """Drop every pair touching a ``removed`` account and insert ``added`` pairs.
+
+    A targeted membership patch: pairs between two surviving accounts keep their
+    original ``assigned_at`` (and their ongoing conversation), so a single account
+    dropping out never reshuffles the whole graph. ``added`` are canonical (a < b).
+    """
+    await asyncio.to_thread(_prune_and_add_pairs, removed, added)
 
 
 dialogue_messages = Table(
@@ -249,16 +276,39 @@ async def list_recent_dialogue_messages(limit: int = 30) -> list[DialogueMessage
     return await asyncio.to_thread(_list_recent_dialogue_messages, limit)
 
 
-def _purge_dialogue_messages_older_than(cutoff_iso: str) -> int:
-    # Only purge already-replied messages — unreplied ones may still owe an
-    # answer even if old, and dropping them would break ongoing conversations.
-    statement = delete(dialogue_messages).where(
-        (dialogue_messages.c.created_at < cutoff_iso) & (dialogue_messages.c.replied == 1),
+def _recent_pair_messages(key: str, limit: int) -> list[DialogueMessage]:
+    # Newest ``limit`` rows ordered on ``created_at`` so the (pair_key, created_at)
+    # index serves both the filter and the sort; reverse in Python so the caller
+    # reads oldest→newest. Rows are append-only, so created_at tracks insertion.
+    statement = (
+        select(dialogue_messages)
+        .where(dialogue_messages.c.pair_key == key)
+        .order_by(dialogue_messages.c.created_at.desc())
+        .limit(limit)
     )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    messages = [_row_to_message(cast("Mapping[str, object]", row)) for row in rows]
+    messages.reverse()
+    return messages
+
+
+async def recent_pair_messages(key: str, limit: int) -> list[DialogueMessage]:
+    """Return up to ``limit`` most recent messages for a pair, oldest→newest (for LLM context)."""
+    return await asyncio.to_thread(_recent_pair_messages, key, limit)
+
+
+def _purge_dialogue_messages_older_than(cutoff_iso: str) -> int:
+    # Rows older than the retention cutoff (default 90 days) are dead regardless
+    # of ``replied``: the conversation window is only 48h, so nothing this old is
+    # still active. Deleting unreplied rows too reclaims storage from orphans
+    # (ex-partners after a reshuffle, stopped accounts) that would otherwise grow
+    # the table forever.
+    statement = delete(dialogue_messages).where(dialogue_messages.c.created_at < cutoff_iso)
     with _get_engine().begin() as connection:
         return connection.execute(statement).rowcount
 
 
 async def purge_dialogue_messages_older_than(cutoff_iso: str) -> int:
-    """Delete replied dialogue messages older than the cutoff. Returns rows removed."""
+    """Delete dialogue messages older than the cutoff, any reply state. Returns rows removed."""
     return await asyncio.to_thread(_purge_dialogue_messages_older_than, cutoff_iso)

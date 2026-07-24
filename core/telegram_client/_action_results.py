@@ -31,6 +31,9 @@ class _DispatchResult:
     message_id: int | None = None
     channel_id: int | None = None
     log_extra: dict[str, object] | None = None
+    # Recent post ids fetched during a read, threaded to a following react so it
+    # skips re-fetching the same channel (set only by ``read_channel``).
+    recent_message_ids: list[int] | None = None
 
 
 async def _flood_action_result(

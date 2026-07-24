@@ -177,6 +177,30 @@ async def test_warmed_account_carries_card_meta() -> None:
 
 
 @pytest.mark.asyncio
+async def test_load_board_folds_in_warmed_pool() -> None:
+    """The board payload carries the same graduated pool ``/warmed`` returns.
+
+    The warming page reads this instead of a second fetch, so the two must agree
+    (and a promoted account must not leak into idle/warming).
+    """
+    await create_account(AccountCreate(account_id="grad", label="Grad"))
+    await create_account(AccountCreate(account_id="fresh", label="Fresh"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="grad", state="idle", started_at=_days_ago(20)),
+    )
+    await mark_promoted_to_nc("grad")
+
+    board = await load_board()
+    warmed = await list_warmed_accounts(14)
+
+    assert [a.account_id for a in board.warmed] == ["grad"]
+    assert [a.account_id for a in board.warmed] == [a.account_id for a in warmed.accounts]
+    assert board.warmed[0].target_days == 14  # settings.neurocomment.warmed_min_days fallback
+    assert "grad" not in {c.account_id for c in board.idle}
+    assert "grad" not in {c.account_id for c in board.warming}
+
+
+@pytest.mark.asyncio
 async def test_board_card_carries_telegram_name() -> None:
     """The board card surfaces first_name/last_name + avatar_etag for the display name/photo."""
     from core.db import update_account_from_session_check  # noqa: PLC0415
