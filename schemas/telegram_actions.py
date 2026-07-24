@@ -155,6 +155,16 @@ class SendDirectMessage(BaseModel):
     action_type: Literal["send_dm"] = "send_dm"
     user_id: int
     text: str = Field(min_length=1)
+    # Per-account typing tempo (WPM) for the "typing…" simulation; ``None`` falls
+    # back to the global ``typing_wpm``.
+    typing_wpm: int | None = None
+
+
+class MarkDirectMessageRead(BaseModel):
+    """Mark a private conversation read — emulates opening a DM before replying."""
+
+    action_type: Literal["mark_dm_read"] = "mark_dm_read"
+    user_id: int
 
 
 class GetLinkedDiscussionGroup(BaseModel):
@@ -233,6 +243,7 @@ TelegramAction = Annotated[
     | ReadChannel
     | ReactToPost
     | SendDirectMessage
+    | MarkDirectMessageRead
     | SetProfilePhoto
     | PostStory
     | AddProfileMusic

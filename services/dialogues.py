@@ -7,6 +7,7 @@ of "who knows whom" looks organic. The dialogue exchange itself builds on this.
 
 from __future__ import annotations
 
+import asyncio
 import random
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -17,6 +18,7 @@ from core.db import (
     list_dialogue_pairs,
     list_recent_dialogue_messages,
     list_warming_account_ids,
+    prune_and_add_pairs,
     replace_dialogue_pairs,
 )
 from core.logging import log_event
@@ -33,6 +35,10 @@ if TYPE_CHECKING:
 
 _rng = random.SystemRandom()
 _MIN_POOL = 2
+# Serialize the read-modify-write below: concurrent start_warming calls hold
+# different per-account locks, so without this they could interleave
+# replace_dialogue_pairs and churn assigned_at.
+_assign_lock = asyncio.Lock()
 
 
 async def get_partners(account_id: str) -> DialoguePartnersResult:
@@ -55,19 +61,41 @@ async def _eligible_accounts() -> list[str]:
     )
 
 
-def _needs_reshuffle(pairs: list[DialoguePair], eligible: list[str], now: datetime) -> bool:
-    if not pairs:
-        return True
-    covered = {pair.account_a for pair in pairs} | {pair.account_b for pair in pairs}
-    if covered != set(eligible):
-        return True
+def _time_to_reshuffle(pairs: list[DialoguePair], now: datetime) -> bool:
+    """True once the graph's OLDEST pair is older than the reshuffle interval.
+
+    Keyed off the oldest ``assigned_at`` (not the newest) so incremental
+    membership patches — which stamp only their new pairs — never keep pushing
+    the organic full-reshuffle clock back. Unparseable timestamps force a rebuild.
+    """
     try:
-        newest = max(datetime.fromisoformat(pair.assigned_at) for pair in pairs)
+        oldest = min(datetime.fromisoformat(pair.assigned_at) for pair in pairs)
     except ValueError:
         return True
-    if newest.tzinfo is None:
-        newest = newest.replace(tzinfo=UTC)
-    return now - newest >= timedelta(days=settings.warming.dialogue_reshuffle_days)
+    if oldest.tzinfo is None:
+        oldest = oldest.replace(tzinfo=UTC)
+    return now - oldest >= timedelta(days=settings.warming.dialogue_reshuffle_days)
+
+
+def _pairs_for_new_accounts(new_accounts: list[str], eligible: list[str]) -> list[tuple[str, str]]:
+    """Weave each newly-eligible account into the graph, leaving the rest alone.
+
+    Mirrors :func:`_build_pairs`' per-account degree (``randint(min, max)``) but
+    only for the new accounts, so existing acquaintances — and their live
+    conversations — survive a membership change. Pairs are canonical (a < b).
+    """
+    warm = settings.warming
+    pairs: set[tuple[str, str]] = set()
+    for account in new_accounts:
+        others = [other for other in eligible if other != account]
+        if not others:
+            continue
+        upper = min(warm.dialogue_partners_max, len(others))
+        lower = min(warm.dialogue_partners_min, upper)
+        for partner in _rng.sample(others, _rng.randint(lower, upper)):
+            ordered = sorted((account, partner))
+            pairs.add((ordered[0], ordered[1]))
+    return sorted(pairs)
 
 
 def _build_pairs(accounts: list[str]) -> list[tuple[str, str]]:
@@ -88,31 +116,50 @@ def _build_pairs(accounts: list[str]) -> list[tuple[str, str]]:
 
 
 async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
-    """Reshuffle the acquaintance graph when stale, membership-changed, or forced.
+    """Keep the acquaintance graph current: full reshuffle on the interval, else patch.
 
     A pool below two eligible accounts clears any existing pairs (nobody to talk
-    to). Otherwise pairs are rebuilt only when needed, to avoid churn.
+    to). A full ``_build_pairs`` reshuffle runs only on first assignment, when
+    forced, or once the interval elapses — the intended organic re-mixing. In
+    between, a membership change is applied as a *targeted patch* (drop pairs of
+    accounts that fell out, weave in new ones) so a single account freezing never
+    reshuffles the whole graph and orphans every live conversation.
     """
-    eligible = await _eligible_accounts()
-    pairs = await list_dialogue_pairs()
-    now = datetime.now(UTC)
+    async with _assign_lock:
+        eligible = await _eligible_accounts()
+        pairs = await list_dialogue_pairs()
+        now = datetime.now(UTC)
 
-    if len(eligible) < _MIN_POOL:
-        if pairs:
-            await replace_dialogue_pairs([])
-        return DialoguePairsResult(pairs=[])
+        if len(eligible) < _MIN_POOL:
+            if pairs:
+                await replace_dialogue_pairs([])
+            return DialoguePairsResult(pairs=[])
 
-    if not force and not _needs_reshuffle(pairs, eligible, now):
-        return DialoguePairsResult(pairs=pairs)
+        if force or not pairs or _time_to_reshuffle(pairs, now):
+            new_pairs = _build_pairs(eligible)
+            await replace_dialogue_pairs(new_pairs)
+            await log_event(
+                "INFO",
+                "dialogue_pairs_assigned",
+                extra={"accounts": len(eligible), "pairs": len(new_pairs)},
+            )
+            return DialoguePairsResult(pairs=await list_dialogue_pairs())
 
-    new_pairs = _build_pairs(eligible)
-    await replace_dialogue_pairs(new_pairs)
-    await log_event(
-        "INFO",
-        "dialogue_pairs_assigned",
-        extra={"accounts": len(eligible), "pairs": len(new_pairs)},
-    )
-    return DialoguePairsResult(pairs=await list_dialogue_pairs())
+        eligible_set = set(eligible)
+        covered = {pair.account_a for pair in pairs} | {pair.account_b for pair in pairs}
+        removed = covered - eligible_set
+        added = sorted(eligible_set - covered)
+        if not removed and not added:
+            return DialoguePairsResult(pairs=pairs)
+
+        new_pairs = _pairs_for_new_accounts(added, eligible) if added else []
+        await prune_and_add_pairs(removed, new_pairs)
+        await log_event(
+            "INFO",
+            "dialogue_pairs_patched",
+            extra={"removed": len(removed), "added": len(added), "new_pairs": len(new_pairs)},
+        )
+        return DialoguePairsResult(pairs=await list_dialogue_pairs())
 
 
 async def load_dialogue_overview(*, recent_limit: int = 30) -> DialogueFeed:

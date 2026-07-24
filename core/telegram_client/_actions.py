@@ -44,6 +44,7 @@ from schemas.telegram_actions import (
     JoinChannel,
     JoinDiscussionGroup,
     LeaveChannel,
+    MarkDirectMessageRead,
     PostComment,
     PostStory,
     ReactToPost,
@@ -161,10 +162,13 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
     )
 
 
-def _typing_seconds(text: str) -> float:
-    """Length-proportional typing time (≈ WPM), clamped to a sane window."""
+def _typing_seconds(text: str, wpm: int | None = None) -> float:
+    """Length-proportional typing time (≈ WPM), clamped to a sane window.
+
+    ``wpm`` is the per-account tempo; ``None`` falls back to the global default.
+    """
     warm = settings.warming
-    base = len(text) * 60.0 / (5.0 * warm.typing_wpm)
+    base = len(text) * 60.0 / (5.0 * (wpm or warm.typing_wpm))
     return max(warm.typing_sim_min_seconds, min(warm.typing_sim_max_seconds, base))
 
 
@@ -172,7 +176,7 @@ async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage
     """Send a DM, optionally preceded by a length-proportional "typing…" action."""
     if settings.warming.typing_simulation_enabled:
         async with client.action(action.user_id, "typing"):  # ty: ignore[invalid-context-manager]
-            await asyncio.sleep(_typing_seconds(action.text))
+            await asyncio.sleep(_typing_seconds(action.text, action.typing_wpm))
             message = await client.send_message(action.user_id, action.text)
     else:
         message = await client.send_message(action.user_id, action.text)
@@ -229,6 +233,9 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             log_extra = react.log_extra
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
+        case MarkDirectMessageRead():
+            # send_read_acknowledge on a user peer marks the DM conversation read.
+            await client.send_read_acknowledge(action.user_id)
         case _ if action.action_type.startswith("channel_"):
             # Channel management (create/edit/post/delete) — its own dispatcher
             # builds the full result (channel_create carries the new id).
@@ -379,7 +386,7 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
             extra = {"chat_id": action.chat_id, "message_id": action.message_id}
         case SetOnline():
             extra = {"online": action.online}
-        case SendDirectMessage():
+        case SendDirectMessage() | MarkDirectMessageRead():
             extra = {"user_id": action.user_id}
         case UpdateProfile():
             extra = {

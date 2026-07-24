@@ -352,11 +352,15 @@ async def _purge_loop() -> None:  # pragma: no cover - long-running task body.
 
     ``purge_stale_history`` swallows its own errors, so a failing sweep never
     breaks the cadence. Cancelled cleanly on shutdown like the per-account loops.
+    Also reshuffles the acquaintance graph so frozen/fail-health partners drop
+    out on the purge cadence (``_refresh_dialogue_pairs`` swallows its own
+    errors too).
     """
     interval = settings.warming.purge_interval_hours * 3600
     while True:
         await asyncio.sleep(interval)
         await purge_stale_history()
+        await _refresh_dialogue_pairs()
 
 
 def _start_purge_task() -> None:
