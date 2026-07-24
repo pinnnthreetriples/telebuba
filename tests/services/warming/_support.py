@@ -38,6 +38,8 @@ _ZERO_DELAY_FIELDS = (
     "reading_min_seconds",
     "reading_max_seconds",
     "startup_jitter_max_seconds",
+    "dm_read_reply_delay_min_seconds",
+    "dm_read_reply_delay_max_seconds",
 )
 
 _SAT = "2026-06-13"

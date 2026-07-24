@@ -10,6 +10,7 @@ patching across the split submodules.
 
 from __future__ import annotations
 
+import asyncio
 import random
 
 from core.gemini import generate_text
@@ -20,4 +21,10 @@ from services.spam_status import refresh_spam_status
 # module-level ``random.*`` helpers. Behaviour is identical for our needs.
 rng = random.SystemRandom()
 
-__all__ = ["execute", "generate_text", "refresh_spam_status", "rng"]
+
+async def sleep(seconds: float) -> None:
+    """Async sleep seam — patched to a no-op in tests so delays stay instant."""
+    await asyncio.sleep(seconds)
+
+
+__all__ = ["execute", "generate_text", "refresh_spam_status", "rng", "sleep"]

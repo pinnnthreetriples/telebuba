@@ -143,6 +143,16 @@ class WarmingSettings(BaseSettings):
     # once the window passes the pair may start talking again (resumption).
     dialogue_max_turns: int = Field(default=12, ge=1)
     dialogue_conversation_window_hours: float = Field(default=48.0, gt=0.0)
+    # How many recent pair messages are fed to Gemini as conversation context so
+    # replies/openers reference prior turns instead of being context-free. 0 = off.
+    dialogue_context_messages: int = Field(default=6, ge=0)
+    # Near-duplicate gate: reject a generated line whose token-set Jaccard against
+    # any recent pair message is >= this (catches "привет как дела" vs "привет, как дела!").
+    dialogue_similarity_max: float = Field(default=0.8, ge=0.0, le=1.0)
+    # Read-to-reply realism: mark the incoming DM read, then pause this many
+    # seconds (uniform) before replying — a real user reads before answering.
+    dm_read_reply_delay_min_seconds: float = Field(default=2.0, ge=0.0)
+    dm_read_reply_delay_max_seconds: float = Field(default=15.0, ge=0.0)
     # Human-like pacing: inter-action pauses are drawn from a clipped log-normal
     # (heavy right tail — many short pauses, the occasional long one) instead of
     # a flat uniform, which is the most detectable timing pattern.
@@ -152,6 +162,11 @@ class WarmingSettings(BaseSettings):
     # time before sending a DM (≈ WPM), clamped to a sane window.
     typing_simulation_enabled: bool = True
     typing_wpm: int = Field(default=45, ge=1)
+    # Per-account typing tempo: each account draws a stable-but-distinct WPM from
+    # this range (hashed off its id) so the fleet doesn't type at one uniform speed.
+    # ``typing_wpm`` stays the fallback when no per-message value is supplied.
+    typing_wpm_min: int = Field(default=32, ge=1)
+    typing_wpm_max: int = Field(default=58, ge=1)
     typing_sim_min_seconds: float = Field(default=0.5, ge=0.0)
     typing_sim_max_seconds: float = Field(default=12.0, ge=0.0)
     # Time-of-day cadence: bias the next cycle to land inside an active local-time

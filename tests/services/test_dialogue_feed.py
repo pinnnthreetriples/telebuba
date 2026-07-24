@@ -16,6 +16,9 @@ from core.db import (
     configure_database,
     create_account,
     list_recent_dialogue_messages,
+    pair_key,
+    purge_dialogue_messages_older_than,
+    recent_pair_messages,
     record_dialogue_message,
     update_account_from_session_check,
 )
@@ -93,6 +96,47 @@ async def test_load_overview_resolves_phone_labels_newest_first() -> None:
     assert newest.from_label == "+15550002222"
     assert newest.to_account == "a"
     assert newest.to_label == "+15550001111"
+
+
+@pytest.mark.asyncio
+async def test_purge_deletes_old_unreplied_keeps_recent(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await create_account(AccountCreate(account_id="a"))
+    await create_account(AccountCreate(account_id="b"))
+    # Old unreplied row — an orphan the pre-fix WHERE (replied==1) would keep.
+    monkeypatch.setattr(
+        "core.repositories.dialogues._now_iso",
+        lambda: "2000-01-01T00:00:00+00:00",
+    )
+    await record_dialogue_message("a", "b", "old")
+    monkeypatch.setattr(
+        "core.repositories.dialogues._now_iso",
+        lambda: "2026-01-01T00:00:00+00:00",
+    )
+    await record_dialogue_message("a", "b", "recent")
+
+    removed = await purge_dialogue_messages_older_than("2010-01-01T00:00:00+00:00")
+
+    assert removed == 1
+    remaining = await list_recent_dialogue_messages()
+    assert [msg.text for msg in remaining] == ["recent"]
+
+
+@pytest.mark.asyncio
+async def test_recent_pair_messages_chronological_and_filtered() -> None:
+    for account_id in ("a", "b", "c"):
+        await create_account(AccountCreate(account_id=account_id))
+    for i in range(3):
+        await record_dialogue_message("a", "b", f"ab{i}")
+    await record_dialogue_message("a", "c", "ac0")  # different pair
+
+    key = pair_key("a", "b")
+    msgs = await recent_pair_messages(key, limit=2)
+
+    # Oldest→newest, limited to the last two of the a↔b pair only.
+    assert [msg.text for msg in msgs] == ["ab1", "ab2"]
+    assert all(msg.pair_key == key for msg in msgs)
 
 
 @pytest.mark.asyncio
