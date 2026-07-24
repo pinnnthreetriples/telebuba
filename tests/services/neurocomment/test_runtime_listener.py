@@ -18,6 +18,7 @@ from core.db import (
 from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import (
     ActionResult,
+    ActionStatus,
     JoinChannel,
     NewPostEvent,
 )
@@ -282,6 +283,11 @@ async def test_reconcile_paces_joins_with_jittered_pause(
     # 3 fresh joins → 2 inter-join pauses, each the jittered value. (Other 42.0-free
     # sleeps, e.g. the deletion sweep interval, are unrelated and ignored.)
     assert [s for s in sleeps if s == 42.0] == [42.0, 42.0]
+    # Second reconcile: every channel is now cached in _JOINED_CHANNELS, so no join
+    # RPCs fire and no inter-join pause runs — cache-hits must never sleep.
+    sleeps.clear()
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    assert [s for s in sleeps if s == 42.0] == []
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 
@@ -297,21 +303,27 @@ async def test_reconcile_stops_join_burst_on_flood(
     campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     for ch in ("@a", "@b", "@c"):
         await link_channel_to_campaign(campaign.campaign_id, ch)
-    _patch_listener(monkeypatch, _ListenerSpy())
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
     attempts: list[str] = []
 
-    async def _flood_on_first(account_id: str, action: JoinChannel) -> ActionResult:
+    async def _ok_then_flood(account_id: str, action: JoinChannel) -> ActionResult:
+        # First join succeeds; the next one floods mid-loop.
         attempts.append(action.channel)
-        return ActionResult(
-            status="flood_wait", action_type=action.action_type, account_id=account_id
-        )
+        status: ActionStatus = "ok" if len(attempts) == 1 else "flood_wait"
+        return ActionResult(status=status, action_type=action.action_type, account_id=account_id)
 
-    monkeypatch.setattr("services.neurocomment._seams.execute", _flood_on_first)
+    monkeypatch.setattr("services.neurocomment._seams.execute", _ok_then_flood)
 
     await _runtime.reconcile_neurocomment_runtime("listener-1")
 
-    # Loop broke after the first flood — only one join RPC was fired, not three.
-    assert attempts == ["@a"]
+    # Broke after the flood on the 2nd join → the 3rd channel is never attempted.
+    assert len(attempts) == 2
+    # The successful join is cached; the flooded one is not (retried next reconcile).
+    assert ("listener-1", attempts[0]) in _runtime._JOINED_CHANNELS
+    assert ("listener-1", attempts[1]) not in _runtime._JOINED_CHANNELS
+    # Valid state after the break: the listener still subscribes to all channels.
+    assert set(spy.subscribed[0][1]) == {"@a", "@b", "@c"}
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 
