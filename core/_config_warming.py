@@ -73,7 +73,8 @@ class WarmingSettings(BaseSettings):
     # a perfectly closed set and cross-account overlap stays noisy.
     channel_exploration_probability: float = Field(default=0.1, ge=0.0, le=1.0)
     reaction_probability: float = Field(default=0.6, ge=0.0, le=1.0)
-    read_message_limit: int = Field(default=15, ge=1, le=100)
+    # Recent posts fetched per channel in one read; the read reuses this pool for
+    # the following reaction, so it also bounds the reaction's candidate set.
     reaction_message_limit: int = Field(default=20, ge=1, le=100)
     # Telegram's reaction emoticons omit the U+FE0F variation selector (bare "❤",
     # not "❤️"); keep this set in that canonical form so it matches a channel's

@@ -49,8 +49,9 @@ def _affinity_epoch(now: datetime) -> int:
 # epoch, the channel-name set, and the (runtime-static) selection config, so a
 # hit skips re-hashing two SHA-256 per channel + a full re-sort every cycle. The
 # config fields are folded into the key so a test varying them mid-run recomputes
-# rather than reading a stale slice; in production they never change. Cleared per
-# test by the warming conftest.
+# rather than reading a stale slice; in production they never change. Prior-epoch
+# entries are evicted on miss (see below) so the dict stays bounded to the live
+# epoch rather than growing forever. Cleared per test by the warming conftest.
 _AFFINITY_CACHE: dict[tuple[object, ...], list[WarmingChannel]] = {}
 
 
@@ -83,6 +84,11 @@ def _account_channel_affinity(
     cached = _AFFINITY_CACHE.get(key)
     if cached is not None:
         return cached
+
+    # A miss for the current epoch means any entry from an older epoch is dead
+    # (epoch is shared fleet-wide), so evict them to keep the cache bounded.
+    for stale in [k for k in _AFFINITY_CACHE if k[1] != epoch]:
+        del _AFFINITY_CACHE[stale]
 
     if len(channels) <= warm.channels_per_cycle_min:
         result = channels

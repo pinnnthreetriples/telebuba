@@ -91,10 +91,9 @@ async def test_cycle_reads_once_and_threads_ids_into_react(
     reacts = [a for _id, a in recorder.actions if a.action_type == "react_to_post"]
     assert len(reads) == 1
     assert len(reacts) == 1
-    # The single read's message_limit covers the reaction candidate pool, and its
-    # ids are threaded into the react so the reactor never re-fetches.
-    warm = settings.warming
-    assert reads[0].message_limit == max(warm.read_message_limit, warm.reaction_message_limit)
+    # The single read fetches the reaction candidate pool, and its ids are
+    # threaded into the react so the reactor never re-fetches.
+    assert reads[0].message_limit == settings.warming.reaction_message_limit
     assert reacts[0].message_ids == [101, 102]
 
 

@@ -76,7 +76,10 @@ async def _initial_delay_seconds(
     A *past-due* schedule (``next_run_at`` already elapsed, e.g. after downtime)
     would otherwise resume at delay 0: on reconcile every such account fires in
     the same second. Spread it across ``catch_up_spread_seconds`` instead so the
-    fleet's catch-up cycles fan out rather than spiking Telegram + SQLite.
+    fleet's catch-up cycles fan out rather than spiking Telegram + SQLite. Note
+    this also applies to a *manual* start of an account whose stored
+    ``next_run_at`` is already in the past — its first cycle waits up to the
+    spread rather than firing immediately.
     """
     if record is not None and record.next_run_at is not None:
         remaining = _seconds_until(record.next_run_at, now)
