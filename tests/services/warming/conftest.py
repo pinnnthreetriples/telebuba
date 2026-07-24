@@ -9,6 +9,7 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from core.telegram_client._react import _whitelist_cache
 from services import warming
 from services.warming import _runtime, _seams
 from tests.services.warming._support import _ZERO_DELAY_FIELDS
@@ -42,6 +43,9 @@ def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterato
     reset_logging_for_tests()
     setup_logging()
     warming._RUNTIME.clear()
+    # Module-level reaction-whitelist TTL cache — clear so channel reaction sets
+    # never carry across tests.
+    _whitelist_cache.clear()
     # _ACCOUNT_LOCKS are module-level and bound to the loop alive when created;
     # clear them too so each test gets fresh locks — needed when a runner like
     # mutmut drives several pytest sessions in one process (the loop changes).

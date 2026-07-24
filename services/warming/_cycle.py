@@ -114,7 +114,12 @@ async def _read_and_react(  # noqa: PLR0913
     out = _ReadReactOutcome()
     read_result = await _seams.execute(
         account_id,
-        ReadChannel(channel=channel, message_limit=warm.read_message_limit),
+        # Fetch enough to cover the reaction's candidate pool in a single read;
+        # the react below reuses these ids instead of re-fetching the channel.
+        ReadChannel(
+            channel=channel,
+            message_limit=max(warm.read_message_limit, warm.reaction_message_limit),
+        ),
     )
     out.attempts += 1
     if read_result.status == "ok":
@@ -133,12 +138,14 @@ async def _read_and_react(  # noqa: PLR0913
         can_react = False
 
     if can_react and reactions_enabled and _seams.rng.random() < reaction_probability:
+        recent = read_result.recent_message_ids
         react_result = await _seams.execute(
             account_id,
             ReactToPost(
                 channel=channel,
                 reactions=warm.default_reactions,
                 message_limit=warm.reaction_message_limit,
+                message_ids=[int(x) for x in recent] if recent else None,
             ),
         )
         out.attempts += 1

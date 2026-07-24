@@ -217,18 +217,15 @@ async def test_settings_join_enabled_defaults_on_and_roundtrips() -> None:
 async def test_settings_warming_controls_default_and_roundtrip() -> None:
     secret = await load_warming_settings()
     assert secret.enforce_readiness is True
-    assert secret.max_daily_actions == 0
 
     saved = await save_warming_settings(
         inter_account_chat=False,
         reactions_enabled=True,
         enforce_readiness=False,
-        max_daily_actions=30,
         gemini_api_key=None,
     )
 
     assert saved.enforce_readiness is False
-    assert saved.max_daily_actions == 30
 
 
 @pytest.mark.asyncio

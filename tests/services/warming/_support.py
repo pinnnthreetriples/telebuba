@@ -64,11 +64,15 @@ class _Recorder:
         elif action.action_type in self.peer_flood_on:
             status = "peer_flood"
         message_id = self.react_message_id if action.action_type == "react_to_post" else None
+        # A read hands its recent post ids back so the cycle threads them into the
+        # following react (which then skips its own fetch).
+        recent = ["101", "102"] if action.action_type == "read_channel" and status == "ok" else None
         return ActionResult(
             status=status,
             action_type=action.action_type,
             account_id=account_id,
             message_id=message_id if status == "ok" else None,
+            recent_message_ids=recent,
         )
 
     def types(self) -> list[str]:

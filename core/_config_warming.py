@@ -84,10 +84,6 @@ class WarmingSettings(BaseSettings):
     # Refuse to start warming an account that is not ready (dead session, no
     # proxy, no channels). Set False to bypass the pre-start gate.
     enforce_readiness: bool = True
-    # Per-account daily action budget (joins+reads+reactions+messages). 0 = off.
-    # When the day's count reaches the cap the account parks until the next daily
-    # reset (UTC date rollover), shifted into its local active-hours window.
-    max_daily_actions: int = Field(default=0, ge=0)
     # Watch subscribed channels' stories once per session (a low-risk, very human
     # signal). Applies to every persona; disable to skip the story-view step.
     story_view_enabled: bool = True

@@ -92,12 +92,12 @@ async def test_run_loop_iteration_parks_when_daily_cap_reached(
 
 
 @pytest.mark.asyncio
-async def test_legacy_max_daily_override_is_ignored(
+async def test_phase_cap_governs_daily_limit(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # A legacy fleet-wide max_daily_actions persisted in the DB must NOT override
-    # the per-account auto cap from phase/trust (audit П2). A fresh account is
-    # intro-capped at 3, so daily_actions=3 parks despite the 999 override.
+    # The per-account auto cap (phase/trust) is the sole daily governor (audit П2;
+    # the legacy fleet-wide override was removed). A fresh account is intro-capped
+    # at 3, so daily_actions=3 parks the account.
     # enforce_readiness off so the daily gate is reached, not the П3 readiness gate.
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
@@ -106,7 +106,6 @@ async def test_legacy_max_daily_override_is_ignored(
         inter_account_chat=False,
         reactions_enabled=False,
         enforce_readiness=False,
-        max_daily_actions=999,
         gemini_api_key="",
     )
     await create_account(AccountCreate(account_id="acc-1"))
