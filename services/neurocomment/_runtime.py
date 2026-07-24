@@ -11,26 +11,22 @@ from __future__ import annotations
 
 import asyncio
 from contextlib import suppress
-from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.db import (
     get_listener_account_id,
-    get_listener_running,
     list_active_watch_channels,
     list_campaigns,
     list_warming_account_ids,
-    reclaim_stale_claims,
     record_join,
     set_listener_account_id,
     set_listener_running,
 )
 from core.logging import log_event
 from core.telegram_client import stop_post_listener, subscribe_posts
-from schemas.neurocomment import NeurocommentRuntimeStatus
 from schemas.telegram_actions import JoinChannel
-from services.neurocomment import _seams, _signals, _state
+from services.neurocomment import _seams, _signals
 from services.neurocomment._generate import _COOLDOWN_STATUSES
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import (
@@ -316,97 +312,6 @@ async def clear_neurocomment_listener() -> None:
     await _teardown_listener_locked(listener_account_id, clear_account=True)
 
 
-async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
-    """Fleet runtime state for the UI: is the engine subscribed, and over how many channels.
-
-    ``running`` reflects the persisted ``listener_running`` flag (actively
-    subscribed), not merely whether an account is remembered. The remembered
-    ``listener_account_id`` is always returned when one is set, so a *paused*
-    runtime shows the listener strip with ``running=False`` — the SPA tells "paused
-    with a remembered listener" from "no listener" by that field being non-null.
-    The watch set is only read when running, so a paused/stopped engine costs two
-    scalar reads.
-    """
-    log_limit = settings.neurocomment.log_limit
-    listener_account_id = await get_listener_account_id()
-    running = await get_listener_running()
-    onboarding = is_onboarding_running()
-    if not running:
-        return NeurocommentRuntimeStatus(
-            running=False,
-            listener_account_id=listener_account_id,
-            log_limit=log_limit,
-            onboarding=onboarding,
-        )
-    channels = (await list_active_watch_channels()).channels
-    return NeurocommentRuntimeStatus(
-        running=True,
-        active_channels=len(channels),
-        listener_account_id=listener_account_id,
-        log_limit=log_limit,
-        onboarding=onboarding,
-    )
-
-
-async def reconcile_if_running() -> None:
-    """Re-point the live listener at the current watch set — no-op when not running.
-
-    Called after a channel link/unlink so the running listener's subscription tracks
-    the DB immediately, instead of only at the next start/boot. Gated on
-    ``listener_running`` so a *paused* runtime (id remembered, flag off) is not
-    silently resubscribed by a channel edit. Also (re)triggers campaign onboarding —
-    a campaign edited after Start would otherwise never get readiness rows.
-    """
-    if not await get_listener_running():
-        return
-    listener_account_id = await get_listener_account_id()
-    if listener_account_id is not None:
-        await reconcile_neurocomment_runtime(listener_account_id)
-        _ensure_onboarding_running(_signals.signal_onboarding_progress)
-
-
-async def reconcile_neurocomment_on_startup() -> None:
-    """No-arg ``app.on_startup`` hook: resume the listener only if it was running.
-
-    A remembered-but-*paused* listener (``listener_account_id`` set,
-    ``listener_running`` False) stays paused across a reboot — resuming it would
-    silently re-enable a runtime the operator turned off (audit 2026-07-02).
-
-    Stale claims are reclaimed unconditionally first: a crash mid-post leaves rows
-    stuck ``claimed`` forever (the post_id is then permanently un-claimable), and
-    that must be cleaned up even for a runtime that boots paused.
-    """
-    await _reclaim_stale_claims_on_startup()
-    # Rehydrate cooldowns unconditionally (#34) — a just-flooded account stays parked
-    # across a restart even for a runtime that boots paused.
-    await _state.hydrate_cooldowns()
-    if not await get_listener_running():
-        return
-    listener_account_id = await get_listener_account_id()
-    if listener_account_id is not None:
-        await reconcile_neurocomment_runtime(listener_account_id)
-        # Resume onboarding too: campaigns created since the last Start would
-        # otherwise boot with a live listener but zero readiness rows.
-        _ensure_onboarding_running(_signals.signal_onboarding_progress)
-
-
-async def _reclaim_stale_claims_on_startup() -> None:
-    """Mark claims stuck 'claimed' since before the reclaim cutoff as 'failed'."""
-    cutoff = (
-        datetime.now(UTC) - timedelta(seconds=settings.neurocomment.stale_claim_reclaim_seconds)
-    ).isoformat()
-    reclaimed = await reclaim_stale_claims(cutoff)
-    if reclaimed:
-        await log_event("INFO", "neurocomment_stale_claims_reclaimed", extra={"count": reclaimed})
-
-
-async def shutdown_neurocomment_on_shutdown() -> None:
-    """No-arg ``app.on_shutdown`` hook: tear the listener + tasks down on exit."""
-    listener_account_id = await get_listener_account_id()
-    if listener_account_id is not None:
-        await shutdown_neurocomment_runtime(listener_account_id)
-
-
 def _ensure_sweep_running() -> None:
     """Start the periodic deletion sweep if enabled and not already running."""
     global _SWEEP_TASK  # noqa: PLW0603 - single module-level sweep-task handle
@@ -460,6 +365,17 @@ def reset_for_tests() -> None:
         _ONBOARD_TASK.cancel()
         _ONBOARD_TASK = None
 
+
+# The app-lifecycle hooks + reconcile trigger + UI status query live in ``_lifecycle``
+# (file-size cap); they call back into this module's core machinery. Re-exported so
+# ``_runtime.<name>`` and the ``services.neurocomment`` package exports still resolve.
+from services.neurocomment._lifecycle import (  # noqa: E402, F401 - re-export after the module body.
+    _reclaim_stale_claims_on_startup,
+    neurocomment_runtime_status,
+    reconcile_if_running,
+    reconcile_neurocomment_on_startup,
+    shutdown_neurocomment_on_shutdown,
+)
 
 # The deletion sweep's work lives in ``_sweep`` (file-size cap); the task handle and
 # its start/stop stay above (this module's lifecycle owns reconcile/shutdown). Re-
