@@ -365,3 +365,37 @@ async def test_refused_resync_read_still_surfaces_the_refusal(
     account = await fetch_account("account-profile-readfail")
     assert account is not None
     assert account.username == "oldname"
+
+
+@pytest.mark.asyncio
+async def test_resync_with_unstorable_live_username_keeps_original_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live value our schema refuses must not replace the action's error.
+
+    Fragment/NFT usernames can be 4 characters — shorter than the schema's
+    5-char floor. The re-sync's ValidationError (a ValueError subclass) must be
+    swallowed so the API still answers with the original stable code, not a
+    pydantic dump.
+    """
+    await _seed_profile("account-profile-nft", monkeypatch)
+
+    async def fake_read(_account_id: str, _action: object) -> TelegramProfileSnapshot:
+        return TelegramProfileSnapshot(first_name="Alice", username="nft1")
+
+    _patch_failed_execute(monkeypatch)
+    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+
+    with pytest.raises(AccountActionError, match="boom"):
+        await update_account_profile(
+            AccountProfileUpdateRequest(
+                account_id="account-profile-nft",
+                first_name="Alice",
+                username="newname",
+            ),
+        )
+
+    account = await fetch_account("account-profile-nft")
+    assert account is not None
+    # Sync skipped wholesale: the DB keeps the pre-edit snapshot.
+    assert account.username == "oldname"

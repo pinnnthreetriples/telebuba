@@ -468,7 +468,7 @@ async def test_execute_frozen_account_yields_stable_code_and_marks_db(
 async def test_execute_flood_wait_marks_db_status(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A flood-limited action stores ``flood_wait`` so the list/tiles reflect it."""
+    """A flood-limited PROFILE EDIT stores ``flood_wait`` so the list/tiles reflect it."""
     await create_account(AccountCreate(account_id="acc-flooded"))
 
     class FakeClient:
@@ -487,6 +487,70 @@ async def test_execute_flood_wait_marks_db_status(
     account = await fetch_account("acc-flooded")
     assert account is not None
     assert account.status == "flood_wait"
+
+
+@pytest.mark.asyncio
+async def test_execute_flood_wait_on_non_edit_action_leaves_status_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Warming-style actions flood routinely — that must NOT stick ``flood_wait``.
+
+    A sticky status would block start_warming (readiness requires ``alive``)
+    and park reconcile in error on restart; only operator-driven profile/media
+    edits mark the account.
+    """
+    await create_account(AccountCreate(account_id="acc-warming-flood"))
+    before = await fetch_account("acc-warming-flood")
+    assert before is not None
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_message(self, _chat_id: int, _text: str) -> object:
+            raise errors.FloodWaitError(request=None, capture=30)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-warming-flood", PostComment(chat_id=1, text="hi"))
+
+    assert result.status == "flood_wait"
+    account = await fetch_account("acc-warming-flood")
+    assert account is not None
+    assert account.status == before.status
+
+
+@pytest.mark.asyncio
+async def test_execute_survives_status_write_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A locked DB during status bookkeeping must not break execute's contract.
+
+    ``execute`` returns a typed ``ActionResult``, never raises — even when the
+    frozen/flood status write itself fails (SQLite "database is locked").
+    """
+    await create_account(AccountCreate(account_id="acc-frozen-locked"))
+
+    async def broken_update(_account_id: str, *, status: str) -> None:
+        del status
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr("core.telegram_client._profile.update_account_status", broken_update)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.FrozenMethodInvalidError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-frozen-locked", UpdateProfile(first_name="Alice"))
+
+    assert result.status == "failed"
+    assert result.error_message == "account_frozen"
 
 
 def test_typing_seconds_scales_and_clamps(monkeypatch: pytest.MonkeyPatch) -> None:

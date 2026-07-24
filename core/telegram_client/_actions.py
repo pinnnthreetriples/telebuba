@@ -4,15 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import random
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from telethon import errors
-from telethon.tl.functions.account import (
-    UpdateProfileRequest,
-    UpdateStatusRequest,
-    UpdateUsernameRequest,
-)
+from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.channels import (
     GetFullChannelRequest,
     JoinChannelRequest,
@@ -22,7 +17,7 @@ from telethon.tl.functions.messages import ImportChatInviteRequest, SendReaction
 from telethon.tl.types import ReactionEmoji
 
 from core.config import settings
-from core.db import fetch_account, update_account_status
+from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._action_results import (
     _DispatchResult,
@@ -33,6 +28,11 @@ from core.telegram_client._action_results import (
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
 from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
+from core.telegram_client._profile import (
+    _PROFILE_EDIT_ACTION_TYPES,
+    _dispatch_update_profile,
+    _mark_account_status,
+)
 from core.telegram_client._react import _channel_reaction_whitelist, _pick_reaction
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._util import extract_invite_hash
@@ -68,16 +68,6 @@ if TYPE_CHECKING:
 # SystemRandom: non-cryptographic jitter/selection, but avoids the module-level
 # `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
 _rng = random.SystemRandom()
-
-# Telethon refusal family → stable, locale-neutral code for profile-field edits
-# (mirrors _channels._TELETHON_ERROR_CODES). Flood-family errors are deliberately
-# NOT mapped — they must reach ``execute``'s dedicated flood-wait ladder unchanged.
-_PROFILE_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
-    (errors.UsernameOccupiedError, "username_occupied"),
-    (errors.UsernamePurchaseAvailableError, "username_occupied"),
-    (errors.UsernameInvalidError, "username_invalid"),
-    (errors.AboutTooLongError, "about_too_long"),
-)
 
 
 async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: C901, PLR0911 - one except per Telegram error family
@@ -116,14 +106,16 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
     # Frozen errors subclass FloodError (420) / BadRequestError (400); classify
     # them above FloodWaitError so the broader flood clause cannot swallow them
     # (mirrors check_telegram_session). The status write keeps the accounts list
-    # honest without waiting for the next manual session check.
+    # honest without waiting for the next manual session check; frozen is a
+    # permanent state, so it is recorded for EVERY action family.
     except (errors.FrozenMethodInvalidError, errors.FrozenParticipantMissingError) as exc:
-        await update_account_status(account_id, status="frozen")
+        await _mark_account_status(account_id, "frozen")
         frozen = ProfileGatewayError("account_frozen")
         frozen.__cause__ = exc  # same chain ``raise ... from exc`` would build
         return await _generic_error(account_id, action, frozen)
     except errors.FloodWaitError as exc:
-        await update_account_status(account_id, status="flood_wait")
+        if action.action_type in _PROFILE_EDIT_ACTION_TYPES:
+            await _mark_account_status(account_id, "flood_wait")
         return await _flood_action_result(
             account_id, action, status="flood_wait", seconds=exc.seconds
         )
@@ -238,36 +230,6 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             # its own dispatcher raises for anything genuinely unhandled.
             message_id = await _dispatch_profile_media_action(client, action)
     return _DispatchResult(message_id=message_id, log_extra=log_extra)
-
-
-async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
-    """Field contract: ``""`` clears, ``None`` leaves unchanged (omitted from TL flags).
-
-    The username goes FIRST: it is the fallible call (occupied/invalid handle),
-    and sending it after ``UpdateProfileRequest`` used to half-apply the edit —
-    name/bio already changed on Telegram while the UI reported "nothing saved"
-    and the DB snapshot stayed stale.
-
-    Known refusals are re-raised as :class:`ProfileGatewayError` so the SPA
-    receives a stable code instead of Telethon's English prose.
-    """
-    try:
-        if action.username is not None:
-            # Re-sending the account's current username is a no-op, not a failure.
-            with suppress(errors.UsernameNotModifiedError):
-                await client(UpdateUsernameRequest(username=action.username))
-        await client(
-            UpdateProfileRequest(
-                first_name=action.first_name,
-                last_name=action.last_name,
-                about=action.bio,
-            ),
-        )
-    except errors.RPCError as exc:
-        for error_cls, code in _PROFILE_ERROR_CODES:
-            if isinstance(exc, error_cls):
-                raise ProfileGatewayError(code) from exc
-        raise
 
 
 async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> None:
