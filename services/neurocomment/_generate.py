@@ -161,7 +161,6 @@ async def _generate_acceptable(
     """
     nc = settings.neurocomment
     recent = await _recent_channel_comments(campaign.campaign_id, channel)
-    now = datetime.now(UTC)
     # Comment generation always uses Gemini; read the operator's key from the DB
     # (falls back to .env) so a UI-set key takes effect without a restart.
     secret = await load_warming_settings()
@@ -189,8 +188,12 @@ async def _generate_acceptable(
         # letting them post near-identical comments inside each other's delay window.
         # Empty when the semantic gate is off (preserving the off-switch); `recent` is
         # likewise [] then, so the any() below is the off-switch — don't re-guard here.
+        # Take the reservation timestamp only after the slow provider call and the
+        # exact-text claim.  An entry-time timestamp makes a long generation consume
+        # part (or all) of the semantic-dedup lifetime before the text even exists.
+        reserved_at = datetime.now(UTC)
         inflight = (
-            _inflight_texts(channel, now, nc.semantic_dedup_window_hours)
+            _inflight_texts(channel, reserved_at, nc.semantic_dedup_window_hours)
             if nc.semantic_dedup_threshold > 0
             else []
         )
@@ -202,7 +205,7 @@ async def _generate_acceptable(
             reason = "duplicate"
             continue
         if nc.semantic_dedup_threshold > 0:
-            _add_inflight(channel, candidate, now)
+            _add_inflight(channel, candidate, reserved_at)
         return _GenOutcome(candidate, None)
     return _GenOutcome(None, reason)
 

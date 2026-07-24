@@ -423,6 +423,8 @@ async def test_campaign_onboarding_progress_callback(monkeypatch: pytest.MonkeyP
     result = next(e for e in progress_events if e.code == "pair_result")
     assert result.account_id == "acc-1"
     assert result.state is not None
+    finished = next(e for e in progress_events if e.code == "onboarding_finished")
+    assert (finished.ready_count, finished.total_count) == (1, 1)
 
 
 @pytest.mark.asyncio

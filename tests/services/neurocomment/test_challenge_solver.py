@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -296,6 +297,35 @@ async def test_gemini_timeout_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert await challenge.solve_if_present("acc-1", "@chan", 99) == "give_up"
     assert [r["outcome"] for r in _challenge_rows()] == ["give_up"]
+
+
+@pytest.mark.asyncio
+async def test_gemini_call_is_bounded_by_configured_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A provider that never responds cannot stall onboarding indefinitely."""
+    cancelled = asyncio.Event()
+
+    async def never_returns(_request: GeminiRequest) -> GeminiResult:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        raise AssertionError
+
+    monkeypatch.setattr(settings.neurocomment, "challenge_gemini_timeout_seconds", 0.01)
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
+    monkeypatch.setattr(_seams, "generate_text", never_returns)
+
+    outcome = await asyncio.wait_for(
+        challenge.solve_if_present("acc-1", "@chan", 99),
+        timeout=0.5,
+    )
+
+    assert outcome == "give_up"
+    assert cancelled.is_set()
+    assert [row["outcome"] for row in _challenge_rows()] == ["give_up"]
 
 
 @pytest.mark.asyncio

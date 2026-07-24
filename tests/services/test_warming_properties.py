@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import random
 from datetime import UTC, datetime
+from unittest.mock import patch
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -16,7 +17,7 @@ from hypothesis import assume, given
 from hypothesis import strategies as st
 
 from core.config import settings
-from services.warming import _human_delay, compute_intensity
+from services.warming import _human_delay, _seams, compute_intensity
 from services.warming.channels import _normalize_channel
 from services.warming.pacing import _PHASE_ORDER, _phase_from_age, _shift_to_active_hours
 
@@ -154,11 +155,13 @@ def test_compute_intensity_monotonic_in_age(age_a: float, age_b: float) -> None:
 @given(
     a=st.floats(min_value=0.0, max_value=3600.0, allow_nan=False, allow_infinity=False),
     b=st.floats(min_value=0.0, max_value=3600.0, allow_nan=False, allow_infinity=False),
+    draw=st.floats(min_value=0.0, max_value=4.0, allow_nan=False, allow_infinity=False),
 )
-def test_human_delay_stays_within_range(a: float, b: float) -> None:
+def test_human_delay_stays_within_range(a: float, b: float, draw: float) -> None:
     """The log-normal draw is always clamped into ``[min, max]``."""
     low, high = sorted((a, b))
-    result = _human_delay(a, b)
+    with patch.object(_seams.rng, "lognormvariate", return_value=draw):
+        result = _human_delay(a, b)
     assert low <= result <= high
 
 
@@ -178,19 +181,19 @@ _IANA_TZS = [
     "Pacific/Auckland",
 ]
 
-# Module-level so Hypothesis doesn't trip the function-scoped-fixture health check;
-# the invariant holds for every rng output, so determinism is not required.
-_SHIFT_RNG = random.Random(0)  # noqa: S311 - non-crypto jitter in a test
-
 
 @given(
     # Hypothesis requires naive bounds for st.datetimes; we attach UTC below.
     naive=st.datetimes(min_value=datetime(2020, 1, 1), max_value=datetime(2035, 1, 1)),  # noqa: DTZ001
     tz_name=st.sampled_from(_IANA_TZS),
     account_id=st.text(min_size=1, max_size=16),
+    rng_seed=st.integers(min_value=0, max_value=2**32 - 1),
 )
 def test_shift_result_lands_in_active_window(
-    naive: datetime, tz_name: str, account_id: str
+    naive: datetime,
+    tz_name: str,
+    account_id: str,
+    rng_seed: int,
 ) -> None:
     """A shifted next-run never precedes the candidate and lands inside the window.
 
@@ -200,7 +203,8 @@ def test_shift_result_lands_in_active_window(
     local hour lands in-window.
     """
     candidate = naive.replace(tzinfo=UTC)
-    result = _shift_to_active_hours(candidate, tz_name, _SHIFT_RNG, account_id)
+    rng = random.Random(rng_seed)  # noqa: S311 - deterministic non-crypto test stream
+    result = _shift_to_active_hours(candidate, tz_name, rng, account_id)
     warm = settings.warming
     assert result >= candidate  # shifting only ever defers, never brings a run forward
     local_hour = result.astimezone(ZoneInfo(tz_name)).hour

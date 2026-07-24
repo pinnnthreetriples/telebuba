@@ -53,6 +53,25 @@ def test_human_delay_is_bounded_and_right_skewed(monkeypatch: pytest.MonkeyPatch
     assert warming._human_delay(3.0, 3.0) == 3.0
 
 
+@pytest.mark.parametrize(
+    ("draw", "expected"),
+    [(0.0, 2.0), (0.25, 4.0), (1.0, 10.0), (4.0, 10.0)],
+)
+def test_human_delay_maps_and_clips_deterministic_draws(
+    monkeypatch: pytest.MonkeyPatch, draw: float, expected: float
+) -> None:
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: draw)
+    assert warming._human_delay(2.0, 10.0) == pytest.approx(expected)
+
+
+def test_human_delay_normalizes_reversed_and_negative_bounds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.5)
+    assert warming._human_delay(10.0, 2.0) == pytest.approx(6.0)
+    assert warming._human_delay(-4.0, -2.0) == pytest.approx(-3.0)
+
+
 def test_shift_to_active_hours_moves_night_into_window(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
@@ -126,9 +145,13 @@ def test_shift_to_active_hours_daily_jitter_wobbles_the_base(
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
     monkeypatch.setattr(settings.warming, "active_hours_start_spread_minutes", 120)
     monkeypatch.setattr(settings.warming, "chronotype_jitter_minutes", 20.0)
-    # Restore a live rng.random() (the fixture pins it to 0.0, collapsing the
-    # triangular jitter to a single value).
-    monkeypatch.setattr(_seams.rng, "random", random.random)
+    # Use an independent seeded stream: the fixture pins the seam to 0.0, while
+    # process-global randomness would make mutation outcomes non-reproducible.
+    monkeypatch.setattr(
+        _seams.rng,
+        "random",
+        random.Random(17).random,  # noqa: S311 - deterministic test stream
+    )
     night = datetime(2026, 6, 12, 3, 0, tzinfo=UTC)
     draws = {warming._shift_to_active_hours(night, None, _seams.rng, "acc-1") for _ in range(20)}
     assert len(draws) > 1  # daily wobble around the stable base
@@ -222,9 +245,12 @@ async def test_initial_delay_cold_start_spreads_over_hours(monkeypatch: pytest.M
     # spread itself is under test, not the window snap.
     monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
     monkeypatch.setattr(settings.warming, "cold_start_spread_hours", 4.0)
-    # Restore a live rng.random() (the fixture pins it to 0.0, which would collapse
-    # the cold-start uniform() spread to a single value).
-    monkeypatch.setattr(_seams.rng, "random", random.random)
+    # Exercise the real spread with a reproducible stream, independent of test order.
+    monkeypatch.setattr(
+        _seams.rng,
+        "random",
+        random.Random(23).random,  # noqa: S311 - deterministic test stream
+    )
 
     async def fake_tz(_account_id: str) -> None:
         return None
@@ -242,7 +268,11 @@ async def test_initial_delay_cold_start_spans_the_window(monkeypatch: pytest.Mon
     # (so the first cycles land the same evening / by next morning, not all at
     # once). Active hours off so the raw spread is under test, not the window snap.
     monkeypatch.setattr(settings.warming, "active_hours_enabled", False)
-    monkeypatch.setattr(_seams.rng, "random", random.random)  # live draw over the span
+    monkeypatch.setattr(
+        _seams.rng,
+        "random",
+        random.Random(29).random,  # noqa: S311 - deterministic test stream
+    )
 
     async def fake_tz(_account_id: str) -> None:
         return None

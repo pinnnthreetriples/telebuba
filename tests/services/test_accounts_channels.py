@@ -1,9 +1,4 @@
-"""Tests for the channel + channel-post services.
-
-External collaborators are monkeypatched on their owning submodules
-(``services.accounts.channels`` / ``services.accounts.channel_posts``) — the
-module-scope ``execute`` / ``execute_read`` imports are the patch seams.
-"""
+"""Tests for the channel and channel-post services."""
 
 from __future__ import annotations
 
@@ -14,7 +9,7 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
-from core.telegram_client import TelegramReadError
+from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.channels import ChannelCreateRequest, ChannelUpdateRequest
 from schemas.telegram_actions import (
     ActionResult,
@@ -98,10 +93,13 @@ def _patch_read(
     monkeypatch: pytest.MonkeyPatch,
     module: str,
     result: BaseModel,
+    account_ids: list[str] | None = None,
 ) -> list[object]:
     captured: list[object] = []
 
-    async def fake_execute_read(_account_id: str, action: object) -> BaseModel:
+    async def fake_execute_read(account_id: str, action: object) -> BaseModel:
+        if account_ids is not None:
+            account_ids.append(account_id)
         captured.append(action)
         return result
 
@@ -109,24 +107,25 @@ def _patch_read(
     return captured
 
 
-def _patch_log(monkeypatch: pytest.MonkeyPatch, module: str) -> list[tuple[str, str]]:
+def _patch_log(
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+    details: list[tuple[str, str, str | None, dict[str, object] | None]] | None = None,
+) -> list[tuple[str, str]]:
     events: list[tuple[str, str]] = []
 
     async def fake_log(
         level: str,
         event: str,
-        account_id: str | None = None,  # noqa: ARG001
-        extra: dict[str, object] | None = None,  # noqa: ARG001
+        account_id: str | None = None,
+        extra: dict[str, object] | None = None,
     ) -> None:
         events.append((level, event))
+        if details is not None:
+            details.append((level, event, account_id, extra))
 
     monkeypatch.setattr(f"services.accounts.{module}.log_event", fake_log)
     return events
-
-
-# --------------------------------------------------------------------------- #
-# Channels
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -138,7 +137,8 @@ async def test_create_account_channel_executes_and_logs(
         "channels",
         _ok("channel_create", "acc-1", channel_id="42"),
     )
-    events = _patch_log(monkeypatch, "channels")
+    details: list[tuple[str, str, str | None, dict[str, object] | None]] = []
+    events = _patch_log(monkeypatch, "channels", details)
 
     result = await create_account_channel(
         "acc-1",
@@ -152,6 +152,14 @@ async def test_create_account_channel_executes_and_logs(
     assert action.about == "Desc"
     assert action.username == "my_channel"
     assert events == [("INFO", "account_channel_created")]
+    assert details == [
+        (
+            "INFO",
+            "account_channel_created",
+            "acc-1",
+            {"title": "Mine", "has_username": True, "channel_id": "42"},
+        ),
+    ]
 
 
 @pytest.mark.asyncio
@@ -180,7 +188,6 @@ async def test_create_account_channel_failed_result_raises_code(
 async def test_create_failed_after_create_carries_channel_id(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A post-create username refusal keeps the created id on the error."""
     _patch_execute(
         monkeypatch,
         "channels",
@@ -206,6 +213,7 @@ async def test_create_failed_after_create_carries_channel_id(
 async def test_list_account_channels_maps_ids_to_strings(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    account_ids: list[str] = []
     captured = _patch_read(
         monkeypatch,
         "channels",
@@ -219,6 +227,7 @@ async def test_list_account_channels_maps_ids_to_strings(
                 ),
             ],
         ),
+        account_ids,
     )
 
     page = await list_account_channels("acc-1")
@@ -230,6 +239,7 @@ async def test_list_account_channels_maps_ids_to_strings(
     action = captured[0]
     assert isinstance(action, ListOwnChannels)
     assert action.limit == settings.channels.list_limit
+    assert account_ids == ["acc-1"]
 
 
 @pytest.mark.asyncio
@@ -248,9 +258,24 @@ async def test_list_account_channels_read_error_maps_to_stable_code(
 
 
 @pytest.mark.asyncio
+async def test_list_channels_preserves_missing_account_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def missing(_account_id: str, _action: object) -> BaseModel:
+        message = "account vanished"
+        raise TelegramAccountNotFoundError(message)
+
+    monkeypatch.setattr("services.accounts.channels.execute_read", missing)
+
+    with pytest.raises(TelegramAccountNotFoundError, match="account vanished"):
+        await list_account_channels("missing")
+
+
+@pytest.mark.asyncio
 async def test_get_account_channel_maps_detail(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    account_ids: list[str] = []
     captured = _patch_read(
         monkeypatch,
         "channels",
@@ -261,6 +286,7 @@ async def test_get_account_channel_maps_detail(
             about="All about it",
             participants_count=7,
         ),
+        account_ids,
     )
 
     view = await get_account_channel("acc-1", 42)
@@ -271,6 +297,7 @@ async def test_get_account_channel_maps_detail(
     action = captured[0]
     assert isinstance(action, GetOwnChannel)
     assert action.channel_id == 42
+    assert account_ids == ["acc-1"]
 
 
 @pytest.mark.asyncio
@@ -278,7 +305,8 @@ async def test_update_account_channel_threads_fields(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = _patch_execute(monkeypatch, "channels", _ok("channel_edit", "acc-1"))
-    events = _patch_log(monkeypatch, "channels")
+    details: list[tuple[str, str, str | None, dict[str, object] | None]] = []
+    events = _patch_log(monkeypatch, "channels", details)
 
     await update_account_channel(
         "acc-1",
@@ -292,13 +320,16 @@ async def test_update_account_channel_threads_fields(
     assert action.title == "New"
     assert action.about == ""
     assert events == [("INFO", "account_channel_updated")]
+    assert details[0][2:] == (
+        "acc-1",
+        {"channel_id": 42, "has_title": True, "has_about": True},
+    )
 
 
 @pytest.mark.asyncio
 async def test_update_account_channel_rejects_empty_update(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No field set → the EditChannel action model refuses (ValueError family)."""
     _patch_execute(monkeypatch, "channels", _ok("channel_edit", "acc-1"))
 
     with pytest.raises(ValueError, match="title/about"):
@@ -310,7 +341,8 @@ async def test_set_account_channel_photo_validates_and_logs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = _patch_execute(monkeypatch, "channels", _ok("channel_set_photo", "acc-1"))
-    events = _patch_log(monkeypatch, "channels")
+    details: list[tuple[str, str, str | None, dict[str, object] | None]] = []
+    events = _patch_log(monkeypatch, "channels", details)
 
     await set_account_channel_photo("acc-1", 42, filename="logo.png", content=b"png")
 
@@ -318,6 +350,7 @@ async def test_set_account_channel_photo_validates_and_logs(
     assert isinstance(action, SetChannelPhoto)
     assert action.filename == "logo.png"
     assert events == [("INFO", "account_channel_photo_updated")]
+    assert details[0][2:] == ("acc-1", {"channel_id": 42, "filename": "logo.png"})
 
 
 @pytest.mark.asyncio
@@ -347,7 +380,8 @@ async def test_delete_account_channel_executes_and_logs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     captured = _patch_execute(monkeypatch, "channels", _ok("channel_delete", "acc-1"))
-    events = _patch_log(monkeypatch, "channels")
+    details: list[tuple[str, str, str | None, dict[str, object] | None]] = []
+    events = _patch_log(monkeypatch, "channels", details)
 
     await delete_account_channel("acc-1", 42)
 
@@ -355,13 +389,13 @@ async def test_delete_account_channel_executes_and_logs(
     assert isinstance(action, DeleteChannel)
     assert action.channel_id == 42
     assert events == [("INFO", "account_channel_deleted")]
+    assert details[0][2:] == ("acc-1", {"channel_id": 42})
 
 
 @pytest.mark.asyncio
 async def test_check_channel_username_pattern_invalid_short_circuits(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A handle failing the pattern never reaches Telegram."""
     captured = _patch_read(
         monkeypatch,
         "channels",
@@ -392,11 +426,6 @@ async def test_check_channel_username_maps_gateway_verdict(
     action = captured[0]
     assert isinstance(action, CheckChannelUsername)
     assert action.username == "good_handle"
-
-
-# --------------------------------------------------------------------------- #
-# Channel posts
-# --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
@@ -484,7 +513,6 @@ async def test_publish_post_unknown_suffix_is_rejected(
 async def test_publish_post_partial_media_is_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A filename without content never reaches the executor (all-or-none)."""
     captured = _patch_execute(monkeypatch, "channel_posts", _ok("channel_post_publish", "acc-1"))
 
     with pytest.raises(ValueError, match="together"):

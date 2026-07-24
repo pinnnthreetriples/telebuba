@@ -150,5 +150,9 @@ async def test_account_trust_score_for_fresh_alive_account() -> None:
 @pytest.mark.asyncio
 async def test_account_trust_score_unknown_account_is_critical() -> None:
     score = await account_trust_score("ghost")
-    assert score.score == 0
-    assert score.band == "critical"
+    assert score.model_dump() == {
+        "account_id": "ghost",
+        "score": 0,
+        "band": "critical",
+        "reasons": ["unknown account"],
+    }

@@ -2,21 +2,42 @@
 
 from __future__ import annotations
 
+from collections import Counter
+
 import pytest
 
 from core.db import configure_database, create_account
 from schemas.accounts import AccountCreate
-from schemas.proxy import ProxyCheckResult, ProxyCreate
+from schemas.proxy import ProxyCheckResult, ProxyCreate, ProxySettings
 from services import proxies
 
 
 @pytest.mark.asyncio
-async def test_add_and_list_pool(tmp_path) -> None:
+async def test_add_and_list_pool(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_database(tmp_path / "telebuba.db")
-    await proxies.add_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080))
+    events: list[tuple[str, str, dict[str, object] | None]] = []
+
+    async def log(
+        level: str,
+        event: str,
+        *,
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        events.append((level, event, extra))
+
+    monkeypatch.setattr(proxies, "log_event", log)
+    saved = await proxies.add_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080))
     pool = await proxies.list_pool()
+
     assert len(pool.proxies) == 1
     assert pool.proxies[0].used == 0
+    assert events == [
+        (
+            "INFO",
+            "proxy_added",
+            {"proxy_id": saved.id, "host": "h", "port": 1080, "proxy_type": "socks5"},
+        ),
+    ]
 
 
 @pytest.mark.asyncio
@@ -150,18 +171,76 @@ async def test_remove_proxy(tmp_path) -> None:
 
 
 @pytest.mark.asyncio
-async def test_check_proxy_persists_result(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("status", "expected_level", "last_error"),
+    [("tcp_working", "INFO", None), ("failed", "WARNING", "connect timeout")],
+)
+async def test_check_proxy_persists_complete_result_and_logs_verdict(
+    tmp_path,
+    monkeypatch: pytest.MonkeyPatch,
+    status: str,
+    expected_level: str,
+    last_error: str | None,
+) -> None:
     configure_database(tmp_path / "telebuba.db")
     proxy = await proxies.add_proxy(ProxyCreate(proxy_type="socks5", host="h", port=1080))
+    calls: Counter[str] = Counter()
+    events: list[tuple[str, str, dict[str, object] | None]] = []
 
-    async def fake_check(_proxy: object) -> ProxyCheckResult:
-        return ProxyCheckResult(status="tcp_working", exit_ip="1.2.3.4", country_code="NL")
+    async def fake_check(settings: ProxySettings) -> ProxyCheckResult:
+        calls["probe"] += 1
+        assert settings.model_dump() == {
+            "proxy_type": "socks5",
+            "host": "h",
+            "port": 1080,
+            "username": None,
+            "password": None,
+        }
+        return ProxyCheckResult(
+            status=status,  # ty: ignore[invalid-argument-type]
+            last_error=last_error,
+            exit_ip="1.2.3.4",
+            country_code="NL",
+            country_name="Netherlands",
+            asn="AS64500",
+            is_datacenter=True,
+        )
+
+    async def log(
+        level: str,
+        event: str,
+        *,
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        calls["log"] += 1
+        events.append((level, event, extra))
 
     monkeypatch.setattr("services.proxies.check_proxy_connectivity", fake_check)
+    monkeypatch.setattr(proxies, "log_event", log)
 
     checked = await proxies.check_proxy(proxy.id)
-    assert checked.status == "tcp_working"
+
+    assert checked.status == status
+    assert checked.last_error == last_error
+    assert checked.exit_ip == "1.2.3.4"
     assert checked.country_code == "NL"
+    assert checked.country_name == "Netherlands"
+    assert checked.asn == "AS64500"
+    assert checked.is_datacenter is True
+    assert calls == Counter({"probe": 1, "log": 1})
+    assert events == [
+        (
+            expected_level,
+            "proxy_checked",
+            {
+                "proxy_id": proxy.id,
+                "status": status,
+                "exit_ip": "1.2.3.4",
+                "country_code": "NL",
+                "last_error": last_error,
+            },
+        ),
+    ]
 
 
 @pytest.mark.asyncio
@@ -174,12 +253,31 @@ async def test_check_proxy_unknown_raises(tmp_path) -> None:
 @pytest.mark.asyncio
 async def test_probe_proxy_does_not_persist(tmp_path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_database(tmp_path / "telebuba.db")
+    probed: list[ProxySettings] = []
 
-    async def fake_check(_proxy: object) -> ProxyCheckResult:
+    async def fake_check(settings: ProxySettings) -> ProxyCheckResult:
+        probed.append(settings)
         return ProxyCheckResult(status="tcp_working", country_code="DE")
 
     monkeypatch.setattr("services.proxies.check_proxy_connectivity", fake_check)
 
-    result = await proxies.probe_proxy(ProxyCreate(proxy_type="https", host="h", port=8080))
+    result = await proxies.probe_proxy(
+        ProxyCreate(
+            proxy_type="https",
+            host="h",
+            port=8080,
+            username="operator",
+            password="secret",
+        ),
+    )
     assert result.status == "tcp_working"
+    assert [settings.model_dump() for settings in probed] == [
+        {
+            "proxy_type": "https",
+            "host": "h",
+            "port": 8080,
+            "username": "operator",
+            "password": "secret",
+        },
+    ]
     assert (await proxies.list_pool()).proxies == []

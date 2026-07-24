@@ -16,6 +16,7 @@ from schemas.profile_media import (
     AccountStoryPin,
     AccountStoryRemove,
     AccountStoryUpload,
+    StoryMediaKind,
 )
 from schemas.telegram_actions import (
     ActionResult,
@@ -71,14 +72,7 @@ async def test_set_account_profile_photo_executes_action(
 async def test_media_upload_invalidates_profile_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """All three media services call ``invalidate_account_profile_cache``.
-
-    Regression: after PR #96 the dialog cached the live snapshot, but only
-    ``update_account_profile`` invalidated it on save. Media uploads fell
-    through with ``force_refresh=True`` at the UI layer; the new
-    optimistic-update flow removed that, so service-level invalidation is
-    the only safety net left.
-    """
+    """All three media upload services invalidate the profile cache."""
     invalidated: list[str] = []
 
     monkeypatch.setattr(
@@ -122,9 +116,18 @@ async def test_media_upload_invalidates_profile_cache(
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("kind", "filename", "content"),
+    [("image", "story.PNG", b"xxx"), ("video", "story.MOV", b"xxxxx")],
+)
 async def test_post_account_story_executes_story_action(
     monkeypatch: pytest.MonkeyPatch,
+    kind: StoryMediaKind,
+    filename: str,
+    content: bytes,
 ) -> None:
+    monkeypatch.setattr(settings.profile_media, "story_image_max_bytes", 3)
+    monkeypatch.setattr(settings.profile_media, "story_video_max_bytes", 5)
     captured: list[object] = []
 
     async def fake_execute(account_id: str, action: object) -> ActionResult:
@@ -136,9 +139,9 @@ async def test_post_account_story_executes_story_action(
     result = await post_account_story(
         AccountStoryUpload(
             account_id="account-story",
-            filename="story.mp4",
-            content=b"mp4",
-            media_kind="video",
+            filename=filename,
+            content=content,
+            media_kind=kind,
             caption="Story",
             privacy_preset="public",
         ),
@@ -146,6 +149,11 @@ async def test_post_account_story_executes_story_action(
 
     assert result.status == "ok"
     assert isinstance(captured[0], PostStory)
+    assert (captured[0].filename, captured[0].content, captured[0].media_kind) == (
+        filename,
+        content,
+        kind,
+    )
     assert captured[0].privacy_preset == "public"
 
 
@@ -153,8 +161,9 @@ async def test_post_account_story_executes_story_action(
 async def test_post_account_story_collage_passes_extra_images(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A collage upload threads image #1 + extra_images + layout into ``PostStory``."""
+    monkeypatch.setattr(settings.profile_media, "story_collage_max_images", 3)
     captured: list[object] = []
+    extras: list[dict[str, object]] = []
 
     async def fake_execute(account_id: str, action: object) -> ActionResult:
         captured.append(action)
@@ -162,21 +171,45 @@ async def test_post_account_story_collage_passes_extra_images(
 
     monkeypatch.setattr("services.accounts.media.execute", fake_execute)
 
+    async def log(_level: str, _event: str, **kwargs: object) -> None:
+        extras.append(kwargs["extra"])  # ty: ignore[invalid-argument-type]
+
+    monkeypatch.setattr("services.accounts.media.log_event", log)
+
     result = await post_account_story(
         AccountStoryUpload(
             account_id="acc-collage",
             filename="s.jpg",
             content=b"first",
             media_kind="image",
+            caption="caption",
+            privacy_preset="close_friends",
+            period_seconds=21_600,
+            protect_content=True,
             extra_images=[b"second", b"third"],
-            collage_layout="v3",
+            collage_layout="grid-3",
         ),
     )
 
     assert result.status == "ok"
     assert isinstance(captured[0], PostStory)
-    assert captured[0].extra_images == [b"second", b"third"]
-    assert captured[0].collage_layout == "v3"
+    action = captured[0]
+    assert (
+        action.caption,
+        action.privacy_preset,
+        action.period_seconds,
+        action.protect_content,
+        action.extra_images,
+        action.collage_layout,
+    ) == ("caption", "close_friends", 21_600, True, [b"second", b"third"], "grid-3")
+    assert extras == [
+        {
+            "filename": "s.jpg",
+            "media_kind": "image",
+            "privacy_preset": "close_friends",
+            "image_count": 3,
+        },
+    ]
 
 
 @pytest.mark.asyncio
@@ -277,39 +310,59 @@ async def test_post_account_story_collage_rejects_bad_suffix(
 async def test_add_account_profile_music_executes_music_action(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    captured: list[object] = []
+    events: list[object] = []
 
     async def fake_execute(account_id: str, action: object) -> ActionResult:
-        captured.append(action)
+        events.append(action)
         return ActionResult(status="ok", action_type="add_profile_music", account_id=account_id)
 
     monkeypatch.setattr("services.accounts.media.execute", fake_execute)
 
+    def invalidate(account_id: str) -> None:
+        events.append(("invalidate", account_id))
+
+    async def log(level: str, event: str, **kwargs: object) -> None:
+        events.append((level, event, kwargs))
+
+    monkeypatch.setattr("services.accounts.media.invalidate_account_profile_cache", invalidate)
+    monkeypatch.setattr("services.accounts.media.log_event", log)
+
     result = await add_account_profile_music(
         AccountProfileMusicUpload(
             account_id="account-music",
-            filename="track.mp3",
-            content=b"mp3",
+            filename="track.M4A",
+            content=b"audio",
             title="Track",
+            performer="Artist",
         ),
     )
 
     assert result.status == "ok"
-    assert isinstance(captured[0], AddProfileMusic)
-    assert captured[0].title == "Track"
+    assert isinstance(events[0], AddProfileMusic)
+    assert (events[0].filename, events[0].content, events[0].title, events[0].performer) == (
+        "track.M4A",
+        b"audio",
+        "Track",
+        "Artist",
+    )
+    assert events[1:] == [
+        ("invalidate", "account-music"),
+        (
+            "INFO",
+            "account_profile_music_added",
+            {
+                "account_id": "account-music",
+                "extra": {"filename": "track.M4A", "has_title": True},
+            },
+        ),
+    ]
 
 
 @pytest.mark.asyncio
 async def test_remove_account_profile_photo_executes_action_and_invalidates_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The remove-photo service must reach Telegram with the InputPhoto id triple.
-
-    Mirrors the music-removal contract: passing only ``photo_id`` is not enough
-    — ``access_hash`` and ``file_reference`` are required for Telethon's
-    ``DeletePhotosRequest``, and the in-process snapshot cache has to be
-    cleared so the next dialog open shows the new photo set.
-    """
+    """Photo removal forwards the complete identity triple and invalidates cache."""
     captured: list[object] = []
     invalidated: list[str] = []
 
@@ -344,7 +397,6 @@ async def test_remove_account_profile_photo_executes_action_and_invalidates_cach
 async def test_set_account_main_profile_photo_executes_action_and_invalidates_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """«Сделать основным» must reach Telegram with the InputPhoto triple + clear cache."""
     captured: list[object] = []
     invalidated: list[str] = []
 
@@ -381,13 +433,7 @@ async def test_set_account_main_profile_photo_executes_action_and_invalidates_ca
 async def test_set_account_main_profile_photo_invalidates_cache_on_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A FAILED «Сделать основным» must still drop the cached profile snapshot.
-
-    Regression (debug.log 2026-07-13 18:11:39): a failed promote kept the stale
-    snapshot alive, so the dialog kept offering photo ids that no longer existed
-    on the server and the operator re-clicked dead entries. Invalidate whether
-    the action succeeded or not — the next open re-reads live state.
-    """
+    """A failed main-photo update still drops the cached snapshot."""
     invalidated: list[str] = []
 
     async def fake_execute(account_id: str, _action: object) -> ActionResult:
@@ -419,7 +465,6 @@ async def test_set_account_main_profile_photo_invalidates_cache_on_failure(
 
 
 def _media_failure_calls() -> list[tuple[object, object]]:
-    """(service coroutine, payload) for every media mutation — used twice below."""
     return [
         (
             set_account_profile_photo,
@@ -463,13 +508,9 @@ async def test_every_media_mutation_invalidates_cache_on_failure(
     service_call: Callable[[Any], Awaitable[ActionResult]],
     payload: Any,
 ) -> None:
-    """EVERY media mutation must invalidate the snapshot cache on failure too.
-
-    Regression: only set-main applied the #249 invalidate-before-raise pattern;
-    the other mutations raised first, kept the stale snapshot for the TTL, and
-    the modal went on offering ids the server no longer recognised.
-    """
+    """Every failed media mutation invalidates the profile snapshot."""
     invalidated: list[str] = []
+    logged: list[str] = []
 
     async def fake_execute(account_id: str, action: object) -> ActionResult:
         return ActionResult(
@@ -486,21 +527,23 @@ async def test_every_media_mutation_invalidates_cache_on_failure(
         invalidated.append,
     )
 
+    async def log(*_args: object, **_kwargs: object) -> None:
+        logged.append("success")
+
+    monkeypatch.setattr("services.accounts.media.log_event", log)
+
     with pytest.raises(AccountActionError):
         await service_call(payload)
 
     assert invalidated == ["acc-inv"], "failed mutations must still drop the cached snapshot"
+    assert logged == [], "a refused action must not emit a success event"
 
 
 @pytest.mark.asyncio
 async def test_media_mutation_unavailable_maps_to_stable_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An ``unavailable`` gateway result raises the stable ``unavailable`` code.
-
-    ``raise_for_result`` must NOT leak the raw pool-error message as the code —
-    the API maps ``unavailable`` to 503 (infrastructure), not 400 (client).
-    """
+    """An unavailable gateway result maps to the stable unavailable code."""
 
     async def fake_execute(account_id: str, action: object) -> ActionResult:
         return ActionResult(
@@ -527,12 +570,7 @@ async def test_media_mutation_unavailable_maps_to_stable_code(
 async def test_remove_account_story_executes_action_and_invalidates_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Service must reach Telegram with ``RemoveStory`` + clear the profile cache.
-
-    Telegram's deleteStories doesn't error on unknown IDs (drops them
-    silently), so the only signals we test are the action shape and the
-    cache invalidation — both of which the optimistic UI relies on.
-    """
+    """Story removal reaches Telegram and clears the profile cache."""
     captured: list[object] = []
     invalidated: list[str] = []
 

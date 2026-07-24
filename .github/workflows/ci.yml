@@ -27,8 +27,8 @@ concurrency:
 permissions: read-all
 
 env:
-  PYTHON_VERSION: "3.13"
-  UV_VERSION: "0.10.9"
+  PYTHON_VERSION: "3.13.14"
+  UV_VERSION: "0.11.29"
   AISLOP_NPM_PACKAGE: "aislop@0.10.2"
   # Node 24: steiger's web-tree-sitter (WASM) throws "bad export type for 'deleter'"
   # on Node 20. 24 is the dev target and runs the whole FE toolchain cleanly.
