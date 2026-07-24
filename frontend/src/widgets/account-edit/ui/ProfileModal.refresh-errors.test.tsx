@@ -78,6 +78,72 @@ test('a failed snapshot load shows an error with a retry instead of empty tabs',
   ).toBeInTheDocument();
 });
 
+test('the refresh button is disabled while a post-action background sync runs', async () => {
+  let releaseSync!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      if (url.searchParams.get('refresh') === 'true') {
+        // Hold the post-mutation forced pull so the disabled state is observable.
+        return new Promise((resolve) => {
+          releaseSync = resolve;
+        });
+      }
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сторис'));
+  await userEvent.click(await screen.findByLabelText('Закрепить в профиле навсегда'));
+
+  // The background sync is in flight → «Обновить» must not start a rival pull.
+  await waitFor(() => {
+    expect(screen.getByText('Обновить').closest('button')).toBeDisabled();
+  });
+  releaseSync(jsonResponse(VIEW));
+  await waitFor(() => {
+    expect(screen.getByText('Обновить').closest('button')).toBeEnabled();
+  });
+});
+
+test('a stale forced pull cannot clobber a newer one (serialised refresh)', async () => {
+  const pinned = { ...VIEW, stories: [{ ...VIEW.stories[0], is_pinned: true }] };
+  let releaseStale!: (response: Response) => void;
+  let forcedCalls = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      if (url.searchParams.get('refresh') === 'true') {
+        forcedCalls += 1;
+        if (forcedCalls === 1) {
+          // The «Обновить» pull hangs and resolves LAST — with stale data.
+          return new Promise((resolve) => {
+            releaseStale = resolve;
+          });
+        }
+        return Promise.resolve(jsonResponse(pinned));
+      }
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сторис'));
+  // Start the slow header pull, then pin a story — its post-action refresh
+  // starts a NEWER pull that lands first (the story shows as pinned).
+  await userEvent.click(screen.getByText('Обновить'));
+  await userEvent.click(await screen.findByLabelText('Закрепить в профиле навсегда'));
+  expect(await screen.findByText('📌 Навсегда')).toBeInTheDocument();
+
+  // The stale pull resolves last — it must NOT roll the story back to unpinned.
+  releaseStale(jsonResponse(VIEW));
+  await waitFor(() => {
+    expect(screen.getByText('Обновить').closest('button')).toBeEnabled();
+  });
+  expect(screen.getByText('📌 Навсегда')).toBeInTheDocument();
+});
+
 test('the header renders the real avatar when the snapshot carries one', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const { pathname } = new URL((input as Request).url);

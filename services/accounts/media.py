@@ -1,7 +1,7 @@
 """Profile photo / story / music upload flows.
 
 ``execute`` is imported at module scope so tests can monkeypatch
-``services.accounts.media.execute``.
+``services.accounts.media.execute`` (same for ``refresh_account_avatar``).
 """
 
 from __future__ import annotations
@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 
 from core.config import settings
 from core.logging import log_event
-from core.telegram_client import execute
+from core.telegram_client import execute, refresh_account_avatar
 from schemas.telegram_actions import (
     AddProfileMusic,
     PostStory,
@@ -74,6 +74,9 @@ async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionRe
     # touched server state, and a kept-stale snapshot keeps offering dead ids.
     invalidate_account_profile_cache(data.account_id)
     raise_for_result(result)
+    # Best-effort DB avatar re-sync so the accounts list shows the new photo
+    # immediately instead of after the next session check.
+    await refresh_account_avatar(data.account_id)
     await log_event(
         "INFO",
         "account_profile_photo_updated",
@@ -206,6 +209,9 @@ async def remove_account_profile_photo(data: AccountProfilePhotoRemove) -> Actio
     )
     invalidate_account_profile_cache(data.account_id)
     raise_for_result(result)
+    # Deleting the current avatar makes Telegram auto-promote the next photo —
+    # re-sync so the list row tracks that promotion (or clears with the last one).
+    await refresh_account_avatar(data.account_id)
     await log_event(
         "INFO",
         "account_profile_photo_removed",
@@ -229,6 +235,7 @@ async def set_account_main_profile_photo(data: AccountProfilePhotoSetMain) -> Ac
     # re-click photo ids that no longer exist (log-proven 2026-07-13 18:11:39).
     invalidate_account_profile_cache(data.account_id)
     raise_for_result(result)
+    await refresh_account_avatar(data.account_id)
     await log_event(
         "INFO",
         "account_profile_photo_set_main",

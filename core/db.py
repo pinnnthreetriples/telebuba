@@ -219,8 +219,10 @@ from core.repositories.accounts import (  # noqa: E402, F401
     fetch_account_avatar,
     list_accounts,
     list_accounts_by_ids,
+    update_account_avatar,
     update_account_from_session_check,
     update_account_profile_snapshot,
+    update_account_status,
 )
 from core.repositories.content import (  # noqa: E402, F401
     purge_sent_hashes_older_than,

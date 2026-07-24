@@ -34,12 +34,17 @@ from telethon.tl.types import (
     InputPrivacyValueAllowCloseFriends,
     InputPrivacyValueAllowContacts,
     InputUserSelf,
+    UserProfilePhotoEmpty,
 )
 
 from core.config import settings
+from core.db import update_account_avatar
 from core.logging import log_event
+from core.telegram_client._pool import get_client
+from core.telegram_client._session import _download_avatar_thumb
 from core.telegram_client._story_image import (
     _compose_story_collage,
+    _decode_image_source,
     _default_collage_layout,
     _normalize_story_image_for_telegram,
 )
@@ -60,6 +65,21 @@ if TYPE_CHECKING:
     from telethon.tl.types import TypeInputMedia, TypeInputPrivacyRule
 
     from schemas.telegram_actions import TelegramAction
+
+
+class ProfileGatewayError(ValueError):
+    """A profile (field or media) action was refused; ``str(exc)`` is the stable code.
+
+    Same contract as :class:`core.telegram_client._channels.ChannelGatewayError`:
+    the code rides ``execute``'s generic-exception ladder into
+    ``ActionResult.error_message`` verbatim and the SPA translates it
+    (non-negotiable #12). The unreadable detail (Pillow reason, stale-id
+    context) travels as the chained cause into the failure log.
+    """
+
+    def __init__(self, code: str) -> None:
+        self.code = code
+        super().__init__(code)
 
 
 async def _dispatch_profile_media_action(
@@ -91,7 +111,21 @@ async def _dispatch_profile_media_action(
     return None
 
 
+def _validate_profile_photo(content: bytes) -> None:
+    """Decode gate (mirrors the story path): refuse bytes Pillow can't decode.
+
+    Without it a renamed/corrupt ``.jpg`` travels all the way to Telegram and
+    comes back as a raw ``PHOTO_INVALID``-family error instead of a stable code.
+    """
+    code = "profile_photo_invalid"
+    try:
+        _decode_image_source(content)
+    except ValueError as exc:
+        raise ProfileGatewayError(code) from exc
+
+
 async def _set_profile_photo(client: TelegramClient, filename: str, content: bytes) -> None:
+    await asyncio.to_thread(_validate_profile_photo, content)
     uploaded = await client.upload_file(_named_bytes(filename, content), file_name=filename)
     await client(UploadProfilePhotoRequest(file=uploaded))
 
@@ -214,8 +248,10 @@ async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) ->
     )
     document = getattr(message, "document", None)
     if document is None:
-        msg = "Telegram did not return an audio document"
-        raise ValueError(msg)
+        code = "profile_music_invalid"
+        raise ProfileGatewayError(code) from ValueError(
+            "Telegram did not return an audio document",
+        )
     await client(SaveMusicRequest(id=utils.get_input_document(document)))
     message_id = getattr(message, "id", None)
     if isinstance(message_id, int):
@@ -246,8 +282,10 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
         ),
     )
     if not removed:
-        msg = "Telegram did not remove the track (unknown or expired reference)"
-        raise RuntimeError(msg)
+        code = "profile_music_stale_reference"
+        raise ProfileGatewayError(code) from ValueError(
+            "Telegram did not remove the track (unknown or expired reference)",
+        )
 
 
 async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePhoto) -> None:
@@ -276,8 +314,10 @@ async def _remove_profile_photo(client: TelegramClient, action: RemoveProfilePho
         ),
     )
     if action.photo_id not in (deleted or []):
-        msg = "Telegram did not delete the photo (unknown or expired reference)"
-        raise RuntimeError(msg)
+        code = "profile_photo_stale_reference"
+        raise ProfileGatewayError(code) from ValueError(
+            "Telegram did not delete the photo (unknown or expired reference)",
+        )
 
 
 async def _history_photos(client: TelegramClient) -> list[object]:
@@ -352,28 +392,32 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
     )
     target = _find_history_photo(photos, action.photo_id)
     if target is None:
-        msg = "Target profile photo is no longer in the account's history"
-        raise RuntimeError(msg)
+        code = "profile_photo_not_found"
+        raise ProfileGatewayError(code) from ValueError(
+            "Target profile photo is no longer in the account's history",
+        )
     # Full-size download (no thumb arg = largest stored size, the same
     # rendition every viewer sees), then the standard new-avatar upload.
     data = await client.download_media(target, file=bytes)  # ty: ignore[invalid-argument-type]
     if not isinstance(data, (bytes, bytearray)) or not data:
-        msg = "Telegram did not return the photo bytes"
-        raise RuntimeError(msg)
+        code = "profile_photo_download_failed"
+        raise ProfileGatewayError(code) from ValueError(
+            "Telegram did not return the photo bytes",
+        )
     uploaded = await client.upload_file(
         _named_bytes("avatar.jpg", bytes(data)),
         file_name="avatar.jpg",
     )
     result = await client(UploadProfilePhotoRequest(file=uploaded))
     new_id = getattr(getattr(result, "photo", None), "id", None)
+    # The "after" phase logs only what this call already knows — re-fetching
+    # history + full-user here cost 2 RPCs per click purely for the debug log.
     await log_event(
         "INFO",
         "telegram_set_main_id_flow",
         extra={
             "phase": "after",
             "target_photo_id": action.photo_id,
-            "history_ids": _photo_ids(await _history_photos(client)),
-            "current_avatar_id": await _current_avatar_id(client),
             "promoted_photo_id": new_id if isinstance(new_id, int) else None,
         },
     )
@@ -400,6 +444,36 @@ async def _toggle_story_pinned(client: TelegramClient, action: ToggleStoryPinned
     await client(
         TogglePinnedRequest(peer=InputPeerSelf(), id=[action.story_id], pinned=action.pinned),
     )
+
+
+async def refresh_account_avatar(account_id: str) -> None:
+    """Re-sync the accounts-list avatar (``avatar_thumb``/``avatar_etag``) from Telegram.
+
+    Called by the service layer after a photo mutation (set / remove / set-main)
+    so the list row shows the new avatar immediately instead of waiting for the
+    next session check. Mirrors the check's avatar capture: fresh ``get_me()``
+    (the pooled entity cache may still hold the pre-mutation photo), then the
+    ~160px thumb via ``_download_avatar_thumb``. Best-effort — any refusal is
+    logged and swallowed; a refused *download* keeps the cached thumb (the
+    session-check rule), while a genuinely absent photo clears it.
+    """
+    try:
+        client = await get_client(account_id)
+        me = await client.get_me()
+        photo = getattr(me, "photo", None)
+        has_photo = photo is not None and not isinstance(photo, UserProfilePhotoEmpty)
+        thumb = await _download_avatar_thumb(client, me) if has_photo else None
+    except Exception as exc:  # noqa: BLE001 - the avatar is cosmetic; the mutation already succeeded.
+        await log_event(
+            "WARNING",
+            "account_avatar_refresh_failed",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__, "message": str(exc)},
+        )
+        return
+    if has_photo and thumb is None:
+        return
+    await update_account_avatar(account_id, thumb)
 
 
 def _named_bytes(filename: str, content: bytes) -> BytesIO:

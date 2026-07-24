@@ -207,6 +207,72 @@ test('Save is disabled until the form is actually edited', async () => {
   expect(save).toBeEnabled();
 });
 
+test('a rejected save shows the translated username error under the field', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (pathname === '/api/v1/accounts/profile') {
+      // The stable code rides the envelope's message (backend contract).
+      return Promise.resolve(
+        jsonResponse({ error: { code: 'bad_request', message: 'username_occupied' } }, 409),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.type(screen.getByDisplayValue('ivanov'), '2');
+  await userEvent.click(screen.getByText('Сохранить'));
+  expect(await screen.findByText('Юзернейм уже занят')).toBeInTheDocument();
+});
+
+test('a flood_wait rejection shows the retry-after seconds in the general box', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (pathname === '/api/v1/accounts/profile') {
+      return Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: 'bad_request',
+              message: 'flood_wait',
+              fields: { retry_after_seconds: 42 },
+            },
+          },
+          429,
+        ),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.type(screen.getByDisplayValue('Иван'), 'ов');
+  await userEvent.click(screen.getByText('Сохранить'));
+  expect(
+    await screen.findByText('Telegram ограничил действия — повторите через 42 с'),
+  ).toBeInTheDocument();
+});
+
+test('an account with no stored first name shows why Save is disabled', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse({ ...VIEW, first_name: null, username: null }));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(
+    <ProfileModal account={{ ...ACCOUNT, first_name: null, username: null }} onClose={vi.fn()} />,
+  );
+  // The required-name reason renders without the field ever being touched.
+  expect(await screen.findByText('Укажите имя')).toBeInTheDocument();
+  expect(screen.getByText('Сохранить').closest('button')).toBeDisabled();
+});
+
 test('a successful save clears the dirty state so closing does not prompt', async () => {
   let saved = false;
   vi.mocked(fetch).mockImplementation((input) => {

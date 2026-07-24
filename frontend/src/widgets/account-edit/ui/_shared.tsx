@@ -1,7 +1,49 @@
 import { useState, type ReactNode } from 'react';
 
-// The accordion primitives shared by every AccountEdit section. Internal to the
-// slice (not re-exported from index). Styles/types live in ./_styles.
+// The accordion primitives shared by every AccountEdit section, plus the
+// profile modal's dashed add-tile. Internal to the slice (not re-exported from
+// index). Styles/types live in ./_styles.
+
+// Dashed "add" tile used by the profile modal's photo and stories grids.
+export function DashedAdd({
+  ratio,
+  label,
+  onClick,
+  busy = false,
+  disabled = false,
+}: {
+  ratio: string;
+  label: string;
+  onClick: () => void;
+  busy?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      disabled={busy || disabled}
+      onClick={onClick}
+      style={{ aspectRatio: ratio }}
+      className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted disabled:opacity-60"
+    >
+      {busy ? (
+        <span className="tb-spin inline-block h-[18px] w-[18px] rounded-full border-2 border-line-input border-t-primary" />
+      ) : (
+        <svg
+          width="20"
+          height="20"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+        >
+          <path d="M12 5v14M5 12h14" />
+        </svg>
+      )}
+      {label}
+    </button>
+  );
+}
 
 export function Spinner({ size }: { size: number }) {
   return (

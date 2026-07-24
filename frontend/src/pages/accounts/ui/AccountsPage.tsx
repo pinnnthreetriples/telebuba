@@ -11,6 +11,7 @@ import {
   deleteAccountMutation,
 } from '@/entities/account';
 import { proxyPoolQueryOptions } from '@/entities/proxy';
+import type { AccountRead } from '@/shared/api';
 import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
 import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
@@ -28,7 +29,7 @@ export function AccountsPage() {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [proxyAdding, setProxyAdding] = useState(false);
-  const [profilingId, setProfilingId] = useState<string | null>(null);
+  const [profilingRow, setProfilingRow] = useState<AccountRead | null>(null);
 
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
   const { data, isPending, isError } = useQuery(
@@ -93,9 +94,14 @@ export function AccountsPage() {
 
   // Derive the edited/profiled row from the live list each render so it
   // reflects the latest refetch (e.g. status flips from 'unauthorized' after a
-  // code login), rather than a stale snapshot captured at click time.
+  // code login), rather than a stale snapshot captured at click time. The
+  // profile modal keeps the click-time row as a fallback so an open modal
+  // doesn't vanish when the account drops out of the current filtered page
+  // after an invalidate (e.g. a renamed account no longer matches the search).
   const editing = editingId ? (items.find((a) => a.account_id === editingId) ?? null) : null;
-  const profiling = profilingId ? (items.find((a) => a.account_id === profilingId) ?? null) : null;
+  const profiling = profilingRow
+    ? (items.find((a) => a.account_id === profilingRow.account_id) ?? profilingRow)
+    : null;
   if (editing) {
     return (
       <AccountEdit
@@ -185,7 +191,7 @@ export function AccountsPage() {
               setEditingId(account.account_id);
             }}
             onProfile={(account) => {
-              setProfilingId(account.account_id);
+              setProfilingRow(account);
             }}
             busyId={busyId}
           />
@@ -241,7 +247,7 @@ export function AccountsPage() {
         <ProfileModal
           account={profiling}
           onClose={() => {
-            setProfilingId(null);
+            setProfilingRow(null);
           }}
         />
       ) : null}

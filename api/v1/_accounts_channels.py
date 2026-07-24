@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
+from api.v1._errors import service_errors_to_http
 from core.config import settings
 from schemas.api import Page
 from schemas.channels import (
@@ -69,12 +70,8 @@ def _reject_oversize(file: UploadFile, max_bytes: int) -> None:
     operation_id="createAccountChannel",
 )
 async def create_account_channel(account_id: str, body: ChannelCreateRequest) -> ActionResult:
-    try:
+    with service_errors_to_http():
         return await accounts.create_account_channel(account_id, body)
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @channels_router.get(
@@ -119,16 +116,12 @@ async def update_account_channel(
     channel_id: str,
     body: ChannelUpdateRequest,
 ) -> ActionResult:
-    try:
+    with service_errors_to_http():
         return await accounts.update_account_channel(
             account_id,
             _decode_channel_id(channel_id),
             body,
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @channels_router.post(
@@ -143,17 +136,13 @@ async def set_account_channel_photo(
 ) -> ActionResult:
     _reject_oversize(file, settings.channels.avatar_max_bytes)
     content = await file.read()
-    try:
+    with service_errors_to_http():
         return await accounts.set_account_channel_photo(
             account_id,
             _decode_channel_id(channel_id),
             filename=file.filename or "photo.jpg",
             content=content,
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @channels_router.post(
@@ -162,9 +151,5 @@ async def set_account_channel_photo(
     operation_id="deleteAccountChannel",
 )
 async def delete_account_channel(account_id: str, channel_id: str) -> ActionResult:
-    try:
+    with service_errors_to_http():
         return await accounts.delete_account_channel(account_id, _decode_channel_id(channel_id))
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
