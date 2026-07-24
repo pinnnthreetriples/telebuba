@@ -5855,6 +5855,7 @@
             "type": "string",
             "enum": [
               "ok",
+              "already_participant",
               "flood_wait",
               "slow_mode_wait",
               "premium_wait",

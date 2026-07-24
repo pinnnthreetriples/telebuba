@@ -285,3 +285,21 @@ def _add_campaign_account_channels_table(connection: Connection) -> None:
             "SELECT campaign_id, account_id, channel, created_at "
             "FROM neurocomment_campaign_accounts WHERE channel IS NOT NULL",
         )
+
+
+def _add_neurocomment_join_log(connection: Connection) -> None:
+    # #35: append-only per-account channel-join log backing the rolling-24h join
+    # cap. Telegram freezes an account after ~20-50 channel joins a day; one row is
+    # written per real join RPC that returned ok, and the (account_id, joined_at)
+    # index serves the per-account window count both join sites gate on.
+    connection.exec_driver_sql(
+        "CREATE TABLE IF NOT EXISTS neurocomment_join_log ("
+        "  id INTEGER PRIMARY KEY AUTOINCREMENT,"
+        "  account_id VARCHAR NOT NULL,"
+        "  joined_at VARCHAR NOT NULL"
+        ")",
+    )
+    connection.exec_driver_sql(
+        "CREATE INDEX IF NOT EXISTS ix_nc_join_log_account_joined "
+        "ON neurocomment_join_log(account_id, joined_at)",
+    )

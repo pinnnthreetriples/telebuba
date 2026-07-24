@@ -61,8 +61,12 @@ class FakeClient:
         self.handlers: list[tuple[Callable[[Any], Awaitable[None]], object]] = []
         self.removed: list[tuple[object, object]] = []
         self.catch_up_called = False
+        # Every channel string passed to get_peer_id, so a test can prove a
+        # channel is resolved via RPC at most once and then served from cache.
+        self.peer_id_calls: list[str] = []
 
     async def get_peer_id(self, channel: str) -> int:
+        self.peer_id_calls.append(channel)
         return self.PEER_IDS[channel]
 
     def add_event_handler(
@@ -403,6 +407,54 @@ async def test_all_unresolvable_registers_no_handler(monkeypatch: pytest.MonkeyP
     await subscribe_posts("listener-allbad", ["@gone", "@missing"], on_post)
 
     assert client.handlers == []
+
+
+@pytest.mark.asyncio
+async def test_peer_id_resolved_once_then_served_from_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A channel is resolved via RPC once; a second reconcile reuses the cache.
+
+    Reconcile fires on every channel link/unlink and on boot, so re-resolving
+    every watched channel each time is O(channels) serial RPCs. Peer ids are
+    stable, so the second subscribe must issue no fresh get_peer_id calls.
+    """
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+    received: list[NewPostEvent] = []
+
+    async def on_post(event: NewPostEvent) -> None:
+        received.append(event)
+
+    await subscribe_posts("listener-cache", ["@news", "@deals"], on_post)
+    assert sorted(client.peer_id_calls) == ["@deals", "@news"]
+
+    # Second reconcile with the same channels: no new RPCs, cache serves the ids.
+    await subscribe_posts("listener-cache", ["@news", "@deals"], on_post)
+    assert sorted(client.peer_id_calls) == ["@deals", "@news"]
+
+    # Behaviour unchanged: the filtered handler still maps peer id -> channel.
+    callback, _ = client.handlers[0]
+    await callback(_make_event(chat_id=-200, post_id=1, text="x", media=None, post=True))
+    assert received[0].channel == "@deals"
+
+
+@pytest.mark.asyncio
+async def test_failed_resolution_is_not_cached(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A channel that fails to resolve is retried next reconcile, not cached."""
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+
+    async def on_post(_event: NewPostEvent) -> None:
+        return None
+
+    # "@gone" is absent from PEER_IDS -> get_peer_id raises and must NOT be cached.
+    await subscribe_posts("listener-retry", ["@gone"], on_post)
+    assert client.peer_id_calls == ["@gone"]
+
+    # Second reconcile must re-attempt the unresolved channel (no poisoned cache).
+    await subscribe_posts("listener-retry", ["@gone"], on_post)
+    assert client.peer_id_calls == ["@gone", "@gone"]
 
 
 @pytest.mark.asyncio

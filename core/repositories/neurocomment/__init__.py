@@ -25,6 +25,7 @@ from core.repositories.neurocomment._campaigns import (
     deactivate_channel,
     delete_campaign,
     fetch_active_campaign_for_channel,
+    fetch_active_campaigns_for_channels,
     fetch_campaign,
     link_channel_to_campaign,
     list_active_watch_channels,
@@ -64,6 +65,7 @@ from core.repositories.neurocomment._comments import (
 )
 from core.repositories.neurocomment._cooldowns import load_active_cooldowns, persist_cooldown
 from core.repositories.neurocomment._deletions import mark_comments_deleted
+from core.repositories.neurocomment._joins import count_account_joins_since, record_join
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
     count_account_comments_since,
@@ -89,6 +91,7 @@ __all__ = [
     "clear_pair_banned",
     "count_account_channel_comments_since",
     "count_account_comments_since",
+    "count_account_joins_since",
     "count_by_outcome",
     "count_channel_comments_per_account_since",
     "count_comments_per_account_since",
@@ -98,6 +101,7 @@ __all__ = [
     "delete_readiness",
     "evict_cached_decision",
     "fetch_active_campaign_for_channel",
+    "fetch_active_campaigns_for_channels",
     "fetch_campaign",
     "fetch_comment",
     "fetch_linked_group",
@@ -128,6 +132,7 @@ __all__ = [
     "mark_pair_banned",
     "persist_cooldown",
     "reclaim_stale_claims",
+    "record_join",
     "remove_account_from_campaign",
     "resolve_pending_outcome",
     "save_neurocomment_settings",

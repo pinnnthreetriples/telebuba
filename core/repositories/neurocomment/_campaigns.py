@@ -288,6 +288,39 @@ async def fetch_active_campaign_for_channel(channel: str) -> NeurocommentCampaig
     return await asyncio.to_thread(_fetch_active_campaign_for_channel, channel)
 
 
+def _fetch_active_campaigns_for_channels(
+    channels: list[str],
+) -> dict[str, NeurocommentCampaign]:
+    if not channels:
+        return {}
+    statement = (
+        select(_neurocomment_campaigns)
+        .add_columns(_neurocomment_campaign_channels.c.channel)
+        .select_from(_active_channel_join())
+        .where(
+            (_neurocomment_campaign_channels.c.channel.in_(channels))
+            & (_neurocomment_campaign_channels.c.active == 1)
+            & (_neurocomment_campaigns.c.status == "active"),
+        )
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return {str(row["channel"]): _row_to_campaign(row) for row in rows}
+
+
+async def fetch_active_campaigns_for_channels(
+    channels: list[str],
+) -> dict[str, NeurocommentCampaign]:
+    """Active campaigns for a set of channels, keyed by channel (one query).
+
+    The bulk form of ``fetch_active_campaign_for_channel`` — same join and
+    active filters, batched with ``IN`` so the deletion sweep buckets its whole
+    watch set without an O(channels) fan-out. A channel with no active campaign
+    is simply absent from the mapping (mirrors the single-row ``None``).
+    """
+    return await asyncio.to_thread(_fetch_active_campaigns_for_channels, channels)
+
+
 def _list_active_watch_channels() -> ChannelList:
     statement = (
         select(_neurocomment_campaign_channels.c.channel)

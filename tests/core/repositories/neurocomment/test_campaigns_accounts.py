@@ -14,6 +14,7 @@ from core.db import (  # type: ignore[attr-defined]
     create_campaign,
     deactivate_channel,
     fetch_active_campaign_for_channel,
+    fetch_active_campaigns_for_channels,
     fetch_campaign,
     link_channel_to_campaign,
     list_active_watch_channels,
@@ -237,6 +238,39 @@ async def test_fetch_active_campaign_for_channel_returns_active_only() -> None:
     # Link deactivated → no match.
     assert await fetch_active_campaign_for_channel("@dropped") is None
     assert await fetch_active_campaign_for_channel("@never") is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_active_campaigns_for_channels_buckets_like_per_channel() -> None:
+    one = await create_campaign(CampaignCreate(name="One", prompt="p", status="active"))
+    two = await create_campaign(CampaignCreate(name="Two", prompt="p", status="active"))
+    paused = await create_campaign(CampaignCreate(name="Off", prompt="p", status="paused"))
+
+    await link_channel_to_campaign(one.campaign_id, "@a")
+    await link_channel_to_campaign(one.campaign_id, "@b")
+    await link_channel_to_campaign(two.campaign_id, "@c")
+    await link_channel_to_campaign(paused.campaign_id, "@paused")
+    await link_channel_to_campaign(one.campaign_id, "@dropped")
+    await deactivate_channel(one.campaign_id, "@dropped")
+
+    got = await fetch_active_campaigns_for_channels(
+        ["@a", "@b", "@c", "@paused", "@dropped", "@never"],
+    )
+    # Only channels with an active link in an active campaign are present; the
+    # others (paused campaign, deactivated link, unknown) are absent — mirroring
+    # the ``None`` the per-channel reader returns for each.
+    assert set(got) == {"@a", "@b", "@c"}
+    assert got["@a"].campaign_id == one.campaign_id
+    assert got["@b"].campaign_id == one.campaign_id
+    assert got["@c"].campaign_id == two.campaign_id
+
+    # Each result matches what the per-channel reader would return.
+    for channel, campaign in got.items():
+        single = await fetch_active_campaign_for_channel(channel)
+        assert single is not None
+        assert single.campaign_id == campaign.campaign_id
+
+    assert await fetch_active_campaigns_for_channels([]) == {}
 
 
 @pytest.mark.asyncio

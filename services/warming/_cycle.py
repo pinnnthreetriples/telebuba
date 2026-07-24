@@ -199,7 +199,9 @@ class _ChannelTally:
 
 def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str) -> bool:
     """Fold a join result into the tally. Returns True if the cycle should stop."""
-    if result.status == "ok":
+    if result.status in {"ok", "already_participant"}:
+        # Already a member counts as a joined channel — warming has no rolling-24h
+        # cap, so there is nothing to skip; it is success just like a real join.
         tally.joined += 1
         return False
     tally.last_failed_action = "join"
@@ -261,7 +263,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         if secret.join_enabled and not await is_channel_joined(account_id, channel.channel):
             join_result = await _seams.execute(account_id, JoinChannel(channel=channel.channel))
             tally.attempts += 1
-            if join_result.status == "ok":
+            if join_result.status in {"ok", "already_participant"}:
                 await record_channel_joined(account_id, channel.channel)
                 await _emit_step(on_step, "join")
             if _apply_join_result(tally, join_result, channel.channel):

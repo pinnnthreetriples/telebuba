@@ -94,7 +94,7 @@ async def test_execute_join_channel_with_joinchat_dispatches_import(
 
 
 @pytest.mark.asyncio
-async def test_execute_join_channel_already_participant_returns_ok(
+async def test_execute_join_channel_already_participant_returns_already_participant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeClient:
@@ -108,7 +108,8 @@ async def test_execute_join_channel_already_participant_returns_ok(
 
     result = await execute("acc-already", JoinChannel(channel="@already"))
 
-    assert result.status == "ok"
+    # Distinct from a real join so the caller can skip the rolling-24h join cap.
+    assert result.status == "already_participant"
     assert result.action_type == "join_channel"
 
 
@@ -194,7 +195,7 @@ async def test_join_discussion_group_joins_resolved_entity(
 
 
 @pytest.mark.asyncio
-async def test_join_discussion_group_already_participant_is_ok(
+async def test_join_discussion_group_already_participant_reports_already_participant(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeClient:
@@ -210,7 +211,7 @@ async def test_join_discussion_group_already_participant_is_ok(
 
     result = await execute("acc-2", JoinDiscussionGroup(channel="@news"))
 
-    assert result.status == "ok"
+    assert result.status == "already_participant"
     assert result.action_type == "join_discussion_group"
 
 

@@ -14,32 +14,29 @@ place.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 
 from core.config import settings
 from core.db import (
+    count_account_joins_since,
     fetch_active_campaign_for_channel,
     fetch_readiness,
-    mark_pair_banned,
+    record_join,
     upsert_linked_group,
     upsert_readiness,
 )
 from core.logging import log_event
-from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
+from schemas.neurocomment import AccountChannelOnboarding
 from schemas.telegram_actions import (
-    ActionResult,
     GetLinkedDiscussionGroup,
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
-from services.neurocomment import _seams, _state, challenge
+from services.neurocomment import _seams, _state
 
-# Writes Telegram-blocked at join → chat_restricted (Ф2 #120); solver can't clear it.
-_GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
-# A hard ban at join → sticky ban (#30), same as a ban hit while commenting (never retried).
-_BAN_ERROR = "UserBannedInChannelError"
-# Rate-limit families: never terminal, retry later, must return promptly.
-_RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
+# The join ActionResult → OnboardingState mapping + solver recording live in
+# ``_classify`` (file-size cap); ``_join_and_classify`` below delegates to it.
+from services.neurocomment._classify import _classify_join
 
 
 def _effective_solver_enabled(campaign_override: bool | None) -> bool:  # noqa: FBT001 - tri-state value
@@ -66,6 +63,21 @@ async def onboard_account_channel(account_id: str, channel: str) -> AccountChann
             account_id=account_id,
             channel=channel,
             state="comments_off",
+        )
+    # Rolling-24h join cap (anti-freeze): both operator single-pair paths
+    # (direct call + retry_pair) funnel through here, so the gate lives here to
+    # cover them — the campaign loop gates in _onboard_pair before its jitter
+    # sleep. At cap: skip the join RPC (no record), retry once the window rolls.
+    # Non-terminal "joining" so the pair is reconsidered, not stuck.
+    if await _at_join_cap(account_id):
+        await log_event(
+            "WARNING",
+            "neurocomment_join_daily_cap",
+            account_id=account_id,
+            extra={"channel": channel},
+        )
+        return AccountChannelOnboarding(
+            account_id=account_id, channel=channel, state="joining", reason="daily_join_cap"
         )
     campaign = await fetch_active_campaign_for_channel(channel)
     solver_enabled = _effective_solver_enabled(campaign.solver_enabled if campaign else None)
@@ -103,6 +115,12 @@ async def _join_and_classify(
             state="bot_challenge_backoff",
         )
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
+    if result.status == "ok":
+        # A real join RPC landed → count it against the account's rolling-24h cap.
+        # ``already_participant`` is a no-op re-join (still a success below) and must
+        # NOT be recorded, else a re-onboard would inflate the cap with joins that
+        # never happened.
+        await record_join(account_id)
     return await _classify_join(
         account_id, channel, result, group_id, solver_enabled=solver_enabled
     )
@@ -141,106 +159,15 @@ async def _safe_resolve(account_id: str, channel: str) -> LinkedDiscussionGroupR
         return None
 
 
-async def _classify_join(
-    account_id: str,
-    channel: str,
-    result: ActionResult,
-    group_id: int,
-    *,
-    solver_enabled: bool,
-) -> AccountChannelOnboarding:
-    """Map a join ``ActionResult`` to a state + persisted readiness row."""
-    if result.status == "ok":
-        # Joined → run the proactive challenge solver before declaring the pair
-        # comment-able (Ф2 #145), unless the solver is disabled for this campaign.
-        return await _solve_and_record(account_id, channel, group_id, solver_enabled=solver_enabled)
-    if result.status in _RETRY_STATUSES:
-        # Non-terminal: do not write ready; surface the wait so the account is
-        # retried later instead of getting stuck. Return promptly (no sleep).
-        await log_event(
-            "INFO",
-            "neurocomment_onboard_retry_later",
-            account_id=account_id,
-            extra={"channel": channel, "status": result.status},
-        )
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="joining",
-            reason=result.error_type or f"{result.status}:{result.flood_wait_seconds}",
-        )
-    if result.error_type == "InviteRequestSentError":
-        await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="join_by_request",
-        )
-    if result.error_type == _BAN_ERROR:
-        # Hard ban at join → sticky ban (#30) so a re-onboard stops re-joining the group.
-        await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
-        await mark_pair_banned(account_id, channel)
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="banned",
-        )
-    if result.error_type in _GATE_ERRORS:
-        # Telegram-level write block (mute / restrict) → chat_restricted (Ф2 #120).
-        # Unsolvable by the challenge solver, so it is never invoked here; joined stays
-        # True (we are a member) but ready is False.
-        await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
-        return AccountChannelOnboarding(
-            account_id=account_id,
-            channel=channel,
-            state="chat_restricted",
-        )
-    # Hard failure (invalid invite / banned / private): never joined and never will
-    # without operator action. Persist a signal distinct from the approval-gate row
-    # (which is also joined=False) so the board renders join_failed, not "awaiting
-    # approval": captcha_passed=True on an unjoined row is the sentinel (no other path
-    # produces that combination). ready stays False so the pair is never selected.
-    await upsert_readiness(account_id, channel, joined=False, captcha_passed=True, ready=False)
-    return AccountChannelOnboarding(
-        account_id=account_id,
-        channel=channel,
-        state="failed",
-        reason=result.error_type or result.error_message,
-    )
+async def _at_join_cap(account_id: str) -> bool:
+    """True when ``account_id`` has hit its rolling-24h channel-join cap (0 = no cap).
 
-
-async def _solve_and_record(
-    account_id: str,
-    channel: str,
-    group_id: int,
-    *,
-    solver_enabled: bool,
-) -> AccountChannelOnboarding:
-    """Run the challenge solver on a freshly-joined group; persist the readiness.
-
-    With the solver disabled (opt-in, #148) an ok join is assumed comment-able →
-    ``ready``. Otherwise ``give_up`` / ``failed`` (a detected/unsolved challenge)
-    leaves the pair not-ready — the audit row drives the board's ``bot_challenge``;
-    ``no_challenge`` / ``solved`` means comment-able → ``ready``.
+    Telegram freezes an account after ~20-50 channel joins a day, so both join sites
+    gate on this before sending a real join RPC — an over-cap account has its
+    remaining joins skipped this run and resumes as the 24h window rolls.
     """
-
-    def _result(state: OnboardingState) -> AccountChannelOnboarding:
-        return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
-
-    if solver_enabled:
-        outcome = await challenge.solve_if_present(account_id, channel, group_id)
-        if outcome == "rate_limited":
-            # LLM gateway 429'd: transient, not a solver failure — retry-later, no
-            # readiness written, un-penalized (no bot_challenge, no #147 back-off).
-            return _result("joining").model_copy(update={"reason": "llm_rate_limited"})
-        if outcome in ("give_up", "failed"):
-            # Detected but unsolved (or click errored) → not comment-able; the solver's
-            # audit row is what the board reads to render bot_challenge.
-            await upsert_readiness(
-                account_id, channel, joined=True, captcha_passed=False, ready=False
-            )
-            return _result("bot_challenge")
-    # Solver disabled, or no_challenge/solved (click dispatched, audit pending) →
-    # optimistically comment-able; the engine confirms a solved click on first comment.
-    await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
-    return _result("ready")
+    cap = settings.neurocomment.max_joins_per_account_per_day
+    if cap <= 0:
+        return False
+    since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    return await count_account_joins_since(account_id, since) >= cap

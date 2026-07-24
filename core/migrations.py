@@ -45,6 +45,7 @@ from core.migration_steps_neurocomment import (
     _add_neurocomment_challenges_channel_index,
     _add_neurocomment_comment_deleted_at,
     _add_neurocomment_cooldowns,
+    _add_neurocomment_join_log,
 )
 from core.migration_steps_pool import (
     _add_neurocomment_listener_running,
@@ -103,6 +104,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         "add_neurocomment_challenges_channel_index",
         _add_neurocomment_challenges_channel_index,
     ),
+    (36, "add_neurocomment_join_log", _add_neurocomment_join_log),
 )
 
 

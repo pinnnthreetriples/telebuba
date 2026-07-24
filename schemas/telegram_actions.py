@@ -324,6 +324,10 @@ class BotChallengeWaitResult(BaseModel):
 
 ActionStatus = Literal[
     "ok",
+    # A join RPC against a channel/group the account is already a member of: a
+    # success everywhere (it IS joined), but a no-op the caller can tell apart
+    # from a real join so it does not count against the rolling-24h join cap.
+    "already_participant",
     "flood_wait",
     "slow_mode_wait",
     "premium_wait",

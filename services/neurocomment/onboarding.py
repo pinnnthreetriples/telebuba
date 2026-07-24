@@ -44,6 +44,7 @@ from services.neurocomment._onboard_channel import OnboardContext, onboard_chann
 # ``_safe_resolve`` and ``_join_and_classify`` are called by the campaign loop below
 # (and patched by name in tests); ``onboard_account_channel`` is the public entrypoint.
 from services.neurocomment._onboard_pair import (  # noqa: F401 - re-exported public API + seams
+    _at_join_cap,
     _effective_solver_enabled,
     _join_and_classify,
     _safe_resolve,
@@ -230,3 +231,15 @@ async def _probe_account_spam(
             )
             if report:
                 report(OnboardingProgressEvent(code="spam_probe_failed", account_id=account_id))
+
+
+# The join-outcome classification + solver recording live in ``_classify`` (file-size
+# cap); ``_join_and_classify`` above calls ``_classify_join``. Re-exported so that call
+# and ``onboarding._classify_join`` / ``onboarding._GATE_ERRORS`` still resolve.
+from services.neurocomment._classify import (  # noqa: E402, F401 - re-export after the module body.
+    _BAN_ERROR,
+    _GATE_ERRORS,
+    _RETRY_STATUSES,
+    _classify_join,
+    _solve_and_record,
+)

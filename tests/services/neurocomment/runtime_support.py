@@ -31,6 +31,9 @@ def isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
     reset_logging_for_tests()
     setup_logging()
+    # Collapse the jittered inter-join pause so multi-channel reconciles don't
+    # actually wait 30-120s per join in tests.
+    monkeypatch.setattr(_runtime, "_join_jitter_seconds", lambda: 0.0)
     _runtime.reset_for_tests()
     _state.reset_for_tests()
     yield
@@ -84,3 +87,16 @@ def _patch_warming_ids(monkeypatch: pytest.MonkeyPatch, ids: set[str]) -> None:
         return set(ids)
 
     monkeypatch.setattr(_runtime, "list_warming_account_ids", _ids)
+
+
+async def _drain_joins() -> None:
+    """Await the background paced-join task so join/sleep/cache assertions see it finish.
+
+    Since the paced join loop moved off reconcile's hot path (it now returns before the
+    joins land), tests that assert ``exec_spy.joined`` / ``_JOINED_CHANNELS`` / sleep
+    counts must drain the coalescing task first. The task loops until no rerun is queued,
+    so awaiting it once covers any coalesced rerun. No-op when no pass is in flight.
+    """
+    task = _runtime._JOIN_TASK
+    if task is not None:
+        await task
