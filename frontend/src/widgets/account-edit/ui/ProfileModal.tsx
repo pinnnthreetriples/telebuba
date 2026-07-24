@@ -8,6 +8,7 @@ import {
   accountProfileSnapshotQueryOptions,
   accountsQueryKey,
   addAccountMusicMutation,
+  fetchLiveProfileSnapshot,
   removeAccountMusicMutation,
   removeAccountPhotoMutation,
   removeAccountStoryMutation,
@@ -19,14 +20,20 @@ import {
 import type {
   AccountProfileView,
   AccountRead,
-  ProfileMusicView,
+  MusicRemoveRequest,
   ProfilePhotoView,
   ProfileStoryView,
 } from '@/shared/api';
-import { ConfirmModal, FieldError, FormField, Modal, toastError } from '@/shared/ui';
+import { ConfirmModal, FormField, Modal, toastError } from '@/shared/ui';
 
+import { isUploadablePhoto, PHOTO_MAX_BYTES } from './_channelsShared';
+import { dedupeById, profileErrorField, profileErrorText } from './_profileShared';
+import { FIELD } from './_styles';
 import { AddStoryModal } from './AddStoryModal';
 import { ChannelsTab } from './ChannelsTab';
+import { MusicTab } from './MusicTab';
+import { PhotoTab } from './PhotoTab';
+import { StoriesTab } from './StoriesTab';
 
 // Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
 // bio ≤70, username 5–32 chars of [A-Za-z0-9_] starting with a letter
@@ -55,80 +62,29 @@ const profileSchema = z.object({
 // busy scrim).
 type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels';
 
-const FIELD =
-  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-const LABEL = 'mb-[6px] block text-[12px] font-medium text-[#3a3a3a]';
-// Fallback tile background when a media item carries no thumbnail.
-const TILE = 'linear-gradient(135deg,#cfd8ec,#e7dfd2)';
-// Client-side mirror of the backend photo gate (services/accounts/_uploads.py
-// suffix allowlist + settings.profile_media.photo_max_bytes default) so a
-// GIF/HEIC/oversized file is rejected up front instead of uploading fully and
-// failing with an untranslated 400.
-const PHOTO_SUFFIXES = ['.jpg', '.jpeg', '.png', '.webp'];
-const PHOTO_MAX_BYTES = 10_000_000;
-
-function isUploadablePhoto(file: File): boolean {
-  const name = file.name.toLowerCase();
-  return file.size <= PHOTO_MAX_BYTES && PHOTO_SUFFIXES.some((suffix) => name.endsWith(suffix));
-}
-
-function DashedAdd({
-  ratio,
-  label,
-  onClick,
-  busy = false,
-  disabled = false,
-}: {
-  ratio: string;
-  label: string;
-  onClick: () => void;
-  busy?: boolean;
-  disabled?: boolean;
-}) {
+// "Обновлено {только что | N мин назад}" from the snapshot query's last fetch.
+// Its own component with its own 30s tick, so only this label re-renders while
+// the minutes advance — not the whole modal. (Derived from Date.now(); without
+// the tick it would freeze on "только что".)
+function SyncLabel({ updatedAt }: { updatedAt: number }) {
+  const { t } = useTranslation();
+  const [, setNowTick] = useState(0);
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setNowTick((n) => n + 1);
+    }, 30_000);
+    return () => {
+      window.clearInterval(id);
+    };
+  }, []);
+  const mins = updatedAt ? Math.floor((Date.now() - updatedAt) / 60000) : 0;
   return (
-    <button
-      type="button"
-      disabled={busy || disabled}
-      onClick={onClick}
-      style={{ aspectRatio: ratio }}
-      className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted disabled:opacity-60"
-    >
-      {busy ? (
-        <span className="tb-spin inline-block h-[18px] w-[18px] rounded-full border-2 border-line-input border-t-primary" />
-      ) : (
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        >
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      )}
-      {label}
-    </button>
+    <span className="text-[11px] text-ink-subtle">
+      {!updatedAt || mins < 1
+        ? t('accounts.profile.updatedJustNow')
+        : t('accounts.profile.updatedMinAgo', { n: mins })}
+    </span>
   );
-}
-
-function dedupeById(photos: ProfilePhotoView[]): ProfilePhotoView[] {
-  const seen = new Set<string>();
-  return photos.filter((photo) => {
-    if (seen.has(photo.photo_id)) return false;
-    seen.add(photo.photo_id);
-    return true;
-  });
-}
-
-function tileStyle(uri: string | null | undefined, ratio: string): React.CSSProperties {
-  if (!uri) return { aspectRatio: ratio, background: TILE };
-  return {
-    aspectRatio: ratio,
-    backgroundImage: `url(${uri})`,
-    backgroundSize: 'cover',
-    backgroundPosition: 'center',
-  };
 }
 
 export function ProfileModal({ account, onClose }: { account: AccountRead; onClose: () => void }) {
@@ -142,8 +98,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const setStoryPinned = useMutation(setAccountStoryPinnedMutation());
   const removeMusic = useMutation(removeAccountMusicMutation());
   const removePhoto = useMutation(removeAccountPhotoMutation());
-  const photoInput = useRef<HTMLInputElement>(null);
-  const musicInput = useRef<HTMLInputElement>(null);
 
   const snapOpts = accountProfileSnapshotQueryOptions({
     path: { account_id: account.account_id },
@@ -154,23 +108,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // The post-action background re-pull is fire-and-forget; this drives the
   // content-body overlay so a media edit doesn't look frozen while it settles.
   const [syncing, setSyncing] = useState(false);
-  // A failed background re-pull rejects on the refresh:true query key, which
+  // A failed background re-pull rejects outside any rendered query, which
   // loadError (watching the plain key) can't see — track it here so the banner
   // shows instead of silently presenting a pre-mutation grid as current.
   const [syncError, setSyncError] = useState(false);
-  // Re-render every 30s so the "Обновлено N мин назад" label keeps advancing —
-  // it's derived from Date.now() and would otherwise freeze on "только что".
-  const [, setNowTick] = useState(0);
-  useEffect(() => {
-    const id = window.setInterval(() => {
-      setNowTick((n) => n + 1);
-    }, 30_000);
-    return () => {
-      window.clearInterval(id);
-    };
-  }, []);
-  // Defensive dedup by photo_id: Telegram can momentarily echo a duplicate id
-  // during a make-main promotion, and a repeated tile would misrender.
   const photos = dedupeById(snapshot.data?.photos ?? []);
   const stories = snapshot.data?.stories ?? [];
   const music = snapshot.data?.music ?? [];
@@ -181,51 +122,47 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // Older Telethon builds lack the saved-music TL methods; the snapshot flags
   // that so the UI shows an "unsupported" note instead of a picker that fails.
   const musicSupported = snapshot.data?.music_supported !== false;
-  // Force a live Telegram re-pull (bypasses the 30s read-cache) and write it into
-  // the rendered snapshot query. Shared by «Обновить» and every post-mutation
-  // refresh — an invalidate alone can hit the TTL cache and return a stale photo
-  // set (the make-main duplicate/loss bug surfaced exactly here).
-  const forcePull = () =>
-    queryClient.fetchQuery(
-      accountProfileSnapshotQueryOptions({
-        path: { account_id: account.account_id },
-        query: { refresh: true },
-      }),
-    );
+  // Serialised force-pull: a live Telegram re-pull (bypasses the 30s read
+  // cache, straight through the SDK so no refresh:true twin lands in the query
+  // cache) written into the rendered snapshot query. Shared by «Обновить» and
+  // every post-mutation refresh. Every call starts a fresh pull — reusing an
+  // in-flight one could serve pre-mutation data — but only the LATEST one
+  // writes: an older pull resolving last must not clobber newer data
+  // (superseded calls return null).
+  const pullGen = useRef(0);
+  const forcePull = async (): Promise<AccountProfileView | null> => {
+    const gen = ++pullGen.current;
+    try {
+      const fresh = await fetchLiveProfileSnapshot(account.account_id);
+      if (gen !== pullGen.current) return null;
+      queryClient.setQueryData(snapOpts.queryKey, fresh);
+      setSyncError(false);
+      return fresh;
+    } catch (error) {
+      if (gen !== pullGen.current) return null;
+      throw error;
+    } finally {
+      // Whichever pull is latest clears the overlay — success or failure.
+      if (gen === pullGen.current) setSyncing(false);
+    }
+  };
   // Scoped: this account's snapshot + the accounts table (name/username/avatar
   // show in the list) — not the whole cache.
   const refresh = () => {
     setSyncing(true);
-    void forcePull()
-      .then((fresh) => {
-        queryClient.setQueryData(snapOpts.queryKey, fresh);
-        setSyncError(false);
-      })
-      .catch(() => {
-        setSyncError(true);
-      })
-      .finally(() => {
-        setSyncing(false);
-      });
+    void forcePull().catch(() => {
+      setSyncError(true);
+    });
     void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
   };
-  // "Обновлено {только что | N мин назад}" — from the snapshot query's last fetch.
-  const syncMins = snapshot.dataUpdatedAt
-    ? Math.floor((Date.now() - snapshot.dataUpdatedAt) / 60000)
-    : 0;
-  const syncLabel =
-    !snapshot.dataUpdatedAt || syncMins < 1
-      ? t('accounts.profile.updatedJustNow')
-      : t('accounts.profile.updatedMinAgo', { n: syncMins });
 
   const [tab, setTab] = useState<Tab>('text');
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
-  const [dragOver, setDragOver] = useState(false);
   const [storyOpen, setStoryOpen] = useState(false);
   const [saved, setSaved] = useState(false);
   const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
   const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
-  const [confirmMusic, setConfirmMusic] = useState<ProfileMusicView | null>(null);
+  const [confirmMusic, setConfirmMusic] = useState<MusicRemoveRequest | null>(null);
 
   // A single "media in flight" flag: any photo/story/music write plus the
   // post-action background sync. Drives the content-body overlay and disables
@@ -280,6 +217,38 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const canSave = useStore(form.store, (state) => state.canSubmit);
   const isDirty = useStore(form.store, (state) => state.isDirty);
 
+  // A rejected save carries a stable code in the error envelope; username/bio
+  // codes render under their field, the rest beside the footer's Save button
+  // (which is global — the box must not be trapped inside the text tab).
+  // Unknown codes show as-is (plus the global mutation toast — same contract
+  // as channels).
+  const saveError = updateProfile.isError ? updateProfile.error : null;
+  const saveErrorField = saveError ? profileErrorField(saveError) : null;
+  const saveErrorText = saveError
+    ? profileErrorText(saveError, t, t('accounts.profile.saveError'))
+    : null;
+  // A stale server error must not outlive the edit that addresses it: while an
+  // error is shown, the first form-value change clears it. Store subscription,
+  // not a values selector — typing must not re-render the whole modal.
+  const showingSaveError = updateProfile.isError;
+  const resetSaveError = updateProfile.reset;
+  useEffect(() => {
+    if (!showingSaveError) return;
+    const baseline = form.store.state.values;
+    return form.store.subscribe(() => {
+      if (form.store.state.values !== baseline) resetSaveError();
+    });
+  }, [showingSaveError, resetSaveError, form]);
+
+  // onMount validation already flags an empty stored first name, but errors
+  // only render for touched fields — mark it touched so the reason Save is
+  // disabled shows instead of a silently dead button.
+  useEffect(() => {
+    if (form.getFieldValue('first_name').trim() === '') {
+      form.setFieldMeta('first_name', (meta) => ({ ...meta, isTouched: true }));
+    }
+  }, [form]);
+
   // Seed the text fields from a successfully-pulled live profile ('' for unset
   // fields), without marking the form dirty. first_name can't be empty on
   // Telegram, so a null there means "no text in this snapshot" — keep ours.
@@ -309,12 +278,15 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     setRefreshState('loading');
     try {
       const fresh = await forcePull();
-      queryClient.setQueryData(snapOpts.queryKey, fresh);
-      setSyncError(false);
-      seedForm(fresh);
-      // A 200 carrying an `error` field means Telegram refused the live pull —
-      // that's a failed refresh, not a success.
-      setRefreshState(fresh.error ? 'error' : 'ok');
+      if (fresh) {
+        seedForm(fresh);
+        // A 200 carrying an `error` field means Telegram refused the live pull —
+        // that's a failed refresh, not a success.
+        setRefreshState(fresh.error ? 'error' : 'ok');
+      } else {
+        // Superseded by a newer pull — that one reports the outcome.
+        setRefreshState('idle');
+      }
     } catch {
       setRefreshState('error');
     } finally {
@@ -376,27 +348,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     setPhotoProgress(null);
     refresh();
   };
-  const onPhotosPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
-    // Materialise the array BEFORE resetting the input — event.target.files is
-    // a live FileList, and value='' empties it, so reading it afterwards yields
-    // nothing. (jsdom doesn't emulate that clear, which is why tests missed it.)
-    const files = Array.from(event.target.files ?? []);
-    event.target.value = '';
-    void uploadPhotos(files);
-  };
-
-  const onMusicPicked = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
-    addMusic.mutate(
-      { path: { account_id: account.account_id }, body: { file } },
-      // Settled, not success: a failure has already invalidated the server-side
-      // snapshot cache, so the grid must re-pull either way or it keeps serving
-      // ids Telegram has since replaced.
-      { onSettled: refresh },
-    );
-    event.target.value = '';
-  };
 
   const tabBtn = (value: Tab): string =>
     `border-b-2 py-[14px] text-[13px] font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
@@ -431,7 +382,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             <div className="flex shrink-0 flex-col items-end gap-[5px]">
               <button
                 type="button"
-                disabled={refreshState === 'loading'}
+                disabled={refreshState === 'loading' || syncing}
                 onClick={() => {
                   void onRefresh();
                 }}
@@ -489,7 +440,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     ? t('accounts.profile.refreshError')
                     : t('accounts.profile.refresh')}
               </button>
-              <span className="text-[11px] text-ink-subtle">{syncLabel}</span>
+              <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
             </div>
             <button
               type="button"
@@ -546,7 +497,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 <span>{t('accounts.profile.loadError')}</span>
                 <button
                   type="button"
-                  disabled={refreshState === 'loading'}
+                  disabled={refreshState === 'loading' || syncing}
                   onClick={() => {
                     void onRefresh();
                   }}
@@ -568,8 +519,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 </div>
                 <form.Field name="username">
                   {(field) => (
-                    <label className="block">
-                      <span className={LABEL}>{t('accounts.profile.username')}</span>
+                    <FormField field={field} label={t('accounts.profile.username')}>
                       <div className="relative flex items-center">
                         <span className="absolute left-3 text-[13px] text-ink-subtle">@</span>
                         <input
@@ -581,14 +531,17 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                           className={`${FIELD} pl-[26px]`}
                         />
                       </div>
-                      <FieldError field={field} />
-                    </label>
+                      {saveErrorField === 'username' && saveErrorText != null && (
+                        <span className="mt-[5px] block text-[11px] font-medium text-[#c0473f]">
+                          {saveErrorText}
+                        </span>
+                      )}
+                    </FormField>
                   )}
                 </form.Field>
                 <form.Field name="bio">
                   {(field) => (
-                    <label className="block">
-                      <span className={LABEL}>{t('accounts.profile.bio')}</span>
+                    <FormField field={field} label={t('accounts.profile.bio')}>
                       <textarea
                         rows={3}
                         value={field.state.value}
@@ -598,283 +551,110 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         onBlur={field.handleBlur}
                         className={`${FIELD} resize-none [font-family:inherit]`}
                       />
-                      <FieldError field={field} />
-                    </label>
+                      {saveErrorField === 'bio' && saveErrorText != null && (
+                        <span className="mt-[5px] block text-[11px] font-medium text-[#c0473f]">
+                          {saveErrorText}
+                        </span>
+                      )}
+                    </FormField>
                   )}
                 </form.Field>
               </div>
             )}
 
             {tab === 'photo' && (
-              <div
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setDragOver(true);
+              <PhotoTab
+                photos={photos}
+                busy={busy}
+                uploading={Boolean(photoProgress)}
+                onUpload={(files) => {
+                  void uploadPhotos(files);
                 }}
-                onDragLeave={(event) => {
-                  // Only clear on a real exit — hovering a child tile fires
-                  // dragleave on the container and would otherwise flicker.
-                  if (!event.currentTarget.contains(event.relatedTarget as Node))
-                    setDragOver(false);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setDragOver(false);
-                  // Ignore a second drop while a batch is still uploading.
-                  if (photoProgress) return;
-                  const images = Array.from(event.dataTransfer.files).filter((file) =>
-                    file.type.startsWith('image/'),
+                onRemove={setConfirmPhoto}
+                onMakeMain={(photo) => {
+                  setMainPhoto.mutate(
+                    {
+                      path: { account_id: account.account_id },
+                      body: {
+                        photo_id: photo.photo_id,
+                        access_hash: photo.access_hash,
+                        file_reference: photo.file_reference,
+                      },
+                    },
+                    // Settled: make-main RE-UPLOADS the photo as a new one
+                    // (fresh id at the front, the original stays as a visible
+                    // duplicate the operator may delete), so the grid must
+                    // re-pull either way.
+                    { onSettled: refresh },
                   );
-                  void uploadPhotos(images);
                 }}
-                className={`relative rounded-[12px] border-[1.5px] border-dashed p-3 transition-colors ${dragOver ? 'border-primary' : 'border-transparent'}`}
-              >
-                {dragOver && (
-                  <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-[12px] bg-white/70 text-[13px] font-medium text-primary">
-                    {t('accounts.profile.dropPhotos')}
-                  </div>
-                )}
-                <div className="mb-3 text-[12px] text-ink-subtle">
-                  {t('accounts.profile.photoHint')}
-                </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(104px,1fr))] gap-3">
-                  {photos.map((photo) => (
-                    <div key={photo.photo_id} className="relative">
-                      <div
-                        className="rounded-[12px] border border-black/5"
-                        style={tileStyle(photo.thumb_url, '1')}
-                      />
-                      <button
-                        type="button"
-                        aria-label={t('accounts.profile.removePhoto')}
-                        onClick={() => {
-                          setConfirmPhoto(photo);
-                        }}
-                        className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
-                      >
-                        ×
-                      </button>
-                      {photo.is_main ? (
-                        <span className="mt-[6px] block w-full py-[2px] text-[11px] font-medium text-primary">
-                          {t('accounts.profile.mainPhoto')}
-                        </span>
-                      ) : (
-                        <button
-                          type="button"
-                          disabled={busy}
-                          onClick={() => {
-                            setMainPhoto.mutate(
-                              {
-                                path: { account_id: account.account_id },
-                                body: {
-                                  photo_id: photo.photo_id,
-                                  access_hash: photo.access_hash,
-                                  file_reference: photo.file_reference,
-                                },
-                              },
-                              // Settled: make-main RE-UPLOADS the photo as a
-                              // new one (fresh id at the front, the original
-                              // stays as a visible duplicate the operator may
-                              // delete), so the grid must re-pull either way.
-                              { onSettled: refresh },
-                            );
-                          }}
-                          className="mt-[6px] block w-full py-[2px] text-left text-[11px] font-medium text-primary hover:underline disabled:opacity-50"
-                        >
-                          {t('accounts.profile.makeMain')}
-                        </button>
-                      )}
-                    </div>
-                  ))}
-                  <DashedAdd
-                    ratio="1"
-                    label={t('accounts.profile.upload')}
-                    disabled={busy}
-                    onClick={() => photoInput.current?.click()}
-                  />
-                </div>
-                <input
-                  ref={photoInput}
-                  type="file"
-                  accept={PHOTO_SUFFIXES.join(',')}
-                  multiple
-                  onChange={onPhotosPicked}
-                  className="hidden"
-                />
-              </div>
+              />
             )}
 
             {tab === 'stories' && (
-              <div>
-                <div className="mb-3 text-[12px] text-ink-subtle">
-                  {t('accounts.profile.storiesHint')}
-                </div>
-                <div className="grid grid-cols-[repeat(auto-fill,minmax(96px,1fr))] gap-3">
-                  {stories.map((story) => (
-                    <div key={story.story_id} className="relative">
-                      <div
-                        className="rounded-[12px] border border-black/5"
-                        style={tileStyle(story.thumb_url, '9 / 16')}
-                      />
-                      {(story.views != null || story.reactions != null) && (
-                        <span className="absolute left-[5px] top-[5px] inline-flex items-center gap-[6px] rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-[9px] font-medium text-white">
-                          {story.views != null && (
-                            <span
-                              title={t('accounts.profile.storyViews', { n: story.views })}
-                              className="inline-flex items-center gap-[3px]"
-                            >
-                              <svg
-                                width="10"
-                                height="10"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                stroke="currentColor"
-                                strokeWidth="2"
-                              >
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-                                <circle cx="12" cy="12" r="3" />
-                              </svg>
-                              {story.views}
-                            </span>
-                          )}
-                          {story.reactions != null && (
-                            <span
-                              title={t('accounts.profile.storyReactions', { n: story.reactions })}
-                              className="inline-flex items-center gap-[3px]"
-                            >
-                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 21l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.18L12 21z" />
-                              </svg>
-                              {story.reactions}
-                            </span>
-                          )}
-                        </span>
-                      )}
-                      <button
-                        type="button"
-                        aria-label={t('accounts.profile.removeStory')}
-                        onClick={() => {
-                          setConfirmStory(story);
-                        }}
-                        className="absolute right-[6px] top-[6px] h-[22px] w-[22px] rounded-full bg-[rgba(11,11,12,0.55)] text-[13px] leading-none text-white"
-                      >
-                        ×
-                      </button>
-                      <button
-                        type="button"
-                        disabled={setStoryPinned.isPending}
-                        aria-label={t(
-                          story.is_pinned
-                            ? 'accounts.profile.unpinStory'
-                            : 'accounts.profile.pinStory',
-                        )}
-                        onClick={() => {
-                          setStoryPinned.mutate(
-                            {
-                              path: { account_id: account.account_id },
-                              body: { story_id: story.story_id, pinned: !story.is_pinned },
-                            },
-                            { onSettled: refresh },
-                          );
-                        }}
-                        className={`absolute inset-x-[5px] bottom-[24px] truncate rounded-[6px] px-[5px] py-[2px] text-center text-[9px] font-medium disabled:opacity-50 ${
-                          story.is_pinned
-                            ? 'bg-primary text-white'
-                            : 'bg-[rgba(11,11,12,0.6)] text-white'
-                        }`}
-                      >
-                        {t(
-                          story.is_pinned
-                            ? 'accounts.profile.pinnedForever'
-                            : 'accounts.profile.pin24h',
-                        )}
-                      </button>
-                      <span className="absolute inset-x-[5px] bottom-[5px] truncate rounded-[6px] bg-[rgba(11,11,12,0.6)] px-[5px] py-[2px] text-center text-[9px] font-medium text-white">
-                        {t(`accounts.addStory.${story.privacy_preset ?? 'unknown'}`)}
-                      </span>
-                    </div>
-                  ))}
-                  <DashedAdd
-                    ratio="9 / 16"
-                    label={t('accounts.profile.addStory')}
-                    onClick={() => {
-                      setStoryOpen(true);
-                    }}
-                  />
-                </div>
-              </div>
+              <StoriesTab
+                stories={stories}
+                pinPending={setStoryPinned.isPending}
+                onAdd={() => {
+                  setStoryOpen(true);
+                }}
+                onRemove={setConfirmStory}
+                onPinToggle={(story) => {
+                  setStoryPinned.mutate(
+                    {
+                      path: { account_id: account.account_id },
+                      body: { story_id: story.story_id, pinned: !story.is_pinned },
+                    },
+                    { onSettled: refresh },
+                  );
+                }}
+              />
             )}
 
-            {tab === 'music' && !musicSupported && (
-              <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
-                {t('accounts.profile.musicUnsupported')}
-              </div>
-            )}
-
-            {tab === 'music' && musicSupported && (
-              <div>
-                {music.length > 0 ? (
-                  <div className="flex flex-col gap-2">
-                    {music.map((track) => (
-                      <div
-                        key={track.file_id}
-                        className="flex items-center gap-[13px] rounded-[12px] border border-line px-[14px] py-3"
-                      >
-                        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-primary text-white">
-                          <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M8 5v14l11-7z" />
-                          </svg>
-                        </span>
-                        <div className="min-w-0 flex-1">
-                          <div className="truncate text-[13.5px] font-semibold">
-                            {track.title ?? t('accounts.profile.trackTitle')}
-                          </div>
-                          <div className="truncate text-[12px] text-ink-subtle">
-                            {track.performer ?? t('accounts.profile.trackArtist')}
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={!track.file_reference}
-                          onClick={() => {
-                            setConfirmMusic(track);
-                          }}
-                          aria-label={t('accounts.profile.removeMusic')}
-                          className="h-[30px] w-[30px] rounded-full border border-line bg-white text-[15px] text-ink-subtle disabled:opacity-50"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <div className="rounded-[12px] border border-dashed border-line bg-white px-4 py-6 text-center text-[12.5px] text-ink-subtle">
-                    {t('accounts.profile.noMusic')}
-                  </div>
-                )}
-                <button
-                  type="button"
-                  disabled={busy}
-                  onClick={() => musicInput.current?.click()}
-                  className="mt-3 rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-60"
-                >
-                  {t('accounts.profile.pickTrack')}
-                </button>
-                <input
-                  ref={musicInput}
-                  type="file"
-                  accept="audio/*"
-                  onChange={onMusicPicked}
-                  className="hidden"
-                />
-              </div>
+            {tab === 'music' && (
+              <MusicTab
+                music={music}
+                supported={musicSupported}
+                busy={busy}
+                onPick={(file) => {
+                  addMusic.mutate(
+                    { path: { account_id: account.account_id }, body: { file } },
+                    // Settled, not success: a failure has already invalidated
+                    // the server-side snapshot cache, so the grid must re-pull
+                    // either way or it keeps serving ids Telegram has since
+                    // replaced.
+                    { onSettled: refresh },
+                  );
+                }}
+                onRemove={(track) => {
+                  // The remove button is disabled without a file_reference;
+                  // the guard keeps the narrowing honest (no '' fallback ever
+                  // reaches the wire).
+                  if (!track.file_reference) return;
+                  setConfirmMusic({
+                    file_id: track.file_id,
+                    access_hash: track.access_hash ?? '0',
+                    file_reference: track.file_reference,
+                  });
+                }}
+              />
             )}
 
             {tab === 'channels' && <ChannelsTab accountId={account.account_id} />}
           </div>
 
           {/* footer */}
-          <div className="flex justify-end gap-2 border-t border-[#f0eeeb] px-5 py-[14px]">
+          <div className="flex items-center justify-end gap-2 border-t border-[#f0eeeb] px-5 py-[14px]">
+            {/* Non-field save errors (account_frozen, flood_wait, unknown)
+                live beside the global Save button, visible from any tab. */}
+            {saveErrorField === null && saveErrorText != null && (
+              <div
+                title={saveErrorText}
+                className="mr-auto min-w-0 truncate text-[12px] font-medium text-danger"
+              >
+                {saveErrorText}
+              </div>
+            )}
             <button
               type="button"
               onClick={requestClose}
@@ -987,11 +767,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             removeMusic
               .mutateAsync({
                 path: { account_id: account.account_id },
-                body: {
-                  file_id: confirmMusic.file_id,
-                  access_hash: confirmMusic.access_hash ?? '0',
-                  file_reference: confirmMusic.file_reference ?? '',
-                },
+                body: confirmMusic,
               })
               .finally(refresh)
           }

@@ -3,7 +3,12 @@
 // on the entity, not on the generated client's internals.
 import { queryOptions } from '@tanstack/react-query';
 
-import { listAccounts, type AccountRead } from '@/shared/api';
+import {
+  getAccountProfileSnapshot,
+  listAccounts,
+  type AccountProfileView,
+  type AccountRead,
+} from '@/shared/api';
 
 // The backend caps a page at 200 (api/v1/accounts.py), so pull at that size.
 const ALL_ACCOUNTS_PAGE_SIZE = 200;
@@ -36,6 +41,19 @@ export function allAccountsQueryOptions() {
       return { items };
     },
   });
+}
+
+// One-shot forced live pull for the profile modal (refresh=true bypasses the
+// server's 30s read cache). Calls the SDK directly — not fetchQuery — so no
+// parallel refresh:true entry lands in the query cache; the caller writes the
+// result into the plain snapshot key itself.
+export async function fetchLiveProfileSnapshot(accountId: string): Promise<AccountProfileView> {
+  const { data } = await getAccountProfileSnapshot({
+    path: { account_id: accountId },
+    query: { refresh: true },
+    throwOnError: true,
+  });
+  return data;
 }
 
 export {

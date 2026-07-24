@@ -15,6 +15,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi import status as http_status
 
+from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload
 from core.config import settings
 from schemas.profile_media import (
@@ -59,12 +60,8 @@ async def set_account_photo(
         filename=file.filename or "photo.jpg",
         content=content,
     )
-    try:
+    with service_errors_to_http():
         return await accounts.set_account_profile_photo(upload)
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 def _decode_ref(value: str) -> bytes:
@@ -165,12 +162,8 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
         extra_images=[await extra.read() for extra in extras],
         collage_layout=collage_layout,
     )
-    try:
+    with service_errors_to_http():
         return await accounts.post_account_story(upload)
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @media_router.post(
@@ -197,12 +190,8 @@ async def add_account_music(
         title=title,
         performer=performer,
     )
-    try:
+    with service_errors_to_http():
         return await accounts.add_account_profile_music(upload)
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @media_router.post(
@@ -211,14 +200,10 @@ async def add_account_music(
     operation_id="removeAccountStory",
 )
 async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> ActionResult:
-    try:
+    with service_errors_to_http():
         return await accounts.remove_account_story(
             AccountStoryRemove(account_id=account_id, story_id=body.story_id),
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @media_router.post(
@@ -227,14 +212,10 @@ async def remove_account_story(account_id: str, body: StoryRemoveRequest) -> Act
     operation_id="setAccountStoryPinned",
 )
 async def set_account_story_pinned(account_id: str, body: StoryPinRequest) -> ActionResult:
-    try:
+    with service_errors_to_http():
         return await accounts.set_account_story_pinned(
             AccountStoryPin(account_id=account_id, story_id=body.story_id, pinned=body.pinned),
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @media_router.post(
@@ -249,12 +230,8 @@ async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> Act
         access_hash=_decode_id(body.access_hash),
         file_reference=_decode_ref(body.file_reference),
     )
-    try:
+    with service_errors_to_http():
         return await accounts.remove_account_profile_music(remove)
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @media_router.post(
@@ -269,12 +246,8 @@ async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> Act
         access_hash=_decode_id(body.access_hash),
         file_reference=_decode_ref(body.file_reference),
     )
-    try:
+    with service_errors_to_http():
         return await accounts.remove_account_profile_photo(remove)
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @media_router.post(
@@ -289,9 +262,5 @@ async def set_account_photo_main(account_id: str, body: PhotoMainRequest) -> Act
         access_hash=_decode_id(body.access_hash),
         file_reference=_decode_ref(body.file_reference),
     )
-    try:
+    with service_errors_to_http():
         return await accounts.set_account_main_profile_photo(set_main)
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

@@ -4,15 +4,10 @@ from __future__ import annotations
 
 import asyncio
 import random
-from contextlib import suppress
 from typing import TYPE_CHECKING
 
 from telethon import errors
-from telethon.tl.functions.account import (
-    UpdateProfileRequest,
-    UpdateStatusRequest,
-    UpdateUsernameRequest,
-)
+from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.channels import (
     GetFullChannelRequest,
     JoinChannelRequest,
@@ -31,8 +26,13 @@ from core.telegram_client._action_results import (
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
-from core.telegram_client._media import _dispatch_profile_media_action
+from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
+from core.telegram_client._profile import (
+    _PROFILE_EDIT_ACTION_TYPES,
+    _dispatch_update_profile,
+    _mark_account_status,
+)
 from core.telegram_client._react import _channel_reaction_whitelist, _pick_reaction
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
 from core.telegram_client._util import extract_invite_hash
@@ -103,7 +103,19 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
         )
     except errors.PeerFloodError:
         return await _flood_action_result(account_id, action, status="peer_flood", seconds=None)
+    # Frozen errors subclass FloodError (420) / BadRequestError (400); classify
+    # them above FloodWaitError so the broader flood clause cannot swallow them
+    # (mirrors check_telegram_session). The status write keeps the accounts list
+    # honest without waiting for the next manual session check; frozen is a
+    # permanent state, so it is recorded for EVERY action family.
+    except (errors.FrozenMethodInvalidError, errors.FrozenParticipantMissingError) as exc:
+        await _mark_account_status(account_id, "frozen")
+        frozen = ProfileGatewayError("account_frozen")
+        frozen.__cause__ = exc  # same chain ``raise ... from exc`` would build
+        return await _generic_error(account_id, action, frozen)
     except errors.FloodWaitError as exc:
+        if action.action_type in _PROFILE_EDIT_ACTION_TYPES:
+            await _mark_account_status(account_id, "flood_wait")
         return await _flood_action_result(
             account_id, action, status="flood_wait", seconds=exc.seconds
         )
@@ -222,27 +234,6 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             # its own dispatcher raises for anything genuinely unhandled.
             message_id = await _dispatch_profile_media_action(client, action)
     return _DispatchResult(message_id=message_id, log_extra=log_extra)
-
-
-async def _dispatch_update_profile(client: TelegramClient, action: UpdateProfile) -> None:
-    """Field contract: ``""`` clears, ``None`` leaves unchanged (omitted from TL flags).
-
-    The username goes FIRST: it is the fallible call (occupied/invalid handle),
-    and sending it after ``UpdateProfileRequest`` used to half-apply the edit —
-    name/bio already changed on Telegram while the UI reported "nothing saved"
-    and the DB snapshot stayed stale.
-    """
-    if action.username is not None:
-        # Re-sending the account's current username is a no-op, not a failure.
-        with suppress(errors.UsernameNotModifiedError):
-            await client(UpdateUsernameRequest(username=action.username))
-    await client(
-        UpdateProfileRequest(
-            first_name=action.first_name,
-            last_name=action.last_name,
-            about=action.bio,
-        ),
-    )
 
 
 async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> None:

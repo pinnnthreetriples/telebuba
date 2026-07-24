@@ -12,6 +12,7 @@ to keep each file small:
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
 - ``_listener``— standing NewMessage subscription → typed NewPostEvent callback
 - ``_media``   — profile photo / story / music actions
+- ``_profile`` — profile-field edit dispatch + edit-time status bookkeeping
 
 Tests that monkeypatch internals target the submodule that owns the name
 (e.g. ``core.telegram_client._actions.get_client``), not this namespace.
@@ -37,6 +38,7 @@ from core.telegram_client._listener import (
     subscribe_posts,
     update_post_subscription,
 )
+from core.telegram_client._media import refresh_account_avatar
 from core.telegram_client._pool import (
     TelegramClientPoolError,
     evict_client,
@@ -67,6 +69,7 @@ __all__ = [
     "log_out_session",
     "prepare_session_check_profile",
     "prepare_telegram_client_profile",
+    "refresh_account_avatar",
     "remove_account_session",
     "request_phone_code",
     "shutdown_telegram_pool",

@@ -15,7 +15,7 @@ import {
   CHANNEL_TITLE_MAX,
   channelErrorText,
   FIELD,
-  isUploadableChannelPhoto,
+  isUploadablePhoto,
   LABEL,
   PHOTO_MAX_BYTES,
   PHOTO_SUFFIXES,
@@ -95,7 +95,7 @@ export function ChannelEditModal({
     if (!file) return;
     // Mirror of the backend avatar gate (suffix allowlist + byte cap) so a bad
     // file is rejected up front with a translated toast.
-    if (!isUploadableChannelPhoto(file)) {
+    if (!isUploadablePhoto(file)) {
       toastError(
         t('accounts.channel.photoRejected', { name: file.name, mb: PHOTO_MAX_BYTES / 1_000_000 }),
       );

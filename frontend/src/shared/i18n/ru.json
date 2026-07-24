@@ -284,7 +284,21 @@
       "updatedMinAgo": "Обновлено {{n}} мин назад",
       "discardTitle": "Отменить изменения?",
       "discardBody": "Есть несохранённые правки профиля. Закрыть без сохранения?",
-      "discardConfirm": "Не сохранять"
+      "discardConfirm": "Не сохранять",
+      "saveError": "Не удалось сохранить профиль",
+      "code": {
+        "username_occupied": "Юзернейм уже занят",
+        "username_invalid": "Недопустимый юзернейм",
+        "about_too_long": "Описание слишком длинное для Telegram",
+        "account_frozen": "Аккаунт заморожен Telegram — редактирование недоступно",
+        "flood_wait": "Telegram ограничил действия — повторите через {{s}} с",
+        "profile_photo_invalid": "Изображение не удалось обработать — выберите JPG/PNG/WebP",
+        "profile_photo_stale_reference": "Фото изменилось на Telegram — обновите список",
+        "profile_photo_not_found": "Фото не найдено в профиле — обновите список",
+        "profile_photo_download_failed": "Не удалось скачать фото из Telegram",
+        "profile_music_invalid": "Аудиофайл не удалось обработать — выберите другой",
+        "profile_music_stale_reference": "Трек изменился на Telegram — обновите список"
+      }
     },
     "channel": {
       "hint": "Каналы, которыми владеет аккаунт",
@@ -599,6 +613,7 @@
     "account_profile_photo_updated": "Фото профиля обновлено",
     "account_profile_photo_removed": "Фото профиля удалено",
     "account_profile_photo_set_main": "Фото профиля выбрано основным",
+    "account_avatar_refresh_failed": "Не удалось обновить миниатюру аватара",
     "account_profile_music_added": "Музыка профиля добавлена",
     "account_profile_music_removed": "Музыка профиля удалена",
     "account_profile_read_failed_unexpected": "Не удалось прочитать профиль",

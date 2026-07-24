@@ -40,11 +40,12 @@ class StoryCollageLayoutError(ValueError):
         super().__init__(self.code)
 
 
-def _decode_story_source(content: bytes) -> Image.Image:
-    """Decode arbitrary upload bytes into an RGB Pillow image, or raise.
+def _decode_image_source(content: bytes) -> Image.Image:
+    """Decode arbitrary upload bytes into an RGB Pillow image, or raise ``ValueError``.
 
-    Shared by the single-photo and collage paths so both surface the same
-    locale-neutral ``story_image_invalid`` code for undecodable input.
+    The raised ``ValueError`` carries the Pillow reason plus the file's real
+    magic bytes; callers wrap it into their own stable-code error so the
+    failure log shows what the file actually was.
     """
     try:
         with Image.open(BytesIO(content)) as opened:
@@ -52,11 +53,21 @@ def _decode_story_source(content: bytes) -> Image.Image:
             return opened.convert("RGB") if opened.mode != "RGB" else opened.copy()
     except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
         # UnidentifiedImageError = container Pillow can't decode (e.g. HEIC/JXL
-        # renamed to .png); OSError from load() = truncated/corrupt bytes. The
-        # chained cause carries the Pillow reason plus the file's real magic
-        # bytes so the telegram_post_story_failed log shows what the file was.
+        # renamed to .png); OSError from load() = truncated/corrupt bytes.
         detail = f"{type(exc).__name__}: {exc}; magic={content[:12].hex()}"
-        raise StoryImageNormalisationError from ValueError(detail)
+        raise ValueError(detail) from exc
+
+
+def _decode_story_source(content: bytes) -> Image.Image:
+    """Decode a story upload, or raise the stable ``story_image_invalid`` code.
+
+    Shared by the single-photo and collage paths so both surface the same
+    locale-neutral code for undecodable input.
+    """
+    try:
+        return _decode_image_source(content)
+    except ValueError as exc:
+        raise StoryImageNormalisationError from exc
 
 
 def _normalize_story_image_for_telegram(content: bytes) -> bytes:

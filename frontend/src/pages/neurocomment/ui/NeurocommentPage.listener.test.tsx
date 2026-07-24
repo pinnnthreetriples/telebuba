@@ -36,6 +36,7 @@ test('an idle account (loaded but not linked) can be assigned to the campaign', 
             {
               account_id: 'acc-1',
               label: '+79261112233',
+              phone: '+79261112233',
               status: 'alive',
               created_at: 'n',
               updated_at: 'n',
@@ -165,6 +166,7 @@ test('an actively-warming account is not offered as a listener', async () => {
             {
               account_id: 'acc-1',
               label: '+79261112233',
+              phone: '+79261112233',
               status: 'alive',
               created_at: 'n',
               updated_at: 'n',
@@ -226,6 +228,7 @@ test('surfaces the backend 409 when a picked listener turns out to be warming', 
             {
               account_id: 'acc-1',
               label: '+79261112233',
+              phone: '+79261112233',
               status: 'alive',
               created_at: 'n',
               updated_at: 'n',

@@ -269,3 +269,45 @@ test('the profile modal tracks the fresh row after the list refetches', async ()
     expect(screen.getAllByText(/\+70000000002/).length).toBeGreaterThanOrEqual(2);
   });
 });
+
+test('the open profile modal survives the account dropping out of the filtered list', async () => {
+  // A refetch (e.g. after a rename) can drop the row from the current page;
+  // the open modal must keep the click-time row instead of vanishing.
+  const row: AccountRead = { ...account('acc-1'), phone: '+70000000003' };
+  let call = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/accounts/stats') {
+      return Promise.resolve(
+        jsonResponse({ total: 1, active: 1, idle: 0, needs_code: 0, problem: 0 }),
+      );
+    }
+    if (url.pathname === '/api/v1/accounts' && request.method === 'GET') {
+      call += 1;
+      return Promise.resolve(jsonResponse({ items: call === 1 ? [row] : [], next_cursor: null }));
+    }
+    return Promise.resolve(jsonResponse(account('acc-1')));
+  });
+
+  const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  render(
+    <QueryClientProvider client={client}>
+      <AccountsPage />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => {
+    expect(screen.getByText('+70000000003')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByTitle('Редактировать профиль'));
+  expect(screen.getByText('Текст')).toBeInTheDocument();
+
+  await client.invalidateQueries();
+  // The page shows the empty state, but the modal stays open on the old row.
+  await waitFor(() => {
+    expect(screen.getByText('Аккаунтов нет')).toBeInTheDocument();
+  });
+  expect(screen.getByText('Текст')).toBeInTheDocument();
+  // The modal header still carries the click-time row's phone.
+  expect(screen.getAllByText(/\+70000000003/).length).toBeGreaterThanOrEqual(1);
+});
