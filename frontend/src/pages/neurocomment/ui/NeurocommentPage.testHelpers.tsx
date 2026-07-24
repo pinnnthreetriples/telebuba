@@ -68,6 +68,7 @@ export function routeApi() {
             {
               account_id: 'acc-1',
               label: '+79261112233',
+              phone: '+79261112233',
               status: 'alive',
               created_at: 'n',
               updated_at: 'n',
@@ -109,6 +110,7 @@ export function routeApiRunning() {
             {
               account_id: 'acc-1',
               label: '+79261112233',
+              phone: '+79261112233',
               status: 'alive',
               created_at: 'n',
               updated_at: 'n',
@@ -116,6 +118,7 @@ export function routeApiRunning() {
             {
               account_id: 'acc-2',
               label: '+79261119999',
+              phone: '+79261119999',
               status: 'alive',
               created_at: 'n',
               updated_at: 'n',

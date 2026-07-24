@@ -7,8 +7,8 @@ import '@/shared/i18n';
 import { ListenerEditModal } from './ListenerEditModal';
 
 const OPTIONS = [
-  { id: 'a1', phone: '+79990000001' },
-  { id: 'a2', phone: '+79990000002' },
+  { id: 'a1', name: 'Ivan Petrov' },
+  { id: 'a2', name: 'Maria Sidorova' },
 ];
 
 test('opens the dropdown, picks an option, saves with swap and closes', async () => {
@@ -19,7 +19,7 @@ test('opens the dropdown, picks an option, saves with swap and closes', async ()
 
   // open the custom dropdown and pick the second option
   await userEvent.click(screen.getByText('Выберите аккаунт…'));
-  await userEvent.click(screen.getByText('+79990000002'));
+  await userEvent.click(screen.getByText('Maria Sidorova'));
 
   await userEvent.click(screen.getByText('Сохранить'));
   expect(onSave).toHaveBeenCalledWith('a2');
