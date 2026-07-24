@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -13,6 +14,7 @@ from core.db import (
     fetch_readiness,
     insert_challenge,
     link_channel_to_campaign,
+    lookup_cached_decision,
     save_warming_settings,
     update_solver_enabled,
     upsert_readiness,
@@ -112,6 +114,84 @@ async def test_gives_up_after_max_attempts(monkeypatch: pytest.MonkeyPatch) -> N
     assert await challenge.solve_if_present("acc-1", "@chan", 99) == "failed"
     assert len(execute.calls) == 2  # exactly max_attempts dispatches, no more
     assert [r["outcome"] for r in _challenge_rows()] == ["failed"]
+
+
+@pytest.mark.asyncio
+async def test_dispatch_timeout_records_failed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A hung click must not stall onboarding: the dispatch is bounded, and a timeout is
+    # treated as a failed dispatch (recorded failed), not left awaiting forever.
+    monkeypatch.setattr(settings.neurocomment, "challenge_dispatch_timeout_seconds", 0.01)
+    gemini = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+
+    async def _hang(_account_id: str, _action: object) -> object:
+        await asyncio.Event().wait()  # never completes → wait_for cancels it
+
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", _hang)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "failed"
+    assert [r["outcome"] for r in _challenge_rows()] == ["failed"]
+
+
+@pytest.mark.asyncio
+async def test_rate_limited_defers_without_penalty(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A 429 from the LLM is transient, not a solver failure: defer (rate_limited) with
+    # no audit row and no dispatch, so the pair is retried later un-penalized.
+    execute = _ExecuteStub(ok=True)
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
+    monkeypatch.setattr(
+        _seams, "generate_text", _gemini(GeminiResult(status="rate_limited", error="429"))
+    )
+    monkeypatch.setattr(_seams, "execute", execute.execute)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "rate_limited"
+    assert _challenge_rows() == []  # nothing recorded → un-penalized
+    assert execute.calls == []  # nothing dispatched
+
+
+@pytest.mark.asyncio
+async def test_retry_skips_cache_and_evicts_poisoned_decision(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # A cached solved decision proves wrong (bot re-challenges). The retry must NOT
+    # reuse it (fresh LLM call), and the poisoned row is evicted so it can't fail
+    # every future account sharing the challenge.
+    message = _msg()
+    challenge_hash = challenge._challenge_hash(message.text, message.button_labels)
+    cached = ChallengeDecision(
+        action="click_button", button_index=0, confidence=0.9, reasoning="cached"
+    )
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash=challenge_hash,
+            account_id="other-acc",
+            channel="@other",
+            raw_text=message.text,
+            button_labels=message.button_labels,
+            outcome="solved",
+            decision_json=cached.model_dump_json(),
+        ),
+    )
+    # The fresh retry decision clicks the other label (positional 0 = "yes").
+    gemini = _gemini(
+        GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+    )
+    execute = _ExecuteStub(ok=True)
+    # wait #1 = challenge; recheck after attempt0 re-challenges; recheck after attempt1 = None.
+    monkeypatch.setattr(_seams, "execute_read", _wait(message, _msg()))
+    monkeypatch.setattr(_seams, "generate_text", gemini)
+    monkeypatch.setattr(_seams, "execute", execute.execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert len(gemini.calls) == 1  # cache used on attempt 0, fresh LLM on the retry
+    clicks = [c for c in execute.calls if isinstance(c, ClickButton)]
+    assert [c.button_text for c in clicks] == ["no", "yes"]  # cached then fresh
+    assert await lookup_cached_decision(challenge_hash) is None  # poisoned row evicted
 
 
 @pytest.mark.asyncio

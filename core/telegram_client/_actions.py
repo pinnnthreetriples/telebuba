@@ -321,7 +321,7 @@ async def _dispatch_join_discussion_group(
 async def _dispatch_click_button(client: TelegramClient, action: ClickButton) -> None:
     """Click an inline button on a stored message; no-op if the message is gone.
 
-    Index-first selector: ``button_index`` if set, else ``button_text``, else
+    Text-first selector: ``button_text`` if set, else ``button_index``, else
     the first button. We don't surface the callback answer.
     """
     message = await client.get_messages(action.chat_id, ids=action.message_id)

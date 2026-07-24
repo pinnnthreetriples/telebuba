@@ -64,6 +64,12 @@ def configure_database(database_path: Path) -> None:
         _state.engine.dispose()
     _state.database_path = database_path
     _state.engine = None
+    # A new database means any cached settings row belongs to the old one.
+    from core.repositories._warming_settings import (  # noqa: PLC0415 - avoids an import cycle
+        _invalidate_warming_settings_cache,
+    )
+
+    _invalidate_warming_settings_cache()
 
 
 def dispose_engine() -> None:
@@ -269,6 +275,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     deactivate_channel,
     delete_campaign,
     delete_readiness,
+    evict_cached_decision,
     fetch_active_campaign_for_channel,
     fetch_campaign,
     fetch_comment,
@@ -285,6 +292,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_campaigns,
     list_challenged_channels,
     list_failed_for_channel,
+    list_failed_for_channels,
     list_linked_groups,
     list_posted_comments_for_channel_since,
     list_posted_comments_page,

@@ -42,6 +42,7 @@ from core.migration_steps import (
 from core.migration_steps_neurocomment import (
     _add_campaign_account_channel,
     _add_campaign_account_channels_table,
+    _add_neurocomment_challenges_channel_index,
     _add_neurocomment_comment_deleted_at,
     _add_neurocomment_cooldowns,
 )
@@ -97,6 +98,11 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     (32, "add_account_avatar", _add_account_avatar),
     (33, "add_proxy_geo_consensus", _add_proxy_geo_consensus),
     (34, "add_neurocomment_cooldowns", _add_neurocomment_cooldowns),
+    (
+        35,
+        "add_neurocomment_challenges_channel_index",
+        _add_neurocomment_challenges_channel_index,
+    ),
 )
 
 

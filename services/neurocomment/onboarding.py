@@ -244,6 +244,16 @@ async def _solve_and_record(
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=True, ready=True)
         return AccountChannelOnboarding(account_id=account_id, channel=channel, state="ready")
     outcome = await challenge.solve_if_present(account_id, channel, group_id)
+    if outcome == "rate_limited":
+        # LLM gateway 429'd: transient, not a solver failure — write no readiness and
+        # surface a retry-later state so the pair is re-onboarded later, un-penalized
+        # (no bot_challenge, no #147 channel back-off).
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="joining",
+            reason="llm_rate_limited",
+        )
     if outcome in ("give_up", "failed"):
         # Detected but unsolved (or the click errored) → not comment-able; the
         # solver's audit row is what the board reads to render bot_challenge.

@@ -36,9 +36,11 @@ from core.repositories.neurocomment._campaigns import (
 )
 from core.repositories.neurocomment._challenges import (
     count_by_outcome,
+    evict_cached_decision,
     insert_challenge,
     list_challenged_channels,
     list_failed_for_channel,
+    list_failed_for_channels,
     lookup_cached_decision,
     resolve_pending_outcome,
 )
@@ -94,6 +96,7 @@ __all__ = [
     "deactivate_channel",
     "delete_campaign",
     "delete_readiness",
+    "evict_cached_decision",
     "fetch_active_campaign_for_channel",
     "fetch_campaign",
     "fetch_comment",
@@ -110,6 +113,7 @@ __all__ = [
     "list_campaigns",
     "list_challenged_channels",
     "list_failed_for_channel",
+    "list_failed_for_channels",
     "list_linked_groups",
     "list_posted_comments_for_channel_since",
     "list_posted_comments_page",
