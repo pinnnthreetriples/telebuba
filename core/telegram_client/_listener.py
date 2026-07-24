@@ -43,6 +43,12 @@ _HANDLERS: dict[str, _EventHandler] = {}
 # The channel-filter each handler was registered with, so a pool rebuild can
 # re-attach the same subscription on the replacement client.
 _FILTERS: dict[str, object] = {}
+# Resolved peer id per channel, so reconcile does not re-issue a get_peer_id RPC
+# for every watched channel on every call (fires on each link/unlink + boot =
+# O(channels) serial RPCs otherwise). Peer ids are stable, so a stale entry is
+# harmless. ponytail: process-lifetime, never invalidated — only successful
+# resolutions are cached, so a failure simply retries on the next reconcile.
+_PEER_IDS: dict[str, int] = {}
 
 
 async def _reattach_on_rebuild(account_id: str, client: TelegramClient) -> None:
@@ -84,16 +90,19 @@ async def subscribe_posts(
     channel_by_peer_id: dict[int, str] = {}
     resolved: list[str] = []
     for channel in channels:
-        try:
-            peer_id = await client.get_peer_id(channel)
-        except Exception as exc:  # noqa: BLE001 - one bad channel must not disable the whole listener
-            await log_event(
-                "WARNING",
-                "post_listener_channel_unresolved",
-                account_id=account_id,
-                extra={"channel": channel, "error_type": type(exc).__name__},
-            )
-            continue
+        peer_id = _PEER_IDS.get(channel)
+        if peer_id is None:
+            try:
+                peer_id = await client.get_peer_id(channel)
+            except Exception as exc:  # noqa: BLE001 - one bad channel must not disable the whole listener
+                await log_event(
+                    "WARNING",
+                    "post_listener_channel_unresolved",
+                    account_id=account_id,
+                    extra={"channel": channel, "error_type": type(exc).__name__},
+                )
+                continue
+            _PEER_IDS[channel] = peer_id
         channel_by_peer_id[peer_id] = channel
         resolved.append(channel)
 
@@ -173,3 +182,4 @@ def _reset_for_tests() -> None:
     """Test-only reset; production code never calls this."""
     _HANDLERS.clear()
     _FILTERS.clear()
+    _PEER_IDS.clear()
