@@ -11,7 +11,6 @@ import {
   startWarmingMutation,
   stopWarmingMutation,
   unpromoteFromNeurocommentMutation,
-  warmedAccountsQueryOptions,
   warmingBoardQueryOptions,
 } from '@/entities/warming';
 import type { WarmingAccountState } from '@/shared/api';
@@ -24,8 +23,9 @@ import { WarmDaysModal, WarmingBoard } from '@/widgets/warming-board';
 const FALLBACK_POLL_MS = 30000;
 
 // The only queries this page reads (createQueryKey stamps _id on key[0]); a live
-// event refreshes just these, never the whole cache.
-const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmedAccounts', 'listWarmingChannels'];
+// event refreshes just these, never the whole cache. The warmed pool now rides
+// the board payload, so there's no separate listWarmedAccounts fetch here.
+const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmingChannels'];
 
 function mono(id: string): string {
   return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
@@ -100,14 +100,6 @@ export function WarmingPage() {
   const promote = useMutation(promoteToNeurocommentMutation());
   const unpromote = useMutation(unpromoteFromNeurocommentMutation());
   const handoff = useMutation(handoffToNeurocommentMutation());
-
-  const warmedQuery = useQuery({
-    ...warmedAccountsQueryOptions(),
-    refetchInterval: FALLBACK_POLL_MS,
-  });
-  // A handed-off account lives on the neurocomment page's idle pool from that
-  // point on — the warmed card here shows only the not-yet-handed ones.
-  const warmed = (warmedQuery.data?.accounts ?? []).filter((acc) => !acc.nc_handed_off);
 
   // promote (graduate) / unpromote (return to warming) share the {account_id} body.
   const runGraduation = (mutation: typeof promote, accountId: string) => {
@@ -188,6 +180,9 @@ export function WarmingPage() {
 
   const idle = data.idle ?? [];
   const warming = data.warming ?? [];
+  // A handed-off account lives on the neurocomment page's idle pool from that
+  // point on — the warmed card here shows only the not-yet-handed ones.
+  const warmed = (data.warmed ?? []).filter((acc) => !acc.nc_handed_off);
   const channels = data.channels.channels ?? [];
   // handle → friendly label, so the board's activity log can name the channel a
   // join/read/react touched (the gateway logs the raw handle in extra.channel).

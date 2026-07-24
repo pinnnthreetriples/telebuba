@@ -9145,6 +9145,13 @@
             "minimum": 1.0,
             "title": "Card Log Limit",
             "default": 30
+          },
+          "warmed": {
+            "items": {
+              "$ref": "#/components/schemas/WarmedAccount"
+            },
+            "type": "array",
+            "title": "Warmed"
           }
         },
         "type": "object",

@@ -138,6 +138,34 @@ def test_channel_affinity_churn_strength_controls_drift(monkeypatch: pytest.Monk
     assert len(base & gentle) >= len(base & violent)
 
 
+def test_channel_affinity_memoized_within_epoch(monkeypatch: pytest.MonkeyPatch) -> None:
+    # M2: the subset is a pure function of (account, epoch, channel set, config),
+    # so a repeat call in the same epoch is served from the memo — the same list
+    # object, no re-hash/re-sort.
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.5)
+    pool = _affinity_pool(10)
+
+    first = _fleet._account_channel_affinity("acc-1", pool)
+    second = _fleet._account_channel_affinity("acc-1", pool)
+
+    assert second is first  # cache hit, not a recompute
+    assert [c.channel for c in first] == [c.channel for c in second]
+
+
+def test_channel_affinity_cache_busts_across_epochs(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A different epoch is a different cache key, so the memo must not serve one
+    # epoch's slice for another — each epoch is computed independently.
+    monkeypatch.setattr(settings.warming, "channels_per_cycle_min", 1)
+    monkeypatch.setattr(settings.warming, "channel_affinity_ratio", 0.25)
+    pool = _affinity_pool(40)
+
+    e0 = _fleet._account_channel_affinity("acc-1", pool, 0)
+    e1 = _fleet._account_channel_affinity("acc-1", pool, 1)
+
+    assert e0 is not e1  # distinct keys → separately computed, not a shared hit
+
+
 def test_maybe_explore_swaps_in_off_affinity_channel(monkeypatch: pytest.MonkeyPatch) -> None:
     # #203: with the exploration roll passing, one chosen channel is replaced by a
     # channel from outside the affinity set (count preserved).

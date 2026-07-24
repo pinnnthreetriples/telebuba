@@ -72,9 +72,17 @@ async def _initial_delay_seconds(
     random point across ``cold_start_spread_hours`` and then routes it through the
     active-hours window — so a bulk onboarding of N accounts neither all fires at
     once nor kicks off in the middle of the night.
+
+    A *past-due* schedule (``next_run_at`` already elapsed, e.g. after downtime)
+    would otherwise resume at delay 0: on reconcile every such account fires in
+    the same second. Spread it across ``catch_up_spread_seconds`` instead so the
+    fleet's catch-up cycles fan out rather than spiking Telegram + SQLite.
     """
     if record is not None and record.next_run_at is not None:
-        return _seconds_until(record.next_run_at, now)
+        remaining = _seconds_until(record.next_run_at, now)
+        if remaining <= 0.0:
+            return _seams.rng.uniform(0.0, settings.warming.catch_up_spread_seconds)
+        return remaining
     candidate = now + timedelta(
         seconds=_seams.rng.uniform(
             0.0, settings.warming.cold_start_spread_hours * _SECONDS_PER_HOUR

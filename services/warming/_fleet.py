@@ -45,6 +45,15 @@ def _affinity_epoch(now: datetime) -> int:
     return now.toordinal() // settings.warming.channel_affinity_churn_days
 
 
+# Memoised affinity subsets. The result is a pure function of the account, the
+# epoch, the channel-name set, and the (runtime-static) selection config, so a
+# hit skips re-hashing two SHA-256 per channel + a full re-sort every cycle. The
+# config fields are folded into the key so a test varying them mid-run recomputes
+# rather than reading a stale slice; in production they never change. Cleared per
+# test by the warming conftest.
+_AFFINITY_CACHE: dict[tuple[object, ...], list[WarmingChannel]] = {}
+
+
 def _account_channel_affinity(
     account_id: str, channels: list[WarmingChannel], epoch: int = 0
 ) -> list[WarmingChannel]:
@@ -62,20 +71,37 @@ def _account_channel_affinity(
     floor; pools no larger than that floor stay whole (nothing to subdivide).
     """
     warm = settings.warming
-    if len(channels) <= warm.channels_per_cycle_min:
-        return channels
-    k = min(
-        len(channels),
-        max(warm.channels_per_cycle_min, round(len(channels) * warm.channel_affinity_ratio)),
+    key = (
+        account_id,
+        epoch,
+        frozenset(c.channel for c in channels),
+        warm.channels_per_cycle_min,
+        warm.channel_affinity_ratio,
+        warm.channel_affinity_churn_strength,
+        warm.fleet_hash_salt,
     )
-    strength = warm.channel_affinity_churn_strength
+    cached = _AFFINITY_CACHE.get(key)
+    if cached is not None:
+        return cached
 
-    def _score(channel: WarmingChannel) -> float:
-        base = _stable_fraction(f"aff:{account_id}:{channel.channel}")
-        drift = _stable_fraction(f"aff:{account_id}:{channel.channel}:{epoch}")
-        return base + strength * drift
+    if len(channels) <= warm.channels_per_cycle_min:
+        result = channels
+    else:
+        k = min(
+            len(channels),
+            max(warm.channels_per_cycle_min, round(len(channels) * warm.channel_affinity_ratio)),
+        )
+        strength = warm.channel_affinity_churn_strength
 
-    return sorted(channels, key=_score)[:k]
+        def _score(channel: WarmingChannel) -> float:
+            base = _stable_fraction(f"aff:{account_id}:{channel.channel}")
+            drift = _stable_fraction(f"aff:{account_id}:{channel.channel}:{epoch}")
+            return base + strength * drift
+
+        result = sorted(channels, key=_score)[:k]
+
+    _AFFINITY_CACHE[key] = result
+    return result
 
 
 def _maybe_explore(

@@ -7,6 +7,7 @@ are reached via :mod:`services.warming._seams`.
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,14 @@ _MIN_CYCLE_ACTIONS = 2
 # the channel loop revisits join/read/react per channel, so a raw write would
 # bounce the rail backward.
 _PROGRESS_STEPS: tuple[str, ...] = ("set_online", "join", "read", "react", "stories", "send_dm")
+
+# Fleet-wide ceiling on concurrently-running Telegram-heavy cycles (see
+# ``warming.cycle_concurrency``). Module-level and loop-bound like the runtime's
+# lock dicts, so a restart's reconcile — which recreates one loop task per active
+# account — can't drive dozens of simultaneous cycles. Acquired only around
+# ``run_one_cycle`` below, never the long inter-cycle sleep. Tests reset it (the
+# conftest rebinds it per test, mirroring ``_ACCOUNT_LOCKS``).
+_cycle_semaphore = asyncio.Semaphore(settings.warming.cycle_concurrency)
 
 
 async def _recover_from_quarantine(
@@ -398,18 +407,24 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
 
     persona = record.activity_persona if record is not None else "normal"
     remaining = max(0, effective_cap - daily_count) if effective_cap > 0 else None
-    result = await run_one_cycle(
-        WarmingCycleRequest(
-            account_id=account_id,
-            remaining_actions=remaining,
-            # П11: trust+age-aware DM permission (readiness already enforced by
-            # the gate above when enabled). The cycle's own intensity is
-            # trust-blind, so pass the loop's trust-aware value instead.
-            dm_allowed=intensity.dm_allowed,
-            activity_persona=persona,
-        ),
-        on_step=_on_step,
-    )
+    # The semaphore caps fleet-wide concurrent cycles; hold it only for the
+    # Telegram-heavy cycle, not the surrounding state writes or inter-cycle sleep.
+    async with _cycle_semaphore:
+        result = await run_one_cycle(
+            WarmingCycleRequest(
+                account_id=account_id,
+                remaining_actions=remaining,
+                # П11: trust+age-aware DM permission (readiness already enforced by
+                # the gate above when enabled). The cycle's own intensity is
+                # trust-blind, so pass the loop's trust-aware value instead.
+                dm_allowed=intensity.dm_allowed,
+                activity_persona=persona,
+            ),
+            # M3: reuse the settings row already loaded above instead of a second
+            # ``load_warming_settings`` round-trip inside the cycle.
+            secret=controls,
+            on_step=_on_step,
+        )
     schedule = await _calculate_next_run(account_id, result, persona, effective_cap)
     return await _finalize_after_cycle(
         account_id, result, age_hours, daily, schedule, run_id=run_id

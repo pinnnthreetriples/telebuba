@@ -349,18 +349,23 @@ async def _build_cycle_result(
     return result
 
 
-async def run_one_cycle(
+async def run_one_cycle(  # noqa: C901 - the optional-settings fallback adds one branch to an already-linear pass.
     data: WarmingCycleRequest,
     *,
+    secret: WarmingSettingsSecret | None = None,
     on_step: _OnStep | None = None,
 ) -> WarmingCycleResult:
     """Perform exactly one warming pass for an account. The testable core.
 
+    ``secret`` (optional) is the warming settings row; the loop threads in the
+    copy it already loaded so the cycle doesn't re-fetch it. Falls back to a
+    fresh load for direct callers that don't have one.
     ``on_step`` (optional) is fired with the canonical step name after each
     successful action so the loop can persist live mid-cycle progress.
     """
     account_id = data.account_id
-    secret = await load_warming_settings()
+    if secret is None:
+        secret = await load_warming_settings()
     channels = (await list_warming_channels()).channels
     if not channels:
         await log_event("WARNING", "warming_no_channels", account_id=account_id)

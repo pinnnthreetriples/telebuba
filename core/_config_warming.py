@@ -36,6 +36,21 @@ class WarmingSettings(BaseSettings):
     # same evening or by next morning — a night-time candidate still snaps forward
     # to the active window, but the ceiling no longer stretches past ~a day.
     cold_start_spread_hours: float = Field(default=8.0, ge=0.0)
+    # Restart catch-up spread: after downtime (deploy/crash) every account whose
+    # persisted ``next_run_at`` already elapsed is past-due, and ``_seconds_until``
+    # clamps that to 0 — so reconcile would fire them all in the same second (an
+    # activity spike + a fingerprint tell) and hammer SQLite. A past-due first
+    # cycle instead waits a random point across this window so the fleet's
+    # catch-up cycles fan out. Kept to ~30 min: long enough to smear the burst,
+    # short enough that resumed accounts don't idle noticeably after a restart.
+    catch_up_spread_seconds: float = Field(default=1800.0, ge=0.0, le=86400.0)
+    # Fleet-wide ceiling on Telegram-heavy warming cycles running at once. Each
+    # active account owns its own loop task, so without a cap a restart (or an
+    # aligned schedule) could drive dozens of concurrent cycles — a connection
+    # spike across the pool. Only the cycle itself is gated, never the long
+    # inter-cycle sleep, so a small bound throttles bursts without stalling the
+    # fleet's steady-state cadence.
+    cycle_concurrency: int = Field(default=8, ge=1, le=128)
     channels_per_cycle_min: int = Field(default=1, ge=1)
     channels_per_cycle_max: int = Field(default=3, ge=1)
     # Fraction of the global channel pool that forms one account's *stable*

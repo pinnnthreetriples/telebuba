@@ -2271,6 +2271,10 @@ export type WarmingBoardState = {
    * Card Log Limit
    */
   card_log_limit?: number;
+  /**
+   * Warmed
+   */
+  warmed?: Array<WarmedAccount>;
 };
 
 /**
