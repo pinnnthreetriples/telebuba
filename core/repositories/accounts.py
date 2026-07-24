@@ -347,6 +347,46 @@ async def update_account_profile_snapshot(data: AccountProfileUpdateRequest) -> 
     return await asyncio.to_thread(_update_account_profile_snapshot, data)
 
 
+def _update_account_status(account_id: str, status: AccountStatus) -> None:
+    now = _now_iso()
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_accounts)
+            .where(_accounts.c.account_id == account_id)
+            .values(status=status, last_checked_at=now, updated_at=now),
+        )
+
+
+async def update_account_status(account_id: str, *, status: AccountStatus) -> None:
+    """Set just the account's status (+ check timestamps).
+
+    Used when the typed-action executor learns account state mid-action
+    (frozen / flood-wait) — same columns the session check writes for a
+    non-alive result. A missing account is a silent no-op.
+    """
+    await asyncio.to_thread(_update_account_status, account_id, status)
+
+
+def _update_account_avatar(account_id: str, thumb: bytes | None) -> None:
+    etag = hashlib.blake2b(thumb, digest_size=16).hexdigest() if thumb is not None else None
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_accounts)
+            .where(_accounts.c.account_id == account_id)
+            .values(updated_at=_now_iso(), avatar_thumb=thumb, avatar_etag=etag),
+        )
+
+
+async def update_account_avatar(account_id: str, thumb: bytes | None) -> None:
+    """Store (or clear, on ``None``) the accounts-list avatar thumb + its etag.
+
+    Callers decide the wipe semantics: the session check never passes ``None``
+    (a refused download must not wipe a good photo), while the post-mutation
+    avatar refresh passes ``None`` only when Telegram reports no photo at all.
+    """
+    await asyncio.to_thread(_update_account_avatar, account_id, thumb)
+
+
 def _update_account_from_session_check(result: TelegramSessionCheckResult) -> AccountRead:
     now = _now_iso()
     values: dict[str, object] = {

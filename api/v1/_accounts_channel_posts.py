@@ -9,10 +9,10 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
-from fastapi import status as http_status
+from fastapi import APIRouter, File, Form, Query, UploadFile
 
 from api.v1._accounts_channels import _decode_channel_id, _reject_oversize
+from api.v1._errors import service_errors_to_http
 from core.config import settings
 from schemas.api import Page
 from schemas.channels import ChannelPostEditRequest, ChannelPostView
@@ -42,7 +42,7 @@ async def publish_account_channel_post(
         _reject_oversize(file, settings.channels.post_video_max_bytes)
         content = await file.read()
         filename = file.filename or "media"
-    try:
+    with service_errors_to_http():
         return await accounts.publish_account_channel_post(
             account_id,
             _decode_channel_id(channel_id),
@@ -50,10 +50,6 @@ async def publish_account_channel_post(
             filename=filename,
             content=content,
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @channel_posts_router.get(
@@ -67,17 +63,13 @@ async def list_account_channel_posts(
     cursor: str | None = None,
     limit: Annotated[int | None, Query(ge=1, le=100)] = None,
 ) -> Page[ChannelPostView]:
-    try:
+    with service_errors_to_http():
         return await accounts.list_account_channel_posts(
             account_id,
             _decode_channel_id(channel_id),
             cursor=cursor,
             limit=limit,
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @channel_posts_router.post(
@@ -91,17 +83,13 @@ async def edit_account_channel_post(
     post_id: int,
     body: ChannelPostEditRequest,
 ) -> ActionResult:
-    try:
+    with service_errors_to_http():
         return await accounts.edit_account_channel_post(
             account_id,
             _decode_channel_id(channel_id),
             post_id,
             text=body.text,
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @channel_posts_router.post(
@@ -114,13 +102,9 @@ async def delete_account_channel_post(
     channel_id: str,
     post_id: int,
 ) -> ActionResult:
-    try:
+    with service_errors_to_http():
         return await accounts.delete_account_channel_post(
             account_id,
             _decode_channel_id(channel_id),
             post_id,
         )
-    except accounts.AccountActionError:
-        raise
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc

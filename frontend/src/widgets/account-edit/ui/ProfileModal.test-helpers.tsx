@@ -1,3 +1,6 @@
+/* eslint-disable react-refresh/only-export-components -- test-only helpers,
+   never hot-reloaded; the `satisfies`-typed fixtures trip the rule's
+   constant-export detection. */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
@@ -5,7 +8,7 @@ import { vi } from 'vitest';
 
 import '@/shared/i18n';
 
-import type { AccountRead } from '@/shared/api';
+import type { AccountProfileView, AccountRead } from '@/shared/api';
 
 export function renderWithClient(ui: ReactElement) {
   const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -29,6 +32,8 @@ export const ACCOUNT: AccountRead = {
   updated_at: 'now',
 };
 
+// Typed against the real view schema so the fixture can't drift from the
+// contract (int64 ids travel as strings, the main photo carries is_main).
 export const VIEW = {
   error: null,
   // Live profile text matching the stored row, so auto-seeding is a no-op in
@@ -37,7 +42,9 @@ export const VIEW = {
   last_name: null,
   username: 'ivanov',
   bio: null,
-  photos: [{ photo_id: 1, access_hash: 2, file_reference: 'YWJj', thumb_url: null }],
+  photos: [
+    { photo_id: '1', access_hash: '2', file_reference: 'YWJj', thumb_url: null, is_main: true },
+  ],
   stories: [
     {
       story_id: 3,
@@ -53,7 +60,7 @@ export const VIEW = {
     { file_id: '4', title: 'Track', performer: 'Artist', access_hash: '5', file_reference: 'YWJj' },
   ],
   music_supported: true,
-};
+} satisfies AccountProfileView;
 
 export function routeApi() {
   vi.mocked(fetch).mockImplementation((input) => {
@@ -88,4 +95,4 @@ export const TWO_PHOTOS = {
       is_main: false,
     },
   ],
-};
+} satisfies AccountProfileView;

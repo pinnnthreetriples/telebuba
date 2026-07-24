@@ -4,8 +4,11 @@ from __future__ import annotations
 
 import pytest
 
+from core.db import fetch_account
+from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountCreate, AccountProfileUpdateRequest
-from schemas.telegram_actions import ActionResult, UpdateProfile
+from schemas.telegram_actions import ActionResult, GetUserProfile, UpdateProfile
+from schemas.telegram_profile_snapshot import TelegramProfileSnapshot
 from services.accounts import AccountActionError, add_account, update_account_profile
 
 
@@ -242,3 +245,157 @@ async def test_update_account_profile_invalidates_cache_when_db_write_fails(
         )
 
     assert invalidated == ["account-profile-db"]
+
+
+def _patch_failed_execute(monkeypatch: pytest.MonkeyPatch) -> None:
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="update_profile",
+            account_id=account_id,
+            error_message="boom",
+        )
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+
+
+async def _seed_profile(account_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
+    """Create the account and store a known pre-edit snapshot in the DB."""
+    await add_account(AccountCreate(account_id=account_id))
+
+    async def ok_execute(acc_id: str, _action: object) -> ActionResult:
+        return ActionResult(status="ok", action_type="update_profile", account_id=acc_id)
+
+    monkeypatch.setattr("services.accounts.profile.execute", ok_execute)
+    await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id=account_id,
+            first_name="Alice",
+            last_name="L",
+            username="oldname",
+            bio="Bio",
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_partial_username_apply_resyncs_db_from_telegram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Username applied + follow-up UpdateProfileRequest refused → DB gets confirmed state.
+
+    The gateway sends the username FIRST, so a refused edit can still have
+    changed the live username; the DB row must not keep the old one.
+    """
+    await _seed_profile("account-profile-partial", monkeypatch)
+    read_actions: list[object] = []
+
+    async def fake_read(_account_id: str, action: object) -> TelegramProfileSnapshot:
+        read_actions.append(action)
+        return TelegramProfileSnapshot(first_name="Alice", username="newname")
+
+    _patch_failed_execute(monkeypatch)
+    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+
+    with pytest.raises(AccountActionError):
+        await update_account_profile(
+            AccountProfileUpdateRequest(
+                account_id="account-profile-partial",
+                first_name="Alice",
+                username="newname",
+            ),
+        )
+
+    assert len(read_actions) == 1
+    assert isinstance(read_actions[0], GetUserProfile)
+    account = await fetch_account("account-profile-partial")
+    assert account is not None
+    # Confirmed live state wins: new username, unset optionals cleared.
+    assert account.username == "newname"
+    assert account.last_name in (None, "")
+    assert account.bio in (None, "")
+
+
+@pytest.mark.asyncio
+async def test_failed_edit_without_username_skips_resync(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No username in the payload → no partial-apply window → no extra read."""
+    await _seed_profile("account-profile-noresync", monkeypatch)
+    read_actions: list[object] = []
+
+    async def fake_read(_account_id: str, action: object) -> TelegramProfileSnapshot:
+        read_actions.append(action)
+        return TelegramProfileSnapshot(first_name="Alice")
+
+    _patch_failed_execute(monkeypatch)
+    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+
+    with pytest.raises(AccountActionError):
+        await update_account_profile(
+            AccountProfileUpdateRequest(account_id="account-profile-noresync", first_name="Bob"),
+        )
+
+    assert read_actions == []
+
+
+@pytest.mark.asyncio
+async def test_refused_resync_read_still_surfaces_the_refusal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flood-blocked confirmation read is skipped silently; DB stays as-is."""
+    await _seed_profile("account-profile-readfail", monkeypatch)
+
+    async def failing_read(_account_id: str, _action: object) -> TelegramProfileSnapshot:
+        reason = "FloodWaitError: wait of 30s"
+        raise TelegramReadError(reason)
+
+    _patch_failed_execute(monkeypatch)
+    monkeypatch.setattr("services.accounts.profile.execute_read", failing_read)
+
+    with pytest.raises(AccountActionError, match="boom"):
+        await update_account_profile(
+            AccountProfileUpdateRequest(
+                account_id="account-profile-readfail",
+                first_name="Alice",
+                username="newname",
+            ),
+        )
+
+    account = await fetch_account("account-profile-readfail")
+    assert account is not None
+    assert account.username == "oldname"
+
+
+@pytest.mark.asyncio
+async def test_resync_with_unstorable_live_username_keeps_original_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A live value our schema refuses must not replace the action's error.
+
+    Fragment/NFT usernames can be 4 characters — shorter than the schema's
+    5-char floor. The re-sync's ValidationError (a ValueError subclass) must be
+    swallowed so the API still answers with the original stable code, not a
+    pydantic dump.
+    """
+    await _seed_profile("account-profile-nft", monkeypatch)
+
+    async def fake_read(_account_id: str, _action: object) -> TelegramProfileSnapshot:
+        return TelegramProfileSnapshot(first_name="Alice", username="nft1")
+
+    _patch_failed_execute(monkeypatch)
+    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+
+    with pytest.raises(AccountActionError, match="boom"):
+        await update_account_profile(
+            AccountProfileUpdateRequest(
+                account_id="account-profile-nft",
+                first_name="Alice",
+                username="newname",
+            ),
+        )
+
+    account = await fetch_account("account-profile-nft")
+    assert account is not None
+    # Sync skipped wholesale: the DB keeps the pre-edit snapshot.
+    assert account.username == "oldname"
