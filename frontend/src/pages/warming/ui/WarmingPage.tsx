@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { accountDisplayName } from '@/entities/account';
 import { proxyTypeLabel } from '@/entities/proxy';
 import {
   addWarmingChannelsMutation,
@@ -268,25 +269,38 @@ export function WarmingPage() {
                       return key ? t(key) : reason;
                     })
                     .join(', ');
+                  // Telegram name on top; the phone (with its country flag)
+                  // drops to a subtitle. When the account has no name,
+                  // accountDisplayName falls back to the phone, so skip the
+                  // duplicate subtitle and keep the flag on the primary line.
+                  const name = accountDisplayName(account);
+                  const showPhone = account.phone != null && account.phone !== name;
+                  const flag = cc ? (
+                    <span
+                      className={`fi fi-${cc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
+                    />
+                  ) : null;
                   return (
                     <div
                       key={account.account_id}
                       className="flex items-center gap-[10px] rounded-xl border border-line bg-white px-3 py-[11px]"
                     >
                       <div className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full bg-primary-tint text-[12px] font-semibold text-primary">
-                        {mono(account.phone ?? account.label ?? account.account_id)}
+                        {mono(name)}
                       </div>
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-[5px]">
-                          <span className="truncate text-[13px] font-semibold">
-                            {account.phone ?? account.label ?? account.account_id}
-                          </span>
-                          {cc ? (
-                            <span
-                              className={`fi fi-${cc} h-[11px] w-[15px] shrink-0 rounded-[2px] shadow-[0_0_0_1px_rgba(0,0,0,0.07)]`}
-                            />
-                          ) : null}
+                          <span className="truncate text-[13px] font-semibold">{name}</span>
+                          {showPhone ? null : flag}
                         </div>
+                        {showPhone ? (
+                          <div className="mt-[1px] flex items-center gap-[5px]">
+                            <span className="truncate text-[11px] text-ink-subtle">
+                              {account.phone}
+                            </span>
+                            {flag}
+                          </div>
+                        ) : null}
                         <div className="mt-[2px] flex items-center gap-[6px]">
                           <svg
                             width="13"

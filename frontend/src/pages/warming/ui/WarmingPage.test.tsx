@@ -131,6 +131,34 @@ test('ready card: phone flag sits with the number, proxy flag with the proxy typ
   expect(proxyFlag?.parentElement?.textContent).toContain('HTTPS');
 });
 
+test('ready card: Telegram name on top, phone + flag on the line beneath', async () => {
+  const board: WarmingBoardState = {
+    ...BOARD,
+    idle: [
+      {
+        ...account('idle-9', 'idle'),
+        first_name: 'Maria',
+        phone: '529672284791',
+        phone_country: 'MX',
+      },
+    ],
+  };
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    return Promise.resolve(jsonResponse({}));
+  });
+  const { container } = renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Maria')).toBeInTheDocument();
+  });
+  // The phone drops to a subtitle and the country flag rides with it, not the name.
+  expect(screen.getByText('529672284791')).toBeInTheDocument();
+  const phoneFlag = container.querySelector('.fi-mx');
+  expect(phoneFlag?.parentElement?.textContent).toContain('529672284791');
+  expect(phoneFlag?.parentElement?.textContent).not.toContain('Maria');
+});
+
 test('shows graduated accounts and wires return-to-warming + handoff', async () => {
   const warmed = {
     accounts: [
