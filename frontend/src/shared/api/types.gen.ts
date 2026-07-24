@@ -345,6 +345,7 @@ export type ActionResult = {
    */
   status:
     | 'ok'
+    | 'already_participant'
     | 'flood_wait'
     | 'slow_mode_wait'
     | 'premium_wait'
