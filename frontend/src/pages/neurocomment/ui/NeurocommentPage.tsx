@@ -2,7 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { allAccountsQueryOptions } from '@/entities/account';
+import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account';
 import {
   assignCampaignAccountMutation,
   campaignChallengesQueryOptions,
@@ -214,9 +214,15 @@ export function NeurocommentPage() {
   const boardChannels = board.data?.channels ?? [];
   const boardChannelNames = boardChannels.map((c) => c.channel);
 
-  // Account label lookup so the captcha queue shows the phone, not the raw id.
-  const accountLabel = (accountId: string): string =>
-    accountOptions.find((a) => a.account_id === accountId)?.label ?? accountId;
+  // Resolve an account's Telegram display name from the full account list (the
+  // only place carrying first/last name), so the captcha queue and neuro-accounts
+  // modal show the same label as the Accounts table — not the raw phone/id that
+  // the neurocomment board card exposes.
+  const displayNameById = (accountId: string, fallback: string): string => {
+    const found = accountOptions.find((a) => a.account_id === accountId);
+    return found ? accountDisplayName(found) : fallback;
+  };
+  const accountLabel = (accountId: string): string => displayNameById(accountId, accountId);
 
   // Ids already on the selected campaign's board (linked accounts).
   const linkedIds = new Set(boardAccounts.map((a) => a.account_id));
@@ -228,7 +234,7 @@ export function NeurocommentPage() {
   const neuroAccountRows = [
     ...boardAccounts.map((a) => ({
       account_id: a.account_id,
-      phone: a.label,
+      name: displayNameById(a.account_id, a.label),
       linked: true,
       pinned_channels: a.pinned_channels ?? [],
     })),
@@ -236,7 +242,7 @@ export function NeurocommentPage() {
       .filter((a) => !linkedIds.has(a.account_id))
       .map((a) => ({
         account_id: a.account_id,
-        phone: a.label ?? a.account_id,
+        name: accountDisplayName(a),
         linked: false,
         pinned_channels: [],
       })),

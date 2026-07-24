@@ -177,6 +177,61 @@ async def test_warmed_account_carries_card_meta() -> None:
 
 
 @pytest.mark.asyncio
+async def test_board_card_carries_telegram_name() -> None:
+    """The board card surfaces first_name/last_name so it shows the display name."""
+    from core.db import update_account_from_session_check  # noqa: PLC0415
+    from schemas.telegram_session import TelegramSessionCheckResult  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="named"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="named",
+            session_path="named",
+            status="alive",
+            is_temporary=False,
+            first_name="Alice",
+            last_name="Smith",
+        ),
+    )
+
+    board = await load_board()
+
+    card = next(c for c in board.idle if c.account_id == "named")
+    assert card.first_name == "Alice"
+    assert card.last_name == "Smith"
+
+
+@pytest.mark.asyncio
+async def test_warmed_account_carries_telegram_name() -> None:
+    """list_warmed_accounts propagates the card's first_name/last_name (de-id-mock)."""
+    from core.db import update_account_from_session_check  # noqa: PLC0415
+    from schemas.telegram_session import TelegramSessionCheckResult  # noqa: PLC0415
+    from services.warming import promote_to_neurocomment  # noqa: PLC0415
+
+    await create_account(AccountCreate(account_id="named"))
+    await update_account_from_session_check(
+        TelegramSessionCheckResult(
+            account_id="named",
+            session_path="named",
+            status="alive",
+            is_temporary=False,
+            first_name="Alice",
+            last_name="Smith",
+        ),
+    )
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="named", state="active", started_at=_days_ago(20)),
+    )
+    await promote_to_neurocomment("named")
+
+    warmed = (await list_warmed_accounts(14)).accounts
+
+    assert len(warmed) == 1
+    assert warmed[0].first_name == "Alice"
+    assert warmed[0].last_name == "Smith"
+
+
+@pytest.mark.asyncio
 async def test_unmark_neurocomment_removes_from_warmed_list() -> None:
     """The un-promote affordance flips the flag back; the warmed-list drops the account."""
     from services.warming import promote_to_neurocomment, unmark_neurocomment  # noqa: PLC0415

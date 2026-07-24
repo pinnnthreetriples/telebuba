@@ -142,6 +142,7 @@ test('the captcha queue shows the account phone, not the raw id', async () => {
             {
               account_id: 'acc-1',
               label: '+79261112233',
+              phone: '+79261112233',
               status: 'alive',
               created_at: 'n',
               updated_at: 'n',

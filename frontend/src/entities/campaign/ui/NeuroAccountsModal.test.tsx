@@ -7,8 +7,8 @@ import '@/shared/i18n';
 import { NeuroAccountsModal, type NeuroAccountRow } from './NeuroAccountsModal';
 
 const ACCOUNTS: NeuroAccountRow[] = [
-  { account_id: 'a1', phone: '+79990000001', linked: true, pinned_channels: ['@crypto'] },
-  { account_id: 'a2', phone: '+79990000002', linked: false, pinned_channels: [] },
+  { account_id: 'a1', name: 'Vika Ix', linked: true, pinned_channels: ['@crypto'] },
+  { account_id: 'a2', name: '+79990000002', linked: false, pinned_channels: [] },
 ];
 const CHANNELS = ['@crypto', '@news'];
 
@@ -27,6 +27,8 @@ test('assigns an idle account, confirms removal, and closes', async () => {
     />,
   );
   expect(screen.getByText('Аккаунты в нейрокомментинге')).toBeInTheDocument();
+  // the row shows the account's Telegram display name
+  expect(screen.getByText('Vika Ix')).toBeInTheDocument();
   // an already-assigned account shows its single channel in the dropdown trigger
   expect(screen.getByLabelText('Каналы аккаунта')).toHaveTextContent('@crypto');
 
@@ -69,7 +71,7 @@ test('the dropdown reflects the account subset and offers all channels', async (
 test('an empty subset shows and selects "all channels"', async () => {
   render(
     <NeuroAccountsModal
-      accounts={[{ account_id: 'a3', phone: '+79990000003', linked: true, pinned_channels: [] }]}
+      accounts={[{ account_id: 'a3', name: '+79990000003', linked: true, pinned_channels: [] }]}
       channels={CHANNELS}
       onClose={vi.fn()}
       onPick={vi.fn()}
@@ -89,7 +91,7 @@ test('a multi-channel subset shows a count in the trigger', () => {
       accounts={[
         {
           account_id: 'a3',
-          phone: '+79990000003',
+          name: '+79990000003',
           linked: true,
           pinned_channels: ['@crypto', '@news'],
         },
@@ -109,7 +111,7 @@ test('toggling channels adds/removes; "all channels" clears the subset', async (
   render(
     <NeuroAccountsModal
       accounts={[
-        { account_id: 'a3', phone: '+79990000003', linked: true, pinned_channels: ['@crypto'] },
+        { account_id: 'a3', name: '+79990000003', linked: true, pinned_channels: ['@crypto'] },
       ]}
       channels={CHANNELS}
       onClose={vi.fn()}

@@ -273,6 +273,9 @@ class WarmingAccountState(BaseModel):
     # the real flag + proxy badge (was a design-first hash mock). Both None when
     # the account has no phone / no proxy assigned.
     phone: str | None = None
+    # Telegram display name parts, so cards/modal show the name like the accounts table.
+    first_name: str | None = None
+    last_name: str | None = None
     # Mirrors ``AccountRead.proxy_type`` (a free ``str`` code, not the ProxyType
     # literal) so the assignment in ``load_board`` type-checks.
     proxy_type: str | None = None
@@ -337,6 +340,9 @@ class WarmedAccount(BaseModel):
     # Card meta sourced from the warming board card (so the design's warmed card
     # shows the real phone / flag / proxy badge / trust instead of a mock).
     phone: str | None = None
+    # Telegram display name parts, so cards/modal show the name like the accounts table.
+    first_name: str | None = None
+    last_name: str | None = None
     phone_country: str | None = None
     proxy_type: str | None = None
     proxy_country: str | None = None
