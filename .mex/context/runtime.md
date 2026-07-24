@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-23
+last_updated: 2026-07-24
 ---
 
 # Telegram Runtimes
@@ -9,6 +9,7 @@ last_updated: 2026-07-23
 - Services choose policy and persist outcomes; never expose Telethon objects or session/tdata contents.
 - Device fingerprints are immutable. Proxy credentials resolve inside `core/` from the shared `proxies` pool; one account uses at most one proxy and capacity is config-driven. Proxy checks discover the public exit IP over a TLS tunnel, then persist IPinfo/MaxMind country consensus without exposing credentials.
 - Rate limits return classified outcomes; persist cooldowns and never retry immediately.
+- A frozen account stays authorized and `get_me()` succeeds; classify it via `help.getAppConfig` `freeze_since_date` (plus `FrozenMethodInvalidError`, matched by class and ordered above `FloodWaitError`) into the permanent `frozen` status.
 
 ## Warming
 - One persisted `asyncio.Task` per active account; FastAPI lifespan starts reconciliation and shutdown.
