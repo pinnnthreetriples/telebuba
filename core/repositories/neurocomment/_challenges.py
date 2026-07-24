@@ -12,7 +12,7 @@ import asyncio
 import json
 from typing import TYPE_CHECKING
 
-from sqlalchemy import func, select, update
+from sqlalchemy import delete, func, select, update
 
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import _neurocomment_challenges
@@ -102,6 +102,31 @@ async def list_failed_for_channel(channel: str, limit: int) -> ChallengeRowList:
     return await asyncio.to_thread(_list_failed_for_channel, channel, limit)
 
 
+def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowList:
+    if not channels:
+        return ChallengeRowList()
+    statement = (
+        select(_neurocomment_challenges)
+        .where(
+            _neurocomment_challenges.c.channel.in_(channels)
+            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES),
+        )
+        .order_by(
+            _neurocomment_challenges.c.decided_at.desc(),
+            _neurocomment_challenges.c.id.desc(),
+        )
+        .limit(limit)
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return ChallengeRowList(rows=[_row_to_challenge(row) for row in rows])
+
+
+async def list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowList:
+    """Most-recent non-solved challenges across ``channels`` (the campaign captcha queue)."""
+    return await asyncio.to_thread(_list_failed_for_channels, channels, limit)
+
+
 def _list_challenged_channels(channels: list[str]) -> ChallengedChannels:
     if not channels:
         return ChallengedChannels()
@@ -146,6 +171,26 @@ def _lookup_cached_decision(challenge_hash: str) -> ChallengeDecision | None:
 async def lookup_cached_decision(challenge_hash: str) -> ChallengeDecision | None:
     """Reuse a previously solved decision for the same challenge hash (global cache)."""
     return await asyncio.to_thread(_lookup_cached_decision, challenge_hash)
+
+
+def _evict_cached_decision(challenge_hash: str) -> int:
+    statement = delete(_neurocomment_challenges).where(
+        (_neurocomment_challenges.c.challenge_hash == challenge_hash)
+        & (_neurocomment_challenges.c.outcome == "solved"),
+    )
+    with _get_engine().begin() as connection:
+        result = connection.execute(statement)
+    return result.rowcount
+
+
+async def evict_cached_decision(challenge_hash: str) -> int:
+    """Drop the cached solved decision(s) for a hash after a re-challenge proved it wrong.
+
+    A poisoned cache row would otherwise make every future account sharing the same
+    challenge click the same wrong button; evicting it forces a fresh LLM decision.
+    Returns the number of solved rows removed.
+    """
+    return await asyncio.to_thread(_evict_cached_decision, challenge_hash)
 
 
 def _resolve_pending_outcome(account_id: str, channel: str, outcome: str) -> bool:

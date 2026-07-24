@@ -851,7 +851,7 @@
       "sub": "Auto bot-check pass",
       "tooltip": "The engine solves the channel's bot-check itself via Gemini or a cache of past answers. Turn it on when a channel asks you to prove you're not a bot — otherwise those channels get skipped.",
       "pending": "Needs check · {{count}}",
-      "solve": "Solve"
+      "solve": "Retry"
     },
     "campaign": {
       "run": "Run",

@@ -22,6 +22,7 @@ from pydantic import ValidationError
 from core.config import settings
 from core.db import (
     delete_readiness,
+    evict_cached_decision,
     insert_challenge,
     load_warming_settings,
     lookup_cached_decision,
@@ -40,7 +41,16 @@ from services.neurocomment import _seams
 if TYPE_CHECKING:
     from schemas.neurocomment import AccountChannelOnboarding
 
-ChallengeOutcome = Literal["no_challenge", "give_up", "solved", "failed"]
+ChallengeOutcome = Literal["no_challenge", "give_up", "solved", "failed", "rate_limited"]
+
+
+class _RateLimited:
+    """Sentinel: the LLM gateway returned 429 — defer without penalizing the pair."""
+
+
+# A distinct decision result from the give_up/None path so a transient rate limit is
+# never recorded as a challenge failure (which would feed the #147 channel back-off).
+_RATE_LIMITED = _RateLimited()
 
 # Gemini-compatible (OpenAPI subset) schema for ChallengeDecision — hand-written
 # rather than model_json_schema() because responseSchema rejects $defs/anyOf.
@@ -100,7 +110,7 @@ def _build_vision_prompt(message: BotChallengeMessage) -> str:
 
 async def _llm_decision(
     message: BotChallengeMessage, *, use_image: bool = False
-) -> ChallengeDecision | None:
+) -> ChallengeDecision | _RateLimited | None:
     """Fresh LLM decision via the operator-selected provider (Gemini or OpenAI).
 
     The provider + keys come from the settings row (DB, falling back to .env);
@@ -108,7 +118,8 @@ async def _llm_decision(
     ``use_image`` attaches the captcha photo (vision) and swaps in the image
     prompt — set only for a photo challenge; a photo with no downloaded image
     gives up rather than sending a blank vision request. Returns ``None``
-    (→ give up) on misconfig / timeout / unparseable body.
+    (→ give up) on misconfig / timeout / unparseable body, or ``_RATE_LIMITED``
+    on a 429 so the caller defers instead of penalizing the pair.
     """
     if use_image and message.image_b64 is None:
         return None
@@ -144,7 +155,8 @@ async def _llm_decision(
     except (TimeoutError, ValidationError):
         return None
     if result.status != "ok" or result.text is None:
-        return None
+        # A 429 is transient (not a wrong/undecidable challenge) → defer, don't give up.
+        return _RATE_LIMITED if result.status == "rate_limited" else None
     try:
         decision = ChallengeDecision.model_validate_json(result.text)
     except ValidationError:
@@ -174,12 +186,23 @@ def _canonicalize_index(
     return decision.model_copy(update={"button_index": canonical})
 
 
-async def _decide(message: BotChallengeMessage) -> ChallengeDecision | None:
-    """Cached solved decision for this challenge if any, else a fresh Gemini call."""
-    cached = await lookup_cached_decision(_challenge_hash(message.text, message.button_labels))
-    if cached is not None:
-        return cached
-    return await _llm_decision(message)
+async def _decide(
+    message: BotChallengeMessage, *, use_cache: bool
+) -> tuple[ChallengeDecision | _RateLimited | None, bool]:
+    """Decide this challenge; return ``(decision, from_cache)``.
+
+    Image challenges take the vision LLM path (never cached — the picture varies). A
+    text challenge reuses a cached solved decision only when ``use_cache`` (the first
+    attempt); a retry forces a fresh LLM call so a re-challenge never replays the same
+    wrong answer. ``from_cache`` lets the caller evict a reused row that gets re-challenged.
+    """
+    if message.has_photo:
+        return await _llm_decision(message, use_image=True), False
+    if use_cache:
+        cached = await lookup_cached_decision(_challenge_hash(message.text, message.button_labels))
+        if cached is not None:
+            return cached, True
+    return await _llm_decision(message), False
 
 
 def _human_delay_seconds() -> float:
@@ -249,7 +272,15 @@ async def _dispatch(
         )
     else:  # send_text (give_up is handled before dispatch)
         action = PostComment(chat_id=group_id, text=decision.text or "")
-    result = await _seams.execute(account_id, action)
+    try:
+        # The only unbounded Telethon await in the solver — a hung click must not
+        # stall onboarding forever, so cap it and treat a timeout as a failed dispatch.
+        result = await asyncio.wait_for(
+            _seams.execute(account_id, action),
+            timeout=settings.neurocomment.challenge_dispatch_timeout_seconds,
+        )
+    except TimeoutError:
+        return False
     return result.status == "ok"
 
 
@@ -303,17 +334,24 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
     Returns the pair's onboarding signal: ``no_challenge`` / ``solved`` →
     comment-able (``solved`` is optimistic — the audit row stays ``pending`` until
     the engine confirms on the first comment), ``give_up`` / ``failed`` →
-    ``bot_challenge``.
+    ``bot_challenge``, ``rate_limited`` → the LLM gateway 429'd, so defer and retry
+    later without recording a failure (no audit row, no channel back-off).
     """
     nc = settings.neurocomment
     message = await _wait_for_challenge(account_id, group_id, nc.challenge_wait_timeout_seconds)
     if message is None:
         return "no_challenge"
     decision: ChallengeDecision | None = None
-    for _attempt in range(nc.challenge_max_attempts):
-        decision = await (
-            _llm_decision(message, use_image=True) if message.has_photo else _decide(message)
-        )
+    for attempt in range(nc.challenge_max_attempts):
+        # Only the first attempt may reuse the cache. A re-challenge (attempt > 0)
+        # proves the prior answer wrong, so retries force a fresh LLM decision rather
+        # than replaying the same poisoned click.
+        candidate, from_cache = await _decide(message, use_cache=attempt == 0)
+        if isinstance(candidate, _RateLimited):
+            # 429 from the LLM: defer without recording a failure (no audit row, no
+            # #147 channel back-off) so the pair is retried later un-penalized.
+            return "rate_limited"
+        decision = candidate
         if (
             decision is None
             or decision.action == "give_up"
@@ -334,6 +372,10 @@ async def solve_if_present(account_id: str, channel: str, group_id: int) -> Chal
             # pending row; harmless — pending rows feed neither board status nor cache.
             await _record(account_id, channel, message, outcome="pending", decision=decision)
             return "solved"
+        if from_cache:
+            # The cached decision was just re-challenged → it is wrong. Evict it so it
+            # can't fail every future account sharing this challenge.
+            await evict_cached_decision(_challenge_hash(message.text, message.button_labels))
         message = retry
     # Out of attempts and still being re-challenged → give up (do not keep clicking).
     await _record(account_id, channel, message, outcome="failed", decision=decision)

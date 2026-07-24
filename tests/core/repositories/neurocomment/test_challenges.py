@@ -9,8 +9,10 @@ import pytest
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     count_by_outcome,
+    evict_cached_decision,
     insert_challenge,
     list_failed_for_channel,
+    list_failed_for_channels,
     lookup_cached_decision,
     resolve_pending_outcome,
 )
@@ -79,6 +81,40 @@ async def test_list_failed_for_channel_is_newest_first_and_limited() -> None:
     assert [r.raw_text for r in result.rows] == ["challenge 2", "challenge 1"]
 
 
+@pytest.mark.asyncio
+async def test_list_failed_for_channels_filters_orders_and_limits() -> None:
+    # Insert in a deterministic order so id (the tiebreaker) tracks insert order.
+    for challenge_hash, channel, outcome in (
+        ("h0", "@a", "give_up"),  # oldest
+        ("h1", "@b", "failed"),
+        ("h2", "@a", "solved"),  # solved → excluded
+        ("h3", "@c", "failed"),  # channel outside the queried set → excluded
+        ("h4", "@b", "give_up"),  # newest of the queried, unsolved rows
+    ):
+        await insert_challenge(
+            ChallengeInsert(
+                challenge_hash=challenge_hash,
+                account_id="acc-1",
+                channel=channel,
+                raw_text=challenge_hash,
+                button_labels=["x"],
+                outcome=outcome,
+            ),
+        )
+
+    result = await list_failed_for_channels(["@a", "@b"], limit=10)
+
+    # Only unsolved rows on the queried channels, newest first.
+    assert [r.raw_text for r in result.rows] == ["h4", "h1", "h0"]
+
+    # The global limit caps the merged result, keeping the newest.
+    limited = await list_failed_for_channels(["@a", "@b"], limit=2)
+    assert [r.raw_text for r in limited.rows] == ["h4", "h1"]
+
+    # No channels → empty, no query.
+    assert (await list_failed_for_channels([], limit=10)).rows == []
+
+
 def _solved_insert(
     challenge_hash: str, account_id: str, decision: ChallengeDecision
 ) -> ChallengeInsert:
@@ -105,6 +141,32 @@ async def test_lookup_cached_decision_returns_solved_decision() -> None:
     assert cached is not None
     assert cached.action == "click_button"
     assert cached.button_index == 2
+
+
+@pytest.mark.asyncio
+async def test_evict_cached_decision_removes_only_solved_rows() -> None:
+    decision = ChallengeDecision(
+        action="click_button", button_index=0, confidence=0.9, reasoning="r"
+    )
+    await insert_challenge(_solved_insert("hash-evict", "acc-1", decision))
+    # A non-solved audit row under the same hash must survive (not a cache entry).
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="hash-evict",
+            account_id="acc-2",
+            channel="@chan",
+            raw_text="prove human",
+            button_labels=["yes"],
+            outcome="give_up",
+        ),
+    )
+
+    removed = await evict_cached_decision("hash-evict")
+
+    assert removed == 1
+    assert await lookup_cached_decision("hash-evict") is None  # cache row gone
+    # The give_up audit row is untouched.
+    assert len((await list_failed_for_channel("@chan", limit=10)).rows) == 1
 
 
 @pytest.mark.asyncio

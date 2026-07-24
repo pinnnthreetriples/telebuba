@@ -136,6 +136,18 @@ def test_migration_15_adds_human_skipped_column() -> None:
     assert 15 in versions
 
 
+def test_migration_35_adds_challenges_channel_index() -> None:
+    """Migration #35 lands the channel-leading composite index on the challenges table."""
+    engine = _get_engine()
+    index_names = {ix["name"] for ix in inspect(engine).get_indexes("neurocomment_challenges")}
+    assert "ix_nc_challenges_channel_outcome_decided" in index_names
+    with engine.connect() as connection:
+        versions = {
+            int(row[0]) for row in connection.exec_driver_sql("SELECT version FROM schema_version")
+        }
+    assert 35 in versions
+
+
 def test_migration_30_adds_banned_column() -> None:
     engine = _get_engine()
     with engine.connect() as connection:
