@@ -150,6 +150,11 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
         message_id=outcome.message_id,
         # int64 → decimal string at the JSON boundary (see ActionResult).
         channel_id=str(outcome.channel_id) if outcome.channel_id is not None else None,
+        recent_message_ids=(
+            [str(i) for i in outcome.recent_message_ids]
+            if outcome.recent_message_ids is not None
+            else None
+        ),
     )
 
 
@@ -212,7 +217,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
-            await _dispatch_read_channel(client, action)
+            return await _dispatch_read_channel(client, action)
         case WatchPeerStories():
             log_extra = {"stories_seen": await dispatch_watch_peer_stories(client, action)}
         case ReactToPost():
@@ -232,17 +237,24 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
     return _DispatchResult(message_id=message_id, log_extra=log_extra)
 
 
-async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> None:
-    """Fetch recent posts and mark them read — the "reading a feed" emulation."""
+async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) -> _DispatchResult:
+    """Fetch recent posts and mark them read — the "reading a feed" emulation.
+
+    Returns the ids fetched so a following react on the same channel reuses them
+    instead of issuing a second identical ``get_messages``.
+    """
     messages = await client.get_messages(action.channel, limit=action.message_limit)
     # get_messages(limit=...) returns an iterable TotalList; the stub union also
     # admits a single Message / None for the by-id form, which we never use here.
-    max_id = max(
-        (int(getattr(message, "id", 0)) for message in messages),  # ty: ignore[not-iterable]
-        default=0,
-    )
+    ids = [
+        int(getattr(message, "id", 0))
+        for message in messages  # ty: ignore[not-iterable]
+        if getattr(message, "id", None)
+    ]
+    max_id = max(ids, default=0)
     if max_id:
         await client.send_read_acknowledge(action.channel, max_id=max_id)
+    return _DispatchResult(recent_message_ids=ids)
 
 
 async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> _DispatchResult:
@@ -256,12 +268,15 @@ async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -
     it: the placed emoji on success, or a ``reaction_skip`` reason (no recent
     posts / no usable emoji) when nothing landed.
     """
-    messages = await client.get_messages(action.channel, limit=action.message_limit)
-    candidates = [
-        int(getattr(m, "id", 0))
-        for m in messages  # ty: ignore[not-iterable]
-        if getattr(m, "id", None)
-    ]
+    if action.message_ids is None:
+        messages = await client.get_messages(action.channel, limit=action.message_limit)
+        candidates = [
+            int(getattr(m, "id", 0))
+            for m in messages  # ty: ignore[not-iterable]
+            if getattr(m, "id", None)
+        ]
+    else:
+        candidates = action.message_ids
     if not candidates:
         return _DispatchResult(log_extra={"reaction_skip": "no_posts"})
     allowed = await _channel_reaction_whitelist(client, action.channel)

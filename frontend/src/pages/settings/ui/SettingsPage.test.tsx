@@ -18,7 +18,6 @@ const SETTINGS = {
   reactions_enabled: true,
   join_enabled: true,
   enforce_readiness: true,
-  max_daily_actions: 0,
   has_gemini_key: true,
   gemini_model: 'gemini-2.5-flash',
   gemini_max_retries: 2,

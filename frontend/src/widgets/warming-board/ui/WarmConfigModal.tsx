@@ -103,8 +103,6 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           join_enabled: toggles.join_enabled,
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: toggles.enforce_readiness,
-          // Preserve the server's non-behaviour fields untouched.
-          max_daily_actions: settings?.max_daily_actions ?? 0,
           gemini_model: settings?.gemini_model,
           gemini_api_key: null,
           clear_gemini_key: false,

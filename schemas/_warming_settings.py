@@ -23,10 +23,6 @@ class WarmingSettings(BaseModel):
     reactions_enabled: bool = True
     join_enabled: bool = True
     enforce_readiness: bool = True
-    # Deprecated (audit П2): the fleet-wide override is retired — the engine uses
-    # the per-account auto cap (phase + trust) only. Kept so existing rows load;
-    # no longer read by the cycle or surfaced in the UI.
-    max_daily_actions: int = Field(default=0, ge=0)
     has_gemini_key: bool = False
     gemini_model: str = Field(min_length=1)
     # Operator-tunable Gemini rate-limit handling (not secret): retry count on a
@@ -47,7 +43,6 @@ class WarmingSettingsSecret(BaseModel):
     reactions_enabled: bool
     join_enabled: bool = True
     enforce_readiness: bool = True
-    max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str
     gemini_model: str = Field(min_length=1)
     gemini_max_retries: int = Field(default=1, ge=0, le=5)
@@ -74,7 +69,6 @@ class WarmingSettingsUpdate(BaseModel):
     reactions_enabled: bool = True
     join_enabled: bool = True
     enforce_readiness: bool = True
-    max_daily_actions: int = Field(default=0, ge=0)
     gemini_api_key: str | None = None
     gemini_model: str | None = None
     gemini_max_retries: int = Field(default=1, ge=0, le=5)

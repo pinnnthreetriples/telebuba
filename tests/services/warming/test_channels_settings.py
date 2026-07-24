@@ -173,16 +173,13 @@ async def test_save_settings_persists_warming_controls() -> None:
             inter_account_chat=False,
             reactions_enabled=True,
             enforce_readiness=False,
-            max_daily_actions=50,
         ),
     )
 
     assert masked.enforce_readiness is False
-    assert masked.max_daily_actions == 50
 
     reloaded = await warming.load_settings()
     assert reloaded.enforce_readiness is False
-    assert reloaded.max_daily_actions == 50
 
 
 @pytest.mark.asyncio

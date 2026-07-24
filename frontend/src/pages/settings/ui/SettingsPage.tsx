@@ -80,7 +80,6 @@ function SettingsForm({
               join_enabled: toggles.join_enabled,
               inter_account_chat: toggles.inter_account_chat,
               enforce_readiness: settings.enforce_readiness ?? true,
-              max_daily_actions: 0,
               gemini_model: settings.gemini_model,
               gemini_max_retries: clampNumber(geminiRetries, 0, 5, 1),
               gemini_min_interval_seconds: clampNumber(geminiInterval, 0, 60, 0),

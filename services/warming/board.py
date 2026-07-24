@@ -161,42 +161,17 @@ async def _load_cards() -> tuple[list[WarmingAccountState], WarmingChannelList, 
     return cards, channels, masked
 
 
-async def load_board() -> WarmingBoardState:
-    cards, channels, masked = await _load_cards()
-    # A graduated account (promoted_to_nc) lives in the "Прогреты" pool
-    # (list_warmed_accounts), never in "ready to warm" — regardless of how many
-    # days it warmed. Its warmed card's «вернуть в прогрев» button un-promotes it
-    # back into idle. Buckets stay disjoint; a graduation is never stranded.
-    idle = [card for card in cards if not is_warming(card.state) and not card.promoted_to_nc]
-    warming = [card for card in cards if is_warming(card.state)]
-    return WarmingBoardState(
-        idle=idle,
-        warming=warming,
-        channels=channels,
-        settings=masked,
-        channel_count=len(channels.channels),
-        active_count=sum(1 for card in warming if card.state == "active"),
-        summary=_build_summary([*idle, *warming]),
-        card_log_limit=settings.warming.card_log_limit,
-    )
-
-
-async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
-    """Accounts the operator has graduated into the neurocomment pool.
+def _warmed_from_cards(cards: list[WarmingAccountState], min_days: int) -> list[WarmedAccount]:
+    """The graduated pool, newest-warmed first, derived from board cards.
 
     Graduation is an explicit operator action (the card's «в прогретые» /
     «переместить в нейрокомментинг» button flips ``promoted_to_nc``), so *every*
-    promoted account appears here immediately — the day count is shown for
-    progress, not used to gate visibility (a below-target graduation is the
-    operator's call, not an accident). ``min_days`` only supplies the target
-    fallback for a card that never had one.
-
-    ``nc_handed_off`` rides each row so the two consumers can split the pool:
-    the warming page's warmed card shows only NOT-yet-handed accounts, the
-    neurocomment page counts/offers only handed ones (the warmed card's
-    «в нейрокомментинг» button flips it).
+    promoted account appears — the day count is shown for progress, not used to
+    gate visibility. ``min_days`` only supplies the target fallback for a card
+    that never had one. ``nc_handed_off`` rides each row so the two consumers can
+    split the pool: the warming page shows only NOT-yet-handed accounts, the
+    neurocomment page counts/offers only handed ones.
     """
-    cards, _channels, _masked = await _load_cards()
     warmed = [
         WarmedAccount(
             account_id=card.account_id,
@@ -217,7 +192,39 @@ async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
         if card.promoted_to_nc
     ]
     warmed.sort(key=lambda a: a.warming_days, reverse=True)
-    return WarmedAccountList(accounts=warmed)
+    return warmed
+
+
+async def load_board() -> WarmingBoardState:
+    cards, channels, masked = await _load_cards()
+    # A graduated account (promoted_to_nc) lives in the "Прогреты" pool
+    # (the ``warmed`` list below), never in "ready to warm" — regardless of how
+    # many days it warmed. Its warmed card's «вернуть в прогрев» button un-promotes
+    # it back into idle. Buckets stay disjoint; a graduation is never stranded.
+    idle = [card for card in cards if not is_warming(card.state) and not card.promoted_to_nc]
+    warming = [card for card in cards if is_warming(card.state)]
+    return WarmingBoardState(
+        idle=idle,
+        warming=warming,
+        channels=channels,
+        settings=masked,
+        channel_count=len(channels.channels),
+        active_count=sum(1 for card in warming if card.state == "active"),
+        summary=_build_summary([*idle, *warming]),
+        card_log_limit=settings.warming.card_log_limit,
+        # Folded in from the same cards so the warming page needs one poll, not two.
+        warmed=_warmed_from_cards(cards, settings.neurocomment.warmed_min_days),
+    )
+
+
+async def list_warmed_accounts(min_days: int) -> WarmedAccountList:
+    """Accounts the operator has graduated into the neurocomment pool.
+
+    Still served at ``/warmed`` for the neurocomment page; the warming page now
+    reads the same pool from ``load_board``'s ``warmed`` field instead.
+    """
+    cards, _channels, _masked = await _load_cards()
+    return WarmedAccountList(accounts=_warmed_from_cards(cards, min_days))
 
 
 _TRUST_HEALTHY_BANDS: Final = frozenset({"excellent", "good"})

@@ -75,6 +75,29 @@ async def test_cycle_reacts_when_enabled(monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.mark.asyncio
+async def test_cycle_reads_once_and_threads_ids_into_react(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Read fetches a channel once; the react reuses those ids (no second fetch)."""
+    recorder = _Recorder()
+    monkeypatch.setattr(_seams, "execute", recorder.execute)
+    monkeypatch.setattr(settings.warming, "reaction_probability", 1.0)
+    await _seed_channel()
+    await _set_settings(chat=False, reactions=True, key="")
+
+    await warming.run_one_cycle(WarmingCycleRequest(account_id="acc-1"))
+
+    reads = [a for _id, a in recorder.actions if a.action_type == "read_channel"]
+    reacts = [a for _id, a in recorder.actions if a.action_type == "react_to_post"]
+    assert len(reads) == 1
+    assert len(reacts) == 1
+    # The single read fetches the reaction candidate pool, and its ids are
+    # threaded into the react so the reactor never re-fetches.
+    assert reads[0].message_limit == settings.warming.reaction_message_limit
+    assert reacts[0].message_ids == [101, 102]
+
+
+@pytest.mark.asyncio
 async def test_cycle_does_not_count_skipped_reaction(monkeypatch: pytest.MonkeyPatch) -> None:
     """A react that lands no reaction (message_id=None, e.g. restricted channel) isn't counted."""
     recorder = _Recorder()

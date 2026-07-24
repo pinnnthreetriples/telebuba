@@ -331,6 +331,11 @@ class WarmingBoardState(BaseModel):
     # from ``settings.warming.card_log_limit`` — the SPA reads it instead of a
     # hardcoded 20.
     card_log_limit: int = Field(default=30, ge=1)
+    # The operator-graduated ("Прогреты") pool, folded into the board so the
+    # warming page reads it from this one poll instead of a second /warmed fetch.
+    # Same rows ``list_warmed_accounts`` returns; the /warmed endpoint stays for
+    # the neurocomment page.
+    warmed: list[WarmedAccount] = Field(default_factory=list)
 
 
 class WarmedAccount(BaseModel):

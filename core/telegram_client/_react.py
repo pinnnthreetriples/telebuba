@@ -8,6 +8,7 @@ these to read a channel's allowed reaction set and pick a landable emoji.
 from __future__ import annotations
 
 import random
+import time
 from typing import TYPE_CHECKING
 
 from telethon.tl.functions.channels import GetFullChannelRequest
@@ -22,6 +23,13 @@ if TYPE_CHECKING:
 # `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
 _rng = random.SystemRandom()
 
+# A channel's allowed-reaction set changes rarely, but the react action re-read it
+# on every reaction. Cache it per channel for an hour. Single event loop / one
+# uvicorn worker (CLAUDE.md) → no lock needed. Failures are not cached so a
+# transient error re-probes next time rather than sticking a bad "None".
+_WHITELIST_TTL_SECONDS = 3600.0
+_whitelist_cache: dict[str, tuple[float, set[str] | None]] = {}
+
 
 async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> set[str] | None:
     """Emoticons the channel permits as reactions.
@@ -31,17 +39,24 @@ async def _channel_reaction_whitelist(client: TelegramClient, channel: str) -> s
     default set rather than regress). An empty set means reactions are off or the
     channel only permits emoji we don't use, so the caller should skip entirely.
     """
+    now = time.monotonic()
+    cached = _whitelist_cache.get(channel)
+    if cached is not None and now - cached[0] < _WHITELIST_TTL_SECONDS:
+        return cached[1]
     try:
         full = await client(GetFullChannelRequest(channel=channel))  # ty: ignore[invalid-argument-type]
     except Exception:  # noqa: BLE001 - availability is best-effort; don't fail the react over it.
-        return None
+        return None  # transient — don't cache the failure.
     available = getattr(getattr(full, "full_chat", None), "available_reactions", None)
     if isinstance(available, ChatReactionsNone):
-        return set()
-    if isinstance(available, ChatReactionsSome):
-        return {r.emoticon for r in available.reactions if isinstance(r, ReactionEmoji)}
-    # ChatReactionsAll / unknown → any emoji is accepted, so don't narrow.
-    return None
+        result: set[str] | None = set()
+    elif isinstance(available, ChatReactionsSome):
+        result = {r.emoticon for r in available.reactions if isinstance(r, ReactionEmoji)}
+    else:
+        # ChatReactionsAll / unknown → any emoji is accepted, so don't narrow.
+        result = None
+    _whitelist_cache[channel] = (now, result)
+    return result
 
 
 def _bare_emoji(emoji: str) -> str:
