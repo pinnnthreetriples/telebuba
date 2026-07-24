@@ -8547,6 +8547,17 @@
             ],
             "title": "Last Name"
           },
+          "avatar_etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Etag"
+          },
           "phone_country": {
             "anyOf": [
               {
@@ -8959,6 +8970,17 @@
               }
             ],
             "title": "Last Name"
+          },
+          "avatar_etag": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Avatar Etag"
           },
           "proxy_type": {
             "anyOf": [

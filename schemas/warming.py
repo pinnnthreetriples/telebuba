@@ -276,6 +276,8 @@ class WarmingAccountState(BaseModel):
     # Telegram display name parts, so cards/modal show the name like the accounts table.
     first_name: str | None = None
     last_name: str | None = None
+    # Cached Telegram avatar etag; the card renders /avatar?v={etag} when set, initials otherwise.
+    avatar_etag: str | None = None
     # Mirrors ``AccountRead.proxy_type`` (a free ``str`` code, not the ProxyType
     # literal) so the assignment in ``load_board`` type-checks.
     proxy_type: str | None = None
@@ -343,6 +345,8 @@ class WarmedAccount(BaseModel):
     # Telegram display name parts, so cards/modal show the name like the accounts table.
     first_name: str | None = None
     last_name: str | None = None
+    # Cached Telegram avatar etag; the card renders /avatar?v={etag} when set, initials otherwise.
+    avatar_etag: str | None = None
     phone_country: str | None = None
     proxy_type: str | None = None
     proxy_country: str | None = None
