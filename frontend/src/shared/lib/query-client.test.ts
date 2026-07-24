@@ -32,6 +32,48 @@ test('surfaces the API error envelope message when a mutation fails', async () =
   });
 });
 
+test('translates a stable media code in the mutation toast', async () => {
+  vi.mocked(toastError).mockClear();
+  const { result } = renderHook(
+    () =>
+      useMutation({
+        mutationFn: () =>
+          Promise.reject({
+            error: { code: 'bad_request', message: 'profile_photo_stale_reference' },
+          }),
+      }),
+    { wrapper },
+  );
+  result.current.mutate(undefined);
+  await waitFor(() => {
+    // The operator sees the translated copy, not the raw stable code.
+    expect(toastError).toHaveBeenCalledWith('Фото изменилось на Telegram — обновите список');
+  });
+});
+
+test('a flood_wait toast carries the retry-after seconds (string on the wire)', async () => {
+  vi.mocked(toastError).mockClear();
+  const { result } = renderHook(
+    () =>
+      useMutation({
+        mutationFn: () =>
+          Promise.reject({
+            error: {
+              code: 'bad_request',
+              message: 'flood_wait',
+              // The backend serialises envelope fields as strings.
+              fields: { retry_after_seconds: '345' },
+            },
+          }),
+      }),
+    { wrapper },
+  );
+  result.current.mutate(undefined);
+  await waitFor(() => {
+    expect(toastError).toHaveBeenCalledWith('Telegram ограничил действия — повторите через 345 с');
+  });
+});
+
 test('falls back to a translated message when the envelope has none', async () => {
   vi.mocked(toastError).mockClear();
   const { result } = renderHook(

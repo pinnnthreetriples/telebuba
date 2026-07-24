@@ -227,23 +227,25 @@ test('a rejected save shows the translated username error under the field', asyn
   expect(await screen.findByText('Юзернейм уже занят')).toBeInTheDocument();
 });
 
-test('a flood_wait rejection shows the retry-after seconds in the general box', async () => {
+test('a flood_wait rejection shows the retry-after seconds on any tab', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const { pathname } = new URL((input as Request).url);
     if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
       return Promise.resolve(jsonResponse(VIEW));
     }
     if (pathname === '/api/v1/accounts/profile') {
+      // Real backend contract: envelope fields serialise as STRINGS
+      // (api/errors.py; tests/api/test_accounts.py) and a flood ride is a 400.
       return Promise.resolve(
         jsonResponse(
           {
             error: {
               code: 'bad_request',
               message: 'flood_wait',
-              fields: { retry_after_seconds: 42 },
+              fields: { retry_after_seconds: '345' },
             },
           },
-          429,
+          400,
         ),
       );
     }
@@ -253,8 +255,38 @@ test('a flood_wait rejection shows the retry-after seconds in the general box', 
   await userEvent.type(screen.getByDisplayValue('Иван'), 'ов');
   await userEvent.click(screen.getByText('Сохранить'));
   expect(
-    await screen.findByText('Telegram ограничил действия — повторите через 42 с'),
+    await screen.findByText('Telegram ограничил действия — повторите через 345 с'),
   ).toBeInTheDocument();
+  // Save (and its error) is global footer state — it must survive a tab switch.
+  await userEvent.click(screen.getByText('Фото'));
+  expect(
+    screen.getByText('Telegram ограничил действия — повторите через 345 с'),
+  ).toBeInTheDocument();
+});
+
+test('the inline server error clears as soon as the field is edited', async () => {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (pathname === '/api/v1/accounts/profile') {
+      return Promise.resolve(
+        jsonResponse({ error: { code: 'bad_request', message: 'username_occupied' } }, 409),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.type(screen.getByDisplayValue('ivanov'), '2');
+  await userEvent.click(screen.getByText('Сохранить'));
+  expect(await screen.findByText('Юзернейм уже занят')).toBeInTheDocument();
+
+  // Editing the field again invalidates the stale server verdict.
+  await userEvent.type(screen.getByDisplayValue('ivanov2'), '3');
+  await waitFor(() => {
+    expect(screen.queryByText('Юзернейм уже занят')).not.toBeInTheDocument();
+  });
 });
 
 test('an account with no stored first name shows why Save is disabled', async () => {

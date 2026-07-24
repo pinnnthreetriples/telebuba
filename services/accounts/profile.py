@@ -6,16 +6,12 @@ monkeypatch ``services.accounts.profile.execute`` (same for ``execute_read``).
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, cast
 
 from core.db import update_account_profile_snapshot
 from core.logging import log_event
-from core.telegram_client import (
-    TelegramAccountNotFoundError,
-    TelegramReadError,
-    execute,
-    execute_read,
-)
+from core.telegram_client import execute, execute_read
 
 # AccountProfileUpdateRequest is constructed at runtime by the re-sync path,
 # so it cannot live in the TYPE_CHECKING block.
@@ -29,6 +25,8 @@ if TYPE_CHECKING:
     from schemas.telegram_profile_snapshot import TelegramProfileSnapshot
 
 __all__ = ["update_account_profile"]
+
+logger = logging.getLogger(__name__)
 
 
 async def update_account_profile(data: AccountProfileUpdateRequest) -> AccountRead:
@@ -71,27 +69,33 @@ async def update_account_profile(data: AccountProfileUpdateRequest) -> AccountRe
 async def _sync_confirmed_profile(account_id: str) -> None:
     """Re-read the live profile and persist what Telegram actually holds.
 
-    Failure-path only (never costs the happy path an RPC). A refused read
-    (flood usually blocks it too) or an implausible empty first name skips the
-    sync — the row then self-heals on the next session check.
+    Failure-path only (never costs the happy path an RPC), and best-effort end
+    to end: ANY failure here — refused read, a live value our schema refuses
+    (e.g. a 4-char Fragment/NFT username), a vanished account row — is logged
+    and swallowed so the caller surfaces the action's real stable-code error,
+    never a re-sync artefact. The row then self-heals on the next session check.
     """
     try:
         snapshot = await execute_read(account_id, GetUserProfile())
-    except (TelegramAccountNotFoundError, TelegramReadError):
-        return
-    profile = cast("TelegramProfileSnapshot", snapshot)
-    if not profile.first_name:
-        return
-    # ``""`` clears per the field contract — an unset optional on Telegram must
-    # clear the stale DB value, not leave it (``None`` would skip the column).
-    await update_account_profile_snapshot(
-        AccountProfileUpdateRequest(
-            account_id=account_id,
-            first_name=profile.first_name,
-            last_name=profile.last_name or "",
-            username=profile.username or "",
-            # A premium account's live bio can exceed our 70-char schema cap;
-            # clamp so the snapshot write can't fail validation mid-sync.
-            bio=(profile.bio or "")[:PROFILE_BIO_MAX_LENGTH],
-        ),
-    )
+        profile = cast("TelegramProfileSnapshot", snapshot)
+        if not profile.first_name:
+            return
+        # ``""`` clears per the field contract — an unset optional on Telegram
+        # must clear the stale DB value, not leave it (``None`` skips the column).
+        await update_account_profile_snapshot(
+            AccountProfileUpdateRequest(
+                account_id=account_id,
+                first_name=profile.first_name,
+                last_name=profile.last_name or "",
+                username=profile.username or "",
+                # A premium account's live bio can exceed our 70-char schema cap;
+                # clamp so the snapshot write can't fail validation mid-sync.
+                bio=(profile.bio or "")[:PROFILE_BIO_MAX_LENGTH],
+            ),
+        )
+    except Exception:  # noqa: BLE001 - best-effort sync; the original error must win
+        logger.debug(
+            "confirmed-profile re-sync skipped (account_id=%s)",
+            account_id,
+            exc_info=True,
+        )

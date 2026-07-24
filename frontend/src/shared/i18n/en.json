@@ -290,7 +290,13 @@
         "username_invalid": "That username is not allowed",
         "about_too_long": "The bio is too long for Telegram",
         "account_frozen": "The account is frozen by Telegram — editing is unavailable",
-        "flood_wait": "Telegram rate-limited the account — retry in {{s}} s"
+        "flood_wait": "Telegram rate-limited the account — retry in {{s}} s",
+        "profile_photo_invalid": "The image could not be processed — choose a JPG/PNG/WebP file",
+        "profile_photo_stale_reference": "The photo changed on Telegram — refresh the list",
+        "profile_photo_not_found": "Photo not found in the profile — refresh the list",
+        "profile_photo_download_failed": "Couldn't download the photo from Telegram",
+        "profile_music_invalid": "The audio file could not be processed — pick another one",
+        "profile_music_stale_reference": "The track changed on Telegram — refresh the list"
       }
     },
     "channel": {

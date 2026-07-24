@@ -46,14 +46,16 @@ export function profileErrorField(err: unknown): 'username' | 'bio' | null {
 // A failed profile save rejects with the /api/v1 envelope whose `message` is a
 // locale-neutral code (username_occupied, flood_wait, …) translated via
 // accounts.profile.code.*; an unknown code shows as-is (same contract as
-// channelErrorText). flood_wait interpolates fields.retry_after_seconds.
+// channelErrorText). flood_wait interpolates fields.retry_after_seconds — the
+// backend serialises envelope fields as strings (api/errors.py), so parse
+// rather than expect a number.
 export function profileErrorText(err: unknown, t: Translate, fallback: string): string {
   const message = envelopeMessage(err);
   if (!message) return fallback;
   const fields = (err as { error?: { fields?: Record<string, unknown> } }).error?.fields;
-  const seconds = fields?.retry_after_seconds;
+  const seconds = Number(fields?.retry_after_seconds ?? NaN);
   return t(`accounts.profile.code.${message}`, {
     defaultValue: message,
-    s: typeof seconds === 'number' ? seconds : '?',
+    s: Number.isFinite(seconds) ? seconds : '?',
   });
 }

@@ -291,7 +291,13 @@
         "username_invalid": "Недопустимый юзернейм",
         "about_too_long": "Описание слишком длинное для Telegram",
         "account_frozen": "Аккаунт заморожен Telegram — редактирование недоступно",
-        "flood_wait": "Telegram ограничил действия — повторите через {{s}} с"
+        "flood_wait": "Telegram ограничил действия — повторите через {{s}} с",
+        "profile_photo_invalid": "Изображение не удалось обработать — выберите JPG/PNG/WebP",
+        "profile_photo_stale_reference": "Фото изменилось на Telegram — обновите список",
+        "profile_photo_not_found": "Фото не найдено в профиле — обновите список",
+        "profile_photo_download_failed": "Не удалось скачать фото из Telegram",
+        "profile_music_invalid": "Аудиофайл не удалось обработать — выберите другой",
+        "profile_music_stale_reference": "Трек изменился на Telegram — обновите список"
       }
     },
     "channel": {

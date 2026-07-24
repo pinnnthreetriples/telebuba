@@ -5,7 +5,7 @@ import { toastError } from '@/shared/ui';
 
 // The generated client throws our error envelope {error:{code,message,fields?}}.
 interface ErrorEnvelope {
-  error: { code?: string; message?: string };
+  error: { code?: string; message?: string; fields?: Record<string, unknown> };
 }
 
 function asEnvelope(error: unknown): ErrorEnvelope['error'] | null {
@@ -28,6 +28,24 @@ function redirectToLogin(): void {
   }
 }
 
+// The envelope's `message` usually carries a stable locale-neutral code
+// (profile_photo_stale_reference, flood_wait, channel_username_occupied, …).
+// For media mutations this toast is the only place the operator sees the
+// failure, so translate via the profile/channel code tables; an unknown code
+// (or free-form message) shows as-is, and no envelope at all falls back to the
+// generic copy. flood_wait interpolates retry_after_seconds — the backend
+// serialises envelope fields as strings, so parse rather than expect a number.
+function mutationErrorText(error: unknown): string {
+  const detail = asEnvelope(error);
+  const message = detail?.message;
+  if (typeof message !== 'string' || !message.trim()) return i18n.t('shell.mutationError');
+  const seconds = Number(detail?.fields?.retry_after_seconds ?? NaN);
+  return i18n.t([`accounts.profile.code.${message}`, `accounts.channel.code.${message}`], {
+    defaultValue: message,
+    s: Number.isFinite(seconds) ? seconds : '?',
+  });
+}
+
 export const queryClient = new QueryClient({
   queryCache: new QueryCache({
     onError: (error) => {
@@ -35,7 +53,8 @@ export const queryClient = new QueryClient({
     },
   }),
   // Mutations don't surface errors on their own — show the API envelope's
-  // message (or a translated fallback) so failures aren't silently swallowed.
+  // message (translated when it's a stable code) so failures aren't silently
+  // swallowed.
   mutationCache: new MutationCache({
     onError: (error) => {
       // A mutation-only 401 must redirect too — nothing else catches it.
@@ -43,8 +62,7 @@ export const queryClient = new QueryClient({
         redirectToLogin();
         return;
       }
-      const detail = asEnvelope(error);
-      toastError(detail?.message ?? i18n.t('shell.mutationError'));
+      toastError(mutationErrorText(error));
     },
   }),
   defaultOptions: {

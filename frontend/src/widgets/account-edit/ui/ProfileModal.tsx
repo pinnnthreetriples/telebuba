@@ -218,13 +218,27 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const isDirty = useStore(form.store, (state) => state.isDirty);
 
   // A rejected save carries a stable code in the error envelope; username/bio
-  // codes render under their field, the rest in a general box. Unknown codes
-  // show as-is (plus the global mutation toast — same contract as channels).
+  // codes render under their field, the rest beside the footer's Save button
+  // (which is global — the box must not be trapped inside the text tab).
+  // Unknown codes show as-is (plus the global mutation toast — same contract
+  // as channels).
   const saveError = updateProfile.isError ? updateProfile.error : null;
   const saveErrorField = saveError ? profileErrorField(saveError) : null;
   const saveErrorText = saveError
     ? profileErrorText(saveError, t, t('accounts.profile.saveError'))
     : null;
+  // A stale server error must not outlive the edit that addresses it: while an
+  // error is shown, the first form-value change clears it. Store subscription,
+  // not a values selector — typing must not re-render the whole modal.
+  const showingSaveError = updateProfile.isError;
+  const resetSaveError = updateProfile.reset;
+  useEffect(() => {
+    if (!showingSaveError) return;
+    const baseline = form.store.state.values;
+    return form.store.subscribe(() => {
+      if (form.store.state.values !== baseline) resetSaveError();
+    });
+  }, [showingSaveError, resetSaveError, form]);
 
   // onMount validation already flags an empty stored first name, but errors
   // only render for touched fields — mark it touched so the reason Save is
@@ -545,11 +559,6 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                     </FormField>
                   )}
                 </form.Field>
-                {saveErrorField === null && saveErrorText != null && (
-                  <div className="rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
-                    {saveErrorText}
-                  </div>
-                )}
               </div>
             )}
 
@@ -635,7 +644,17 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           </div>
 
           {/* footer */}
-          <div className="flex justify-end gap-2 border-t border-[#f0eeeb] px-5 py-[14px]">
+          <div className="flex items-center justify-end gap-2 border-t border-[#f0eeeb] px-5 py-[14px]">
+            {/* Non-field save errors (account_frozen, flood_wait, unknown)
+                live beside the global Save button, visible from any tab. */}
+            {saveErrorField === null && saveErrorText != null && (
+              <div
+                title={saveErrorText}
+                className="mr-auto min-w-0 truncate text-[12px] font-medium text-danger"
+              >
+                {saveErrorText}
+              </div>
+            )}
             <button
               type="button"
               onClick={requestClose}
