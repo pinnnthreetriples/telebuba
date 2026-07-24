@@ -29,7 +29,7 @@ _NEUROCOMMENT_TABLES = {
 def test_neurocomment_settings_have_issue_defaults() -> None:
     nc = settings.neurocomment
     assert (nc.reply_delay_min_seconds, nc.reply_delay_max_seconds) == (3.0, 10.0)
-    assert (nc.join_delay_min_seconds, nc.join_delay_max_seconds) == (30.0, 60.0)
+    assert (nc.join_delay_min_seconds, nc.join_delay_max_seconds) == (30.0, 120.0)
     assert nc.max_comments_per_hour == 10
     assert nc.comment_max_words == 30
     assert nc.max_comments_per_channel_per_day == 3

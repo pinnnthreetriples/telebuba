@@ -30,8 +30,9 @@ from core.telegram_client import stop_post_listener, subscribe_posts
 from schemas.neurocomment import NeurocommentRuntimeStatus
 from schemas.telegram_actions import JoinChannel
 from services.neurocomment import _seams, _signals, _state
+from services.neurocomment._generate import _COOLDOWN_STATUSES
 from services.neurocomment.engine import handle_new_post
-from services.neurocomment.onboarding import onboard_campaign
+from services.neurocomment.onboarding import _join_jitter_seconds, onboard_campaign
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -126,19 +127,38 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     # (already-participant → ok); a per-channel failure is logged, not fatal.
     # Gated on ``_JOINED_CHANNELS`` so repeated reconciles (every channel link
     # re-runs this) cost one join per (account, channel) per process, not per call.
+    # Jittered pause between *actual* joins (cache-hits skip it, no pause before
+    # the first) so a large watch set never fires as one join burst — the freeze
+    # vector. Mirrors the campaign-onboarding pacing.
+    first_join = True
     for channel in channels:
         if (listener_account_id, channel) in _JOINED_CHANNELS:
             continue
+        if not first_join:
+            await asyncio.sleep(_join_jitter_seconds())
+        first_join = False
         result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
         if result.status == "ok":
             _JOINED_CHANNELS.add((listener_account_id, channel))
-        else:
+            continue
+        if result.status in _COOLDOWN_STATUSES:
+            # Telegram is rate-limiting this account: stop the join burst now
+            # rather than fire the next RPC and escalate a soft flood-wait into a
+            # hard freeze. Unjoined channels retry on the next reconcile (only ok
+            # joins are cached).
             await log_event(
                 "WARNING",
-                "neurocomment_listener_join_failed",
+                "neurocomment_listener_join_flood",
                 account_id=listener_account_id,
                 extra={"channel": channel, "status": result.status},
             )
+            break
+        await log_event(
+            "WARNING",
+            "neurocomment_listener_join_failed",
+            account_id=listener_account_id,
+            extra={"channel": channel, "status": result.status},
+        )
     await subscribe_posts(listener_account_id, channels, on_post)
     _ensure_sweep_running()
     await log_event(

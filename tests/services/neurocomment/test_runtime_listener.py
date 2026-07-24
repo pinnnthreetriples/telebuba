@@ -17,6 +17,8 @@ from core.db import (
 )
 from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import (
+    ActionResult,
+    JoinChannel,
     NewPostEvent,
 )
 from services.neurocomment import _runtime
@@ -249,6 +251,67 @@ async def test_reconcile_retries_failed_join_on_next_call(
     await _runtime.reconcile_neurocomment_runtime("listener-1")  # cached → skipped
 
     assert exec_spy.joined == [("listener-1", "@a"), ("listener-1", "@a")]
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_reconcile_paces_joins_with_jittered_pause(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Listener joins are spaced by a jittered pause (never one burst = freeze vector).
+
+    Pause runs *between* actual joins only: no pause before the first, none after
+    the last, so N fresh channels produce N-1 pauses.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    await link_channel_to_campaign(campaign.campaign_id, "@c")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    _patch_execute(monkeypatch, _ExecuteSpy())
+    monkeypatch.setattr(_runtime, "_join_jitter_seconds", lambda: 42.0)
+    sleeps: list[float] = []
+
+    async def _record(seconds: float) -> None:
+        sleeps.append(seconds)
+
+    monkeypatch.setattr(_runtime.asyncio, "sleep", _record)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    # 3 fresh joins → 2 inter-join pauses, each the jittered value. (Other 42.0-free
+    # sleeps, e.g. the deletion sweep interval, are unrelated and ignored.)
+    assert [s for s in sleeps if s == 42.0] == [42.0, 42.0]
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_reconcile_stops_join_burst_on_flood(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flood/rate-limit status halts the join loop instead of firing more RPCs.
+
+    Escalating a soft flood-wait into a hard freeze is exactly what got accounts
+    frozen; the remaining channels retry on the next reconcile.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    for ch in ("@a", "@b", "@c"):
+        await link_channel_to_campaign(campaign.campaign_id, ch)
+    _patch_listener(monkeypatch, _ListenerSpy())
+    attempts: list[str] = []
+
+    async def _flood_on_first(account_id: str, action: JoinChannel) -> ActionResult:
+        attempts.append(action.channel)
+        return ActionResult(
+            status="flood_wait", action_type=action.action_type, account_id=account_id
+        )
+
+    monkeypatch.setattr("services.neurocomment._seams.execute", _flood_on_first)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    # Loop broke after the first flood — only one join RPC was fired, not three.
+    assert attempts == ["@a"]
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 

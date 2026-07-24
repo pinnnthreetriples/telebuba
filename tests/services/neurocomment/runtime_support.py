@@ -31,6 +31,9 @@ def isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
     reset_logging_for_tests()
     setup_logging()
+    # Collapse the jittered inter-join pause so multi-channel reconciles don't
+    # actually wait 30-120s per join in tests.
+    monkeypatch.setattr(_runtime, "_join_jitter_seconds", lambda: 0.0)
     _runtime.reset_for_tests()
     _state.reset_for_tests()
     yield
