@@ -14,7 +14,7 @@ export function ListenerEditModal({
   onClose,
   onSave,
 }: {
-  options: { id: string; phone: string }[];
+  options: { id: string; name: string }[];
   selected: string | null;
   onClose: () => void;
   onSave: (id: string) => void;
@@ -81,7 +81,7 @@ export function ListenerEditModal({
             className={TRIGGER}
           >
             <span className="font-medium text-ink">
-              {current?.phone ?? t('neurocomment.listener.choose')}
+              {current?.name ?? t('neurocomment.listener.choose')}
             </span>
             <span className={`tb-ddchev flex shrink-0 text-ink-subtle ${open ? 'open' : ''}`}>
               <svg
@@ -110,7 +110,7 @@ export function ListenerEditModal({
                 }}
                 className="flex cursor-pointer items-center justify-between gap-2 rounded-[7px] px-[11px] py-[9px] text-[13px] transition-colors hover:bg-[#f2f6ff]"
               >
-                <span className="font-medium">{o.phone}</span>
+                <span className="font-medium">{o.name}</span>
                 {o.id === pick ? (
                   <svg
                     width="15"

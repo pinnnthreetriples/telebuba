@@ -2024,6 +2024,10 @@ export type WarmedAccount = {
    */
   last_name?: string | null;
   /**
+   * Avatar Etag
+   */
+  avatar_etag?: string | null;
+  /**
    * Phone Country
    */
   phone_country?: string | null;
@@ -2199,6 +2203,10 @@ export type WarmingAccountState = {
    * Last Name
    */
   last_name?: string | null;
+  /**
+   * Avatar Etag
+   */
+  avatar_etag?: string | null;
   /**
    * Proxy Type
    */

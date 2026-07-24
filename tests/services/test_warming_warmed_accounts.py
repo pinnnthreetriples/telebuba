@@ -202,12 +202,12 @@ async def test_load_board_folds_in_warmed_pool() -> None:
 
 @pytest.mark.asyncio
 async def test_board_card_carries_telegram_name() -> None:
-    """The board card surfaces first_name/last_name so it shows the display name."""
+    """The board card surfaces first_name/last_name + avatar_etag for the display name/photo."""
     from core.db import update_account_from_session_check  # noqa: PLC0415
     from schemas.telegram_session import TelegramSessionCheckResult  # noqa: PLC0415
 
     await create_account(AccountCreate(account_id="named"))
-    await update_account_from_session_check(
+    updated = await update_account_from_session_check(
         TelegramSessionCheckResult(
             account_id="named",
             session_path="named",
@@ -215,25 +215,29 @@ async def test_board_card_carries_telegram_name() -> None:
             is_temporary=False,
             first_name="Alice",
             last_name="Smith",
+            avatar_thumb=b"jpeg-bytes",
         ),
     )
+    assert updated.avatar_etag is not None
 
     board = await load_board()
 
     card = next(c for c in board.idle if c.account_id == "named")
     assert card.first_name == "Alice"
     assert card.last_name == "Smith"
+    # The card carries the avatar etag so it can render /avatar?v={etag}.
+    assert card.avatar_etag == updated.avatar_etag
 
 
 @pytest.mark.asyncio
 async def test_warmed_account_carries_telegram_name() -> None:
-    """list_warmed_accounts propagates the card's first_name/last_name (de-id-mock)."""
+    """list_warmed_accounts propagates the card's name + avatar_etag (de-id-mock)."""
     from core.db import update_account_from_session_check  # noqa: PLC0415
     from schemas.telegram_session import TelegramSessionCheckResult  # noqa: PLC0415
     from services.warming import promote_to_neurocomment  # noqa: PLC0415
 
     await create_account(AccountCreate(account_id="named"))
-    await update_account_from_session_check(
+    updated = await update_account_from_session_check(
         TelegramSessionCheckResult(
             account_id="named",
             session_path="named",
@@ -241,8 +245,10 @@ async def test_warmed_account_carries_telegram_name() -> None:
             is_temporary=False,
             first_name="Alice",
             last_name="Smith",
+            avatar_thumb=b"jpeg-bytes",
         ),
     )
+    assert updated.avatar_etag is not None
     await upsert_warming_state(
         WarmingStateWrite(account_id="named", state="active", started_at=_days_ago(20)),
     )
@@ -253,6 +259,7 @@ async def test_warmed_account_carries_telegram_name() -> None:
     assert len(warmed) == 1
     assert warmed[0].first_name == "Alice"
     assert warmed[0].last_name == "Smith"
+    assert warmed[0].avatar_etag == updated.avatar_etag
 
 
 @pytest.mark.asyncio

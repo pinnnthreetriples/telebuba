@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-16
+last_updated: 2026-07-24
 ---
 
 # Frontend Rules
@@ -11,6 +11,7 @@ FSD order: `app → routes → pages → widgets → features → entities → s
 - No `any` or ignored type failures without a precise upstream justification.
 - All display strings and formatting use react-i18next/`Intl` (`ru`, `en`).
 - Reuse Tailwind tokens and local `shared/ui`; do not duplicate backend policy.
+- Account display identity is per-surface: reuse `entities/account` helpers (`accountDisplayName`, `accountInitials`, `<AccountAvatar>`); any account-bearing payload (e.g. warming cards) must carry `first_name`/`last_name`/`phone`/`avatar_etag`, not just a label.
 - Frontend configuration uses `VITE_*`.
 - Vitest logic coverage stays at least 80%; Steiger, ESLint, Prettier, TypeScript, tests and build must pass.
 

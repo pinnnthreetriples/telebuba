@@ -3,7 +3,7 @@ import type { TFunction } from 'i18next';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { accountDisplayName } from '@/entities/account';
+import { AccountAvatar, accountDisplayName } from '@/entities/account';
 import { logsQueryOptions } from '@/entities/log';
 import type { LogEntry, WarmingAccountState } from '@/shared/api';
 import { eventLabel, formatLocalTime, type FeedbackResult } from '@/shared/lib';
@@ -44,10 +44,6 @@ const WARM_STATUS: Record<WarmingState, { color: string; bg: string }> = {
   quarantine: { color: '#9a7b22', bg: '#fbf3e2' },
   error: { color: '#c0473f', bg: '#fbecec' },
 };
-
-function mono(id: string): string {
-  return id.replace(/\D/g, '').slice(-2) || id.slice(0, 2).toUpperCase();
-}
 
 function extraStr(extra: LogEntry['extra'], key: string): string | undefined {
   const value = extra?.[key];
@@ -196,9 +192,11 @@ function WarmingCard({
       {/* header */}
       <div className="mb-4 flex items-center justify-between">
         <div className="flex items-center gap-[9px]">
-          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-[#e8f0ff] text-[11px] font-semibold text-[#0066ff]">
-            {mono(primaryId)}
-          </div>
+          <AccountAvatar
+            account={account}
+            className="h-7 w-7 shrink-0 rounded-full"
+            fallbackClassName="text-[11px] font-semibold bg-[#e8f0ff] text-[#0066ff]"
+          />
           <div>
             <div className="text-[13px] font-semibold">{primaryId}</div>
             <div className="mt-[2px] flex items-center gap-[6px]">
