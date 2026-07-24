@@ -8,6 +8,7 @@ import pytest
 
 from core.config import settings
 from core.db import (
+    count_account_joins_since,
     create_campaign,
     get_listener_account_id,
     get_listener_running,
@@ -351,6 +352,40 @@ async def test_reconcile_stops_joining_once_listener_at_daily_cap(
     assert len(exec_spy.joined) == 1
     # The listener still subscribes to every watched channel after the break.
     assert set(spy.subscribed[0][1]) == {"@a", "@b", "@c"}
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_reconcile_caches_already_participant_without_recording_join(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An already-participant channel is cached (joined) but must not consume cap budget.
+
+    On a listener restart the whole watch set re-joins as already-participant; recording
+    those no-ops would pin the count near the cap and starve genuinely-new joins.
+    """
+    monkeypatch.setattr(settings.neurocomment, "max_joins_per_account_per_day", 20)
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    spy = _ListenerSpy()
+    _patch_listener(monkeypatch, spy)
+
+    async def _already(account_id: str, action: JoinChannel) -> ActionResult:
+        return ActionResult(
+            status="already_participant",
+            action_type=action.action_type,
+            account_id=account_id,
+        )
+
+    monkeypatch.setattr("services.neurocomment._seams.execute", _already)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    # It IS joined → cached so we stop re-joining, and the listener subscribes.
+    assert ("listener-1", "@a") in _runtime._JOINED_CHANNELS
+    assert spy.subscribed[0][1] == ["@a"]
+    # But the no-op re-join is not recorded against the rolling-24h cap.
+    assert await count_account_joins_since("listener-1", "1970-01-01T00:00:00+00:00") == 0
     await _runtime.shutdown_neurocomment_runtime("listener-1")
 
 

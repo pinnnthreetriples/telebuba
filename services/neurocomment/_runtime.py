@@ -154,9 +154,14 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
             await asyncio.sleep(_join_jitter_seconds())
         first_join = False
         result = await _seams.execute(listener_account_id, JoinChannel(channel=channel))
-        if result.status == "ok":
+        if result.status in {"ok", "already_participant"}:
+            # Either way the account IS in the channel → cache it so we stop
+            # re-joining. Only a real join counts against the rolling-24h cap;
+            # an already-participant no-op (e.g. every channel on a restart) must
+            # not, else the count pins near the cap and starves genuine joins.
             _JOINED_CHANNELS.add((listener_account_id, channel))
-            await record_join(listener_account_id)
+            if result.status == "ok":
+                await record_join(listener_account_id)
             continue
         if result.status in _COOLDOWN_STATUSES:
             # Telegram is rate-limiting this account: stop the join burst now

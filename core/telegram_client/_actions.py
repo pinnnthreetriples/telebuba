@@ -115,7 +115,11 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
                 account_id=account_id,
                 extra={"channel": getattr(action, "channel", None)},
             )
-            return ActionResult(status="ok", action_type=action.action_type, account_id=account_id)
+            return ActionResult(
+                status="already_participant",
+                action_type=action.action_type,
+                account_id=account_id,
+            )
         return await _generic_error(account_id, action, exc)
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
         return await _unavailable_result(account_id, action, exc)

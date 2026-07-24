@@ -126,6 +126,35 @@ async def test_failed_join_is_not_recorded(monkeypatch: pytest.MonkeyPatch) -> N
 
 
 @pytest.mark.asyncio
+async def test_already_participant_join_is_ready_but_not_recorded(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An already-participant no-op re-join marks the pair ready without consuming cap.
+
+    On a re-onboard the account is already in the group, so the join RPC returns
+    ``already_participant``. That still yields a comment-able pair, but recording it
+    would inflate the rolling-24h cap with joins that never actually happened.
+    """
+    monkeypatch.setattr(settings.neurocomment, "max_joins_per_account_per_day", 20)
+    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    join = _JoinStub()
+    join.set("@chan", status="already_participant")
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", join.execute)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
+
+    result = await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    assert [o.state for o in result.outcomes] == ["ready"]
+    assert await count_account_joins_since("acc-1", _EPOCH) == 0
+
+
+@pytest.mark.asyncio
 async def test_operator_single_pair_respects_join_cap(monkeypatch: pytest.MonkeyPatch) -> None:
     """onboard_account_channel (the operator / retry_pair path) gates on the cap too."""
     monkeypatch.setattr(settings.neurocomment, "max_joins_per_account_per_day", 1)

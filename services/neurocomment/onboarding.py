@@ -139,8 +139,9 @@ async def _join_and_classify(
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
     if result.status == "ok":
         # A real join RPC landed → count it against the account's rolling-24h cap.
-        # (Already-participant no-ops also return ok and aren't cheaply distinguishable
-        # here; recording them is the conservative, ban-safe choice.)
+        # ``already_participant`` is a no-op re-join (still a success below) and must
+        # NOT be recorded, else a re-onboard would inflate the cap with joins that
+        # never happened.
         await record_join(account_id)
     return await _classify_join(
         account_id, channel, result, group_id, solver_enabled=solver_enabled
@@ -189,9 +190,10 @@ async def _classify_join(
     solver_enabled: bool,
 ) -> AccountChannelOnboarding:
     """Map a join ``ActionResult`` to a state + persisted readiness row."""
-    if result.status == "ok":
-        # Joined → run the proactive challenge solver before declaring the pair
-        # comment-able (Ф2 #145), unless the solver is disabled for this campaign.
+    if result.status in {"ok", "already_participant"}:
+        # Joined (or already a member) → run the proactive challenge solver before
+        # declaring the pair comment-able (Ф2 #145), unless the solver is disabled
+        # for this campaign.
         return await _solve_and_record(account_id, channel, group_id, solver_enabled=solver_enabled)
     if result.status in _RETRY_STATUSES:
         # Non-terminal: do not write ready; surface the wait so the account is
