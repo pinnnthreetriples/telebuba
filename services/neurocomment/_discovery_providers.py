@@ -11,23 +11,27 @@ result, and this module owns the protocol, the adapters and the account choice.
 
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_warming_state, load_warming_settings
+from core.db import fetch_warming_state, list_warming_account_ids, load_warming_settings
 from core.repositories.neurocomment import get_listener_account_id, list_campaign_accounts
 from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import GetSimilarChannels, SearchChannels
 from schemas.telegram_actions_discovery import TelegramChannelMatches
 from schemas.telemetr import TelemetrSearchRequest
 from services.neurocomment import _seams
-from services.neurocomment._state import in_cooldown
+from services.neurocomment._state import in_cooldown, set_cooldown
 from services.trust import flood_active
 
 if TYPE_CHECKING:
     from schemas.neurocomment_discovery import DiscoverySearchRequest, DiscoverySource
+
+# The gateway renders a flood wait as ``FloodWait(<seconds>s)`` (core.telegram_client).
+_FLOOD_SECONDS = re.compile(r"FloodWait\((\d+)s\)")
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,6 +54,11 @@ class SourceOutcome:
 
     candidates: tuple[RawCandidate, ...] = ()
     error: str | None = None
+    # Did this source actually return a result? False for a source that was skipped
+    # (no key configured) and for one that failed. It separates "nobody answered" from
+    # "the answers came back empty", which is what decides whether an empty merge may
+    # replace the stored candidate set.
+    answered: bool = True
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +85,13 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     if account_id is None:
         return "no_account"
 
+    # Warming assumes it owns its accounts' traffic — that assumption is the whole
+    # basis of its freeze avoidance. Every other listener consumer enforces the same
+    # mutual exclusion; a paused listener can legally be warming, so without this a
+    # multi-minute read stream would interleave with warming's own paced traffic.
+    if account_id in await list_warming_account_ids():
+        return "account_cooling"
+
     now = datetime.now(UTC)
     # Two independent health signals: the engine's in-memory cooldown (flood /
     # peer-flood / slow-mode) and warming's persisted flood deadline. Searching on a
@@ -86,6 +102,21 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     if state is not None and flood_active(state.flood_wait_until, now):
         return "account_cooling"
     return SearchAccount(account_id=account_id)
+
+
+async def record_flood(account_id: str, reason: str | None) -> bool:
+    """Register a discovery-caused FloodWait as a cooldown; says whether it was one.
+
+    Discovery reads both fleet flood signals but wrote neither, so its own limit was
+    invisible to everyone else: the operator's immediate retry passed the health gate,
+    and the reconcile that follows an adopt would run peer resolution and joins on a
+    flooded account — leaving the engine deaf on the channels just added.
+    """
+    match = _FLOOD_SECONDS.search(reason or "")
+    if match is None:
+        return False
+    await set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=int(match.group(1))))
+    return True
 
 
 def _matches_to_candidates(
@@ -113,7 +144,7 @@ async def search_native(account_id: str, keyword: str) -> SourceOutcome:
             SearchChannels(query=keyword),
         )
     except TelegramReadError as exc:
-        return SourceOutcome(error=exc.reason)
+        return SourceOutcome(error=exc.reason, answered=False)
     return SourceOutcome(candidates=_matches_to_candidates(result, "telegram_search"))
 
 
@@ -122,7 +153,7 @@ async def search_similar(account_id: str, seed: str | None) -> SourceOutcome:
     try:
         result = await _seams.execute_read(account_id, GetSimilarChannels(seed=seed))
     except TelegramReadError as exc:
-        return SourceOutcome(error=exc.reason)
+        return SourceOutcome(error=exc.reason, answered=False)
     return SourceOutcome(candidates=_matches_to_candidates(result, "telegram_similar"))
 
 
@@ -145,9 +176,9 @@ async def search_telemetr(keyword: str, request: DiscoverySearchRequest) -> Sour
         ),
     )
     if result.status == "not_configured":
-        return SourceOutcome()
+        return SourceOutcome(answered=False)
     if result.status != "ok":
-        return SourceOutcome(error=f"telemetr_{result.status}")
+        return SourceOutcome(error=f"telemetr_{result.status}", answered=False)
     return SourceOutcome(
         candidates=tuple(
             RawCandidate(

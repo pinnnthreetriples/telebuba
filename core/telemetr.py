@@ -20,7 +20,14 @@ from typing import cast
 import httpx
 
 from core.config import settings
-from schemas.telemetr import TelemetrChannel, TelemetrSearchRequest, TelemetrSearchResult
+from schemas.telemetr import (
+    TELEMETR_MAX_LIMIT,
+    TELEMETR_MAX_MEMBERS,
+    TELEMETR_MAX_TITLE_LENGTH,
+    TelemetrChannel,
+    TelemetrSearchRequest,
+    TelemetrSearchResult,
+)
 
 _HTTP_OK = 200
 _HTTP_TOO_MANY_REQUESTS = 429
@@ -69,6 +76,21 @@ def _params(request: TelemetrSearchRequest) -> dict[str, str | int]:
     return params
 
 
+def _members_count(value: object) -> int | None:
+    """Return a persistable subscriber count, or ``None`` when the row's is unusable.
+
+    ``isinstance(True, int)`` holds in Python, so a JSON ``true`` would otherwise
+    become one subscriber and quietly fail a ``members_min`` filter. An out-of-range
+    count is unknown rather than fatal: the channel is still a usable candidate, and
+    the alternative is losing the whole run's candidate write.
+    """
+    if not isinstance(value, int) or isinstance(value, bool):
+        return None
+    if not 0 <= value <= TELEMETR_MAX_MEMBERS:
+        return None
+    return value
+
+
 def _parse_channel(entry: object) -> TelemetrChannel | None:
     if not isinstance(entry, dict):
         return None
@@ -85,11 +107,13 @@ def _parse_channel(entry: object) -> TelemetrChannel | None:
     if not handle:
         return None
     title = row.get("title")
-    members = row.get("members_count")
+    # Truncate instead of dropping the row or raising: an over-long title is a
+    # cosmetic defect, but an unbounded one is a board payload we re-serialise on
+    # every SPA poll.
     return TelemetrChannel(
         username=handle,
-        title=title.strip() if isinstance(title, str) else "",
-        members_count=int(members) if isinstance(members, int) else None,
+        title=title.strip()[:TELEMETR_MAX_TITLE_LENGTH] if isinstance(title, str) else "",
+        members_count=_members_count(row.get("members_count")),
     )
 
 
@@ -101,7 +125,9 @@ def _extract_items(body: object) -> list[TelemetrChannel]:
         rows = cast("dict[str, object]", body).get("items")
     if not isinstance(rows, list):
         return []
-    parsed = (_parse_channel(entry) for entry in rows)
+    # ``limit`` on the wire is a request, not a promise: cap what we parse so an
+    # oversized body cannot be held in memory once per keyword.
+    parsed = (_parse_channel(entry) for entry in rows[:TELEMETR_MAX_LIMIT])
     return [channel for channel in parsed if channel is not None]
 
 
@@ -150,7 +176,11 @@ async def search_catalog(request: TelemetrSearchRequest) -> TelemetrSearchResult
                 headers={"x-api-key": request.api_key},
                 params=_params(request),
             )
-        except httpx.HTTPError as exc:
+        # Both siblings escape ``HTTPError``: httpx encodes headers while building the
+        # request, so an operator key carrying a non-breaking space or a Cyrillic
+        # character raises ``UnicodeEncodeError``, and ``InvalidURL`` (a malformed
+        # ``TELEMETR__BASE_URL``) is not an ``HTTPError`` subclass.
+        except (httpx.HTTPError, httpx.InvalidURL, UnicodeError) as exc:
             result = TelemetrSearchResult(status="error", error=f"{type(exc).__name__}: {exc}")
             transient = True
         else:

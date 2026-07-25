@@ -1008,7 +1008,8 @@
           "pending": "checking",
           "comments_on": "Comments enabled",
           "comments_off": "Comments disabled",
-          "unknown": "could not check"
+          "unknown": "could not check",
+          "notChecked": "not checked"
         },
         "source": {
           "telegram_search": "Telegram search",
@@ -1023,7 +1024,9 @@
         },
         "add": "Add selected ({{count}})",
         "added": "Added: {{count}}",
-        "addedNone": "Nothing added: those channels are already taken"
+        "addedNone": "Nothing added: those channels are already taken",
+        "addedRefused": "Not added: {{count}} — those channels are already taken",
+        "addFailed": "Couldn't add the channels. Some may have been added — check the list and try again."
       }
     },
     "history": {

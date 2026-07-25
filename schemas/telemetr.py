@@ -21,6 +21,13 @@ TelemetrStatus = Literal["ok", "error", "rate_limited", "not_configured"]
 
 # Telemetr.io caps ``limit`` on /catalog/search at 100.
 TELEMETR_MAX_LIMIT = 100
+# Telegram's own channel-title ceiling. Bounding it here stops a third party's
+# over-long title from riding through persistence into every SPA board poll.
+TELEMETR_MAX_TITLE_LENGTH = 128
+# A count above this cannot be persisted (SQLite rejects an out-of-range integer),
+# and the write happens after the whole run's candidates are merged — so one absurd
+# row would cost every other candidate, native hits included.
+TELEMETR_MAX_MEMBERS = 2**31 - 1
 
 
 class TelemetrSearchRequest(BaseModel):
@@ -37,8 +44,8 @@ class TelemetrChannel(BaseModel):
     """One catalogue row, narrowed to the fields discovery actually uses."""
 
     username: str = Field(min_length=1)
-    title: str = ""
-    members_count: int | None = None
+    title: str = Field(default="", max_length=TELEMETR_MAX_TITLE_LENGTH)
+    members_count: int | None = Field(default=None, ge=0, le=TELEMETR_MAX_MEMBERS)
 
 
 class TelemetrSearchResult(BaseModel):

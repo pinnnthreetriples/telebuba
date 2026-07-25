@@ -2,17 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
+
 import pytest
 
 from core.config import settings
-from core.db import create_account, create_campaign
+from core.db import create_account, create_campaign, upsert_warming_state
 from core.repositories.neurocomment import list_discovery_candidates
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 from schemas.neurocomment_discovery import DiscoverySearchRequest
 from schemas.telemetr import TelemetrSearchResult
+from schemas.warming import WarmingStateWrite
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment._discovery_search import run_search
+from services.neurocomment._state import in_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
@@ -45,7 +49,7 @@ async def test_native_search_runs_once_per_keyword(monkeypatch: pytest.MonkeyPat
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, error = await run_search(
+    found, error, _ = await run_search(
         campaign_id,
         LISTENER_ID,
         _request(keywords=["crypto", "trading"]),
@@ -68,7 +72,7 @@ async def test_seed_channel_adds_a_similar_channels_pass(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, _ = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
+    found, _, _ = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
 
     assert found == 2
     assert [action.seed for action in reader.similar_actions()] == ["@durov"]
@@ -144,7 +148,7 @@ async def test_missing_telemetr_key_skips_the_source_without_an_error(
     monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
-    found, error = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    found, error, _ = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
 
     assert error is None
     assert found == 1
@@ -159,7 +163,7 @@ async def test_telemetr_rate_limit_keeps_native_results_and_reports_the_reason(
     monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
-    found, error = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    found, error, _ = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
 
     assert found == 1
     assert error == "telemetr_rate_limited"
@@ -176,10 +180,104 @@ async def test_native_read_failure_does_not_abort_the_run(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, error = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="seed"))
+    found, error, _ = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="seed"))
 
     assert found == 1
     assert error == "RPC: ChannelPrivateError"
+
+
+@pytest.mark.asyncio
+async def test_a_flood_wait_stops_the_keyword_sweep(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Every further read lands inside the live window, and Telegram escalates repeats."""
+    reader = ReadRecorder(search=read_error("FloodWait(1800s)"), similar=matches(("x", "X", None)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _new_campaign()
+
+    await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(keywords=["alpha", "bravo", "charlie"], seed_channel="@durov"),
+    )
+
+    # One attempt, then stop — not one per keyword, and the seed pass is skipped too.
+    assert len(reader.search_actions()) == 1
+    assert reader.actions_of("get_similar_channels") == []
+
+
+@pytest.mark.asyncio
+async def test_a_flood_wait_puts_the_account_on_cooldown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Discovery read both fleet flood signals but wrote neither, so its own was invisible."""
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=read_error("FloodWait(600s)")))
+    campaign_id = await _new_campaign()
+
+    await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert in_cooldown(LISTENER_ID, datetime.now(UTC)) is True
+
+
+@pytest.mark.asyncio
+async def test_a_warming_account_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Warming's freeze avoidance assumes it owns its accounts' traffic."""
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    await seed_listener()
+    campaign_id = await _new_campaign()
+    await upsert_warming_state(WarmingStateWrite(account_id=LISTENER_ID, state="active"))
+
+    refused = await start_run(campaign_id, _request())
+
+    assert refused.status == "account_cooling"
+
+
+@pytest.mark.asyncio
+async def test_the_similar_pass_outranks_the_catalogue(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Priority, not arrival order: the similar pass runs last but still wins the tie."""
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=matches(), similar=matches(("LookAlike", "Native", None))),
+    )
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(telemetr_ok(("lookalike", "Catalogue", 900))),
+    )
+    campaign_id = await _new_campaign()
+
+    await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(use_telemetr=True, seed_channel="@durov"),
+    )
+
+    rows = (await list_discovery_candidates(campaign_id)).rows
+    # Telegram's spelling and source label, with the count borrowed from the catalogue.
+    assert [row.channel for row in rows] == ["LookAlike"]
+    assert rows[0].source == "telegram_similar"
+    assert rows[0].subscribers == 900
+
+
+@pytest.mark.asyncio
+async def test_member_bounds_are_inclusive(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A channel sitting exactly on the operator's bound belongs in the result."""
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=matches(("atmin", "Min", 1_000), ("atmax", "Max", 100_000))),
+    )
+    campaign_id = await _new_campaign()
+
+    await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(members_min=1_000, members_max=100_000),
+    )
+
+    rows = (await list_discovery_candidates(campaign_id)).rows
+    assert sorted(row.channel for row in rows) == ["atmax", "atmin"]
 
 
 @pytest.mark.asyncio
@@ -272,7 +370,7 @@ async def test_candidate_cap_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, _ = await run_search(campaign_id, LISTENER_ID, _request())
+    found, _, _ = await run_search(campaign_id, LISTENER_ID, _request())
 
     assert found == 2
 
@@ -420,6 +518,9 @@ async def test_start_discovery_honours_the_daily_search_cap(
     second_campaign = await _new_campaign()
 
     first = await start_run(first_campaign, _request())
+    # Let it finish first: both campaigns resolve to the same listener, so an
+    # overlapping start is refused for holding the account before the cap is consulted.
+    await drain_discovery(first_campaign)
     second = await start_run(second_campaign, _request())
 
     assert first.status == "started"

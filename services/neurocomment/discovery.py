@@ -12,6 +12,7 @@ cache makes the retry nearly free.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from core import db
@@ -61,17 +62,17 @@ async def start_discovery(
     """
     if await db.fetch_campaign(campaign_id) is None:
         return None
-    # Claim the slot and the search before resolving the account: that resolution
-    # awaits, and a check made before it would still be true for a second start.
-    refusal = _discovery_state.try_reserve(campaign_id)
-    if refusal is not None:
-        return DiscoverySearchOutcome(status=refusal)
-
     account = await resolve_search_account(campaign_id)
     if isinstance(account, str):
-        # Refused before any RPC, so give the search back to the allowance.
-        _discovery_state.release(campaign_id)
         return DiscoverySearchOutcome(status=account)  # ty: ignore[invalid-argument-type]
+
+    # Resolution first, then one synchronous claim: everything from here to ``spawn``
+    # is await-free, so a second start cannot straddle it and no failure can strand a
+    # claim. The claim covers the account too, not just the campaign — every campaign
+    # resolves to the same listener.
+    refusal = _discovery_state.try_reserve(campaign_id, account.account_id)
+    if refusal is not None:
+        return DiscoverySearchOutcome(status=refusal)
 
     _discovery_state.set_phase(campaign_id, "searching")
     _discovery_state.set_last_error(campaign_id, None)
@@ -96,12 +97,18 @@ async def _run(
 ) -> None:
     """The background run: search, then qualify. Never lets an error escape."""
     try:
-        found, search_error = await run_search(campaign_id, account.account_id, request)
+        found, search_error, replaced = await run_search(
+            campaign_id,
+            account.account_id,
+            request,
+        )
         _discovery_state.set_last_error(campaign_id, search_error)
         qualify_error = None
-        if not found and search_error is not None:
-            # Nothing found AND a reason why: the search itself failed rather than
-            # coming up empty, so this is not a run the operator should read as done.
+        if not replaced:
+            # No source answered, so the stored candidates are still the previous run's
+            # and this is not a run the operator should read as done. Keyed off the
+            # write, not off ``(found, error)``: a source that answered with zero hits,
+            # or a filter that removed every hit, is an empty result — not a failure.
             _discovery_state.set_phase(campaign_id, "failed")
         else:
             _discovery_state.set_phase(campaign_id, "qualifying")
@@ -224,10 +231,16 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
                 continue
             linked += 1
             outcomes.append(ChannelLinkOutcome(status="linked", channel=channel))
-    finally:
-        # In a finally so that a channel failing mid-loop still leaves the listener
-        # subscribed to the ones that did link — otherwise they are ignored until the
-        # next restart. Once for the batch, never per channel.
+    except Exception:
+        # Reconcile what did link before re-raising, or a running listener ignores those
+        # channels until the next restart. Suppressed so it cannot displace the original
+        # error, and deliberately not a ``finally``: under cancellation this reconcile
+        # would only delay the cancel, and a second cancel would tear it in half.
+        if linked:
+            with contextlib.suppress(Exception):
+                await _runtime.reconcile_if_running()
+        raise
+    else:
         if linked:
             await _runtime.reconcile_if_running()
     await log_event(

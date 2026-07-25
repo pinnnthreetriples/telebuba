@@ -10,10 +10,11 @@ const CHECKBOX = 'h-[14px] w-[14px] shrink-0 accent-primary disabled:opacity-40'
 
 function CommentsCell({ candidate, settled }: { candidate: DiscoveryCandidate; settled: boolean }) {
   const { t } = useTranslation();
-  // Polling stops at a terminal phase, so a row still 'pending' by then will never
-  // resolve — it reads as unchecked, not as work in progress.
+  // 'pending' means never probed, which the backend keeps distinct from 'unknown'
+  // (probed, unanswerable). Once the run has stopped nothing will probe it, so it has
+  // to read as "not checked yet" — a re-run resolves those, unlike 'unknown'.
   const state = candidate.qualification ?? 'pending';
-  const qualification = settled && state === 'pending' ? 'unknown' : state;
+  const qualification = settled && state === 'pending' ? 'notChecked' : state;
   const label = t(`neurocomment.modal.discovery.comments.${qualification}`);
   if (qualification === 'comments_on') {
     return (
@@ -30,7 +31,8 @@ function CommentsCell({ candidate, settled }: { candidate: DiscoveryCandidate; s
     );
   }
   // pending: a pulsing dot reads as "still working", which is what the qualification
-  // pass is doing while the operator watches. 'unknown' is final, so it stays still.
+  // pass is doing while the operator watches. 'unknown' and 'notChecked' are final,
+  // so they stay still.
   return (
     <span className="inline-flex items-center gap-[5px] text-[11.5px] text-ink-subtle">
       <span
@@ -68,7 +70,13 @@ export function DiscoveryResults({
   const someChecked = checkedCount > 0 && !allChecked;
   const phase = board?.progress.phase ?? 'idle';
   const failed = phase === 'failed';
-  const settled = phase === 'done' || failed;
+  // The predicate that stops the poll, not the phase: a frame with running:false is
+  // the last one whatever phase it claims. A restarted backend forgets the in-memory
+  // phase but still serves the stored rows as 'idle', and those must not pulse on.
+  const running = board?.progress.running === true;
+  const settled = !running;
+  const qualified = board?.progress.qualified ?? 0;
+  const total = board?.progress.total ?? 0;
 
   const columns: ColumnDef<DiscoveryCandidate>[] = [
     {
@@ -167,9 +175,11 @@ export function DiscoveryResults({
 
   // Candidates are replaced only after the whole search stage, so any rows still on
   // screen while it runs belong to the PREVIOUS run — never show them as results.
+  // role=status on every transient state: a search runs 30s+, so a screen-reader
+  // operator has to be told when it finishes or fails without polling the table.
   if (loading) {
     return (
-      <p className="py-[26px] text-center text-[12.5px] text-ink-subtle">
+      <p role="status" className="py-[26px] text-center text-[12.5px] text-ink-subtle">
         {t('neurocomment.modal.discovery.results.searching')}
       </p>
     );
@@ -177,7 +187,7 @@ export function DiscoveryResults({
 
   if (errored) {
     return (
-      <p className="py-[26px] text-center text-[12.5px] text-danger">
+      <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.error')}
       </p>
     );
@@ -185,7 +195,7 @@ export function DiscoveryResults({
 
   if (failed && candidates.length === 0) {
     return (
-      <p className="py-[26px] text-center text-[12.5px] text-danger">
+      <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
           reason: board?.progress.last_error ?? '',
         })}
@@ -205,16 +215,15 @@ export function DiscoveryResults({
     <div className="flex flex-col gap-[9px]">
       <div className="flex items-center justify-between gap-2 text-[11.5px] text-ink-subtle">
         <span>{t('neurocomment.modal.discovery.results.count', { count: candidates.length })}</span>
-        {phase === 'qualifying' ? (
-          <span className="tb-pulse">
-            {t('neurocomment.modal.discovery.results.qualifying', {
-              done: board?.progress.qualified ?? 0,
-              total: board?.progress.total ?? 0,
-            })}
+        {/* Also the only trace of how far an aborted run got ("40/300"), so it has to
+            outlive the qualifying phase. */}
+        {phase === 'qualifying' || qualified < total ? (
+          <span role="status" className={running ? 'tb-pulse' : undefined}>
+            {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
           </span>
         ) : null}
         {board?.progress.last_error != null && phase !== 'qualifying' ? (
-          <span className="text-danger">
+          <span role="status" className="text-danger">
             {/* An aborted run keeps whatever it collected, so the reason has to ride
                 along with the rows instead of replacing them. */}
             {t(`neurocomment.modal.discovery.results.${failed ? 'failed' : 'degraded'}`, {

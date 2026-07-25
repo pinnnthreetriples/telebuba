@@ -18,6 +18,7 @@ from schemas.neurocomment_discovery import (
 )
 from services.neurocomment import _seams
 from services.neurocomment._discovery_providers import (
+    record_flood,
     search_native,
     search_similar,
     search_telemetr,
@@ -116,33 +117,43 @@ async def run_search(
     campaign_id: str,
     account_id: str,
     request: DiscoverySearchRequest,
-) -> tuple[int, str | None]:
+) -> tuple[int, str | None, bool]:
     """Collect candidates from every enabled source and persist the merged set.
 
-    Returns the candidate count plus the first degraded-source reason (if any). A
-    source that fails is recorded, never raised: the other source's results still
-    have value to the operator.
+    Returns the candidate count, the first degraded-source reason (if any), and
+    whether the stored set was actually replaced. A source that fails is recorded,
+    never raised: the other source's results still have value to the operator.
     """
     outcomes: list[SourceOutcome] = []
     keywords = [keyword.strip() for keyword in request.keywords]
 
+    flooded = False
     for index, keyword in enumerate(keywords):
         if index:
             await _pace()
-        outcomes.append(await search_native(account_id, keyword))
+        native = await search_native(account_id, keyword)
+        outcomes.append(native)
+        if await record_flood(account_id, native.error):
+            # Every remaining read would land inside the live window, and Telegram
+            # escalates the wait on repeat violations. Same rule the qualification
+            # loop follows; recording it also keeps the retry off this account.
+            flooded = True
+            break
         if request.use_telemetr:
             # HTTP to a third party costs no Telegram flood budget, so it needs no pause.
             outcomes.append(await search_telemetr(keyword, request))
 
-    if request.seed_channel:
+    if request.seed_channel and not flooded:
         await _pace()
-        outcomes.append(await search_similar(account_id, request.seed_channel))
+        similar = await search_similar(account_id, request.seed_channel)
+        outcomes.append(similar)
+        await record_flood(account_id, similar.error)
 
     rows, error = _merge(outcomes, request)
-    if not rows and error is not None:
-        # Every source failed. The replace is a delete-then-insert, so writing an
-        # empty set here would destroy the previous run's already-qualified
-        # candidates over one transient timeout. Keep them and report the failure.
-        return 0, error
+    if not any(outcome.answered for outcome in outcomes):
+        # Not one source returned a result, so an empty merge is not a finding. The
+        # write is delete-then-insert, and writing nothing here would destroy the
+        # previous run's already-qualified candidates over one transient timeout.
+        return 0, error, False
     await replace_discovery_candidates(campaign_id, rows)
-    return len(rows), error
+    return len(rows), error, True

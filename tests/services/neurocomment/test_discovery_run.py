@@ -8,6 +8,7 @@ stage files, because both are about the run as a whole.
 from __future__ import annotations
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 import pytest
 
@@ -17,11 +18,13 @@ from core.repositories.neurocomment import (
     replace_discovery_candidates,
 )
 from schemas.neurocomment_discovery import DiscoveryCandidateRow
+from schemas.telemetr import TelemetrSearchResult
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment import discovery as discovery_module
 from services.neurocomment.discovery import start_discovery
 from tests.services.neurocomment.discovery_support import (
     ReadRecorder,
+    TelemetrRecorder,
     drain_discovery,
     matches,
     new_campaign,
@@ -31,6 +34,8 @@ from tests.services.neurocomment.discovery_support import (
 )
 
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
+
+_CONCURRENT_STARTS = 2
 
 
 async def _seed_candidates(campaign_id: str, *channels: str) -> None:
@@ -62,10 +67,29 @@ async def test_two_concurrent_starts_produce_exactly_one_run(
     await seed_listener()
     campaign_id = await new_campaign()
 
-    first, second = await asyncio.gather(
+    gate = asyncio.Event()
+    both_arrived = asyncio.Event()
+    entered: list[str] = []
+    resolve = discovery_module.resolve_search_account
+
+    async def _gated(target: str) -> object:
+        # Park BOTH starts inside the window on purpose. Left to the event loop, the
+        # two coroutines happen to serialize and the test passes even with no claim at
+        # all — which is exactly how the first version of this test proved nothing.
+        entered.append(target)
+        if len(entered) == _CONCURRENT_STARTS:
+            both_arrived.set()
+        await gate.wait()
+        return await resolve(target)
+
+    monkeypatch.setattr(discovery_module, "resolve_search_account", _gated)
+    both = asyncio.gather(
         start_discovery(campaign_id, search_request()),
         start_discovery(campaign_id, search_request()),
     )
+    await both_arrived.wait()
+    gate.set()
+    first, second = await both
     await drain_discovery(campaign_id)
 
     assert first is not None
@@ -76,31 +100,40 @@ async def test_two_concurrent_starts_produce_exactly_one_run(
 
 
 @pytest.mark.asyncio
-async def test_concurrent_starts_cannot_overrun_the_daily_allowance(
+async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The cap is fleet-wide, so two campaigns racing at 0/1 must not both pass."""
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_searches_per_day", 1)
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    """Per-campaign single-flight alone does not deliver the one-paced-stream rule.
+
+    Every campaign resolves to the same fleet listener, so N campaigns would otherwise
+    mean N simultaneous RPC streams on one account — the burst the pacing exists to
+    avoid, and the allowance bounds total searches, not concurrency.
+    """
+    running = asyncio.Event()
+
+    async def _hang(*_args: object, **_kwargs: object) -> tuple[int, str | None, bool]:
+        running.set()
+        await asyncio.Event().wait()
+        return 0, None, True
+
+    monkeypatch.setattr(discovery_module, "run_search", _hang)
     await seed_listener()
     first_campaign = await new_campaign()
     second_campaign = await new_campaign()
 
-    first, second = await asyncio.gather(
-        start_discovery(first_campaign, search_request()),
-        start_discovery(second_campaign, search_request()),
-    )
-    await drain_discovery(first_campaign)
-    await drain_discovery(second_campaign)
+    first = await start_discovery(first_campaign, search_request())
+    await running.wait()
+    second = await start_discovery(second_campaign, search_request())
 
     assert first is not None
     assert second is not None
-    assert {first.status, second.status} == {"started", "daily_limit_reached"}
+    assert first.status == "started"
+    assert second.status == "already_running"
 
 
 @pytest.mark.asyncio
-async def test_a_refused_start_releases_the_slot_it_claimed() -> None:
-    """The claim is taken before the account check, so a refusal must give it back."""
+async def test_a_refused_start_spends_nothing() -> None:
+    """The claim comes after account resolution, so a refusal never has one to give back."""
     campaign_id = await new_campaign()
 
     refused = await start_discovery(campaign_id, search_request())
@@ -194,6 +227,114 @@ async def test_a_partial_search_failure_still_qualifies_what_it_found(
     assert await _channels_of(campaign_id) == ["alpha"]
     assert _discovery_state.phase_of(campaign_id) == "done"
     assert _discovery_state.last_error(campaign_id) == "RPC: Timeout"
+
+
+@pytest.mark.asyncio
+async def test_a_degraded_source_with_no_native_hits_still_replaces_the_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Nobody-answered is the discriminator, not no-rows-plus-a-reason.
+
+    Native answering honestly with zero hits while the catalogue is rate-limited is an
+    empty *result*: serving the previous run's rows here would present channels from a
+    different keyword set as this run's findings, ticked and adoptable.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(TelemetrSearchResult(status="rate_limited", error="HTTP 429")),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+    await _seed_candidates(campaign_id, "from_last_run")
+
+    await start_discovery(campaign_id, search_request(use_telemetr=True))
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == []
+    assert _discovery_state.phase_of(campaign_id) == "done"
+    # The degraded source is still reported, just not as a failed run.
+    assert _discovery_state.last_error(campaign_id) == "telemetr_rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_a_filter_that_removed_every_hit_replaces_the_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The source answered; the operator's own filter is what emptied the result."""
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("small", "S", 42))))
+    await seed_listener()
+    campaign_id = await new_campaign()
+    await _seed_candidates(campaign_id, "from_last_run")
+
+    await start_discovery(campaign_id, search_request(members_min=10_000))
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == []
+    assert _discovery_state.phase_of(campaign_id) == "done"
+
+
+@pytest.mark.asyncio
+async def test_a_qualification_failure_reports_failed_not_done(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A half-probed set must not read as a finished clean run."""
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(
+            search=matches(("alpha", "A", None)),
+            linked=read_error("RPC: AuthKeyUnregisteredError"),
+        ),
+    )
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 1)
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request())
+    await drain_discovery(campaign_id)
+
+    assert _discovery_state.phase_of(campaign_id) == "failed"
+    assert _discovery_state.last_error(campaign_id) == "RPC: AuthKeyUnregisteredError"
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_campaign_cancels_its_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Otherwise it keeps probing the shared listener for rows that no longer exist."""
+    from services.neurocomment.campaigns import delete_campaign  # noqa: PLC0415
+
+    running = asyncio.Event()
+
+    async def _hang(*_args: object, **_kwargs: object) -> tuple[int, str | None, bool]:
+        running.set()
+        await asyncio.Event().wait()
+        return 0, None, True
+
+    monkeypatch.setattr(discovery_module, "run_search", _hang)
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request())
+    await running.wait()
+    await delete_campaign(campaign_id)
+
+    assert _discovery_state.is_running(campaign_id) is False
+    assert _discovery_state.phase_of(campaign_id) == "idle"
+
+
+@pytest.mark.asyncio
+async def test_the_rolling_window_lets_the_allowance_recover(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without pruning, the fleet is capped forever after the first 24h of searches."""
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_searches_per_day", 2)
+    now = datetime.now(UTC)
+    for index in range(2):
+        assert _discovery_state.try_reserve(f"c{index}", f"acc-{index}", now) is None
+
+    assert _discovery_state.at_daily_search_cap(now) is True
+    assert _discovery_state.at_daily_search_cap(now + timedelta(hours=25)) is False
 
 
 @pytest.mark.asyncio

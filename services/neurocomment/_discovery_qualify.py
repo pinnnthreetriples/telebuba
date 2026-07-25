@@ -26,6 +26,7 @@ from core.repositories.neurocomment import (
 from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import GetLinkedDiscussionGroup, LinkedDiscussionGroupResult
 from services.neurocomment import _seams
+from services.neurocomment._discovery_providers import record_flood
 from services.neurocomment._signals import signal_discovery_progress
 
 if TYPE_CHECKING:
@@ -37,15 +38,15 @@ _PROGRESS_EVERY = 5
 
 
 def _is_fresh(checked_at: str, now: datetime) -> bool:
-    ttl_hours = settings.neurocomment.discovery_linked_group_ttl_hours
-    if ttl_hours <= 0:
-        return False
+    """Is this cached verdict still trustworthy? A zero TTL falls out as never."""
     try:
         stamped = datetime.fromisoformat(checked_at)
     except ValueError:
+        # Text column: a legacy or hand-edited row must re-probe, not raise.
         return False
     if stamped.tzinfo is None:
         stamped = stamped.replace(tzinfo=UTC)
+    ttl_hours = settings.neurocomment.discovery_linked_group_ttl_hours
     return stamped + timedelta(hours=ttl_hours) > now
 
 
@@ -116,6 +117,12 @@ async def _probe_one(campaign_id: str, account_id: str, channel: str) -> str | N
             GetLinkedDiscussionGroup(channel=channel),
         )
     except TelegramReadError as exc:
+        if await record_flood(account_id, exc.reason):
+            # A flood wait says nothing about this channel, so leave it unprobed —
+            # stamping it would show a permanent "could not check" verdict that only a
+            # full re-search clears. Recording the cooldown also keeps the retry off
+            # this account until the window closes.
+            return exc.reason
         await mark_discovery_qualified(campaign_id, channel, error=exc.reason)
         return exc.reason
 

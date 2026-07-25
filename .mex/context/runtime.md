@@ -44,12 +44,16 @@ last_updated: 2026-07-25
 - File-size gate (aislop max 400) drives the `_runtime`/`onboarding` splits into `_join`/`_lifecycle`/`_classify`/`_sweep`/`_watch` via E402 re-export-after-body; task-handle globals stay in `_runtime` (tests rebind them, and rebinding a re-exported name does not reach the defining module), so a peer module reaches back through the `_runtime` module object. `_generate.py` now sits ~5 lines under the cap. Repository reads split the same way (`_readiness`, `_retention` beside `_comments`/`_quota`), and request models live in `schemas/_neurocomment_requests.py` re-exported from `schemas/neurocomment.py` — a pure module move, so the generated OpenAPI client is unaffected (component names are class names). `schemas/neurocomment.py` sits ~8 lines under the cap: the settings pair is the next extraction.
 
 Channel discovery (`services/neurocomment/discovery.py`) is a background run per campaign,
-single-flighted in memory (`_discovery_state`) and cancelled unconditionally on shutdown. The
-slot AND one unit of the rolling-24h search allowance are claimed by `try_reserve` before the
-first `await` — resolving the account awaits, and a check made before it is still true for a
-second start, whose task would then overwrite the first and escape shutdown. Same await-free
-check→spawn rule as `_ensure_onboarding_running`/`_ensure_join_running`. A refusal that spent
-no RPC calls `release`, refunding the search.
+single-flighted in memory (`_discovery_state`), cancelled on shutdown AND when its campaign is
+deleted. The account is resolved FIRST, then `try_reserve` claims the campaign slot, the
+account, and one unit of the rolling-24h allowance in a single await-free step — the same
+check→spawn rule `_ensure_onboarding_running`/`_ensure_join_running` follow. Claiming the
+account matters as much as the campaign: every campaign resolves to the same fleet listener, so
+per-campaign alone would allow N parallel streams on one account. Resolving before claiming is
+also what removes any window where a failure could strand a claim.
+Discovery refuses an account that is warming (`list_warming_account_ids`) — warming's freeze
+avoidance assumes it owns its accounts' traffic — and it now RECORDS its own FloodWait as a
+cooldown, so the retry and the post-adopt reconcile stay off that account.
 Both stages are paced: the search fans out over keywords with the same jitter as the
 qualification loop. Comments-enabled is `channelFull.linked_chat_id`, resolved through the
 existing `GetLinkedDiscussionGroup` action; the shared `neurocomment_linked_groups` cache is
@@ -59,7 +63,9 @@ A FloodWait aborts a qualification pass and leaves the tail `pending` (`qualifie
 resumable); the run never takes `account_lock`, because holding it for minutes would block
 warming/neurocomment start-stop for that account. Telemetr.io is optional: no key means a
 skipped source, a 429 degrades the run to native results with `last_error` set. Writing
-candidates is delete-then-insert, so a search that found nothing AND has a reason keeps the
-previous set and ends `failed`; only a genuinely empty result replaces it.
+candidates is delete-then-insert, so the set is replaced only when at least one source actually
+answered (`SourceOutcome.answered`); if none did, the previous set survives and the run ends
+`failed`. A source answering with zero hits — or a filter removing every hit — IS an empty
+result and does replace it. A FloodWait aborts the search sweep as well as qualification.
 
 API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.

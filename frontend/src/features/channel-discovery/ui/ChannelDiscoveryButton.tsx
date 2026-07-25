@@ -32,7 +32,11 @@ export function ChannelDiscoveryButton({ campaignId, campaignName }: Props) {
         {t('neurocomment.modal.discovery.open')}
       </button>
       {open && campaignId !== null ? (
+        // Keyed so a campaign switch under the open modal (the page falls back to the
+        // first campaign, which changes when one is deleted) remounts it: ticks and
+        // adopt state belong to the campaign they were made for, never to the next one.
         <ChannelDiscoveryModal
+          key={campaignId}
           campaignId={campaignId}
           campaignName={campaignName}
           onClose={() => {

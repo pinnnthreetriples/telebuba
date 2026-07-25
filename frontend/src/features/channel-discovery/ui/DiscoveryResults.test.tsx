@@ -142,7 +142,39 @@ describe('DiscoveryResults', () => {
     // Polling has stopped, so this row would pulse forever.
     render(<Harness data={board([candidate({ qualification: 'pending' })], { phase: 'done' })} />);
 
-    const cell = screen.getByText('не удалось проверить');
+    const cell = screen.getByText('не проверено');
+    expect(cell.querySelector('.animate-pulse')).toBeNull();
+  });
+
+  it('tells a never-probed row apart from an unanswerable one', () => {
+    // Opposite next steps: "не проверено" means re-run and it resolves, "не удалось
+    // проверить" means the probe already gave up on it.
+    render(
+      <Harness
+        data={board(
+          [
+            candidate({ channel: 'unprobed', qualification: 'pending' }),
+            candidate({ channel: 'opaque', qualification: 'unknown' }),
+          ],
+          { phase: 'failed', last_error: 'FloodWait(300s)' },
+        )}
+      />,
+    );
+
+    expect(screen.getByText('не проверено')).toBeInTheDocument();
+    expect(screen.getByText('не удалось проверить')).toBeInTheDocument();
+  });
+
+  it('settles a stopped run whatever phase it claims', () => {
+    // A backend restart forgets the in-memory phase but still serves the stored rows:
+    // 'idle' with running:false is polling-stopped, so nothing may animate.
+    render(
+      <Harness
+        data={board([candidate({ qualification: 'pending' })], { phase: 'idle', running: false })}
+      />,
+    );
+
+    const cell = screen.getByText('не проверено');
     expect(cell.querySelector('.animate-pulse')).toBeNull();
   });
 
@@ -254,6 +286,32 @@ describe('DiscoveryResults', () => {
     );
 
     expect(screen.getByText('Проверяем комментарии: 3/8')).toBeInTheDocument();
+  });
+
+  it('keeps the qualification count after the run aborts', () => {
+    render(
+      <Harness
+        data={board([candidate()], {
+          phase: 'failed',
+          running: false,
+          total: 300,
+          qualified: 40,
+          last_error: 'FloodWait(300s)',
+        })}
+      />,
+    );
+
+    // How far the aborted run got is the number the operator acts on.
+    expect(screen.getByText('Проверяем комментарии: 40/300')).toBeInTheDocument();
+  });
+
+  it('announces the transient states in a live region', () => {
+    const { unmount } = render(<Harness data={undefined} loading />);
+    expect(screen.getByRole('status')).toHaveTextContent('Ищем каналы…');
+    unmount();
+
+    render(<Harness data={undefined} errored />);
+    expect(screen.getByRole('status')).toHaveTextContent(/Не удалось получить результаты/);
   });
 
   it('surfaces a degraded source once the run settles', () => {

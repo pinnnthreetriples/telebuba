@@ -43,6 +43,18 @@ async def _seed(*channels: str) -> str:
     return campaign.campaign_id
 
 
+async def _backdate(channel: str, checked_at: datetime | str) -> None:
+    """Rewrite a cache row's stamp so freshness can be exercised without waiting."""
+    stamp = checked_at if isinstance(checked_at, str) else checked_at.isoformat()
+    from core.db import _get_engine  # noqa: PLC0415
+
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_linked_groups SET checked_at = ? WHERE channel = ?",
+            (stamp, channel),
+        )
+
+
 def _verdict(*, enabled: bool, count: int | None = None) -> LinkedDiscussionGroupResult:
     return LinkedDiscussionGroupResult(
         linked_chat_id=-100 if enabled else None,
@@ -126,15 +138,7 @@ async def test_stale_cache_entry_is_reprobed(monkeypatch: pytest.MonkeyPatch) ->
     monkeypatch.setattr(settings.neurocomment, "discovery_linked_group_ttl_hours", 24)
     campaign_id = await _seed("stale")
     await upsert_linked_group("stale", None, comments_enabled=False)
-    # Backdate the cache stamp beyond the TTL.
-    old = (datetime.now(UTC) - timedelta(days=30)).isoformat()
-    from core.db import _get_engine  # noqa: PLC0415
-
-    with _get_engine().begin() as connection:
-        connection.exec_driver_sql(
-            "UPDATE neurocomment_linked_groups SET checked_at = ? WHERE channel = 'stale'",
-            (old,),
-        )
+    await _backdate("stale", datetime.now(UTC) - timedelta(days=30))
 
     await run_qualification(campaign_id, LISTENER_ID)
 
@@ -142,6 +146,65 @@ async def test_stale_cache_entry_is_reprobed(monkeypatch: pytest.MonkeyPatch) ->
     cached = await fetch_linked_group("stale")
     assert cached is not None
     assert cached.comments_enabled == 1
+
+
+@pytest.mark.asyncio
+async def test_the_ttl_is_read_in_hours(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A stamp just past the window must re-probe: the unit itself has to be pinned.
+
+    The other TTL tests use a 30x margin, so any wrong unit inside a factor of 24
+    survives them — and a cache held 24x too long would filter a channel that switched
+    comments on out of every campaign for months.
+    """
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    monkeypatch.setattr(settings.neurocomment, "discovery_linked_group_ttl_hours", 24)
+    campaign_id = await _seed("edge")
+    await upsert_linked_group("edge", None, comments_enabled=False)
+    await _backdate("edge", datetime.now(UTC) - timedelta(hours=25))
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    assert len(reader.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unparseable_cache_stamp_is_treated_as_stale(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Defensive, and reachable: the column is text a legacy row could have written."""
+    reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _seed("garbled")
+    await upsert_linked_group("garbled", -100, comments_enabled=True)
+    await _backdate("garbled", "not-a-timestamp")
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    assert len(reader.calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_progress_is_signalled_during_a_long_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Without a nudge the modal sits frozen on "qualifying" for minutes."""
+    frames: list[int] = []
+    monkeypatch.setattr(
+        "services.neurocomment._discovery_qualify.signal_discovery_progress",
+        lambda: frames.append(1),
+    )
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(linked=lambda _action: _verdict(enabled=True)),
+    )
+    campaign_id = await _seed(*[f"chan_{index:02d}" for index in range(11)])
+
+    await run_qualification(campaign_id, LISTENER_ID)
+
+    # _PROGRESS_EVERY is 5, so an 11-candidate pass nudges at 5 and 10.
+    assert len(frames) == 2
 
 
 @pytest.mark.asyncio
@@ -195,8 +258,10 @@ async def test_flood_wait_aborts_and_leaves_the_tail_pending(
     assert reason == "FloodWait(300s)"
     assert len(reader.calls) == 1
     rows = {row.channel: row for row in (await list_discovery_candidates(campaign_id)).rows}
-    # The failing candidate is marked; the untouched tail stays resumable.
-    assert rows["aaa"].qualified_at is not None
+    # Nothing is marked, not even the sacrificed candidate: a flood wait says nothing
+    # about the channel, and stamping it would leave a permanent "could not check"
+    # verdict that only a full re-search clears. The whole tail stays resumable.
+    assert rows["aaa"].qualified_at is None
     assert rows["bbb"].qualified_at is None
     assert rows["ccc"].qualified_at is None
 

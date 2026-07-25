@@ -83,15 +83,23 @@ async def test_qualification_reads_the_shared_linked_group_cache() -> None:
 
 @pytest.mark.asyncio
 async def test_a_failed_probe_reads_as_unknown_not_pending() -> None:
-    """The operator must be able to tell "wait" from "we could not tell"."""
+    """The operator must be able to tell "wait" from "we could not tell".
+
+    The cache deliberately DISAGREES: with a stale ``comments_enabled=True`` row from an
+    earlier run, dropping the error check would report a confident green verdict — and
+    count it in ``comments_on`` — for a probe that actually failed. Without the cache
+    row the uncached fallback returns "unknown" anyway and the test proves nothing.
+    """
     campaign_id = await _campaign()
     await replace_discovery_candidates(campaign_id, [_row("broken")])
+    await upsert_linked_group("broken", -100, comments_enabled=True)
     await mark_discovery_qualified(campaign_id, "broken", error="RPC: ChannelPrivateError")
 
     board = await load_discovery(campaign_id)
 
     assert board is not None
     assert board.candidates[0].qualification == "unknown"
+    assert board.progress.comments_on == 0
     assert board.progress.qualified == 1
     assert board.progress.comments_on == 0
 

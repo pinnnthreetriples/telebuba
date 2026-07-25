@@ -55,7 +55,11 @@ type Routes = {
   startStatus?: string;
   hasTelemetrKey?: boolean;
   adoptLinked?: number;
+  adoptFails?: boolean;
   boardFailures?: number;
+  // Mutable so a spec can stall the board mid-test; a stalled fetch proves a row on
+  // screen came from the cache rather than the server.
+  hang?: { board: boolean };
 };
 
 function route(routes: Routes = {}) {
@@ -86,6 +90,12 @@ function route(routes: Routes = {}) {
       return jsonResponse({ status: routes.startStatus ?? 'started' });
     }
     if (url.pathname.endsWith('/discovery/adopt')) {
+      if (routes.adoptFails === true) {
+        return new Response(JSON.stringify({ error: { code: 'internal', message: 'boom' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const linked = routes.adoptLinked ?? 1;
       return jsonResponse({
         outcomes: Array.from({ length: linked }, (_, index) => ({
@@ -95,6 +105,7 @@ function route(routes: Routes = {}) {
       });
     }
     if (url.pathname.endsWith('/discovery')) {
+      if (routes.hang?.board === true) return new Promise<Response>(() => undefined);
       if (boardFailures > 0) {
         boardFailures -= 1;
         return new Response(JSON.stringify({ error: { code: 'internal', message: 'boom' } }), {
@@ -183,8 +194,9 @@ describe('ChannelDiscoveryModal', () => {
     });
     renderModal();
     await startSearch();
+    // running:false keeps the poll off, so only the SSE frame can refresh these rows.
     await waitFor(() => {
-      expect(screen.getByText('проверяется')).toBeInTheDocument();
+      expect(screen.getByText('не проверено')).toBeInTheDocument();
     });
 
     const source = (globalThis.EventSource as unknown as MockEventSourceCtor).last();
@@ -268,14 +280,96 @@ describe('ChannelDiscoveryModal', () => {
     await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
 
     expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
-    // The next run reuses the cached rows, and starting it does not touch the picks —
-    // so a tick surviving here would mean the back button failed to drop it.
+    // Starting the next run does not touch the picks, so a tick surviving onto its rows
+    // would mean the back button failed to drop it.
     await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
     await waitFor(() => {
       expect(screen.getByText('@good')).toBeInTheDocument();
     });
     expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toBeChecked();
     expect(screen.getByRole('button', { name: /Добавить выбранные \(0\)/ })).toBeInTheDocument();
+  });
+
+  it('drops the finished run rows as soon as the next search starts', async () => {
+    const hang = { board: false };
+    route({ board: boardPayload([candidate({ channel: 'first' })]), hang });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@first')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
+    // Run #2's board never answers, so anything on screen could only come from run #1's
+    // cached frame — which is 'done', hence adoptable and poll-stopping.
+    hang.board = true;
+    await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Ищем каналы…')).toBeInTheDocument();
+    });
+    expect(screen.queryByText('@first')).not.toBeInTheDocument();
+  });
+
+  it('stays open and reports the refused part of a partial adopt', async () => {
+    route({
+      board: boardPayload([candidate({ channel: 'good' }), candidate({ channel: 'alsogood' })]),
+      adoptLinked: 1,
+    });
+    const onClose = vi.fn();
+    renderModal(onClose);
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать все подходящие' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(2\)/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Не добавлено: 1/)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /Добавлено: 1/ })).toBeInTheDocument();
+    // well past the auto-close delay
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1000);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('reports a failed adopt and keeps the button retryable', async () => {
+    route({ board: boardPayload([candidate({ channel: 'good' })]), adoptFails: true });
+    const onClose = vi.fn();
+    renderModal(onClose);
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Не удалось добавить каналы/)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ })).toBeEnabled();
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1000);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('keeps focus inside the dialog when the form gives way to the results', async () => {
+    route({ board: boardPayload([candidate({ channel: 'good' })]) });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    // The focused "Найти" button unmounted; focus on <body> would let the next Tab
+    // walk into the page behind the modal.
+    expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true);
   });
 
   it('reports a no-op adopt as a warning and stays open', async () => {

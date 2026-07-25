@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -39,7 +39,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const [form, setForm] = useState<DiscoveryFormState>(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [addedCount, setAddedCount] = useState<number | null>(null);
+  const [adopted, setAdopted] = useState<{ linked: number; refused: number } | null>(null);
 
   // Whether the external catalogue is usable is server state; the modal owns its
   // own I/O, so it reads the settings row rather than taking it as a prop.
@@ -52,7 +52,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
     enabled: submitted,
     // Function form (a first in this codebase): the fixed-interval constant used
     // elsewhere cannot switch itself off, and this modal must stop polling once the
-    // run reaches a terminal phase. No data means loading or errored — the query is
+    // run stops. No data means loading or errored — the query is
     // only enabled after a started search, so keep polling instead of going quiet on
     // one transient failure.
     refetchInterval: (query) =>
@@ -76,14 +76,17 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const refused = startStatus !== undefined && startStatus !== 'started';
 
   const runSearch = () => {
-    setAddedCount(null);
+    setAdopted(null);
     startSearch.mutate(
       { path: { campaign_id: campaignId }, body: buildSearchRequest(form) },
       {
         onSuccess: (outcome) => {
           if (outcome.status !== 'started') return;
           setSubmitted(true);
-          void queryClient.invalidateQueries({ queryKey: discoveryOptions.queryKey });
+          // reset, not invalidate: invalidate keeps the previous run's frame while it
+          // refetches, and the cache would then hand this run the finished rows of the
+          // last one — adoptable, and with a running:false that stops the poll.
+          void queryClient.resetQueries({ queryKey: discoveryOptions.queryKey });
         },
       },
     );
@@ -108,6 +111,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
 
   const submitAdopt = () => {
     if (picks.length === 0) return;
+    const requested = picks.length;
     adopt.mutate(
       { path: { campaign_id: campaignId }, body: { channels: picks } },
       {
@@ -115,19 +119,32 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           const linked = (result.outcomes ?? []).filter(
             (outcome) => outcome.status === 'linked',
           ).length;
-          setAddedCount(linked);
+          setAdopted({ linked, refused: requested - linked });
           void queryClient.invalidateQueries({
             queryKey: neurocommentBoardQueryOptions({ path: { campaign_id: campaignId } }).queryKey,
           });
           void queryClient.invalidateQueries({ queryKey: campaignsQueryOptions().queryKey });
           void queryClient.invalidateQueries({ queryKey: discoveryOptions.queryKey });
-          // Every pick was taken between the last poll and the click: stay open so the
-          // refreshed rows explain the no-op instead of flashing a green "done".
-          if (linked > 0) setTimeout(onClose, CLOSE_DELAY_MS);
+          // Anything refused was taken between the last poll and the click. Closing on a
+          // partial result would hide which picks never made it, so only a clean sweep
+          // gets the green flash and the auto-close.
+          if (linked === requested) setTimeout(onClose, CLOSE_DELAY_MS);
         },
       },
     );
   };
+
+  // Both transitions unmount the button that had focus ("Найти" / "← Изменить
+  // параметры"), which drops focus onto <body>. Modal's Tab trap is a keydown
+  // handler on the dialog, so from there the next Tab walks into the page behind it.
+  const contentRef = useRef<HTMLDivElement>(null);
+  const opened = useRef(false);
+  useEffect(() => {
+    // Not on open: Modal focuses the dialog itself, and that is where its Tab trap
+    // can still wrap backwards.
+    if (opened.current) contentRef.current?.focus();
+    opened.current = true;
+  }, [submitted]);
 
   return (
     <Modal onClose={onClose} z={72} className="w-[920px] max-h-[88vh] overflow-y-auto">
@@ -137,7 +154,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           {t('neurocomment.modal.discovery.sub', { name: campaignName })}
         </p>
 
-        <div className="mt-[15px]">
+        <div ref={contentRef} tabIndex={-1} className="mt-[15px] outline-none">
           {submitted ? (
             <DiscoveryResults
               board={board.data}
@@ -161,6 +178,20 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {refused ? (
           <p className="mt-[11px] text-[12px] text-danger">
             {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
+          </p>
+        ) : null}
+
+        {adopted !== null && adopted.refused > 0 ? (
+          <p role="status" className="mt-[11px] text-[12px] text-warning">
+            {t('neurocomment.modal.discovery.addedRefused', { count: adopted.refused })}
+          </p>
+        ) : null}
+
+        {/* A mid-batch failure links some channels and then 500s with no outcomes, so
+            silence would read as "nothing happened". */}
+        {adopt.isError ? (
+          <p role="status" className="mt-[11px] text-[12px] text-danger">
+            {t('neurocomment.modal.discovery.addFailed')}
           </p>
         ) : null}
 
@@ -188,15 +219,16 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               </button>
               <button
                 type="button"
-                // addedCount stays set through the close delay, so a fast second click
-                // cannot re-post the same channels.
-                disabled={picks.length === 0 || adopt.isPending || addedCount !== null}
+                // The outcome stays set through the close delay, so a fast second click
+                // cannot re-post the same channels. A failed adopt leaves it null on
+                // purpose: that one is worth retrying.
+                disabled={picks.length === 0 || adopt.isPending || adopted !== null}
                 onClick={submitAdopt}
                 className="inline-flex items-center gap-[6px] rounded-[10px] bg-primary px-[15px] py-[8px] text-[12.5px] font-medium text-white disabled:opacity-50"
               >
-                {addedCount === null ? (
+                {adopted === null ? (
                   t('neurocomment.modal.discovery.add', { count: picks.length })
-                ) : addedCount === 0 ? (
+                ) : adopted.linked === 0 ? (
                   <>
                     <StatusIcon kind="err" />
                     {t('neurocomment.modal.discovery.addedNone')}
@@ -204,7 +236,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
                 ) : (
                   <>
                     <StatusIcon kind="ok" />
-                    {t('neurocomment.modal.discovery.added', { count: addedCount })}
+                    {t('neurocomment.modal.discovery.added', { count: adopted.linked })}
                   </>
                 )}
               </button>
