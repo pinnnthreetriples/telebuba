@@ -90,6 +90,49 @@ async def test_telegram_client_profile_uses_saved_fingerprint(tmp_path: Path, mo
 
 
 @pytest.mark.asyncio
+async def test_telegram_client_profile_honours_the_stored_session_name(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """A pooled borrower passes no session name, so the account row must decide.
+
+    The pool keys on ``account_id`` only. If that name were used while the
+    credential sat in a differently-named file, every pooled action would
+    connect to a fresh empty session and report a healthy account unauthorized.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    await create_account(
+        AccountCreateFactory.build(account_id="12345", session_name="tdata_0"),
+    )
+
+    profile = await prepare_telegram_client_profile(
+        TelegramClientRequest(account_id="12345"),
+    )
+
+    assert profile.session_path == str(tmp_path / "sessions" / "tdata_0")
+
+
+@pytest.mark.asyncio
+async def test_telegram_client_profile_prefers_an_explicit_session_name(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The login flows name the session themselves — that still wins over the row."""
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    await create_account(
+        AccountCreateFactory.build(account_id="12345", session_name="tdata_0"),
+    )
+
+    profile = await prepare_telegram_client_profile(
+        TelegramClientRequest(account_id="12345", session_name="explicit"),
+    )
+
+    assert profile.session_path == str(tmp_path / "sessions" / "explicit")
+
+
+@pytest.mark.asyncio
 async def test_telegram_client_profile_includes_saved_proxy(
     tmp_path: Path,
     monkeypatch,

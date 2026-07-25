@@ -163,11 +163,13 @@ async def _remove_session_file(session_path: str) -> None:
 async def remove_account_session(account_id: str, session_name: str | None = None) -> None:
     """Unlink an account's Telethon ``.session`` file from disk.
 
-    Path composition (and the ``session_name`` → ``account_id`` fallback) is shared
-    with client construction via ``_session_path``, so ``services`` callers never
-    re-derive the session-dir layout — they just name the account.
+    Path composition (and the ``session_name`` → stored-name → ``account_id``
+    resolution) is shared with client construction via ``_session_path``, so
+    ``services`` callers never re-derive the session-dir layout — they just name
+    the account. Callers pass the name off the account row, so the resolution
+    lands on the explicit branch and does not depend on the row still existing.
     """
-    await _remove_session_file(_session_path(_login_request(account_id, session_name)))
+    await _remove_session_file(await _session_path(_login_request(account_id, session_name)))
 
 
 def _status_result(
