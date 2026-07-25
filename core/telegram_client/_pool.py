@@ -18,9 +18,13 @@ add a per-account request lock. The only lock is on connect/rebuild, to
 single-flight the initial handshake when multiple callers race on the very
 first ``get_client()`` for an account.
 
-Probe paths (``check_telegram_session`` / ``check_spam_status``) deliberately
-do NOT use the pool. They run once per account-lifecycle and benefit from a
-clean throwaway session — see :func:`core.telegram_client._client.telegram_client`.
+The probe paths (``check_telegram_session`` / ``check_spam_status``) used to be
+exempt, on the assumption that they run once per account lifecycle. They do
+not — the operator can press the check button on any row at any time — and a
+throwaway client on an account the pool already holds dies on the ``.session``
+SQLite lock. They borrow from the pool like everyone else; only the login /
+logout flows in ``_auth`` still build their own client, and they run on an
+account that is by definition not in service.
 """
 
 from __future__ import annotations
