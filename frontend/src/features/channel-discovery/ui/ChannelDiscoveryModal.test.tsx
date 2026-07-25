@@ -397,7 +397,10 @@ describe('ChannelDiscoveryModal', () => {
   });
 
   it('reports a no-op adopt as a warning and stays open', async () => {
-    route({ board: boardPayload([candidate({ channel: 'good' })]), adoptStatuses: ['already_assigned'] });
+    route({
+      board: boardPayload([candidate({ channel: 'good' })]),
+      adoptStatuses: ['already_assigned'],
+    });
     const onClose = vi.fn();
     renderModal(onClose);
     await startSearch();
