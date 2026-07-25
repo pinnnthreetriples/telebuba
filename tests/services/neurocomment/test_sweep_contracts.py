@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock
 
 import pytest
 
+from core.config import settings
 from schemas.neurocomment import CommentRecord
 from schemas.telegram_actions import CheckMessagesAliveResult
 from services.neurocomment import _state, _sweep
@@ -26,6 +28,29 @@ def _comment(message_id: int | None, *, account: str = "reader") -> CommentRecor
         created_at="2026-01-01T00:00:00+00:00",
         updated_at="2026-01-01T00:00:00+00:00",
     )
+
+
+@pytest.mark.asyncio
+async def test_sweep_loop_waits_for_configured_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interval = 17.5
+    waits: list[float | None] = []
+    sweep = AsyncMock()
+
+    async def cancel_after_first_wait(seconds: float | None) -> None:
+        waits.append(seconds)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", interval)
+    monkeypatch.setattr(_sweep.asyncio, "sleep", cancel_after_first_wait)
+    monkeypatch.setattr(_sweep, "_sweep_once", sweep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await _sweep._sweep_loop()
+
+    assert waits == [interval]
+    sweep.assert_not_awaited()
 
 
 @pytest.mark.asyncio

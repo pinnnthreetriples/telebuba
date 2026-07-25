@@ -331,11 +331,13 @@ async def test_refresh_concurrent_callers_share_probe(monkeypatch: pytest.Monkey
     """Two cycles waking together must produce a single @SpamBot probe, not two."""
     monkeypatch.setattr(settings.warming, "spam_status_ttl_hours", 24.0)
     monkeypatch.setattr(spam_status, "_REFRESH_LOCKS", {})
-    await create_account(AccountCreate(account_id="acc-1"))
-
+    cached: SpamStatusVerdict | None = None
     calls = 0
     started = _asyncio.Event()
     probe_event = _asyncio.Event()
+
+    async def get_cached(_account_id: str) -> SpamStatusVerdict | None:
+        return cached
 
     async def slow_probe(account_id: str) -> SpamStatusProbe:
         nonlocal calls
@@ -347,20 +349,35 @@ async def test_refresh_concurrent_callers_share_probe(monkeypatch: pytest.Monkey
             reply_text="Good news, no limits are currently applied to your account.",
         )
 
+    async def save(verdict: SpamStatusVerdict) -> SpamStatusVerdict:
+        nonlocal cached
+        cached = verdict
+        return verdict
+
+    async def log(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr(spam_status, "get_spam_status", get_cached)
     monkeypatch.setattr(spam_status, "check_spam_status", slow_probe)
+    monkeypatch.setattr(spam_status, "upsert_spam_status", save)
+    monkeypatch.setattr(spam_status, "log_event", log)
 
     task1 = _asyncio.create_task(spam_status.refresh_spam_status("acc-1"))
     tasks = [task1]
+    results: list[SpamStatusVerdict] = []
     try:
         await _asyncio.wait_for(started.wait(), timeout=2.0)
         task2 = _asyncio.create_task(spam_status.refresh_spam_status("acc-1"))
         tasks.append(task2)
         await _asyncio.sleep(0)
+
+        assert calls == 1
     finally:
         probe_event.set()
-        await _asyncio.wait_for(_asyncio.gather(*tasks), timeout=2.0)
+        results = list(await _asyncio.wait_for(_asyncio.gather(*tasks), timeout=2.0))
 
     assert calls == 1
+    assert [result.status for result in results] == ["clean", "clean"]
 
 
 @pytest.mark.asyncio
