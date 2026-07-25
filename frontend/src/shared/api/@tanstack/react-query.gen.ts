@@ -549,8 +549,8 @@ export const listAccountsInfiniteQueryKey = (
 /**
  * List Accounts
  */
-export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) =>
-  infiniteQueryOptions<
+export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) => {
+  const opts = infiniteQueryOptions<
     ListAccountsResponse,
     ListAccountsError,
     InfiniteData<ListAccountsResponse>,
@@ -586,6 +586,8 @@ export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>)
       queryKey: listAccountsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
 
 export const accountStatsQueryKey = (options?: Options<AccountStatsData>) =>
   createQueryKey('accountStats', options);
@@ -1379,8 +1381,8 @@ export const listAccountChannelPostsInfiniteQueryKey = (
  */
 export const listAccountChannelPostsInfiniteOptions = (
   options: Options<ListAccountChannelPostsData>,
-) =>
-  infiniteQueryOptions<
+) => {
+  const opts = infiniteQueryOptions<
     ListAccountChannelPostsResponse,
     ListAccountChannelPostsError,
     InfiniteData<ListAccountChannelPostsResponse>,
@@ -1416,6 +1418,8 @@ export const listAccountChannelPostsInfiniteOptions = (
       queryKey: listAccountChannelPostsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
 
 /**
  * Publish Account Channel Post
@@ -2224,8 +2228,8 @@ export const listNeurocommentCommentsInfiniteQueryKey = (
  */
 export const listNeurocommentCommentsInfiniteOptions = (
   options: Options<ListNeurocommentCommentsData>,
-) =>
-  infiniteQueryOptions<
+) => {
+  const opts = infiniteQueryOptions<
     ListNeurocommentCommentsResponse,
     ListNeurocommentCommentsError,
     InfiniteData<ListNeurocommentCommentsResponse>,
@@ -2264,6 +2268,8 @@ export const listNeurocommentCommentsInfiniteOptions = (
       queryKey: listNeurocommentCommentsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
 
 /**
  * Link Channel
@@ -2880,8 +2886,8 @@ export const listLogsInfiniteQueryKey = (
 /**
  * List Logs
  */
-export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) =>
-  infiniteQueryOptions<
+export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) => {
+  const opts = infiniteQueryOptions<
     ListLogsResponse,
     ListLogsError,
     InfiniteData<ListLogsResponse>,
@@ -2915,3 +2921,5 @@ export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) =>
       queryKey: listLogsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};

@@ -235,9 +235,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   useEffect(() => {
     if (!showingSaveError) return;
     const baseline = form.store.state.values;
-    return form.store.subscribe(() => {
+    // ``subscribe`` hands back a Subscription, not the bare unsubscribe function
+    // (@tanstack/store, since react-form 1.x), so the effect cleans up through it.
+    const subscription = form.store.subscribe(() => {
       if (form.store.state.values !== baseline) resetSaveError();
     });
+    return () => subscription.unsubscribe();
   }, [showingSaveError, resetSaveError, form]);
 
   // onMount validation already flags an empty stored first name, but errors
