@@ -6,16 +6,16 @@ import asyncio
 import random
 from typing import TYPE_CHECKING
 
-from telethon import errors
+from telethon import errors, utils
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.channels import (
     GetFullChannelRequest,
     JoinChannelRequest,
     LeaveChannelRequest,
 )
-from telethon.tl.functions.contacts import ImportContactsRequest
+from telethon.tl.functions.contacts import ResolvePhoneRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
-from telethon.tl.types import InputPhoneContact, ReactionEmoji
+from telethon.tl.types import ReactionEmoji
 
 from core.config import settings
 from core.db import fetch_account
@@ -178,9 +178,9 @@ def _typing_seconds(text: str, wpm: int | None = None) -> float:
 class DmPeerUnresolvedError(Exception):
     """A DM partner this session cannot address, and no way left to learn how.
 
-    Either we hold no phone to import, or their "who can find me by phone number"
-    privacy setting made the import return no user. Its own type so callers can
-    skip the pair instead of counting a permanent block as a cycle failure.
+    Either we hold no phone to look up, or their "who can find me by phone
+    number" privacy setting hides them. Its own type so callers can skip the
+    pair instead of counting a permanent block as a cycle failure.
     """
 
 
@@ -188,37 +188,33 @@ async def _resolve_dm_peer(
     client: TelegramClient,
     action: SendDirectMessage | MarkDirectMessageRead,
 ) -> TypeInputPeer:
-    """Resolve the DM partner to an input peer, importing it by phone if unknown.
+    """Resolve the DM partner to an input peer, looking them up by phone if unknown.
 
-    A cold session raises ``ValueError`` on a raw ``user_id``; Telethon persists
-    what the import reveals, so it is paid once per pair.
+    A cold session raises ``ValueError`` on a raw ``user_id``. ``resolvePhone``
+    answers with the user *without* saving a contact — an import would build a
+    saved list of nothing but fleet accounts, exactly the correlated graph the
+    rest of warming works to avoid. Telethon files the ``access_hash`` from the
+    response into the session, so the lookup is paid once per pair.
     """
     try:
         return await client.get_input_entity(action.user_id)
     except ValueError as cold:
         if action.peer_phone is None:
-            msg = f"No cached entity and no phone to import for {action.user_id}"
+            msg = f"No cached entity and no phone to resolve {action.user_id}"
             raise DmPeerUnresolvedError(msg) from cold
-        await client(
-            ImportContactsRequest(
-                [
-                    InputPhoneContact(
-                        client_id=action.user_id,
-                        phone=action.peer_phone,
-                        # Saving the partner under their real name; falling back to
-                        # the digits would stamp every warming account with an
-                        # obviously machine-made contact list.
-                        first_name=action.peer_first_name or action.peer_phone,
-                        last_name="",
-                    )
-                ]
-            )
-        )
         try:
+            # Raw requests skip the phone normalisation Telethon's high-level
+            # helpers apply, so an operator-typed "+7 999 ..." would go as-is.
+            phone = utils.parse_phone(action.peer_phone) or action.peer_phone
+            await client(ResolvePhoneRequest(phone))
             return await client.get_input_entity(action.user_id)
-        except ValueError as exc:
-            msg = f"Contact import revealed no user for {action.user_id} (phone privacy)"
-            raise DmPeerUnresolvedError(msg) from exc
+        except (
+            errors.PhoneNotOccupiedError,
+            errors.PhoneNumberInvalidError,
+            ValueError,
+        ) as hidden:
+            msg = f"Phone lookup revealed no user for {action.user_id}"
+            raise DmPeerUnresolvedError(msg) from hidden
 
 
 async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage) -> int | None:

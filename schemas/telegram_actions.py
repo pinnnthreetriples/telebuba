@@ -167,10 +167,8 @@ class SendDirectMessage(BaseModel):
     typing_wpm: int | None = None
     # Recipient's phone, used to teach a fresh session the peer's access_hash
     # (a raw user_id it has never seen cannot be resolved). ``None`` = resolve
-    # from the session cache only. ``peer_first_name`` names the contact that
-    # import creates, so the saved list doesn't read as machine-generated.
+    # from the session cache only.
     peer_phone: str | None = None
-    peer_first_name: str | None = None
 
 
 class MarkDirectMessageRead(BaseModel):
@@ -180,7 +178,6 @@ class MarkDirectMessageRead(BaseModel):
     user_id: int
     # Same role as on ``SendDirectMessage`` — peer resolution for a cold session.
     peer_phone: str | None = None
-    peer_first_name: str | None = None
 
 
 class GetLinkedDiscussionGroup(BaseModel):

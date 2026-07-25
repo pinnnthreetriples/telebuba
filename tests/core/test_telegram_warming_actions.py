@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from telethon import errors
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.channels import GetFullChannelRequest
 from telethon.tl.functions.messages import SendReactionRequest
@@ -30,7 +31,7 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
-    from telethon.tl.functions.contacts import ImportContactsRequest
+    from telethon.tl.functions.contacts import ResolvePhoneRequest
 
 
 @pytest.fixture(autouse=True)
@@ -439,16 +440,21 @@ async def test_send_dm_returns_message_id(monkeypatch: pytest.MonkeyPatch) -> No
 
 
 @pytest.mark.asyncio
-async def test_send_dm_imports_contact_when_peer_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Regression guard for the cold-session "input entity" bug: no DM ever sent."""
+async def test_send_dm_resolves_phone_when_peer_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression guard for the cold-session "input entity" bug: no DM ever sent.
+
+    Also pins the two properties that pick ``resolvePhone`` over a contact
+    import: it leaves no saved contact behind, and the phone is normalised
+    before it goes out (raw requests skip Telethon's own ``parse_phone``).
+    """
     monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
-    captured: list[ImportContactsRequest] = []
+    captured: list[ResolvePhoneRequest] = []
 
     class FakeClient:
         async def connect(self) -> None:
             return None
 
-        async def __call__(self, request: ImportContactsRequest) -> None:
+        async def __call__(self, request: ResolvePhoneRequest) -> None:
             captured.append(request)
 
         async def get_input_entity(self, user_id: int) -> str:
@@ -465,56 +471,13 @@ async def test_send_dm_imports_contact_when_peer_unknown(monkeypatch: pytest.Mon
 
     result = await execute(
         "acc-cold",
-        SendDirectMessage(
-            user_id=555, text="hello", peer_phone="79990001122", peer_first_name="Boris"
-        ),
+        SendDirectMessage(user_id=555, text="hello", peer_phone="+7 999 000-11-22"),
     )
 
     assert result.status == "ok"
     assert result.message_id == 99
-    contact = captured[0].contacts[0]
-    # Named, not saved as bare digits — a contact list of phone numbers is a
-    # fingerprint on the one module whose job is not looking like a bot.
-    assert (contact.phone, contact.first_name) == ("79990001122", "Boris")
-
-
-@pytest.mark.asyncio
-async def test_send_dm_contact_name_falls_back_to_the_phone(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A partner with no stored name must not put ``None`` in the contact.
-
-    ``InputPhoneContact(first_name=None)`` fails to serialize, and that TypeError
-    would park the sender instead of skipping the pair.
-    """
-    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
-    captured: list[ImportContactsRequest] = []
-
-    class FakeClient:
-        async def connect(self) -> None:
-            return None
-
-        async def __call__(self, request: ImportContactsRequest) -> None:
-            captured.append(request)
-
-        async def get_input_entity(self, user_id: int) -> str:
-            if not captured:
-                msg = "Could not find the input entity"
-                raise ValueError(msg)
-            return f"peer:{user_id}"
-
-        async def send_message(self, _peer: object, _text: str) -> object:
-            return MagicMock(id=7)
-
-    _patch_client(monkeypatch, FakeClient())
-
-    result = await execute(
-        "acc-nameless",
-        SendDirectMessage(user_id=555, text="hello", peer_phone="79990001122"),
-    )
-
-    assert result.status == "ok"
-    assert captured[0].contacts[0].first_name == "79990001122"
+    assert [type(r).__name__ for r in captured] == ["ResolvePhoneRequest"]
+    assert captured[0].phone == "79990001122"
 
 
 @pytest.mark.asyncio
@@ -556,7 +519,9 @@ async def test_send_dm_unresolvable_peer_gets_its_own_error_type(
             return None
 
         async def __call__(self, _request: object) -> None:
-            return None  # importContacts matched nobody: users=[]
+            # What Telegram answers for a number hidden by "who can find me by
+            # phone number", and for one no account uses — deliberately alike.
+            raise errors.PhoneNotOccupiedError(request=None)
 
         async def get_input_entity(self, user_id: int) -> str:
             msg = f"Could not find the input entity for PeerUser(user_id={user_id})"

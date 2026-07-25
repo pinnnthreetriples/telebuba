@@ -48,8 +48,8 @@ async def test_dm_actions_carry_the_recipients_phone(monkeypatch: pytest.MonkeyP
     from services.warming._chat import _open_with_partner, _reply_to_partner  # noqa: PLC0415
 
     accounts = {
-        "acc-a": _account(account_id="acc-a", user_id=1, phone="70000000001", first_name="Anna"),
-        "acc-b": _account(account_id="acc-b", user_id=2, phone="70000000002", first_name="Boris"),
+        "acc-a": _account(account_id="acc-a", user_id=1, phone="70000000001"),
+        "acc-b": _account(account_id="acc-b", user_id=2, phone="70000000002"),
     }
     recorder = _Recorder()
     texts = iter(["so what have you been up to", "quiet week here, mostly reading"])
@@ -69,21 +69,18 @@ async def test_dm_actions_carry_the_recipients_phone(monkeypatch: pytest.MonkeyP
     assert (await _reply_to_partner("acc-b", incoming, secret, accounts)).messages_sent == 1
 
     sends = [
-        (sender, a.user_id, a.peer_phone, a.peer_first_name)
+        (sender, a.user_id, a.peer_phone)
         for sender, a in recorder.actions
         if a.action_type == "send_dm"
     ]
     reads = [
-        (sender, a.user_id, a.peer_phone, a.peer_first_name)
+        (sender, a.user_id, a.peer_phone)
         for sender, a in recorder.actions
         if a.action_type == "mark_dm_read"
     ]
     # Each sender carries the OTHER account's phone, never its own.
-    assert sends == [
-        ("acc-a", 2, "70000000002", "Boris"),
-        ("acc-b", 1, "70000000001", "Anna"),
-    ]
-    assert reads == [("acc-b", 1, "70000000001", "Anna")]
+    assert sends == [("acc-a", 2, "70000000002"), ("acc-b", 1, "70000000001")]
+    assert reads == [("acc-b", 1, "70000000001")]
 
 
 def test_peer_unresolved_constant_tracks_the_gateway_error_class() -> None:
@@ -121,6 +118,8 @@ async def test_unresolvable_peer_skips_without_failing_the_cycle(
     assert result.messages_sent == 0
     assert result.failures == 0
     assert result.last_failed_action is None
+    # Billed, so the phone lookup it spent counts against the daily cap.
+    assert result.attempted_actions == 1
 
 
 @pytest.mark.asyncio
@@ -156,6 +155,7 @@ async def test_unresolvable_partner_stops_the_reply_from_re_arming(
     result = await _reply_to_partner("acc-1", incoming, await load_warming_settings(), _pair())
 
     assert result.failures == 0
+    assert result.attempted_actions == 1
     # Consumed, so the pair stops re-arming this same message next cycle.
     assert await latest_unreplied_for("acc-1") is None
     # Bailed at the read-ack: no second import, no wasted generation.

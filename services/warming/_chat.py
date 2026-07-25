@@ -302,7 +302,6 @@ async def _reply_to_partner(  # noqa: PLR0911
         MarkDirectMessageRead(
             user_id=target.user_id,
             peer_phone=target.phone,
-            peer_first_name=target.first_name,
         ),
     )
     if read.status != "ok":
@@ -350,7 +349,6 @@ async def _reply_to_partner(  # noqa: PLR0911
             text=text,
             typing_wpm=_account_typing_wpm(sender_id),
             peer_phone=target.phone,
-            peer_first_name=target.first_name,
         ),
     )
 
@@ -385,11 +383,14 @@ async def _skip_unresolvable_peer(sender_id: str, partner_id: str) -> ChatResult
     pair is permanently undeliverable. Counting it as a failure would park an
     otherwise healthy sender in the terminal ``error`` state.
 
+    The turn still spent RPCs, so it is billed as an attempt: that keeps the
+    phone lookup — the most abuse-monitored call the fleet makes — inside the
+    daily cap instead of running off-budget beside it.
+
     ponytail: no negative cache. The reply path consumes the message so a stuck
     pair stops re-arming, but the opener still re-picks this partner and spends
-    one ``contacts.importContacts`` per cycle on it. Cycles are hours apart, so
-    that is a handful of calls a day — cheap, though re-importing the same
-    unmatched number on a schedule is itself a mild spam signal. Give the pair a
+    one ``contacts.resolvePhone`` per cycle on it. Cycles are hours apart and the
+    cap now absorbs it, so that is a handful of calls a day. Give the pair a
     cooldown if the fleet ever carries more than a couple of these.
     """
     await log_event(
@@ -398,7 +399,7 @@ async def _skip_unresolvable_peer(sender_id: str, partner_id: str) -> ChatResult
         account_id=sender_id,
         extra={"with": partner_id},
     )
-    return ChatResult()
+    return ChatResult(attempted_actions=1)
 
 
 async def _drop_unresolvable_reply(sender_id: str, incoming: DialogueMessage) -> ChatResult:
@@ -475,7 +476,6 @@ async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure
             text=text,
             typing_wpm=_account_typing_wpm(sender_id),
             peer_phone=target.phone,
-            peer_first_name=target.first_name,
         ),
     )
 
