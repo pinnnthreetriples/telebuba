@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from core import db
@@ -99,7 +101,6 @@ async def test_a_failed_probe_reads_as_unknown_not_pending() -> None:
 
     assert board is not None
     assert board.candidates[0].qualification == "unknown"
-    assert board.progress.comments_on == 0
     assert board.progress.qualified == 1
     assert board.progress.comments_on == 0
 
@@ -216,10 +217,14 @@ async def test_adopt_skips_the_reconcile_when_nothing_was_linked(
 
 
 @pytest.mark.asyncio
-async def test_a_failure_mid_batch_still_reconciles_what_linked(
+async def test_a_failure_mid_batch_is_reported_per_channel_and_reconciles_once(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Otherwise a running listener ignores those channels until the next restart."""
+    """The report is the point: aborting hid the channels that had already linked.
+
+    And the reconcile still fires exactly once — a running listener would otherwise
+    ignore the linked channels until the next restart.
+    """
     calls: list[int] = []
 
     async def _record() -> None:
@@ -227,14 +232,70 @@ async def test_a_failure_mid_batch_still_reconciles_what_linked(
 
     async def _fail_on_second(campaign_id: str, channel: str) -> None:
         if channel == "second":
-            raise RuntimeError
+            msg = "database is locked"
+            raise RuntimeError(msg)
         await link_channel_to_campaign(campaign_id, channel)
 
     monkeypatch.setattr(_runtime, "reconcile_if_running", _record)
     monkeypatch.setattr(db, "link_channel_to_campaign", _fail_on_second)
     campaign_id = await _campaign()
 
-    with pytest.raises(RuntimeError):
+    result = await adopt_candidates(campaign_id, ["first", "second", "third"])
+
+    assert result is not None
+    assert [(o.channel, o.status) for o in result.outcomes] == [
+        ("first", "linked"),
+        ("second", "failed"),
+        ("third", "linked"),
+    ]
+    assert len(calls) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_batch_that_only_fails_links_nothing_and_skips_the_reconcile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The systemic case (campaign gone, DB wedged) degrades into a full failure list."""
+    calls: list[int] = []
+
+    async def _record() -> None:
+        calls.append(1)
+
+    async def _always_fail(campaign_id: str, channel: str) -> None:  # noqa: ARG001
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_runtime, "reconcile_if_running", _record)
+    monkeypatch.setattr(db, "link_channel_to_campaign", _always_fail)
+    campaign_id = await _campaign()
+
+    result = await adopt_candidates(campaign_id, ["first", "second"])
+
+    assert result is not None
+    assert [o.status for o in result.outcomes] == ["failed", "failed"]
+    assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_cancellation_mid_batch_does_not_reconcile(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A cancelled request must not start a reconcile it would only delay."""
+    calls: list[int] = []
+
+    async def _record() -> None:
+        calls.append(1)
+
+    async def _cancel_on_second(campaign_id: str, channel: str) -> None:
+        if channel == "second":
+            raise asyncio.CancelledError
+        await link_channel_to_campaign(campaign_id, channel)
+
+    monkeypatch.setattr(_runtime, "reconcile_if_running", _record)
+    monkeypatch.setattr(db, "link_channel_to_campaign", _cancel_on_second)
+    campaign_id = await _campaign()
+
+    with pytest.raises(asyncio.CancelledError):
         await adopt_candidates(campaign_id, ["first", "second", "third"])
 
-    assert len(calls) == 1
+    assert calls == []

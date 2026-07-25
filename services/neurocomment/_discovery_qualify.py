@@ -71,6 +71,7 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
     fresh = _fresh_cache(cached.groups, now)
 
     consecutive_errors = 0
+    total_errors = 0
     probed = 0
     for index, row in enumerate(pending.rows):
         if row.channel in fresh:
@@ -89,8 +90,15 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
             consecutive_errors = 0
         else:
             consecutive_errors += 1
-            if consecutive_errors >= settings.neurocomment.discovery_max_consecutive_errors:
-                # A dead session must not burn one RPC per remaining candidate.
+            total_errors += 1
+            neuro = settings.neurocomment
+            if (
+                consecutive_errors >= neuro.discovery_max_consecutive_errors
+                or total_errors >= neuro.discovery_max_total_errors
+            ):
+                # Neither a dead session nor a half-dead one may burn one RPC per
+                # remaining candidate: a session failing every other probe never trips
+                # the consecutive counter, so the total bounds the flaky case too.
                 return reason
 
         if (index + 1) % _PROGRESS_EVERY == 0:

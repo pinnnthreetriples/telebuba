@@ -318,6 +318,29 @@ async def test_a_success_resets_the_consecutive_error_counter(
 
 
 @pytest.mark.asyncio
+async def test_total_errors_abort_a_pass_that_fails_every_other_probe(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The consecutive counter never trips on a half-dead session; the total one must."""
+    reader = ReadRecorder(linked=read_error("RPC: TimeoutError", only="bad"))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 3)
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_total_errors", 2)
+    campaign_id = await _seed("aa_bad", "bb_good", "cc_bad", "dd_good", "ee_good")
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason == "RPC: TimeoutError"
+    # aa_bad, bb_good, cc_bad — the second failure ends the pass.
+    assert len(reader.calls) == 3
+    rows = {row.channel: row for row in (await list_discovery_candidates(campaign_id)).rows}
+    # The untouched tail stays pending, so the next pass resumes exactly here.
+    assert rows["dd_good"].qualified_at is None
+    assert rows["ee_good"].qualified_at is None
+    assert rows["cc_bad"].qualify_error == "RPC: TimeoutError"
+
+
+@pytest.mark.asyncio
 async def test_nothing_pending_is_a_cheap_no_op(monkeypatch: pytest.MonkeyPatch) -> None:
     reader = ReadRecorder(linked=lambda _action: _verdict(enabled=True))
     monkeypatch.setattr(_seams, "execute_read", reader)

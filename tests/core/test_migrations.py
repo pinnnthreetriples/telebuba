@@ -6,6 +6,7 @@ from typing import TYPE_CHECKING
 
 import pytest
 from sqlalchemy import create_engine
+from sqlalchemy.exc import IntegrityError
 
 from core.db import _get_engine, configure_database  # type: ignore[attr-defined]
 from core.migration_steps import _add_users_token_version
@@ -18,6 +19,8 @@ from core.migrations import MIGRATIONS, _rename_proxy_type_http_to_https, apply_
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+    from sqlalchemy.engine import Engine
 
 
 @pytest.fixture(autouse=True)
@@ -514,3 +517,100 @@ def test_discovery_candidates_migration_creates_table_and_index(tmp_path: Path) 
         "created_at",
     } == columns
     assert "ix_nc_discovery_campaign_qualified" in indexes
+
+
+def _legacy_campaign_channels(tmp_path: Path, name: str) -> Engine:
+    """A legacy DB with #11's case-SENSITIVE index, so case-duplicates can be planted."""
+    engine = create_engine(f"sqlite:///{tmp_path / name}", future=True)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_channels ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id VARCHAR NOT NULL, "
+            "channel VARCHAR NOT NULL, active INTEGER NOT NULL, created_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "CREATE UNIQUE INDEX ix_neurocomment_channel_one_active_campaign "
+            "ON neurocomment_campaign_channels(channel) WHERE active = 1",
+        )
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_account_channels ("
+            "campaign_id VARCHAR NOT NULL, account_id VARCHAR NOT NULL, "
+            "channel VARCHAR NOT NULL, created_at VARCHAR NOT NULL, "
+            "PRIMARY KEY (campaign_id, account_id, channel))",
+        )
+    return engine
+
+
+def test_channel_fold_index_rejects_case_duplicates_and_is_idempotent(tmp_path: Path) -> None:
+    """#39 recreates the one-active-campaign index over the ``dedup_key`` fold."""
+    from core.migration_steps_neurocomment import (  # noqa: PLC0415
+        _add_neurocomment_channel_case_fold_index,
+    )
+
+    engine = _legacy_campaign_channels(tmp_path, "fold.db")
+    with engine.begin() as connection:
+        _add_neurocomment_channel_case_fold_index(connection)
+        _add_neurocomment_channel_case_fold_index(connection)  # idempotent — must not raise.
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_channels "
+            "(campaign_id, channel, active, created_at) VALUES ('a', 'telegram', 1, 'now')",
+        )
+        # +HASH invite keys stay case-sensitive: both must be insertable.
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_channels "
+            "(campaign_id, channel, active, created_at) VALUES ('a', '+AbCdEfGh', 1, 'now'), "
+            "('b', '+abcdefgh', 1, 'now')",
+        )
+    with engine.begin() as connection, pytest.raises(IntegrityError):
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_channels "
+            "(campaign_id, channel, active, created_at) VALUES ('b', 'Telegram', 1, 'now')",
+        )
+    engine.dispose()
+
+
+def test_channel_fold_index_deactivates_pre_existing_case_duplicates(tmp_path: Path) -> None:
+    """A DB already holding both spellings active: the LATER link is demoted, not deleted."""
+    from core.migration_steps_neurocomment import (  # noqa: PLC0415
+        _add_neurocomment_channel_case_fold_index,
+    )
+
+    engine = _legacy_campaign_channels(tmp_path, "dupes.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_channels "
+            "(campaign_id, channel, active, created_at) VALUES "
+            "('a', 'telegram', 1, 'now'), ('b', 'Telegram', 1, 'now'), ('c', 'other', 1, 'now')",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_account_channels "
+            "(campaign_id, account_id, channel, created_at) VALUES "
+            "('b', 'acc-1', 'Telegram', 'now'), ('c', 'acc-1', 'other', 'now')",
+        )
+        _add_neurocomment_channel_case_fold_index(connection)
+
+    with engine.connect() as connection:
+        links = connection.exec_driver_sql(
+            "SELECT campaign_id, channel, active FROM neurocomment_campaign_channels ORDER BY id",
+        ).all()
+        subsets = connection.exec_driver_sql(
+            "SELECT campaign_id, channel FROM neurocomment_campaign_account_channels",
+        ).all()
+    engine.dispose()
+
+    # The row is kept (re-linkable by the operator), only its active flag flips.
+    assert links == [("a", "telegram", 1), ("b", "Telegram", 0), ("c", "other", 1)]
+    # The demoted link's per-account subset entry is dropped, as deactivate_channel does.
+    assert subsets == [("c", "other")]
+
+
+def test_channel_fold_index_skips_a_db_without_the_link_table(tmp_path: Path) -> None:
+    """The #39 body is a no-op on a hand-built DB that has no campaign-channel table."""
+    from core.migration_steps_neurocomment import (  # noqa: PLC0415
+        _add_neurocomment_channel_case_fold_index,
+    )
+
+    engine = create_engine(f"sqlite:///{tmp_path / 'empty-fold.db'}", future=True)
+    with engine.begin() as connection:
+        _add_neurocomment_channel_case_fold_index(connection)  # no table → returns, no raise.
+    engine.dispose()

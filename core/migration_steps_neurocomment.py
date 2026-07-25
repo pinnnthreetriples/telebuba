@@ -10,12 +10,23 @@ step from ``core.migration_steps`` unchanged.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
+from core.channel_tokens import dedup_key
 from core.migration_steps import _sqlite_columns, _sqlite_table_exists
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
+
+logger = logging.getLogger(__name__)
+
+# The one-active-campaign fold, expressed in SQL: mirrors
+# ``core.channel_tokens.dedup_key`` — public usernames fold to lower case, a
+# ``+HASH`` invite key keeps its case because two invites differing only in letter
+# case are genuinely different chats. The duplicate SWEEP below calls ``dedup_key``
+# itself, so this string is the fold's only second spelling.
+_CHANNEL_FOLD = "CASE WHEN substr(channel, 1, 1) = '+' THEN channel ELSE lower(channel) END"
 
 
 def _add_neurocomment_tables(connection: Connection) -> None:
@@ -302,4 +313,67 @@ def _add_neurocomment_join_log(connection: Connection) -> None:
     connection.exec_driver_sql(
         "CREATE INDEX IF NOT EXISTS ix_nc_join_log_account_joined "
         "ON neurocomment_join_log(account_id, joined_at)",
+    )
+
+
+def _add_neurocomment_channel_case_fold_index(connection: Connection) -> None:
+    """#39: make "one active campaign per channel" case-insensitive.
+
+    Telegram usernames are case-insensitive, so the #11 index
+    (``ON neurocomment_campaign_channels(channel) WHERE active = 1``) happily let
+    ``Telegram`` be linked while ``telegram`` was already active elsewhere — one
+    channel served by two campaigns, subscribed twice and commented on twice, which
+    is exactly what that index exists to prevent. This recreates it over the
+    ``dedup_key`` fold, so ``+HASH`` invite keys (which ARE case-sensitive) keep
+    their exact-match behaviour.
+
+    Pre-existing violators exist: a database can already hold ``telegram`` on
+    campaign A and ``Telegram`` on B, both active, and ``CREATE UNIQUE INDEX`` would
+    fail on it. Such a collision is resolved by DEACTIVATING the later link (the
+    higher ``id``) — never by deleting it. The row survives with ``active = 0``, so
+    the operator can simply re-link the channel to the campaign they meant; its
+    per-account channel-subset rows are dropped exactly as ``deactivate_channel``
+    drops them, because a subset entry for a non-active channel would silently
+    exclude that account from selection forever. Every demotion is logged at
+    WARNING so the change is not silent.
+    """
+    if not _sqlite_table_exists(connection, "neurocomment_campaign_channels"):
+        return
+    subsets_exist = _sqlite_table_exists(connection, "neurocomment_campaign_account_channels")
+    active_links = connection.exec_driver_sql(
+        "SELECT id, campaign_id, channel FROM neurocomment_campaign_channels "
+        "WHERE active = 1 ORDER BY id",
+    ).all()
+    seen: set[str] = set()
+    for link_id, campaign_id, channel in active_links:
+        key = dedup_key(str(channel))
+        if key not in seen:
+            seen.add(key)
+            continue
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_campaign_channels SET active = 0 WHERE id = ?",
+            (link_id,),
+        )
+        if subsets_exist:
+            connection.exec_driver_sql(
+                "DELETE FROM neurocomment_campaign_account_channels "
+                "WHERE campaign_id = ? AND channel = ?",
+                (campaign_id, channel),
+            )
+        logger.warning(
+            "migration 39: deactivated case-duplicate channel link %r in campaign %r "
+            "(link id %s) — the same channel was already active under a different spelling; "
+            "re-link it if this was the campaign you wanted",
+            channel,
+            campaign_id,
+            link_id,
+        )
+    # Replace #11's case-sensitive index in place: same name, so nothing else has to
+    # learn a new one. Dropping first is safe — the whole registry runs in one
+    # transaction, so a failing CREATE rolls back to the old index rather than
+    # leaving the invariant unenforced.
+    connection.exec_driver_sql("DROP INDEX IF EXISTS ix_neurocomment_channel_one_active_campaign")
+    connection.exec_driver_sql(
+        "CREATE UNIQUE INDEX IF NOT EXISTS ix_neurocomment_channel_one_active_campaign "
+        f"ON neurocomment_campaign_channels({_CHANNEL_FOLD}) WHERE active = 1",
     )

@@ -6982,11 +6982,37 @@
         "title": "DialogueFeedMessage",
         "description": "One dialogue message with both accounts resolved to display labels.\n\nLocale-neutral (#12): ``from_label``/``to_label`` are the account's own\nphone / label / id strings, never translated UI text; ``created_at`` is the\nstored ISO-8601 timestamp. The SPA owns any presentation."
       },
+      "DiscoveryAdoptOutcome": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "linked",
+              "already_assigned",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "channel"
+        ],
+        "title": "DiscoveryAdoptOutcome",
+        "description": "What happened to one channel of a batch adopt."
+      },
       "DiscoveryAdoptRequest": {
         "properties": {
           "channels": {
             "items": {
               "type": "string",
+              "maxLength": 32,
               "minLength": 1
             },
             "type": "array",
@@ -7006,7 +7032,7 @@
         "properties": {
           "outcomes": {
             "items": {
-              "$ref": "#/components/schemas/ChannelLinkOutcome"
+              "$ref": "#/components/schemas/DiscoveryAdoptOutcome"
             },
             "type": "array",
             "title": "Outcomes"

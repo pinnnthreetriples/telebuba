@@ -47,6 +47,7 @@ from core.migration_steps_neurocomment import (
     _add_campaign_account_channel,
     _add_campaign_account_channels_table,
     _add_neurocomment_challenges_channel_index,
+    _add_neurocomment_channel_case_fold_index,
     _add_neurocomment_comment_deleted_at,
     _add_neurocomment_cooldowns,
     _add_neurocomment_join_log,
@@ -114,6 +115,11 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         38,
         "add_neurocomment_discovery_candidates",
         _add_neurocomment_discovery_candidates,
+    ),
+    (
+        39,
+        "add_neurocomment_channel_case_fold_index",
+        _add_neurocomment_channel_case_fold_index,
     ),
 )
 

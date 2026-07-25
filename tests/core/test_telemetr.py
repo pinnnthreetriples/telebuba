@@ -33,6 +33,31 @@ def _ok_body(*rows: Mapping[str, object]) -> dict[str, object]:
     return {"items": list(rows)}
 
 
+class _AttemptCounter:
+    """Counts calls into the shared client.
+
+    A key that will not encode and an unparseable base URL both fail while httpx builds
+    the request, so respx never sees them and its ``call_count`` cannot tell one attempt
+    from three — this wrapper can.
+    """
+
+    def __init__(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        self.count = 0
+        client = _get_client()
+        inner = client.get
+
+        async def _counted(
+            url: str,
+            *,
+            headers: dict[str, str],
+            params: dict[str, str | int],
+        ) -> httpx.Response:
+            self.count += 1
+            return await inner(url, headers=headers, params=params)
+
+        monkeypatch.setattr(client, "get", _counted)
+
+
 @pytest.mark.asyncio
 async def test_search_parses_catalogue_rows() -> None:
     with respx.mock:
@@ -208,31 +233,75 @@ async def test_transport_error_is_retried_then_reported(monkeypatch: pytest.Monk
 
 
 @pytest.mark.asyncio
-async def test_non_ascii_api_key_is_an_error_not_a_crash(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Headers are encoded while the request is built, so this never reaches HTTPError."""
-    monkeypatch.setattr(settings.telemetr, "max_retries", 0)
+async def test_non_ascii_api_key_errors_after_one_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Headers are encoded while the request is built, so this never reaches HTTPError.
+
+    A key carrying a non-breaking space will not encode on a second attempt either, so
+    retrying it would only spend a request and delay the honest error.
+    """
+    monkeypatch.setattr(settings.telemetr, "max_retries", 2)
+    monkeypatch.setattr(settings.telemetr, "retry_backoff_seconds", 0.0)
     with respx.mock:
         route = respx.get(url__regex=_ENDPOINT).mock(
             return_value=httpx.Response(200, json=_ok_body()),
         )
+        counter = _AttemptCounter(monkeypatch)
 
-        result = await search_catalog(_request(api_key="ключ"))
+        result = await search_catalog(_request(api_key="tm-\xa0key"))
 
     assert result.status == "error"
+    assert result.error is not None
+    assert "UnicodeEncodeError" in result.error
+    assert counter.count == 1
     assert route.call_count == 0
 
 
 @pytest.mark.asyncio
-async def test_malformed_base_url_is_an_error_not_a_crash(monkeypatch: pytest.MonkeyPatch) -> None:
-    """``httpx.InvalidURL`` is not an ``HTTPError`` subclass, so it needs its own catch."""
-    monkeypatch.setattr(settings.telemetr, "max_retries", 0)
+async def test_malformed_base_url_errors_after_one_attempt(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``httpx.InvalidURL`` is not an ``HTTPError`` subclass, so it needs its own catch.
+
+    And a base URL that does not parse never will, so this is reported, not retried.
+    """
+    monkeypatch.setattr(settings.telemetr, "max_retries", 2)
+    monkeypatch.setattr(settings.telemetr, "retry_backoff_seconds", 0.0)
     monkeypatch.setattr(settings.telemetr, "base_url", "http://telemetr.io:port")
+    counter = _AttemptCounter(monkeypatch)
 
     result = await search_catalog(_request())
 
     assert result.status == "error"
     assert result.error is not None
     assert "InvalidURL" in result.error
+    assert counter.count == 1
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        httpx.LocalProtocolError("Illegal header value b'tm-key\\n'"),
+        httpx.UnsupportedProtocol("Request URL is missing an 'http://' protocol."),
+    ],
+    ids=["newline-in-key", "scheme-less-base-url"],
+)
+@pytest.mark.asyncio
+async def test_deterministic_transport_failures_are_not_retried(
+    monkeypatch: pytest.MonkeyPatch,
+    error: httpx.HTTPError,
+) -> None:
+    """A newline in the key and a scheme-less base URL surface from inside the transport.
+
+    Both are ``HTTPError`` subclasses, so only clause order keeps them off the retry
+    path — and both are configuration defects a second attempt cannot fix.
+    """
+    monkeypatch.setattr(settings.telemetr, "max_retries", 2)
+    monkeypatch.setattr(settings.telemetr, "retry_backoff_seconds", 0.0)
+    with respx.mock:
+        route = respx.get(url__regex=_ENDPOINT).mock(side_effect=error)
+
+        result = await search_catalog(_request())
+
+    assert result.status == "error"
+    assert route.call_count == 1
 
 
 @pytest.mark.asyncio

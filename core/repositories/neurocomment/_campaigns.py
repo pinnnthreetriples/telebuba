@@ -9,8 +9,11 @@ from uuid import uuid4
 from sqlalchemy import delete, func, insert, select, update
 from sqlalchemy.exc import IntegrityError
 
+from core.channel_tokens import dedup_key
 from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import (
+    _campaign_channel_matches,
+    _campaign_channels_match,
     _neurocomment_campaign_account_channels,
     _neurocomment_campaign_accounts,
     _neurocomment_campaign_channels,
@@ -170,8 +173,7 @@ def _row_to_channel_link(row: RowMapping) -> CampaignChannelLink:
 
 def _active_channel_link(connection: Connection, channel: str) -> CampaignChannelLink | None:
     statement = select(_neurocomment_campaign_channels).where(
-        (_neurocomment_campaign_channels.c.channel == channel)
-        & (_neurocomment_campaign_channels.c.active == 1),
+        _campaign_channel_matches(channel) & (_neurocomment_campaign_channels.c.active == 1),
     )
     row = connection.execute(statement).mappings().first()
     return None if row is None else _row_to_channel_link(row)
@@ -206,7 +208,9 @@ async def link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignCh
     """Bind a channel to a campaign as active.
 
     Raises ``ChannelAlreadyAssignedError`` if the channel is already active in any
-    campaign (the DB partial-unique index is the source of truth).
+    campaign (the DB partial-unique index is the source of truth). Handles are
+    compared with ``dedup_key`` folding, so ``Telegram`` collides with ``telegram``
+    (same channel) while two ``+HASH`` invites differing only in case do not.
     """
     return await asyncio.to_thread(_link_channel_to_campaign, campaign_id, channel)
 
@@ -271,7 +275,7 @@ def _fetch_active_campaign_for_channel(channel: str) -> NeurocommentCampaign | N
         select(_neurocomment_campaigns)
         .select_from(_active_channel_join())
         .where(
-            (_neurocomment_campaign_channels.c.channel == channel)
+            _campaign_channel_matches(channel)
             & (_neurocomment_campaign_channels.c.active == 1)
             & (_neurocomment_campaigns.c.status == "active"),
         )
@@ -299,14 +303,20 @@ def _fetch_active_campaigns_for_channels(
         .add_columns(_neurocomment_campaign_channels.c.channel)
         .select_from(_active_channel_join())
         .where(
-            (_neurocomment_campaign_channels.c.channel.in_(channels))
+            _campaign_channels_match(channels)
             & (_neurocomment_campaign_channels.c.active == 1)
             & (_neurocomment_campaigns.c.status == "active"),
         )
     )
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
-    return {str(row["channel"]): _row_to_campaign(row) for row in rows}
+    # Keyed by the channel the CALLER asked for, not the stored spelling: the
+    # discovery board looks the result up by Telegram's canonical handle while the
+    # link may have been typed in lower case by hand.
+    owners = {dedup_key(str(row["channel"])): _row_to_campaign(row) for row in rows}
+    return {
+        channel: owners[dedup_key(channel)] for channel in channels if dedup_key(channel) in owners
+    }
 
 
 async def fetch_active_campaigns_for_channels(

@@ -4,10 +4,13 @@ Kept in their own module so ``core.db`` stays within the file-size budget.
 Importing this module registers the tables in ``core.db._metadata``; the
 repository package pulls it in, and ``core.db`` imports the package before
 ``_get_engine`` runs ``create_all``. The partial unique index enforcing
-"one active campaign per channel" is created in migration #11.
+"one active campaign per channel" is created in migration #11 and recreated over
+the case fold in migration #39 — see ``_campaign_channel_matches`` below.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -19,9 +22,15 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    func,
+    or_,
 )
 
+from core.channel_tokens import dedup_key
 from core.db import _metadata
+
+if TYPE_CHECKING:
+    from sqlalchemy import ColumnElement
 
 _neurocomment_campaigns = Table(
     "neurocomment_campaigns",
@@ -49,6 +58,31 @@ _neurocomment_campaign_channels = Table(
     Column("active", Integer, nullable=False),
     Column("created_at", String, nullable=False),
 )
+
+
+def _campaign_channel_matches(channel: str) -> ColumnElement[bool]:
+    """Match a campaign-channel link the way ``dedup_key`` folds handles.
+
+    Telegram usernames are case-insensitive, so ``Telegram`` must find the link
+    stored as ``telegram`` — but a ``+HASH`` invite key IS case-sensitive and is
+    compared verbatim. Mirrors the migration #39 unique index, so what the index
+    refuses to insert is exactly what these reads find.
+    """
+    column = _neurocomment_campaign_channels.c.channel
+    if channel.startswith("+"):
+        return column == channel
+    return func.lower(column) == dedup_key(channel)
+
+
+def _campaign_channels_match(channels: list[str]) -> ColumnElement[bool]:
+    """The ``IN`` form of :func:`_campaign_channel_matches` (same fold, one query)."""
+    column = _neurocomment_campaign_channels.c.channel
+    return or_(
+        column.in_([c for c in channels if c.startswith("+")]),
+        func.lower(column).in_([c.lower() for c in channels if not c.startswith("+")]),
+    )
+
+
 _neurocomment_campaign_accounts = Table(
     "neurocomment_campaign_accounts",
     _metadata,
@@ -106,9 +140,10 @@ _neurocomment_discovery_candidates = Table(
         ForeignKey("neurocomment_campaigns.campaign_id"),
         primary_key=True,
     ),
-    # Handle exactly as Telegram returned it (canonical case) — campaign-channel
-    # matching is exact, and adopt writes this value verbatim. Cross-provider dedup
-    # folds case in memory before insert, so no second key column is needed.
+    # Handle exactly as Telegram returned it (canonical case) — adopt writes this
+    # value verbatim, and campaign-channel matching folds case (migration #39), so a
+    # handle the operator typed in lower case is still recognised as the same channel.
+    # Cross-provider dedup folds case in memory before insert, so no key column.
     Column("channel", String, primary_key=True),
     Column("title", String, nullable=False, server_default=""),
     # NULL until known: contacts.Search does not reliably carry a subscriber count;

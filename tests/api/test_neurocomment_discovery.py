@@ -12,8 +12,9 @@ import httpx
 import pytest
 
 from api import create_app
-from schemas.neurocomment import ChannelLinkOutcome
 from schemas.neurocomment_discovery import (
+    CHANNEL_HANDLE_MAX_LENGTH,
+    DiscoveryAdoptOutcome,
     DiscoveryAdoptResult,
     DiscoveryBoard,
     DiscoveryCandidate,
@@ -214,21 +215,28 @@ async def test_adopt_returns_one_outcome_per_channel(
         seen.append(channels)
         return DiscoveryAdoptResult(
             outcomes=[
-                ChannelLinkOutcome(status="linked", channel="alpha"),
-                ChannelLinkOutcome(status="already_assigned", channel="beta"),
+                DiscoveryAdoptOutcome(status="linked", channel="alpha"),
+                DiscoveryAdoptOutcome(status="already_assigned", channel="beta"),
+                DiscoveryAdoptOutcome(status="failed", channel="gamma"),
             ],
         )
 
     monkeypatch.setattr("services.neurocomment.adopt_candidates", _fake)
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/adopt", json={"channels": ["alpha", "beta"]})
+        resp = await client.post(
+            f"{_BASE}/adopt",
+            json={"channels": ["alpha", "beta", "gamma"]},
+        )
 
+    # A channel whose link attempt raised is part of the batch's report, not a 500:
+    # the ones that linked stay linked, so the operator has to be told which.
     assert resp.status_code == 200
     assert [item["status"] for item in resp.json()["outcomes"]] == [
         "linked",
         "already_assigned",
+        "failed",
     ]
-    assert seen == [["alpha", "beta"]]
+    assert seen == [["alpha", "beta", "gamma"]]
 
 
 @pytest.mark.asyncio
@@ -262,11 +270,21 @@ async def test_adopt_rejects_an_empty_or_oversized_batch(app: FastAPI) -> None:
     assert oversized.status_code == 422
 
 
+@pytest.mark.parametrize(
+    "handle",
+    ["", " ", "\t", " alpha", "a" * (CHANNEL_HANDLE_MAX_LENGTH + 1)],
+)
 @pytest.mark.asyncio
-async def test_adopt_rejects_a_blank_handle(app: FastAPI) -> None:
-    """Without a per-item bound this reached the link transaction and 500'd."""
+async def test_adopt_rejects_an_unusable_handle(app: FastAPI, handle: str) -> None:
+    """Adopt writes the handle verbatim, so an unusable one must not get that far.
+
+    A blank one 500'd inside the link transaction; a padded or over-long one persisted a
+    campaign-channel row matching no candidate and no linked group. The plain
+    channel-link route still takes any non-empty string — pre-existing, not this route's
+    to fix, which is why these bounds live on the discovery request.
+    """
     async with _client(app) as client:
-        resp = await client.post(f"{_BASE}/adopt", json={"channels": ["alpha", ""]})
+        resp = await client.post(f"{_BASE}/adopt", json={"channels": ["alpha", handle]})
 
     assert resp.status_code == 422
 

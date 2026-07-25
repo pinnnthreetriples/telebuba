@@ -1026,6 +1026,7 @@
         "added": "Added: {{count}}",
         "addedNone": "Nothing added: those channels are already taken",
         "addedRefused": "Not added: {{count}} — those channels are already taken",
+        "addedFailed": "Could not add: {{count}} — try again",
         "addFailed": "Couldn't add the channels. Some may have been added — check the list and try again."
       }
     },

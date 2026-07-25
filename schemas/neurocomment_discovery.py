@@ -1,7 +1,7 @@
 """Channel-discovery schemas — split from ``schemas.neurocomment`` (file-size cap).
 
-One-way import of ``ChannelLinkOutcome`` from ``schemas.neurocomment`` (no cycle:
-that module must not import this one), same arrangement as
+Self-contained: nothing here imports ``schemas.neurocomment``, which keeps the split
+one-way (that module must not import this one either), same arrangement as
 ``schemas.neurocomment_progress``.
 
 Field bounds are literals, not config reads: ``schemas/`` may not import ``core``
@@ -14,10 +14,6 @@ from __future__ import annotations
 from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
-
-from schemas.neurocomment import (
-    ChannelLinkOutcome,  # noqa: TC001 - Pydantic needs the runtime type for field schema.
-)
 
 # Where a candidate came from. Adding a source is one literal here plus one
 # adapter in services (see .mex/patterns/add-discovery-source.md).
@@ -51,6 +47,8 @@ MAX_KEYWORDS = 10
 # tail. Onboarding's rolling join cap (20/account/day) absorbs the burst.
 MAX_ADOPT_CHANNELS = 500
 CHANNEL_HANDLE_MAX_LENGTH = 32
+
+AdoptHandle = Annotated[str, Field(min_length=1, max_length=CHANNEL_HANDLE_MAX_LENGTH)]
 
 
 class DiscoverySearchRequest(BaseModel):
@@ -133,17 +131,43 @@ class DiscoveryBoard(BaseModel):
 class DiscoveryAdoptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    # Per-item bound too: a blank handle would otherwise pass validation and only
-    # fail deep inside the link transaction, turning a client mistake into a 500.
-    # The plain channel-link route bounds its handle the same way.
-    channels: list[Annotated[str, Field(min_length=1)]] = Field(
-        min_length=1,
-        max_length=MAX_ADOPT_CHANNELS,
-    )
+    # Per-item bounds too: adopt writes the handle it is given straight into
+    # ``neurocomment_campaign_channels``, so without them a blank handle failed deep
+    # inside the link transaction (a client mistake surfacing as a 500) and a 100 KB
+    # string was persisted verbatim. The ceiling is Telegram's username length, which is
+    # also what discovery itself can store: candidates are normalized against
+    # ``CHANNEL_HANDLE_MAX_LENGTH`` and invite-style ``+HASH`` forms (the one legal form
+    # that is longer) are dropped at search time, so adopt can never receive one.
+    channels: list[AdoptHandle] = Field(min_length=1, max_length=MAX_ADOPT_CHANNELS)
+
+    @model_validator(mode="after")
+    def _check_handles(self) -> DiscoveryAdoptRequest:
+        for channel in self.channels:
+            # ``min_length`` lets " " and "\t" through, and a padded handle links a row
+            # that matches no candidate and no linked group — the listener would simply
+            # never watch it. Cheaper to refuse than to store something unusable.
+            if channel != channel.strip():
+                msg = "each channel must be a bare handle with no surrounding whitespace"
+                raise ValueError(msg)
+        return self
+
+
+# Batch-only third status: ``failed`` is a channel whose link attempt raised (the DB was
+# locked, the campaign was deleted mid-batch). ``ChannelLinkOutcome`` is deliberately
+# left alone — the single-channel link route cannot produce this, and widening its
+# literal would advertise a status it never returns.
+DiscoveryAdoptStatus = Literal["linked", "already_assigned", "failed"]
+
+
+class DiscoveryAdoptOutcome(BaseModel):
+    """What happened to one channel of a batch adopt."""
+
+    status: DiscoveryAdoptStatus
+    channel: str = Field(min_length=1)
 
 
 class DiscoveryAdoptResult(BaseModel):
-    outcomes: list[ChannelLinkOutcome] = Field(default_factory=list)
+    outcomes: list[DiscoveryAdoptOutcome] = Field(default_factory=list)
 
 
 class DiscoveryCandidateRow(BaseModel):

@@ -924,6 +924,22 @@ export type DialogueFeedMessage = {
 };
 
 /**
+ * DiscoveryAdoptOutcome
+ *
+ * What happened to one channel of a batch adopt.
+ */
+export type DiscoveryAdoptOutcome = {
+  /**
+   * Status
+   */
+  status: 'linked' | 'already_assigned' | 'failed';
+  /**
+   * Channel
+   */
+  channel: string;
+};
+
+/**
  * DiscoveryAdoptRequest
  */
 export type DiscoveryAdoptRequest = {
@@ -940,7 +956,7 @@ export type DiscoveryAdoptResult = {
   /**
    * Outcomes
    */
-  outcomes?: Array<ChannelLinkOutcome>;
+  outcomes?: Array<DiscoveryAdoptOutcome>;
 };
 
 /**

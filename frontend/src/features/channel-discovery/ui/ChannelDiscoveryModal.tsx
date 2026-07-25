@@ -39,7 +39,11 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const [form, setForm] = useState<DiscoveryFormState>(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
-  const [adopted, setAdopted] = useState<{ linked: number; refused: number } | null>(null);
+  const [adopted, setAdopted] = useState<{
+    linked: number;
+    refused: number;
+    failed: number;
+  } | null>(null);
 
   // Whether the external catalogue is usable is server state; the modal owns its
   // own I/O, so it reads the settings row rather than taking it as a prop.
@@ -116,10 +120,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
       { path: { campaign_id: campaignId }, body: { channels: picks } },
       {
         onSuccess: (result) => {
-          const linked = (result.outcomes ?? []).filter(
-            (outcome) => outcome.status === 'linked',
-          ).length;
-          setAdopted({ linked, refused: requested - linked });
+          const outcomes = result.outcomes ?? [];
+          const count = (status: string) =>
+            outcomes.filter((outcome) => outcome.status === status).length;
+          // "Taken by another campaign" and "the link itself failed" need different
+          // copy: the first is final, the second is worth retrying.
+          const linked = count('linked');
+          setAdopted({ linked, refused: count('already_assigned'), failed: count('failed') });
           void queryClient.invalidateQueries({
             queryKey: neurocommentBoardQueryOptions({ path: { campaign_id: campaignId } }).queryKey,
           });
@@ -187,7 +194,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           </p>
         ) : null}
 
-        {/* A mid-batch failure links some channels and then 500s with no outcomes, so
+        {adopted !== null && adopted.failed > 0 ? (
+          <p role="status" className="mt-[11px] text-[12px] text-danger">
+            {t('neurocomment.modal.discovery.addedFailed', { count: adopted.failed })}
+          </p>
+        ) : null}
+
+        {/* The request itself never landed, so nothing can be read from the outcomes —
             silence would read as "nothing happened". */}
         {adopt.isError ? (
           <p role="status" className="mt-[11px] text-[12px] text-danger">

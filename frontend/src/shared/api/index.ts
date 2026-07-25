@@ -232,6 +232,7 @@ export type {
   DeleteProxyResponses,
   DialogueFeed,
   DialogueFeedMessage,
+  DiscoveryAdoptOutcome,
   DiscoveryAdoptRequest,
   DiscoveryAdoptResult,
   DiscoveryBoard,

@@ -12,7 +12,6 @@ cache makes the retry nearly free.
 
 from __future__ import annotations
 
-import contextlib
 from typing import TYPE_CHECKING
 
 from core import db
@@ -22,8 +21,8 @@ from core.repositories.neurocomment import (
     list_discovery_candidates,
     list_linked_groups,
 )
-from schemas.neurocomment import ChannelLinkOutcome
 from schemas.neurocomment_discovery import (
+    DiscoveryAdoptOutcome,
     DiscoveryAdoptResult,
     DiscoveryBoard,
     DiscoveryCandidate,
@@ -212,40 +211,58 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
 async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAdoptResult | None:
     """Link the operator's picks to the campaign, reporting one outcome per channel.
 
-    ``already_assigned`` is a status, not an exception (the channel belongs to
-    another campaign). The listener reconcile fires ONCE at the end: adopting 30
-    channels must not trigger 30 reconciles.
+    Every refusal AND every failure is a per-channel status, never an exception:
+    ``already_assigned`` (the channel is another campaign's active target) and
+    ``failed`` (the attempt raised). One bad channel must not cost the report for the
+    other 29 — those stay linked either way, so aborting the batch left the operator
+    with an opaque 500 and no way to know what had already happened.
+
+    No whole-batch abort, not even for a systemic cause (campaign deleted mid-loop, DB
+    locked): every link is its own transaction, so the systemic case simply degrades
+    into a full list of ``failed`` the operator can retry from, while the common
+    transient case costs exactly one channel instead of the whole selection.
+
+    The listener reconcile fires ONCE at the end, and only if something linked:
+    adopting 30 channels must not trigger 30 reconciles.
     """
     campaign = await db.fetch_campaign(campaign_id)
     if campaign is None:
         return None
 
-    outcomes: list[ChannelLinkOutcome] = []
+    outcomes: list[DiscoveryAdoptOutcome] = []
     linked = 0
-    try:
-        for channel in channels:
-            try:
-                await db.link_channel_to_campaign(campaign_id, channel)
-            except db.ChannelAlreadyAssignedError:
-                outcomes.append(ChannelLinkOutcome(status="already_assigned", channel=channel))
-                continue
-            linked += 1
-            outcomes.append(ChannelLinkOutcome(status="linked", channel=channel))
-    except Exception:
-        # Reconcile what did link before re-raising, or a running listener ignores those
-        # channels until the next restart. Suppressed so it cannot displace the original
-        # error, and deliberately not a ``finally``: under cancellation this reconcile
-        # would only delay the cancel, and a second cancel would tear it in half.
-        if linked:
-            with contextlib.suppress(Exception):
-                await _runtime.reconcile_if_running()
-        raise
-    else:
-        if linked:
-            await _runtime.reconcile_if_running()
+    failures = 0
+    reason: str | None = None
+    for channel in channels:
+        try:
+            await db.link_channel_to_campaign(campaign_id, channel)
+        except db.ChannelAlreadyAssignedError:
+            outcomes.append(DiscoveryAdoptOutcome(status="already_assigned", channel=channel))
+            continue
+        except Exception as exc:  # noqa: BLE001 - reported per channel, see the docstring
+            failures += 1
+            reason = reason or type(exc).__name__
+            outcomes.append(DiscoveryAdoptOutcome(status="failed", channel=channel))
+            continue
+        linked += 1
+        outcomes.append(DiscoveryAdoptOutcome(status="linked", channel=channel))
+
+    if linked:
+        # Reached even when a later channel failed, or a running listener would ignore the
+        # ones that did link until the next restart. Cancellation is a ``BaseException``,
+        # so it unwinds past this: a cancelled request must not start a reconcile it would
+        # only delay, and a second cancel would tear that reconcile in half.
+        await _runtime.reconcile_if_running()
     await log_event(
         "INFO",
         "neurocomment_discovery_adopted",
-        extra={"campaign_id": campaign_id, "linked": linked, "submitted": len(channels)},
+        extra={
+            "campaign_id": campaign_id,
+            "linked": linked,
+            "submitted": len(channels),
+            "failed": failures,
+            # First failure only: one short code, like the search stage's degraded reason.
+            "reason": reason,
+        },
     )
     return DiscoveryAdoptResult(outcomes=outcomes)

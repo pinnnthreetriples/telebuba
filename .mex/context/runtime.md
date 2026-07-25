@@ -66,6 +66,20 @@ skipped source, a 429 degrades the run to native results with `last_error` set. 
 candidates is delete-then-insert, so the set is replaced only when at least one source actually
 answered (`SourceOutcome.answered`); if none did, the previous set survives and the run ends
 `failed`. A source answering with zero hits — or a filter removing every hit — IS an empty
-result and does replace it. A FloodWait aborts the search sweep as well as qualification.
+result and does replace it. A FloodWait aborts the search sweep as well as qualification, and a
+pass also stops at `discovery_max_total_errors` — the consecutive counter catches a dead session
+but not a flaky one failing every other probe.
+
+Campaign-channel ownership is folded through `core.channel_tokens.dedup_key` semantics: the
+unique index (migration 39) and every ownership lookup compare `lower(channel)` for usernames but
+EXACT for `+HASH`, because invite keys really are case-sensitive — a plain `COLLATE NOCASE` would
+wrongly reject a second invite link. Before this, `Telegram` could be linked while `telegram` was
+active, putting one channel in two campaigns. Migration 39 deactivates (never deletes) a
+pre-existing case duplicate so the unique index can be created at all.
+
+Removing an account tombstones it in the client pool (`removing_client`) for the whole
+evict → unlink → delete sequence. Pool borrowers do not take `account_lock`, so without the
+tombstone one could rebuild a client mid-removal, reopen the session file and make the unlink
+fail on Windows — aborting before the DB row was deleted — or re-create the file afterwards.
 
 API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.

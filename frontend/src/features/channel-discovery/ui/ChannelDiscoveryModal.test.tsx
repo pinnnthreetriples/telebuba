@@ -54,7 +54,9 @@ type Routes = {
   boards?: DiscoveryBoard[];
   startStatus?: string;
   hasTelemetrKey?: boolean;
-  adoptLinked?: number;
+  // One status per requested channel, defaulting to all-linked. The server reports
+  // per-channel outcomes, so a spec has to be able to mix them.
+  adoptStatuses?: string[];
   adoptFails?: boolean;
   boardFailures?: number;
   // Mutable so a spec can stall the board mid-test; a stalled fetch proves a row on
@@ -96,11 +98,11 @@ function route(routes: Routes = {}) {
           headers: { 'Content-Type': 'application/json' },
         });
       }
-      const linked = routes.adoptLinked ?? 1;
+      const requested = (body as { channels?: string[] } | null)?.channels ?? [];
       return jsonResponse({
-        outcomes: Array.from({ length: linked }, (_, index) => ({
-          status: 'linked',
-          channel: `chan_${index}`,
+        outcomes: requested.map((channel, index) => ({
+          status: routes.adoptStatuses?.[index] ?? 'linked',
+          channel,
         })),
       });
     }
@@ -311,10 +313,32 @@ describe('ChannelDiscoveryModal', () => {
     expect(screen.queryByText('@first')).not.toBeInTheDocument();
   });
 
+  it('tells a channel taken elsewhere apart from one that failed to link', async () => {
+    // Opposite next actions: taken is final, failed is worth retrying — so one
+    // combined "not added" count would be misleading.
+    route({
+      board: boardPayload([candidate({ channel: 'good' }), candidate({ channel: 'alsogood' })]),
+      adoptStatuses: ['linked', 'failed'],
+    });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать все подходящие' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(2\)/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Не удалось добавить: 1/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/уже заняты/)).not.toBeInTheDocument();
+  });
+
   it('stays open and reports the refused part of a partial adopt', async () => {
     route({
       board: boardPayload([candidate({ channel: 'good' }), candidate({ channel: 'alsogood' })]),
-      adoptLinked: 1,
+      adoptStatuses: ['linked', 'already_assigned'],
     });
     const onClose = vi.fn();
     renderModal(onClose);
@@ -373,7 +397,7 @@ describe('ChannelDiscoveryModal', () => {
   });
 
   it('reports a no-op adopt as a warning and stays open', async () => {
-    route({ board: boardPayload([candidate({ channel: 'good' })]), adoptLinked: 0 });
+    route({ board: boardPayload([candidate({ channel: 'good' })]), adoptStatuses: ['already_assigned'] });
     const onClose = vi.fn();
     renderModal(onClose);
     await startSearch();

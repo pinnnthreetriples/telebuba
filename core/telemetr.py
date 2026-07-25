@@ -161,7 +161,9 @@ async def search_catalog(request: TelemetrSearchRequest) -> TelemetrSearchResult
     Never raises: HTTP errors, timeouts, and unexpected payloads map to
     ``status="error"``; a 429 maps to ``status="rate_limited"``; a missing key maps
     to ``status="not_configured"`` without a request. Retries a transient failure
-    up to ``settings.telemetr.max_retries`` times with a short backoff.
+    up to ``settings.telemetr.max_retries`` times with a short backoff; a
+    deterministic one (unencodable key, malformed base URL) is reported after one
+    attempt.
     """
     if not request.api_key:
         return TelemetrSearchResult(status="not_configured")
@@ -176,11 +178,21 @@ async def search_catalog(request: TelemetrSearchRequest) -> TelemetrSearchResult
                 headers={"x-api-key": request.api_key},
                 params=_params(request),
             )
-        # Both siblings escape ``HTTPError``: httpx encodes headers while building the
-        # request, so an operator key carrying a non-breaking space or a Cyrillic
-        # character raises ``UnicodeEncodeError``, and ``InvalidURL`` (a malformed
-        # ``TELEMETR__BASE_URL``) is not an ``HTTPError`` subclass.
-        except (httpx.HTTPError, httpx.InvalidURL, UnicodeError) as exc:
+        # Deterministic construction failures, caught before ``HTTPError`` because two
+        # of them subclass it: an operator key with a non-breaking space or a Cyrillic
+        # character never encodes (``UnicodeError``), a key with a newline never becomes
+        # a legal header (``LocalProtocolError``), and a ``TELEMETR__BASE_URL`` that is
+        # malformed or missing its scheme never resolves (``InvalidURL``,
+        # ``UnsupportedProtocol``). A second attempt cannot change any of them, so
+        # retrying would only spend a request and delay the honest error.
+        except (
+            httpx.InvalidURL,
+            httpx.UnsupportedProtocol,
+            httpx.LocalProtocolError,
+            UnicodeError,
+        ) as exc:
+            return TelemetrSearchResult(status="error", error=f"{type(exc).__name__}: {exc}")
+        except httpx.HTTPError as exc:
             result = TelemetrSearchResult(status="error", error=f"{type(exc).__name__}: {exc}")
             transient = True
         else:
