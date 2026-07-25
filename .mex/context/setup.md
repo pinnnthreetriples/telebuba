@@ -28,4 +28,4 @@ npx mex-agent check && npx mex-agent doctor
 cd frontend && npm run gates && npm run build   # last: leaves the shell in frontend/
 ```
 
-CI workflows are the source of truth; nightly adds extended Hypothesis, Semgrep, mutation and a repeat of both CVE audits (the PR-only copies miss anything disclosed during a quiet week). `.mex/**` and Markdown do not trigger code CI. Run one uvicorn worker and treat `.session`, tdata, JWT secrets and proxy passwords as credentials.
+CI workflows are the source of truth; nightly adds extended Hypothesis, Semgrep, mutation and a repeat of both CVE audits (the PR-only copies miss anything disclosed during a quiet week). All eight `ci.yml` jobs are **required status checks** on `main`, so they run on every PR including docs-only ones — `paths-ignore` was removed because a workflow that does not run leaves a required check pending forever. `mex.yml` keeps its `paths:` filter and is deliberately NOT required, for the same reason in reverse. `.mex/**` and Markdown do not trigger code CI. Run one uvicorn worker and treat `.session`, tdata, JWT secrets and proxy passwords as credentials.

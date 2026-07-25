@@ -255,17 +255,40 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // Seed the text fields from a successfully-pulled live profile ('' for unset
   // fields), without marking the form dirty. first_name can't be empty on
   // Telegram, so a null there means "no text in this snapshot" — keep ours.
+  //
+  // See `seedField` above for why each write also refreshes the field's validation
+  // state rather than only its value.
+  // Seeds one field. `dontUpdateMeta` keeps the form clean, but it also leaves the
+  // onMount verdict untouched — and that verdict judged the STORED value this write
+  // just replaced. Left stale, an account whose row has no first name but whose
+  // snapshot does shows «Укажите имя» under a field displaying the real name, with
+  // Save dead for good: `canSubmit` counts onMount errors, and no later edit to any
+  // field clears another field's. So drop it and re-validate through onChange, which
+  // does reflect the new value — dropping it alone would enable Save on a seeded
+  // value that is itself invalid. Neither step marks the form dirty.
+  const seedField = useCallback(
+    (name: 'first_name' | 'last_name' | 'username' | 'bio', value: string) => {
+      form.setFieldValue(name, value, { dontUpdateMeta: true });
+      form.setFieldMeta(name, (meta) => ({
+        ...meta,
+        errorMap: { ...meta.errorMap, onMount: undefined },
+      }));
+      form.validateField(name, 'change');
+    },
+    [form],
+  );
+
   const seedForm = useCallback(
     (view: AccountProfileView) => {
       if (view.error) return;
       if (view.first_name != null) {
-        form.setFieldValue('first_name', view.first_name, { dontUpdateMeta: true });
+        seedField('first_name', view.first_name);
       }
-      form.setFieldValue('last_name', view.last_name ?? '', { dontUpdateMeta: true });
-      form.setFieldValue('username', view.username ?? '', { dontUpdateMeta: true });
-      form.setFieldValue('bio', view.bio ?? '', { dontUpdateMeta: true });
+      seedField('last_name', view.last_name ?? '');
+      seedField('username', view.username ?? '');
+      seedField('bio', view.bio ?? '');
     },
-    [form],
+    [seedField],
   );
 
   // The row snapshot the modal opened with can lag Telegram; once the live

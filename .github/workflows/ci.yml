@@ -1,20 +1,17 @@
 name: CI
 
+# No `paths-ignore`. It used to skip .mex/**, Markdown, .gitignore and LICENSE to
+# save runner minutes, but these jobs are now REQUIRED status checks on main, and a
+# workflow that does not run reports nothing: a docs-only PR would sit forever on
+# "Expected — waiting for status to be reported", unmergeable. Since the whole point
+# of requiring them is that nothing reaches main ungated, paying ~2 parallel minutes
+# on a README typo is the right side of that trade. Do not reintroduce the filter
+# without also adding same-named no-op jobs for the skipped paths.
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '.mex/**'
-      - '**.md'
-      - '.gitignore'
-      - 'LICENSE'
   push:
     branches: [main]
-    paths-ignore:
-      - '.mex/**'
-      - '**.md'
-      - '.gitignore'
-      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:

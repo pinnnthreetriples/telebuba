@@ -40,9 +40,14 @@ updates:
   #
   # npm SECURITY updates do not depend on this file at all -- GitHub's docs are
   # explicit that dependabot.yml settings and Dependabot alerts do not interact.
-  # They depend on "Dependabot alerts" + "Dependabot security updates" being ON in
-  # repository settings, and both are currently OFF, so the `npm audit` job in
-  # ci.yml plus its nightly copy are the only npm CVE detection this repo has.
+  # They depend on "Dependabot alerts" + "Dependabot security updates" in repository
+  # settings, and both were found OFF while auditing PR #286 (so the config that
+  # first landed there claimed a control that did not exist). Both are now ON, which
+  # is what actually covers frontend/package-lock.json; the `npm audit` job in
+  # ci.yml and its nightly copy are the in-repo backstop.
   #
   # NOTE the same applies to the pip entry above: its `allow: telethon` restricts
-  # security updates too, not just version updates. Do not copy that pattern here.
+  # security updates too, not just version updates -- so Dependabot will not raise a
+  # security PR for any other Python package. Left as-is on purpose: the entry exists
+  # to keep telethon current, and `pip-audit` (every PR + nightly) is the actual gate
+  # on the rest of the tree. Dependabot is the convenience here, CI is the control.
