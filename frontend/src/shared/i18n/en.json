@@ -227,7 +227,8 @@
         "photo": "Photo",
         "stories": "Stories",
         "music": "Music",
-        "channels": "Channels"
+        "channels": "Channels",
+        "privacy": "Privacy"
       },
       "firstName": "First name",
       "lastName": "Last name",
@@ -297,6 +298,35 @@
         "profile_photo_download_failed": "Couldn't download the photo from Telegram",
         "profile_music_invalid": "The audio file could not be processed — pick another one",
         "profile_music_stale_reference": "The track changed on Telegram — refresh the list"
+      },
+      "privacy": {
+        "hint": "When the Telegram photo or bio is limited to contacts, strangers see a letter placeholder instead of the avatar and an empty bio. Pick “Everybody” to make the avatar and bio visible to all.",
+        "loading": "Loading…",
+        "loadError": "Couldn't read the privacy settings from Telegram ({{reason}})",
+        "retry": "Retry",
+        "current": "Now: {{value}}",
+        "row": {
+          "profile_photo": "Profile photo",
+          "bio": "Bio",
+          "last_seen": "Last seen"
+        },
+        "level": {
+          "everybody": "Everybody",
+          "contacts": "Contacts",
+          "nobody": "Nobody",
+          "unknown": "Unknown"
+        },
+        "unknownNote": "Telegram returned a rule the dashboard doesn't recognise — pick a level again",
+        "openAll": "Open the profile to everybody",
+        "applyAll": "Apply to all accounts",
+        "applyAllTitle": "Apply to all accounts?",
+        "applyAllBody": "Every account in the fleet will get: {{levels}}. Accounts without a working session are skipped.",
+        "applyAllConfirm": "Apply",
+        "cancel": "Cancel",
+        "bulkOk": "Applied: {{n}}",
+        "bulkFailed": "Failed: {{n}}",
+        "bulkSkipped": "Skipped: {{n}}",
+        "noReason": "reason unknown"
       }
     },
     "channel": {
@@ -733,6 +763,7 @@
       "comment_on_post": "Comment on post",
       "click_button": "Click button",
       "update_profile": "Update profile",
+      "set_privacy_settings": "Privacy settings",
       "set_online": "Go online",
       "read_channel": "Read channel",
       "react_to_post": "React to post",
