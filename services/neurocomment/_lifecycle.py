@@ -37,7 +37,10 @@ async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
     The watch set is only read when running, so a paused/stopped engine costs two
     scalar reads. ``unwatched_channels`` reports the requested channels the listener
     could not resolve — they are excluded from ``active_channels`` so the SPA never
-    claims to watch a channel whose posts can never arrive.
+    claims to watch a channel whose posts can never arrive. A listener that reconcile
+    had to unsubscribe because its account is warming publishes the WHOLE watch set as
+    unwatched (it clears no ``running`` flag — the operator paused nothing), so
+    ``running=True`` with ``active_channels == 0`` is the honest "up but deaf" report.
     """
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a parent import cycle.
 

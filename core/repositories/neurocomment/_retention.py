@@ -45,8 +45,11 @@ def _purge_neurocomment_history_older_than(cutoff_iso: str) -> int:
             (_neurocomment_challenges.c.decided_at < cutoff_iso)
             & (_neurocomment_challenges.c.outcome != "solved"),
         ),
-        # Pure ballast: the log only backs a rolling-24h per-account join count, so a row
-        # past the retention window can never be counted again.
+        # Ballast only because the caller keeps ``cutoff_iso`` at least a day old (see the
+        # floor in ``services.neurocomment._sweep._prune_history_if_due``): the log backs a
+        # rolling-24h per-account join count, so a cutoff INSIDE that window would make the
+        # count under-report and let an account exceed the #270 anti-freeze join cap. Do not
+        # call this with a sub-day cutoff.
         delete(_neurocomment_join_log).where(_neurocomment_join_log.c.joined_at < cutoff_iso),
     )
     with _get_engine().begin() as connection:

@@ -10,14 +10,17 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
-from core.db import (
+from core.db import (  # type: ignore[attr-defined]
+    _get_engine,
     claim_comment,
+    count_account_joins_since,
     create_account,
     create_campaign,
     fetch_comment,
     link_channel_to_campaign,
     list_recent_logs,
     mark_comment_posted,
+    record_join,
 )
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
@@ -316,6 +319,67 @@ async def test_prune_failure_is_logged_and_does_not_propagate(
     logs = await list_recent_logs(limit=50)
     assert [e for e in logs if e.event == "retention_purge_failed"]
     assert await _retention_log_entries() == []
+
+
+@pytest.mark.asyncio
+async def test_prune_failure_does_not_re_enter_the_purge_on_the_next_tick(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The clock is stamped BEFORE the purge, so a failing prune waits out its interval.
+
+    Stamped after the purge instead, a persistently failing prune would never record a run
+    and would re-scan the append-only tables (and re-log the WARNING) on every ~5-minute
+    sweep tick forever. The existing failure test only proves one call does not raise.
+    """
+    monkeypatch.setattr(settings.neurocomment, "retention_days", 90.0)
+    monkeypatch.setattr(settings.neurocomment, "retention_prune_interval_hours", 24.0)
+    calls = 0
+
+    async def boom(_cutoff: str) -> int:
+        nonlocal calls
+        calls += 1
+        msg = "purge boom"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_sweep, "purge_neurocomment_history_older_than", boom)
+
+    now = datetime.now(UTC)
+    await _sweep._prune_history_if_due(now)
+    await _sweep._prune_history_if_due(now + timedelta(minutes=5))  # the next sweep tick
+
+    assert calls == 1  # the failure still counts as "ran", so the interval gates the retry
+
+
+def _backdate_joins(hours: float) -> None:
+    """Push every join-log row ``hours`` into the past (``record_join`` always stamps now)."""
+    stamp = (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_join_log SET joined_at = ?",
+            (stamp,),
+        )
+
+
+@pytest.mark.asyncio
+async def test_prune_never_reaches_inside_the_rolling_24h_join_window(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A sub-day ``retention_days`` must not purge joins the anti-freeze cap still counts.
+
+    ``retention_days`` is a float, so ``NEUROCOMMENT__RETENTION_DAYS=0.5`` is valid config.
+    The join log is only ballast *outside* 24h: inside it, it backs the rolling-24h count
+    ``_at_join_cap`` reads for the #270 cap. A 12h cutoff deletes rows that count, the cap
+    under-counts, and the account over-joins into a Telegram freeze — so the cutoff is
+    floored at one day. Runs the real repository purge, not a recorder.
+    """
+    monkeypatch.setattr(settings.neurocomment, "retention_days", 0.5)
+    await record_join("acc-1")
+    _backdate_joins(18)  # inside the 24h window, but older than a 0.5-day cutoff
+
+    await _sweep._prune_history_if_due(datetime.now(UTC))
+
+    since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    assert await count_account_joins_since("acc-1", since) == 1
 
 
 @pytest.mark.asyncio

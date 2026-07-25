@@ -16,14 +16,16 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     get_listener_account_id,
-    list_active_watch_channels,
     list_campaigns,
     list_warming_account_ids,
     set_listener_account_id,
     set_listener_running,
 )
 from core.logging import log_event
-from core.telegram_client import stop_post_listener, subscribe_posts
+from core.telegram_client import (
+    stop_post_listener,
+    subscribe_posts,  # noqa: F401 - re-exported: read by _watch + patched by tests via _runtime.
+)
 from services.neurocomment import _signals
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import (
@@ -110,65 +112,16 @@ async def on_post(event: NewPostEvent) -> None:
     task.add_done_callback(_TASKS.discard)
 
 
-async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
-    """(Re)point the listener at the current active watch set. Idempotent, returns promptly.
-
-    No active channels → stop the listener (idempotent). Safe to call on every
-    boot; ``subscribe_posts`` itself drops any prior handler before registering.
-    Subscribing before the paced joins land is fine: Telethon only delivers updates
-    for channels the account has actually joined, and ``subscribe_posts`` is
-    idempotent, so the single-flighted background join task making channels live as
-    it paces is acceptable — and keeps this call off the multi-minute join path.
-    """
-    # Reset up front: the early returns unsubscribe (nothing watched), the live path refills.
-    _UNWATCHED_CHANNELS.clear()
-    # Warming and neurocomment are mutually exclusive per account. This is the
-    # single choke point every subscription path funnels through (start, channel
-    # edit, startup resume), so the guard lives here — start_neurocomment adds an
-    # early raise on top for the interactive 409. A warming listener is unsubscribed
-    # (never re-subscribed) rather than raising, so boot/channel-edit stay safe.
-    if listener_account_id in await list_warming_account_ids():
-        await stop_post_listener(listener_account_id)
-        await _stop_sweep()
-        await _stop_join()
-        await log_event(
-            "WARNING",
-            "neurocomment_listener_warming_skipped",
-            account_id=listener_account_id,
-        )
-        return
-    channels = (await list_active_watch_channels()).channels
-    if not channels:
-        await stop_post_listener(listener_account_id)
-        await _stop_sweep()
-        await _stop_join()
-        return
-    subscribed = await subscribe_posts(listener_account_id, channels, on_post)
-    _UNWATCHED_CHANNELS.update(set(channels) - set(subscribed))
-    _ensure_sweep_running()
-    _ensure_join_running(listener_account_id)
-    if _UNWATCHED_CHANNELS:
-        # The only place an operator can learn a channel is dead to the engine.
-        await log_event(
-            "WARNING",
-            "neurocomment_channels_unwatched",
-            account_id=listener_account_id,
-            extra={"count": len(_UNWATCHED_CHANNELS), "channels": sorted(_UNWATCHED_CHANNELS)},
-        )
-    await log_event(
-        "INFO",
-        "neurocomment_runtime_reconciled",
-        account_id=listener_account_id,
-        extra={"channels": len(subscribed), "unwatched": len(_UNWATCHED_CHANNELS)},
-    )
-
-
 async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
     """Stop the listener + deletion sweep and cancel in-flight on-post tasks (bounded wait)."""
     await stop_post_listener(listener_account_id)
     await _stop_sweep()
     await _stop_onboarding()
     await _stop_join()
+    # Drop the gap report with the subscription it described: ``start_neurocomment`` sets
+    # ``listener_running`` BEFORE it reconciles, so a poll landing in between would
+    # otherwise be served the previous session's channel names.
+    _publish_unwatched()
     tasks = list(_TASKS)
     _TASKS.clear()
     await _cancel_bounded(*tasks)
@@ -261,14 +214,18 @@ async def _join_watch_channels(listener_account_id: str) -> None:
     """Paced join task (background); reruns once if a channel was linked mid-pace.
 
     Single-flighted, so only one pacing stream runs at a time (no concurrent bursts)
-    and the per-join cap check-then-record is serialized across passes.
+    and the per-join cap check-then-record is serialized across passes. Its tail is the
+    one place a channel that only became resolvable once joined gets back into the filter.
     """
     global _JOIN_RERUN  # noqa: PLW0603 - single module-level rerun flag
     while True:
         await run_join_pass(listener_account_id)
         if not _JOIN_RERUN:
-            return
+            break
         _JOIN_RERUN = False
+    # A channel unresolvable at subscribe time (not joined yet) is absent from the live
+    # filter forever — nothing else reconciles. The joins are done now, so heal it here.
+    await _resubscribe_unwatched(listener_account_id)
 
 
 async def _teardown_listener_locked(listener_account_id: str, *, clear_account: bool) -> None:
@@ -396,4 +353,14 @@ from services.neurocomment._sweep import (  # noqa: E402, F401 - re-export after
     _sweep_channel,
     _sweep_loop,
     _sweep_once,
+)
+
+# Reconcile + the unwatched-channel report live in ``_watch`` (file-size cap); the
+# ``_UNWATCHED_CHANNELS`` set they publish into stays above (tests read and seed it as
+# ``_runtime._UNWATCHED_CHANNELS``). Re-exported so shutdown/the join tail find the
+# helpers and ``_runtime.reconcile_neurocomment_runtime`` still resolves for callers.
+from services.neurocomment._watch import (  # noqa: E402 - re-export after the module body.
+    _publish_unwatched,
+    _resubscribe_unwatched,
+    reconcile_neurocomment_runtime,
 )
