@@ -101,9 +101,10 @@ async def _probe_client(account_id: str) -> TelegramClient:
     ``cause`` hands the real Telethon/proxy/network error to the caller's
     classification ladder rather than collapsing it to ``unknown_error``.
 
-    Note the pool keys on ``account_id`` and ignores ``session_name``, so the
-    request's ``session_name`` no longer selects the file. That is deliberate:
-    the check should report the session every other action runs on.
+    The pool keys on ``account_id`` and passes no session name, so the request's
+    ``session_name`` no longer selects the file directly — but it still decides
+    it, because ``_session_path`` resolves the account row's stored name. The
+    check therefore reports on exactly the file every other action opens.
     """
     try:
         return await get_client(account_id)
