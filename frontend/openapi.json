@@ -5705,7 +5705,7 @@
           "status"
         ],
         "title": "AccountPrivacyOutcome",
-        "description": "One account's result in the fleet-wide apply.\n\n``skipped`` = the account's session is not usable, so nothing was attempted;\n``failed`` carries the stable, locale-neutral refusal code in ``error``."
+        "description": "One account's result in the fleet-wide apply.\n\n``skipped`` = the account is permanently dead, and ``error`` carries the\naccount status that caused the skip, so a count is explainable.\n\n``failed`` carries whatever ``AccountActionError`` reported. That is USUALLY a\nstable code the SPA translates under ``accounts.profile.code.*``, but not\nalways: ``raise_for_result`` falls back to ``ActionResult.error_message`` for\nthe generic-failure family, which is a Telethon message. Repo-wide behaviour\nfor every account action, not specific to privacy \u2014 so the SPA renders an\nunknown value as-is rather than pretending it is translatable. The infra\nfamily (pool / socket / proxy) is already collapsed to the flat ``unavailable``\ncode before it gets here, which is what keeps a proxy endpoint off the wire."
       },
       "AccountPrivacyUpdateRequest": {
         "properties": {

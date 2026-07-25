@@ -84,8 +84,17 @@ export type AccountCheckRequest = {
  *
  * One account's result in the fleet-wide apply.
  *
- * ``skipped`` = the account's session is not usable, so nothing was attempted;
- * ``failed`` carries the stable, locale-neutral refusal code in ``error``.
+ * ``skipped`` = the account is permanently dead, and ``error`` carries the
+ * account status that caused the skip, so a count is explainable.
+ *
+ * ``failed`` carries whatever ``AccountActionError`` reported. That is USUALLY a
+ * stable code the SPA translates under ``accounts.profile.code.*``, but not
+ * always: ``raise_for_result`` falls back to ``ActionResult.error_message`` for
+ * the generic-failure family, which is a Telethon message. Repo-wide behaviour
+ * for every account action, not specific to privacy — so the SPA renders an
+ * unknown value as-is rather than pretending it is translatable. The infra
+ * family (pool / socket / proxy) is already collapsed to the flat ``unavailable``
+ * code before it gets here, which is what keeps a proxy endpoint off the wire.
  */
 export type AccountPrivacyOutcome = {
   /**
