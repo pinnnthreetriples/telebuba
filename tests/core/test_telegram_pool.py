@@ -26,6 +26,7 @@ from core.telegram_client._pool import (
     evict_client,
     get_client,
     register_rebuild_hook,
+    removing_client,
     shutdown_telegram_pool,
 )
 
@@ -266,6 +267,31 @@ async def test_evict_precedes_session_file_removal(
 
     assert order == ["disconnect", "unlink"], "eviction must precede the file removal"
     assert not session_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_removing_client_evicts_then_refuses_rebuilds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A borrower inside the removal window is refused, not handed a fresh client.
+
+    ``evict_client`` alone only empties the cache: the very next borrower would
+    rebuild and re-open (or re-create) the ``.session`` file the removal is about
+    to unlink, so the unlink fails on Windows and aborts the delete. The
+    tombstone must last the whole block and lift when it exits.
+    """
+    built = _install_fake_factory(monkeypatch)
+    await get_client("acc-gone")
+
+    async with removing_client("acc-gone"):
+        assert "acc-gone" not in _CLIENTS, "entering the block must evict the cached client"
+        with pytest.raises(TelegramClientPoolError):
+            await get_client("acc-gone")
+
+    assert len(built) == 1, "no client may be built while the removal is in flight"
+    # Scoped to the removal, not permanent — the id stays borrowable afterwards.
+    await get_client("acc-gone")
+    assert len(built) == 2
 
 
 @pytest.mark.asyncio

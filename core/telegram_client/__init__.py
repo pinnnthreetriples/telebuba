@@ -43,6 +43,7 @@ from core.telegram_client._pool import (
     TelegramClientPoolError,
     evict_client,
     get_client,
+    removing_client,
     shutdown_telegram_pool,
 )
 from core.telegram_client._read import (
@@ -71,6 +72,7 @@ __all__ = [
     "prepare_telegram_client_profile",
     "refresh_account_avatar",
     "remove_account_session",
+    "removing_client",
     "request_phone_code",
     "shutdown_telegram_pool",
     "stop_post_listener",

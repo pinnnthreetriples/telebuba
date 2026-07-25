@@ -26,6 +26,7 @@ clean throwaway session — see :func:`core.telegram_client._client.telegram_cli
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
@@ -33,7 +34,7 @@ from core.telegram_client._client import create_telegram_client, prepare_telegra
 from schemas.device_fingerprint import TelegramClientRequest
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from telethon import TelegramClient
 
@@ -44,6 +45,7 @@ __all__ = [
     "evict_client",
     "get_client",
     "register_rebuild_hook",
+    "removing_client",
     "shutdown_telegram_pool",
 ]
 
@@ -60,6 +62,10 @@ class TelegramClientPoolError(RuntimeError):
 _CLIENTS: dict[str, TelegramClient] = {}
 _CONNECT_LOCKS: dict[str, asyncio.Lock] = {}
 _SHUTTING_DOWN = False
+
+# Accounts whose removal is in flight — the per-account twin of ``_SHUTTING_DOWN``.
+# See :func:`removing_client` for why a rebuild during that window is fatal.
+_REMOVING: set[str] = set()
 
 # Callbacks invoked after a fresh client is built for an account, so standing
 # subscriptions (the post listener) can re-register their handlers on the new
@@ -107,6 +113,12 @@ async def get_client(account_id: str) -> TelegramClient:
         return cached
 
     async with _connect_lock(account_id):
+        if account_id in _REMOVING:
+            # Checked *inside* the lock: a borrower can pass the pool entry point
+            # before the removal marks the account and then sit here waiting on
+            # ``evict_client``'s lock, so the pre-lock state says nothing.
+            msg = "account is being removed"
+            raise TelegramClientPoolError(account_id, RuntimeError(msg))
         # Re-check under the lock — a peer may have connected while we waited.
         cached = _CLIENTS.get(account_id)
         if cached is not None and cached.is_connected():
@@ -179,6 +191,31 @@ async def evict_client(account_id: str) -> None:
             await _safe_disconnect(client)
 
 
+@asynccontextmanager
+async def removing_client(account_id: str) -> AsyncIterator[None]:
+    """Evict ``account_id``'s client and refuse rebuilds until the block exits.
+
+    Account removal evicts the client, unlinks the ``.session`` file, then
+    deletes the DB row. ``evict_client`` on its own is not enough: every
+    ``await`` in that sequence lets a concurrent borrower (post listener,
+    warming loop, channel discovery) reach :func:`get_client`, which rebuilds a
+    client and re-opens the session file — Telethon's ``SQLiteSession`` even
+    re-creates it if it is already gone. On Windows the pending ``unlink`` then
+    raises ``PermissionError`` and aborts the removal *before* the row is
+    deleted; past the unlink it resurrects an orphan file for an account that no
+    longer exists. Borrowers refused here raise
+    :class:`TelegramClientPoolError`, which ``execute(...)`` already classifies
+    as an unavailable account.
+    """
+    _REMOVING.add(account_id)
+    try:
+        # Marked before the eviction so a rebuild cannot slip into the gap.
+        await evict_client(account_id)
+        yield
+    finally:
+        _REMOVING.discard(account_id)
+
+
 async def _build_and_connect(account_id: str) -> TelegramClient:
     profile = await prepare_telegram_client_profile(
         TelegramClientRequest(account_id=account_id),
@@ -234,4 +271,5 @@ def _reset_for_tests() -> None:
     global _SHUTTING_DOWN  # noqa: PLW0603
     _CLIENTS.clear()
     _CONNECT_LOCKS.clear()
+    _REMOVING.clear()
     _SHUTTING_DOWN = False
