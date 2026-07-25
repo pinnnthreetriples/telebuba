@@ -30,6 +30,8 @@ if TYPE_CHECKING:
     from collections.abc import Iterator
     from pathlib import Path
 
+    from telethon.tl.functions.contacts import ImportContactsRequest
+
 
 @pytest.fixture(autouse=True)
 def _isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
@@ -420,8 +422,11 @@ async def test_send_dm_returns_message_id(monkeypatch: pytest.MonkeyPatch) -> No
         async def connect(self) -> None:
             return None
 
-        async def send_message(self, user_id: int, text: str) -> object:
-            assert user_id == 555
+        async def get_input_entity(self, user_id: int) -> str:
+            return f"peer:{user_id}"
+
+        async def send_message(self, peer: object, text: str) -> object:
+            assert peer == "peer:555"
             assert text == "hello"
             return MagicMock(id=88)
 
@@ -431,6 +436,141 @@ async def test_send_dm_returns_message_id(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert result.status == "ok"
     assert result.message_id == 88
+
+
+@pytest.mark.asyncio
+async def test_send_dm_imports_contact_when_peer_unknown(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Regression guard for the cold-session "input entity" bug: no DM ever sent."""
+    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
+    captured: list[ImportContactsRequest] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: ImportContactsRequest) -> None:
+            captured.append(request)
+
+        async def get_input_entity(self, user_id: int) -> str:
+            if not captured:
+                msg = f"Could not find the input entity for PeerUser(user_id={user_id})"
+                raise ValueError(msg)
+            return f"peer:{user_id}"
+
+        async def send_message(self, peer: object, _text: str) -> object:
+            assert peer == "peer:555"
+            return MagicMock(id=99)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-cold",
+        SendDirectMessage(
+            user_id=555, text="hello", peer_phone="79990001122", peer_first_name="Boris"
+        ),
+    )
+
+    assert result.status == "ok"
+    assert result.message_id == 99
+    contact = captured[0].contacts[0]
+    # Named, not saved as bare digits — a contact list of phone numbers is a
+    # fingerprint on the one module whose job is not looking like a bot.
+    assert (contact.phone, contact.first_name) == ("79990001122", "Boris")
+
+
+@pytest.mark.asyncio
+async def test_send_dm_contact_name_falls_back_to_the_phone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A partner with no stored name must not put ``None`` in the contact.
+
+    ``InputPhoneContact(first_name=None)`` fails to serialize, and that TypeError
+    would park the sender instead of skipping the pair.
+    """
+    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
+    captured: list[ImportContactsRequest] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: ImportContactsRequest) -> None:
+            captured.append(request)
+
+        async def get_input_entity(self, user_id: int) -> str:
+            if not captured:
+                msg = "Could not find the input entity"
+                raise ValueError(msg)
+            return f"peer:{user_id}"
+
+        async def send_message(self, _peer: object, _text: str) -> object:
+            return MagicMock(id=7)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-nameless",
+        SendDirectMessage(user_id=555, text="hello", peer_phone="79990001122"),
+    )
+
+    assert result.status == "ok"
+    assert captured[0].contacts[0].first_name == "79990001122"
+
+
+@pytest.mark.asyncio
+async def test_send_dm_without_a_phone_is_unresolvable_not_a_bare_value_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No phone and no cached entity is just as permanent as a privacy block.
+
+    A bare ``ValueError`` here would miss the caller's skip branch and park the
+    sender in the terminal ``error`` state.
+    """
+    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, user_id: int) -> str:
+            msg = f"Could not find the input entity for PeerUser(user_id={user_id})"
+            raise ValueError(msg)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-nophone", SendDirectMessage(user_id=555, text="hello"))
+
+    assert result.status == "failed"
+    assert result.error_type == "DmPeerUnresolvedError"
+
+
+@pytest.mark.asyncio
+async def test_send_dm_unresolvable_peer_gets_its_own_error_type(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A phone-privacy block must not read like the pre-fix resolution bug."""
+    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            return None  # importContacts matched nobody: users=[]
+
+        async def get_input_entity(self, user_id: int) -> str:
+            msg = f"Could not find the input entity for PeerUser(user_id={user_id})"
+            raise ValueError(msg)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-hidden",
+        SendDirectMessage(user_id=555, text="hello", peer_phone="79990001122"),
+    )
+
+    assert result.status == "failed"
+    assert result.error_type == "DmPeerUnresolvedError"
 
 
 @pytest.mark.asyncio

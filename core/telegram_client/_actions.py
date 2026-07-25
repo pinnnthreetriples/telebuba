@@ -13,8 +13,9 @@ from telethon.tl.functions.channels import (
     JoinChannelRequest,
     LeaveChannelRequest,
 )
+from telethon.tl.functions.contacts import ImportContactsRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
-from telethon.tl.types import ReactionEmoji
+from telethon.tl.types import InputPhoneContact, ReactionEmoji
 
 from core.config import settings
 from core.db import fetch_account
@@ -63,6 +64,7 @@ from schemas.telegram_actions import (
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
+    from telethon.tl.types import TypeInputPeer
 
     from schemas.telegram_actions import TelegramAction
 
@@ -173,14 +175,61 @@ def _typing_seconds(text: str, wpm: int | None = None) -> float:
     return max(warm.typing_sim_min_seconds, min(warm.typing_sim_max_seconds, base))
 
 
+class DmPeerUnresolvedError(Exception):
+    """A DM partner this session cannot address, and no way left to learn how.
+
+    Either we hold no phone to import, or their "who can find me by phone number"
+    privacy setting made the import return no user. Its own type so callers can
+    skip the pair instead of counting a permanent block as a cycle failure.
+    """
+
+
+async def _resolve_dm_peer(
+    client: TelegramClient,
+    action: SendDirectMessage | MarkDirectMessageRead,
+) -> TypeInputPeer:
+    """Resolve the DM partner to an input peer, importing it by phone if unknown.
+
+    A cold session raises ``ValueError`` on a raw ``user_id``; Telethon persists
+    what the import reveals, so it is paid once per pair.
+    """
+    try:
+        return await client.get_input_entity(action.user_id)
+    except ValueError as cold:
+        if action.peer_phone is None:
+            msg = f"No cached entity and no phone to import for {action.user_id}"
+            raise DmPeerUnresolvedError(msg) from cold
+        await client(
+            ImportContactsRequest(
+                [
+                    InputPhoneContact(
+                        client_id=action.user_id,
+                        phone=action.peer_phone,
+                        # Saving the partner under their real name; falling back to
+                        # the digits would stamp every warming account with an
+                        # obviously machine-made contact list.
+                        first_name=action.peer_first_name or action.peer_phone,
+                        last_name="",
+                    )
+                ]
+            )
+        )
+        try:
+            return await client.get_input_entity(action.user_id)
+        except ValueError as exc:
+            msg = f"Contact import revealed no user for {action.user_id} (phone privacy)"
+            raise DmPeerUnresolvedError(msg) from exc
+
+
 async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage) -> int | None:
     """Send a DM, optionally preceded by a length-proportional "typing…" action."""
+    peer = await _resolve_dm_peer(client, action)
     if settings.warming.typing_simulation_enabled:
-        async with client.action(action.user_id, "typing"):  # ty: ignore[invalid-context-manager]
+        async with client.action(peer, "typing"):  # ty: ignore[invalid-context-manager]
             await asyncio.sleep(_typing_seconds(action.text, action.typing_wpm))
-            message = await client.send_message(action.user_id, action.text)
+            message = await client.send_message(peer, action.text)
     else:
-        message = await client.send_message(action.user_id, action.text)
+        message = await client.send_message(peer, action.text)
     return int(getattr(message, "id", 0)) or None
 
 
@@ -236,7 +285,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             message_id = await _send_dm_with_typing(client, action)
         case MarkDirectMessageRead():
             # send_read_acknowledge on a user peer marks the DM conversation read.
-            await client.send_read_acknowledge(action.user_id)
+            await client.send_read_acknowledge(await _resolve_dm_peer(client, action))
         case _ if action.action_type.startswith("channel_"):
             # Channel management (create/edit/post/delete) — its own dispatcher
             # builds the full result (channel_create carries the new id).

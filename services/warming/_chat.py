@@ -41,6 +41,10 @@ if TYPE_CHECKING:
 # Control characters: strip from Gemini output before sending it as a DM.
 _CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
+# The gateway's class name for "this partner is permanently unaddressable" —
+# no phone to import, or phone-lookup privacy hides them from the import.
+_PEER_UNRESOLVED = "DmPeerUnresolvedError"
+
 _CHAT_PROMPTS = (
     "Напиши одно короткое дружелюбное сообщение для чата в Telegram (1-2 предложения), "
     "без хэштегов и без кавычек.",
@@ -293,8 +297,20 @@ async def _reply_to_partner(  # noqa: PLR0911
     # Read receipt + read-to-reply delay: a real user opens and reads the DM
     # before answering, so mark it read then pause briefly. A failed read-ack is
     # not a dialogue failure — proceed to reply regardless.
-    read = await _seams.execute(sender_id, MarkDirectMessageRead(user_id=target.user_id))
+    read = await _seams.execute(
+        sender_id,
+        MarkDirectMessageRead(
+            user_id=target.user_id,
+            peer_phone=target.phone,
+            peer_first_name=target.first_name,
+        ),
+    )
     if read.status != "ok":
+        # The read-ack resolves the same peer the send would, so an unresolvable
+        # partner is already decided here — bail before spending a second import
+        # and a Gemini generation on a reply that cannot be delivered.
+        if read.error_type == _PEER_UNRESOLVED:
+            return await _drop_unresolvable_reply(sender_id, incoming)
         await log_event(
             "INFO",
             "warming_dialogue_read_ack_skipped",
@@ -330,7 +346,11 @@ async def _reply_to_partner(  # noqa: PLR0911
     result = await _seams.execute(
         sender_id,
         SendDirectMessage(
-            user_id=target.user_id, text=text, typing_wpm=_account_typing_wpm(sender_id)
+            user_id=target.user_id,
+            text=text,
+            typing_wpm=_account_typing_wpm(sender_id),
+            peer_phone=target.phone,
+            peer_first_name=target.first_name,
         ),
     )
 
@@ -341,8 +361,10 @@ async def _reply_to_partner(  # noqa: PLR0911
         await release_sent_text(text)
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
-        await mark_message_unreplied(incoming.id)
         await release_sent_text(text)
+        if result.error_type == _PEER_UNRESOLVED:
+            return await _drop_unresolvable_reply(sender_id, incoming)
+        await mark_message_unreplied(incoming.id)
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.
@@ -356,6 +378,41 @@ async def _reply_to_partner(  # noqa: PLR0911
     return ChatResult(messages_sent=1, attempted_actions=1)
 
 
+async def _skip_unresolvable_peer(sender_id: str, partner_id: str) -> ChatResult:
+    """A partner Telegram will never hand us — skip the turn without failing the cycle.
+
+    No phone to import, or their phone-lookup privacy hides them: either way the
+    pair is permanently undeliverable. Counting it as a failure would park an
+    otherwise healthy sender in the terminal ``error`` state.
+
+    ponytail: no negative cache. The reply path consumes the message so a stuck
+    pair stops re-arming, but the opener still re-picks this partner and spends
+    one ``contacts.importContacts`` per cycle on it. Cycles are hours apart, so
+    that is a handful of calls a day — cheap, though re-importing the same
+    unmatched number on a schedule is itself a mild spam signal. Give the pair a
+    cooldown if the fleet ever carries more than a couple of these.
+    """
+    await log_event(
+        "WARNING",
+        "warming_dialogue_peer_unresolved",
+        account_id=sender_id,
+        extra={"with": partner_id},
+    )
+    return ChatResult()
+
+
+async def _drop_unresolvable_reply(sender_id: str, incoming: DialogueMessage) -> ChatResult:
+    """Skip the pair and consume the message that would otherwise re-arm it.
+
+    Leaving it pending would resurface the same undeliverable partner every
+    cycle forever — ``_conversation_faded`` needs 12 turns to let go and a stuck
+    pair never gets past one. Marking it replied ends the thread, exactly as an
+    unknown partner already does at the top of ``_reply_to_partner``.
+    """
+    await mark_message_replied(incoming.id)
+    return await _skip_unresolvable_peer(sender_id, incoming.from_account)
+
+
 async def _conversation_faded(account_a: str, account_b: str) -> bool:
     """True once a pair has exchanged ``dialogue_max_turns`` within the window."""
     warm = settings.warming
@@ -366,7 +423,7 @@ async def _conversation_faded(account_a: str, account_b: str) -> bool:
     return count >= warm.dialogue_max_turns
 
 
-async def _open_with_partner(
+async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure reason
     sender_id: str,
     partners: list[str],
     secret: WarmingSettingsSecret,
@@ -414,7 +471,11 @@ async def _open_with_partner(
     result = await _seams.execute(
         sender_id,
         SendDirectMessage(
-            user_id=target.user_id, text=text, typing_wpm=_account_typing_wpm(sender_id)
+            user_id=target.user_id,
+            text=text,
+            typing_wpm=_account_typing_wpm(sender_id),
+            peer_phone=target.phone,
+            peer_first_name=target.first_name,
         ),
     )
 
@@ -424,6 +485,8 @@ async def _open_with_partner(
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
         await release_sent_text(text)
+        if result.error_type == _PEER_UNRESOLVED:
+            return await _skip_unresolvable_peer(sender_id, target.account_id)
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
 
     await record_dialogue_message(sender_id, target.account_id, text)
