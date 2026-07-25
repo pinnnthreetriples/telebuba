@@ -24,7 +24,7 @@
     "@fontsource/inter": "^5.1.0",
     "@fontsource/jetbrains-mono": "^5.1.1",
     "@sentry/react": "^8.45.1",
-    "@tanstack/react-form": "^0.41.3",
+    "@tanstack/react-form": "^1.33.2",
     "@tanstack/react-query": "^5.62.7",
     "@tanstack/react-router": "^1.87.0",
     "@tanstack/react-table": "^8.20.6",
