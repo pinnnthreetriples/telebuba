@@ -70,8 +70,20 @@ async def _initial_delay_seconds(
     Honours a persisted future ``next_run_at`` so a restart resumes the existing
     schedule. A cold-started account (no schedule yet) picks its first run at a
     random point across ``cold_start_spread_hours`` and then routes it through the
-    active-hours window — so a bulk onboarding of N accounts neither all fires at
-    once nor kicks off in the middle of the night.
+    active-hours window — so a bulk onboarding of N accounts does not all fire at
+    once.
+
+    ``cold_start_spread_hours`` is a hard ceiling on that wait, and it wins over the
+    active-hours window. The snap moves a night-time candidate FORWARD to the
+    account's next local morning, which for a fleet whose phone timezone is hours
+    behind ours meant a first cycle 14h out — the account reads as stuck. When the
+    snapped morning does not fit under the ceiling we keep the original random point
+    instead (not the ceiling itself, which would fire every such account in the same
+    second). Measured consequence at the shipped 5h ceiling against a 9h quiet
+    window: the snap survives on ~4% of cold starts and ~37% fire inside the
+    account's local night. That is the deliberate price of a short
+    time-to-first-cycle — see ``cold_start_spread_hours`` for the number that buys
+    daytime-only first cycles back.
 
     A *past-due* schedule (``next_run_at`` already elapsed, e.g. after downtime)
     would otherwise resume at delay 0: on reconcile every such account fires in
@@ -86,15 +98,13 @@ async def _initial_delay_seconds(
         if remaining <= 0.0:
             return _seams.rng.uniform(0.0, settings.warming.catch_up_spread_seconds)
         return remaining
-    candidate = now + timedelta(
-        seconds=_seams.rng.uniform(
-            0.0, settings.warming.cold_start_spread_hours * _SECONDS_PER_HOUR
-        ),
-    )
+    spread = settings.warming.cold_start_spread_hours * _SECONDS_PER_HOUR
+    raw = _seams.rng.uniform(0.0, spread)
     candidate = _shift_to_active_hours(
-        candidate, await _account_tz(account_id), _seams.rng, account_id
+        now + timedelta(seconds=raw), await _account_tz(account_id), _seams.rng, account_id
     )
-    return _seconds_until(candidate.isoformat(), now)
+    delay = _seconds_until(candidate.isoformat(), now)
+    return delay if delay <= spread else raw
 
 
 async def _persist_cold_start_schedule(

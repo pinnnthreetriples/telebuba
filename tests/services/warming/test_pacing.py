@@ -235,11 +235,24 @@ async def test_initial_delay_past_due_spread_varies(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_initial_delay_cold_start_shifts_into_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    # FIX #10: a cold start (no schedule) at 03:00 local must not fire in the
-    # middle of the night — it is routed through the active-hours window.
+    # FIX #10: a cold start (no schedule) at 03:00 local must not fire in the middle
+    # of the night — it is routed through the active-hours window.
+    #
+    # The snap only survives when the spread can absorb it, because the ceiling wins
+    # (see ``test_initial_delay_cold_start_never_exceeds_spread``): the snap moves a
+    # candidate forward to the next local morning, so the worst case is the whole
+    # quiet window plus the morning spread. Hence the spread here is derived from
+    # that arithmetic rather than picked to make the assertion pass — and it is
+    # deliberately NOT the shipped 5h default, under which this property does not
+    # hold at all.
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    quiet_hours = 24 - (23 - 8)
+    morning_spread_hours = settings.warming.active_hours_start_spread_minutes / 60
+    monkeypatch.setattr(
+        settings.warming, "cold_start_spread_hours", quiet_hours + morning_spread_hours
+    )
 
     async def fake_tz(_account_id: str) -> str:
         return "Europe/Istanbul"  # UTC+3, no DST
@@ -249,6 +262,33 @@ async def test_initial_delay_cold_start_shifts_into_window(monkeypatch: pytest.M
     delay = await warming._initial_delay_seconds("acc-1", None, now)
     first_run = (now + timedelta(seconds=delay)).astimezone(ZoneInfo("Europe/Istanbul"))
     assert 8 <= first_run.hour < 23
+
+
+@pytest.mark.asyncio
+async def test_initial_delay_cold_start_never_exceeds_spread(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    # ``cold_start_spread_hours`` is a hard ceiling on the pre-first-cycle wait.
+    # A night-time candidate whose next local morning lies beyond the window used
+    # to snap there anyway — for a fleet several timezones behind us that meant a
+    # first cycle ~14h out and an account that read as stuck on the board. The snap
+    # may only pull the first run earlier inside the window, never past it, and the
+    # overshoot falls back to the original random point (not the ceiling itself, or
+    # every such account would fire in the same second).
+    monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
+    monkeypatch.setattr(settings.warming, "active_hours_start", 8)
+    monkeypatch.setattr(settings.warming, "active_hours_end", 23)
+    monkeypatch.setattr(settings.warming, "cold_start_spread_hours", 5.0)
+    monkeypatch.setattr(_seams.rng, "random", random.random)  # live draws
+
+    async def fake_tz(_account_id: str) -> str:
+        return "Europe/Istanbul"  # UTC+3, no DST
+
+    monkeypatch.setattr(_runner, "_account_tz", fake_tz)
+    now = datetime(2026, 6, 12, 21, 0, tzinfo=UTC)  # 00:00 Istanbul → deep night
+    delays = {await warming._initial_delay_seconds("acc-1", None, now) for _ in range(20)}
+    assert all(0.0 <= delay <= 5 * 3600 for delay in delays)
+    assert len(delays) > 1  # still fanned out, not clamped onto one instant
 
 
 @pytest.mark.asyncio

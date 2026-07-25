@@ -257,12 +257,13 @@ def test_is_quiet_day_false_on_unparseable_date(monkeypatch: pytest.MonkeyPatch)
 def test_compute_intensity_ceiling_for_fresh_account(monkeypatch: pytest.MonkeyPatch) -> None:
     # The age-ramp is retired: channel range is the flat config, and a fresh
     # account is throttled by the phase cap + the DM cold-start guard, not by a
-    # per-cycle ramp. Intro phase, cap 3, DM blocked under dm_min_age.
+    # per-cycle ramp. Intro phase, the configured intro cap, DM blocked under
+    # dm_min_age.
     _configure_intensity(monkeypatch)
     fresh = warming.compute_intensity(0.0)
     assert fresh.channels_max == 3
     assert fresh.phase == "intro"
-    assert fresh.daily_cap == 3
+    assert fresh.daily_cap == settings.warming.phase_daily_cap["intro"]
     assert fresh.dm_allowed is False
 
 

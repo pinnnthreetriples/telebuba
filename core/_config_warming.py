@@ -31,11 +31,20 @@ class WarmingSettings(BaseSettings):
     startup_jitter_max_seconds: float = Field(default=8.0, ge=0.0)
     # Cold-start spread: a fresh account (no persisted schedule) picks its first
     # run uniformly across this many hours instead of a few seconds, so a bulk
-    # onboarding of N accounts neither all fires at once nor collapses into the
-    # next morning window. Kept well under a full day so the first cycle lands the
-    # same evening or by next morning — a night-time candidate still snaps forward
-    # to the active window, but the ceiling no longer stretches past ~a day.
-    cold_start_spread_hours: float = Field(default=8.0, ge=0.0)
+    # onboarding of N accounts does not all fire at once. This is a HARD ceiling on
+    # the wait before the FIRST cycle only — a persisted ``next_run_at`` (e.g. a
+    # daily-cap park to the next local morning) is honoured verbatim and can be
+    # further out.
+    #
+    # It also decides whether the active-hours snap in ``_initial_delay_seconds``
+    # survives at all. The snap moves a night-time candidate FORWARD to the account's
+    # next local morning, so it fits under the ceiling only when this value exceeds
+    # the quiet window (24 - the active window) plus the morning spread. At 5h
+    # against a 9h quiet window it never fits: measured, the snap survives on ~4% of
+    # cold starts and ~37% start inside the account's local night. Raising this to
+    # ~13h (9h quiet + 4h morning spread) restores daytime-only first cycles at the
+    # cost of a longer wait; the two cannot both hold.
+    cold_start_spread_hours: float = Field(default=5.0, ge=0.0)
     # Restart catch-up spread: after downtime (deploy/crash) every account whose
     # persisted ``next_run_at`` already elapsed is past-due, and ``_seconds_until``
     # clamps that to 0 — so reconcile would fire them all in the same second (an
@@ -107,7 +116,12 @@ class WarmingSettings(BaseSettings):
     # is multiplied by 1 ± this fraction so runs don't land on a rigid grid.
     next_run_jitter_fraction: float = Field(default=0.25, ge=0.0, le=1.0)
     # Cold-start guard: no outbound DM until the account is at least this old.
-    dm_min_age_hours: float = Field(default=36.0, ge=0.0)
+    # Age is measured from OUR row's ``created_at``, not the account's real
+    # Telegram age, so this is "hours since we imported it". Deliberately short
+    # (paired with ``cold_start_spread_hours``) so inter-account dialogue starts on
+    # day one instead of after a day and a half of silence — raise it if the fleet
+    # starts collecting DM-related restrictions.
+    dm_min_age_hours: float = Field(default=5.0, ge=0.0)
     # How long a cached @SpamBot verdict stays fresh before we re-probe. Frequent
     # /start to @SpamBot is itself suspicious, so keep this generous.
     spam_status_ttl_hours: float = Field(default=36.0, ge=0.0)
@@ -228,10 +242,22 @@ class WarmingSettings(BaseSettings):
         },
     )
     # Daily action cap by phase (80 = CRMChat ceiling for accounts ≥2-3 months).
+    # The cap does double duty: it bounds the day's actions AND sets the cadence,
+    # because ``persona_next_run_seconds`` affords ``cap // expected_actions_per_
+    # session`` sessions and splits the active window between them. So a cap below
+    # 2x that divisor collapses to ONE session — a ~15h inter-cycle pause — and a
+    # cap at or below the divisor also starves the steps a cycle runs last: the
+    # story glance and the inter-account DM (``set_online`` itself counts as an
+    # action, and joins/reads take the rest). ``intro`` at 3 hit both: no first DM
+    # before the account left ``intro``, and a half-day gap between cycles. At 15 it
+    # affords 3 sessions ≈ a 5h gap, matching ``cold_start_spread_hours``.
     phase_daily_cap: dict[str, int] = Field(
         default_factory=lambda: {
-            "intro": 3,
-            "settling": 10,
+            # ``settling`` follows ``intro`` up: the cap must never drop as an
+            # account ages (property test ``test_compute_intensity_monotonic_in_age``),
+            # so 10 here would make a day-old account out-cap a week-old one.
+            "intro": 15,
+            "settling": 15,
             "warming": 20,
             "active": 40,
             "warmed": 80,

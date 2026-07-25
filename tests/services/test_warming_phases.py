@@ -161,6 +161,22 @@ def test_compute_intensity_intro_for_fresh_account() -> None:
     assert intensity.daily_cap == settings.warming.phase_daily_cap["intro"]
 
 
+def test_intro_cap_leaves_room_for_a_dm_and_more_than_one_session() -> None:
+    # The intro cap governs two things at once, and at 3 it broke both.
+    # 1) The cycle spends its budget in a fixed order — set_online (itself an
+    #    action), joins/reads, story glance, inter-account DM last — so a cap at or
+    #    below the expected session size starves the DM step: a fresh account could
+    #    never send a first DM regardless of dm_min_age_hours.
+    # 2) persona_next_run_seconds affords cap // expected_actions_per_session
+    #    sessions and splits the active window between them, so a cap under 2x the
+    #    divisor collapses to one session and a ~15h inter-cycle pause.
+    # Guard both invariants rather than the number itself.
+    warm = settings.warming
+    per_session = warm.expected_actions_per_session
+    assert warm.phase_daily_cap["intro"] > per_session
+    assert warm.phase_daily_cap["intro"] // per_session >= 2
+
+
 def test_compute_intensity_daily_cap_is_config_driven(monkeypatch: pytest.MonkeyPatch) -> None:
     # FIX #6: the per-phase cap now lives in settings.warming, not a hardcoded
     # module constant — overriding it must flow through to compute_intensity.
