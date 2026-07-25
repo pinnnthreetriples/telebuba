@@ -44,7 +44,12 @@ last_updated: 2026-07-25
 - File-size gate (aislop max 400) drives the `_runtime`/`onboarding` splits into `_join`/`_lifecycle`/`_classify`/`_sweep`/`_watch` via E402 re-export-after-body; task-handle globals stay in `_runtime` (tests rebind them, and rebinding a re-exported name does not reach the defining module), so a peer module reaches back through the `_runtime` module object. `_generate.py` now sits ~5 lines under the cap. Repository reads split the same way (`_readiness`, `_retention` beside `_comments`/`_quota`), and request models live in `schemas/_neurocomment_requests.py` re-exported from `schemas/neurocomment.py` — a pure module move, so the generated OpenAPI client is unaffected (component names are class names). `schemas/neurocomment.py` sits ~8 lines under the cap: the settings pair is the next extraction.
 
 Channel discovery (`services/neurocomment/discovery.py`) is a background run per campaign,
-single-flighted in memory (`_discovery_state`) and cancelled unconditionally on shutdown.
+single-flighted in memory (`_discovery_state`) and cancelled unconditionally on shutdown. The
+slot AND one unit of the rolling-24h search allowance are claimed by `try_reserve` before the
+first `await` — resolving the account awaits, and a check made before it is still true for a
+second start, whose task would then overwrite the first and escape shutdown. Same await-free
+check→spawn rule as `_ensure_onboarding_running`/`_ensure_join_running`. A refusal that spent
+no RPC calls `release`, refunding the search.
 Both stages are paced: the search fans out over keywords with the same jitter as the
 qualification loop. Comments-enabled is `channelFull.linked_chat_id`, resolved through the
 existing `GetLinkedDiscussionGroup` action; the shared `neurocomment_linked_groups` cache is
@@ -53,6 +58,8 @@ applied in the SERVICE, not the repository — onboarding and the board still wa
 A FloodWait aborts a qualification pass and leaves the tail `pending` (`qualified_at` makes it
 resumable); the run never takes `account_lock`, because holding it for minutes would block
 warming/neurocomment start-stop for that account. Telemetr.io is optional: no key means a
-skipped source, a 429 degrades the run to native results with `last_error` set.
+skipped source, a 429 degrades the run to native results with `last_error` set. Writing
+candidates is delete-then-insert, so a search that found nothing AND has a reason keeps the
+previous set and ends `failed`; only a genuinely empty result replaces it.
 
 API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.
