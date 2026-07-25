@@ -235,14 +235,24 @@ async def test_initial_delay_past_due_spread_varies(monkeypatch: pytest.MonkeyPa
 
 @pytest.mark.asyncio
 async def test_initial_delay_cold_start_shifts_into_window(monkeypatch: pytest.MonkeyPatch) -> None:
-    # FIX #10: a cold start (no schedule) at 03:00 local must not fire in the
-    # middle of the night — it is routed through the active-hours window. The
-    # spread is widened so the snapped morning still fits under the ceiling (see
-    # ``test_initial_delay_cold_start_never_exceeds_spread`` for the other side).
+    # FIX #10: a cold start (no schedule) at 03:00 local must not fire in the middle
+    # of the night — it is routed through the active-hours window.
+    #
+    # The snap only survives when the spread can absorb it, because the ceiling wins
+    # (see ``test_initial_delay_cold_start_never_exceeds_spread``): the snap moves a
+    # candidate forward to the next local morning, so the worst case is the whole
+    # quiet window plus the morning spread. Hence the spread here is derived from
+    # that arithmetic rather than picked to make the assertion pass — and it is
+    # deliberately NOT the shipped 5h default, under which this property does not
+    # hold at all.
     monkeypatch.setattr(settings.warming, "active_hours_enabled", True)
     monkeypatch.setattr(settings.warming, "active_hours_start", 8)
     monkeypatch.setattr(settings.warming, "active_hours_end", 23)
-    monkeypatch.setattr(settings.warming, "cold_start_spread_hours", 12.0)
+    quiet_hours = 24 - (23 - 8)
+    morning_spread_hours = settings.warming.active_hours_start_spread_minutes / 60
+    monkeypatch.setattr(
+        settings.warming, "cold_start_spread_hours", quiet_hours + morning_spread_hours
+    )
 
     async def fake_tz(_account_id: str) -> str:
         return "Europe/Istanbul"  # UTC+3, no DST

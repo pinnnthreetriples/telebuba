@@ -31,11 +31,19 @@ class WarmingSettings(BaseSettings):
     startup_jitter_max_seconds: float = Field(default=8.0, ge=0.0)
     # Cold-start spread: a fresh account (no persisted schedule) picks its first
     # run uniformly across this many hours instead of a few seconds, so a bulk
-    # onboarding of N accounts neither all fires at once nor collapses into the
-    # next morning window. This is a HARD ceiling on the pre-first-cycle wait: the
-    # active-hours snap may pull a night-time candidate forward inside the window
-    # but never past it (see ``_initial_delay_seconds``), so a freshly started
-    # account always begins working within this many hours.
+    # onboarding of N accounts does not all fire at once. This is a HARD ceiling on
+    # the wait before the FIRST cycle only — a persisted ``next_run_at`` (e.g. a
+    # daily-cap park to the next local morning) is honoured verbatim and can be
+    # further out.
+    #
+    # It also decides whether the active-hours snap in ``_initial_delay_seconds``
+    # survives at all. The snap moves a night-time candidate FORWARD to the account's
+    # next local morning, so it fits under the ceiling only when this value exceeds
+    # the quiet window (24 - the active window) plus the morning spread. At 5h
+    # against a 9h quiet window it never fits: measured, the snap survives on ~4% of
+    # cold starts and ~37% start inside the account's local night. Raising this to
+    # ~13h (9h quiet + 4h morning spread) restores daytime-only first cycles at the
+    # cost of a longer wait; the two cannot both hold.
     cold_start_spread_hours: float = Field(default=5.0, ge=0.0)
     # Restart catch-up spread: after downtime (deploy/crash) every account whose
     # persisted ``next_run_at`` already elapsed is past-due, and ``_seconds_until``
