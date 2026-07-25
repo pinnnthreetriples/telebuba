@@ -89,7 +89,7 @@ def test_peer_unresolved_constant_tracks_the_gateway_error_class() -> None:
     ``services/`` can't import the gateway's private exception, so the constant
     is pinned here instead.
     """
-    from core.telegram_client._actions import DmPeerUnresolvedError  # noqa: PLC0415
+    from core.telegram_client._dm import DmPeerUnresolvedError  # noqa: PLC0415
     from services.warming._chat import _PEER_UNRESOLVED  # noqa: PLC0415
 
     assert DmPeerUnresolvedError.__name__ == _PEER_UNRESOLVED

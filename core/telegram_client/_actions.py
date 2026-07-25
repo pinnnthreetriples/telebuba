@@ -2,22 +2,19 @@
 
 from __future__ import annotations
 
-import asyncio
 import random
 from typing import TYPE_CHECKING
 
-from telethon import errors, utils
+from telethon import errors
 from telethon.tl.functions.account import UpdateStatusRequest
 from telethon.tl.functions.channels import (
     GetFullChannelRequest,
     JoinChannelRequest,
     LeaveChannelRequest,
 )
-from telethon.tl.functions.contacts import ResolvePhoneRequest
 from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 
-from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._action_results import (
@@ -27,6 +24,7 @@ from core.telegram_client._action_results import (
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
+from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
 from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._profile import (
@@ -64,7 +62,6 @@ from schemas.telegram_actions import (
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
-    from telethon.tl.types import TypeInputPeer
 
     from schemas.telegram_actions import TelegramAction
 
@@ -163,70 +160,6 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
             else None
         ),
     )
-
-
-def _typing_seconds(text: str, wpm: int | None = None) -> float:
-    """Length-proportional typing time (≈ WPM), clamped to a sane window.
-
-    ``wpm`` is the per-account tempo; ``None`` falls back to the global default.
-    """
-    warm = settings.warming
-    base = len(text) * 60.0 / (5.0 * (wpm or warm.typing_wpm))
-    return max(warm.typing_sim_min_seconds, min(warm.typing_sim_max_seconds, base))
-
-
-class DmPeerUnresolvedError(Exception):
-    """A DM partner this session cannot address, and no way left to learn how.
-
-    Either we hold no phone to look up, or their "who can find me by phone
-    number" privacy setting hides them. Its own type so callers can skip the
-    pair instead of counting a permanent block as a cycle failure.
-    """
-
-
-async def _resolve_dm_peer(
-    client: TelegramClient,
-    action: SendDirectMessage | MarkDirectMessageRead,
-) -> TypeInputPeer:
-    """Resolve the DM partner to an input peer, looking them up by phone if unknown.
-
-    A cold session raises ``ValueError`` on a raw ``user_id``. ``resolvePhone``
-    answers with the user *without* saving a contact — an import would build a
-    saved list of nothing but fleet accounts, exactly the correlated graph the
-    rest of warming works to avoid. Telethon files the ``access_hash`` from the
-    response into the session, so the lookup is paid once per pair.
-    """
-    try:
-        return await client.get_input_entity(action.user_id)
-    except ValueError as cold:
-        if action.peer_phone is None:
-            msg = f"No cached entity and no phone to resolve {action.user_id}"
-            raise DmPeerUnresolvedError(msg) from cold
-        try:
-            # Raw requests skip the phone normalisation Telethon's high-level
-            # helpers apply, so an operator-typed "+7 999 ..." would go as-is.
-            phone = utils.parse_phone(action.peer_phone) or action.peer_phone
-            await client(ResolvePhoneRequest(phone))
-            return await client.get_input_entity(action.user_id)
-        except (
-            errors.PhoneNotOccupiedError,
-            errors.PhoneNumberInvalidError,
-            ValueError,
-        ) as hidden:
-            msg = f"Phone lookup revealed no user for {action.user_id}"
-            raise DmPeerUnresolvedError(msg) from hidden
-
-
-async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage) -> int | None:
-    """Send a DM, optionally preceded by a length-proportional "typing…" action."""
-    peer = await _resolve_dm_peer(client, action)
-    if settings.warming.typing_simulation_enabled:
-        async with client.action(peer, "typing"):  # ty: ignore[invalid-context-manager]
-            await asyncio.sleep(_typing_seconds(action.text, action.typing_wpm))
-            message = await client.send_message(peer, action.text)
-    else:
-        message = await client.send_message(peer, action.text)
-    return int(getattr(message, "id", 0)) or None
 
 
 async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _DispatchResult:  # noqa: C901, PLR0912

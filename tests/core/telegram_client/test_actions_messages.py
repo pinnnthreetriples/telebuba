@@ -15,7 +15,7 @@ from telethon.tl.functions.account import (
 from core.config import settings
 from core.db import create_account, fetch_account
 from core.telegram_client import execute
-from core.telegram_client._actions import _typing_seconds
+from core.telegram_client._dm import _typing_seconds
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import (
     ClickButton,
