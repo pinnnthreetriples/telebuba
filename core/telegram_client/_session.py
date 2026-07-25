@@ -9,11 +9,14 @@ from telethon import errors
 from telethon.tl.functions.help import GetAppConfigRequest
 
 from core.config import settings
-from core.telegram_client._client import create_telegram_client, prepare_session_check_profile
+from core.telegram_client._client import prepare_session_check_profile
+from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._util import optional_str
 from schemas.telegram_session import TelegramSessionCheckResult
 
 if TYPE_CHECKING:
+    from telethon import TelegramClient
+
     from schemas.device_fingerprint import TelegramClientProfile
     from schemas.telegram_session import SessionCheckStatus, TelegramSessionCheckRequest
 
@@ -34,10 +37,9 @@ async def check_telegram_session(
                 "fill them in to enable session checks."
             ),
         )
-    client = create_telegram_client(profile)
     result: TelegramSessionCheckResult
     try:
-        await client.connect()
+        client = await _probe_client(profile.account_id)
         if not await client.is_user_authorized():
             result = _status_session_check_result(profile, status="unauthorized")
         else:
@@ -79,9 +81,34 @@ async def check_telegram_session(
             status="unknown_error",
             is_temporary=True,
         )
-    finally:
-        await client.disconnect()
     return result
+
+
+async def _probe_client(account_id: str) -> TelegramClient:
+    """Borrow the account's pooled client, surfacing the pool's underlying cause.
+
+    The check used to build its own throwaway client. Telethon keeps the
+    account's ``.session`` SQLite file open with an uncommitted write
+    transaction for as long as a client is connected, so a second client on the
+    same file raised ``sqlite3.OperationalError: database is locked`` — an
+    unmapped 500 on the Accounts screen for any account something else was
+    holding (the neurocomment listener holds one for hours). The pool is the
+    single owner of a session, so borrow from it instead of opening a rival
+    connection; that also makes the verdict describe the connection the system
+    actually works through, and skips the ~7 s handshake.
+
+    ``TelegramClientPoolError`` only wraps a connect failure, so re-raising
+    ``cause`` hands the real Telethon/proxy/network error to the caller's
+    classification ladder rather than collapsing it to ``unknown_error``.
+
+    Note the pool keys on ``account_id`` and ignores ``session_name``, so the
+    request's ``session_name`` no longer selects the file. That is deliberate:
+    the check should report the session every other action runs on.
+    """
+    try:
+        return await get_client(account_id)
+    except TelegramClientPoolError as exc:
+        raise exc.cause from exc
 
 
 _SESSION_ERRORS = (

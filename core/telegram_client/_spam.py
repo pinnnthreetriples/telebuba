@@ -9,9 +9,8 @@ from telethon import events
 
 from core.config import settings
 from core.logging import log_event
-from core.telegram_client._client import telegram_client
+from core.telegram_client._pool import get_client
 from core.telegram_client._util import optional_str
-from schemas.device_fingerprint import TelegramClientRequest
 from schemas.spam_status import SpamStatusProbe
 
 if TYPE_CHECKING:
@@ -26,21 +25,23 @@ async def check_spam_status(account_id: str) -> SpamStatusProbe:
     Sends ``/start`` to @SpamBot and captures its reply, and reads the account's
     own ``restricted`` / ``restriction_reason`` flags via ``get_me``. The raw
     result is parsed and cached by ``services.spam_status`` — never raises.
+
+    Runs on the pooled client for the same reason the session check does: a
+    second Telethon client on an account whose ``.session`` file is already open
+    dies on ``database is locked`` (see ``_session._probe_client``).
     """
-    request = TelegramClientRequest(account_id=account_id)
-    async with telegram_client(request) as client:
-        try:
-            await client.connect()
-            reply_text = await _probe_spambot(client)
-            restricted, reason = await _probe_self_restriction(client)
-        except Exception as exc:  # noqa: BLE001 - any probe failure classifies as unknown.
-            await log_event(
-                "WARNING",
-                "telegram_spam_status_probe_failed",
-                account_id=account_id,
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
-            )
-            return SpamStatusProbe(account_id=account_id, error=f"{type(exc).__name__}: {exc}")
+    try:
+        client = await get_client(account_id)
+        reply_text = await _probe_spambot(client)
+        restricted, reason = await _probe_self_restriction(client)
+    except Exception as exc:  # noqa: BLE001 - any probe failure classifies as unknown.
+        await log_event(
+            "WARNING",
+            "telegram_spam_status_probe_failed",
+            account_id=account_id,
+            extra={"error_type": type(exc).__name__, "message": str(exc)},
+        )
+        return SpamStatusProbe(account_id=account_id, error=f"{type(exc).__name__}: {exc}")
     return SpamStatusProbe(
         account_id=account_id,
         reply_text=reply_text,

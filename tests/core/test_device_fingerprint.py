@@ -231,6 +231,23 @@ async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) 
     assert disconnected is True
 
 
+def _patch_session_pool(monkeypatch, fake_client: FakeSessionClient) -> None:
+    """Serve the check from the pool, the way production does.
+
+    The check borrows the account's pooled client instead of building its own —
+    two Telethon clients on one ``.session`` file collide on its SQLite lock. A
+    connect failure therefore surfaces out of the pool, not out of the client,
+    so ``connect_error`` is raised here.
+    """
+
+    async def fake_get_client(_account_id: str) -> FakeSessionClient:
+        if fake_client.connect_error is not None:
+            raise fake_client.connect_error
+        return fake_client
+
+    monkeypatch.setattr("core.telegram_client._session.get_client", fake_get_client)
+
+
 @pytest.mark.asyncio
 async def test_check_telegram_session_returns_alive(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")
@@ -238,9 +255,7 @@ async def test_check_telegram_session_returns_alive(tmp_path: Path, monkeypatch)
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(authorized=True)
-    monkeypatch.setattr(
-        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
-    )
+    _patch_session_pool(monkeypatch, fake_client)
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-alive"))
 
@@ -248,7 +263,6 @@ async def test_check_telegram_session_returns_alive(tmp_path: Path, monkeypatch)
     assert result.is_temporary is False
     assert result.user_id == 123
     assert result.username == "user"
-    assert fake_client.disconnected is True
 
 
 @pytest.mark.asyncio
@@ -258,16 +272,13 @@ async def test_check_telegram_session_returns_unauthorized(tmp_path: Path, monke
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(authorized=False)
-    monkeypatch.setattr(
-        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
-    )
+    _patch_session_pool(monkeypatch, fake_client)
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-dead"))
 
     assert result.status == "unauthorized"
     assert result.is_temporary is False
     assert result.user_id is None
-    assert fake_client.disconnected is True
 
 
 @pytest.mark.asyncio
@@ -287,9 +298,7 @@ async def test_check_telegram_session_detects_frozen_via_app_config(
             "freeze_appeal_url": "https://t.me/spambot",
         },
     )
-    monkeypatch.setattr(
-        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
-    )
+    _patch_session_pool(monkeypatch, fake_client)
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-frozen"))
 
@@ -297,7 +306,6 @@ async def test_check_telegram_session_detects_frozen_via_app_config(
     assert result.is_temporary is False
     assert result.error_type == "AccountFrozen"
     assert "https://t.me/spambot" in (result.error_message or "")
-    assert fake_client.disconnected is True
 
 
 @pytest.mark.asyncio
@@ -310,9 +318,7 @@ async def test_check_telegram_session_alive_when_no_freeze_field(
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(app_config={"some_other_key": 1})
-    monkeypatch.setattr(
-        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
-    )
+    _patch_session_pool(monkeypatch, fake_client)
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-ok"))
 
@@ -343,16 +349,13 @@ async def test_check_telegram_session_classifies_errors(
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     fake_client = FakeSessionClient(connect_error=exc)
-    monkeypatch.setattr(
-        "core.telegram_client._session.create_telegram_client", lambda _: fake_client
-    )
+    _patch_session_pool(monkeypatch, fake_client)
 
     result = await check_telegram_session(TelegramSessionCheckRequest(account_id="account-error"))
 
     assert result.status == status
     assert result.is_temporary is (status in {"network_error", "proxy_error", "flood_wait"})
     assert result.error_type == type(exc).__name__
-    assert fake_client.disconnected is True
     if status == "flood_wait":
         assert result.flood_wait_seconds == 42
 
@@ -389,11 +392,6 @@ class FakeSessionClient:
         self.authorized = authorized
         self.connect_error = connect_error
         self.app_config = app_config or {}
-        self.disconnected = False
-
-    async def connect(self) -> None:
-        if self.connect_error is not None:
-            raise self.connect_error
 
     async def is_user_authorized(self) -> bool:
         return self.authorized
@@ -406,6 +404,3 @@ class FakeSessionClient:
 
     async def __call__(self, _request: object) -> _FakeAppConfig:
         return _FakeAppConfig(self.app_config)
-
-    async def disconnect(self) -> None:
-        self.disconnected = True
