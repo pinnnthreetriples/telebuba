@@ -147,7 +147,7 @@ def test_compute_intensity_monotonic_in_age(age_a: float, age_b: float) -> None:
 
 
 # --------------------------------------------------------------------------- #
-# _cycle._human_delay
+# _steps._human_delay
 # --------------------------------------------------------------------------- #
 
 

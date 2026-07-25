@@ -551,6 +551,7 @@
     "neurocomment_post_cooldown": "Пауза между комментариями",
     "neurocomment_post_gated": "Комментарий отложен по лимиту",
     "neurocomment_account_banned": "Аккаунт забанен в канале",
+    "neurocomment_post_access_lost": "Потерян доступ к чату канала",
     "neurocomment_generation_exhausted": "Не удалось сгенерировать текст",
     "neurocomment_no_account_available": "Нет доступного аккаунта",
     "neurocomment_no_campaign": "Нет подходящей кампании",
@@ -566,6 +567,7 @@
     "neurocomment_listener_join_flood": "Вступления слушателя приостановлены (флуд-контроль)",
     "neurocomment_join_daily_cap": "Достигнут суточный лимит вступлений",
     "neurocomment_runtime_reconciled": "Движок восстановлен",
+    "neurocomment_channels_unwatched": "Каналы вне прослушивания",
     "neurocomment_start_onboard_failed": "Ошибка запуска онбординга",
     "neurocomment_sweep_failed": "Ошибка проверки удалённых комментариев",
     "neurocomment_settings_saved": "Настройки сохранены",
@@ -645,6 +647,7 @@
     "neurocomment_post_commit_failed": "Не удалось сохранить комментарий",
     "neurocomment_post_dropped_overloaded": "Комментарий отброшен из-за перегрузки",
     "neurocomment_stale_claims_reclaimed": "Зависшие задачи возвращены в очередь",
+    "neurocomment_retention_purged": "Старая история нейрокомментов удалена",
     "neurocomment_sweep_read_failed": "Не удалось проверить комментарии",
     "neurocomment_sweep_channel_failed": "Ошибка проверки удалений в канале",
     "neurocomment_listener_warming_skipped": "Слушатель пропущен — аккаунт в прогреве",
@@ -711,6 +714,7 @@
     "neurocomment_post_cooldown": "Пауза от Telegram (флуд-контроль) — аккаунт временно не комментирует.",
     "neurocomment_post_gated": "Нужна капча/разблокировка для отправки в этот канал.",
     "neurocomment_account_banned": "Аккаунт забанен в этом канале — бот больше не пытается туда писать. Снимется, когда «Проверить каналы» покажет, что аккаунт снова может писать.",
+    "neurocomment_post_access_lost": "Аккаунт больше не может писать в чат обсуждений этого канала — его исключили или группа стала закрытой. Пара снята с работы, следующий проход онбординга вступит в чат заново.",
     "neurocomment_channel_cooled": "Канал на паузе после ошибок или массовых удалений.",
     "neurocomment_no_campaign": "Для этого канала нет активной кампании."
   },
@@ -847,7 +851,8 @@
       "remove": "Снять слушателя",
       "actions": "Действия",
       "activeCampaigns": "активных кампаний",
-      "warmingBlocked": "Этот аккаунт сейчас в прогреве — его нельзя назначить слушателем"
+      "warmingBlocked": "Этот аккаунт сейчас в прогреве — его нельзя назначить слушателем",
+      "unwatched": "Не слушаются ({{count}}): {{channels}} — посты из этих каналов не дойдут до движка"
     },
     "captcha": {
       "title": "Решение капчи",

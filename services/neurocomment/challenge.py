@@ -123,6 +123,7 @@ async def _llm_decision(
     """
     if use_image and message.image_b64 is None:
         return None
+    nc = settings.neurocomment
     secret = await load_warming_settings()
     use_openai = secret.captcha_llm_provider == "openai" and bool(secret.openai_api_key)
     if use_openai:
@@ -148,9 +149,15 @@ async def _llm_decision(
             image_b64=message.image_b64 if use_image else None,
             image_mime=message.image_mime,
         )
+        # The vision path uploads a base64 captcha image and routinely outlives the text
+        # budget; the provider gateway's own timeout is 30s, so reusing the 10s text cutoff
+        # truncated a request that was still being answered and parked the pair as
+        # ``bot_challenge`` for an operator to retry. Give the image path its own budget.
         result = await asyncio.wait_for(
             generate(request),
-            timeout=settings.neurocomment.challenge_gemini_timeout_seconds,
+            timeout=nc.challenge_vision_timeout_seconds
+            if use_image
+            else nc.challenge_gemini_timeout_seconds,
         )
     except (TimeoutError, ValidationError):
         return None
@@ -163,7 +170,7 @@ async def _llm_decision(
         return None
     # M4: a fresh low-confidence guess is not worth a risky action → give up (None
     # reuses the give_up contract). Cached decisions skip this — they were already vetted.
-    if decision.confidence < settings.neurocomment.challenge_min_confidence:
+    if decision.confidence < nc.challenge_min_confidence:
         return None
     return _canonicalize_index(decision, message)
 

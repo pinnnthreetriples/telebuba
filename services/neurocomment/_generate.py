@@ -60,6 +60,10 @@ _GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenErro
 # (account, channel) pair with a sticky ban (#30) instead of a recoverable gate, and is
 # never a challenge failure (no pending-resolve, no back-off).
 _BAN_ERROR = "UserBannedInChannelError"
+# The account is no longer in / can no longer reach the discussion group (kicked, group
+# went private). Neither a ban nor a solver-clearable gate — the only fix is a fresh join,
+# so the pair is parked with onboarding's hard-join-failure sentinel (see the branch).
+_LOST_ACCESS_ERRORS = frozenset({"ChannelPrivateError"})
 # Rate-limit families that carry (or imply) a cooldown rather than a hard fail.
 _COOLDOWN_STATUSES = frozenset(
     {"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"},
@@ -254,7 +258,10 @@ async def _classify_post(
         # comment IS delivered, so a failure in any of the follow-up DB writes must be
         # logged, never flip the row to failed (that would mis-report a live comment
         # and free its dedup hash for a duplicate). CancelledError still propagates.
-        _state.clear_cooldown(account_id, event.channel)
+        # No cooldown clearing here: ``in_cooldown`` lazily evicts expired keys, so the
+        # clear was redundant in the calm case and destructive under concurrency — a task
+        # already past the selection gate and sleeping in its reply delay would erase a
+        # *fresh* flood cooldown another task had just parked the account with.
         try:
             await mark_comment_posted(
                 event.channel,
@@ -303,6 +310,25 @@ async def _classify_post(
         # the pending challenge is left as-is. Cleared by a can_send probe / operator retry.
         await mark_pair_banned(account_id, event.channel)
         event_name = "neurocomment_account_banned"
+    elif result.error_type in _LOST_ACCESS_ERRORS:
+        # Ordered after the ban, before the gate: all three match disjoint ``error_type``
+        # values so order can't change behaviour — it reads terminal → rejoinable →
+        # solver-clearable. Previously this fell to the generic tail, which touches no
+        # state, so the pair was re-picked on the channel's very next post and failed
+        # forever (live DB: 38 such failures vs 19 sends). (joined=False,
+        # captcha_passed=True) is onboarding's existing hard-join-failure sentinel, already
+        # rendered as ``join_failed`` by board's ``_not_joined_status`` — no schema/board
+        # change needed. ready=False stops selection now, and since the row is neither
+        # human_skipped nor banned the next onboarding pass re-joins (self-healing). Not a
+        # solver failure: no pending-resolve, no challenge back-off.
+        await upsert_readiness(
+            account_id,
+            event.channel,
+            joined=False,
+            captcha_passed=True,
+            ready=False,
+        )
+        event_name = "neurocomment_post_access_lost"
     elif result.error_type in _GATE_ERRORS:
         # Gate: stop selecting this pair until re-onboarded; the click did not work.
         await upsert_readiness(

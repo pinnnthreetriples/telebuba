@@ -6965,31 +6965,6 @@
             "minLength": 1,
             "title": "Label"
           },
-          "health": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Health"
-          },
-          "trust_score": {
-            "type": "integer",
-            "title": "Trust Score"
-          },
-          "trust_band": {
-            "type": "string",
-            "minLength": 1,
-            "title": "Trust Band"
-          },
-          "spam_status": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Spam Status"
-          },
           "comments_last_hour": {
             "type": "integer",
             "title": "Comments Last Hour"
@@ -7043,15 +7018,12 @@
         "required": [
           "account_id",
           "label",
-          "health",
-          "trust_score",
-          "trust_band",
           "comments_last_hour",
           "max_comments_per_hour",
           "comments_today"
         ],
         "title": "NeurocommentAccountCard",
-        "description": "Per-account card in the work view: limits, health, last activity."
+        "description": "Per-account card in the work view: limits and last activity.\n\nCarries no trust/health/spam: the SPA reads those from ``AccountRead`` on the\naccounts/warming surfaces, so deriving them per board poll was pure waste."
       },
       "NeurocommentBoard": {
         "properties": {
@@ -7246,6 +7218,13 @@
             "title": "Active Channels",
             "default": 0
           },
+          "unwatched_channels": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "title": "Unwatched Channels"
+          },
           "listener_account_id": {
             "anyOf": [
               {
@@ -7274,7 +7253,7 @@
           "log_limit"
         ],
         "title": "NeurocommentRuntimeStatus",
-        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: it reflects the\npersisted ``listener_running`` flag (the engine is actively subscribed), NOT\nmerely whether an account is remembered. ``listener_account_id`` is the\n*remembered* listener and is returned even when ``running`` is False \u2014 that is a\nPAUSED runtime, and the SPA keeps the listener strip visible (distinct from \"no\nlistener\", where the field is null). ``active_channels`` is the size of the\nwatch set across all active campaigns (populated only while running).\n``log_limit`` is the operator-configured activity-log row cap the SPA reads\ninstead of hardcoding one (from ``settings.neurocomment.log_limit``)."
+        "description": "Fleet-wide runtime state for the page's running indicator + live animation.\n\n``running`` is the single source of truth the UI animates on: it reflects the\npersisted ``listener_running`` flag (the engine is actively subscribed), NOT\nmerely whether an account is remembered. ``listener_account_id`` is the\n*remembered* listener and is returned even when ``running`` is False \u2014 that is a\nPAUSED runtime, and the SPA keeps the listener strip visible (distinct from \"no\nlistener\", where the field is null). ``active_channels`` is how many channels the\nlistener is actually watching (populated only while running), i.e. the watch set\nacross all active campaigns minus ``unwatched_channels``.\n``log_limit`` is the operator-configured activity-log row cap the SPA reads\ninstead of hardcoding one (from ``settings.neurocomment.log_limit``)."
       },
       "NeurocommentSettings": {
         "properties": {

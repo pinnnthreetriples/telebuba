@@ -42,19 +42,23 @@ def isolate_runtime(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator
 
 
 class _ListenerSpy:
-    def __init__(self) -> None:
+    def __init__(self, *, unresolvable: set[str] | None = None) -> None:
         self.subscribed: list[tuple[str, list[str]]] = []
         self.stopped: list[str] = []
         self.on_post: Callable[[NewPostEvent], Awaitable[None]] | None = None
+        # Channels the fake listener cannot resolve: they are recorded as requested but
+        # left out of the returned watch set, mirroring a failed ``get_peer_id``.
+        self.unresolvable = unresolvable or set()
 
     async def subscribe_posts(
         self,
         account_id: str,
         channels: list[str],
         on_post: Callable[[NewPostEvent], Awaitable[None]],
-    ) -> None:
+    ) -> list[str]:
         self.subscribed.append((account_id, channels))
         self.on_post = on_post
+        return [channel for channel in channels if channel not in self.unresolvable]
 
     async def stop_post_listener(self, account_id: str) -> None:
         self.stopped.append(account_id)

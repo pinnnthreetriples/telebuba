@@ -84,6 +84,12 @@ _JOIN_RERUN = False
 # invalidated — a failed join simply retries on the next reconcile.
 _JOINED_CHANNELS: set[tuple[str, str]] = set()
 
+# Watch channels the listener could not resolve to a peer id: absent from the NewMessage
+# filter, so no post from them EVER reaches the engine while the board still renders them
+# ready. Refreshed on every reconcile so the status query surfaces the gap without a
+# Telegram round-trip. ponytail: single-process, in-memory, like _JOINED_CHANNELS.
+_UNWATCHED_CHANNELS: set[str] = set()
+
 
 async def on_post(event: NewPostEvent) -> None:
     """Listener callback: spawn the pipeline task and return at once (non-blocking).
@@ -114,6 +120,8 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
     idempotent, so the single-flighted background join task making channels live as
     it paces is acceptable — and keeps this call off the multi-minute join path.
     """
+    # Reset up front: the early returns unsubscribe (nothing watched), the live path refills.
+    _UNWATCHED_CHANNELS.clear()
     # Warming and neurocomment are mutually exclusive per account. This is the
     # single choke point every subscription path funnels through (start, channel
     # edit, startup resume), so the guard lives here — start_neurocomment adds an
@@ -135,14 +143,23 @@ async def reconcile_neurocomment_runtime(listener_account_id: str) -> None:
         await _stop_sweep()
         await _stop_join()
         return
-    await subscribe_posts(listener_account_id, channels, on_post)
+    subscribed = await subscribe_posts(listener_account_id, channels, on_post)
+    _UNWATCHED_CHANNELS.update(set(channels) - set(subscribed))
     _ensure_sweep_running()
     _ensure_join_running(listener_account_id)
+    if _UNWATCHED_CHANNELS:
+        # The only place an operator can learn a channel is dead to the engine.
+        await log_event(
+            "WARNING",
+            "neurocomment_channels_unwatched",
+            account_id=listener_account_id,
+            extra={"count": len(_UNWATCHED_CHANNELS), "channels": sorted(_UNWATCHED_CHANNELS)},
+        )
     await log_event(
         "INFO",
         "neurocomment_runtime_reconciled",
         account_id=listener_account_id,
-        extra={"channels": len(channels)},
+        extra={"channels": len(subscribed), "unwatched": len(_UNWATCHED_CHANNELS)},
     )
 
 
@@ -152,18 +169,9 @@ async def shutdown_neurocomment_runtime(listener_account_id: str) -> None:
     await _stop_sweep()
     await _stop_onboarding()
     await _stop_join()
-    if not _TASKS:
-        return
     tasks = list(_TASKS)
     _TASKS.clear()
-    for task in tasks:
-        if not task.done():
-            task.cancel()
-    with suppress(TimeoutError):
-        await asyncio.wait_for(
-            asyncio.gather(*tasks, return_exceptions=True),
-            timeout=settings.neurocomment.stop_cancel_timeout_seconds,
-        )
+    await _cancel_bounded(*tasks)
 
 
 async def start_neurocomment(
@@ -304,51 +312,46 @@ def _ensure_sweep_running() -> None:
         _SWEEP_TASK = asyncio.create_task(_sweep_loop())
 
 
-async def _stop_sweep() -> None:
-    """Cancel the periodic deletion sweep (bounded wait), if running."""
-    global _SWEEP_TASK  # noqa: PLW0603 - single module-level sweep-task handle
-    task = _SWEEP_TASK
-    _SWEEP_TASK = None
-    if task is None or task.done():
+async def _cancel_bounded(*tasks: asyncio.Task[None] | None) -> None:
+    """Cancel the given tasks and wait a bounded time for them to unwind; ``None`` skipped.
+
+    One body for all four cancel sites (sweep/onboarding/join + on-post tasks): they only
+    differ in which handle they clear, and ``_runtime`` sits under the aislop size cap.
+    """
+    live = [task for task in tasks if task is not None]
+    if not live:
         return
-    task.cancel()
+    for task in live:
+        if not task.done():
+            task.cancel()
     with suppress(TimeoutError):
         await asyncio.wait_for(
-            asyncio.gather(task, return_exceptions=True),
+            asyncio.gather(*live, return_exceptions=True),
             timeout=settings.neurocomment.stop_cancel_timeout_seconds,
         )
+
+
+async def _stop_sweep() -> None:
+    """Cancel the periodic deletion sweep (bounded wait), if running."""
+    global _SWEEP_TASK  # single module-level sweep-task handle
+    task, _SWEEP_TASK = _SWEEP_TASK, None
+    await _cancel_bounded(task)
 
 
 async def _stop_onboarding() -> None:
     """Cancel the background campaign-onboarding task (bounded wait), if in flight."""
     global _ONBOARD_TASK, _ONBOARD_RERUN  # noqa: PLW0603 - single module-level handles
     _ONBOARD_RERUN = False  # shutdown discards any queued rerun
-    task = _ONBOARD_TASK
-    _ONBOARD_TASK = None
-    if task is None or task.done():
-        return
-    task.cancel()
-    with suppress(TimeoutError):
-        await asyncio.wait_for(
-            asyncio.gather(task, return_exceptions=True),
-            timeout=settings.neurocomment.stop_cancel_timeout_seconds,
-        )
+    task, _ONBOARD_TASK = _ONBOARD_TASK, None
+    await _cancel_bounded(task)
 
 
 async def _stop_join() -> None:
     """Cancel the background paced join task (bounded wait), if in flight."""
     global _JOIN_TASK, _JOIN_RERUN  # noqa: PLW0603 - single module-level handles
     _JOIN_RERUN = False  # shutdown discards any queued rerun
-    task = _JOIN_TASK
-    _JOIN_TASK = None
-    if task is None or task.done():
-        return
-    task.cancel()
-    with suppress(TimeoutError):
-        await asyncio.wait_for(
-            asyncio.gather(task, return_exceptions=True),
-            timeout=settings.neurocomment.stop_cancel_timeout_seconds,
-        )
+    task, _JOIN_TASK = _JOIN_TASK, None
+    await _cancel_bounded(task)
 
 
 def reset_for_tests() -> None:
@@ -356,6 +359,7 @@ def reset_for_tests() -> None:
     global _SWEEP_TASK, _ONBOARD_TASK, _ONBOARD_RERUN, _JOIN_TASK, _JOIN_RERUN  # noqa: PLW0603 - module-level handles
     _TASKS.clear()
     _JOINED_CHANNELS.clear()
+    _UNWATCHED_CHANNELS.clear()
     _ONBOARD_RERUN = False
     _JOIN_RERUN = False
     if _SWEEP_TASK is not None:  # pragma: no cover - tests await shutdown, so it's already None

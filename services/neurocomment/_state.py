@@ -3,8 +3,12 @@
 The in-memory dicts below are the hot read path. The flood/peer-flood/slow-mode
 cooldowns (``_COOLDOWN_UNTIL``, set via ``set_cooldown``) are additionally
 mirrored to ``neurocomment_cooldowns`` and rehydrated at startup (#34), so a
-just-flooded account stays parked across a process restart. The channel/challenge
-back-offs stay in-memory only — they are recomputed each sweep and self-heal.
+just-flooded account stays parked across a process restart. A cooldown is only ever
+removed by *expiry* (the lazy eviction in ``in_cooldown`` plus the hydrate prune): there
+is deliberately no early clear, because it cannot delete the persisted row (memory and
+disk would then disagree across a restart) and, with tasks sleeping in their reply delay,
+it can wipe a rival task's still-live cooldown. The channel/challenge back-offs stay
+in-memory only — they are recomputed each sweep and self-heal.
 """
 
 from __future__ import annotations
@@ -80,17 +84,6 @@ def in_cooldown(account_id: str, now: datetime, channel: str | None = None) -> b
         else:
             del _COOLDOWN_UNTIL[key]
     return cooled
-
-
-def clear_cooldown(account_id: str, channel: str | None = None) -> None:
-    """Drop an account's account-wide and ``channel`` cooldowns (called on a successful post).
-
-    In-memory only — no DB delete needed. A successful post is gated by
-    ``in_cooldown``, so a cleared cooldown is necessarily already expired; its
-    lapsed DB row is pruned by ``load_active_cooldowns`` on the next hydrate.
-    """
-    _COOLDOWN_UNTIL.pop((account_id, None), None)
-    _COOLDOWN_UNTIL.pop((account_id, channel), None)
 
 
 async def hydrate_cooldowns() -> None:

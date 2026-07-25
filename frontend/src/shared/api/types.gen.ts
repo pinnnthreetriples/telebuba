@@ -1040,7 +1040,10 @@ export type MusicRemoveRequest = {
 /**
  * NeurocommentAccountCard
  *
- * Per-account card in the work view: limits, health, last activity.
+ * Per-account card in the work view: limits and last activity.
+ *
+ * Carries no trust/health/spam: the SPA reads those from ``AccountRead`` on the
+ * accounts/warming surfaces, so deriving them per board poll was pure waste.
  */
 export type NeurocommentAccountCard = {
   /**
@@ -1051,22 +1054,6 @@ export type NeurocommentAccountCard = {
    * Label
    */
   label: string;
-  /**
-   * Health
-   */
-  health: string;
-  /**
-   * Trust Score
-   */
-  trust_score: number;
-  /**
-   * Trust Band
-   */
-  trust_band: string;
-  /**
-   * Spam Status
-   */
-  spam_status?: string | null;
   /**
    * Comments Last Hour
    */
@@ -1229,8 +1216,9 @@ export type NeurocommentChannelRow = {
  * merely whether an account is remembered. ``listener_account_id`` is the
  * *remembered* listener and is returned even when ``running`` is False — that is a
  * PAUSED runtime, and the SPA keeps the listener strip visible (distinct from "no
- * listener", where the field is null). ``active_channels`` is the size of the
- * watch set across all active campaigns (populated only while running).
+ * listener", where the field is null). ``active_channels`` is how many channels the
+ * listener is actually watching (populated only while running), i.e. the watch set
+ * across all active campaigns minus ``unwatched_channels``.
  * ``log_limit`` is the operator-configured activity-log row cap the SPA reads
  * instead of hardcoding one (from ``settings.neurocomment.log_limit``).
  */
@@ -1243,6 +1231,10 @@ export type NeurocommentRuntimeStatus = {
    * Active Channels
    */
   active_channels?: number;
+  /**
+   * Unwatched Channels
+   */
+  unwatched_channels?: Array<string>;
   /**
    * Listener Account Id
    */

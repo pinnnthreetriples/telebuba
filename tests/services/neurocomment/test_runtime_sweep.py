@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+import asyncio
+import contextlib
+from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -22,13 +25,16 @@ from schemas.telegram_actions import (
     CheckMessagesAlive,
     CheckMessagesAliveResult,
 )
-from services.neurocomment import _runtime, _state
+from services.neurocomment import _runtime, _state, _sweep
 from tests.services.neurocomment.runtime_support import (
     _ExecuteSpy,
     _ListenerSpy,
     _patch_execute,
     _patch_listener,
 )
+
+if TYPE_CHECKING:
+    from schemas.logs import LogEntry
 
 pytestmark = pytest.mark.usefixtures("isolate_runtime")
 
@@ -223,3 +229,124 @@ async def test_sweep_does_not_re_escalate_while_cooled(monkeypatch: pytest.Monke
     assert _state.channel_in_backoff("@a", datetime.now(UTC)) is True
     assert _state._CHANNEL_TRIPS["@a"] == 1  # escalated exactly once, not per sweep
     assert reads == 1  # the second sweep skipped the gateway read entirely
+
+
+# --------------------------------------------------------------------------- #
+# Retention prune: rides the sweep tick, self-gated on its own interval.
+# --------------------------------------------------------------------------- #
+
+
+def _patch_purge(monkeypatch: pytest.MonkeyPatch, removed: int) -> list[str]:
+    """Replace the repository purge with a recorder; returns the cutoffs it was passed."""
+    cutoffs: list[str] = []
+
+    async def fake_purge(cutoff: str) -> int:
+        cutoffs.append(cutoff)
+        return removed
+
+    monkeypatch.setattr(_sweep, "purge_neurocomment_history_older_than", fake_purge)
+    return cutoffs
+
+
+@pytest.fixture(autouse=True)
+def _fresh_prune_clock() -> None:
+    # The "last prune ran at" stamp is module-level, so every test starts due.
+    _sweep.reset_prune_clock()
+
+
+@pytest.mark.asyncio
+async def test_prune_runs_once_per_configured_interval(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.neurocomment, "retention_days", 90.0)
+    monkeypatch.setattr(settings.neurocomment, "retention_prune_interval_hours", 24.0)
+    cutoffs = _patch_purge(monkeypatch, removed=0)
+
+    now = datetime.now(UTC)
+    await _sweep._prune_history_if_due(now)  # never ran → due
+    await _sweep._prune_history_if_due(now + timedelta(hours=1))  # a 5-min tick: too soon
+    await _sweep._prune_history_if_due(now + timedelta(hours=25))  # interval elapsed → due
+
+    assert len(cutoffs) == 2  # not once per sweep tick
+    assert cutoffs[0] == (now - timedelta(days=90)).isoformat()  # cutoff trails by the window
+
+
+@pytest.mark.asyncio
+async def test_prune_skipped_entirely_when_retention_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.neurocomment, "retention_days", 0.0)  # keep forever
+    cutoffs = _patch_purge(monkeypatch, removed=5)
+
+    await _sweep._prune_history_if_due(datetime.now(UTC))
+
+    assert cutoffs == []
+
+
+@pytest.mark.asyncio
+async def test_prune_logs_only_when_rows_were_removed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(settings.neurocomment, "retention_days", 90.0)
+    _patch_purge(monkeypatch, removed=0)
+    await _sweep._prune_history_if_due(datetime.now(UTC))
+
+    # A no-op purge stays silent, mirroring ``neurocomment_comment_deleted``.
+    assert await _retention_log_entries() == []
+
+    _sweep.reset_prune_clock()
+    _patch_purge(monkeypatch, removed=7)
+    await _sweep._prune_history_if_due(datetime.now(UTC))
+
+    entries = await _retention_log_entries()
+    assert len(entries) == 1
+    assert entries[0].extra["removed"] == 7
+
+
+@pytest.mark.asyncio
+async def test_prune_failure_is_logged_and_does_not_propagate(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.neurocomment, "retention_days", 90.0)
+
+    async def boom(_cutoff: str) -> int:
+        msg = "purge boom"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_sweep, "purge_neurocomment_history_older_than", boom)
+
+    await _sweep._prune_history_if_due(datetime.now(UTC))  # must not raise
+
+    logs = await list_recent_logs(limit=50)
+    assert [e for e in logs if e.event == "retention_purge_failed"]
+    assert await _retention_log_entries() == []
+
+
+@pytest.mark.asyncio
+async def test_sweep_loop_prunes_even_when_the_deletion_pass_faults(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The prune rides the loop behind its own guard, so neither half aborts the other."""
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", 0.01)
+    monkeypatch.setattr(settings.neurocomment, "retention_days", 90.0)
+    pruned = asyncio.Event()
+
+    async def failing_pass() -> None:
+        msg = "sweep boom"
+        raise RuntimeError(msg)
+
+    async def fake_purge(_cutoff: str) -> int:
+        pruned.set()
+        return 0
+
+    monkeypatch.setattr(_sweep, "_sweep_once", failing_pass)
+    monkeypatch.setattr(_sweep, "purge_neurocomment_history_older_than", fake_purge)
+
+    task = asyncio.create_task(_sweep._sweep_loop())
+    try:
+        await asyncio.wait_for(pruned.wait(), timeout=5.0)
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+async def _retention_log_entries() -> list[LogEntry]:
+    logs = await list_recent_logs(limit=50)
+    return [entry for entry in logs if entry.event == "neurocomment_retention_purged"]

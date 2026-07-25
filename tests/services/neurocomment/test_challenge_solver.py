@@ -34,6 +34,8 @@ from schemas.telegram_actions import (
 from services.neurocomment import _seams, challenge
 
 if TYPE_CHECKING:
+    from collections.abc import Awaitable
+
     from schemas.gemini import GeminiRequest
 
 
@@ -364,6 +366,59 @@ async def test_cache_miss_calls_gemini_and_records_pending(monkeypatch: pytest.M
     rows = _challenge_rows()
     assert [r["outcome"] for r in rows] == ["pending"]
     assert rows[0]["decision_json"] is not None
+
+
+def _record_wait_for(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Capture the timeout every ``asyncio.wait_for`` in the solver is handed, in order."""
+    timeouts: list[float] = []
+    real = asyncio.wait_for
+
+    async def spy(
+        awaitable: Awaitable[object],
+        timeout: float,  # noqa: ASYNC109 - the spy must mirror asyncio.wait_for's signature
+    ) -> object:
+        timeouts.append(timeout)
+        return await real(awaitable, timeout)
+
+    monkeypatch.setattr(challenge.asyncio, "wait_for", spy)
+    return timeouts
+
+
+def _solvable(monkeypatch: pytest.MonkeyPatch, message: BotChallengeMessage) -> None:
+    """Wire a challenge the solver answers with a click, so the LLM call is reached."""
+    monkeypatch.setattr(settings.neurocomment, "challenge_gemini_timeout_seconds", 11.0)
+    monkeypatch.setattr(settings.neurocomment, "challenge_vision_timeout_seconds", 44.0)
+    monkeypatch.setattr(_seams, "execute_read", _wait(message))
+    monkeypatch.setattr(
+        _seams,
+        "generate_text",
+        _gemini(
+            GeminiResult(status="ok", text=_decision_text(action="click_button", button_index=0)),
+        ),
+    )
+    monkeypatch.setattr(_seams, "execute", _ExecuteStub(ok=True).execute)
+    monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
+
+
+@pytest.mark.asyncio
+async def test_vision_llm_call_gets_the_longer_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    # A vision request uploads a base64 captcha image and routinely outlives the text
+    # budget (the provider gateway's own is 30s), so reusing the 10s text cutoff
+    # truncated a request still being answered and parked the pair as bot_challenge.
+    _solvable(monkeypatch, _msg(has_photo=True, image_b64="aW1n"))
+    timeouts = _record_wait_for(monkeypatch)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert timeouts[0] == 44.0  # the vision LLM call, not the text budget
+
+
+@pytest.mark.asyncio
+async def test_text_llm_call_keeps_the_shorter_budget(monkeypatch: pytest.MonkeyPatch) -> None:
+    _solvable(monkeypatch, _msg())  # no photo → text path, unchanged budget
+    timeouts = _record_wait_for(monkeypatch)
+
+    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "solved"
+    assert timeouts[0] == 11.0
 
 
 @pytest.mark.asyncio

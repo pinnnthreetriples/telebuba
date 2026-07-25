@@ -14,7 +14,7 @@ edges:
     condition: setup, commands, CI, or verification
   - target: patterns/INDEX.md
     condition: repeatable implementation task
-last_updated: 2026-07-24
+last_updated: 2026-07-25
 ---
 
 # Telebuba Router
@@ -22,7 +22,7 @@ last_updated: 2026-07-24
 ## State
 - Working: React/FastAPI; accounts, sessions, proxy pool, profile media, channels, warming runtime, neurocomment listener and vision solver, strict CI.
 - Deferred: landing #237, worker/remote DB architecture, full operator and deployment documentation, persistent neurocomment post queue + catch-up, send↔DB idempotency reconciliation, backup readiness/off-site.
-- Known: warming daily cap may undercount after a mid-cycle restart (#208); use one uvicorn worker. Neurocomment join cap counts NC joins only (not warming). Listener membership ceils ~500 channels/account (needs sharding beyond); SQLite single-writer is the eventual Postgres trigger.
+- Known: warming daily cap may undercount after a mid-cycle restart (#208); use one uvicorn worker. Neurocomment join cap counts NC joins only (not warming). Listener membership ceils ~500 channels/account (needs sharding beyond); SQLite single-writer is the eventual Postgres trigger. The aislop size gate is red at baseline — `schemas/neurocomment.py` and `services/warming/_cycle.py` exceed the 400-line cap and need splitting. On a Windows checkout (`core.autocrlf=true`) `npm run format` flags CRLF files the SPA's `endOfLine: "lf"` rejects; run `prettier --write` on changed files, not a repo-wide check.
 
 ## Routing
 | Task | Load |

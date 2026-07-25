@@ -124,8 +124,11 @@ async def test_subscribe_posts_surfaces_new_broadcast_post(
     async def on_post(event: NewPostEvent) -> None:
         received.append(event)
 
-    await subscribe_posts("listener-1", ["@news", "@deals"], on_post)
+    watched = await subscribe_posts("listener-1", ["@news", "@deals"], on_post)
 
+    # The watch set comes back in the caller's own handle form — those strings are what
+    # the rest of the system keys on, so no peer id may leak out of here.
+    assert watched == ["@news", "@deals"]
     assert len(client.handlers) == 1
     callback, _event_filter = client.handlers[0]
 
@@ -207,11 +210,13 @@ async def test_update_post_subscription_swaps_handler(monkeypatch: pytest.Monkey
     await subscribe_posts("listener-5", ["@news"], on_post)
     first_callback, _ = client.handlers[0]
 
-    await update_post_subscription("listener-5", ["@deals"], on_post)
+    watched = await update_post_subscription("listener-5", ["@deals"], on_post)
 
     # Old handler removed, exactly one live handler remains.
     assert any(removed[0] is first_callback for removed in client.removed)
     assert len(client.handlers) == 1
+    # The swap reports the new watch set, not the replaced one.
+    assert watched == ["@deals"]
 
 
 @pytest.mark.asyncio
@@ -385,8 +390,11 @@ async def test_unresolvable_channel_is_skipped_others_still_subscribe(
         received.append(event)
 
     # "@gone" is absent from PEER_IDS -> get_peer_id raises; "@news" resolves.
-    await subscribe_posts("listener-bad", ["@gone", "@news"], on_post)
+    watched = await subscribe_posts("listener-bad", ["@gone", "@news"], on_post)
 
+    # Only the resolved channel is reported as watched — the caller needs that to know
+    # "@gone" is silently dead (no post from it can ever reach the engine).
+    assert watched == ["@news"]
     # One bad channel must NOT abort the batch — the good channel still listens.
     assert len(client.handlers) == 1
     callback, _ = client.handlers[0]
@@ -404,9 +412,10 @@ async def test_all_unresolvable_registers_no_handler(monkeypatch: pytest.MonkeyP
 
     # Every channel fails to resolve -> register nothing: events.NewMessage(chats=[])
     # would otherwise watch EVERY chat.
-    await subscribe_posts("listener-allbad", ["@gone", "@missing"], on_post)
+    watched = await subscribe_posts("listener-allbad", ["@gone", "@missing"], on_post)
 
     assert client.handlers == []
+    assert watched == []
 
 
 @pytest.mark.asyncio

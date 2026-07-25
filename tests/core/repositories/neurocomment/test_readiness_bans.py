@@ -5,17 +5,23 @@ from __future__ import annotations
 import pytest
 
 from core.db import (  # type: ignore[attr-defined]
+    assign_account_to_campaign,
     clear_pair_banned,
     create_account,
+    create_campaign,
     delete_readiness,
     fetch_linked_group,
     fetch_readiness,
+    link_channel_to_campaign,
+    list_campaign_readiness,
+    list_channel_readiness,
     mark_human_skipped,
     mark_pair_banned,
     upsert_linked_group,
     upsert_readiness,
 )
 from schemas.accounts import AccountCreate
+from schemas.neurocomment import CampaignCreate
 
 
 @pytest.mark.asyncio
@@ -147,3 +153,43 @@ async def test_readiness_upsert_and_fetch() -> None:
     fetched = await fetch_readiness("acc-1", "@chan")
     assert fetched is not None
     assert fetched.ready is True
+
+
+@pytest.mark.asyncio
+async def test_list_channel_readiness_narrows_the_campaign_read_to_one_channel() -> None:
+    # The engine used to load every (account, channel) pair of the campaign per post and
+    # filter the channel in Python; this reader does both filters in SQL. The
+    # campaign-accounts subquery still guards the shared-account leak, so an account_id
+    # from another campaign is dropped even when a caller passes it in.
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    other = await create_campaign(CampaignCreate(name="B", prompt="p"))
+    for channel in ("@one", "@two"):
+        await link_channel_to_campaign(campaign.campaign_id, channel)
+    for acc in ("acc-1", "acc-2", "acc-outside"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+        await upsert_readiness(acc, "@one", joined=True, captcha_passed=True, ready=True)
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
+    await assign_account_to_campaign(other.campaign_id, "acc-outside")
+    await upsert_readiness("acc-1", "@two", joined=True, captcha_passed=True, ready=True)
+
+    rows = await list_channel_readiness(campaign.campaign_id, "@one", ["acc-1", "acc-2"])
+    assert {(r.account_id, r.channel) for r in rows.readiness} == {
+        ("acc-1", "@one"),
+        ("acc-2", "@one"),
+    }
+    # The campaign-wide read is what it narrows: same accounts, but both channels.
+    wide = await list_campaign_readiness(campaign.campaign_id)
+    assert {(r.account_id, r.channel) for r in wide.readiness} == {
+        ("acc-1", "@one"),
+        ("acc-2", "@one"),
+        ("acc-1", "@two"),
+    }
+
+    # Candidate-scoped: a campaign account left out of the list is not returned.
+    only_one = await list_channel_readiness(campaign.campaign_id, "@one", ["acc-1"])
+    assert [r.account_id for r in only_one.readiness] == ["acc-1"]
+    # Another campaign's account can't leak in, and an empty list skips the query.
+    leak = await list_channel_readiness(campaign.campaign_id, "@one", ["acc-outside"])
+    assert leak.readiness == []
+    assert (await list_channel_readiness(campaign.campaign_id, "@one", [])).readiness == []

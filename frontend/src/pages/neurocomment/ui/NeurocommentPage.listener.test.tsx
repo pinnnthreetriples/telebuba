@@ -300,6 +300,45 @@ test('the idle-accounts banner opens the accounts modal', async () => {
   await userEvent.click(screen.getByText('Готово'));
 });
 
+test('the listener strip names channels the listener could not resolve', async () => {
+  // A channel missing from the listener's filter still renders `ready` on the board, so
+  // the strip is the only place the operator can see that its posts never arrive.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({
+          running: true,
+          active_channels: 1,
+          unwatched_channels: ['@YSMSPRZ65'],
+          listener_account_id: 'acc-1',
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+
+  expect(await screen.findByText(/@YSMSPRZ65/)).toBeInTheDocument();
+  expect(screen.getByText(/Не слушаются/)).toBeInTheDocument();
+});
+
+test('no unwatched-channel warning when the whole watch set is live', async () => {
+  // routeApiRunning returns no unwatched_channels → the strip stays clean.
+  routeApiRunning();
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+
+  expect(screen.queryByText(/Не слушаются/)).not.toBeInTheDocument();
+});
+
 test('after pausing, the listener strip still shows the remembered account', async () => {
   // Finding #4: runtime returns listener_account_id even when running is false,
   // so the strip shows the paused listener rather than the "choose" dropdown.

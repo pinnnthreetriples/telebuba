@@ -19,9 +19,6 @@ const ACCOUNTS: NeurocommentAccountCard[] = [
   {
     account_id: 'acc-1',
     label: 'Account One',
-    health: 'ready',
-    trust_score: 80,
-    trust_band: 'high',
     comments_last_hour: 1,
     max_comments_per_hour: 10,
     comments_today: 2,

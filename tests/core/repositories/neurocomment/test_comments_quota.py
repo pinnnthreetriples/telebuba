@@ -183,19 +183,44 @@ async def test_bulk_per_account_counts_match_per_account_readers() -> None:
     assert await claim_comment("@one", 5, campaign.campaign_id, "acc-2") is True
 
     past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+    both = ["acc-1", "acc-2"]
 
-    grouped = await count_comments_per_account_since(past)
+    grouped = await count_comments_per_account_since(both, past)
     per_account = {c.account_id: c.count for c in grouped.counts}
     assert per_account == {"acc-1": 3, "acc-2": 2}
     for acc in ("acc-1", "acc-2", "ghost"):
         assert per_account.get(acc, 0) == await count_account_comments_since(acc, past)
 
-    channel_grouped = await count_channel_comments_per_account_since("@one", past)
+    channel_grouped = await count_channel_comments_per_account_since("@one", both, past)
     per_channel = {c.account_id: c.count for c in channel_grouped.counts}
     assert per_channel == {"acc-1": 2, "acc-2": 2}
     for acc in ("acc-1", "acc-2", "ghost"):
         expected = await count_account_channel_comments_since(acc, "@one", past)
         assert per_channel.get(acc, 0) == expected
+
+
+@pytest.mark.asyncio
+async def test_bulk_per_account_counts_are_scoped_to_the_given_accounts() -> None:
+    # The hourly reader used to filter on status+created_at only, which forced a full
+    # scan of neurocomment_comments on every post (the index is account-leading). Both
+    # bulk readers now take the candidate list: rows outside it are never counted, and
+    # an empty candidate list answers without touching the DB.
+    for acc in ("acc-1", "acc-2"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    await _post_one("@one", 1, campaign.campaign_id, "acc-1")
+    await _post_one("@one", 2, campaign.campaign_id, "acc-2")
+
+    past = (datetime.now(UTC) - timedelta(hours=1)).isoformat()
+
+    scoped = await count_comments_per_account_since(["acc-1"], past)
+    assert {c.account_id: c.count for c in scoped.counts} == {"acc-1": 1}
+    channel_scoped = await count_channel_comments_per_account_since("@one", ["acc-2"], past)
+    assert {c.account_id: c.count for c in channel_scoped.counts} == {"acc-2": 1}
+    # An unknown candidate simply has no rows; an empty list short-circuits.
+    assert (await count_comments_per_account_since(["ghost"], past)).counts == []
+    assert (await count_comments_per_account_since([], past)).counts == []
+    assert (await count_channel_comments_per_account_since("@one", [], past)).counts == []
 
 
 @pytest.mark.asyncio

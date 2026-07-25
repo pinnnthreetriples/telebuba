@@ -21,6 +21,21 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
+# The inbound request bodies live in a sibling module for the file-size budget;
+# re-exported here so ``from schemas.neurocomment import LinkChannelRequest`` etc.
+# keep working.
+from schemas._neurocomment_requests import (  # noqa: F401 - re-export for existing call sites
+    AssignAccountRequest,
+    CampaignRunStatus,
+    LinkChannelRequest,
+    RetryPairRequest,
+    SetAccountChannelRequest,
+    SetCampaignStatusRequest,
+    SolverToggleRequest,
+    StartNeurocommentRequest,
+    UpdatePromptRequest,
+)
+
 CampaignStatus = Literal["active", "paused", "archived"]
 CommentStatus = Literal["claimed", "posted", "failed"]
 
@@ -35,76 +50,6 @@ class CampaignCreate(BaseModel):
     # on every comment generation.
     prompt: str = Field(min_length=1, max_length=4000)
     status: CampaignStatus = "active"
-
-
-class LinkChannelRequest(BaseModel):
-    """Attach a channel to a campaign (the campaign id is the route path param)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    channel: str = Field(min_length=1)
-
-
-class AssignAccountRequest(BaseModel):
-    """Assign an account to a campaign (the campaign id is the route path param)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    account_id: str = Field(min_length=1)
-
-
-class SolverToggleRequest(BaseModel):
-    """Turn the per-campaign challenge (captcha) solver on/off."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    enabled: bool
-
-
-class UpdatePromptRequest(BaseModel):
-    """Replace a campaign's generation prompt (the edit-prompt modal)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    prompt: str = Field(min_length=1, max_length=4000)
-
-
-class RetryPairRequest(BaseModel):
-    """Operator retry of one (account, channel) challenge — the captcha «Решить»."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    account_id: str = Field(min_length=1)
-    channel: str = Field(min_length=1)
-
-
-class StartNeurocommentRequest(BaseModel):
-    """Start the fleet listener on the given account."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    listener_account_id: str = Field(min_length=1)
-
-
-# The operator play/pause button toggles between the running and paused states;
-# ``archived`` is a separate retire action, not part of per-campaign run/pause.
-CampaignRunStatus = Literal["active", "paused"]
-
-
-class SetCampaignStatusRequest(BaseModel):
-    """Per-campaign run/pause: flip a campaign between ``active`` and ``paused`` (#148)."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    status: CampaignRunStatus
-
-
-class SetAccountChannelRequest(BaseModel):
-    """Set the campaign channels an account targets; an empty list = all channels."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    channels: list[str] = Field(default_factory=list)
 
 
 class NeurocommentCampaign(BaseModel):
@@ -340,15 +285,17 @@ class AccountChannelReadiness(BaseModel):
 
 
 class NeurocommentAccountCard(BaseModel):
-    """Per-account card in the work view: limits, health, last activity."""
+    """Per-account card in the work view: limits and last activity.
+
+    Carries no trust/health/spam: the SPA reads those from ``AccountRead`` on the
+    accounts/warming surfaces, so deriving them per board poll was pure waste.
+    """
 
     account_id: str = Field(min_length=1)
     label: str = Field(min_length=1)
-    health: str = Field(min_length=1)
-    trust_score: int
-    trust_band: str = Field(min_length=1)
-    spam_status: str | None = None
     comments_last_hour: int
+    # The cap the engine enforces (saved ``neurocomment_settings`` row, #19) — not
+    # the config default, or the card would render a denominator nobody honours.
     max_comments_per_hour: int
     comments_today: int
     last_comment_at: str | None = None
@@ -394,14 +341,19 @@ class NeurocommentRuntimeStatus(BaseModel):
     merely whether an account is remembered. ``listener_account_id`` is the
     *remembered* listener and is returned even when ``running`` is False — that is a
     PAUSED runtime, and the SPA keeps the listener strip visible (distinct from "no
-    listener", where the field is null). ``active_channels`` is the size of the
-    watch set across all active campaigns (populated only while running).
+    listener", where the field is null). ``active_channels`` is how many channels the
+    listener is actually watching (populated only while running), i.e. the watch set
+    across all active campaigns minus ``unwatched_channels``.
     ``log_limit`` is the operator-configured activity-log row cap the SPA reads
     instead of hardcoding one (from ``settings.neurocomment.log_limit``).
     """
 
     running: bool
     active_channels: int = 0
+    # Channels in the active watch set the listener could not resolve, so no post from
+    # them reaches the engine. Sorted; empty when the whole watch set is live. The board
+    # still renders such a channel `ready`, so the SPA warns off this list.
+    unwatched_channels: list[str] = Field(default_factory=list)
     listener_account_id: str | None = None
     log_limit: int = Field(ge=1)
     # True while the background campaign-onboarding pass is in flight (accounts are
