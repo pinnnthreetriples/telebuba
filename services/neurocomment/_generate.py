@@ -319,8 +319,13 @@ async def _classify_post(
         # captcha_passed=True) is onboarding's existing hard-join-failure sentinel, already
         # rendered as ``join_failed`` by board's ``_not_joined_status`` — no schema/board
         # change needed. ready=False stops selection now, and since the row is neither
-        # human_skipped nor banned the next onboarding pass re-joins (self-healing). Not a
-        # solver failure: no pending-resolve, no challenge back-off.
+        # human_skipped nor banned an onboarding pass re-joins it. That recovery is NOT
+        # automatic: ``_ensure_onboarding_running`` has no timer — only operator Start, app
+        # boot with ``listener_running=1``, and the campaign link/deactivate/assign/
+        # set-status reconciles start a pass. Telethon also raises ChannelPrivateError on a
+        # stale cached entity, so a *transient* access loss parks the pair until one of
+        # those happens (before #279 it recovered on its own, noisily). Not a solver
+        # failure: no pending-resolve, no challenge back-off.
         await upsert_readiness(
             account_id,
             event.channel,
@@ -342,6 +347,16 @@ async def _classify_post(
             await _register_challenge_failure(event.channel)
         event_name = "neurocomment_post_gated"
     else:
+        # A class fix, not a per-error fix: ``core.telegram_client._actions`` funnels every
+        # unmapped Telethon exception into one generic ``status="failed"``, so the named
+        # families above can never be a complete enumeration — and a tail that touched NO
+        # state re-picked the same pair on the channel's very next post, forever (live DB:
+        # 230 failed vs 17 posted). That is the loop #279 closed for ChannelPrivateError
+        # alone; naming more errors would only move the hole. So the *default* is now safe:
+        # park (account, channel) on the duration-less cooldown fallback. Bounded and
+        # self-expiring, so an unknown terminal error costs one window instead of an endless
+        # retry, and no readiness write — an unknown error is not evidence of lost access.
+        await _apply_cooldown(account_id, None, event.channel)
         event_name = "neurocomment_post_failed"
     await log_event(
         "WARNING",

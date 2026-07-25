@@ -11,6 +11,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy.exc import OperationalError
 
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
@@ -134,6 +135,26 @@ async def test_purge_removes_old_join_log_rows() -> None:
     assert removed == 2
     epoch = datetime(2000, 1, 1, tzinfo=UTC).isoformat()
     assert await count_account_joins_since("acc-1", epoch) == 0
+
+
+@pytest.mark.asyncio
+async def test_purge_rolls_back_earlier_deletes_when_a_later_one_fails() -> None:
+    """All three deletes share one transaction, so a mid-purge fault undoes the lot.
+
+    Dropping the join-log table makes the *third* statement raise after the first two have
+    already deleted rows. Without the shared transaction the count the caller logs would be
+    a lie and the rows would be half-gone — and every other test here would still pass,
+    which is why the contract needs its own test rather than a docstring.
+    """
+    await _campaign_with_comments()
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql("DROP TABLE neurocomment_join_log")
+
+    with pytest.raises(OperationalError):
+        await purge_neurocomment_history_older_than(_cutoff())
+
+    assert await fetch_comment("@chan", 1) is not None  # posted row: delete rolled back
+    assert await fetch_comment("@chan", 2) is not None  # failed row: delete rolled back
 
 
 @pytest.mark.asyncio

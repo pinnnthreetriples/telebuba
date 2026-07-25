@@ -81,7 +81,13 @@ async def _prune_history_if_due(now: datetime) -> None:
     if _LAST_PRUNE_AT is not None and (now - _LAST_PRUNE_AT).total_seconds() < interval_seconds:
         return
     _LAST_PRUNE_AT = now
-    cutoff = (now - timedelta(days=nc.retention_days)).isoformat()
+    # Floored at one day because the join log is not pure ballast inside 24h: it backs the
+    # rolling-24h per-account join count that ``_at_join_cap`` reads for the #270 anti-freeze
+    # cap. ``retention_days`` is a float (0.5 is valid config), and a sub-day cutoff deletes
+    # joins the count still needs — it then under-counts, the cap lets the account keep
+    # joining, and Telegram freezes it. Flooring the *shared* cutoff rather than computing a
+    # second one only ever lengthens comment/challenge retention, which is the safe direction.
+    cutoff = (now - timedelta(days=max(nc.retention_days, 1.0))).isoformat()
     try:
         removed = await purge_neurocomment_history_older_than(cutoff)
     except Exception as exc:  # noqa: BLE001 - retention must never abort the deletion sweep.

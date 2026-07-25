@@ -75,8 +75,11 @@ async def test_reconcile_unsubscribes_a_warming_listener(monkeypatch: pytest.Mon
 
     assert spy.subscribed == []
     assert spy.stopped == ["listener-1"]
-    # Unsubscribed → nothing is watched, so no channel counts as "requested but missing".
-    assert not _runtime._UNWATCHED_CHANNELS
+    # This path clears no ``listener_running`` flag, so status keeps reporting a running
+    # engine: EVERY watched channel must read as unwatched. The old assertion (empty set)
+    # locked in a green strip painted over a dead listener — the #279 bug class, left open
+    # on this path. The pre-seeded "@stale" is gone because publishing replaces the set.
+    assert sorted(_runtime._UNWATCHED_CHANNELS) == ["@a"]
 
 
 @pytest.mark.asyncio

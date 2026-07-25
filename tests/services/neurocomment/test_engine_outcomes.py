@@ -622,6 +622,40 @@ async def test_lost_access_pair_is_not_reselected_for_the_next_post(
     assert await _latest_reason("neurocomment_no_account_available") == "not_ready"
 
 
+@pytest.mark.asyncio
+async def test_unclassified_failure_parks_the_pair_on_a_bounded_cooldown(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The default branch must touch state too — the loop is a class, not one error name.
+
+    ``core.telegram_client._actions`` funnels every unmapped Telethon exception into one
+    generic ``status="failed"``, so any terminal error outside the named families lands
+    here. A tail that touched no state re-picked the same pair on the channel's very next
+    post forever; #279 closed that for ChannelPrivateError only.
+    """
+    monkeypatch.setattr(settings.neurocomment, "peer_flood_cooldown_seconds", 3600)
+    await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub(status="failed", error_type="SomeUnmappedRpcError")
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
+    assert len(comment.calls) == 1
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    assert len(comment.calls) == 1  # parked, not re-attempted on the channel's next post
+    assert await _latest_reason("neurocomment_no_account_available") == "cooldown"
+    assert await _has_event("neurocomment_post_failed") is True
+    now = datetime.now(UTC)
+    assert _state.in_cooldown("acc-1", now, "@chan") is True
+    # Bounded and self-expiring: an unknown error is not evidence of lost access, so no
+    # readiness write — the pair comes back on its own once the window lapses.
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    assert (readiness.ready, readiness.banned) == (True, False)
+    assert _state.in_cooldown("acc-1", now + timedelta(seconds=7200), "@chan") is False
+
+
 # --------------------------------------------------------------------------- #
 # A successful post never erases a cooldown parked by a concurrent task
 # --------------------------------------------------------------------------- #
