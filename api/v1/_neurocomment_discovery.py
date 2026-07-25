@@ -37,7 +37,10 @@ async def start_discovery(
     campaign_id: str,
     body: DiscoverySearchRequest,
 ) -> DiscoverySearchOutcome:
-    return await nc_service.start_discovery(campaign_id, body)
+    outcome = await nc_service.start_discovery(campaign_id, body)
+    if outcome is None:
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="campaign not found")
+    return outcome
 
 
 @discovery_router.get(

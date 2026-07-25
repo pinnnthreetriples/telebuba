@@ -76,12 +76,18 @@ def _parse_channel(entry: object) -> TelemetrChannel | None:
     # Telemetr calls the handle "peer"; a row without one cannot be linked to a
     # campaign (campaign channels are handles), so it is dropped.
     peer = row.get("peer")
-    if not isinstance(peer, str) or not peer.strip():
+    if not isinstance(peer, str):
+        return None
+    # Strip before the emptiness check, not after: a peer of "@" survives a
+    # pre-strip guard and would fail TelemetrChannel's min_length, raising out of
+    # a module whose whole contract is that it never does.
+    handle = peer.strip().lstrip("@").strip()
+    if not handle:
         return None
     title = row.get("title")
     members = row.get("members_count")
     return TelemetrChannel(
-        username=peer.strip().lstrip("@"),
+        username=handle,
         title=title.strip() if isinstance(title, str) else "",
         members_count=int(members) if isinstance(members, int) else None,
     )

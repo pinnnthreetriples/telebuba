@@ -55,12 +55,14 @@ type Routes = {
   startStatus?: string;
   hasTelemetrKey?: boolean;
   adoptLinked?: number;
+  boardFailures?: number;
 };
 
 function route(routes: Routes = {}) {
   const calls: { path: string; method: string; body: unknown }[] = [];
   const boards = routes.boards ?? (routes.board ? [routes.board] : [boardPayload([])]);
   let boardIndex = 0;
+  let boardFailures = routes.boardFailures ?? 0;
 
   vi.mocked(fetch).mockImplementation(async (input) => {
     const request = input as Request;
@@ -93,6 +95,13 @@ function route(routes: Routes = {}) {
       });
     }
     if (url.pathname.endsWith('/discovery')) {
+      if (boardFailures > 0) {
+        boardFailures -= 1;
+        return new Response(JSON.stringify({ error: { code: 'internal', message: 'boom' } }), {
+          status: 500,
+          headers: { 'Content-Type': 'application/json' },
+        });
+      }
       const payload = boards[Math.min(boardIndex, boards.length - 1)];
       boardIndex += 1;
       return jsonResponse(payload);
@@ -259,12 +268,74 @@ describe('ChannelDiscoveryModal', () => {
     await userEvent.click(screen.getByRole('button', { name: '← Изменить параметры' }));
 
     expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+    // The next run reuses the cached rows, and starting it does not touch the picks —
+    // so a tick surviving here would mean the back button failed to drop it.
     await userEvent.click(screen.getByRole('button', { name: 'Найти' }));
     await waitFor(() => {
       expect(screen.getByText('@good')).toBeInTheDocument();
     });
     expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: /Добавить выбранные \(0\)/ })).toBeInTheDocument();
   });
+
+  it('reports a no-op adopt as a warning and stays open', async () => {
+    route({ board: boardPayload([candidate({ channel: 'good' })]), adoptLinked: 0 });
+    const onClose = vi.fn();
+    renderModal(onClose);
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+
+    await waitFor(() => {
+      expect(screen.getByRole('button', { name: /Ничего не добавлено/ })).toBeInTheDocument();
+    });
+    // well past the auto-close delay
+    await new Promise((resolve) => {
+      setTimeout(resolve, 1000);
+    });
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not adopt twice while the modal is closing', async () => {
+    const calls = route({ board: boardPayload([candidate({ channel: 'good' })]) });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+
+    const done = await screen.findByRole('button', { name: /Добавлено/ });
+    expect(done).toBeDisabled();
+    await userEvent.click(done);
+    expect(calls.filter((call) => call.path.endsWith('/discovery/adopt'))).toHaveLength(1);
+  });
+
+  it('keeps polling after a failed board fetch', async () => {
+    route({ boardFailures: 1, board: boardPayload([candidate({ channel: 'good' })]) });
+    renderModal();
+    await startSearch();
+
+    // The run is in flight, so the honest copy is "retrying", not "nothing found".
+    await waitFor(() => {
+      expect(screen.getByText(/Не удалось получить результаты/)).toBeInTheDocument();
+    });
+    expect(screen.queryByText(/Ничего не нашлось/)).not.toBeInTheDocument();
+
+    // One errored frame must not switch the self-disabling poll off for good.
+    await waitFor(
+      () => {
+        expect(screen.getByText('@good')).toBeInTheDocument();
+      },
+      { timeout: 8000 },
+    );
+  }, 15000);
 
   it('shows the empty state when nothing was found', async () => {
     route({ board: boardPayload([]) });

@@ -8,6 +8,8 @@ import {
   EMPTY_FORM,
   formatSubscribers,
   isSelectable,
+  KEYWORD_MAX_LENGTH,
+  MAX_ADOPT,
   parseKeywords,
   resolveSelection,
   selectableChannels,
@@ -34,6 +36,13 @@ describe('parseKeywords', () => {
 
   it('drops tokens below the Telegram minimum', () => {
     expect(parseKeywords('abc crypto ab')).toEqual(['crypto']);
+  });
+
+  it('drops tokens above the API maximum length', () => {
+    // A pasted t.me URL is one long token; the API refuses it with a 422.
+    const longest = 'k'.repeat(KEYWORD_MAX_LENGTH);
+    expect(parseKeywords(longest)).toEqual([longest]);
+    expect(parseKeywords(`${longest}k`)).toEqual([]);
   });
 
   it('strips @ noise and dedupes case-insensitively', () => {
@@ -142,11 +151,12 @@ describe('selection helpers', () => {
   });
 
   it('caps the batch at the API maximum', () => {
-    const many = Array.from({ length: 60 }, (_, index) =>
+    const many = Array.from({ length: MAX_ADOPT + 10 }, (_, index) =>
       candidate({ channel: `chan_${index}`, qualification: 'comments_on' }),
     );
     const selected = new Set(many.map((item) => item.channel));
-    expect(resolveSelection(selected, many)).toHaveLength(50);
+    expect(MAX_ADOPT).toBe(500); // matches the API's MAX_ADOPT_CHANNELS
+    expect(resolveSelection(selected, many)).toHaveLength(MAX_ADOPT);
   });
 });
 

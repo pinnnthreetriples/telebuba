@@ -827,8 +827,7 @@
       "remove": "Remove channel",
       "removeTitle": "Remove channel {{channel}} from the campaign?",
       "removeBody": "Campaign accounts will stop commenting in this channel.",
-      "removeConfirm": "Remove",
-      "find": "Find channels"
+      "removeConfirm": "Remove"
     },
     "channelStatus": {
       "ready": "Ready",
@@ -993,6 +992,7 @@
           "empty": "Nothing found. Try different keywords or add a seed channel.",
           "failed": "Search aborted: {{reason}}",
           "degraded": "A source returned an error: {{reason}}",
+          "error": "Couldn't load the search results. Retrying…",
           "selectAll": "Select all eligible",
           "select": "Select channel {{channel}}",
           "colChannel": "Channel",
@@ -1022,7 +1022,8 @@
           "daily_limit_reached": "The daily search allowance is spent."
         },
         "add": "Add selected ({{count}})",
-        "added": "Added: {{count}}"
+        "added": "Added: {{count}}",
+        "addedNone": "Nothing added: those channels are already taken"
       }
     },
     "history": {

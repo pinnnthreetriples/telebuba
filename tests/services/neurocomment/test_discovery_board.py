@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import pytest
 
+from core import db
 from core.db import create_campaign, link_channel_to_campaign
 from core.repositories.neurocomment import (
     mark_discovery_qualified,
@@ -204,3 +205,28 @@ async def test_adopt_skips_the_reconcile_when_nothing_was_linked(
     assert result is not None
     assert [outcome.status for outcome in result.outcomes] == ["already_assigned"]
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_failure_mid_batch_still_reconciles_what_linked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Otherwise a running listener ignores those channels until the next restart."""
+    calls: list[int] = []
+
+    async def _record() -> None:
+        calls.append(1)
+
+    async def _fail_on_second(campaign_id: str, channel: str) -> None:
+        if channel == "second":
+            raise RuntimeError
+        await link_channel_to_campaign(campaign_id, channel)
+
+    monkeypatch.setattr(_runtime, "reconcile_if_running", _record)
+    monkeypatch.setattr(db, "link_channel_to_campaign", _fail_on_second)
+    campaign_id = await _campaign()
+
+    with pytest.raises(RuntimeError):
+        await adopt_candidates(campaign_id, ["first", "second", "third"])
+
+    assert len(calls) == 1

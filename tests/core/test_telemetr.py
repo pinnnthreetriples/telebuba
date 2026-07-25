@@ -203,6 +203,10 @@ async def test_junk_rows_are_dropped_without_failing_the_source() -> None:
                     "items": [
                         {"title": "no peer"},
                         {"peer": "   "},
+                        # Nothing but the sigil: survives a pre-strip guard, then fails
+                        # the schema's min_length and raises out of a never-raises module.
+                        {"peer": "@"},
+                        {"peer": " @ "},
                         {"peer": 42},
                         "not a dict",
                         {"peer": "@good", "members_count": "many"},

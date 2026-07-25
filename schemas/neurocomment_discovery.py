@@ -11,7 +11,7 @@ config (candidate cap, pacing, cache TTL) are applied in ``services/``.
 
 from __future__ import annotations
 
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
@@ -47,7 +47,9 @@ KEYWORD_MAX_LENGTH = 64
 MAX_KEYWORDS = 10
 # Upper bound on one adopt click. Onboarding's own rolling join cap (20/account/day)
 # and 30-120s join jitter absorb the burst; this just bounds the request body.
-MAX_ADOPT_CHANNELS = 50
+# The ceiling of ``discovery_max_candidates``, so select-all can never silently drop a
+# tail. Onboarding's rolling join cap (20/account/day) absorbs the burst.
+MAX_ADOPT_CHANNELS = 500
 CHANNEL_HANDLE_MAX_LENGTH = 32
 
 
@@ -131,7 +133,13 @@ class DiscoveryBoard(BaseModel):
 class DiscoveryAdoptRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    channels: list[str] = Field(min_length=1, max_length=MAX_ADOPT_CHANNELS)
+    # Per-item bound too: a blank handle would otherwise pass validation and only
+    # fail deep inside the link transaction, turning a client mistake into a 500.
+    # The plain channel-link route bounds its handle the same way.
+    channels: list[Annotated[str, Field(min_length=1)]] = Field(
+        min_length=1,
+        max_length=MAX_ADOPT_CHANNELS,
+    )
 
 
 class DiscoveryAdoptResult(BaseModel):

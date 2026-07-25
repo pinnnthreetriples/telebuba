@@ -5,11 +5,7 @@ from __future__ import annotations
 import pytest
 
 from core.config import settings
-from core.db import (
-    create_account,
-    create_campaign,
-    set_listener_account_id,
-)
+from core.db import create_account, create_campaign
 from core.repositories.neurocomment import list_discovery_candidates
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
@@ -17,14 +13,15 @@ from schemas.neurocomment_discovery import DiscoverySearchRequest
 from schemas.telemetr import TelemetrSearchResult
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment._discovery_search import run_search
-from services.neurocomment.discovery import start_discovery
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
     TelemetrRecorder,
+    drain_discovery,
     matches,
     read_error,
     seed_listener,
+    start_run,
     telemetr_ok,
 )
 
@@ -221,6 +218,52 @@ async def test_unknown_member_count_is_kept_not_dropped(
 
 
 @pytest.mark.asyncio
+async def test_a_count_from_one_source_filters_the_same_channel_from_another(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Native outranks Telemetr but carries no count, so counts must pool before dedup.
+
+    Otherwise the preferred spelling shadows the only count anyone knew, and the
+    channel slips through a filter it plainly fails.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("small", "S", None))))
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(telemetr_ok(("small", "S", 42))),
+    )
+    campaign_id = await _new_campaign()
+
+    await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(use_telemetr=True, members_min=10_000),
+    )
+
+    assert (await list_discovery_candidates(campaign_id)).rows == []
+
+
+@pytest.mark.asyncio
+async def test_a_pooled_count_is_stored_on_the_surviving_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("big", "B", None))))
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(telemetr_ok(("big", "B", 50_000))),
+    )
+    campaign_id = await _new_campaign()
+
+    await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+
+    rows = (await list_discovery_candidates(campaign_id)).rows
+    # Native still wins the spelling and the source label; only the count is borrowed.
+    assert rows[0].source == "telegram_search"
+    assert rows[0].subscribers == 50_000
+
+
+@pytest.mark.asyncio
 async def test_candidate_cap_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 2)
     reader = ReadRecorder(
@@ -277,7 +320,7 @@ async def test_start_discovery_spawns_and_reports_started(
     await seed_listener()
     campaign_id = await _new_campaign()
 
-    outcome = await start_discovery(campaign_id, _request())
+    outcome = await start_run(campaign_id, _request())
 
     assert outcome.status == "started"
 
@@ -294,8 +337,8 @@ async def test_start_discovery_is_single_flighted(monkeypatch: pytest.MonkeyPatc
     await seed_listener()
     campaign_id = await _new_campaign()
 
-    first = await start_discovery(campaign_id, _request())
-    second = await start_discovery(campaign_id, _request())
+    first = await start_run(campaign_id, _request())
+    second = await start_run(campaign_id, _request())
 
     assert first.status == "started"
     assert second.status == "already_running"
@@ -305,7 +348,7 @@ async def test_start_discovery_is_single_flighted(monkeypatch: pytest.MonkeyPatc
 async def test_start_discovery_without_any_account_refuses() -> None:
     campaign_id = await _new_campaign()
 
-    outcome = await start_discovery(campaign_id, _request())
+    outcome = await start_run(campaign_id, _request())
 
     assert outcome.status == "no_account"
 
@@ -323,7 +366,7 @@ async def test_start_discovery_falls_back_to_a_campaign_account(
     campaign_id = await _new_campaign()
     await assign_account_to_campaign(campaign_id, "acc-serving")
 
-    outcome = await start_discovery(campaign_id, _request())
+    outcome = await start_run(campaign_id, _request())
 
     assert outcome.status == "started"
 
@@ -342,7 +385,7 @@ async def test_start_discovery_refuses_a_cooling_account(
     campaign_id = await _new_campaign()
     await _state.set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
 
-    outcome = await start_discovery(campaign_id, _request())
+    outcome = await start_run(campaign_id, _request())
 
     assert outcome.status == "account_cooling"
 
@@ -361,7 +404,7 @@ async def test_start_discovery_refuses_an_account_in_warming_flood_wait(
     until = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
     await _set_state(LISTENER_ID, "flood_wait", flood_wait_until=until)
 
-    outcome = await start_discovery(campaign_id, _request())
+    outcome = await start_run(campaign_id, _request())
 
     assert outcome.status == "account_cooling"
 
@@ -376,8 +419,8 @@ async def test_start_discovery_honours_the_daily_search_cap(
     first_campaign = await _new_campaign()
     second_campaign = await _new_campaign()
 
-    first = await start_discovery(first_campaign, _request())
-    second = await start_discovery(second_campaign, _request())
+    first = await start_run(first_campaign, _request())
+    second = await start_run(second_campaign, _request())
 
     assert first.status == "started"
     assert second.status == "daily_limit_reached"
@@ -391,7 +434,7 @@ async def test_daily_cap_does_not_count_a_refused_start(
     monkeypatch.setattr(settings.neurocomment, "discovery_max_searches_per_day", 1)
     campaign_id = await _new_campaign()
 
-    refused = await start_discovery(campaign_id, _request())
+    refused = await start_run(campaign_id, _request())
 
     assert refused.status == "no_account"
     assert _discovery_state.at_daily_search_cap() is False
@@ -418,7 +461,9 @@ async def test_listener_is_preferred_over_a_campaign_account(
     await assign_account_to_campaign(campaign_id, "acc-serving")
     await seed_listener()
 
-    await run_search(campaign_id, LISTENER_ID, _request())
-    await set_listener_account_id(LISTENER_ID)
+    # Through start_discovery, not run_search: handing the account in as a literal
+    # would assert nothing about which one the policy actually picks.
+    await start_run(campaign_id, _request())
+    await drain_discovery(campaign_id)
 
     assert seen == [LISTENER_ID]

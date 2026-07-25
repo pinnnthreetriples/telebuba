@@ -5,8 +5,11 @@ import type { DiscoveryCandidate, DiscoverySearchRequest } from '@/shared/api';
 // Telegram rejects global searches shorter than this; the backend validates it too,
 // but the form should not let the operator submit a request it will refuse.
 export const KEYWORD_MIN_LENGTH = 4;
+export const KEYWORD_MAX_LENGTH = 64;
 export const MAX_KEYWORDS = 10;
-export const MAX_ADOPT = 50;
+// Matches the API's MAX_ADOPT_CHANNELS, itself the ceiling of discovery_max_candidates:
+// everything a run can show must be adoptable in one go.
+export const MAX_ADOPT = 500;
 
 export type DiscoveryFormState = {
   keywords: string;
@@ -34,7 +37,7 @@ export function parseKeywords(raw: string): string[] {
   const keywords: string[] = [];
   for (const token of raw.split(/[,\s]+/)) {
     const cleaned = token.trim().replace(/^@+/, '');
-    if (cleaned.length < KEYWORD_MIN_LENGTH) continue;
+    if (cleaned.length < KEYWORD_MIN_LENGTH || cleaned.length > KEYWORD_MAX_LENGTH) continue;
     const key = cleaned.toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);

@@ -52,9 +52,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
     enabled: submitted,
     // Function form (a first in this codebase): the fixed-interval constant used
     // elsewhere cannot switch itself off, and this modal must stop polling once the
-    // run reaches a terminal phase.
+    // run reaches a terminal phase. No data means loading or errored — the query is
+    // only enabled after a started search, so keep polling instead of going quiet on
+    // one transient failure.
     refetchInterval: (query) =>
-      query.state.data?.progress.running === true ? SEARCH_POLL_MS : false,
+      query.state.data === undefined || query.state.data.progress.running === true
+        ? SEARCH_POLL_MS
+        : false,
   });
 
   // The shared SSE stream fires for the whole app; only this one query is ours.
@@ -72,7 +76,6 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const refused = startStatus !== undefined && startStatus !== 'started';
 
   const runSearch = () => {
-    setSelected(new Set());
     setAddedCount(null);
     startSearch.mutate(
       { path: { campaign_id: campaignId }, body: buildSearchRequest(form) },
@@ -118,7 +121,9 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           });
           void queryClient.invalidateQueries({ queryKey: campaignsQueryOptions().queryKey });
           void queryClient.invalidateQueries({ queryKey: discoveryOptions.queryKey });
-          setTimeout(onClose, CLOSE_DELAY_MS);
+          // Every pick was taken between the last poll and the click: stay open so the
+          // refreshed rows explain the no-op instead of flashing a green "done".
+          if (linked > 0) setTimeout(onClose, CLOSE_DELAY_MS);
         },
       },
     );
@@ -137,6 +142,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
             <DiscoveryResults
               board={board.data}
               loading={board.isPending || (running && phase === 'searching')}
+              errored={board.isError}
               selected={selected}
               onToggle={toggle}
               onToggleAll={toggleAll}
@@ -164,6 +170,8 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               type="button"
               onClick={() => {
                 setSubmitted(false);
+                // The only way back to the form, so it owns dropping the picks: the
+                // next run's rows have nothing to do with the ones ticked here.
                 setSelected(new Set());
               }}
               className="text-[12.5px] text-ink-muted hover:text-primary"
@@ -180,12 +188,19 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               </button>
               <button
                 type="button"
-                disabled={picks.length === 0 || adopt.isPending}
+                // addedCount stays set through the close delay, so a fast second click
+                // cannot re-post the same channels.
+                disabled={picks.length === 0 || adopt.isPending || addedCount !== null}
                 onClick={submitAdopt}
                 className="inline-flex items-center gap-[6px] rounded-[10px] bg-primary px-[15px] py-[8px] text-[12.5px] font-medium text-white disabled:opacity-50"
               >
                 {addedCount === null ? (
                   t('neurocomment.modal.discovery.add', { count: picks.length })
+                ) : addedCount === 0 ? (
+                  <>
+                    <StatusIcon kind="err" />
+                    {t('neurocomment.modal.discovery.addedNone')}
+                  </>
                 ) : (
                   <>
                     <StatusIcon kind="ok" />

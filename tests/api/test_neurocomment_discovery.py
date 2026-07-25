@@ -255,11 +255,40 @@ async def test_adopt_rejects_an_empty_or_oversized_batch(app: FastAPI) -> None:
         empty = await client.post(f"{_BASE}/adopt", json={"channels": []})
         oversized = await client.post(
             f"{_BASE}/adopt",
-            json={"channels": [f"chan_{index}" for index in range(51)]},
+            json={"channels": [f"chan_{index}" for index in range(501)]},
         )
 
     assert empty.status_code == 422
     assert oversized.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_adopt_rejects_a_blank_handle(app: FastAPI) -> None:
+    """Without a per-item bound this reached the link transaction and 500'd."""
+    async with _client(app) as client:
+        resp = await client.post(f"{_BASE}/adopt", json={"channels": ["alpha", ""]})
+
+    assert resp.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_search_404s_for_an_unknown_campaign(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Account resolution is fleet-wide, so it cannot stand in for this check."""
+
+    async def _none(*_args: object, **_kwargs: object) -> None:
+        return None
+
+    monkeypatch.setattr("services.neurocomment.start_discovery", _none)
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/neurocomment/campaigns/ghost/discovery/search",
+            json={"keywords": ["crypto"]},
+        )
+
+    assert resp.status_code == 404
 
 
 @pytest.mark.asyncio

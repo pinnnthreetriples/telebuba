@@ -7,10 +7,12 @@ from typing import TYPE_CHECKING, cast
 import pytest
 
 from core.config import settings
-from core.db import configure_database, create_account, set_listener_account_id
+from core.db import configure_database, create_account, create_campaign, set_listener_account_id
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountCreate
+from schemas.neurocomment import CampaignCreate
+from schemas.neurocomment_discovery import DiscoverySearchOutcome, DiscoverySearchRequest
 from schemas.telegram_actions import (
     GetSimilarChannels,
     LinkedDiscussionGroupResult,
@@ -19,6 +21,7 @@ from schemas.telegram_actions import (
 from schemas.telegram_actions_discovery import TelegramChannelMatch, TelegramChannelMatches
 from schemas.telemetr import TelemetrChannel, TelemetrSearchResult
 from services.neurocomment import _discovery_state, _seams, _state
+from services.neurocomment.discovery import start_discovery
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Iterator
@@ -32,6 +35,7 @@ if TYPE_CHECKING:
 _Scripted = "BaseModel | Callable[[TelegramReadAction], BaseModel]"
 
 LISTENER_ID = "acc-listener"
+_NO_SUCH_CAMPAIGN = "start_discovery refused: the campaign does not exist"
 
 
 @pytest.fixture
@@ -62,6 +66,37 @@ async def seed_listener(account_id: str = LISTENER_ID) -> str:
     )
     await set_listener_account_id(account_id)
     return account_id
+
+
+async def new_campaign() -> str:
+    campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
+    return campaign.campaign_id
+
+
+def search_request(**overrides: object) -> DiscoverySearchRequest:
+    payload: dict[str, object] = {"keywords": ["crypto"]}
+    payload.update(overrides)
+    return DiscoverySearchRequest.model_validate(payload)
+
+
+async def drain_discovery(campaign_id: str) -> None:
+    """Await the spawned run so a test can assert on its terminal phase."""
+    task = _discovery_state._TASKS.get(campaign_id)
+    if task is not None:
+        await task
+
+
+async def start_run(campaign_id: str, request: DiscoverySearchRequest) -> DiscoverySearchOutcome:
+    """``start_discovery`` narrowed to its outcome.
+
+    Every caller here starts from a campaign it just created, so the unknown-campaign
+    branch would only add ten unrelated None-checks. The route's 404 is covered by the
+    API tests, and refusing an unknown campaign by ``test_discovery_run``.
+    """
+    outcome = await start_discovery(campaign_id, request)
+    if outcome is None:
+        raise AssertionError(_NO_SUCH_CAMPAIGN)
+    return outcome
 
 
 def matches(*rows: tuple[str, str, int | None]) -> TelegramChannelMatches:

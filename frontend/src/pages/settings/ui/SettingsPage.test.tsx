@@ -243,3 +243,34 @@ test('by default the save sends clear_gemini_key: false (key preserved)', async 
     expect(body.gemini_api_key).toBeNull();
   });
 });
+
+test('an untouched Telemetr key field keeps the stored key instead of wiping it', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    const body = await warmingPutBody();
+    // null = keep; "" would clear the stored key behind the operator's back
+    expect(body.telemetr_api_key).toBeNull();
+    expect(body.clear_telemetr_key).toBe(false);
+  });
+});
+
+test('a typed Telemetr key is sent in the warming PUT', async () => {
+  routeSettings();
+  renderWithClient(<SettingsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeInTheDocument();
+  });
+
+  // The label wraps the input and its show/hide button, so pin the input.
+  await userEvent.type(screen.getByLabelText('Ключ Telemetr.io', { selector: 'input' }), 'tk-1');
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(async () => {
+    expect((await warmingPutBody()).telemetr_api_key).toBe('tk-1');
+  });
+});

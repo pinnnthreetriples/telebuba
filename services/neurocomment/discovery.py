@@ -47,23 +47,32 @@ if TYPE_CHECKING:
 async def start_discovery(
     campaign_id: str,
     request: DiscoverySearchRequest,
-) -> DiscoverySearchOutcome:
+) -> DiscoverySearchOutcome | None:
     """Validate, then spawn one background run for this campaign.
+
+    ``None`` for an unknown campaign, as in ``load_discovery``. Checked first and
+    against the campaign, not the account: ``resolve_search_account`` falls back to
+    the global listener, so without this a deleted campaign would answer "started",
+    spend a search slot and real RPCs, then die on the foreign key.
 
     Refusals are statuses, not exceptions, so the API can report them verbatim:
     another run in flight, no usable account, that account cooling off, or the
     rolling-24h search allowance spent.
     """
-    if _discovery_state.is_running(campaign_id):
-        return DiscoverySearchOutcome(status="already_running")
-    if _discovery_state.at_daily_search_cap():
-        return DiscoverySearchOutcome(status="daily_limit_reached")
+    if await db.fetch_campaign(campaign_id) is None:
+        return None
+    # Claim the slot and the search before resolving the account: that resolution
+    # awaits, and a check made before it would still be true for a second start.
+    refusal = _discovery_state.try_reserve(campaign_id)
+    if refusal is not None:
+        return DiscoverySearchOutcome(status=refusal)
 
     account = await resolve_search_account(campaign_id)
     if isinstance(account, str):
+        # Refused before any RPC, so give the search back to the allowance.
+        _discovery_state.release(campaign_id)
         return DiscoverySearchOutcome(status=account)  # ty: ignore[invalid-argument-type]
 
-    _discovery_state.record_search()
     _discovery_state.set_phase(campaign_id, "searching")
     _discovery_state.set_last_error(campaign_id, None)
     _discovery_state.spawn(campaign_id, _run(campaign_id, account, request))
@@ -89,15 +98,21 @@ async def _run(
     try:
         found, search_error = await run_search(campaign_id, account.account_id, request)
         _discovery_state.set_last_error(campaign_id, search_error)
-        _discovery_state.set_phase(campaign_id, "qualifying")
-        signal_discovery_progress()
-
-        qualify_error = await run_qualification(campaign_id, account.account_id)
-        if qualify_error is not None:
-            _discovery_state.set_last_error(campaign_id, qualify_error)
+        qualify_error = None
+        if not found and search_error is not None:
+            # Nothing found AND a reason why: the search itself failed rather than
+            # coming up empty, so this is not a run the operator should read as done.
             _discovery_state.set_phase(campaign_id, "failed")
         else:
-            _discovery_state.set_phase(campaign_id, "done")
+            _discovery_state.set_phase(campaign_id, "qualifying")
+            signal_discovery_progress()
+
+            qualify_error = await run_qualification(campaign_id, account.account_id)
+            if qualify_error is not None:
+                _discovery_state.set_last_error(campaign_id, qualify_error)
+                _discovery_state.set_phase(campaign_id, "failed")
+            else:
+                _discovery_state.set_phase(campaign_id, "done")
         await log_event(
             "INFO",
             "neurocomment_discovery_finished",
@@ -200,17 +215,21 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
 
     outcomes: list[ChannelLinkOutcome] = []
     linked = 0
-    for channel in channels:
-        try:
-            await db.link_channel_to_campaign(campaign_id, channel)
-        except db.ChannelAlreadyAssignedError:
-            outcomes.append(ChannelLinkOutcome(status="already_assigned", channel=channel))
-            continue
-        linked += 1
-        outcomes.append(ChannelLinkOutcome(status="linked", channel=channel))
-
-    if linked:
-        await _runtime.reconcile_if_running()
+    try:
+        for channel in channels:
+            try:
+                await db.link_channel_to_campaign(campaign_id, channel)
+            except db.ChannelAlreadyAssignedError:
+                outcomes.append(ChannelLinkOutcome(status="already_assigned", channel=channel))
+                continue
+            linked += 1
+            outcomes.append(ChannelLinkOutcome(status="linked", channel=channel))
+    finally:
+        # In a finally so that a channel failing mid-loop still leaves the listener
+        # subscribed to the ones that did link — otherwise they are ignored until the
+        # next restart. Once for the batch, never per channel.
+        if linked:
+            await _runtime.reconcile_if_running()
     await log_event(
         "INFO",
         "neurocomment_discovery_adopted",

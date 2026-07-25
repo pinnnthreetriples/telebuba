@@ -6986,10 +6986,11 @@
         "properties": {
           "channels": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "minLength": 1
             },
             "type": "array",
-            "maxItems": 50,
+            "maxItems": 500,
             "minItems": 1,
             "title": "Channels"
           }

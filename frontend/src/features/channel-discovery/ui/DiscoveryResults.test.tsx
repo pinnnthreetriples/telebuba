@@ -41,15 +41,18 @@ function board(
 function Harness({
   data,
   loading = false,
+  errored = false,
 }: {
   data: DiscoveryBoard | undefined;
   loading?: boolean;
+  errored?: boolean;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   return (
     <DiscoveryResults
       board={data}
       loading={loading}
+      errored={errored}
       selected={selected}
       onToggle={(channel) => {
         setSelected((current) => {
@@ -72,6 +75,24 @@ describe('DiscoveryResults', () => {
     expect(screen.getByText('Ищем каналы…')).toBeInTheDocument();
   });
 
+  it('hides the previous run rows while the next search runs', () => {
+    render(
+      <Harness
+        data={board([candidate({ channel: 'stale' })], { phase: 'searching', running: true })}
+        loading
+      />,
+    );
+
+    expect(screen.getByText('Ищем каналы…')).toBeInTheDocument();
+    expect(screen.queryByText('@stale')).not.toBeInTheDocument();
+  });
+
+  it('says the request failed instead of claiming nothing was found', () => {
+    render(<Harness data={undefined} errored />);
+    expect(screen.getByText(/Не удалось получить результаты/)).toBeInTheDocument();
+    expect(screen.queryByText(/Ничего не нашлось/)).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when the search found nothing', () => {
     render(<Harness data={board([])} />);
     expect(screen.getByText(/Ничего не нашлось/)).toBeInTheDocument();
@@ -82,25 +103,47 @@ describe('DiscoveryResults', () => {
     expect(screen.getByText(/FloodWait\(300s\)/)).toBeInTheDocument();
   });
 
+  it('shows the abort reason even when the run kept partial results', () => {
+    render(
+      <Harness data={board([candidate()], { phase: 'failed', last_error: 'FloodWait(300s)' })} />,
+    );
+
+    expect(screen.getByText(/Поиск прерван: FloodWait\(300s\)/)).toBeInTheDocument();
+    // the partial results stay adoptable
+    expect(screen.getByText('@alpha')).toBeInTheDocument();
+  });
+
   it('renders the three comment states distinctly', () => {
     render(
       <Harness
-        data={board([
-          candidate({ channel: 'on', qualification: 'comments_on' }),
-          candidate({ channel: 'off', qualification: 'comments_off' }),
-          candidate({ channel: 'waiting', qualification: 'pending' }),
-        ])}
+        data={board(
+          [
+            candidate({ channel: 'on', qualification: 'comments_on' }),
+            candidate({ channel: 'off', qualification: 'comments_off' }),
+            candidate({ channel: 'waiting', qualification: 'pending' }),
+          ],
+          { phase: 'qualifying', running: true },
+        )}
       />,
     );
 
-    expect(screen.getByLabelText('Комментарии включены')).toBeInTheDocument();
-    expect(screen.getByLabelText('Комментарии выключены')).toBeInTheDocument();
+    // role=img so the icon-only verdicts expose their label to a screen reader
+    expect(screen.getByRole('img', { name: 'Комментарии включены' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Комментарии выключены' })).toBeInTheDocument();
     expect(screen.getByText('проверяется')).toBeInTheDocument();
   });
 
   it('labels a failed probe as unknown, not pending', () => {
     render(<Harness data={board([candidate({ qualification: 'unknown' })])} />);
     expect(screen.getByText('не удалось проверить')).toBeInTheDocument();
+  });
+
+  it('stops animating an unprobed row once the run is over', () => {
+    // Polling has stopped, so this row would pulse forever.
+    render(<Harness data={board([candidate({ qualification: 'pending' })], { phase: 'done' })} />);
+
+    const cell = screen.getByText('не удалось проверить');
+    expect(cell.querySelector('.animate-pulse')).toBeNull();
   });
 
   it('disables the checkbox of an ineligible row', () => {
@@ -259,6 +302,7 @@ describe('DiscoveryResults', () => {
       <DiscoveryResults
         board={board([candidate({ channel: 'closed', qualification: 'comments_off' })])}
         loading={false}
+        errored={false}
         selected={new Set()}
         onToggle={onToggle}
         onToggleAll={vi.fn()}

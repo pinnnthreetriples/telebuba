@@ -42,18 +42,32 @@ async def _pace() -> None:
     )
 
 
-def _within_member_bounds(candidate: RawCandidate, request: DiscoverySearchRequest) -> bool:
+def _within_member_bounds(subscribers: int | None, request: DiscoverySearchRequest) -> bool:
     """Re-apply the subscriber filter to hits whose count we happen to know.
 
     Telemetr filters server-side; native search usually returns no count at all, and
-    an unknown count must not be silently dropped — it gets filled in during
-    qualification, and the operator can see it then.
+    an unknown count must not be silently dropped — qualification backfills it from
+    the probe when it has to make one, and the operator can see it then.
     """
-    if candidate.subscribers is None:
+    if subscribers is None:
         return True
-    if request.members_min is not None and candidate.subscribers < request.members_min:
+    if request.members_min is not None and subscribers < request.members_min:
         return False
-    return not (request.members_max is not None and candidate.subscribers > request.members_max)
+    return not (request.members_max is not None and subscribers > request.members_max)
+
+
+def _normalized(
+    ranked: list[RawCandidate],
+) -> list[tuple[str, str, RawCandidate]]:
+    """Ranked hits paired with their dedup key and canonical handle, unusable dropped."""
+    entries: list[tuple[str, str, RawCandidate]] = []
+    for candidate in ranked:
+        handle = normalize_channel(candidate.username, max_length=CHANNEL_HANDLE_MAX_LENGTH)
+        if handle is None or handle.startswith("+"):
+            # Invite-only links have no public handle to search or comment under.
+            continue
+        entries.append((dedup_key(handle), handle, candidate))
+    return entries
 
 
 def _merge(
@@ -66,25 +80,30 @@ def _merge(
         ranked.extend(outcome.candidates)
     # Stable sort by source priority so the dedup below keeps the preferred spelling.
     ranked.sort(key=lambda candidate: _SOURCE_PRIORITY.get(candidate.source, 99))
+    entries = _normalized(ranked)
+
+    # Pool the subscriber counts before deduping. A native hit carries no count and
+    # outranks Telemetr, so otherwise it would shadow the very count that decides
+    # whether the channel passes the member filter at all.
+    counts: dict[str, int] = {}
+    for key, _handle, candidate in entries:
+        if candidate.subscribers is not None:
+            counts.setdefault(key, candidate.subscribers)
 
     rows: list[DiscoveryCandidateRow] = []
     seen: set[str] = set()
-    for candidate in ranked:
-        handle = normalize_channel(candidate.username, max_length=CHANNEL_HANDLE_MAX_LENGTH)
-        if handle is None or handle.startswith("+"):
-            # Invite-only links have no public handle to search or comment under.
-            continue
-        key = dedup_key(handle)
+    for key, handle, candidate in entries:
         if key in seen:
             continue
-        if not _within_member_bounds(candidate, request):
+        subscribers = counts.get(key)
+        if not _within_member_bounds(subscribers, request):
             continue
         seen.add(key)
         rows.append(
             DiscoveryCandidateRow(
                 channel=handle,
                 title=candidate.title,
-                subscribers=candidate.subscribers,
+                subscribers=subscribers,
                 source=candidate.source,
             ),
         )
@@ -120,5 +139,10 @@ async def run_search(
         outcomes.append(await search_similar(account_id, request.seed_channel))
 
     rows, error = _merge(outcomes, request)
+    if not rows and error is not None:
+        # Every source failed. The replace is a delete-then-insert, so writing an
+        # empty set here would destroy the previous run's already-qualified
+        # candidates over one transient timeout. Keep them and report the failure.
+        return 0, error
     await replace_discovery_candidates(campaign_id, rows)
     return len(rows), error
