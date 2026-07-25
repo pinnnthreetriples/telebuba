@@ -305,6 +305,35 @@ test('an account with no stored first name shows why Save is disabled', async ()
   expect(screen.getByText('Сохранить').closest('button')).toBeDisabled();
 });
 
+test('seeding a name over the empty stored one lets a later edit save', async () => {
+  // The case the test above deliberately does not cover: the stored row has no
+  // first name, so onMount flags it, but the live snapshot DOES carry one. Seeding
+  // has to refresh the verdict it just disproved. Left stale it read «Укажите имя»
+  // under a field showing the real name, and — the part that actually traps the
+  // operator — Save stayed dead through any subsequent edit, because canSubmit
+  // counts onMount errors and editing one field never clears another's.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse({ ...VIEW, first_name: 'Иван' }));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={{ ...ACCOUNT, first_name: null }} onClose={vi.fn()} />);
+
+  expect(await screen.findByDisplayValue('Иван')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.queryByText('Укажите имя')).not.toBeInTheDocument();
+  });
+
+  // Save is still disabled here only because nothing is dirty yet; editing an
+  // unrelated field is what has to bring it back.
+  await userEvent.type(screen.getByLabelText('Фамилия'), 'Иванов');
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить').closest('button')).toBeEnabled();
+  });
+});
+
 test('a successful save clears the dirty state so closing does not prompt', async () => {
   let saved = false;
   vi.mocked(fetch).mockImplementation((input) => {
