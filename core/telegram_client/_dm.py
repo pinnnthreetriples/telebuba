@@ -48,18 +48,27 @@ async def _resolve_dm_peer(
 ) -> TypeInputPeer:
     """Resolve the DM partner to an input peer, looking them up by phone if unknown.
 
-    A cold session raises ``ValueError`` on a raw ``user_id`` — it checks the
-    in-memory and session caches before the network, so a miss here is a real
-    miss. ``resolvePhone`` then answers *without* saving a contact; an import
-    would build a saved list of nothing but fleet accounts, exactly the
-    correlated graph the rest of warming works to avoid. Telethon files the
-    ``access_hash`` from the response into the session, so it is paid once per
-    pair.
+    A cold session raises ``ValueError`` on a raw ``user_id``. That is not a
+    pure cache check — for a bare int Telethon falls past both caches to
+    ``users.GetUsers`` with ``access_hash=0``, so a cold pair costs that call
+    too, and the miss could in principle be a failed request rather than a
+    genuine absence. It is still safe to treat as terminal, but only on the
+    no-phone branch below, and not because the miss is trustworthy: a partner
+    we hold no phone for has no recovery path at all, since ``access_hash=0``
+    only ever works for a contact and we deliberately save none. Whenever we do
+    hold a phone the miss is not treated as terminal — we go and look it up.
+
+    ``resolvePhone`` answers *without* saving a contact; an import would build a
+    saved list of nothing but fleet accounts, exactly the correlated graph the
+    rest of warming works to avoid. Telethon files the ``access_hash`` from the
+    response into the session, so the lookup is paid once per pair.
 
     Only permanent conditions raise ``DmPeerUnresolvedError``. Telethon turns
     exhausted retries on a server error into a bare ``ValueError``, so the
-    lookup RPC is guarded narrowly: a wobbling datacentre must surface as a
-    failure the pair retries, never as "this partner is unreachable forever".
+    lookup RPC is guarded by the two errors that are unambiguously permanent: a
+    wobbling datacentre must surface as a failure the pair retries, never as
+    "this partner is unreachable forever". Anything added after that guard must
+    keep bare ``ValueError`` propagating, or the swallow reopens.
     """
     try:
         return await client.get_input_entity(action.user_id)
@@ -68,15 +77,16 @@ async def _resolve_dm_peer(
             msg = f"No cached entity and no phone to resolve {action.user_id}"
             raise DmPeerUnresolvedError(msg) from cold
         # Raw requests skip the normalisation Telethon's high-level helpers
-        # apply. parse_phone returns None only for a value that cannot be a
-        # number at all, so that is a data bug — never spend an RPC on it.
+        # apply. parse_phone only strips "+()- " and checks isdigit, so it
+        # rejects outright garbage but happily passes a truncated number —
+        # PHONE_NUMBER_INVALID below is what catches those.
         phone = utils.parse_phone(action.peer_phone)
         if phone is None:
             msg = f"Stored phone for {action.user_id} is not a usable number"
             raise DmPeerUnresolvedError(msg) from cold
         try:
             await client(ResolvePhoneRequest(phone))
-        except errors.PhoneNotOccupiedError as hidden:
+        except (errors.PhoneNotOccupiedError, errors.PhoneNumberInvalidError) as hidden:
             msg = f"No reachable account uses the phone stored for {action.user_id}"
             raise DmPeerUnresolvedError(msg) from hidden
         try:

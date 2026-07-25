@@ -130,7 +130,7 @@ async def test_unresolvable_partner_stops_the_reply_from_re_arming(
 
     Left pending it resurfaces every cycle forever — ``_conversation_faded``
     needs 12 turns and a stuck pair never leaves one — each time paying a second
-    import and a Gemini generation for a reply that cannot be delivered.
+    lookup and a Gemini generation for a reply that cannot be delivered.
     """
     from services.warming._chat import _reply_to_partner  # noqa: PLC0415
 
@@ -158,6 +158,6 @@ async def test_unresolvable_partner_stops_the_reply_from_re_arming(
     assert result.attempted_actions == 1
     # Consumed, so the pair stops re-arming this same message next cycle.
     assert await latest_unreplied_for("acc-1") is None
-    # Bailed at the read-ack: no second import, no wasted generation.
+    # Bailed at the read-ack: no second lookup, no wasted generation.
     assert dispatched == ["mark_dm_read"]
     assert generated == 0

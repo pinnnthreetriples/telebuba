@@ -175,7 +175,7 @@ async def _reply_to_partner(  # noqa: PLR0911
     )
     if read.status != "ok":
         # The read-ack resolves the same peer the send would, so an unresolvable
-        # partner is already decided here — bail before spending a second import
+        # partner is already decided here — bail before spending a second lookup
         # and a Gemini generation on a reply that cannot be delivered.
         if read.error_type == _PEER_UNRESOLVED:
             return await _drop_unresolvable_reply(sender_id, incoming)
@@ -242,7 +242,7 @@ async def _reply_to_partner(  # noqa: PLR0911
 async def _skip_unresolvable_peer(sender_id: str, partner_id: str) -> ChatResult:
     """A partner Telegram will never hand us — skip the turn without failing the cycle.
 
-    No phone to import, or their phone-lookup privacy hides them: either way the
+    No usable phone, or their phone-lookup privacy hides them: either way the
     pair is permanently undeliverable. Counting it as a failure would park an
     otherwise healthy sender in the terminal ``error`` state.
 
@@ -251,10 +251,11 @@ async def _skip_unresolvable_peer(sender_id: str, partner_id: str) -> ChatResult
     daily cap instead of running off-budget beside it.
 
     ponytail: no negative cache. The reply path consumes the message so a stuck
-    pair stops re-arming, but the opener still re-picks this partner and spends
-    one ``contacts.resolvePhone`` per cycle on it. Cycles are hours apart and the
-    cap now absorbs it, so that is a handful of calls a day. Give the pair a
-    cooldown if the fleet ever carries more than a couple of these.
+    pair stops re-arming, but the opener still re-picks this partner and pays
+    the full cold-resolve every cycle — ``users.GetUsers`` for the cache miss,
+    then ``contacts.resolvePhone``. Cycles are hours apart and the cap now
+    absorbs it, so that is a handful of calls a day. Give the pair a cooldown if
+    the fleet ever carries more than a couple of these.
     """
     await log_event(
         "WARNING",
