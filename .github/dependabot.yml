@@ -31,3 +31,23 @@ updates:
       default-days: 7
     allow:
       - dependency-name: "telethon"
+
+  # The SPA's npm tree. This entry exists so Dependabot's SECURITY updates cover
+  # frontend/package-lock.json at all -- without it the ecosystem is invisible to
+  # Dependabot, which is half of why eighteen advisories piled up unnoticed (the
+  # other half was the missing npm audit CI job).
+  #
+  # `open-pull-requests-limit: 0` deliberately switches OFF routine version-update
+  # PRs while leaving security updates unaffected. Same reasoning as the telethon
+  # `allow` above: the frontend toolchain is majors-heavy (an eslint bump drags in
+  # five plugin majors and a new ruleset), so unsolicited version PRs would be
+  # noise that fails the gates and needs hand-holding. Security is a different
+  # trade -- those we want proposed the moment they exist.
+  - package-ecosystem: "npm"
+    directory: "/frontend"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+    open-pull-requests-limit: 0
+    cooldown:
+      default-days: 7

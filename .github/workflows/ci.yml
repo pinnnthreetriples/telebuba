@@ -133,6 +133,44 @@ jobs:
         run: uv run pip-audit --strict --ignore-vuln PYSEC-2026-2132
 
   # ---------------------------------------------------------------------------
+  # The npm half of the same gate. Its absence is why eighteen advisories -- two
+  # of them shipping in the browser bundle -- accumulated unnoticed while
+  # pip-audit kept the Python tree clean.
+  #
+  # Its own job rather than a step in `frontend`: a CVE disclosed upstream turns
+  # this red without a single line of our code changing, and that must not read as
+  # "the SPA is broken". Same shape as pip-audit above, same reviewed-ignore
+  # convention if a finding ever turns out to be unfixable.
+  # ---------------------------------------------------------------------------
+  npm-audit:
+    name: npm audit (CVE)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      # `npm ci` first, and audit the installed tree rather than passing
+      # --package-lock-only: the lockfile alone would miss what `overrides`
+      # actually resolved to, and two of the current fixes ARE overrides.
+      - name: Install frontend deps
+        run: npm ci
+
+      # No --omit=dev and no --audit-level: devDependencies are exactly where the
+      # backlog lived (a happy-dom VM escape runs during CI, an openapi-ts template
+      # flaw is emitted into shipped code), and "moderate" is where the generated
+      # client's prototype-pollution hole was first rated. Anything found is
+      # triaged, not filtered out in advance.
+      - name: Run npm audit
+        run: npm audit
   # SAST scan on every PR and push, so the security gate fires before merge
   # (not after). The heavier full rulesets run in the nightly workflow.
   # ---------------------------------------------------------------------------
