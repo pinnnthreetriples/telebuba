@@ -16,6 +16,7 @@
     "gen:api": "openapi-ts && prettier --write \"src/shared/api/**/*.{ts,tsx}\""
   },
   "overrides": {
+    "js-yaml": "^4.3.0",
     "eslint-plugin-react-hooks": {
       "zod-validation-error": "^4.0.0"
     }
@@ -38,7 +39,7 @@
     "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@hey-api/openapi-ts": "^0.95.0",
+    "@hey-api/openapi-ts": "^0.99.0",
     "@testing-library/jest-dom": "^6.6.3",
     "@testing-library/react": "^16.1.0",
     "@testing-library/user-event": "^14.5.2",
