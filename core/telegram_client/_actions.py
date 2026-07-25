@@ -28,6 +28,7 @@ from core.telegram_client._action_results import (
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
 from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
+from core.telegram_client._privacy import dispatch_set_privacy_settings
 from core.telegram_client._profile import (
     _PROFILE_EDIT_ACTION_TYPES,
     _dispatch_update_profile,
@@ -55,6 +56,7 @@ from schemas.telegram_actions import (
     SendDirectMessage,
     SetMainProfilePhoto,
     SetOnline,
+    SetPrivacySettings,
     SetProfilePhoto,
     ToggleStoryPinned,
     UpdateProfile,
@@ -222,6 +224,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             await _dispatch_click_button(client, action)
         case UpdateProfile():
             await _dispatch_update_profile(client, action)
+        case SetPrivacySettings():
+            await dispatch_set_privacy_settings(client, action)
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
@@ -374,6 +378,12 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
                 "has_last_name": action.last_name is not None,
                 "has_username": action.username is not None,
                 "has_bio": action.bio is not None,
+            }
+        case SetPrivacySettings():
+            extra = {
+                "has_profile_photo": action.profile_photo is not None,
+                "has_bio": action.bio is not None,
+                "has_last_seen": action.last_seen is not None,
             }
         case SetProfilePhoto() | PostStory() | AddProfileMusic():
             extra = {"filename": action.filename}

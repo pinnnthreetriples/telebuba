@@ -80,6 +80,66 @@ export type AccountCheckRequest = {
 };
 
 /**
+ * AccountPrivacyOutcome
+ *
+ * One account's result in the fleet-wide apply.
+ *
+ * ``skipped`` = the account's session is not usable, so nothing was attempted;
+ * ``failed`` carries the stable, locale-neutral refusal code in ``error``.
+ */
+export type AccountPrivacyOutcome = {
+  /**
+   * Account Id
+   */
+  account_id: string;
+  /**
+   * Status
+   */
+  status: 'ok' | 'failed' | 'skipped';
+  /**
+   * Error
+   */
+  error?: string | null;
+};
+
+/**
+ * AccountPrivacyUpdateRequest
+ *
+ * Privacy write body. ``None`` leaves that key unchanged (same as the action).
+ *
+ * ``extra="forbid"`` so a typo'd key 422s instead of silently no-op-ing, and an
+ * all-``None`` body is refused for the same reason the action refuses it: it
+ * would spend a Telegram round trip changing nothing.
+ */
+export type AccountPrivacyUpdateRequest = {
+  /**
+   * Profile Photo
+   */
+  profile_photo?: 'everybody' | 'contacts' | 'nobody' | null;
+  /**
+   * Bio
+   */
+  bio?: 'everybody' | 'contacts' | 'nobody' | null;
+  /**
+   * Last Seen
+   */
+  last_seen?: 'everybody' | 'contacts' | 'nobody' | null;
+};
+
+/**
+ * AccountPrivacyView
+ *
+ * One account's live privacy levels, or why they could not be read.
+ */
+export type AccountPrivacyView = {
+  settings?: PrivacySettingsResult | null;
+  /**
+   * Error
+   */
+  error?: string | null;
+};
+
+/**
  * AccountProfileUpdateRequest
  */
 export type AccountProfileUpdateRequest = {
@@ -522,6 +582,30 @@ export type BodySetAccountPhoto = {
    * File
    */
   file: Blob | File;
+};
+
+/**
+ * BulkPrivacyResult
+ *
+ * Fleet-wide apply roll-up — per-account outcomes plus the three counts.
+ */
+export type BulkPrivacyResult = {
+  /**
+   * Outcomes
+   */
+  outcomes: Array<AccountPrivacyOutcome>;
+  /**
+   * Ok
+   */
+  ok: number;
+  /**
+   * Failed
+   */
+  failed: number;
+  /**
+   * Skipped
+   */
+  skipped: number;
 };
 
 /**
@@ -1604,6 +1688,26 @@ export type PhotoRemoveRequest = {
    * File Reference
    */
   file_reference: string;
+};
+
+/**
+ * PrivacySettingsResult
+ *
+ * Gateway output for ``GetPrivacySettings`` — one level per privacy key.
+ */
+export type PrivacySettingsResult = {
+  /**
+   * Profile Photo
+   */
+  profile_photo?: 'everybody' | 'contacts' | 'nobody' | 'unknown';
+  /**
+   * Bio
+   */
+  bio?: 'everybody' | 'contacts' | 'nobody' | 'unknown';
+  /**
+   * Last Seen
+   */
+  last_seen?: 'everybody' | 'contacts' | 'nobody' | 'unknown';
 };
 
 /**
@@ -3821,6 +3925,95 @@ export type DeleteAccountChannelPostResponses = {
 
 export type DeleteAccountChannelPostResponse =
   DeleteAccountChannelPostResponses[keyof DeleteAccountChannelPostResponses];
+
+export type GetAccountPrivacyData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/privacy';
+};
+
+export type GetAccountPrivacyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetAccountPrivacyError = GetAccountPrivacyErrors[keyof GetAccountPrivacyErrors];
+
+export type GetAccountPrivacyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPrivacyView;
+};
+
+export type GetAccountPrivacyResponse =
+  GetAccountPrivacyResponses[keyof GetAccountPrivacyResponses];
+
+export type SetAccountPrivacyData = {
+  body: AccountPrivacyUpdateRequest;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/privacy';
+};
+
+export type SetAccountPrivacyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetAccountPrivacyError = SetAccountPrivacyErrors[keyof SetAccountPrivacyErrors];
+
+export type SetAccountPrivacyResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountPrivacyView;
+};
+
+export type SetAccountPrivacyResponse =
+  SetAccountPrivacyResponses[keyof SetAccountPrivacyResponses];
+
+export type SetAllAccountsPrivacyData = {
+  body: AccountPrivacyUpdateRequest;
+  path?: never;
+  query?: never;
+  url: '/api/v1/accounts/privacy/all';
+};
+
+export type SetAllAccountsPrivacyErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type SetAllAccountsPrivacyError =
+  SetAllAccountsPrivacyErrors[keyof SetAllAccountsPrivacyErrors];
+
+export type SetAllAccountsPrivacyResponses = {
+  /**
+   * Successful Response
+   */
+  200: BulkPrivacyResult;
+};
+
+export type SetAllAccountsPrivacyResponse =
+  SetAllAccountsPrivacyResponses[keyof SetAllAccountsPrivacyResponses];
 
 export type ListProxiesData = {
   body?: never;

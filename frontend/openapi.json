@@ -2378,6 +2378,192 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/privacy": {
+      "get": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Get Account Privacy",
+        "description": "Live Profile photo / Bio / Last seen privacy levels for one account.",
+        "operationId": "getAccountPrivacy",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPrivacyView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set Account Privacy",
+        "description": "Apply the given keys, then answer with the re-read state (one round trip).",
+        "operationId": "setAccountPrivacy",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountPrivacyUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountPrivacyView"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/accounts/privacy/all": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Set All Accounts Privacy",
+        "description": "Apply the same keys to every account; unusable sessions come back skipped.",
+        "operationId": "setAllAccountsPrivacy",
+        "parameters": [
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AccountPrivacyUpdateRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BulkPrivacyResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/proxies": {
       "get": {
         "tags": [
@@ -5486,6 +5672,125 @@
         ],
         "title": "AccountCheckRequest"
       },
+      "AccountPrivacyOutcome": {
+        "properties": {
+          "account_id": {
+            "type": "string",
+            "title": "Account Id"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "ok",
+              "failed",
+              "skipped"
+            ],
+            "title": "Status"
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "account_id",
+          "status"
+        ],
+        "title": "AccountPrivacyOutcome",
+        "description": "One account's result in the fleet-wide apply.\n\n``skipped`` = the account's session is not usable, so nothing was attempted;\n``failed`` carries the stable, locale-neutral refusal code in ``error``."
+      },
+      "AccountPrivacyUpdateRequest": {
+        "properties": {
+          "profile_photo": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "everybody",
+                  "contacts",
+                  "nobody"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Profile Photo"
+          },
+          "bio": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "everybody",
+                  "contacts",
+                  "nobody"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Bio"
+          },
+          "last_seen": {
+            "anyOf": [
+              {
+                "type": "string",
+                "enum": [
+                  "everybody",
+                  "contacts",
+                  "nobody"
+                ]
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Seen"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "title": "AccountPrivacyUpdateRequest",
+        "description": "Privacy write body. ``None`` leaves that key unchanged (same as the action).\n\n``extra=\"forbid\"`` so a typo'd key 422s instead of silently no-op-ing, and an\nall-``None`` body is refused for the same reason the action refuses it: it\nwould spend a Telegram round trip changing nothing."
+      },
+      "AccountPrivacyView": {
+        "properties": {
+          "settings": {
+            "anyOf": [
+              {
+                "$ref": "#/components/schemas/PrivacySettingsResult"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error"
+          }
+        },
+        "type": "object",
+        "title": "AccountPrivacyView",
+        "description": "One account's live privacy levels, or why they could not be read."
+      },
       "AccountProfileUpdateRequest": {
         "properties": {
           "account_id": {
@@ -6384,6 +6689,38 @@
           "file"
         ],
         "title": "Body_setAccountPhoto"
+      },
+      "BulkPrivacyResult": {
+        "properties": {
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/AccountPrivacyOutcome"
+            },
+            "type": "array",
+            "title": "Outcomes"
+          },
+          "ok": {
+            "type": "integer",
+            "title": "Ok"
+          },
+          "failed": {
+            "type": "integer",
+            "title": "Failed"
+          },
+          "skipped": {
+            "type": "integer",
+            "title": "Skipped"
+          }
+        },
+        "type": "object",
+        "required": [
+          "outcomes",
+          "ok",
+          "failed",
+          "skipped"
+        ],
+        "title": "BulkPrivacyResult",
+        "description": "Fleet-wide apply roll-up \u2014 per-account outcomes plus the three counts."
       },
       "CampaignCreate": {
         "properties": {
@@ -8050,6 +8387,46 @@
           "file_reference"
         ],
         "title": "PhotoRemoveRequest"
+      },
+      "PrivacySettingsResult": {
+        "properties": {
+          "profile_photo": {
+            "type": "string",
+            "enum": [
+              "everybody",
+              "contacts",
+              "nobody",
+              "unknown"
+            ],
+            "title": "Profile Photo",
+            "default": "unknown"
+          },
+          "bio": {
+            "type": "string",
+            "enum": [
+              "everybody",
+              "contacts",
+              "nobody",
+              "unknown"
+            ],
+            "title": "Bio",
+            "default": "unknown"
+          },
+          "last_seen": {
+            "type": "string",
+            "enum": [
+              "everybody",
+              "contacts",
+              "nobody",
+              "unknown"
+            ],
+            "title": "Last Seen",
+            "default": "unknown"
+          }
+        },
+        "type": "object",
+        "title": "PrivacySettingsResult",
+        "description": "Gateway output for ``GetPrivacySettings`` \u2014 one level per privacy key."
       },
       "ProfileMusicView": {
         "properties": {
