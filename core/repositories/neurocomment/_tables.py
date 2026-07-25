@@ -22,15 +22,14 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
-    func,
-    or_,
+    text,
 )
 
-from core.channel_tokens import dedup_key
+from core.channel_tokens import channel_fold_sql
 from core.db import _metadata
 
 if TYPE_CHECKING:
-    from sqlalchemy import ColumnElement
+    from sqlalchemy import TextClause
 
 _neurocomment_campaigns = Table(
     "neurocomment_campaigns",
@@ -60,26 +59,43 @@ _neurocomment_campaign_channels = Table(
 )
 
 
-def _campaign_channel_matches(channel: str) -> ColumnElement[bool]:
-    """Match a campaign-channel link the way ``dedup_key`` folds handles.
+def _channel_fold(column: Column[str]) -> str:
+    """The migration #39 index expression over ``column``, as literal SQL text.
 
-    Telegram usernames are case-insensitive, so ``Telegram`` must find the link
-    stored as ``telegram`` — but a ``+HASH`` invite key IS case-sensitive and is
-    compared verbatim. Mirrors the migration #39 unique index, so what the index
-    refuses to insert is exactly what these reads find.
+    Literal text and not SQLAlchemy's ``case()``: that renders the branch constants
+    as bound parameters, and SQLite only matches a query against an expression index
+    when the expression carries no variables.
     """
-    column = _neurocomment_campaign_channels.c.channel
-    if channel.startswith("+"):
-        return column == channel
-    return func.lower(column) == dedup_key(channel)
+    return channel_fold_sql(f"{column.table.name}.{column.name}")
 
 
-def _campaign_channels_match(channels: list[str]) -> ColumnElement[bool]:
+def _channel_matches(column: Column[str], channel: str) -> TextClause:
+    """Match ``column`` against ``channel`` through the migration #39 fold.
+
+    ``@News``, ``news`` and ``News`` are one Telegram channel; a ``+HASH`` invite key
+    IS case-sensitive and compares verbatim. Both sides go through the SQL fold, so
+    what the index refuses to insert is exactly what these reads find — see
+    :func:`core.channel_tokens.channel_fold_sql` for why folding the probe in Python
+    instead would make the two disagree.
+    """
+    return text(f"{_channel_fold(column)} = {channel_fold_sql(':probe')}").bindparams(
+        probe=channel,
+    )
+
+
+def _campaign_channel_matches(channel: str) -> TextClause:
+    """Match a campaign-channel link the way the one-active-campaign index folds handles."""
+    return _channel_matches(_neurocomment_campaign_channels.c.channel, channel)
+
+
+def _campaign_channels_match(channels: list[str]) -> TextClause:
     """The ``IN`` form of :func:`_campaign_channel_matches` (same fold, one query)."""
-    column = _neurocomment_campaign_channels.c.channel
-    return or_(
-        column.in_([c for c in channels if c.startswith("+")]),
-        func.lower(column).in_([c.lower() for c in channels if not c.startswith("+")]),
+    names = [f"probe_{index}" for index in range(len(channels))]
+    folded = ", ".join(channel_fold_sql(f":{name}") for name in names)
+    return text(
+        f"{_channel_fold(_neurocomment_campaign_channels.c.channel)} IN ({folded})"
+    ).bindparams(
+        **dict(zip(names, channels, strict=True)),
     )
 
 

@@ -279,12 +279,6 @@ class NeurocommentSettings(BaseSettings):
     # Consecutive gateway failures that abort a qualification pass — a dead session
     # must not burn one RPC per candidate.
     discovery_max_consecutive_errors: int = Field(default=3, ge=1)
-    # Total failures that abort a qualification pass. The consecutive counter only
-    # catches a dead session: one failing every other probe never reaches it and would
-    # spend an RPC per remaining candidate. Ten is a tenth of the default candidate cap
-    # and above the handful of dead or private handles a healthy search returns; failed
-    # rows keep their stamp, so the next pass resumes past them rather than re-probing.
-    discovery_max_total_errors: int = Field(default=10, ge=1)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:

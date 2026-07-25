@@ -44,7 +44,7 @@ MAX_KEYWORDS = 10
 # Upper bound on one adopt click. Onboarding's own rolling join cap (20/account/day)
 # and 30-120s join jitter absorb the burst; this just bounds the request body.
 # The ceiling of ``discovery_max_candidates``, so select-all can never silently drop a
-# tail. Onboarding's rolling join cap (20/account/day) absorbs the burst.
+# tail.
 MAX_ADOPT_CHANNELS = 500
 CHANNEL_HANDLE_MAX_LENGTH = 32
 

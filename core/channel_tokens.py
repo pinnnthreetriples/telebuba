@@ -82,11 +82,33 @@ def normalize_channel(token: str, *, max_length: int) -> str | None:  # noqa: PL
 def dedup_key(channel: str) -> str:
     """Case-folding key for dedup.
 
-    Public usernames are case-insensitive, but private-invite hashes ("+HASH")
-    are case-sensitive — two genuinely different invites that differ only in
-    letter case must not collapse to one and silently drop the second.
+    Public usernames are case-insensitive and the leading ``@`` is decoration, so
+    ``@News``, ``news`` and ``News`` are ONE channel — they resolve to a single
+    Telegram peer id. Private-invite hashes ("+HASH") are case-sensitive, though:
+    two genuinely different invites that differ only in letter case must not
+    collapse to one and silently drop the second.
     """
-    return channel if channel.startswith("+") else channel.lower()
+    return channel if channel.startswith("+") else channel.lstrip("@").lower()
+
+
+def channel_fold_sql(operand: str) -> str:
+    """:func:`dedup_key` spelled as SQLite SQL over ``operand``.
+
+    The neurocomment "one active campaign per channel" unique index (migration #39)
+    is built over this expression, so it is the only fold spelling in the codebase:
+    SQLite matches an expression index by comparing the expression itself, and any
+    paraphrase (``lower(channel) = ?``) drops the per-post lookup from a SEARCH to a
+    full SCAN.
+
+    Comparisons fold BOTH sides through this helper rather than pre-folding the probe
+    with :func:`dedup_key`. SQLite's ``lower()`` is ASCII-only where Python's
+    ``str.lower()`` is full-Unicode, so a Python-folded probe disagrees with the index
+    on any non-ASCII handle — a row the index has just accepted then reads as absent.
+    """
+    return (
+        f"CASE WHEN substr({operand}, 1, 1) = '+' THEN {operand} "
+        f"ELSE lower(ltrim({operand}, '@')) END"
+    )
 
 
 def parse_channels(raw: str, *, max_length: int) -> list[str]:

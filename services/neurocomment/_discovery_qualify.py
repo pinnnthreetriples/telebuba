@@ -36,6 +36,15 @@ if TYPE_CHECKING:
 # on the client anyway, and this keeps a 100-candidate run from publishing 100 frames.
 _PROGRESS_EVERY = 5
 
+# Probes a pass must spend before its failure RATE means anything. Past that, half of
+# them failing aborts the pass — a proportion, never a fixed count, because a re-search
+# re-inserts every candidate with ``qualified_at = NULL``: a count would abort at the
+# same handle on every retry, so the tail past it could never be qualified however many
+# searches the operator spends. Ten dead, private or deleted handles in a hundred is an
+# ordinary sweep off a stale catalogue; a session failing as often as it answers over
+# twenty probes is broken, and that is the case the consecutive counter cannot see.
+_ERROR_RATE_MIN_PROBES = 20
+
 
 def _is_fresh(checked_at: str, now: datetime) -> bool:
     """Is this cached verdict still trustworthy? A zero TTL falls out as never."""
@@ -91,14 +100,11 @@ async def run_qualification(campaign_id: str, account_id: str) -> str | None:
         else:
             consecutive_errors += 1
             total_errors += 1
-            neuro = settings.neurocomment
-            if (
-                consecutive_errors >= neuro.discovery_max_consecutive_errors
-                or total_errors >= neuro.discovery_max_total_errors
-            ):
-                # Neither a dead session nor a half-dead one may burn one RPC per
-                # remaining candidate: a session failing every other probe never trips
-                # the consecutive counter, so the total bounds the flaky case too.
+            if consecutive_errors >= settings.neurocomment.discovery_max_consecutive_errors:
+                # A dead session must not burn one RPC per remaining candidate.
+                return reason
+            if probed >= _ERROR_RATE_MIN_PROBES and total_errors * 2 >= probed:
+                # A half-dead one never trips the counter above; see _ERROR_RATE_MIN_PROBES.
                 return reason
 
         if (index + 1) % _PROGRESS_EVERY == 0:

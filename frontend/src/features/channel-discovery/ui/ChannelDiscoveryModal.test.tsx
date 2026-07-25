@@ -421,6 +421,54 @@ describe('ChannelDiscoveryModal', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 
+  it('does not blame an all-failed adopt on the channels being taken', async () => {
+    route({
+      board: boardPayload([candidate({ channel: 'good' })]),
+      adoptStatuses: ['failed'],
+    });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Не удалось добавить: 1/)).toBeInTheDocument();
+    });
+    // Nobody took the channel — the write itself failed, so the footer must not
+    // contradict the paragraph one line above it.
+    expect(screen.getByRole('button', { name: /Ничего не добавлено/ })).toBeInTheDocument();
+    expect(screen.queryByText(/уже заняты/)).not.toBeInTheDocument();
+  });
+
+  it('lets the operator retry an adopt whose links failed', async () => {
+    const calls = route({
+      board: boardPayload([candidate({ channel: 'good' })]),
+      adoptStatuses: ['failed'],
+    });
+    renderModal();
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+
+    // The copy promises "try again", so the button has to stay usable: a failed link
+    // is not a settled outcome the way a taken channel is.
+    const retry = await screen.findByRole('button', { name: /Ничего не добавлено/ });
+    expect(retry).toBeEnabled();
+    await userEvent.click(retry);
+
+    await waitFor(() => {
+      expect(calls.filter((call) => call.path.endsWith('/discovery/adopt'))).toHaveLength(2);
+    });
+  });
+
   it('does not adopt twice while the modal is closing', async () => {
     const calls = route({ board: boardPayload([candidate({ channel: 'good' })]) });
     renderModal();

@@ -22,7 +22,7 @@ from core.telegram_client._client import (
     create_telegram_client,
     prepare_telegram_client_profile,
 )
-from core.telegram_client._pool import evict_client
+from core.telegram_client._pool import removing_client
 from core.telegram_client._util import optional_str
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeChallenge, PhoneCodeRequest, PhoneCodeSubmit
@@ -134,9 +134,11 @@ async def log_out_session(
     if wipe_session:
         # Evict the pooled client first: on Windows it holds the ``.session``
         # SQLite file open, so unlinking under a live handle raises
-        # PermissionError → the reset endpoint 500s.
-        await evict_client(request.account_id)
-        await _remove_session_file(profile.session_path)
+        # PermissionError → the reset endpoint 500s. Evicting alone only empties
+        # the cache, so hold the pool tombstone across the unlink too — a
+        # borrower rebuilding in that gap re-opens the very file being wiped.
+        async with removing_client(request.account_id):
+            await _remove_session_file(profile.session_path)
     return _status_result(profile, status="unauthorized", error_message=error_message)
 
 

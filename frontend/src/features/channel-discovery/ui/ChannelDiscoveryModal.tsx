@@ -116,6 +116,9 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const submitAdopt = () => {
     if (picks.length === 0) return;
     const requested = picks.length;
+    // A retry after failed outcomes must not carry the previous attempt's counts: the
+    // footer and its paragraphs would otherwise describe two attempts at once.
+    setAdopted(null);
     adopt.mutate(
       { path: { campaign_id: campaignId }, body: { channels: picks } },
       {
@@ -233,9 +236,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               <button
                 type="button"
                 // The outcome stays set through the close delay, so a fast second click
-                // cannot re-post the same channels. A failed adopt leaves it null on
-                // purpose: that one is worth retrying.
-                disabled={picks.length === 0 || adopt.isPending || adopted !== null}
+                // cannot re-post channels that are already settled. Failed links are the
+                // one outcome worth retrying, so they keep the button live.
+                disabled={
+                  picks.length === 0 ||
+                  adopt.isPending ||
+                  (adopted !== null && adopted.failed === 0)
+                }
                 onClick={submitAdopt}
                 className="inline-flex items-center gap-[6px] rounded-[10px] bg-primary px-[15px] py-[8px] text-[12.5px] font-medium text-white disabled:opacity-50"
               >

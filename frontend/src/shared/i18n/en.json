@@ -990,7 +990,7 @@
           "qualifying": "Checking comments: {{done}}/{{total}}",
           "searching": "Searching for channels…",
           "empty": "Nothing found. Try different keywords or add a seed channel.",
-          "failed": "Search aborted: {{reason}}",
+          "failed": "Aborted: {{reason}}",
           "degraded": "A source returned an error: {{reason}}",
           "error": "Couldn't load the search results. Retrying…",
           "selectAll": "Select all eligible",
@@ -1024,7 +1024,7 @@
         },
         "add": "Add selected ({{count}})",
         "added": "Added: {{count}}",
-        "addedNone": "Nothing added: those channels are already taken",
+        "addedNone": "Nothing added",
         "addedRefused": "Not added: {{count}} — those channels are already taken",
         "addedFailed": "Could not add: {{count}} — try again",
         "addFailed": "Couldn't add the channels. Some may have been added — check the list and try again."

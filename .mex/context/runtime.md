@@ -66,20 +66,36 @@ skipped source, a 429 degrades the run to native results with `last_error` set. 
 candidates is delete-then-insert, so the set is replaced only when at least one source actually
 answered (`SourceOutcome.answered`); if none did, the previous set survives and the run ends
 `failed`. A source answering with zero hits — or a filter removing every hit — IS an empty
-result and does replace it. A FloodWait aborts the search sweep as well as qualification, and a
-pass also stops at `discovery_max_total_errors` — the consecutive counter catches a dead session
-but not a flaky one failing every other probe.
+result and does replace it. A FloodWait aborts the search sweep as well as qualification. A pass
+also stops when failures reach HALF of at least 20 probes: the consecutive counter catches a dead
+session but not a half-dead one, and the bound has to be a RATE, not a count — a re-search
+re-inserts every candidate with `qualified_at = NULL`, so a fixed count aborts at the same handle
+on every retry and the tail past it becomes unreachable forever. Deliberately not a knob.
 
-Campaign-channel ownership is folded through `core.channel_tokens.dedup_key` semantics: the
-unique index (migration 39) and every ownership lookup compare `lower(channel)` for usernames but
-EXACT for `+HASH`, because invite keys really are case-sensitive — a plain `COLLATE NOCASE` would
-wrongly reject a second invite link. Before this, `Telegram` could be linked while `telegram` was
-active, putting one channel in two campaigns. Migration 39 deactivates (never deletes) a
-pre-existing case duplicate so the unique index can be created at all.
+Campaign-channel ownership is folded: `@Name`, `name` and `NAME` are ONE channel, `+HASH` invite
+keys stay EXACT (they really are case-sensitive, so a plain `COLLATE NOCASE` would wrongly reject a
+second invite link). The fold has exactly two spellings, kept in step by a test:
+`core.channel_tokens.dedup_key` and `channel_fold_sql` — and the read path evaluates it **in SQL on
+both sides**, never pre-folding the probe in Python, because SQLite's `lower()` is ASCII-only while
+Python's is full-Unicode and a mixed comparison leaves a committed row that no lookup can find.
+Spelling the query as the index's own expression is also what lets it SEARCH rather than SCAN, so
+do not "simplify" it to `lower(col) = ?`. Migration 39 creates the folded index
+(`ix_nc_channel_one_active_campaign_fold`) BEFORE dropping #11's — pysqlite gives DDL no
+transaction, so drop-first would leave the table unconstrained if the create failed. It deactivates
+(never deletes) pre-existing case duplicates so the unique index can be created at all, folding in
+SQL so it cannot demote a pair the index would have accepted. `LinkChannelRequest` canonicalises
+the handle, which is why `_deactivate_channel` fold-matches too — otherwise removing a legacy
+`@news` row would 204 while leaving it active.
 
-Removing an account tombstones it in the client pool (`removing_client`) for the whole
-evict → unlink → delete sequence. Pool borrowers do not take `account_lock`, so without the
-tombstone one could rebuild a client mid-removal, reopen the session file and make the unlink
-fail on Windows — aborting before the DB row was deleted — or re-create the file afterwards.
+Removing an account (and `log_out_session(wipe_session=True)`) tombstones it in the client pool
+(`removing_client`, reference-counted) for the whole evict → unlink → delete sequence. Pool
+borrowers do not take `account_lock`, so without the tombstone one could rebuild a client
+mid-removal, reopen the session file and make the unlink fail on Windows — aborting before the DB
+row was deleted — or re-create the file afterwards. `get_client` checks the mark in THREE places
+and all three are load-bearing: before the lock (cached fast path), inside it (a borrower that
+queued before the mark, which FIFO puts ahead of the removal), and after the build (a borrower
+already inside the lock when the mark went up — that one otherwise publishes a live client). Probe
+and login paths build clients outside the pool, so they are NOT covered; the safety net there is
+that a failed unlink still skips `delete_account`, leaving the removal retryable.
 
 API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.

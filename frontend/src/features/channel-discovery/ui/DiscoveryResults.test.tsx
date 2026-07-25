@@ -108,7 +108,7 @@ describe('DiscoveryResults', () => {
       <Harness data={board([candidate()], { phase: 'failed', last_error: 'FloodWait(300s)' })} />,
     );
 
-    expect(screen.getByText(/Поиск прерван: FloodWait\(300s\)/)).toBeInTheDocument();
+    expect(screen.getByText(/Прервано: FloodWait\(300s\)/)).toBeInTheDocument();
     // the partial results stay adoptable
     expect(screen.getByText('@alpha')).toBeInTheDocument();
   });

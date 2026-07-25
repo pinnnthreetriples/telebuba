@@ -318,26 +318,49 @@ async def test_a_success_resets_the_consecutive_error_counter(
 
 
 @pytest.mark.asyncio
-async def test_total_errors_abort_a_pass_that_fails_every_other_probe(
+async def test_a_pass_that_fails_every_other_probe_aborts_once_the_rate_is_measurable(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """The consecutive counter never trips on a half-dead session; the total one must."""
+    """The consecutive counter never trips on a half-dead session; the rate rule must."""
     reader = ReadRecorder(linked=read_error("RPC: TimeoutError", only="bad"))
     monkeypatch.setattr(_seams, "execute_read", reader)
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 3)
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_total_errors", 2)
-    campaign_id = await _seed("aa_bad", "bb_good", "cc_bad", "dd_good", "ee_good")
+    # Alternating, so three failures never land in a row whatever the consecutive bound.
+    channels = [f"c{index:02d}_{'bad' if index % 2 else 'good'}" for index in range(30)]
+    campaign_id = await _seed(*channels)
 
     reason = await run_qualification(campaign_id, LISTENER_ID)
 
     assert reason == "RPC: TimeoutError"
-    # aa_bad, bb_good, cc_bad — the second failure ends the pass.
-    assert len(reader.calls) == 3
+    # _ERROR_RATE_MIN_PROBES is 20, and the 20th probe is this pattern's 10th failure.
+    assert len(reader.calls) == 20
     rows = {row.channel: row for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert rows["c19_bad"].qualify_error == "RPC: TimeoutError"
     # The untouched tail stays pending, so the next pass resumes exactly here.
-    assert rows["dd_good"].qualified_at is None
-    assert rows["ee_good"].qualified_at is None
-    assert rows["cc_bad"].qualify_error == "RPC: TimeoutError"
+    assert all(rows[channel].qualified_at is None for channel in channels[20:])
+
+
+@pytest.mark.asyncio
+async def test_a_healthy_sweep_with_a_minority_of_dead_handles_runs_to_the_end(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A dozen dead or private handles in a hundred is an ordinary sweep, not a failure.
+
+    Aborting here would be permanent, not merely wasteful: a re-search re-inserts every
+    candidate with ``qualified_at = NULL`` and probing follows channel order, so the pass
+    would stop at the same handle every time and the tail could never be qualified.
+    """
+    reader = ReadRecorder(linked=read_error("RPC: ChannelPrivateError", only="dead"))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    channels = [f"c{index:03d}_{'dead' if index % 8 == 7 else 'live'}" for index in range(100)]
+    campaign_id = await _seed(*channels)
+
+    reason = await run_qualification(campaign_id, LISTENER_ID)
+
+    assert reason is None
+    assert len(reader.calls) == 100
+    rows = (await list_discovery_candidates(campaign_id)).rows
+    assert all(row.qualified_at is not None for row in rows)
+    assert sum(row.qualify_error is not None for row in rows) == 12
 
 
 @pytest.mark.asyncio

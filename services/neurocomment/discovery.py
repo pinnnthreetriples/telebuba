@@ -12,9 +12,11 @@ cache makes the retry nearly free.
 
 from __future__ import annotations
 
+import contextlib
 from typing import TYPE_CHECKING
 
 from core import db
+from core.config import settings
 from core.logging import log_event
 from core.repositories.neurocomment import (
     fetch_active_campaigns_for_channels,
@@ -217,10 +219,11 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
     other 29 — those stay linked either way, so aborting the batch left the operator
     with an opaque 500 and no way to know what had already happened.
 
-    No whole-batch abort, not even for a systemic cause (campaign deleted mid-loop, DB
-    locked): every link is its own transaction, so the systemic case simply degrades
-    into a full list of ``failed`` the operator can retry from, while the common
-    transient case costs exactly one channel instead of the whole selection.
+    A transient failure costs exactly one channel, because every link is its own
+    transaction. A systemic one (campaign deleted mid-loop, DB wedged) stops the loop
+    after ``discovery_max_consecutive_errors`` in a row — 500 doomed writes buy nothing
+    — and the untried remainder is reported ``failed`` too, so the operator still gets
+    one outcome per channel they asked for.
 
     The listener reconcile fires ONCE at the end, and only if something linked:
     adopting 30 channels must not trigger 30 reconciles.
@@ -233,17 +236,30 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
     linked = 0
     failures = 0
     reason: str | None = None
-    for channel in channels:
+    consecutive = 0
+    for index, channel in enumerate(channels):
+        if consecutive >= settings.neurocomment.discovery_max_consecutive_errors:
+            # Nothing is working; stop writing. A refusal resets the counter, so only real
+            # failures in a row get here.
+            remainder = channels[index:]
+            failures += len(remainder)
+            outcomes.extend(
+                DiscoveryAdoptOutcome(status="failed", channel=rest) for rest in remainder
+            )
+            break
         try:
             await db.link_channel_to_campaign(campaign_id, channel)
         except db.ChannelAlreadyAssignedError:
+            consecutive = 0
             outcomes.append(DiscoveryAdoptOutcome(status="already_assigned", channel=channel))
             continue
         except Exception as exc:  # noqa: BLE001 - reported per channel, see the docstring
             failures += 1
+            consecutive += 1
             reason = reason or type(exc).__name__
             outcomes.append(DiscoveryAdoptOutcome(status="failed", channel=channel))
             continue
+        consecutive = 0
         linked += 1
         outcomes.append(DiscoveryAdoptOutcome(status="linked", channel=channel))
 
@@ -252,7 +268,12 @@ async def adopt_candidates(campaign_id: str, channels: list[str]) -> DiscoveryAd
         # ones that did link until the next restart. Cancellation is a ``BaseException``,
         # so it unwinds past this: a cancelled request must not start a reconcile it would
         # only delay, and a second cancel would tear that reconcile in half.
-        await _runtime.reconcile_if_running()
+        with contextlib.suppress(Exception):
+            # The reconcile does settings reads and Telegram work. It is a best-effort
+            # nudge for the running listener, not part of the adopt: letting it raise
+            # would replace the per-channel report with an opaque 500 (and swallow the
+            # log below) while the channels stayed linked regardless.
+            await _runtime.reconcile_if_running()
     await log_event(
         "INFO",
         "neurocomment_discovery_adopted",

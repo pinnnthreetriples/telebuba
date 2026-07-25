@@ -7,6 +7,7 @@ import asyncio
 import pytest
 
 from core import db
+from core.config import settings
 from core.db import create_campaign, link_channel_to_campaign
 from core.repositories.neurocomment import (
     mark_discovery_qualified,
@@ -274,6 +275,90 @@ async def test_a_batch_that_only_fails_links_nothing_and_skips_the_reconcile(
     assert result is not None
     assert [o.status for o in result.outcomes] == ["failed", "failed"]
     assert calls == []
+
+
+@pytest.mark.asyncio
+async def test_a_failing_reconcile_does_not_cost_the_batch_report(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The reconcile is a best-effort nudge: the picks are linked whether it works or not.
+
+    Letting it raise would hand the operator the same opaque 500 with no per-channel
+    outcomes that the per-channel reporting exists to prevent.
+    """
+
+    async def _boom() -> None:
+        msg = "listener is wedged"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(_runtime, "reconcile_if_running", _boom)
+    campaign_id = await _campaign()
+
+    result = await adopt_candidates(campaign_id, ["alpha", "beta"])
+
+    assert result is not None
+    assert [outcome.status for outcome in result.outcomes] == ["linked", "linked"]
+    from core.db import list_campaign_channels  # noqa: PLC0415
+
+    links = await list_campaign_channels(campaign_id)
+    assert sorted(link.channel for link in links.links) == ["alpha", "beta"]
+
+
+@pytest.mark.asyncio
+async def test_a_systemic_failure_stops_writing_but_still_reports_every_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """500 doomed writes buy nothing; one outcome per requested channel is the contract."""
+    attempted: list[str] = []
+
+    async def _always_fail(campaign_id: str, channel: str) -> None:  # noqa: ARG001
+        attempted.append(channel)
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    monkeypatch.setattr(db, "link_channel_to_campaign", _always_fail)
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 2)
+    campaign_id = await _campaign()
+
+    result = await adopt_candidates(campaign_id, [f"chan_{index}" for index in range(6)])
+
+    assert result is not None
+    assert [outcome.status for outcome in result.outcomes] == ["failed"] * 6
+    assert attempted == ["chan_0", "chan_1"]
+
+
+@pytest.mark.asyncio
+async def test_an_already_assigned_channel_does_not_count_toward_the_abort(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refusal proves the DB is answering, so it must not push the batch over the bound."""
+    attempted: list[str] = []
+
+    async def _fail_unless_taken(campaign_id: str, channel: str) -> None:
+        attempted.append(channel)
+        if channel == "taken":
+            await link_channel_to_campaign(campaign_id, channel)
+            return
+        msg = "database is locked"
+        raise RuntimeError(msg)
+
+    theirs = await _campaign("Theirs")
+    await link_channel_to_campaign(theirs, "taken")
+    monkeypatch.setattr(db, "link_channel_to_campaign", _fail_unless_taken)
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_consecutive_errors", 2)
+    mine = await _campaign("Mine")
+
+    result = await adopt_candidates(mine, ["aaa", "taken", "bbb", "ccc"])
+
+    assert result is not None
+    assert [outcome.status for outcome in result.outcomes] == [
+        "failed",
+        "already_assigned",
+        "failed",
+        "failed",
+    ]
+    # Without the reset the run of failures would span the refusal and skip ``ccc``.
+    assert attempted == ["aaa", "taken", "bbb", "ccc"]
 
 
 @pytest.mark.asyncio

@@ -14,6 +14,7 @@ from core.db import _get_engine, _now_iso
 from core.repositories.neurocomment._tables import (
     _campaign_channel_matches,
     _campaign_channels_match,
+    _channel_matches,
     _neurocomment_campaign_account_channels,
     _neurocomment_campaign_accounts,
     _neurocomment_campaign_channels,
@@ -209,19 +210,24 @@ async def link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignCh
 
     Raises ``ChannelAlreadyAssignedError`` if the channel is already active in any
     campaign (the DB partial-unique index is the source of truth). Handles are
-    compared with ``dedup_key`` folding, so ``Telegram`` collides with ``telegram``
-    (same channel) while two ``+HASH`` invites differing only in case do not.
+    compared through the ``channel_fold_sql`` fold, so ``Telegram`` and ``@telegram``
+    collide with ``telegram`` (one channel, one peer id) while two ``+HASH`` invites
+    differing only in case do not.
     """
     return await asyncio.to_thread(_link_channel_to_campaign, campaign_id, channel)
 
 
 def _deactivate_channel(campaign_id: str, channel: str) -> None:
     with _get_engine().begin() as connection:
+        # Folded, not compared verbatim: rows written before the link boundary
+        # canonicalised handles still hold spellings like ``@news``, and the operator
+        # removing them sends the canonical ``news`` — an exact match would report
+        # success while leaving the link active and the channel unfreeable.
         connection.execute(
             update(_neurocomment_campaign_channels)
             .where(
-                (_neurocomment_campaign_channels.c.campaign_id == campaign_id)
-                & (_neurocomment_campaign_channels.c.channel == channel)
+                _campaign_channel_matches(channel)
+                & (_neurocomment_campaign_channels.c.campaign_id == campaign_id)
                 & (_neurocomment_campaign_channels.c.active == 1),
             )
             .values(active=0),
@@ -232,8 +238,8 @@ def _deactivate_channel(campaign_id: str, channel: str) -> None:
         # to serving all (remaining) campaign channels.
         connection.execute(
             delete(_neurocomment_campaign_account_channels).where(
-                (_neurocomment_campaign_account_channels.c.campaign_id == campaign_id)
-                & (_neurocomment_campaign_account_channels.c.channel == channel),
+                _channel_matches(_neurocomment_campaign_account_channels.c.channel, channel)
+                & (_neurocomment_campaign_account_channels.c.campaign_id == campaign_id),
             ),
         )
 

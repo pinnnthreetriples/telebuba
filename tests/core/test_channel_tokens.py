@@ -7,9 +7,17 @@ discovery) share one verified normalizer instead of two drifting copies.
 
 from __future__ import annotations
 
+import sqlite3
+
 import pytest
 
-from core.channel_tokens import dedup_key, extract_invite_hash, normalize_channel, parse_channels
+from core.channel_tokens import (
+    channel_fold_sql,
+    dedup_key,
+    extract_invite_hash,
+    normalize_channel,
+    parse_channels,
+)
 
 # Telegram's own username ceiling — what discovery passes.
 HANDLE_MAX = 32
@@ -124,6 +132,32 @@ def test_dedup_key_case_rules(left: str, right: str, *, same: bool) -> None:
     left_key = dedup_key(left.lstrip("@"))
     right_key = dedup_key(right.lstrip("@"))
     assert (left_key == right_key) is same
+
+
+def test_dedup_key_ignores_the_at_sigil() -> None:
+    """``@News`` and ``news`` are one channel — one peer id — so they must fold together.
+
+    ``normalize_channel`` already strips the ``@``, so this only matters for handles
+    that reach ``dedup_key`` unnormalized: the campaign-link box and legacy rows.
+    """
+    assert dedup_key("@News") == dedup_key("news") == "news"
+    # A ``+HASH`` invite key is never touched: '@' is not legal in one anyway.
+    assert dedup_key("+AbCdEfGh") == "+AbCdEfGh"
+
+
+@pytest.mark.parametrize("handle", ["@News", "news", "NEWS", "+AbCdEfGh", "+abcdefgh"])
+def test_channel_fold_sql_mirrors_dedup_key(handle: str) -> None:
+    """The SQL fold and ``dedup_key`` must agree, or the index and the reads disagree."""
+    connection = sqlite3.connect(":memory:")
+    try:
+        # The expression names its operand three times, hence the repeated binding.
+        folded = connection.execute(
+            f"SELECT {channel_fold_sql('?')}",
+            (handle,) * 3,
+        ).fetchone()[0]
+    finally:
+        connection.close()
+    assert folded == dedup_key(handle)
 
 
 def test_parse_channels_dedups_preserving_order() -> None:

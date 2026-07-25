@@ -81,8 +81,11 @@ async def test_remove_account_survives_a_borrower_rebuilding_mid_removal(
     lifecycle lock, so before the pool tombstone one could call ``get_client``
     in that window, rebuild a client and re-open the ``.session`` file — the
     unlink then raised ``PermissionError`` on Windows and aborted ``remove_account``
-    *before* ``delete_account``, leaving the row behind. The interleaving is
-    driven for real by borrowing from inside the removal's own unlink step.
+    *before* ``delete_account``, leaving the row behind.
+
+    Borrowing from inside the removal's own unlink step pins the tombstone
+    *state* for the whole lifecycle sequence; the ordering of a borrower against
+    the mark is covered by the two-task tests in ``tests/core/test_telegram_pool``.
     """
     await add_account(AccountCreate(account_id="acc-race", session_name="sess-race"))
     session_file = settings.telegram.session_dir / "sess-race.session"
