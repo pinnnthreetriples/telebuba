@@ -18,8 +18,49 @@ permissions: read-all
 env:
   PYTHON_VERSION: "3.13"
   UV_VERSION: "0.10.9"
+  NODE_VERSION: "24"
 
 jobs:
+  # ---------------------------------------------------------------------------
+  # The CVE gates again, on a clock. The PR/push copies in ci.yml only fire when
+  # someone changes something, so an advisory disclosed during a quiet week stays
+  # invisible until the next unrelated commit -- exactly how eighteen npm findings
+  # accumulated. Same commands as ci.yml so a nightly red reproduces on a PR.
+  #
+  # Unlike the other jobs here this one IS about gating, so it stays cheap: no
+  # install, no sync beyond what the tools need.
+  # ---------------------------------------------------------------------------
+  audit:
+    name: CVE audit (pip + npm)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: ${{ env.UV_VERSION }}
+          python-version: ${{ env.PYTHON_VERSION }}
+          enable-cache: true
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Sync dependencies
+        run: uv sync --frozen
+
+      # `if: always()` on the npm step so one tree's finding does not hide the
+      # other's -- a nightly run exists to enumerate, not to stop at the first hit.
+      - name: Run pip-audit
+        run: uv run pip-audit --strict --ignore-vuln PYSEC-2026-2132
+
+      - name: Run npm audit
+        if: always()
+        run: npm audit --package-lock-only --audit-level=info
+        working-directory: frontend
+
   # ---------------------------------------------------------------------------
   # Hypothesis extended profile — 2000 examples per property, higher chance of
   # surfacing rare path-dependent bugs that the 200-example strict run misses.

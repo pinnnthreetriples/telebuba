@@ -137,10 +137,14 @@ jobs:
   # of them shipping in the browser bundle -- accumulated unnoticed while
   # pip-audit kept the Python tree clean.
   #
-  # Its own job rather than a step in `frontend`: a CVE disclosed upstream turns
-  # this red without a single line of our code changing, and that must not read as
-  # "the SPA is broken". Same shape as pip-audit above, same reviewed-ignore
-  # convention if a finding ever turns out to be unfixable.
+  # Its own job rather than a step in `frontend`: an upstream disclosure turns this
+  # red without a single line of our code changing, and that must not read as "the
+  # SPA is broken". Same shape as pip-audit above, same reviewed-ignore convention
+  # if a finding ever turns out to be unfixable.
+  #
+  # Both audit jobs also run nightly. On PR/push alone, a CVE disclosed during a
+  # quiet week stays invisible until the next unrelated change -- which is the
+  # failure mode that produced the backlog in the first place.
   # ---------------------------------------------------------------------------
   npm-audit:
     name: npm audit (CVE)
@@ -155,22 +159,25 @@ jobs:
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: frontend/package-lock.json
 
-      # `npm ci` first, and audit the installed tree rather than passing
-      # --package-lock-only: the lockfile alone would miss what `overrides`
-      # actually resolved to, and two of the current fixes ARE overrides.
-      - name: Install frontend deps
-        run: npm ci
-
-      # No --omit=dev and no --audit-level: devDependencies are exactly where the
-      # backlog lived (a happy-dom VM escape runs during CI, an openapi-ts template
-      # flaw is emitted into shipped code), and "moderate" is where the generated
-      # client's prototype-pollution hole was first rated. Anything found is
-      # triaged, not filtered out in advance.
+      # --audit-level=info, spelled out: omitting the flag is NOT "no floor". npm
+      # leaves the config null and npm-audit-report falls back to ``low``, so an
+      # info-severity advisory prints in the log and the job exits 0. The backlog
+      # this gate exists for included a browser-facing prototype-pollution hole
+      # rated merely "moderate", so guessing a floor is exactly the wrong instinct.
+      #
+      # No --omit=dev either: devDependencies are where the backlog lived, and one
+      # of them (@hey-api/openapi-ts) emits code INTO the shipped client.
+      #
+      # --package-lock-only, and deliberately no ``npm ci``: lockfileVersion 3
+      # records the fully resolved tree including what ``overrides`` resolved to, so
+      # the install buys no extra coverage -- it only adds a way for this job to go
+      # red over registry flake or lockfile drift under a label that says "CVE".
+      # Drift is the `frontend` job's business; it runs npm ci already.
       - name: Run npm audit
-        run: npm audit
+        run: npm audit --package-lock-only --audit-level=info
+
+  # ---------------------------------------------------------------------------
   # SAST scan on every PR and push, so the security gate fires before merge
   # (not after). The heavier full rulesets run in the nightly workflow.
   # ---------------------------------------------------------------------------

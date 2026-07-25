@@ -23,9 +23,9 @@ uv run pytest
 uv run pre-commit run --all-files
 uv run python tools/aislop_gate.py
 uv run python -m tools.gen_api
-cd frontend && npm run gates && npm run build
-cd frontend && npm audit   # separate CI job; not part of `npm run gates`
+npm audit --prefix frontend --package-lock-only --audit-level=info  # separate CI job, not in `npm run gates`
 npx mex-agent check && npx mex-agent doctor
+cd frontend && npm run gates && npm run build   # last: leaves the shell in frontend/
 ```
 
-CI workflows are the source of truth; nightly adds extended Hypothesis, Semgrep and mutation checks. `.mex/**` and Markdown do not trigger code CI. Run one uvicorn worker and treat `.session`, tdata, JWT secrets and proxy passwords as credentials.
+CI workflows are the source of truth; nightly adds extended Hypothesis, Semgrep, mutation and a repeat of both CVE audits (the PR-only copies miss anything disclosed during a quiet week). `.mex/**` and Markdown do not trigger code CI. Run one uvicorn worker and treat `.session`, tdata, JWT secrets and proxy passwords as credentials.
