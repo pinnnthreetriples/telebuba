@@ -78,6 +78,11 @@ def _channel_matches(column: Column[str], channel: str) -> TextClause:
     :func:`core.channel_tokens.channel_fold_sql` for why folding the probe in Python
     instead would make the two disagree.
     """
+    # The handle is a BOUND parameter; only the fold expression (built from column
+    # metadata) and the placeholder name are interpolated, so no caller input reaches
+    # the SQL text. See the docstring above for why this cannot be an ORM construct.
+    # Suppresses semgrep's blanket avoid-sqlalchemy-text audit rule.
+    # nosemgrep
     return text(f"{_channel_fold(column)} = {channel_fold_sql(':probe')}").bindparams(
         probe=channel,
     )
@@ -92,6 +97,9 @@ def _campaign_channels_match(channels: list[str]) -> TextClause:
     """The ``IN`` form of :func:`_campaign_channel_matches` (same fold, one query)."""
     names = [f"probe_{index}" for index in range(len(channels))]
     folded = ", ".join(channel_fold_sql(f":{name}") for name in names)
+    # Same as above: every handle is bound, and the interpolated names are generated
+    # from range(), never from a caller. Same avoid-sqlalchemy-text suppression.
+    # nosemgrep
     return text(
         f"{_channel_fold(_neurocomment_campaign_channels.c.channel)} IN ({folded})"
     ).bindparams(
