@@ -17,9 +17,6 @@ const BOARD: NeurocommentBoardData = {
     {
       account_id: 'acc-1',
       label: '+79261112233',
-      health: 'ok',
-      trust_score: 90,
-      trust_band: 'excellent',
       comments_last_hour: 1,
       max_comments_per_hour: 10,
       comments_today: 4,
@@ -30,9 +27,6 @@ const BOARD: NeurocommentBoardData = {
     {
       account_id: 'acc-2',
       label: '+15550000000',
-      health: 'blocked',
-      trust_score: 30,
-      trust_band: 'at_risk',
       comments_last_hour: 0,
       max_comments_per_hour: 10,
       comments_today: 0,

@@ -537,6 +537,7 @@ async def test_start_neurocomment_stop_race_leaves_no_orphan_listener(
         at_subscribe.set()
         await release.wait()
         live["subscribed"] = True
+        return list(channels)  # subscribe_posts now returns the channels it actually watches
 
     async def fake_stop(account_id: str) -> None:  # noqa: ARG001
         live["subscribed"] = False

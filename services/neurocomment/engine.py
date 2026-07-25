@@ -32,7 +32,7 @@ from core.db import (
     list_accounts_by_ids,
     list_campaign_accounts,
     list_campaign_channels,
-    list_campaign_readiness,
+    list_channel_readiness,
     list_device_fingerprints_by_ids,
     list_spam_statuses_by_ids,
     list_warming_states_by_ids,
@@ -186,28 +186,29 @@ async def _load_selection_pool(
     """Bulk-read every selection signal once (mirrors ``services.neurocomment.board``).
 
     Signals are read only for ``account_ids`` — the campaign's channel-eligible
-    candidates — so per-post cost is O(candidates), not O(fleet), as accounts scale.
+    candidates — and readiness only for ``channel``, so per-post cost is O(candidates),
+    not O(fleet) x O(campaign channels), as accounts and channels scale.
     """
     accounts = {acc.account_id: acc for acc in (await list_accounts_by_ids(account_ids)).accounts}
     ready_account_ids = frozenset(
         r.account_id
-        for r in (await list_campaign_readiness(campaign_id)).readiness
+        for r in (await list_channel_readiness(campaign_id, channel, account_ids)).readiness
         # Honour the operator skip (#148) and the auto-ban (#30) even if a stale
         # re-enable left ready=1: a human-skipped or banned pair is never selected.
-        if r.channel == channel and r.ready and not r.human_skipped and not r.banned
+        if r.ready and not r.human_skipped and not r.banned
     )
     states = {rec.account_id: rec for rec in await list_warming_states_by_ids(account_ids)}
     spam = await list_spam_statuses_by_ids(account_ids)
     fingerprints = await list_device_fingerprints_by_ids(account_ids)
 
     hour_ago = (now - timedelta(hours=1)).isoformat()
-    hourly_rows = (await count_comments_per_account_since(hour_ago)).counts
+    hourly_rows = (await count_comments_per_account_since(account_ids, hour_ago)).counts
     hourly = {c.account_id: c.count for c in hourly_rows}
     daily: dict[str, int] = {}
     if limits.max_comments_per_channel_per_day > 0:
         day_ago = (now - timedelta(days=1)).isoformat()
-        daily_rows = (await count_channel_comments_per_account_since(channel, day_ago)).counts
-        daily = {c.account_id: c.count for c in daily_rows}
+        daily_rows = await count_channel_comments_per_account_since(channel, account_ids, day_ago)
+        daily = {c.account_id: c.count for c in daily_rows.counts}
     return _SelectionPool(
         accounts=accounts,
         ready_account_ids=ready_account_ids,
@@ -230,7 +231,7 @@ class _Selection(NamedTuple):
 async def _select_account(
     campaign: NeurocommentCampaign, channel: str, limits: NeurocommentSettings
 ) -> _Selection:
-    """Pick one ready, healthy, under-quota, non-cooled account at random.
+    """Pick the least-busy ready, healthy, under-quota, non-cooled account (random tie-break).
 
     Every signal is bulk-loaded once (mirroring ``services.neurocomment.board``), so
     selection scores N candidates from a handful of queries instead of ~7 per
@@ -262,7 +263,12 @@ async def _select_account(
         return _Selection(
             None, _selection_block_reason(account_ids, channel, channel_count, now, pool)
         )
-    return _Selection(_seams.rng.choice(candidates), None)
+    # Spread load across the fleet instead of concentrating it: uniform random could hand
+    # three posts in a row to one account while siblings idle, burning its hourly quota
+    # first and reading less organic. Ties break through the rng seam (stays de-correlated).
+    fewest = min(pool.hourly_counts.get(a, 0) for a in candidates)
+    idlest = [a for a in candidates if pool.hourly_counts.get(a, 0) == fewest]
+    return _Selection(_seams.rng.choice(idlest), None)
 
 
 # Report the blocker of the account that passed the *most* gates — the most actionable

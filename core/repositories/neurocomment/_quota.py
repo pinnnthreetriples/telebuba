@@ -60,11 +60,21 @@ async def count_account_channel_comments_since(
     )
 
 
-def _count_comments_per_account_since(since_iso: str) -> CommentCountList:
+def _count_comments_per_account_since(
+    account_ids: list[str],
+    since_iso: str,
+) -> CommentCountList:
+    if not account_ids:
+        return CommentCountList()
+    # The account filter is what makes this a SEARCH: ix_nc_comments_account_status_created
+    # is account-leading, so without it SQLite can only walk the whole index (verified via
+    # EXPLAIN QUERY PLAN — "SCAN … USING COVERING INDEX ix_nc_comments_account_status_created"
+    # before, "SEARCH … (account_id=? AND status=? AND created_at>?)" after).
     statement = (
         select(_neurocomment_comments.c.account_id, func.count().label("n"))
         .where(
-            (_neurocomment_comments.c.status.in_(("claimed", "posted")))
+            _neurocomment_comments.c.account_id.in_(account_ids)
+            & (_neurocomment_comments.c.status.in_(("claimed", "posted")))
             & (_neurocomment_comments.c.created_at >= since_iso),
         )
         .group_by(_neurocomment_comments.c.account_id)
@@ -76,20 +86,32 @@ def _count_comments_per_account_since(since_iso: str) -> CommentCountList:
     )
 
 
-async def count_comments_per_account_since(since_iso: str) -> CommentCountList:
+async def count_comments_per_account_since(
+    account_ids: list[str],
+    since_iso: str,
+) -> CommentCountList:
     """Per-account claimed+posted counts since ``since`` — bulk hourly-quota read.
 
-    The grouped equivalent of :func:`count_account_comments_since` for every account
-    at once, so selection scores N candidates from one query instead of N.
+    The grouped equivalent of :func:`count_account_comments_since` for the given
+    candidates, so selection scores N candidates from one query instead of N. Scoped
+    to ``account_ids`` because the cost is otherwise O(all comments ever written) —
+    an unbounded per-post scan — not O(candidates).
     """
-    return await asyncio.to_thread(_count_comments_per_account_since, since_iso)
+    return await asyncio.to_thread(_count_comments_per_account_since, account_ids, since_iso)
 
 
-def _count_channel_comments_per_account_since(channel: str, since_iso: str) -> CommentCountList:
+def _count_channel_comments_per_account_since(
+    channel: str,
+    account_ids: list[str],
+    since_iso: str,
+) -> CommentCountList:
+    if not account_ids:
+        return CommentCountList()
     statement = (
         select(_neurocomment_comments.c.account_id, func.count().label("n"))
         .where(
             (_neurocomment_comments.c.channel == channel)
+            & _neurocomment_comments.c.account_id.in_(account_ids)
             & (_neurocomment_comments.c.status.in_(("claimed", "posted")))
             & (_neurocomment_comments.c.created_at >= since_iso),
         )
@@ -104,7 +126,18 @@ def _count_channel_comments_per_account_since(channel: str, since_iso: str) -> C
 
 async def count_channel_comments_per_account_since(
     channel: str,
+    account_ids: list[str],
     since_iso: str,
 ) -> CommentCountList:
-    """Per-account claimed+posted counts for one channel since ``since`` — bulk day-cap read."""
-    return await asyncio.to_thread(_count_channel_comments_per_account_since, channel, since_iso)
+    """Per-account claimed+posted counts for one channel since ``since`` — bulk day-cap read.
+
+    Channel-leading (ix_nc_comments_channel_account_status_created) so it already
+    SEARCHes; the account scope mirrors :func:`count_comments_per_account_since` so both
+    bulk quota readers cost O(candidates) and neither can be called fleet-wide by mistake.
+    """
+    return await asyncio.to_thread(
+        _count_channel_comments_per_account_since,
+        channel,
+        account_ids,
+        since_iso,
+    )

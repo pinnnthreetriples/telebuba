@@ -23,7 +23,7 @@ reach as ``services.warming._x``.
 from __future__ import annotations
 
 from services.warming._chat import _sanitize_chat_text
-from services.warming._cycle import _human_delay, run_one_cycle
+from services.warming._cycle import run_one_cycle
 from services.warming._loop import run_loop_iteration
 from services.warming._runner import _initial_delay_seconds, _loop_sleep_seconds
 from services.warming._runtime import (
@@ -42,6 +42,7 @@ from services.warming._runtime import (
     stop_warming,
     unmark_neurocomment,
 )
+from services.warming._steps import _human_delay
 from services.warming.board import list_warmed_accounts, load_board
 from services.warming.channels import add_channels, list_channels, remove_channel
 from services.warming.pacing import (

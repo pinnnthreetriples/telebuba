@@ -35,7 +35,9 @@ async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
     runtime shows the listener strip with ``running=False`` — the SPA tells "paused
     with a remembered listener" from "no listener" by that field being non-null.
     The watch set is only read when running, so a paused/stopped engine costs two
-    scalar reads.
+    scalar reads. ``unwatched_channels`` reports the requested channels the listener
+    could not resolve — they are excluded from ``active_channels`` so the SPA never
+    claims to watch a channel whose posts can never arrive.
     """
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a parent import cycle.
 
@@ -51,9 +53,14 @@ async def neurocomment_runtime_status() -> NeurocommentRuntimeStatus:
             onboarding=onboarding,
         )
     channels = (await list_active_watch_channels()).channels
+    # Channels the listener could not resolve are requested but NOT watched, so they must
+    # not inflate the count. Read from the last reconcile's in-memory set (no round-trip)
+    # and intersected with the current watch set, so a since-unlinked channel drops out.
+    unwatched = sorted(_runtime._UNWATCHED_CHANNELS.intersection(channels))  # noqa: SLF001 - peer module
     return NeurocommentRuntimeStatus(
         running=True,
-        active_channels=len(channels),
+        active_channels=len(channels) - len(unwatched),
+        unwatched_channels=unwatched,
         listener_account_id=listener_account_id,
         log_limit=log_limit,
         onboarding=onboarding,

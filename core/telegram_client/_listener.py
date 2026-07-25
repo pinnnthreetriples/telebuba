@@ -75,7 +75,7 @@ async def subscribe_posts(
     account_id: str,
     channels: list[str],
     on_post: Callable[[NewPostEvent], Awaitable[None]],
-) -> None:
+) -> list[str]:
     """Register a single ``NewMessage`` handler watching ``channels`` for new posts.
 
     Idempotent: re-subscribing for the same account first removes the prior
@@ -83,6 +83,11 @@ async def subscribe_posts(
     whitelist — only those channels fire. Each fresh broadcast post is mapped
     back to its original subscription string and pushed to ``on_post``; a
     callback error is logged and swallowed so it can't kill the listener.
+
+    Returns the channels actually registered, in the caller's own handle form (the
+    strings the rest of the system keys on). A channel we cannot resolve to a peer
+    id is left out of the filter, so no post from it will EVER arrive — the caller
+    only learns about that gap from this return value.
     """
     await stop_post_listener(account_id)
 
@@ -109,22 +114,23 @@ async def subscribe_posts(
     if not resolved:
         # Nothing resolved → do NOT register: events.NewMessage(chats=[]) would
         # watch EVERY chat. An empty whitelist must mean "listen to nothing".
-        return
+        return resolved
 
     handler = _make_handler(channel_by_peer_id, on_post)
     event_filter = events.NewMessage(chats=resolved)
     client.add_event_handler(handler, event_filter)
     _HANDLERS[account_id] = handler
     _FILTERS[account_id] = event_filter
+    return resolved
 
 
 async def update_post_subscription(
     account_id: str,
     channels: list[str],
     on_post: Callable[[NewPostEvent], Awaitable[None]],
-) -> None:
-    """Swap the watched set: drop the old handler, register the new one."""
-    await subscribe_posts(account_id, channels, on_post)
+) -> list[str]:
+    """Swap the watched set: drop the old handler, register the new one; return what is watched."""
+    return await subscribe_posts(account_id, channels, on_post)
 
 
 async def stop_post_listener(account_id: str) -> None:

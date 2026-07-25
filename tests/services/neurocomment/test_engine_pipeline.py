@@ -237,6 +237,53 @@ async def test_paused_campaign_posts_are_not_commented(monkeypatch: pytest.Monke
 
 
 @pytest.mark.asyncio
+async def test_selection_prefers_the_least_busy_account(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Load is spread across the fleet: the account with the fewest hourly comments wins.
+
+    Uniform random could hand several posts in a row to one account while its siblings
+    idle — that concentrates the hourly quota and reads less organic.
+    """
+    campaign_id = await _make_campaign("@chan", "acc-busy", "acc-idle")
+    # acc-busy already commented this hour; acc-idle has not. _FixedRng.choice returns the
+    # first item, so a uniform pick would take acc-busy (assignment order).
+    assert await claim_comment("@chan", 1, campaign_id, "acc-busy") is True
+    await mark_comment_posted("@chan", 1, comment_text="x", comment_msg_id=1)
+    comment = _CommentStub(status="ok", message_id=2)
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hello world"))
+
+    assert [account_id for account_id, _ in comment.calls] == ["acc-idle"]
+
+
+@pytest.mark.asyncio
+async def test_selection_ties_break_through_the_rng_seam(monkeypatch: pytest.MonkeyPatch) -> None:
+    """With equal (zero) hourly counts every candidate stays in play and the rng picks."""
+    await _make_campaign("@chan", "acc-1", "acc-2")
+    picked: list[list[str]] = []
+
+    class _LastRng:
+        @staticmethod
+        def choice(seq: list[str]) -> str:
+            picked.append(list(seq))
+            return seq[-1]
+
+        @staticmethod
+        def uniform(low: float, _high: float) -> float:
+            return low
+
+    comment = _CommentStub(status="ok", message_id=1)
+    _patch_io(monkeypatch, comment=comment)
+    monkeypatch.setattr(_seams, "rng", _LastRng())
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hello world"))
+
+    # Both candidates are offered to the seam (no premature narrowing), and its choice wins.
+    assert picked[0] == ["acc-1", "acc-2"]
+    assert [account_id for account_id, _ in comment.calls] == ["acc-2"]
+
+
+@pytest.mark.asyncio
 async def test_not_ready_account_is_skipped_no_claim(monkeypatch: pytest.MonkeyPatch) -> None:
     campaign_id = await _make_campaign("@chan", "acc-1")
     await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=False)

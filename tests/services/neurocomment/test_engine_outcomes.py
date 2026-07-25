@@ -46,6 +46,10 @@ async def _latest_reason(event: str) -> object | None:
     return None
 
 
+async def _has_event(event: str) -> bool:
+    return any(entry.event == event for entry in await list_recent_logs(limit=50))
+
+
 # --------------------------------------------------------------------------- #
 # Post-time error classification
 # --------------------------------------------------------------------------- #
@@ -565,3 +569,82 @@ async def test_banned_pair_is_not_selected_for_the_next_post(
     # No second attempt — the banned pair is excluded from selection.
     assert len(comment.calls) == 1
     assert await _latest_reason("neurocomment_no_account_available") == "not_ready"
+
+
+# --------------------------------------------------------------------------- #
+# Lost access to the discussion group (ChannelPrivateError)
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_channel_private_parks_pair_with_join_failed_sentinel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ChannelPrivateError → readiness off via onboarding's hard-join-failure sentinel."""
+    monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
+    await _make_campaign("@chan", "acc-1")
+    await _seed_pending_challenge("acc-1", "@chan")
+    _patch_io(monkeypatch, comment=_CommentStub(status="failed", error_type="ChannelPrivateError"))
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
+
+    readiness = await fetch_readiness("acc-1", "@chan")
+    assert readiness is not None
+    # (joined=False, captcha_passed=True) is the sentinel the board renders as join_failed.
+    assert (readiness.joined, readiness.captcha_passed, readiness.ready) == (False, True, False)
+    assert readiness.banned is False  # not a ban → the next onboarding pass may re-join
+    # Not a solver failure: the pending challenge is untouched and no channel back-off.
+    assert _challenge_outcome("acc-1") == "pending"
+    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is False
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "failed"
+    assert await try_reserve_sent("a nice comment") is True  # the claim was released
+    assert await _has_event("neurocomment_post_access_lost") is True
+
+
+@pytest.mark.asyncio
+async def test_lost_access_pair_is_not_reselected_for_the_next_post(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The regression: an unclassified ChannelPrivateError re-picked the pair every post."""
+    await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub(status="failed", error_type="ChannelPrivateError")
+    _patch_io(monkeypatch, comment=comment)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
+    assert len(comment.calls) == 1  # access was lost once
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
+
+    # No second attempt — ready=False excludes the pair instead of looping forever.
+    assert len(comment.calls) == 1
+    assert await _latest_reason("neurocomment_no_account_available") == "not_ready"
+
+
+# --------------------------------------------------------------------------- #
+# A successful post never erases a cooldown parked by a concurrent task
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+async def test_successful_post_keeps_a_cooldown_parked_mid_delay(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A rival task's fresh flood cooldown survives this task's successful post."""
+    await _make_campaign("@chan", "acc-1")
+    _patch_io(monkeypatch, comment=_CommentStub(status="ok", message_id=7))
+
+    async def _park_mid_delay(_seconds: float) -> None:
+        # Stands in for a rival task hitting FloodWait while this one sleeps in its reply
+        # delay — i.e. the account is parked account-wide *after* the selection gate.
+        await _state.set_cooldown("acc-1", datetime.now(UTC) + timedelta(seconds=300))
+
+    monkeypatch.setattr(engine.asyncio, "sleep", _park_mid_delay)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
+
+    record = await fetch_comment("@chan", 10)
+    assert record is not None
+    assert record.status == "posted"  # the comment was delivered (cooldown set post-gate)
+    assert _state.in_cooldown("acc-1", datetime.now(UTC)) is True

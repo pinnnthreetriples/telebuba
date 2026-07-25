@@ -11,6 +11,7 @@ export function ListenerCard({
   listenerId,
   running,
   activeCampaignCount,
+  unwatchedChannels,
   listenerActionsOpen,
   onToggleActions,
   onToggleRuntime,
@@ -24,6 +25,7 @@ export function ListenerCard({
   listenerId: string;
   running: boolean;
   activeCampaignCount: number;
+  unwatchedChannels: string[];
   listenerActionsOpen: boolean;
   onToggleActions: () => void;
   onToggleRuntime: () => void;
@@ -229,6 +231,18 @@ export function ListenerCard({
           </div>
         </div>
       )}
+
+      {/* The listener silently drops a channel it cannot resolve, and the board still
+          paints that channel `ready` — so this strip is the only place an operator can
+          see that no post from it will ever arrive. Same note style as warmingBlocked. */}
+      {unwatchedChannels.length > 0 ? (
+        <p className="mt-2 text-[11.5px] font-medium text-danger">
+          {t('neurocomment.listener.unwatched', {
+            count: unwatchedChannels.length,
+            channels: unwatchedChannels.join(', '),
+          })}
+        </p>
+      ) : null}
     </div>
   );
 }

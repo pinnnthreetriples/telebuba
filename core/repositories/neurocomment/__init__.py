@@ -47,21 +47,16 @@ from core.repositories.neurocomment._challenges import (
 )
 from core.repositories.neurocomment._comments import (
     claim_comment,
-    delete_readiness,
     fetch_comment,
     fetch_linked_group,
-    fetch_readiness,
-    list_campaign_readiness,
     list_linked_groups,
     list_posted_comments_for_channel_since,
     list_posted_comments_page,
     list_posted_comments_since,
     mark_comment_failed,
     mark_comment_posted,
-    mark_human_skipped,
     reclaim_stale_claims,
     upsert_linked_group,
-    upsert_readiness,
 )
 from core.repositories.neurocomment._cooldowns import load_active_cooldowns, persist_cooldown
 from core.repositories.neurocomment._deletions import mark_comments_deleted
@@ -72,6 +67,15 @@ from core.repositories.neurocomment._quota import (
     count_channel_comments_per_account_since,
     count_comments_per_account_since,
 )
+from core.repositories.neurocomment._readiness import (
+    delete_readiness,
+    fetch_readiness,
+    list_campaign_readiness,
+    list_channel_readiness,
+    mark_human_skipped,
+    upsert_readiness,
+)
+from core.repositories.neurocomment._retention import purge_neurocomment_history_older_than
 from core.repositories.neurocomment._runtime import (
     get_listener_account_id,
     get_listener_running,
@@ -116,6 +120,7 @@ __all__ = [
     "list_campaign_readiness",
     "list_campaigns",
     "list_challenged_channels",
+    "list_channel_readiness",
     "list_failed_for_channel",
     "list_failed_for_channels",
     "list_linked_groups",
@@ -131,6 +136,7 @@ __all__ = [
     "mark_human_skipped",
     "mark_pair_banned",
     "persist_cooldown",
+    "purge_neurocomment_history_older_than",
     "reclaim_stale_claims",
     "record_join",
     "remove_account_from_campaign",

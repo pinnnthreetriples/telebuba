@@ -120,7 +120,12 @@ class NeurocommentSettings(BaseSettings):
     # candidate whose max similarity to a recent posted comment in the same channel
     # within the window reaches this threshold, then regenerate. 0 disables it; the
     # exact-hash reservation stays the atomic claim regardless.
-    semantic_dedup_threshold: float = Field(default=0.0, ge=0.0, le=1.0)
+    # 0.8 on token-set Jaccard = "the same words, reshuffled or one word swapped" — the
+    # near-duplicate band two accounts land in when Gemini answers one post twice. Lower
+    # and distinct comments about the same post start colliding (needless regenerations);
+    # this guard must be ON by default, or only exact duplicates are caught and a channel
+    # sees near-identical comments from two accounts — a strong spam signal.
+    semantic_dedup_threshold: float = Field(default=0.8, ge=0.0, le=1.0)
     # Look-back window for the semantic-dedup comparison set (recent posted comments).
     semantic_dedup_window_hours: float = Field(default=24.0, ge=0.0)
     # In-memory cooldown applied to an account after a PEER_FLOOD (no duration is
@@ -146,6 +151,14 @@ class NeurocommentSettings(BaseSettings):
     # First back-off duration; doubles per consecutive trip, capped at the max.
     channel_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
     channel_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
+    # Retention for the append-only neurocomment tables (comments / challenges / join
+    # log), which otherwise grow forever and slowly degrade the per-post quota reads.
+    # 0 = keep forever (escape hatch), mirroring the warming retention windows. 90 days
+    # keeps a full quarter of comment history for the board/feed while bounding the scans.
+    retention_days: float = Field(default=90.0, ge=0.0)
+    # A delete scan is far too expensive to run on every 5-minute deletion sweep, so the
+    # prune rides that loop but fires at most once per this interval.
+    retention_prune_interval_hours: float = Field(default=24.0, gt=0.0)
     # Max concurrent Telegram ban probes for the "Проверить каналы" check — keeps
     # a burst of GetParticipant reads on a few accounts from tripping flood limits.
     ban_check_concurrency: int = Field(default=4, ge=1, le=32)
@@ -155,8 +168,13 @@ class NeurocommentSettings(BaseSettings):
     challenge_solver_enabled: bool = True
     # Window the onboarding solver waits for a guardian-bot challenge after joining.
     challenge_wait_timeout_seconds: float = Field(default=20.0, gt=0.0)
-    # Hard cutoff on the Gemini decision call.
+    # Hard cutoff on the Gemini decision call (text challenges).
     challenge_gemini_timeout_seconds: float = Field(default=10.0, gt=0.0)
+    # Same cutoff for the VISION path, which uploads a base64 captcha image to
+    # gpt-4o/Gemini and routinely runs well past 10s. The gateway's own budget is 30s, so
+    # the text timeout truncated our own request and the solver gave up on a captcha the
+    # provider was still answering; 45s sits above the gateway budget so its result wins.
+    challenge_vision_timeout_seconds: float = Field(default=45.0, gt=0.0)
     # Hard cutoff on the click/send dispatch (the only unbounded Telethon await in
     # the solver); a hung click times out and is treated as a failed dispatch.
     challenge_dispatch_timeout_seconds: float = Field(default=15.0, gt=0.0)

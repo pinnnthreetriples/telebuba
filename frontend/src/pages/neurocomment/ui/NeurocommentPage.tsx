@@ -436,6 +436,7 @@ export function NeurocommentPage() {
             listenerId={listenerId}
             running={running}
             activeCampaignCount={activeCampaignCount}
+            unwatchedChannels={runtime.data?.unwatched_channels ?? []}
             listenerActionsOpen={listenerActionsOpen}
             onToggleActions={() => {
               setListenerActionsOpen((v) => !v);

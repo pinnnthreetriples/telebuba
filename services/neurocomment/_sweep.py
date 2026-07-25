@@ -20,6 +20,7 @@ from core.db import (
     list_active_watch_channels,
     list_posted_comments_since,
     mark_comments_deleted,
+    purge_neurocomment_history_older_than,
 )
 from core.logging import log_event
 from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult
@@ -28,12 +29,26 @@ from services.neurocomment import _seams, _state
 if TYPE_CHECKING:
     from schemas.neurocomment import CommentRecord
 
+# When the retention prune last ran. The sweep ticks every ~5 minutes, but a delete
+# scan over the append-only tables is far too expensive at that cadence, so the prune
+# rides this loop and self-gates on ``retention_prune_interval_hours``. ``None`` = never
+# ran in this process, so the first tick after start prunes.
+_LAST_PRUNE_AT: datetime | None = None
+
+
+def reset_prune_clock() -> None:
+    """Forget when the prune last ran (test seam — the next pass becomes due)."""
+    global _LAST_PRUNE_AT  # noqa: PLW0603 - module-level clock, same shape as the task handles.
+    _LAST_PRUNE_AT = None
+
 
 async def _sweep_loop() -> None:
     """Re-read recent comments on an interval; back off channels with mass deletions.
 
     The lone non-event loop in the runtime. A sweep fault is logged and the loop
     keeps going — it must never die (mirrors the listener-safe on-post pipeline).
+    The retention prune piggybacks on the same tick behind its own guard, so neither
+    half of the pass can abort the other.
     """
     interval = settings.neurocomment.deletion_sweep_interval_seconds
     while True:
@@ -46,6 +61,44 @@ async def _sweep_loop() -> None:
                 "neurocomment_sweep_failed",
                 extra={"error_type": type(exc).__name__, "message": str(exc)},
             )
+        await _prune_history_if_due(datetime.now(UTC))
+
+
+async def _prune_history_if_due(now: datetime) -> None:
+    """Retention pass over the append-only neurocomment tables, at most once per interval.
+
+    Skipped entirely when ``retention_days`` is 0 (keep forever). Never raises: retention
+    is nice-to-have bookkeeping, so a failure is logged and swallowed rather than allowed
+    to kill the sweep loop that owns deletion detection. The clock is stamped *before* the
+    purge so a persistently failing prune retries on the next interval instead of
+    re-scanning (and re-logging) every five minutes.
+    """
+    global _LAST_PRUNE_AT  # noqa: PLW0603 - module-level clock, same shape as the task handles.
+    nc = settings.neurocomment
+    if nc.retention_days <= 0:
+        return
+    interval_seconds = nc.retention_prune_interval_hours * 3600
+    if _LAST_PRUNE_AT is not None and (now - _LAST_PRUNE_AT).total_seconds() < interval_seconds:
+        return
+    _LAST_PRUNE_AT = now
+    cutoff = (now - timedelta(days=nc.retention_days)).isoformat()
+    try:
+        removed = await purge_neurocomment_history_older_than(cutoff)
+    except Exception as exc:  # noqa: BLE001 - retention must never abort the deletion sweep.
+        await log_event(
+            "WARNING",
+            "retention_purge_failed",
+            extra={"event": "neurocomment_retention_purged", "error": str(exc)},
+        )
+        return
+    if removed:
+        # Only when rows actually went, mirroring ``neurocomment_comment_deleted``: an
+        # idle deployment would otherwise log a no-op purge every day forever.
+        await log_event(
+            "INFO",
+            "neurocomment_retention_purged",
+            extra={"removed": removed, "cutoff": cutoff},
+        )
 
 
 async def _sweep_once() -> None:

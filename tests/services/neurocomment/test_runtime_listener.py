@@ -69,11 +69,14 @@ async def test_reconcile_unsubscribes_a_warming_listener(monkeypatch: pytest.Mon
     _patch_warming_ids(monkeypatch, {"listener-1"})
     campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
     await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _runtime._UNWATCHED_CHANNELS.add("@stale")
 
     await _runtime.reconcile_neurocomment_runtime("listener-1")
 
     assert spy.subscribed == []
     assert spy.stopped == ["listener-1"]
+    # Unsubscribed → nothing is watched, so no channel counts as "requested but missing".
+    assert not _runtime._UNWATCHED_CHANNELS
 
 
 @pytest.mark.asyncio
@@ -189,11 +192,14 @@ async def test_reconcile_with_no_channels_stops_listener(
 ) -> None:
     spy = _ListenerSpy()
     _patch_listener(monkeypatch, spy)
+    _runtime._UNWATCHED_CHANNELS.add("@stale")
 
     await _runtime.reconcile_neurocomment_runtime("listener-1")
 
     assert spy.subscribed == []
     assert spy.stopped == ["listener-1"]
+    # Same on the empty-watch-set exit: the stale gap must not outlive the subscription.
+    assert not _runtime._UNWATCHED_CHANNELS
 
 
 @pytest.mark.asyncio
@@ -611,4 +617,79 @@ async def test_concurrent_reconciles_do_not_pace_in_parallel(
     # One pacing stream, one join per channel — not five overlapping bursts.
     assert {ch for _aid, ch in exec_spy.joined} == {"@a", "@b", "@c"}
     assert len(exec_spy.joined) == 3
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_reconcile_records_channels_the_listener_cannot_watch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A channel the listener cannot resolve is requested but never watched — say so.
+
+    Live incident: 16 ``post_listener_channel_unresolved`` events for one channel while
+    its readiness row still read ready=1 and the UI was all green. Nothing above the
+    listener knew, because reconcile reported the REQUESTED channel count.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    _patch_listener(monkeypatch, _ListenerSpy(unresolvable={"@b"}))
+    _patch_execute(monkeypatch, _ExecuteSpy())
+    logged: list[tuple[str, str, object]] = []
+
+    async def _fake_log(level: str, event: str, **kwargs: object) -> None:
+        logged.append((level, event, kwargs.get("extra")))
+
+    monkeypatch.setattr(_runtime, "log_event", _fake_log)
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    assert sorted(_runtime._UNWATCHED_CHANNELS) == ["@b"]
+    warned = ("WARNING", "neurocomment_channels_unwatched", {"count": 1, "channels": ["@b"]})
+    assert warned in logged
+    # The reconciled event reports what is truly subscribed, not what was requested.
+    reconciled = [
+        extra for _lvl, event, extra in logged if event == "neurocomment_runtime_reconciled"
+    ]
+    assert reconciled == [{"channels": 1, "unwatched": 1}]
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_later_reconcile_clears_unwatched_once_channels_resolve(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A channel that resolves on a later pass (joined at last) must stop being flagged."""
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    _patch_execute(monkeypatch, _ExecuteSpy())
+    _patch_listener(monkeypatch, _ListenerSpy(unresolvable={"@b"}))
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    assert sorted(_runtime._UNWATCHED_CHANNELS) == ["@b"]
+
+    _patch_listener(monkeypatch, _ListenerSpy())
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    assert not _runtime._UNWATCHED_CHANNELS
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_runtime_status_reports_unwatched_channels(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``active_channels`` counts what is WATCHED; the dropped channels come back by name."""
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await link_channel_to_campaign(campaign.campaign_id, "@b")
+    _patch_listener(monkeypatch, _ListenerSpy(unresolvable={"@b"}))
+    _patch_execute(monkeypatch, _ExecuteSpy())
+    await set_listener_account_id("listener-1")
+    await set_listener_running(running=True)
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+
+    status = await _runtime.neurocomment_runtime_status()
+
+    assert status.active_channels == 1
+    assert status.unwatched_channels == ["@b"]
     await _runtime.shutdown_neurocomment_runtime("listener-1")
