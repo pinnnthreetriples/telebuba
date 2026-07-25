@@ -18,7 +18,9 @@ export default defineConfig({
     coverage: {
       provider: 'v8',
       reporter: ['text', 'html'],
-      all: true,
+      // No `all: true` — vitest 4 removed the option and made it the behaviour:
+      // every file matching `include` is reported, tested or not. That is what the
+      // 80% floor is measured against, so an untested new slice still fails the gate.
       include: ['src/**/*.{ts,tsx}'],
       // Generated client, shadcn primitives, app/route wiring, barrels and i18n
       // config are excluded per the FSD ADR (machine-output / low-signal); the

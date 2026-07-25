@@ -18,7 +18,14 @@ export default tseslint.config(
       'react-refresh': reactRefresh,
     },
     rules: {
-      ...reactHooks.configs.recommended.rules,
+      // The two classic hook rules, named rather than spread from
+      // ``reactHooks.configs.recommended``: since plugin v6 that preset also turns on
+      // the fifteen React Compiler rules (purity, refs, set-state-in-effect, …). The
+      // plugin was bumped to v7 because it is the first line that peers on ESLint 10
+      // (needed for the brace-expansion advisory), NOT to adopt a new ruleset — those
+      // rules flag pre-existing app code and are their own reviewed change.
+      'react-hooks/rules-of-hooks': 'error',
+      'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
     },
   },

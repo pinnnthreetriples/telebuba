@@ -1,6 +1,3 @@
-/* eslint-disable react-refresh/only-export-components -- test-only helpers,
-   never hot-reloaded; the `satisfies`-typed fixtures trip the rule's
-   constant-export detection. */
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render } from '@testing-library/react';
 import type { ReactElement } from 'react';
