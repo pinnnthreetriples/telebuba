@@ -3502,6 +3502,200 @@
         }
       }
     },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/discovery/search": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Start Discovery",
+        "operationId": "startCampaignDiscovery",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoverySearchRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "202": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoverySearchOutcome"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/discovery": {
+      "get": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Get Discovery",
+        "operationId": "getCampaignDiscovery",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryBoard"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/neurocomment/campaigns/{campaign_id}/discovery/adopt": {
+      "post": {
+        "tags": [
+          "neurocomment"
+        ],
+        "summary": "Adopt Discovery",
+        "operationId": "adoptCampaignDiscovery",
+        "parameters": [
+          {
+            "name": "campaign_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Campaign Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DiscoveryAdoptRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DiscoveryAdoptResult"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Validation Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/neurocomment/campaigns": {
       "get": {
         "tags": [
@@ -6788,6 +6982,312 @@
         "title": "DialogueFeedMessage",
         "description": "One dialogue message with both accounts resolved to display labels.\n\nLocale-neutral (#12): ``from_label``/``to_label`` are the account's own\nphone / label / id strings, never translated UI text; ``created_at`` is the\nstored ISO-8601 timestamp. The SPA owns any presentation."
       },
+      "DiscoveryAdoptOutcome": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "linked",
+              "already_assigned",
+              "failed"
+            ],
+            "title": "Status"
+          },
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status",
+          "channel"
+        ],
+        "title": "DiscoveryAdoptOutcome",
+        "description": "What happened to one channel of a batch adopt."
+      },
+      "DiscoveryAdoptRequest": {
+        "properties": {
+          "channels": {
+            "items": {
+              "type": "string",
+              "maxLength": 32,
+              "minLength": 1
+            },
+            "type": "array",
+            "maxItems": 500,
+            "minItems": 1,
+            "title": "Channels"
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "channels"
+        ],
+        "title": "DiscoveryAdoptRequest"
+      },
+      "DiscoveryAdoptResult": {
+        "properties": {
+          "outcomes": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryAdoptOutcome"
+            },
+            "type": "array",
+            "title": "Outcomes"
+          }
+        },
+        "type": "object",
+        "title": "DiscoveryAdoptResult"
+      },
+      "DiscoveryBoard": {
+        "properties": {
+          "campaign_id": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Campaign Id"
+          },
+          "progress": {
+            "$ref": "#/components/schemas/DiscoveryProgress"
+          },
+          "candidates": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoveryCandidate"
+            },
+            "type": "array",
+            "title": "Candidates"
+          }
+        },
+        "type": "object",
+        "required": [
+          "campaign_id",
+          "progress"
+        ],
+        "title": "DiscoveryBoard"
+      },
+      "DiscoveryCandidate": {
+        "properties": {
+          "channel": {
+            "type": "string",
+            "minLength": 1,
+            "title": "Channel"
+          },
+          "title": {
+            "type": "string",
+            "title": "Title",
+            "default": ""
+          },
+          "subscribers": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Subscribers"
+          },
+          "source": {
+            "type": "string",
+            "enum": [
+              "telegram_search",
+              "telegram_similar",
+              "telemetr"
+            ],
+            "title": "Source"
+          },
+          "qualification": {
+            "type": "string",
+            "enum": [
+              "pending",
+              "comments_on",
+              "comments_off",
+              "unknown"
+            ],
+            "title": "Qualification"
+          },
+          "in_campaign": {
+            "type": "boolean",
+            "title": "In Campaign",
+            "default": false
+          },
+          "taken_by_other_campaign": {
+            "type": "boolean",
+            "title": "Taken By Other Campaign",
+            "default": false
+          }
+        },
+        "type": "object",
+        "required": [
+          "channel",
+          "source",
+          "qualification"
+        ],
+        "title": "DiscoveryCandidate",
+        "description": "One found channel as the operator sees it."
+      },
+      "DiscoveryProgress": {
+        "properties": {
+          "phase": {
+            "type": "string",
+            "enum": [
+              "idle",
+              "searching",
+              "qualifying",
+              "done",
+              "failed"
+            ],
+            "title": "Phase"
+          },
+          "running": {
+            "type": "boolean",
+            "title": "Running",
+            "default": false
+          },
+          "total": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Total",
+            "default": 0
+          },
+          "qualified": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Qualified",
+            "default": 0
+          },
+          "comments_on": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Comments On",
+            "default": 0
+          },
+          "last_error": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Last Error"
+          }
+        },
+        "type": "object",
+        "required": [
+          "phase"
+        ],
+        "title": "DiscoveryProgress"
+      },
+      "DiscoverySearchOutcome": {
+        "properties": {
+          "status": {
+            "type": "string",
+            "enum": [
+              "started",
+              "already_running",
+              "no_account",
+              "account_cooling",
+              "daily_limit_reached"
+            ],
+            "title": "Status"
+          }
+        },
+        "type": "object",
+        "required": [
+          "status"
+        ],
+        "title": "DiscoverySearchOutcome",
+        "description": "Why a start attempt did or did not spawn a run."
+      },
+      "DiscoverySearchRequest": {
+        "properties": {
+          "keywords": {
+            "items": {
+              "type": "string"
+            },
+            "type": "array",
+            "maxItems": 10,
+            "minItems": 1,
+            "title": "Keywords"
+          },
+          "seed_channel": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Seed Channel"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string",
+                "maxLength": 32
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "members_min": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Members Min"
+          },
+          "members_max": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Members Max"
+          },
+          "use_telemetr": {
+            "type": "boolean",
+            "title": "Use Telemetr",
+            "default": false
+          }
+        },
+        "additionalProperties": false,
+        "type": "object",
+        "required": [
+          "keywords"
+        ],
+        "title": "DiscoverySearchRequest",
+        "description": "Operator-supplied search parameters.\n\n``language``/``country`` only reach Telemetr.io \u2014 Telegram's native search has\nno such filters. ``members_min``/``members_max`` are applied by Telemetr\nserver-side and re-applied client-side to native hits once the subscriber count\nis known."
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -9298,6 +9798,11 @@
             "title": "Captcha Llm Provider",
             "default": "gemini"
           },
+          "has_telemetr_key": {
+            "type": "boolean",
+            "title": "Has Telemetr Key",
+            "default": false
+          },
           "updated_at": {
             "type": "string",
             "minLength": 1,
@@ -9416,6 +9921,22 @@
               }
             ],
             "title": "Captcha Llm Provider"
+          },
+          "telemetr_api_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Telemetr Api Key"
+          },
+          "clear_telemetr_key": {
+            "type": "boolean",
+            "title": "Clear Telemetr Key",
+            "default": false
           }
         },
         "additionalProperties": false,

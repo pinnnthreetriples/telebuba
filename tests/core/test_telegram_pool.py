@@ -22,10 +22,13 @@ from core.telegram_client import TelegramClientPoolError
 from core.telegram_client._pool import (
     _CLIENTS,
     _REBUILD_HOOKS,
+    _REMOVING,
+    _connect_lock,
     _reset_for_tests,
     evict_client,
     get_client,
     register_rebuild_hook,
+    removing_client,
     shutdown_telegram_pool,
 )
 
@@ -108,6 +111,52 @@ def _install_fake_factory(
     monkeypatch.setattr("core.telegram_client._pool.prepare_telegram_client_profile", fake_prepare)
     monkeypatch.setattr("core.telegram_client._pool.create_telegram_client", fake_create)
     return built
+
+
+def _install_gated_build(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    started: asyncio.Event,
+    release: asyncio.Event,
+) -> list[_FakeClient]:
+    """Patch the build step so a borrower parks *inside* the connect lock.
+
+    A real connect takes seconds; ``release`` stands in for that window so a test
+    can order a removal against a borrower that is already building, instead of
+    asserting tombstone state from inside the removal itself.
+    """
+    built: list[_FakeClient] = []
+
+    async def gated_build(_account_id: str) -> _FakeClient:
+        client = _FakeClient()
+        built.append(client)
+        started.set()
+        await release.wait()
+        await client.connect()
+        return client
+
+    monkeypatch.setattr("core.telegram_client._pool._build_and_connect", gated_build)
+    return built
+
+
+async def _mark_removal(account_id: str) -> asyncio.Task[None]:
+    """Start a removal and return once its tombstone is up.
+
+    ``removing_client`` marks the account synchronously and then blocks on the
+    connect lock inside ``evict_client``, so the returned task is parked with the
+    mark set — the state every tombstone check has to cope with.
+    """
+
+    async def removal() -> None:
+        async with removing_client(account_id):
+            pass
+
+    task = asyncio.create_task(removal())
+    # The mark is set before ``removing_client``'s first await, so a single yield
+    # runs the task exactly up to the blocked eviction.
+    await asyncio.sleep(0)
+    assert account_id in _REMOVING, "the removal must be parked with its mark up"
+    return task
 
 
 @pytest.mark.asyncio
@@ -266,6 +315,137 @@ async def test_evict_precedes_session_file_removal(
 
     assert order == ["disconnect", "unlink"], "eviction must precede the file removal"
     assert not session_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_removing_client_evicts_then_refuses_rebuilds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A borrower inside the removal window is refused, not handed a fresh client.
+
+    ``evict_client`` alone only empties the cache: the very next borrower would
+    rebuild and re-open (or re-create) the ``.session`` file the removal is about
+    to unlink, so the unlink fails on Windows and aborts the delete. The
+    tombstone must last the whole block and lift when it exits.
+    """
+    built = _install_fake_factory(monkeypatch)
+    await get_client("acc-gone")
+
+    async with removing_client("acc-gone"):
+        assert "acc-gone" not in _CLIENTS, "entering the block must evict the cached client"
+        with pytest.raises(TelegramClientPoolError):
+            await get_client("acc-gone")
+
+    assert len(built) == 1, "no client may be built while the removal is in flight"
+    # Scoped to the removal, not permanent — the id stays borrowable afterwards.
+    await get_client("acc-gone")
+    assert len(built) == 2
+
+
+@pytest.mark.asyncio
+async def test_get_client_discards_a_client_built_after_the_mark_appeared(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A borrower already inside the build when the mark lands must get nothing.
+
+    Its in-lock check ran before the removal existed, so only a re-check after
+    the build stops the pool from publishing — and handing back — a live client
+    under a live tombstone. The removal would then disconnect an object the
+    caller still holds, and Telethon's ``SQLiteSession`` re-creates the unlinked
+    file on its next use.
+    """
+    started = asyncio.Event()
+    release = asyncio.Event()
+    built = _install_gated_build(monkeypatch, started=started, release=release)
+
+    borrower = asyncio.create_task(get_client("acc-slow"))
+    await started.wait()
+    remover = await _mark_removal("acc-slow")
+    release.set()
+
+    with pytest.raises(TelegramClientPoolError):
+        await borrower
+    await remover
+
+    assert built[0].disconnect_calls == 1, "the orphaned client must be disconnected"
+    assert "acc-slow" not in _CLIENTS, "nothing may be published under a tombstone"
+
+
+@pytest.mark.asyncio
+async def test_get_client_refuses_a_borrower_that_queued_on_the_lock_before_the_mark(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A queued borrower sits ahead of the removal in FIFO order — still refused.
+
+    Its pre-lock check ran before the mark existed and the removal's eviction is
+    behind it on the same lock, so without the in-lock check it would go on to
+    build and re-open the ``.session`` file the removal is about to unlink.
+    """
+    started = asyncio.Event()
+    release = asyncio.Event()
+    built = _install_gated_build(monkeypatch, started=started, release=release)
+
+    holder = asyncio.create_task(get_client("acc-queued"))
+    await started.wait()
+    queued = asyncio.create_task(get_client("acc-queued"))
+    # One yield is enough for ``queued`` to reach the lock it cannot take, so it
+    # is enqueued before the removal that follows.
+    await asyncio.sleep(0)
+    remover = await _mark_removal("acc-queued")
+    release.set()
+
+    with pytest.raises(TelegramClientPoolError):
+        await holder
+    with pytest.raises(TelegramClientPoolError):
+        await queued
+    await remover
+
+    assert len(built) == 1, "the queued borrower must be refused before it builds"
+
+
+@pytest.mark.asyncio
+async def test_get_client_refuses_a_cached_client_while_the_mark_is_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cached fast path never takes the lock, so it must check the mark itself.
+
+    Holding the connect lock parks ``removing_client``'s eviction, leaving the
+    mark up while the client is still cached and connected — the state a removal
+    that has been woken but not yet resumed leaves behind.
+    """
+    built = _install_fake_factory(monkeypatch)
+    cached = await get_client("acc-cached")
+
+    async with _connect_lock("acc-cached"):
+        remover = await _mark_removal("acc-cached")
+        with pytest.raises(TelegramClientPoolError):
+            await get_client("acc-cached")
+    await remover
+
+    assert built == [cached], "the refusal must not build a replacement"
+
+
+@pytest.mark.asyncio
+async def test_removing_client_tombstone_survives_a_nested_holder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Overlapping removals refcount — an inner exit must not lift the mark.
+
+    Account removal and the session-reset wipe both take the tombstone, so two
+    holders can overlap on one account; with a plain set the inner ``__aexit__``
+    cleared it and let a borrower in while the outer holder was still working.
+    """
+    built = _install_fake_factory(monkeypatch)
+
+    async with removing_client("acc-nested"):
+        async with removing_client("acc-nested"):
+            pass
+        with pytest.raises(TelegramClientPoolError):
+            await get_client("acc-nested")
+
+    assert "acc-nested" not in _REMOVING, "the outer exit must lift the mark"
+    await get_client("acc-nested")
+    assert len(built) == 1, "borrowable again once every holder is done"
 
 
 @pytest.mark.asyncio

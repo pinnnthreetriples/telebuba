@@ -1,6 +1,8 @@
 export {
+  adoptCampaignDiscoveryMutation,
   assignCampaignAccountMutation,
   campaignChallengesQueryOptions,
+  campaignDiscoveryQueryOptions,
   campaignsQueryOptions,
   checkCampaignChannelBansMutation,
   clearNeurocommentListenerMutation,
@@ -17,6 +19,7 @@ export {
   setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
+  startCampaignDiscoveryMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateCampaignPromptMutation,

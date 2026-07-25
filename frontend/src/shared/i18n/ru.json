@@ -470,7 +470,9 @@
       "geminiRetriesExample": "Пример: 3 — попробует ещё 3 раза. 0 — без повторов.",
       "geminiInterval": "Пауза между генерациями (сек)",
       "geminiIntervalHelp": "Минимальная пауза перед каждым обращением к Gemini, чтобы не упереться в лимит запросов в минуту.",
-      "geminiIntervalExample": "Пример: 4 — не чаще одного запроса в 4 сек. 0 — без паузы."
+      "geminiIntervalExample": "Пример: 4 — не чаще одного запроса в 4 сек. 0 — без паузы.",
+      "telemetrKey": "Ключ Telemetr.io",
+      "telemetrHint": "Внешний каталог каналов для автопоиска в нейрокомментинге. Без ключа работает только родной поиск Telegram."
     },
     "captchaLlm": {
       "title": "LLM для решения капчи",
@@ -677,7 +679,11 @@
     "tdata_no_accounts": "В архиве нет аккаунтов",
     "tdata_import_completed": "Импорт завершён",
     "tdata_import_failed": "Ошибка импорта",
-    "tdata_import_rolled_back": "Импорт отменён"
+    "tdata_import_rolled_back": "Импорт отменён",
+    "neurocomment_discovery_started": "Поиск каналов запущен",
+    "neurocomment_discovery_finished": "Поиск каналов завершён",
+    "neurocomment_discovery_failed": "Поиск каналов не удался",
+    "neurocomment_discovery_adopted": "Каналы добавлены из поиска"
   },
   "logEventReason": {
     "chance": "не выпал шанс",
@@ -955,6 +961,74 @@
         "removeConfirm": "Убрать",
         "empty": "Нет аккаунтов в нейрокомментинге",
         "done": "Готово"
+      },
+      "discovery": {
+        "open": "Найти каналы",
+        "title": "Автопоиск каналов",
+        "sub": "{{name}} · поиск каналов с включёнными комментариями",
+        "form": {
+          "keywords": "Ключевые слова",
+          "keywordsPlaceholder": "крипта, трейдинг, новости",
+          "keywordsHint": "От {{min}} символов, до {{max}} слов. Распознано: {{count}}",
+          "language": "Язык",
+          "country": "Страна",
+          "anyLanguage": "Любой",
+          "anyCountry": "Любая",
+          "minSubscribers": "Подписчиков от",
+          "maxSubscribers": "Подписчиков до",
+          "seedChannel": "Похожие на канал",
+          "seedChannelHint": "Telegram подберёт каналы, похожие на указанный, по пересечению аудитории. Это самый дешёвый способ расширить выдачу.",
+          "useTelemetr": "Искать ещё и в каталоге Telemetr.io",
+          "useTelemetrHint": "Внешний каталог: фильтры по стране, языку и числу подписчиков. Расходует квоту вашего тарифа.",
+          "useTelemetrMissing": "Чтобы включить, добавьте ключ Telemetr.io в Настройках.",
+          "reset": "Сбросить",
+          "submit": "Найти",
+          "searching": "Запускаем…"
+        },
+        "results": {
+          "back": "← Изменить параметры",
+          "count": "Найдено каналов: {{count}}",
+          "qualifying": "Проверяем комментарии: {{done}}/{{total}}",
+          "searching": "Ищем каналы…",
+          "empty": "Ничего не нашлось. Попробуйте другие ключевые слова или добавьте канал-образец.",
+          "failed": "Прервано: {{reason}}",
+          "degraded": "Источник ответил с ошибкой: {{reason}}",
+          "error": "Не удалось получить результаты поиска. Повторяем…",
+          "selectAll": "Выбрать все подходящие",
+          "select": "Выбрать канал {{channel}}",
+          "colChannel": "Канал",
+          "colTitle": "Название",
+          "colSubscribers": "Подписчики",
+          "colSource": "Источник",
+          "colComments": "Комментарии",
+          "colState": "Статус",
+          "inCampaign": "уже в кампании",
+          "takenElsewhere": "занят другой кампанией"
+        },
+        "comments": {
+          "pending": "проверяется",
+          "comments_on": "Комментарии включены",
+          "comments_off": "Комментарии выключены",
+          "unknown": "не удалось проверить",
+          "notChecked": "не проверено"
+        },
+        "source": {
+          "telegram_search": "поиск Telegram",
+          "telegram_similar": "похожие",
+          "telemetr": "Telemetr.io"
+        },
+        "refused": {
+          "already_running": "Поиск для этой кампании уже идёт.",
+          "no_account": "Нет аккаунта для поиска: назначьте слушателя или аккаунт в кампанию.",
+          "account_cooling": "Аккаунт поиска пережидает лимит Telegram. Попробуйте позже.",
+          "daily_limit_reached": "Суточный лимит поисков исчерпан."
+        },
+        "add": "Добавить выбранные ({{count}})",
+        "added": "Добавлено: {{count}}",
+        "addedNone": "Ничего не добавлено",
+        "addedRefused": "Не добавлено: {{count}} — эти каналы уже заняты",
+        "addedFailed": "Не удалось добавить: {{count}} — попробуйте ещё раз",
+        "addFailed": "Не удалось добавить каналы. Часть могла успеть добавиться — проверьте список и повторите."
       }
     },
     "history": {

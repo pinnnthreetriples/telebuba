@@ -45,4 +45,59 @@ last_updated: 2026-07-25
 - The board is a read model only: no trust/health/spam derivation (the SPA reads those from `AccountRead`), and the card's quota denominator comes from the saved settings row, not the config default.
 - File-size gate (aislop max 400) drives the `_runtime`/`onboarding` splits into `_join`/`_lifecycle`/`_classify`/`_sweep`/`_watch` via E402 re-export-after-body; task-handle globals stay in `_runtime` (tests rebind them, and rebinding a re-exported name does not reach the defining module), so a peer module reaches back through the `_runtime` module object. `_generate.py` now sits ~5 lines under the cap. Repository reads split the same way (`_readiness`, `_retention` beside `_comments`/`_quota`), and request models live in `schemas/_neurocomment_requests.py` re-exported from `schemas/neurocomment.py` — a pure module move, so the generated OpenAPI client is unaffected (component names are class names). `schemas/neurocomment.py` sits ~8 lines under the cap: the settings pair is the next extraction.
 
+Channel discovery (`services/neurocomment/discovery.py`) is a background run per campaign,
+single-flighted in memory (`_discovery_state`), cancelled on shutdown AND when its campaign is
+deleted. The account is resolved FIRST, then `try_reserve` claims the campaign slot, the
+account, and one unit of the rolling-24h allowance in a single await-free step — the same
+check→spawn rule `_ensure_onboarding_running`/`_ensure_join_running` follow. Claiming the
+account matters as much as the campaign: every campaign resolves to the same fleet listener, so
+per-campaign alone would allow N parallel streams on one account. Resolving before claiming is
+also what removes any window where a failure could strand a claim.
+Discovery refuses an account that is warming (`list_warming_account_ids`) — warming's freeze
+avoidance assumes it owns its accounts' traffic — and it now RECORDS its own FloodWait as a
+cooldown, so the retry and the post-adopt reconcile stay off that account.
+Both stages are paced: the search fans out over keywords with the same jitter as the
+qualification loop. Comments-enabled is `channelFull.linked_chat_id`, resolved through the
+existing `GetLinkedDiscussionGroup` action; the shared `neurocomment_linked_groups` cache is
+read in ONE bulk query and freshness (`discovery_linked_group_ttl_hours`, default 168h) is
+applied in the SERVICE, not the repository — onboarding and the board still want the raw cache.
+A FloodWait aborts a qualification pass and leaves the tail `pending` (`qualified_at` makes it
+resumable); the run never takes `account_lock`, because holding it for minutes would block
+warming/neurocomment start-stop for that account. Telemetr.io is optional: no key means a
+skipped source, a 429 degrades the run to native results with `last_error` set. Writing
+candidates is delete-then-insert, so the set is replaced only when at least one source actually
+answered (`SourceOutcome.answered`); if none did, the previous set survives and the run ends
+`failed`. A source answering with zero hits — or a filter removing every hit — IS an empty
+result and does replace it. A FloodWait aborts the search sweep as well as qualification. A pass
+also stops when failures reach HALF of at least 20 probes: the consecutive counter catches a dead
+session but not a half-dead one, and the bound has to be a RATE, not a count — a re-search
+re-inserts every candidate with `qualified_at = NULL`, so a fixed count aborts at the same handle
+on every retry and the tail past it becomes unreachable forever. Deliberately not a knob.
+
+Campaign-channel ownership is folded: `@Name`, `name` and `NAME` are ONE channel, `+HASH` invite
+keys stay EXACT (they really are case-sensitive, so a plain `COLLATE NOCASE` would wrongly reject a
+second invite link). The fold has exactly two spellings, kept in step by a test:
+`core.channel_tokens.dedup_key` and `channel_fold_sql` — and the read path evaluates it **in SQL on
+both sides**, never pre-folding the probe in Python, because SQLite's `lower()` is ASCII-only while
+Python's is full-Unicode and a mixed comparison leaves a committed row that no lookup can find.
+Spelling the query as the index's own expression is also what lets it SEARCH rather than SCAN, so
+do not "simplify" it to `lower(col) = ?`. Migration 39 creates the folded index
+(`ix_nc_channel_one_active_campaign_fold`) BEFORE dropping #11's — pysqlite gives DDL no
+transaction, so drop-first would leave the table unconstrained if the create failed. It deactivates
+(never deletes) pre-existing case duplicates so the unique index can be created at all, folding in
+SQL so it cannot demote a pair the index would have accepted. `LinkChannelRequest` canonicalises
+the handle, which is why `_deactivate_channel` fold-matches too — otherwise removing a legacy
+`@news` row would 204 while leaving it active.
+
+Removing an account (and `log_out_session(wipe_session=True)`) tombstones it in the client pool
+(`removing_client`, reference-counted) for the whole evict → unlink → delete sequence. Pool
+borrowers do not take `account_lock`, so without the tombstone one could rebuild a client
+mid-removal, reopen the session file and make the unlink fail on Windows — aborting before the DB
+row was deleted — or re-create the file afterwards. `get_client` checks the mark in THREE places
+and all three are load-bearing: before the lock (cached fast path), inside it (a borrower that
+queued before the mark, which FIFO puts ahead of the removal), and after the build (a borrower
+already inside the lock when the mark went up — that one otherwise publishes a live client). Probe
+and login paths build clients outside the pool, so they are NOT covered; the safety net there is
+that a failed unlink still skips `delete_account`, leaving the removal retryable.
+
 API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.

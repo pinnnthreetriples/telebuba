@@ -93,6 +93,56 @@ async def test_channel_belongs_to_one_active_campaign() -> None:
 
 
 @pytest.mark.asyncio
+async def test_at_sigil_and_letter_case_name_one_channel() -> None:
+    """``@News`` and ``news`` are the same channel, so the second link must be refused.
+
+    Both spellings resolve to one Telegram peer id, and the listener's peer→channel map
+    keeps only the last one written — the loser's link would look healthy while never
+    being watched again.
+    """
+    a = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    b = await create_campaign(CampaignCreate(name="B", prompt="p"))
+    await link_channel_to_campaign(a.campaign_id, "@News")
+
+    for spelling in ("news", "@news", "NEWS"):
+        with pytest.raises(ChannelAlreadyAssignedError):
+            await link_channel_to_campaign(b.campaign_id, spelling)
+
+    owner = await fetch_active_campaign_for_channel("news")
+    assert owner is not None
+    assert owner.campaign_id == a.campaign_id
+    # Removing it with the canonical spelling frees the link stored with the sigil.
+    await deactivate_channel(a.campaign_id, "news")
+    assert [link.channel for link in (await list_campaign_channels(a.campaign_id)).links] == []
+
+
+@pytest.mark.asyncio
+async def test_non_ascii_case_handle_round_trips_link_lookup_and_refusal() -> None:
+    """A handle SQLite's ASCII-only ``lower()`` cannot fold must still behave.
+
+    Folding the probe in Python (full-Unicode ``str.lower()``) made the read miss the
+    row the index had just accepted: the link raised ``RuntimeError`` as a 500 while the
+    row was live, the engine saw no owner for its posts, and a retry blamed the wrong
+    campaign.
+    """
+    homoglyph = "Теlegram"  # Cyrillic Т and е — lower() leaves both untouched
+    a = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    b = await create_campaign(CampaignCreate(name="B", prompt="p"))
+
+    link = await link_channel_to_campaign(a.campaign_id, homoglyph)
+    assert link.campaign_id == a.campaign_id
+
+    owner = await fetch_active_campaign_for_channel(homoglyph)
+    assert owner is not None
+    assert owner.campaign_id == a.campaign_id
+    bulk = await fetch_active_campaigns_for_channels([homoglyph])
+    assert bulk[homoglyph].campaign_id == a.campaign_id
+
+    with pytest.raises(ChannelAlreadyAssignedError, match=a.campaign_id):
+        await link_channel_to_campaign(b.campaign_id, homoglyph)
+
+
+@pytest.mark.asyncio
 async def test_link_channel_to_unknown_campaign_raises_integrity_error() -> None:
     # FK violation is distinct from the uniqueness conflict and must propagate.
     with pytest.raises(IntegrityError):
@@ -295,3 +345,63 @@ async def test_update_campaign_prompt_replaces_text() -> None:
     got = await fetch_campaign(campaign.campaign_id)
     assert got is not None
     assert got.prompt == "new prompt"
+
+
+@pytest.mark.asyncio
+async def test_channel_case_does_not_open_a_second_active_campaign() -> None:
+    """Telegram usernames are case-insensitive, so ``Telegram`` IS ``telegram``.
+
+    Discovery stores the canonical spelling Telegram returns next to handles an
+    operator typed by hand, so without the fold one channel could end up active in
+    two campaigns — subscribed twice and commented on twice.
+    """
+    a = await create_campaign(CampaignCreate(name="A", prompt="p"))
+    b = await create_campaign(CampaignCreate(name="B", prompt="p"))
+    await link_channel_to_campaign(a.campaign_id, "telegram")
+
+    with pytest.raises(ChannelAlreadyAssignedError):
+        await link_channel_to_campaign(b.campaign_id, "Telegram")
+
+    # ...and the error names the campaign that actually holds it.
+    assert [link.channel for link in (await list_campaign_channels(b.campaign_id)).links] == []
+
+
+@pytest.mark.asyncio
+async def test_ownership_lookups_fold_channel_case() -> None:
+    """The discovery board asks by canonical handle; the link may be lower case."""
+    active = await create_campaign(CampaignCreate(name="Live", prompt="p", status="active"))
+    await link_channel_to_campaign(active.campaign_id, "telegram")
+
+    single = await fetch_active_campaign_for_channel("TeleGram")
+    assert single is not None
+    assert single.campaign_id == active.campaign_id
+
+    # Keyed by the channel the CALLER asked for, so ``owners.get(row.channel)`` hits.
+    bulk = await fetch_active_campaigns_for_channels(["Telegram", "Nobody"])
+    assert {channel: c.campaign_id for channel, c in bulk.items()} == {
+        "Telegram": active.campaign_id,
+    }
+
+
+@pytest.mark.asyncio
+async def test_invite_hash_links_stay_case_sensitive() -> None:
+    """``+HASH`` invite keys are case-SENSITIVE — two of them are different chats."""
+    a = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    b = await create_campaign(CampaignCreate(name="B", prompt="p", status="active"))
+
+    await link_channel_to_campaign(a.campaign_id, "+AbCdEfGh")
+    # Same letters, different case → a genuinely different invite, must be linkable.
+    other = await link_channel_to_campaign(b.campaign_id, "+abcdefgh")
+    assert other.campaign_id == b.campaign_id
+
+    # And each lookup resolves to its own campaign, not the other's.
+    first = await fetch_active_campaign_for_channel("+AbCdEfGh")
+    second = await fetch_active_campaign_for_channel("+abcdefgh")
+    assert first is not None
+    assert second is not None
+    assert (first.campaign_id, second.campaign_id) == (a.campaign_id, b.campaign_id)
+    bulk = await fetch_active_campaigns_for_channels(["+AbCdEfGh", "+abcdefgh"])
+    assert {ch: c.campaign_id for ch, c in bulk.items()} == {
+        "+AbCdEfGh": a.campaign_id,
+        "+abcdefgh": b.campaign_id,
+    }

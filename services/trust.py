@@ -99,7 +99,12 @@ def _age_hours(created_at: str, now: datetime) -> float:
     return max(0.0, (now - created).total_seconds() / _SECONDS_PER_HOUR)
 
 
-def _flood_active(flood_wait_until: str | None, now: datetime) -> bool:
+def flood_active(flood_wait_until: str | None, now: datetime) -> bool:
+    """Is a persisted flood-wait deadline still in the future?
+
+    Public because channel discovery also refuses to search on a flood-waiting
+    account (a second consumer is when a helper stops being private).
+    """
     if not flood_wait_until:
         return False
     try:
@@ -135,7 +140,7 @@ def account_trust_score_from(
             account_status=account.status,
             spam_status=spam.status if spam else "unknown",
             quarantine_count=record.quarantine_count if record else 0,
-            flood_active=_flood_active(record.flood_wait_until if record else None, now),
+            flood_active=flood_active(record.flood_wait_until if record else None, now),
             geo_status=geo.status,
             proxy_status=account.proxy_status,
             age_hours=_age_hours(account.created_at, now),

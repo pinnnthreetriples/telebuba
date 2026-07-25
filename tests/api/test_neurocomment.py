@@ -272,7 +272,12 @@ async def test_set_account_channel_missing_campaign_is_404(
 
 
 @pytest.mark.asyncio
-async def test_link_channel(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_link_channel_canonicalises_the_handle(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``@news`` and ``news`` are one channel, so the ``@`` never reaches the service."""
+
     async def _fake(campaign_id: str, channel: str) -> ChannelLinkOutcome:  # noqa: ARG001
         return ChannelLinkOutcome(status="linked", channel=channel)
 
@@ -280,10 +285,15 @@ async def test_link_channel(app: FastAPI, monkeypatch: pytest.MonkeyPatch) -> No
     async with _client(app) as client:
         resp = await client.post(
             "/api/v1/neurocomment/campaigns/c1/channels",
-            json={"channel": "@news"},
+            json={"channel": " @news "},
+        )
+        blank = await client.post(
+            "/api/v1/neurocomment/campaigns/c1/channels",
+            json={"channel": "@"},
         )
     assert resp.status_code == 200
-    assert resp.json() == {"status": "linked", "channel": "@news"}
+    assert resp.json() == {"status": "linked", "channel": "news"}
+    assert blank.status_code == 422
 
 
 @pytest.mark.asyncio

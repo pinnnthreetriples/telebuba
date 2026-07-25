@@ -7,6 +7,7 @@ from typing import Annotated
 from fastapi import APIRouter, HTTPException, Query
 from fastapi import status as http_status
 
+from api.v1._neurocomment_discovery import discovery_router
 from schemas.api import Page
 from schemas.challenge import ChallengeOutcomeCounts, ChallengeRowList
 from schemas.neurocomment import (
@@ -33,6 +34,9 @@ from schemas.neurocomment_bans import ChannelBanCheckList
 from services import neurocomment as nc_service
 
 router = APIRouter(prefix="/neurocomment", tags=["neurocomment"])
+# Channel discovery lives in a sibling module (file-size cap); mounted here so its
+# routes share this router's prefix, tag and auth dependency.
+router.include_router(discovery_router)
 
 
 @router.get("/campaigns", response_model=CampaignList, operation_id="listCampaigns")

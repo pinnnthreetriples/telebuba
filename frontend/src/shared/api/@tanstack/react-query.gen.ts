@@ -13,6 +13,7 @@ import {
   accountStats,
   addAccountMusic,
   addWarmingChannels,
+  adoptCampaignDiscovery,
   assignCampaignAccount,
   assignProxy,
   checkAccount,
@@ -33,6 +34,7 @@ import {
   editAccountChannelPost,
   getAccountChannel,
   getAccountProfileSnapshot,
+  getCampaignDiscovery,
   getHealth,
   getMe,
   getNeurocommentBoard,
@@ -82,6 +84,7 @@ import {
   setCampaignStatus,
   skipNeurocommentPair,
   spamCheckAccount,
+  startCampaignDiscovery,
   startNeurocomment,
   startPhoneLogin,
   startWarming,
@@ -106,6 +109,9 @@ import type {
   AddWarmingChannelsData,
   AddWarmingChannelsError,
   AddWarmingChannelsResponse,
+  AdoptCampaignDiscoveryData,
+  AdoptCampaignDiscoveryError,
+  AdoptCampaignDiscoveryResponse,
   AssignCampaignAccountData,
   AssignCampaignAccountError,
   AssignCampaignAccountResponse,
@@ -166,6 +172,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotError,
   GetAccountProfileSnapshotResponse,
+  GetCampaignDiscoveryData,
+  GetCampaignDiscoveryError,
+  GetCampaignDiscoveryResponse,
   GetHealthData,
   GetHealthResponse,
   GetMeData,
@@ -309,6 +318,9 @@ import type {
   SpamCheckAccountData,
   SpamCheckAccountError,
   SpamCheckAccountResponse,
+  StartCampaignDiscoveryData,
+  StartCampaignDiscoveryError,
+  StartCampaignDiscoveryResponse,
   StartNeurocommentData,
   StartNeurocommentError,
   StartNeurocommentResponse,
@@ -1991,6 +2003,85 @@ export const listWarmingDialoguesOptions = (options?: Options<ListWarmingDialogu
     },
     queryKey: listWarmingDialoguesQueryKey(options),
   });
+
+/**
+ * Start Discovery
+ */
+export const startCampaignDiscoveryMutation = (
+  options?: Partial<Options<StartCampaignDiscoveryData>>,
+): UseMutationOptions<
+  StartCampaignDiscoveryResponse,
+  StartCampaignDiscoveryError,
+  Options<StartCampaignDiscoveryData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    StartCampaignDiscoveryResponse,
+    StartCampaignDiscoveryError,
+    Options<StartCampaignDiscoveryData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await startCampaignDiscovery({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getCampaignDiscoveryQueryKey = (options: Options<GetCampaignDiscoveryData>) =>
+  createQueryKey('getCampaignDiscovery', options);
+
+/**
+ * Get Discovery
+ */
+export const getCampaignDiscoveryOptions = (options: Options<GetCampaignDiscoveryData>) =>
+  queryOptions<
+    GetCampaignDiscoveryResponse,
+    GetCampaignDiscoveryError,
+    GetCampaignDiscoveryResponse,
+    ReturnType<typeof getCampaignDiscoveryQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getCampaignDiscovery({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getCampaignDiscoveryQueryKey(options),
+  });
+
+/**
+ * Adopt Discovery
+ */
+export const adoptCampaignDiscoveryMutation = (
+  options?: Partial<Options<AdoptCampaignDiscoveryData>>,
+): UseMutationOptions<
+  AdoptCampaignDiscoveryResponse,
+  AdoptCampaignDiscoveryError,
+  Options<AdoptCampaignDiscoveryData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    AdoptCampaignDiscoveryResponse,
+    AdoptCampaignDiscoveryError,
+    Options<AdoptCampaignDiscoveryData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await adoptCampaignDiscovery({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
 
 export const listCampaignsQueryKey = (options?: Options<ListCampaignsData>) =>
   createQueryKey('listCampaigns', options);

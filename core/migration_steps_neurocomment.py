@@ -10,12 +10,24 @@ step from ``core.migration_steps`` unchanged.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
+from core.channel_tokens import channel_fold_sql
 from core.migration_steps import _sqlite_columns, _sqlite_table_exists
 
 if TYPE_CHECKING:
     from sqlalchemy.engine import Connection
+
+logger = logging.getLogger(__name__)
+
+# The one-active-campaign fold. Both the index below and the duplicate SWEEP that
+# guards it evaluate this same SQL, so the sweep can never demote a pair the index
+# would have accepted (it would if it folded in Python: SQLite's ``lower()`` is
+# ASCII-only, Python's ``str.lower()`` is not).
+_CHANNEL_FOLD = channel_fold_sql("channel")
+# The folded index gets its own name so it can be created BEFORE #11's is dropped.
+_FOLD_INDEX = "ix_nc_channel_one_active_campaign_fold"
 
 
 def _add_neurocomment_tables(connection: Connection) -> None:
@@ -303,3 +315,83 @@ def _add_neurocomment_join_log(connection: Connection) -> None:
         "CREATE INDEX IF NOT EXISTS ix_nc_join_log_account_joined "
         "ON neurocomment_join_log(account_id, joined_at)",
     )
+
+
+def _add_neurocomment_channel_case_fold_index(connection: Connection) -> None:
+    """#39: make "one active campaign per channel" case- and ``@``-insensitive.
+
+    Telegram usernames are case-insensitive and the leading ``@`` is decoration, so
+    the #11 index (``ON neurocomment_campaign_channels(channel) WHERE active = 1``)
+    happily let ``Telegram`` or ``@telegram`` be linked while ``telegram`` was already
+    active elsewhere. Both spellings resolve to the SAME peer id, so the listener's
+    ``channel_by_peer_id`` map keeps only the last one — the other campaign's link goes
+    silently dead while still looking healthy. This recreates the index over the
+    ``dedup_key`` fold, so ``+HASH`` invite keys (which ARE case-sensitive) keep their
+    exact-match behaviour.
+
+    Pre-existing violators exist: a database can already hold ``telegram`` on
+    campaign A and ``Telegram`` on B, both active, and ``CREATE UNIQUE INDEX`` would
+    fail on it. Such a collision is resolved by DEACTIVATING the later link (the
+    higher ``id``) — never by deleting it. The row survives with ``active = 0``, so
+    the operator can simply re-link the channel to the campaign they meant; its
+    per-account channel-subset rows are dropped exactly as ``deactivate_channel``
+    drops them, because a subset entry for a non-active channel would silently
+    exclude that account from selection forever. Every demotion is logged at
+    WARNING, naming those accounts: an account left with NO pins serves every channel
+    of its campaign, so the operator has to re-pin them.
+    """
+    if not _sqlite_table_exists(connection, "neurocomment_campaign_channels"):
+        return
+    subsets_exist = _sqlite_table_exists(connection, "neurocomment_campaign_account_channels")
+    active_links = connection.exec_driver_sql(
+        # _CHANNEL_FOLD is a module constant from channel_fold_sql(); nothing here is
+        # caller-supplied. Interpolating it is the point — the sweep must fold exactly
+        # as the index does, and spelling the expression out a second time is what
+        # caused the drift this migration exists to fix.
+        f"SELECT id, campaign_id, channel, {_CHANNEL_FOLD} AS fold "  # noqa: S608 # nosec B608
+        "FROM neurocomment_campaign_channels WHERE active = 1 ORDER BY id",
+    ).all()
+    seen: set[str] = set()
+    for link_id, campaign_id, channel, fold in active_links:
+        if str(fold) not in seen:
+            seen.add(str(fold))
+            continue
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_campaign_channels SET active = 0 WHERE id = ?",
+            (link_id,),
+        )
+        unpinned: list[str] = []
+        if subsets_exist:
+            unpinned = [
+                str(row[0])
+                for row in connection.exec_driver_sql(
+                    "SELECT account_id FROM neurocomment_campaign_account_channels "
+                    "WHERE campaign_id = ? AND channel = ? ORDER BY account_id",
+                    (campaign_id, channel),
+                ).all()
+            ]
+            connection.exec_driver_sql(
+                "DELETE FROM neurocomment_campaign_account_channels "
+                "WHERE campaign_id = ? AND channel = ?",
+                (campaign_id, channel),
+            )
+        logger.warning(
+            "migration 39: deactivated case-duplicate channel link %r in campaign %r "
+            "(link id %s) — the same channel was already active under a different spelling; "
+            "re-link it if this was the campaign you wanted. Accounts that lost their pin "
+            "on it (an account with no pins left serves EVERY channel of the campaign, so "
+            "re-pin them): %s",
+            channel,
+            campaign_id,
+            link_id,
+            ", ".join(unpinned) or "none",
+        )
+    # Create the folded index under its OWN name before dropping #11's, so there is no
+    # window in which nothing constrains the table: pysqlite emits no BEGIN ahead of
+    # DDL, so with no duplicates to sweep the DROP would run in autocommit and survive
+    # both a failing CREATE and the registry's abort, leaving the invariant unenforced.
+    connection.exec_driver_sql(
+        f"CREATE UNIQUE INDEX IF NOT EXISTS {_FOLD_INDEX} "
+        f"ON neurocomment_campaign_channels({_CHANNEL_FOLD}) WHERE active = 1",
+    )
+    connection.exec_driver_sql("DROP INDEX IF EXISTS ix_neurocomment_channel_one_active_campaign")

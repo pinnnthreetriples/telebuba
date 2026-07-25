@@ -17,7 +17,7 @@ from core.repositories.neurocomment import (
     set_campaign_status,
 )
 from schemas.neurocomment import ChannelLinkOutcome
-from services.neurocomment import _runtime
+from services.neurocomment import _discovery_state, _runtime
 from services.neurocomment.board import load_neurocomment_board
 
 if TYPE_CHECKING:
@@ -164,4 +164,7 @@ async def set_account_channels(
 
 async def delete_campaign(campaign_id: str) -> None:
     """Delete a campaign and clear all its account serving links, channels, and comments."""
+    # First: a discovery run would otherwise keep probing the shared listener for
+    # minutes on behalf of rows this delete is about to remove, writing to nothing.
+    _discovery_state.cancel_campaign_run(campaign_id)
     await db.delete_campaign(campaign_id)

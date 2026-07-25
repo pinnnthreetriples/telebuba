@@ -469,7 +469,9 @@
       "geminiRetriesExample": "Example: 3 — retries 3 more times. 0 — no retries.",
       "geminiInterval": "Pause between generations (sec)",
       "geminiIntervalHelp": "Minimum pause before each Gemini call so a burst doesn't hit the per-minute request limit.",
-      "geminiIntervalExample": "Example: 4 — at most one request every 4s. 0 — no pause."
+      "geminiIntervalExample": "Example: 4 — at most one request every 4s. 0 — no pause.",
+      "telemetrKey": "Telemetr.io key",
+      "telemetrHint": "External channel catalogue for neurocomment channel discovery. Without a key only Telegram's own search runs."
     },
     "captchaLlm": {
       "title": "Captcha solver LLM",
@@ -676,7 +678,11 @@
     "tdata_no_accounts": "No accounts in archive",
     "tdata_import_completed": "Import completed",
     "tdata_import_failed": "Import failed",
-    "tdata_import_rolled_back": "Import rolled back"
+    "tdata_import_rolled_back": "Import rolled back",
+    "neurocomment_discovery_started": "Channel search started",
+    "neurocomment_discovery_finished": "Channel search finished",
+    "neurocomment_discovery_failed": "Channel search failed",
+    "neurocomment_discovery_adopted": "Channels added from search"
   },
   "logEventReason": {
     "chance": "chance didn't hit",
@@ -954,6 +960,74 @@
         "removeConfirm": "Remove",
         "empty": "No accounts in neurocommenting",
         "done": "Done"
+      },
+      "discovery": {
+        "open": "Find channels",
+        "title": "Automated channel search",
+        "sub": "{{name}} · find channels that accept comments",
+        "form": {
+          "keywords": "Keywords",
+          "keywordsPlaceholder": "crypto, trading, news",
+          "keywordsHint": "At least {{min}} characters, up to {{max}} words. Parsed: {{count}}",
+          "language": "Language",
+          "country": "Country",
+          "anyLanguage": "Any",
+          "anyCountry": "Any",
+          "minSubscribers": "Subscribers from",
+          "maxSubscribers": "Subscribers up to",
+          "seedChannel": "Similar to channel",
+          "seedChannelHint": "Telegram suggests channels similar to this one based on overlapping audiences. It is the cheapest way to widen the sweep.",
+          "useTelemetr": "Also search the Telemetr.io catalogue",
+          "useTelemetrHint": "External catalogue: country, language and subscriber filters. Consumes your plan's quota.",
+          "useTelemetrMissing": "Add a Telemetr.io key in Settings to enable this.",
+          "reset": "Reset",
+          "submit": "Search",
+          "searching": "Starting…"
+        },
+        "results": {
+          "back": "← Change parameters",
+          "count": "Channels found: {{count}}",
+          "qualifying": "Checking comments: {{done}}/{{total}}",
+          "searching": "Searching for channels…",
+          "empty": "Nothing found. Try different keywords or add a seed channel.",
+          "failed": "Aborted: {{reason}}",
+          "degraded": "A source returned an error: {{reason}}",
+          "error": "Couldn't load the search results. Retrying…",
+          "selectAll": "Select all eligible",
+          "select": "Select channel {{channel}}",
+          "colChannel": "Channel",
+          "colTitle": "Title",
+          "colSubscribers": "Subscribers",
+          "colSource": "Source",
+          "colComments": "Comments",
+          "colState": "State",
+          "inCampaign": "already in campaign",
+          "takenElsewhere": "taken by another campaign"
+        },
+        "comments": {
+          "pending": "checking",
+          "comments_on": "Comments enabled",
+          "comments_off": "Comments disabled",
+          "unknown": "could not check",
+          "notChecked": "not checked"
+        },
+        "source": {
+          "telegram_search": "Telegram search",
+          "telegram_similar": "similar",
+          "telemetr": "Telemetr.io"
+        },
+        "refused": {
+          "already_running": "A search for this campaign is already running.",
+          "no_account": "No account available for searching: assign a listener or a campaign account.",
+          "account_cooling": "The search account is waiting out a Telegram limit. Try again later.",
+          "daily_limit_reached": "The daily search allowance is spent."
+        },
+        "add": "Add selected ({{count}})",
+        "added": "Added: {{count}}",
+        "addedNone": "Nothing added",
+        "addedRefused": "Not added: {{count}} — those channels are already taken",
+        "addedFailed": "Could not add: {{count}} — try again",
+        "addFailed": "Couldn't add the channels. Some may have been added — check the list and try again."
       }
     },
     "history": {

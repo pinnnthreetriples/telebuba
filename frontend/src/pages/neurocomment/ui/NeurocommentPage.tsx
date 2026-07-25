@@ -30,6 +30,7 @@ import {
   updateCampaignPromptMutation,
 } from '@/entities/campaign';
 import { clearLogsMutation, logsQueryOptions } from '@/entities/log';
+import { ChannelDiscoveryButton } from '@/features/channel-discovery';
 import { warmedAccountsQueryOptions, warmingBoardQueryOptions } from '@/entities/warming';
 import type { NeurocommentCampaign } from '@/shared/api';
 import { logSeverity, useLogEventStream, useTransientFeedback } from '@/shared/lib';
@@ -524,6 +525,12 @@ export function NeurocommentPage() {
             onCheckChannels={checkChannels}
             checkingChannels={checkBans.isPending}
             channelCheckStatus={channelCheckStatus}
+            discoverySlot={
+              <ChannelDiscoveryButton
+                campaignId={campaignId}
+                campaignName={activeCampaign?.name ?? ''}
+              />
+            }
           />
 
           <HowItWorksCard />

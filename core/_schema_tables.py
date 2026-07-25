@@ -140,6 +140,9 @@ _warming_settings = Table(
     Column("openai_api_key", String, nullable=True),
     Column("openai_model", String, nullable=True),
     Column("captcha_llm_provider", String, nullable=True),
+    # Telemetr.io key for neurocomment channel discovery — this row is the app's
+    # single home for provider keys (migration #37).
+    Column("telemetr_api_key", String, nullable=True),
     Column("updated_at", String, nullable=False),
 )
 _warming_account_state = Table(

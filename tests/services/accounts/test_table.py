@@ -2,14 +2,18 @@
 
 from __future__ import annotations
 
+from unittest.mock import MagicMock
+
 import pytest
 
 from core.config import settings
 from core.db import (
+    fetch_account,
     update_account_from_session_check,
     update_proxy_check,
     upsert_spam_status,
 )
+from core.telegram_client import TelegramClientPoolError, get_client
 from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
@@ -24,6 +28,7 @@ from services.accounts import (
     add_account,
     check_account_session,
     evaluate_account_geo,
+    lifecycle,
     list_accounts_page,
     list_listener_accounts,
     remove_account,
@@ -64,6 +69,52 @@ async def test_remove_account_unlinks_session_file() -> None:
     await remove_account("acc-del")
 
     assert not session_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_remove_account_survives_a_borrower_rebuilding_mid_removal(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pool borrower waking between the eviction and the unlink must be refused.
+
+    Borrowers (post listener, warming loop, channel discovery) never take the
+    lifecycle lock, so before the pool tombstone one could call ``get_client``
+    in that window, rebuild a client and re-open the ``.session`` file — the
+    unlink then raised ``PermissionError`` on Windows and aborted ``remove_account``
+    *before* ``delete_account``, leaving the row behind.
+
+    Borrowing from inside the removal's own unlink step pins the tombstone
+    *state* for the whole lifecycle sequence; the ordering of a borrower against
+    the mark is covered by the two-task tests in ``tests/core/test_telegram_pool``.
+    """
+    await add_account(AccountCreate(account_id="acc-race", session_name="sess-race"))
+    session_file = settings.telegram.session_dir / "sess-race.session"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_bytes(b"sqlite session bytes")
+
+    builds: list[str] = []
+
+    async def fake_build(account_id: str) -> object:
+        builds.append(account_id)
+        client = MagicMock()
+        client.is_connected.return_value = True
+        return client
+
+    monkeypatch.setattr("core.telegram_client._pool._build_and_connect", fake_build)
+    real_remove_session = lifecycle.remove_account_session
+
+    async def borrow_then_unlink(account_id: str, session_name: str | None = None) -> None:
+        with pytest.raises(TelegramClientPoolError):
+            await get_client(account_id)
+        await real_remove_session(account_id, session_name)
+
+    monkeypatch.setattr(lifecycle, "remove_account_session", borrow_then_unlink)
+
+    await remove_account("acc-race")
+
+    assert builds == [], "the pool must not rebuild a client for an account being removed"
+    assert not session_file.exists()
+    assert await fetch_account("acc-race") is None
 
 
 @pytest.mark.asyncio

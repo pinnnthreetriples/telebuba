@@ -18,7 +18,7 @@ from __future__ import annotations
 
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 class LinkChannelRequest(BaseModel):
@@ -27,6 +27,25 @@ class LinkChannelRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     channel: str = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def _canonical_handle(self) -> LinkChannelRequest:
+        """Strip the decorative ``@`` so the stored handle is canonical.
+
+        ``@News`` and ``news`` are ONE Telegram channel — they resolve to a single
+        peer id — so accepting the sigil verbatim let the operator link the same
+        channel to a second campaign, and the listener maps only the last spelling
+        it saw: the other campaign's link went silently dead. Discovery adopt already
+        writes the bare handle; this holds the hand-typed box to the same standard.
+        Letter case is left alone (Telegram's own casing is unknowable here) — the DB
+        fold makes reads and the unique index case-insensitive.
+        """
+        canonical = self.channel.strip().lstrip("@")
+        if not canonical:
+            msg = "channel must be a handle, not only '@' or whitespace"
+            raise ValueError(msg)
+        self.channel = canonical
+        return self
 
 
 class AssignAccountRequest(BaseModel):

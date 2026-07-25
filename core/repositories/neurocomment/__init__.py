@@ -60,6 +60,12 @@ from core.repositories.neurocomment._comments import (
 )
 from core.repositories.neurocomment._cooldowns import load_active_cooldowns, persist_cooldown
 from core.repositories.neurocomment._deletions import mark_comments_deleted
+from core.repositories.neurocomment._discovery import (
+    list_discovery_candidates,
+    list_pending_discovery_candidates,
+    mark_discovery_qualified,
+    replace_discovery_candidates,
+)
 from core.repositories.neurocomment._joins import count_account_joins_since, record_join
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
@@ -121,9 +127,11 @@ __all__ = [
     "list_campaigns",
     "list_challenged_channels",
     "list_channel_readiness",
+    "list_discovery_candidates",
     "list_failed_for_channel",
     "list_failed_for_channels",
     "list_linked_groups",
+    "list_pending_discovery_candidates",
     "list_posted_comments_for_channel_since",
     "list_posted_comments_page",
     "list_posted_comments_since",
@@ -133,6 +141,7 @@ __all__ = [
     "mark_comment_failed",
     "mark_comment_posted",
     "mark_comments_deleted",
+    "mark_discovery_qualified",
     "mark_human_skipped",
     "mark_pair_banned",
     "persist_cooldown",
@@ -140,6 +149,7 @@ __all__ = [
     "reclaim_stale_claims",
     "record_join",
     "remove_account_from_campaign",
+    "replace_discovery_candidates",
     "resolve_pending_outcome",
     "save_neurocomment_settings",
     "set_campaign_account_channels",

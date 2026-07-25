@@ -30,6 +30,7 @@ account that is by definition not in service.
 from __future__ import annotations
 
 import asyncio
+from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
@@ -37,7 +38,7 @@ from core.telegram_client._client import create_telegram_client, prepare_telegra
 from schemas.device_fingerprint import TelegramClientRequest
 
 if TYPE_CHECKING:
-    from collections.abc import Awaitable, Callable
+    from collections.abc import AsyncIterator, Awaitable, Callable
 
     from telethon import TelegramClient
 
@@ -48,6 +49,7 @@ __all__ = [
     "evict_client",
     "get_client",
     "register_rebuild_hook",
+    "removing_client",
     "shutdown_telegram_pool",
 ]
 
@@ -65,6 +67,13 @@ _CLIENTS: dict[str, TelegramClient] = {}
 _CONNECT_LOCKS: dict[str, asyncio.Lock] = {}
 _SHUTTING_DOWN = False
 
+# Accounts whose removal is in flight — the per-account twin of ``_SHUTTING_DOWN``.
+# See :func:`removing_client` for why a rebuild during that window is fatal.
+# Refcounted rather than a set because two destructive paths can overlap on one
+# account (a session-reset wipe racing a removal): an inner holder's exit must
+# not lift the outer holder's tombstone.
+_REMOVING: dict[str, int] = {}
+
 # Callbacks invoked after a fresh client is built for an account, so standing
 # subscriptions (the post listener) can re-register their handlers on the new
 # connection. ``_listener`` sets this at import time — the dependency points
@@ -81,6 +90,32 @@ def register_rebuild_hook(hook: _RebuildHook) -> None:
     """
     if hook not in _REBUILD_HOOKS:
         _REBUILD_HOOKS.append(hook)
+
+
+def _is_removing(account_id: str) -> bool:
+    """Is a removal in flight for ``account_id``? (see :func:`removing_client`).
+
+    ``get_client`` asks this at three points on the way to a client and all
+    three are load-bearing complements, not alternatives:
+
+    * before the lock — a *cached* client must not be handed out under a live
+      tombstone;
+    * inside the lock — a borrower that queued on the lock before the mark
+      appeared sits ahead of ``evict_client`` in FIFO order, so its pre-lock
+      answer is already stale and it must still be refused;
+    * after the build — a real connect takes seconds, so the mark can appear
+      while this borrower holds the lock; publishing then hands out a client the
+      removal is about to disconnect underneath its caller.
+
+    Drop any one of them and a borrower re-opens (or re-creates) the ``.session``
+    file the removal is about to unlink.
+    """
+    return account_id in _REMOVING
+
+
+def _removing_error(account_id: str) -> TelegramClientPoolError:
+    msg = "account is being removed"
+    return TelegramClientPoolError(account_id, RuntimeError(msg))
 
 
 def _connect_lock(account_id: str) -> asyncio.Lock:
@@ -105,12 +140,16 @@ async def get_client(account_id: str) -> TelegramClient:
     if _SHUTTING_DOWN:
         msg = "telegram pool is shutting down"
         raise TelegramClientPoolError(account_id, RuntimeError(msg))
+    if _is_removing(account_id):
+        raise _removing_error(account_id)
 
     cached = _CLIENTS.get(account_id)
     if cached is not None and cached.is_connected():
         return cached
 
     async with _connect_lock(account_id):
+        if _is_removing(account_id):
+            raise _removing_error(account_id)
         # Re-check under the lock — a peer may have connected while we waited.
         cached = _CLIENTS.get(account_id)
         if cached is not None and cached.is_connected():
@@ -142,6 +181,13 @@ async def get_client(account_id: str) -> TelegramClient:
                 )
                 raise TelegramClientPoolError(account_id, second_exc) from second_exc
 
+        # Covers both build attempts: connecting awaits, so a removal may have
+        # marked the account while we held the lock. Throw the fresh client away
+        # instead of publishing it — the removal's own unlink follows our lock
+        # release and cleans up the session file this build just touched.
+        if _is_removing(account_id):
+            await _safe_disconnect(client)
+            raise _removing_error(account_id)
         _CLIENTS[account_id] = client
     await _fire_rebuild_hooks(account_id, client)
     return client
@@ -181,6 +227,39 @@ async def evict_client(account_id: str) -> None:
         client = _CLIENTS.pop(account_id, None)
         if client is not None:
             await _safe_disconnect(client)
+
+
+@asynccontextmanager
+async def removing_client(account_id: str) -> AsyncIterator[None]:
+    """Evict ``account_id``'s client and refuse rebuilds until the block exits.
+
+    The eviction is skipped while the pool is shutting down (see
+    :func:`evict_client`), which disconnects everything anyway; the tombstone is
+    set regardless.
+
+    Account removal evicts the client, unlinks the ``.session`` file, then
+    deletes the DB row. ``evict_client`` on its own is not enough: every
+    ``await`` in that sequence lets a concurrent borrower (post listener,
+    warming loop, channel discovery) reach :func:`get_client`, which rebuilds a
+    client and re-opens the session file — Telethon's ``SQLiteSession`` even
+    re-creates it if it is already gone. On Windows the pending ``unlink`` then
+    raises ``PermissionError`` and aborts the removal *before* the row is
+    deleted; past the unlink it resurrects an orphan file for an account that no
+    longer exists. Borrowers refused here raise
+    :class:`TelegramClientPoolError`, which ``execute(...)`` already classifies
+    as an unavailable account.
+    """
+    _REMOVING[account_id] = _REMOVING.get(account_id, 0) + 1
+    try:
+        # Marked before the eviction so a rebuild cannot slip into the gap.
+        await evict_client(account_id)
+        yield
+    finally:
+        holders = _REMOVING[account_id] - 1
+        if holders:
+            _REMOVING[account_id] = holders
+        else:
+            del _REMOVING[account_id]
 
 
 async def _build_and_connect(account_id: str) -> TelegramClient:
@@ -238,4 +317,5 @@ def _reset_for_tests() -> None:
     global _SHUTTING_DOWN  # noqa: PLW0603
     _CLIENTS.clear()
     _CONNECT_LOCKS.clear()
+    _REMOVING.clear()
     _SHUTTING_DOWN = False

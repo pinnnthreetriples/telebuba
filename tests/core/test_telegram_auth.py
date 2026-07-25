@@ -9,6 +9,7 @@ from telethon import errors
 
 from core.db import configure_database
 from core.telegram_client import log_out_session, request_phone_code, submit_phone_code
+from core.telegram_client._pool import _is_removing
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeRequest, PhoneCodeSubmit
 
@@ -226,8 +227,11 @@ async def test_log_out_session_evicts_pool_before_wiping_file(
 
     async def fake_remove(session_path: str) -> None:  # noqa: ARG001 - path unused in the fake
         order.append("remove")
+        assert _is_removing("acc"), "the wipe must run under the pool tombstone"
 
-    monkeypatch.setattr("core.telegram_client._auth.evict_client", fake_evict)
+    # The wipe holds ``removing_client``, which evicts through the pool's own
+    # module-level name — patch it there.
+    monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)
     monkeypatch.setattr("core.telegram_client._auth._remove_session_file", fake_remove)
 
     result = await log_out_session(
@@ -251,7 +255,7 @@ async def test_log_out_session_no_wipe_does_not_evict(tmp_path: Path, monkeypatc
     async def fake_evict(account_id: str) -> None:
         evicted.append(account_id)
 
-    monkeypatch.setattr("core.telegram_client._auth.evict_client", fake_evict)
+    monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)
 
     await log_out_session(
         TelegramClientRequest(account_id="acc", receive_updates=False),

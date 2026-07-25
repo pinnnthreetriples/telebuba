@@ -39,10 +39,15 @@ from core.migration_steps import (
     _add_warming_user_controls,
     _rename_proxy_type_http_to_https,
 )
+from core.migration_steps_discovery import (
+    _add_neurocomment_discovery_candidates,
+    _add_warming_settings_telemetr_key,
+)
 from core.migration_steps_neurocomment import (
     _add_campaign_account_channel,
     _add_campaign_account_channels_table,
     _add_neurocomment_challenges_channel_index,
+    _add_neurocomment_channel_case_fold_index,
     _add_neurocomment_comment_deleted_at,
     _add_neurocomment_cooldowns,
     _add_neurocomment_join_log,
@@ -105,6 +110,17 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         _add_neurocomment_challenges_channel_index,
     ),
     (36, "add_neurocomment_join_log", _add_neurocomment_join_log),
+    (37, "add_warming_settings_telemetr_key", _add_warming_settings_telemetr_key),
+    (
+        38,
+        "add_neurocomment_discovery_candidates",
+        _add_neurocomment_discovery_candidates,
+    ),
+    (
+        39,
+        "add_neurocomment_channel_case_fold_index",
+        _add_neurocomment_channel_case_fold_index,
+    ),
 )
 
 

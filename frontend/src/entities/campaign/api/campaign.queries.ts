@@ -1,11 +1,13 @@
 // Neurocomment data access, re-exported from the generated client (FSD: data
 // only via shared/api).
 export {
+  adoptCampaignDiscoveryMutation,
   assignCampaignAccountMutation,
   checkCampaignChannelBansMutation,
   clearNeurocommentListenerMutation,
   createCampaignMutation,
   deleteCampaignMutation,
+  getCampaignDiscoveryOptions as campaignDiscoveryQueryOptions,
   getNeurocommentBoardOptions as neurocommentBoardQueryOptions,
   getNeurocommentRuntimeOptions as neurocommentRuntimeQueryOptions,
   getNeurocommentSettingsOptions as neurocommentSettingsQueryOptions,
@@ -19,6 +21,7 @@ export {
   setCampaignAccountChannelMutation,
   setCampaignSolverMutation,
   setCampaignStatusMutation,
+  startCampaignDiscoveryMutation,
   startNeurocommentMutation,
   stopNeurocommentMutation,
   updateCampaignPromptMutation,

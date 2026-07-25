@@ -128,8 +128,14 @@ async def _reclaim_stale_claims_on_startup() -> None:
 
 async def shutdown_neurocomment_on_shutdown() -> None:
     """No-arg ``app.on_shutdown`` hook: tear the listener + tasks down on exit."""
-    from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a parent import cycle.
+    from services.neurocomment import (  # noqa: PLC0415 - avoid a parent import cycle.
+        _discovery_state,
+        _runtime,
+    )
 
+    # Unconditional: a discovery run can be serving a campaign account with no
+    # listener configured, so it must not be gated on the listener branch below.
+    await _discovery_state.shutdown_discovery_runs()
     listener_account_id = await get_listener_account_id()
     if listener_account_id is not None:
         await _runtime.shutdown_neurocomment_runtime(listener_account_id)

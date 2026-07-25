@@ -48,6 +48,11 @@ from services.neurocomment.campaigns import (
 )
 from services.neurocomment.challenge import retry_pair
 from services.neurocomment.comments_page import list_comments_page
+from services.neurocomment.discovery import (
+    adopt_candidates,
+    load_discovery,
+    start_discovery,
+)
 from services.neurocomment.engine import handle_new_post
 from services.neurocomment.onboarding import onboard_account_channel, onboard_campaign
 from services.neurocomment.settings_store import (
@@ -61,6 +66,7 @@ __all__ = [
     "ChannelNotInCampaignError",
     "InvalidCursorError",
     "ListenerBusyWarmingError",
+    "adopt_candidates",
     "assign_account_to_campaign",
     "check_campaign_channel_bans",
     "clear_neurocomment_listener",
@@ -76,6 +82,7 @@ __all__ = [
     "list_campaigns",
     "list_channel_challenges",
     "list_comments_page",
+    "load_discovery",
     "load_neurocomment_board",
     "load_neurocomment_settings",
     "neurocomment_runtime_status",
@@ -93,6 +100,7 @@ __all__ = [
     "shutdown_neurocomment_on_shutdown",
     "shutdown_neurocomment_runtime",
     "skip_pair",
+    "start_discovery",
     "start_neurocomment",
     "stop_neurocomment",
     "update_campaign_prompt",

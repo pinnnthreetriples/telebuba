@@ -4,10 +4,13 @@ Kept in their own module so ``core.db`` stays within the file-size budget.
 Importing this module registers the tables in ``core.db._metadata``; the
 repository package pulls it in, and ``core.db`` imports the package before
 ``_get_engine`` runs ``create_all``. The partial unique index enforcing
-"one active campaign per channel" is created in migration #11.
+"one active campaign per channel" is created in migration #11 and recreated over
+the case fold in migration #39 — see ``_campaign_channel_matches`` below.
 """
 
 from __future__ import annotations
+
+from typing import TYPE_CHECKING
 
 from sqlalchemy import (
     BigInteger,
@@ -19,9 +22,14 @@ from sqlalchemy import (
     Integer,
     String,
     Table,
+    text,
 )
 
+from core.channel_tokens import channel_fold_sql
 from core.db import _metadata
+
+if TYPE_CHECKING:
+    from sqlalchemy import TextClause
 
 _neurocomment_campaigns = Table(
     "neurocomment_campaigns",
@@ -49,6 +57,56 @@ _neurocomment_campaign_channels = Table(
     Column("active", Integer, nullable=False),
     Column("created_at", String, nullable=False),
 )
+
+
+def _channel_fold(column: Column[str]) -> str:
+    """The migration #39 index expression over ``column``, as literal SQL text.
+
+    Literal text and not SQLAlchemy's ``case()``: that renders the branch constants
+    as bound parameters, and SQLite only matches a query against an expression index
+    when the expression carries no variables.
+    """
+    return channel_fold_sql(f"{column.table.name}.{column.name}")
+
+
+def _channel_matches(column: Column[str], channel: str) -> TextClause:
+    """Match ``column`` against ``channel`` through the migration #39 fold.
+
+    ``@News``, ``news`` and ``News`` are one Telegram channel; a ``+HASH`` invite key
+    IS case-sensitive and compares verbatim. Both sides go through the SQL fold, so
+    what the index refuses to insert is exactly what these reads find — see
+    :func:`core.channel_tokens.channel_fold_sql` for why folding the probe in Python
+    instead would make the two disagree.
+    """
+    # The handle is a BOUND parameter; only the fold expression (built from column
+    # metadata) and the placeholder name are interpolated, so no caller input reaches
+    # the SQL text. See the docstring above for why this cannot be an ORM construct.
+    # Suppresses semgrep's blanket avoid-sqlalchemy-text audit rule.
+    # nosemgrep
+    return text(f"{_channel_fold(column)} = {channel_fold_sql(':probe')}").bindparams(
+        probe=channel,
+    )
+
+
+def _campaign_channel_matches(channel: str) -> TextClause:
+    """Match a campaign-channel link the way the one-active-campaign index folds handles."""
+    return _channel_matches(_neurocomment_campaign_channels.c.channel, channel)
+
+
+def _campaign_channels_match(channels: list[str]) -> TextClause:
+    """The ``IN`` form of :func:`_campaign_channel_matches` (same fold, one query)."""
+    names = [f"probe_{index}" for index in range(len(channels))]
+    folded = ", ".join(channel_fold_sql(f":{name}") for name in names)
+    # Same as above: every handle is bound, and the interpolated names are generated
+    # from range(), never from a caller. Same avoid-sqlalchemy-text suppression.
+    # nosemgrep
+    return text(
+        f"{_channel_fold(_neurocomment_campaign_channels.c.channel)} IN ({folded})"
+    ).bindparams(
+        **dict(zip(names, channels, strict=True)),
+    )
+
+
 _neurocomment_campaign_accounts = Table(
     "neurocomment_campaign_accounts",
     _metadata,
@@ -89,6 +147,36 @@ _neurocomment_linked_groups = Table(
     Column("linked_chat_id", BigInteger, nullable=True),
     Column("comments_enabled", Integer, nullable=False),
     Column("checked_at", String, nullable=False),
+)
+_neurocomment_discovery_candidates = Table(
+    # Per-campaign scratch set from the "Найти каналы" search (migration #38).
+    # Replaced wholesale on each run; the comments-enabled verdict itself is NOT
+    # duplicated here — ``neurocomment_linked_groups`` already is that cache, and a
+    # second copy could disagree with it. ``qualified_at``/``qualify_error`` record
+    # the *attempt*, which the cache cannot: a failed probe writes nothing there, so
+    # without this the candidate would stay pending forever and progress never
+    # reach 100%.
+    "neurocomment_discovery_candidates",
+    _metadata,
+    Column(
+        "campaign_id",
+        String,
+        ForeignKey("neurocomment_campaigns.campaign_id"),
+        primary_key=True,
+    ),
+    # Handle exactly as Telegram returned it (canonical case) — adopt writes this
+    # value verbatim, and campaign-channel matching folds case (migration #39), so a
+    # handle the operator typed in lower case is still recognised as the same channel.
+    # Cross-provider dedup folds case in memory before insert, so no key column.
+    Column("channel", String, primary_key=True),
+    Column("title", String, nullable=False, server_default=""),
+    # NULL until known: contacts.Search does not reliably carry a subscriber count;
+    # it is backfilled for free from getFullChannel during qualification.
+    Column("subscribers", Integer, nullable=True),
+    Column("source", String, nullable=False),
+    Column("qualified_at", String, nullable=True),
+    Column("qualify_error", String, nullable=True),
+    Column("created_at", String, nullable=False),
 )
 _neurocomment_readiness = Table(
     "neurocomment_readiness",

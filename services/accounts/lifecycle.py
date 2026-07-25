@@ -14,7 +14,7 @@ from core.db import (
 from core.device_fingerprint import get_or_create_device_fingerprint
 from core.logging import log_event
 from core.phone_geo import evaluate_geo
-from core.telegram_client import evict_client, remove_account_session
+from core.telegram_client import remove_account_session, removing_client
 from schemas.geo import GeoMatch
 
 if TYPE_CHECKING:
@@ -72,11 +72,15 @@ async def remove_account(account_id: str) -> None:
             )
         # Disconnect the pooled client so it stops holding the account's
         # ``.session`` handle open (Windows can't unlink a live handle), then
-        # unlink the orphaned session file before purging the DB rows.
-        await evict_client(account_id)
-        account = await fetch_account(account_id)
-        await remove_account_session(account_id, account.session_name if account else None)
-        await delete_account(account_id)
+        # unlink the orphaned session file before purging the DB rows. The
+        # lifecycle lock does not cover pool borrowers (they never take it), so
+        # ``removing_client`` also has to refuse rebuilds until the row is gone —
+        # otherwise a borrower waking mid-removal re-opens the ``.session`` file
+        # and the unlink aborts the delete with PermissionError.
+        async with removing_client(account_id):
+            account = await fetch_account(account_id)
+            await remove_account_session(account_id, account.session_name if account else None)
+            await delete_account(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 
 

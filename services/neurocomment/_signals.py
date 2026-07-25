@@ -26,3 +26,12 @@ def signal_onboarding_progress(_event: OnboardingProgressEvent) -> None:
     never floods the event log.
     """
     signal_event("neurocomment_onboarding_progress")
+
+
+def signal_discovery_progress() -> None:
+    """Nudge the SPA to re-read the discovery board as candidates get qualified.
+
+    Same non-persisted path as onboarding progress: a frame per probed candidate
+    must not write 100 rows to the event log for one search.
+    """
+    signal_event("neurocomment_discovery_progress")
