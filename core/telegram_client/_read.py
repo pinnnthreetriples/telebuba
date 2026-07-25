@@ -12,6 +12,7 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, cast
 
 from telethon import errors
@@ -103,6 +104,9 @@ class TelegramReadError(RuntimeError):
         self.reason = reason
 
 
+logger = logging.getLogger(__name__)
+
+
 async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel:
     """Dispatch a single read action — convenience wrapper around ``execute_read_many``."""
     results = await execute_read_many(account_id, [action])
@@ -151,7 +155,17 @@ async def execute_read_many(
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
         # Pool/socket failures must not leak raw past the gateway — services
         # only handle ``TelegramReadError`` (layer contract, non-negotiable #6).
-        reason = f"{type(exc).__name__}: {exc}"
+        #
+        # Class name only, like the RPCError arm above, and for the same reason
+        # the write side collapses this family to the flat "unavailable" code:
+        # ``TelegramClientPoolError`` stringifies as "…failed for {account_id}:
+        # {cause}", and the cause of a proxy failure carries the proxy endpoint
+        # (``python_socks`` errors name host:port, and they are OSError but NOT
+        # ConnectionError, so they reach here wrapped rather than filtered).
+        # This reason is rendered verbatim in the operator's browser through the
+        # profile and privacy error envelopes, so it must stay content-free.
+        logger.warning("read failed for %s", account_id, exc_info=exc)
+        reason = f"unavailable: {type(exc).__name__}"
         raise TelegramReadError(reason) from exc
     else:
         return results

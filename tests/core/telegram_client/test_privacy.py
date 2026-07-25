@@ -119,13 +119,56 @@ async def test_get_privacy_settings_maps_each_base_rule(
 async def test_get_privacy_settings_unknown_rule_is_unknown(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """A base rule we do not model (close friends) is reported, not guessed."""
+    """A vector with NO base rule at all is reported as unknown, not guessed.
+
+    On its own this shape does not occur: Telegram cannot express "close friends
+    only" without also denying everyone else. See the next test for the vector it
+    really sends, which does NOT reach ``unknown``.
+    """
     _patch_read_client(monkeypatch, _RuleClient(_all_keys([PrivacyValueAllowCloseFriends()])))
 
     result = await execute_read("acc-priv", GetPrivacySettings())
 
     assert isinstance(result, PrivacySettingsResult)
     assert (result.profile_photo, result.bio, result.last_seen) == ("unknown",) * 3
+
+
+@pytest.mark.parametrize(
+    ("rules", "expected", "why"),
+    [
+        (
+            [PrivacyValueAllowCloseFriends(), PrivacyValueDisallowAll()],
+            "nobody",
+            "narrowing rule skipped, base rule wins — right answer for 'can a stranger see it'",
+        ),
+        (
+            [PrivacyValueDisallowUsers(users=[7]), PrivacyValueAllowAll()],
+            "everybody",
+            "'everybody except user 7' — the LOSSY direction: the excluded user is invisible here",
+        ),
+    ],
+)
+@pytest.mark.asyncio
+async def test_get_privacy_settings_pins_the_lossy_collapse(
+    monkeypatch: pytest.MonkeyPatch,
+    rules: list[object],
+    expected: str,
+    why: str,
+) -> None:
+    """Pin what the collapse really answers for the vectors Telegram actually sends.
+
+    The second case is the one that can mislead an operator: a key restricted only
+    by a per-user exception reads as ``everybody``, so the tab can confirm a
+    privacy diagnosis but never refute one. Documented on ``_level_from_rules``;
+    surfacing the raw vector is a separate change.
+    """
+    assert why  # the reason is the point of the case, not a decoration
+    _patch_read_client(monkeypatch, _RuleClient(_all_keys(rules)))
+
+    result = await execute_read("acc-priv", GetPrivacySettings())
+
+    assert isinstance(result, PrivacySettingsResult)
+    assert (result.profile_photo, result.bio, result.last_seen) == (expected,) * 3
 
 
 @pytest.mark.asyncio

@@ -46,12 +46,28 @@ _INPUT_VALUES: dict[str, type] = {
 def _level_from_rules(rules: object) -> PrivacyLevel:
     """Collapse Telegram's rule vector onto the one level the UI shows.
 
-    ``account.getPrivacy`` returns the BASE rule (allow-all / allow-contacts /
-    disallow-all) **plus** any per-user allow/disallow exception rules the
-    account has. The base rule is what decides who can see the key, so the
-    exception rules are skipped rather than making the whole key ``unknown``.
-    An empty vector, a non-list, or a base rule we do not model (e.g.
-    ``PrivacyValueAllowCloseFriends``) is reported as ``unknown``.
+    ``account.getPrivacy`` returns a BASE rule (allow-all / allow-contacts /
+    disallow-all) plus any narrowing rules the account carries. Only the base
+    rule is reported; everything else is skipped rather than making the whole
+    key ``unknown``. ``unknown`` is therefore reached by an empty vector, a
+    non-list, or a vector with no base rule at all.
+
+    Two consequences to know before trusting the answer:
+
+    - The collapse is LOSSY and the loss is one-directional. Telethon 1.44 has
+      twelve ``PrivacyValue*`` types; the skipped ones include per-user
+      ``AllowUsers``/``DisallowUsers`` but also ``DisallowContacts``,
+      ``AllowPremium``, ``AllowCloseFriends``, ``AllowBots`` and the chat-
+      participant pair. So "everybody except these two accounts" reports
+      ``everybody`` — a false all-clear when the operator is asking why those
+      two accounts cannot see the avatar. The exceptions are visible only in a
+      Telegram client, or by dumping this vector raw, which the dashboard does
+      not yet do.
+    - Iteration returns on the FIRST base rule matched, so a restrictive key
+      that also grants a narrower audience — ``[AllowCloseFriends(),
+      DisallowAll()]`` — reports ``nobody``, not ``unknown``. For the question
+      the dashboard exists to answer (can a stranger see this) that is the
+      right answer, but it is not what "we do not model it" would suggest.
     """
     if not isinstance(rules, list):
         return "unknown"

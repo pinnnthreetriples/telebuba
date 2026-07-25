@@ -380,10 +380,15 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
                 "has_bio": action.bio is not None,
             }
         case SetPrivacySettings():
+            # The LEVELS, not just which keys were touched: this action has a
+            # fleet-wide, non-undoable caller (setPrivacy replaces a key's whole
+            # rule vector), so the activity log is the only record of what was
+            # pushed to N accounts. Unlike profile text, a privacy level is not
+            # account content, so logging the value leaks nothing.
             extra = {
-                "has_profile_photo": action.profile_photo is not None,
-                "has_bio": action.bio is not None,
-                "has_last_seen": action.last_seen is not None,
+                "profile_photo": action.profile_photo,
+                "bio": action.bio,
+                "last_seen": action.last_seen,
             }
         case SetProfilePhoto() | PostStory() | AddProfileMusic():
             extra = {"filename": action.filename}

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
+
 import pytest
 
 from core.db import create_account, update_account_status
-from core.telegram_client import TelegramReadError
+from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.accounts import AccountCreate
 from schemas.privacy import AccountPrivacyUpdateRequest
 from schemas.telegram_actions import ActionResult
@@ -145,13 +147,20 @@ def test_all_none_update_request_is_rejected() -> None:
 async def test_apply_privacy_to_all_accounts_counts_ok_failed_and_skipped(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Unusable sessions are skipped without an RPC; failures never abort the sweep."""
-    for account_id in ("acc-alive", "acc-broken", "acc-frozen", "acc-new"):
+    """Only permanently dead accounts are skipped; failures never abort the sweep.
+
+    ``acc-new`` and ``acc-flood`` are the regression this pins. Filtering on
+    ``health_for_status(...) == "ok"`` skipped both, which meant a farm imported
+    minutes ago — every row still ``new`` — reported ``ok: 0`` on exactly the
+    fleet the operator was trying to open up.
+    """
+    for account_id in ("acc-alive", "acc-broken", "acc-frozen", "acc-new", "acc-flood"):
         await create_account(AccountCreate(account_id=account_id))
     await update_account_status("acc-alive", status="alive")
     await update_account_status("acc-broken", status="alive")
     await update_account_status("acc-frozen", status="frozen")
-    # "acc-new" keeps its default ``new`` status — also not usable.
+    await update_account_status("acc-flood", status="flood_wait")
+    # "acc-new" keeps its default ``new`` status — untested, not dead.
 
     attempted: list[str] = []
 
@@ -173,15 +182,18 @@ async def test_apply_privacy_to_all_accounts_counts_ok_failed_and_skipped(
         AccountPrivacyUpdateRequest(profile_photo="everybody"),
     )
 
-    assert sorted(attempted) == ["acc-alive", "acc-broken"]
-    assert (result.ok, result.failed, result.skipped) == (1, 1, 2)
+    assert sorted(attempted) == ["acc-alive", "acc-broken", "acc-flood", "acc-new"]
+    assert (result.ok, result.failed, result.skipped) == (3, 1, 1)
     by_id = {outcome.account_id: outcome for outcome in result.outcomes}
     assert by_id["acc-alive"].status == "ok"
+    assert by_id["acc-new"].status == "ok"
+    assert by_id["acc-flood"].status == "ok"
     assert by_id["acc-broken"].status == "failed"
     assert by_id["acc-broken"].error == "privacy_restricted"
+    # A skip names the status that caused it — a bare count reads to the operator
+    # as "your sessions are broken", which for `new` or `flood_wait` is false.
     assert by_id["acc-frozen"].status == "skipped"
-    assert by_id["acc-frozen"].error is None
-    assert by_id["acc-new"].status == "skipped"
+    assert by_id["acc-frozen"].error == "frozen"
 
 
 @pytest.mark.asyncio
@@ -217,3 +229,64 @@ async def test_apply_privacy_to_all_accounts_on_an_empty_fleet() -> None:
 
     assert result.outcomes == []
     assert (result.ok, result.failed, result.skipped) == (0, 0, 0)
+
+
+@pytest.mark.asyncio
+async def test_two_overlapping_sweeps_share_one_process_wide_concurrency_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The cap is per PROCESS, not per request.
+
+    Built inside the coroutine it would cap one sweep, so a double click or a
+    second browser tab would reach 8 concurrent ``setPrivacy`` writes — twice the
+    pacing the width was chosen for. Nothing else serialises the route.
+    """
+    for index in range(12):
+        account_id = f"acc-{index}"
+        await create_account(AccountCreate(account_id=account_id))
+        await update_account_status(account_id, status="alive")
+
+    in_flight = 0
+    peak = 0
+
+    async def _fake_execute(account_id: str, action: SetPrivacySettings) -> ActionResult:  # noqa: ARG001
+        nonlocal in_flight, peak
+        in_flight += 1
+        peak = max(peak, in_flight)
+        # Yield so the other waiters get a chance to pile up if the cap is broken.
+        await asyncio.sleep(0)
+        in_flight -= 1
+        return _ok(account_id)
+
+    monkeypatch.setattr("services.accounts.privacy.execute", _fake_execute)
+
+    request = AccountPrivacyUpdateRequest(bio="everybody")
+    first, second = await asyncio.gather(
+        apply_privacy_to_all_accounts(request),
+        apply_privacy_to_all_accounts(request),
+    )
+
+    assert peak <= 4
+    assert (first.ok, second.ok) == (12, 12)
+
+
+@pytest.mark.asyncio
+async def test_read_account_privacy_translates_a_gateway_not_found_into_404(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The row can vanish between the guard and the read — that is a 404, not a 500.
+
+    ``TelegramAccountNotFoundError`` is unrelated by inheritance to both
+    ``TelegramReadError`` and ``AccountNotFoundError``, so without the translation
+    it escapes the route's ``service_errors_to_http`` entirely.
+    """
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    async def _fake_execute_read(account_id: str, action: object) -> object:  # noqa: ARG001
+        msg = f"Account not found: {account_id}"
+        raise TelegramAccountNotFoundError(msg)
+
+    monkeypatch.setattr("services.accounts.privacy.execute_read", _fake_execute_read)
+
+    with pytest.raises(AccountNotFoundError):
+        await read_account_privacy("acc-1")
