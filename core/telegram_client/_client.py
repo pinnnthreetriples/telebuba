@@ -9,7 +9,7 @@ from anyio import Path
 from telethon import TelegramClient
 
 from core.config import settings
-from core.db import fetch_account_proxy_settings
+from core.db import fetch_account, fetch_account_proxy_settings
 from core.device_fingerprint import get_or_create_device_fingerprint
 from schemas.device_fingerprint import TelegramClientProfile, TelegramClientRequest
 
@@ -19,9 +19,27 @@ if TYPE_CHECKING:
     from schemas.telegram_session import TelegramSessionCheckRequest
 
 
-def _session_path(request: TelegramClientRequest) -> str:
-    session_name = request.session_name or request.account_id
-    return str(settings.telegram.session_dir / session_name)
+async def _session_path(request: TelegramClientRequest) -> str:
+    """Resolve the ``.session`` file this account's credentials actually live in.
+
+    A caller that names the session wins. Otherwise the stored ``session_name``
+    decides, because the pool — the borrower behind every warming, neurocomment
+    and dialog action — keys on ``account_id`` alone and passes no name.
+
+    All three creation paths currently derive ``session_name`` from the same
+    value as ``account_id`` (``tdata_import`` names the file after the Telegram
+    user id, and ``_tdata`` reads the account id back out of it), and nothing
+    updates the column afterwards, so this resolves to the name it always did.
+    It reads the row rather than assuming the equality because the failure mode
+    is silent: a divergent name would make every pooled action open a file that
+    does not exist and mint an empty, unauthorized session next to a perfectly
+    good credential.
+    """
+    if request.session_name:
+        return str(settings.telegram.session_dir / request.session_name)
+    account = await fetch_account(request.account_id)
+    stored = account.session_name if account is not None else None
+    return str(settings.telegram.session_dir / (stored or request.account_id))
 
 
 async def prepare_telegram_client_profile(
@@ -32,7 +50,7 @@ async def prepare_telegram_client_profile(
     proxy = await fetch_account_proxy_settings(request.account_id)
     return TelegramClientProfile(
         account_id=request.account_id,
-        session_path=_session_path(request),
+        session_path=await _session_path(request),
         receive_updates=request.receive_updates,
         device=device,
         proxy_type=proxy.proxy_type if proxy else None,

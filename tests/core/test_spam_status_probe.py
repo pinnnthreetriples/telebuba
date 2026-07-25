@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager
 from types import SimpleNamespace
 from typing import TYPE_CHECKING, Any
 
@@ -31,11 +30,16 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
 
 
 def _patch_client(monkeypatch: pytest.MonkeyPatch, client: object) -> None:
-    @asynccontextmanager
-    async def fake_cm(_request: object):
-        yield client
+    """Stand in for the pool.
 
-    monkeypatch.setattr("core.telegram_client._spam.telegram_client", fake_cm)
+    The probe borrows the account's pooled client so it never opens a rival
+    connection to an already-open ``.session`` file.
+    """
+
+    async def fake_get_client(_account_id: str) -> object:
+        return client
+
+    monkeypatch.setattr("core.telegram_client._spam.get_client", fake_get_client)
 
 
 class _FakeTelethonClient:
@@ -137,7 +141,7 @@ async def test_check_spam_status_classifies_failure_as_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     class FakeClient:
-        async def connect(self) -> None:
+        async def get_input_entity(self, _username: str) -> str:
             msg = "boom"
             raise RuntimeError(msg)
 
@@ -148,3 +152,21 @@ async def test_check_spam_status_classifies_failure_as_error(
     assert probe.reply_text is None
     assert probe.error is not None
     assert "RuntimeError" in probe.error
+
+
+@pytest.mark.asyncio
+async def test_check_spam_status_reports_a_pool_connect_failure(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pool that can't connect must classify, not escape — the probe never raises."""
+
+    async def failing_get_client(_account_id: str) -> object:
+        msg = "no route"
+        raise ConnectionError(msg)
+
+    monkeypatch.setattr("core.telegram_client._spam.get_client", failing_get_client)
+
+    probe = await check_spam_status("acc-1")
+
+    assert probe.error is not None
+    assert "ConnectionError" in probe.error
