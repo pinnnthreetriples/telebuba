@@ -26,10 +26,13 @@ export function neuroFormValue(s: NeurocommentSettings): NeuroFormValue {
   };
 }
 
-// An integer within [min, max]. A single refine (not regex + refine) so the
-// field emits exactly ONE issue — TanStack Form comma-joins multiple issues into
-// one string, which would break the i18n-key → t() resolution in FieldError.
-// Empty / non-numeric input and out-of-range both fail with the same message.
+// An integer within [min, max]. A single refine (not regex + refine) so the field
+// emits exactly ONE issue. The original reason expired with react-form 1.x: 0.x
+// comma-joined a field's issues into one string, which destroyed the i18n-key →
+// t() resolution in FieldError, and 1.x keeps them as separate entries. What still
+// holds is weaker but real — `FieldError` renders `errors[0]` only, so a second
+// issue would be silently dropped rather than mangled. Empty / non-numeric input
+// and out-of-range therefore share one message on purpose.
 const intInRange = (min: number, max: number, message: string) =>
   z.string().refine((value) => {
     if (!/^\d+$/.test(value)) return false;
@@ -48,8 +51,8 @@ export const neuroFormSchema = z
   .refine(
     (v) => {
       // Only compare once both delay fields are valid integers — otherwise the
-      // per-field error already covers it (and a second issue on delayTo would
-      // get comma-joined, breaking the i18n-key lookup).
+      // per-field error already covers it, and the second issue this would add on
+      // delayTo would lose to it anyway (FieldError shows errors[0]).
       const from = /^\d+$/.test(v.delayFrom) ? Number(v.delayFrom) : NaN;
       const to = /^\d+$/.test(v.delayTo) ? Number(v.delayTo) : NaN;
       return Number.isNaN(from) || Number.isNaN(to) || from <= to;

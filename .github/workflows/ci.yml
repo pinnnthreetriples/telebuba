@@ -133,9 +133,10 @@ jobs:
         run: uv run pip-audit --strict --ignore-vuln PYSEC-2026-2132
 
   # ---------------------------------------------------------------------------
-  # The npm half of the same gate. Its absence is why eighteen advisories -- two
-  # of them shipping in the browser bundle -- accumulated unnoticed while
-  # pip-audit kept the Python tree clean.
+  # The npm half of the same gate. Its absence is why eighteen vulnerable packages
+  # (16 distinct advisories) accumulated unnoticed while pip-audit kept the Python
+  # tree clean -- one of them, a prototype pollution in @tanstack/form-core, in the
+  # shipped bundle, and three rated critical in tooling that runs in this workflow.
   #
   # Its own job rather than a step in `frontend`: an upstream disclosure turns this
   # red without a single line of our code changing, and that must not read as "the
