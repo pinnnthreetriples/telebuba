@@ -234,15 +234,22 @@ class WarmingSettings(BaseSettings):
         },
     )
     # Daily action cap by phase (80 = CRMChat ceiling for accounts ≥2-3 months).
-    # ``intro`` must leave room for a DM after the session's fixed costs:
-    # ``set_online`` itself counts as an action, and a cycle then spends the rest on
-    # joins/reads, so a cap of 3 meant the dialogue step never had budget left and
-    # inter-account chat could not start before the account left ``intro``. Keep it
-    # at or above ``expected_actions_per_session`` + 1.
+    # The cap does double duty: it bounds the day's actions AND sets the cadence,
+    # because ``persona_next_run_seconds`` affords ``cap // expected_actions_per_
+    # session`` sessions and splits the active window between them. So a cap below
+    # 2x that divisor collapses to ONE session — a ~15h inter-cycle pause — and a
+    # cap at or below the divisor also starves the steps a cycle runs last: the
+    # story glance and the inter-account DM (``set_online`` itself counts as an
+    # action, and joins/reads take the rest). ``intro`` at 3 hit both: no first DM
+    # before the account left ``intro``, and a half-day gap between cycles. At 15 it
+    # affords 3 sessions ≈ a 5h gap, matching ``cold_start_spread_hours``.
     phase_daily_cap: dict[str, int] = Field(
         default_factory=lambda: {
-            "intro": 8,
-            "settling": 10,
+            # ``settling`` follows ``intro`` up: the cap must never drop as an
+            # account ages (property test ``test_compute_intensity_monotonic_in_age``),
+            # so 10 here would make a day-old account out-cap a week-old one.
+            "intro": 15,
+            "settling": 15,
             "warming": 20,
             "active": 40,
             "warmed": 80,

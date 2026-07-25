@@ -161,14 +161,20 @@ def test_compute_intensity_intro_for_fresh_account() -> None:
     assert intensity.daily_cap == settings.warming.phase_daily_cap["intro"]
 
 
-def test_intro_cap_leaves_room_for_a_dm() -> None:
-    # The cycle spends its action budget in a fixed order: set_online (1 action),
-    # then joins/reads, then the inter-account DM step last. An intro cap at or
-    # below the expected session size therefore starved the dialogue step — a
-    # fresh account could never send its first DM before leaving intro, no matter
-    # what dm_min_age_hours said. Guard the ordering invariant, not the number.
+def test_intro_cap_leaves_room_for_a_dm_and_more_than_one_session() -> None:
+    # The intro cap governs two things at once, and at 3 it broke both.
+    # 1) The cycle spends its budget in a fixed order — set_online (itself an
+    #    action), joins/reads, story glance, inter-account DM last — so a cap at or
+    #    below the expected session size starves the DM step: a fresh account could
+    #    never send a first DM regardless of dm_min_age_hours.
+    # 2) persona_next_run_seconds affords cap // expected_actions_per_session
+    #    sessions and splits the active window between them, so a cap under 2x the
+    #    divisor collapses to one session and a ~15h inter-cycle pause.
+    # Guard both invariants rather than the number itself.
     warm = settings.warming
-    assert warm.phase_daily_cap["intro"] > warm.expected_actions_per_session
+    per_session = warm.expected_actions_per_session
+    assert warm.phase_daily_cap["intro"] > per_session
+    assert warm.phase_daily_cap["intro"] // per_session >= 2
 
 
 def test_compute_intensity_daily_cap_is_config_driven(monkeypatch: pytest.MonkeyPatch) -> None:
