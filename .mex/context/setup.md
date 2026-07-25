@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-16
+last_updated: 2026-07-25
 ---
 
 # Setup and Checks
@@ -24,6 +24,7 @@ uv run pre-commit run --all-files
 uv run python tools/aislop_gate.py
 uv run python -m tools.gen_api
 cd frontend && npm run gates && npm run build
+cd frontend && npm audit   # separate CI job; not part of `npm run gates`
 npx mex-agent check && npx mex-agent doctor
 ```
 
