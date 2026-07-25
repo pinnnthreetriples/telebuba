@@ -924,6 +924,160 @@ export type DialogueFeedMessage = {
 };
 
 /**
+ * DiscoveryAdoptRequest
+ */
+export type DiscoveryAdoptRequest = {
+  /**
+   * Channels
+   */
+  channels: Array<string>;
+};
+
+/**
+ * DiscoveryAdoptResult
+ */
+export type DiscoveryAdoptResult = {
+  /**
+   * Outcomes
+   */
+  outcomes?: Array<ChannelLinkOutcome>;
+};
+
+/**
+ * DiscoveryBoard
+ */
+export type DiscoveryBoard = {
+  /**
+   * Campaign Id
+   */
+  campaign_id: string;
+  progress: DiscoveryProgress;
+  /**
+   * Candidates
+   */
+  candidates?: Array<DiscoveryCandidate>;
+};
+
+/**
+ * DiscoveryCandidate
+ *
+ * One found channel as the operator sees it.
+ */
+export type DiscoveryCandidate = {
+  /**
+   * Channel
+   */
+  channel: string;
+  /**
+   * Title
+   */
+  title?: string;
+  /**
+   * Subscribers
+   */
+  subscribers?: number | null;
+  /**
+   * Source
+   */
+  source: 'telegram_search' | 'telegram_similar' | 'telemetr';
+  /**
+   * Qualification
+   */
+  qualification: 'pending' | 'comments_on' | 'comments_off' | 'unknown';
+  /**
+   * In Campaign
+   */
+  in_campaign?: boolean;
+  /**
+   * Taken By Other Campaign
+   */
+  taken_by_other_campaign?: boolean;
+};
+
+/**
+ * DiscoveryProgress
+ */
+export type DiscoveryProgress = {
+  /**
+   * Phase
+   */
+  phase: 'idle' | 'searching' | 'qualifying' | 'done' | 'failed';
+  /**
+   * Running
+   */
+  running?: boolean;
+  /**
+   * Total
+   */
+  total?: number;
+  /**
+   * Qualified
+   */
+  qualified?: number;
+  /**
+   * Comments On
+   */
+  comments_on?: number;
+  /**
+   * Last Error
+   */
+  last_error?: string | null;
+};
+
+/**
+ * DiscoverySearchOutcome
+ *
+ * Why a start attempt did or did not spawn a run.
+ */
+export type DiscoverySearchOutcome = {
+  /**
+   * Status
+   */
+  status: 'started' | 'already_running' | 'no_account' | 'account_cooling' | 'daily_limit_reached';
+};
+
+/**
+ * DiscoverySearchRequest
+ *
+ * Operator-supplied search parameters.
+ *
+ * ``language``/``country`` only reach Telemetr.io — Telegram's native search has
+ * no such filters. ``members_min``/``members_max`` are applied by Telemetr
+ * server-side and re-applied client-side to native hits once the subscriber count
+ * is known.
+ */
+export type DiscoverySearchRequest = {
+  /**
+   * Keywords
+   */
+  keywords: Array<string>;
+  /**
+   * Seed Channel
+   */
+  seed_channel?: string | null;
+  /**
+   * Language
+   */
+  language?: string | null;
+  /**
+   * Country
+   */
+  country?: string | null;
+  /**
+   * Members Min
+   */
+  members_min?: number | null;
+  /**
+   * Members Max
+   */
+  members_max?: number | null;
+  /**
+   * Use Telemetr
+   */
+  use_telemetr?: boolean;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -2378,6 +2532,10 @@ export type WarmingSettings = {
    */
   captcha_llm_provider?: 'gemini' | 'openai';
   /**
+   * Has Telemetr Key
+   */
+  has_telemetr_key?: boolean;
+  /**
    * Updated At
    */
   updated_at: string;
@@ -2447,6 +2605,14 @@ export type WarmingSettingsUpdate = {
    * Captcha Llm Provider
    */
   captcha_llm_provider?: 'gemini' | 'openai' | null;
+  /**
+   * Telemetr Api Key
+   */
+  telemetr_api_key?: string | null;
+  /**
+   * Clear Telemetr Key
+   */
+  clear_telemetr_key?: boolean;
 };
 
 /**
@@ -4175,6 +4341,102 @@ export type ListWarmingDialoguesResponses = {
 
 export type ListWarmingDialoguesResponse =
   ListWarmingDialoguesResponses[keyof ListWarmingDialoguesResponses];
+
+export type StartCampaignDiscoveryData = {
+  body: DiscoverySearchRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/discovery/search';
+};
+
+export type StartCampaignDiscoveryErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type StartCampaignDiscoveryError =
+  StartCampaignDiscoveryErrors[keyof StartCampaignDiscoveryErrors];
+
+export type StartCampaignDiscoveryResponses = {
+  /**
+   * Successful Response
+   */
+  202: DiscoverySearchOutcome;
+};
+
+export type StartCampaignDiscoveryResponse =
+  StartCampaignDiscoveryResponses[keyof StartCampaignDiscoveryResponses];
+
+export type GetCampaignDiscoveryData = {
+  body?: never;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/discovery';
+};
+
+export type GetCampaignDiscoveryErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type GetCampaignDiscoveryError =
+  GetCampaignDiscoveryErrors[keyof GetCampaignDiscoveryErrors];
+
+export type GetCampaignDiscoveryResponses = {
+  /**
+   * Successful Response
+   */
+  200: DiscoveryBoard;
+};
+
+export type GetCampaignDiscoveryResponse =
+  GetCampaignDiscoveryResponses[keyof GetCampaignDiscoveryResponses];
+
+export type AdoptCampaignDiscoveryData = {
+  body: DiscoveryAdoptRequest;
+  path: {
+    /**
+     * Campaign Id
+     */
+    campaign_id: string;
+  };
+  query?: never;
+  url: '/api/v1/neurocomment/campaigns/{campaign_id}/discovery/adopt';
+};
+
+export type AdoptCampaignDiscoveryErrors = {
+  /**
+   * Validation Error
+   */
+  422: HttpValidationError;
+};
+
+export type AdoptCampaignDiscoveryError =
+  AdoptCampaignDiscoveryErrors[keyof AdoptCampaignDiscoveryErrors];
+
+export type AdoptCampaignDiscoveryResponses = {
+  /**
+   * Successful Response
+   */
+  200: DiscoveryAdoptResult;
+};
+
+export type AdoptCampaignDiscoveryResponse =
+  AdoptCampaignDiscoveryResponses[keyof AdoptCampaignDiscoveryResponses];
 
 export type ListCampaignsData = {
   body?: never;

@@ -6,6 +6,7 @@ import pytest_asyncio
 
 from core.gemini import close_gemini_client
 from core.openai import close_openai_client
+from core.telemetr import close_telemetr_client
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -41,3 +42,10 @@ async def isolated_openai_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterat
     _clear_http_proxy_environment(monkeypatch)
     yield
     await close_openai_client()
+
+
+@pytest_asyncio.fixture
+async def isolated_telemetr_client(monkeypatch: pytest.MonkeyPatch) -> AsyncIterator[None]:
+    _clear_http_proxy_environment(monkeypatch)
+    yield
+    await close_telemetr_client()

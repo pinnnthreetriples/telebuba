@@ -16,6 +16,7 @@ from core.repositories.neurocomment._tables import (
     _neurocomment_campaign_channels,
     _neurocomment_campaigns,
     _neurocomment_comments,
+    _neurocomment_discovery_candidates,
 )
 from schemas.neurocomment import (
     CampaignChannelLink,
@@ -362,6 +363,11 @@ def _delete_campaign(campaign_id: str) -> None:
         connection.execute(
             delete(_neurocomment_comments).where(
                 _neurocomment_comments.c.campaign_id == campaign_id,
+            ),
+        )
+        connection.execute(
+            delete(_neurocomment_discovery_candidates).where(
+                _neurocomment_discovery_candidates.c.campaign_id == campaign_id,
             ),
         )
         connection.execute(

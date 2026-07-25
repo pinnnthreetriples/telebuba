@@ -90,6 +90,35 @@ _neurocomment_linked_groups = Table(
     Column("comments_enabled", Integer, nullable=False),
     Column("checked_at", String, nullable=False),
 )
+_neurocomment_discovery_candidates = Table(
+    # Per-campaign scratch set from the "Найти каналы" search (migration #38).
+    # Replaced wholesale on each run; the comments-enabled verdict itself is NOT
+    # duplicated here — ``neurocomment_linked_groups`` already is that cache, and a
+    # second copy could disagree with it. ``qualified_at``/``qualify_error`` record
+    # the *attempt*, which the cache cannot: a failed probe writes nothing there, so
+    # without this the candidate would stay pending forever and progress never
+    # reach 100%.
+    "neurocomment_discovery_candidates",
+    _metadata,
+    Column(
+        "campaign_id",
+        String,
+        ForeignKey("neurocomment_campaigns.campaign_id"),
+        primary_key=True,
+    ),
+    # Handle exactly as Telegram returned it (canonical case) — campaign-channel
+    # matching is exact, and adopt writes this value verbatim. Cross-provider dedup
+    # folds case in memory before insert, so no second key column is needed.
+    Column("channel", String, primary_key=True),
+    Column("title", String, nullable=False, server_default=""),
+    # NULL until known: contacts.Search does not reliably carry a subscriber count;
+    # it is backfilled for free from getFullChannel during qualification.
+    Column("subscribers", Integer, nullable=True),
+    Column("source", String, nullable=False),
+    Column("qualified_at", String, nullable=True),
+    Column("qualify_error", String, nullable=True),
+    Column("created_at", String, nullable=False),
+)
 _neurocomment_readiness = Table(
     "neurocomment_readiness",
     _metadata,

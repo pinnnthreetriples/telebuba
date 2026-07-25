@@ -57,6 +57,26 @@ class OpenAISettings(BaseSettings):
     retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
 
 
+class TelemetrSettings(BaseSettings):
+    """Telemetr.io channel catalogue — the external half of channel discovery.
+
+    Supplies keyword/country/language/subscriber filters and subscriber counts that
+    Telegram's own search does not return. The key is operator-set in the DB (falls
+    back to ``TELEMETR__API_KEY`` in .env); an empty key means the source is simply
+    skipped, never an error.
+    """
+
+    model_config = SettingsConfigDict(env_prefix="TELEMETR__", extra="ignore")
+
+    api_key: str = ""
+    base_url: str = Field(default="https://api.telemetr.io/v1")
+    timeout_seconds: float = Field(default=20.0, ge=1.0)
+    # Rows requested per keyword (server max is 100).
+    search_limit: int = Field(default=30, ge=1, le=100)
+    max_retries: int = Field(default=1, ge=0, le=5)
+    retry_backoff_seconds: float = Field(default=1.0, ge=0.0)
+
+
 class TrustSettings(BaseSettings):
     """Tunables for the internal account Trust Score (our own metric, 0-100)."""
 
@@ -241,6 +261,24 @@ class NeurocommentSettings(BaseSettings):
     warmed_min_days: int = Field(default=14, ge=1)
     # Rows shown in the engine panel's collapsible neurocomment-activity log.
     log_limit: int = Field(default=50, ge=1, le=200)
+    # Channel-discovery knobs (the "Найти каналы" search) follow.
+    # Hard cap on candidates kept per campaign. The UI shows one unpaginated list
+    # and every candidate costs up to one getFullChannel probe, so this bounds both.
+    discovery_max_candidates: int = Field(default=100, ge=1, le=500)
+    # Rolling-24h ceiling on operator-initiated searches (in-memory: a search is a
+    # human button press, and contacts.Search is a cheap read).
+    discovery_max_searches_per_day: int = Field(default=20, ge=1)
+    # Jittered spacing between real discovery RPCs. Uniform spacing is itself a bot
+    # signal, so the loop samples in this range; cache hits sleep not at all.
+    discovery_qualify_delay_min_seconds: float = Field(default=1.0, ge=0.0)
+    discovery_qualify_delay_max_seconds: float = Field(default=2.0, ge=0.0)
+    # How long a cached linked-group verdict counts as fresh for discovery. The
+    # repository itself keeps no TTL (onboarding wants the raw cache), but a channel
+    # that switched comments on months ago must not stay filtered out forever.
+    discovery_linked_group_ttl_hours: float = Field(default=168.0, ge=0.0)
+    # Consecutive gateway failures that abort a qualification pass — a dead session
+    # must not burn one RPC per candidate.
+    discovery_max_consecutive_errors: int = Field(default=3, ge=1)
 
     @model_validator(mode="after")
     def _check_delay_bounds(self) -> NeurocommentSettings:
@@ -255,5 +293,8 @@ class NeurocommentSettings(BaseSettings):
             raise ValueError(msg)
         if self.channel_challenge_backoff_base_seconds > self.channel_challenge_backoff_max_seconds:
             msg = "channel_challenge_backoff_base_seconds must not exceed _max_seconds"
+            raise ValueError(msg)
+        if self.discovery_qualify_delay_min_seconds > self.discovery_qualify_delay_max_seconds:
+            msg = "discovery_qualify_delay_min_seconds must not exceed _max_seconds"
             raise ValueError(msg)
         return self

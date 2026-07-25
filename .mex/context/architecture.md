@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-16
+last_updated: 2026-07-25
 ---
 
 # Architecture
@@ -12,7 +12,7 @@ React SPA → /api/v1 → api/ → services/ → core/ → SQLite, Telegram, Ope
 - `main.py`: FastAPI composition root, lifespan runtimes, SSE, routers, static SPA.
 - `api/`: request/dependency/error/serialization only.
 - `services/`: account, auth, proxy, warming, neurocomment, content, dialogue, logs/events, spam/trust policy and orchestration.
-- `core/`: repositories/migrations and all external adapters: Telegram, AI, auth, logging/Sentry, SSE, proxy checks.
+- `core/`: repositories/migrations and all external adapters: Telegram, AI, Telemetr.io channel catalogue, auth, logging/Sentry, SSE, proxy checks; `core/channel_tokens.py` holds the pure channel-handle normalizer shared by warming and neurocomment discovery.
 - `schemas/`: pure contracts; no project-layer imports or I/O.
 - `frontend/`: React 19, strict TypeScript, Vite and FSD; reaches Python only over `/api/v1`.
 

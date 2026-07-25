@@ -40,6 +40,10 @@ from schemas.telegram_actions_channels import (
     SetChannelPhoto,
 )
 
+# The channel-discovery read cluster likewise lives in a sibling module; the read
+# union below references both names.
+from schemas.telegram_actions_discovery import GetSimilarChannels, SearchChannels
+
 # The profile-media / story action cluster lives in a sibling module (file-size
 # cap); the discriminated unions below reference every name, so importing them
 # here keeps ``from schemas.telegram_actions import PostStory`` working unchanged.
@@ -279,7 +283,9 @@ TelegramReadAction = Annotated[
     | ListOwnChannels
     | GetOwnChannel
     | ListChannelPosts
-    | CheckChannelUsername,
+    | CheckChannelUsername
+    | SearchChannels
+    | GetSimilarChannels,
     Field(discriminator="action_type"),
 ]
 
@@ -293,6 +299,9 @@ class LinkedDiscussionGroupResult(BaseModel):
 
     linked_chat_id: int | None = None
     comments_enabled: bool
+    # Free ride: ``channels.getFullChannel`` already returns the subscriber count,
+    # so discovery backfills it here instead of spending a second RPC.
+    participants_count: int | None = None
 
 
 class CheckMessagesAliveResult(BaseModel):

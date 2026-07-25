@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { NeurocommentCampaign } from '@/shared/api';
@@ -45,6 +46,7 @@ export function CampaignsCard({
   onCheckChannels,
   checkingChannels,
   channelCheckStatus,
+  discoverySlot,
 }: {
   campaignList: NeurocommentCampaign[];
   campaignId: string | null;
@@ -68,6 +70,9 @@ export function CampaignsCard({
   onCheckChannels: () => void;
   checkingChannels: boolean;
   channelCheckStatus: Record<string, 'banned' | 'ok'>;
+  // Rendered beside "Проверить каналы". A slot, not new state: this component stays
+  // purely presentational (zero hooks) while the feature owns its own server I/O.
+  discoverySlot?: ReactNode;
 }) {
   const { t } = useTranslation();
   return (
@@ -250,16 +255,19 @@ export function CampaignsCard({
             <span className="min-w-0 truncate text-[11.5px] font-medium text-primary">
               {activeCampaign?.name ?? ''}
             </span>
-            <button
-              type="button"
-              disabled={campaignId === null || checkingChannels}
-              onClick={onCheckChannels}
-              className="shrink-0 rounded-full border border-line-input bg-white px-[11px] py-[4px] text-[11.5px] font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
-            >
-              {checkingChannels
-                ? t('neurocomment.channels.checking')
-                : t('neurocomment.channels.check')}
-            </button>
+            <div className="flex shrink-0 items-center gap-[6px]">
+              {discoverySlot}
+              <button
+                type="button"
+                disabled={campaignId === null || checkingChannels}
+                onClick={onCheckChannels}
+                className="shrink-0 rounded-full border border-line-input bg-white px-[11px] py-[4px] text-[11.5px] font-medium text-ink-muted transition-colors hover:border-primary hover:text-primary disabled:opacity-50"
+              >
+                {checkingChannels
+                  ? t('neurocomment.channels.checking')
+                  : t('neurocomment.channels.check')}
+              </button>
+            </div>
           </div>
           <div className="flex flex-wrap gap-[7px]">
             {boardChannels.map((channel) => (

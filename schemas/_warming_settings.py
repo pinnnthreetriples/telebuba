@@ -33,6 +33,9 @@ class WarmingSettings(BaseModel):
     has_openai_key: bool = False
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    # Telemetr.io channel-catalogue key (neurocomment channel discovery). Lives on
+    # this row because it is the app's single settings row for provider keys.
+    has_telemetr_key: bool = False
     updated_at: str = Field(min_length=1)
 
 
@@ -50,6 +53,7 @@ class WarmingSettingsSecret(BaseModel):
     openai_api_key: str = ""
     openai_model: str = Field(default="gpt-4o", min_length=1)
     captcha_llm_provider: CaptchaLlmProvider = "gemini"
+    telemetr_api_key: str = ""
     updated_at: str = Field(min_length=1)
 
 
@@ -80,3 +84,6 @@ class WarmingSettingsUpdate(BaseModel):
     openai_model: str | None = None
     clear_openai_key: bool = False
     captcha_llm_provider: CaptchaLlmProvider | None = None
+    # Same keep/clear/replace semantics for the Telemetr.io discovery key.
+    telemetr_api_key: str | None = None
+    clear_telemetr_key: bool = False

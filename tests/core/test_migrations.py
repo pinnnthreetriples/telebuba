@@ -9,6 +9,10 @@ from sqlalchemy import create_engine
 
 from core.db import _get_engine, configure_database  # type: ignore[attr-defined]
 from core.migration_steps import _add_users_token_version
+from core.migration_steps_discovery import (
+    _add_neurocomment_discovery_candidates,
+    _add_warming_settings_telemetr_key,
+)
 from core.migration_steps_pool import _add_proxy_geo_consensus
 from core.migrations import MIGRATIONS, _rename_proxy_type_http_to_https, apply_migrations
 
@@ -436,3 +440,77 @@ def test_proxy_geo_consensus_migration_is_idempotent(tmp_path: Path) -> None:
 
     assert {"geo_status", "ipinfo_country_code", "maxmind_country_code"} <= columns
     assert status == "unknown"
+
+
+def test_telemetr_key_migration_adds_the_column_and_is_idempotent(tmp_path: Path) -> None:
+    """#37 puts the Telemetr.io discovery key on the shared provider-key row."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-telemetr.db'}", future=True)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE warming_settings ("
+            "id INTEGER PRIMARY KEY,"
+            "inter_account_chat INTEGER NOT NULL,"
+            "reactions_enabled INTEGER NOT NULL,"
+            "gemini_api_key VARCHAR NOT NULL,"
+            "gemini_model VARCHAR NOT NULL,"
+            "updated_at VARCHAR NOT NULL"
+            ")",
+        )
+        _add_warming_settings_telemetr_key(connection)
+        _add_warming_settings_telemetr_key(connection)
+
+    with engine.connect() as connection:
+        columns = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(warming_settings)",
+            ).mappings()
+        }
+    engine.dispose()
+    assert "telemetr_api_key" in columns
+
+
+def test_telemetr_key_migration_skips_a_db_without_the_settings_table(tmp_path: Path) -> None:
+    """A hand-built legacy DB without ``warming_settings`` is a no-op, not an error."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'no-settings.db'}", future=True)
+    with engine.begin() as connection:
+        _add_warming_settings_telemetr_key(connection)
+    engine.dispose()
+
+
+def test_discovery_candidates_migration_creates_table_and_index(tmp_path: Path) -> None:
+    """#38 adds the per-campaign discovery scratch set plus its progress index."""
+    engine = create_engine(f"sqlite:///{tmp_path / 'legacy-discovery.db'}", future=True)
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaigns (campaign_id VARCHAR PRIMARY KEY)",
+        )
+        _add_neurocomment_discovery_candidates(connection)
+        _add_neurocomment_discovery_candidates(connection)
+
+    with engine.connect() as connection:
+        columns = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA table_info(neurocomment_discovery_candidates)",
+            ).mappings()
+        }
+        indexes = {
+            str(row["name"])
+            for row in connection.exec_driver_sql(
+                "PRAGMA index_list(neurocomment_discovery_candidates)",
+            ).mappings()
+        }
+    engine.dispose()
+
+    assert {
+        "campaign_id",
+        "channel",
+        "title",
+        "subscribers",
+        "source",
+        "qualified_at",
+        "qualify_error",
+        "created_at",
+    } == columns
+    assert "ix_nc_discovery_campaign_qualified" in indexes

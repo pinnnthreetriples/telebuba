@@ -17,6 +17,9 @@ import type {
   AddWarmingChannelsData,
   AddWarmingChannelsErrors,
   AddWarmingChannelsResponses,
+  AdoptCampaignDiscoveryData,
+  AdoptCampaignDiscoveryErrors,
+  AdoptCampaignDiscoveryResponses,
   AssignCampaignAccountData,
   AssignCampaignAccountErrors,
   AssignCampaignAccountResponses,
@@ -77,6 +80,9 @@ import type {
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
+  GetCampaignDiscoveryData,
+  GetCampaignDiscoveryErrors,
+  GetCampaignDiscoveryResponses,
   GetHealthData,
   GetHealthResponses,
   GetMeData,
@@ -220,6 +226,9 @@ import type {
   SpamCheckAccountData,
   SpamCheckAccountErrors,
   SpamCheckAccountResponses,
+  StartCampaignDiscoveryData,
+  StartCampaignDiscoveryErrors,
+  StartCampaignDiscoveryResponses,
   StartNeurocommentData,
   StartNeurocommentErrors,
   StartNeurocommentResponses,
@@ -1158,6 +1167,56 @@ export const listWarmingDialogues = <ThrowOnError extends boolean = false>(
     ListWarmingDialoguesErrors,
     ThrowOnError
   >({ url: '/api/v1/warming/dialogues', ...options });
+
+/**
+ * Start Discovery
+ */
+export const startCampaignDiscovery = <ThrowOnError extends boolean = false>(
+  options: Options<StartCampaignDiscoveryData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    StartCampaignDiscoveryResponses,
+    StartCampaignDiscoveryErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/discovery/search',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
+ * Get Discovery
+ */
+export const getCampaignDiscovery = <ThrowOnError extends boolean = false>(
+  options: Options<GetCampaignDiscoveryData, ThrowOnError>,
+) =>
+  (options.client ?? client).get<
+    GetCampaignDiscoveryResponses,
+    GetCampaignDiscoveryErrors,
+    ThrowOnError
+  >({ url: '/api/v1/neurocomment/campaigns/{campaign_id}/discovery', ...options });
+
+/**
+ * Adopt Discovery
+ */
+export const adoptCampaignDiscovery = <ThrowOnError extends boolean = false>(
+  options: Options<AdoptCampaignDiscoveryData, ThrowOnError>,
+) =>
+  (options.client ?? client).post<
+    AdoptCampaignDiscoveryResponses,
+    AdoptCampaignDiscoveryErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/neurocomment/campaigns/{campaign_id}/discovery/adopt',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
 
 /**
  * List Campaigns

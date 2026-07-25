@@ -32,6 +32,10 @@ from core.telegram_client._read_channels import (
     dispatch_list_channel_posts,
     dispatch_list_own_channels,
 )
+from core.telegram_client._read_discovery import (
+    dispatch_get_similar_channels,
+    dispatch_search_channels,
+)
 from core.telegram_client._read_profile import (
     dispatch_list_profile_music,
     dispatch_list_profile_photos,
@@ -48,6 +52,7 @@ from schemas.telegram_actions import (
     CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
     GetOwnChannel,
+    GetSimilarChannels,
     GetUserProfile,
     LinkedDiscussionGroupResult,
     ListActiveStories,
@@ -56,6 +61,7 @@ from schemas.telegram_actions import (
     ListPinnedStories,
     ListProfileMusic,
     ListProfilePhotos,
+    SearchChannels,
     WaitForBotChallenge,
 )
 from schemas.telegram_profile_snapshot import TelegramProfileSnapshot
@@ -183,6 +189,10 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await dispatch_list_channel_posts(client, action)
         case CheckChannelUsername():
             return await dispatch_check_channel_username(client, action)
+        case SearchChannels():
+            return await dispatch_search_channels(client, action)
+        case GetSimilarChannels():
+            return await dispatch_get_similar_channels(client, action)
         case _:  # pragma: no cover - discriminated union is exhaustive
             msg = f"Unsupported read action_type: {action.action_type}"
             raise ValueError(msg)
@@ -198,11 +208,16 @@ async def _dispatch_get_linked_group(
     disabled or has no linked group.
     """
     result = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-    linked = getattr(getattr(result, "full_chat", None), "linked_chat_id", None)
+    full_chat = getattr(result, "full_chat", None)
+    linked = getattr(full_chat, "linked_chat_id", None)
     linked_id = int(linked) if linked is not None else None
+    # Same RPC already carries the subscriber count, which channel search does not
+    # return — discovery backfills it from here instead of spending a second read.
+    participants = getattr(full_chat, "participants_count", None)
     return LinkedDiscussionGroupResult(
         linked_chat_id=linked_id,
         comments_enabled=linked_id is not None,
+        participants_count=participants if isinstance(participants, int) else None,
     )
 
 
