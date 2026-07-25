@@ -185,7 +185,7 @@ async def test_cycle_skipped_when_only_set_online_fits(
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
-    # Fresh account → intro auto cap of 3 (П2 retired the fleet override);
+    # Fresh account → the intro auto cap (П2 retired the fleet override);
     # enforce_readiness off so the daily gate fires, not the П3 readiness gate.
     await save_warming_settings(
         inter_account_chat=False,
@@ -199,7 +199,9 @@ async def test_cycle_skipped_when_only_set_online_fits(
         WarmingStateWrite(
             account_id="acc-1",
             state="sleeping",
-            daily_actions=2,  # one below the cap of 3 — only SetOnline would fit
+            # One below the intro cap — only SetOnline would fit, so the cycle is
+            # skipped rather than burning the budget on a presence-only pass.
+            daily_actions=settings.warming.phase_daily_cap["intro"] - 1,
             daily_count_date=today,
         ),
     )

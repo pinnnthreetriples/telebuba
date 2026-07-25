@@ -73,6 +73,13 @@ async def _initial_delay_seconds(
     active-hours window — so a bulk onboarding of N accounts neither all fires at
     once nor kicks off in the middle of the night.
 
+    ``cold_start_spread_hours`` is a hard ceiling on that wait. The active-hours
+    snap moves a night-time candidate to the account's next local morning, which
+    for a fleet whose phone timezone is hours behind ours meant a first cycle 14h
+    out — the account reads as stuck. When the snap overshoots the window we keep
+    the original random point instead of the snapped one (rather than clamping to
+    the ceiling, which would fire every such account in the same second).
+
     A *past-due* schedule (``next_run_at`` already elapsed, e.g. after downtime)
     would otherwise resume at delay 0: on reconcile every such account fires in
     the same second. Spread it across ``catch_up_spread_seconds`` instead so the
@@ -86,15 +93,13 @@ async def _initial_delay_seconds(
         if remaining <= 0.0:
             return _seams.rng.uniform(0.0, settings.warming.catch_up_spread_seconds)
         return remaining
-    candidate = now + timedelta(
-        seconds=_seams.rng.uniform(
-            0.0, settings.warming.cold_start_spread_hours * _SECONDS_PER_HOUR
-        ),
-    )
+    spread = settings.warming.cold_start_spread_hours * _SECONDS_PER_HOUR
+    raw = _seams.rng.uniform(0.0, spread)
     candidate = _shift_to_active_hours(
-        candidate, await _account_tz(account_id), _seams.rng, account_id
+        now + timedelta(seconds=raw), await _account_tz(account_id), _seams.rng, account_id
     )
-    return _seconds_until(candidate.isoformat(), now)
+    delay = _seconds_until(candidate.isoformat(), now)
+    return delay if delay <= spread else raw
 
 
 async def _persist_cold_start_schedule(

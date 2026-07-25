@@ -161,6 +161,16 @@ def test_compute_intensity_intro_for_fresh_account() -> None:
     assert intensity.daily_cap == settings.warming.phase_daily_cap["intro"]
 
 
+def test_intro_cap_leaves_room_for_a_dm() -> None:
+    # The cycle spends its action budget in a fixed order: set_online (1 action),
+    # then joins/reads, then the inter-account DM step last. An intro cap at or
+    # below the expected session size therefore starved the dialogue step — a
+    # fresh account could never send its first DM before leaving intro, no matter
+    # what dm_min_age_hours said. Guard the ordering invariant, not the number.
+    warm = settings.warming
+    assert warm.phase_daily_cap["intro"] > warm.expected_actions_per_session
+
+
 def test_compute_intensity_daily_cap_is_config_driven(monkeypatch: pytest.MonkeyPatch) -> None:
     # FIX #6: the per-phase cap now lives in settings.warming, not a hardcoded
     # module constant — overriding it must flow through to compute_intensity.

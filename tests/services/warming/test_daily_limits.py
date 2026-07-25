@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from core.config import settings
 from core.db import (
     create_account,
     fetch_warming_state,
@@ -60,9 +61,9 @@ async def test_run_loop_iteration_parks_when_daily_cap_reached(
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
     await _seed_channel()
-    # A fresh account is intro-capped at 3 by the auto cap (П2 retired the
-    # fleet-wide override); enforce_readiness off so the daily gate is the one
-    # that fires, not the П3 readiness gate.
+    # A fresh account is intro-capped by the auto cap (П2 retired the fleet-wide
+    # override); enforce_readiness off so the daily gate is the one that fires,
+    # not the П3 readiness gate.
     await save_warming_settings(
         inter_account_chat=False,
         reactions_enabled=False,
@@ -75,7 +76,7 @@ async def test_run_loop_iteration_parks_when_daily_cap_reached(
         WarmingStateWrite(
             account_id="acc-1",
             state="sleeping",
-            daily_actions=3,
+            daily_actions=settings.warming.phase_daily_cap["intro"],
             daily_count_date=today,
         ),
     )
@@ -97,7 +98,7 @@ async def test_phase_cap_governs_daily_limit(
 ) -> None:
     # The per-account auto cap (phase/trust) is the sole daily governor (audit П2;
     # the legacy fleet-wide override was removed). A fresh account is intro-capped
-    # at 3, so daily_actions=3 parks the account.
+    # at the intro cap, so a daily_actions already at that cap parks the account.
     # enforce_readiness off so the daily gate is reached, not the П3 readiness gate.
     recorder = _Recorder()
     monkeypatch.setattr(_seams, "execute", recorder.execute)
@@ -114,7 +115,7 @@ async def test_phase_cap_governs_daily_limit(
         WarmingStateWrite(
             account_id="acc-1",
             state="sleeping",
-            daily_actions=3,
+            daily_actions=settings.warming.phase_daily_cap["intro"],
             daily_count_date=today,
         ),
     )
@@ -141,8 +142,11 @@ async def test_run_loop_iteration_increments_daily_counter(
     record = await fetch_warming_state("acc-1")
     assert record is not None
     assert record.daily_count_date == datetime.now(UTC).date().isoformat()
-    # One channel per cycle: set_online + join + read = 3 attempts (set_offline does not count).
-    assert record.daily_actions == 3
+    # One channel per cycle: set_online + join + read + the story glance = 4
+    # attempts (set_offline does not count). The story step is last before the DM
+    # step, so it only fits now that the intro cap leaves room past the reads — at
+    # the old cap of 3 the cycle was truncated right after the read.
+    assert record.daily_actions == 4
 
 
 @pytest.mark.asyncio

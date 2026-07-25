@@ -32,10 +32,11 @@ class WarmingSettings(BaseSettings):
     # Cold-start spread: a fresh account (no persisted schedule) picks its first
     # run uniformly across this many hours instead of a few seconds, so a bulk
     # onboarding of N accounts neither all fires at once nor collapses into the
-    # next morning window. Kept well under a full day so the first cycle lands the
-    # same evening or by next morning — a night-time candidate still snaps forward
-    # to the active window, but the ceiling no longer stretches past ~a day.
-    cold_start_spread_hours: float = Field(default=8.0, ge=0.0)
+    # next morning window. This is a HARD ceiling on the pre-first-cycle wait: the
+    # active-hours snap may pull a night-time candidate forward inside the window
+    # but never past it (see ``_initial_delay_seconds``), so a freshly started
+    # account always begins working within this many hours.
+    cold_start_spread_hours: float = Field(default=5.0, ge=0.0)
     # Restart catch-up spread: after downtime (deploy/crash) every account whose
     # persisted ``next_run_at`` already elapsed is past-due, and ``_seconds_until``
     # clamps that to 0 — so reconcile would fire them all in the same second (an
@@ -107,7 +108,12 @@ class WarmingSettings(BaseSettings):
     # is multiplied by 1 ± this fraction so runs don't land on a rigid grid.
     next_run_jitter_fraction: float = Field(default=0.25, ge=0.0, le=1.0)
     # Cold-start guard: no outbound DM until the account is at least this old.
-    dm_min_age_hours: float = Field(default=36.0, ge=0.0)
+    # Age is measured from OUR row's ``created_at``, not the account's real
+    # Telegram age, so this is "hours since we imported it". Deliberately short
+    # (paired with ``cold_start_spread_hours``) so inter-account dialogue starts on
+    # day one instead of after a day and a half of silence — raise it if the fleet
+    # starts collecting DM-related restrictions.
+    dm_min_age_hours: float = Field(default=5.0, ge=0.0)
     # How long a cached @SpamBot verdict stays fresh before we re-probe. Frequent
     # /start to @SpamBot is itself suspicious, so keep this generous.
     spam_status_ttl_hours: float = Field(default=36.0, ge=0.0)
@@ -228,9 +234,14 @@ class WarmingSettings(BaseSettings):
         },
     )
     # Daily action cap by phase (80 = CRMChat ceiling for accounts ≥2-3 months).
+    # ``intro`` must leave room for a DM after the session's fixed costs:
+    # ``set_online`` itself counts as an action, and a cycle then spends the rest on
+    # joins/reads, so a cap of 3 meant the dialogue step never had budget left and
+    # inter-account chat could not start before the account left ``intro``. Keep it
+    # at or above ``expected_actions_per_session`` + 1.
     phase_daily_cap: dict[str, int] = Field(
         default_factory=lambda: {
-            "intro": 3,
+            "intro": 8,
             "settling": 10,
             "warming": 20,
             "active": 40,
