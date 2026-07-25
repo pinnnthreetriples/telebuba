@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 
 import {
+  accountPrivacyQueryKey,
   accountProfileSnapshotQueryOptions,
   accountsQueryKey,
   addAccountMusicMutation,
@@ -303,6 +304,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // rendered snapshot, and reseed the header + text fields from the fresh profile.
   const onRefresh = async () => {
     setRefreshState('loading');
+    // The privacy tab runs its own query, outside the snapshot: without this,
+    // «Обновить» resets the «Обновлено … назад» label while the levels on
+    // screen stay stale — the control would be lying on that tab. Only when it
+    // is the visible tab: three getPrivacy round trips per press from the text
+    // or media tabs is spend for nothing.
+    if (tab === 'privacy') {
+      void queryClient.invalidateQueries({
+        queryKey: accountPrivacyQueryKey({ path: { account_id: account.account_id } }),
+      });
+    }
     try {
       const fresh = await forcePull();
       if (fresh) {

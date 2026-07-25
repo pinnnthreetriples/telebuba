@@ -12,6 +12,11 @@ export type PrivacyShown = PrivacyLevel | 'unknown';
 // No radio-group primitive exists in the app, so the choice is the aria-pressed
 // button idiom the settings page's provider switch already uses. An 'unknown'
 // level presses nothing — it must never read as "everybody".
+//
+// Deliberately NOT role="radio"/radiogroup: a radiogroup promises arrow-key
+// navigation with a single tab stop, which we do not implement — a keyboard
+// user would land in a group whose options cannot be reached. Three toggles
+// that each take focus are honest about how they actually behave.
 export function PrivacyLevelRow({
   label,
   current,
@@ -49,6 +54,10 @@ export function PrivacyLevelRow({
             key={level}
             type="button"
             disabled={busy}
+            // The visible text is only «Все»/«Контакты»/«Никто», so all three
+            // rows together expose nine buttons with identical names in an
+            // element list. The row goes into the accessible name.
+            aria-label={`${label}: ${t(`accounts.profile.privacy.level.${level}`)}`}
             aria-pressed={current === level}
             onClick={() => {
               onPick(level);

@@ -300,7 +300,7 @@
         "profile_music_stale_reference": "The track changed on Telegram — refresh the list"
       },
       "privacy": {
-        "hint": "When the Telegram photo or bio is limited to contacts, strangers see a letter placeholder instead of the avatar and an empty bio. Pick “Everybody” to make the avatar and bio visible to all.",
+        "hint": "When the Telegram photo or bio is limited to contacts, strangers see a letter placeholder instead of the avatar and an empty bio. The button below opens the photo and bio only. It leaves “Last seen” alone: an open status publishes the account's activity schedule, so change that in its row by hand.",
         "loading": "Loading…",
         "loadError": "Couldn't read the privacy settings from Telegram ({{reason}})",
         "retry": "Retry",
@@ -316,16 +316,22 @@
           "nobody": "Nobody",
           "unknown": "Unknown"
         },
-        "unknownNote": "Telegram returned a rule the dashboard doesn't recognise — pick a level again",
-        "openAll": "Open the profile to everybody",
-        "applyAll": "Apply to all accounts",
-        "applyAllTitle": "Apply to all accounts?",
-        "applyAllBody": "Every account in the fleet will get: {{levels}}. Accounts without a working session are skipped.",
+        "unknownNote": "Telegram returned a rule the dashboard doesn't recognise — it was not set from here; set a level explicitly",
+        "openAll": "Open photo and bio (this account)",
+        "applyAll": "Apply to every account in the fleet",
+        "applyAllPending": "Applying to the fleet…",
+        "applyAllTitle": "Apply to every account in the fleet?",
+        "applyAllBody": "Every account in the fleet will get: {{levels}}.",
+        "applyAllWarn": "Warning: one of these levels is restrictive — it will also be applied to accounts that are fine right now.",
+        "applyAllIrreversible": "This cannot be undone: each key's rule is replaced as a whole, so per-user exceptions (the “except” and “only” lists) are removed. Accounts that are beyond recovery are skipped — the result names the reason for each.",
         "applyAllConfirm": "Apply",
         "cancel": "Cancel",
         "bulkOk": "Applied: {{n}}",
         "bulkFailed": "Failed: {{n}}",
         "bulkSkipped": "Skipped: {{n}}",
+        "outcomeFailed": "{{id}} — {{reason}}",
+        "outcomeSkipped": "{{id}} — skipped ({{reason}})",
+        "writeReadError": "The settings were applied, but reading them back from Telegram failed ({{reason}}) — the levels below are the last known ones, reading again.",
         "noReason": "reason unknown"
       }
     },
