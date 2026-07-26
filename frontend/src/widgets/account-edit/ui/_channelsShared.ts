@@ -39,7 +39,10 @@ export function isUploadablePostMedia(file: File): boolean {
   return false;
 }
 
-export type Translate = (key: string, opts?: Record<string, unknown>) => string;
+// `key` accepts an array because i18next resolves it as a fallback chain, which
+// is how a code shared by two namespaces is translated without duplicating the
+// string into both tables.
+export type Translate = (key: string | string[], opts?: Record<string, unknown>) => string;
 
 // Pull the stable reason out of the /api/v1 error envelope
 // ({error:{code,message,fields?}}): `message` carries the locale-neutral code
@@ -50,12 +53,17 @@ export function envelopeMessage(err: unknown): string | null {
   return typeof message === 'string' && message.trim() ? message : null;
 }
 
-// Codes translate via accounts.channel.code.*; anything unknown shows as-is
-// (same contract as AddStoryModal's errorText).
+// Codes translate via accounts.channel.code.*, falling back to the profile table
+// for the account-wide codes both surfaces share (the rate-limit family, which a
+// slow-mode channel post hits); anything unknown shows as-is, same contract as
+// AddStoryModal's errorText. The fallback beats duplicating those strings into a
+// second namespace, where the two copies would drift.
 export function channelErrorText(err: unknown, t: Translate, fallback: string): string {
   const message = envelopeMessage(err);
   if (!message) return fallback;
-  return t(`accounts.channel.code.${message}`, { defaultValue: message });
+  return t([`accounts.channel.code.${message}`, `accounts.profile.code.${message}`], {
+    defaultValue: message,
+  });
 }
 
 // A create that failed AFTER the channel existed (the public-username step)

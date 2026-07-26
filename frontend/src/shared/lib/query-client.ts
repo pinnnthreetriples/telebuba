@@ -31,19 +31,30 @@ function redirectToLogin(): void {
 // The envelope's `message` usually carries a stable locale-neutral code
 // (profile_photo_stale_reference, flood_wait, channel_username_occupied, …).
 // For media mutations this toast is the only place the operator sees the
-// failure, so translate via the profile/channel code tables; an unknown code
-// (or free-form message) shows as-is, and no envelope at all falls back to the
-// generic copy. flood_wait interpolates retry_after_seconds — the backend
-// serialises envelope fields as strings, so parse rather than expect a number.
+// failure, so translate via the code tables; an unknown code (or free-form
+// message) shows as-is, and no envelope at all falls back to the generic copy.
+// flood_wait interpolates retry_after_seconds — the backend serialises envelope
+// fields as strings, so parse rather than expect a number.
+//
+// `addStory` is in the chain because this toast fires for EVERY mutation,
+// including a story publish: without it a story code the AddStoryModal renders
+// correctly inline showed up raw in the toast beside it.
 function mutationErrorText(error: unknown): string {
   const detail = asEnvelope(error);
   const message = detail?.message;
   if (typeof message !== 'string' || !message.trim()) return i18n.t('shell.mutationError');
   const seconds = Number(detail?.fields?.retry_after_seconds ?? NaN);
-  return i18n.t([`accounts.profile.code.${message}`, `accounts.channel.code.${message}`], {
-    defaultValue: message,
-    s: Number.isFinite(seconds) ? seconds : '?',
-  });
+  return i18n.t(
+    [
+      `accounts.profile.code.${message}`,
+      `accounts.channel.code.${message}`,
+      `accounts.addStory.code.${message}`,
+    ],
+    {
+      defaultValue: message,
+      s: Number.isFinite(seconds) ? seconds : '?',
+    },
+  );
 }
 
 export const queryClient = new QueryClient({
