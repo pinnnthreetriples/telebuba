@@ -31,6 +31,9 @@ test('assigns an idle account, confirms removal, and closes', async () => {
   expect(screen.getByText('Vika Ix')).toBeInTheDocument();
   // an already-assigned account shows its single channel in the dropdown trigger
   expect(screen.getByLabelText('Каналы аккаунта')).toHaveTextContent('@crypto');
+  // the channel list belongs to the linked account only — one per linked row, never for
+  // an idle one (the list is a sibling of the row's top line, not part of the trigger).
+  expect(screen.getAllByRole('listbox')).toHaveLength(1);
 
   // assign the idle account to the campaign
   await userEvent.click(screen.getByText('Добавить в кампанию'));

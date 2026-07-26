@@ -99,6 +99,9 @@ function AccountRow({
             onKeyDown={(e) => {
               if (e.key === 'Escape') setOpen(false);
             }}
+            // A single pinned channel is the one label that can still be truncated here,
+            // so keep the full link reachable without opening the list.
+            title={selected.length === 1 ? selected[0] : undefined}
             className="tb-time flex w-[180px] shrink-0 items-center justify-between gap-2 rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
@@ -152,10 +155,13 @@ function AccountRow({
         // The list expands inside the row instead of floating over it: the modal is its
         // own scroll box, so an absolutely-positioned menu was clipped at the modal edge
         // and had to be scrolled into view. At row width the channels also fit.
+        // The box styling is open-only on purpose: under border-box a collapsed
+        // ``max-height: 0`` still reserves its border and padding, which in flow (unlike
+        // the old absolute menu) would leave 10px of phantom gap in every linked row.
         <div
           role="listbox"
           aria-multiselectable
-          className={`tb-dd rounded-[10px] border border-line bg-white p-1 ${open ? 'open mt-2' : ''}`}
+          className={`tb-dd ${open ? 'open mt-2 rounded-[10px] border border-line bg-white p-1' : ''}`}
         >
           <button
             key={ALL_CHANNELS}
