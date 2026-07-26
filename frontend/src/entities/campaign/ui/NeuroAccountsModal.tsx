@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmModal, FeedbackMark, Modal } from '@/shared/ui';
@@ -12,6 +12,13 @@ export interface NeuroAccountRow {
 
 // Stable React key for the "all channels" row (an empty subset = serve all).
 const ALL_CHANNELS = 'all';
+
+// Channels are stored as the operator typed them, so a campaign's list is usually a
+// column of "https://t.me/…" sharing the first 13 characters — the identical part is
+// exactly what a truncating label keeps. Show what tells them apart.
+function shortChannel(channel: string): string {
+  return channel.replace(/^(?:https?:\/\/)?(?:www\.)?t\.me\//i, '');
+}
 
 function CheckIcon() {
   return (
@@ -47,7 +54,6 @@ function AccountRow({
   const { t } = useTranslation();
   const [confirmRemove, setConfirmRemove] = useState(false);
   const [open, setOpen] = useState(false);
-  const ddRef = useRef<HTMLDivElement>(null);
 
   // A linked account targets a subset of the campaign's channels, or an empty
   // subset = all of them. Any already-selected channel no longer on the campaign
@@ -59,22 +65,8 @@ function AccountRow({
     selected.length === 0
       ? allChannels
       : selected.length === 1
-        ? selected[0]
+        ? shortChannel(selected[0]!)
         : t('neurocomment.modal.neuroAccounts.channelsSelected', { count: selected.length });
-
-  // Close the dropdown on any click outside it (mirrors the app's tb-dd menus).
-  useEffect(() => {
-    if (!open) return undefined;
-    const onDown = (e: MouseEvent) => {
-      if (ddRef.current && !ddRef.current.contains(e.target as Node)) {
-        setOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', onDown);
-    return () => {
-      document.removeEventListener('mousedown', onDown);
-    };
-  }, [open]);
 
   // Multi-select: toggling a channel keeps the menu open; "Все каналы" clears the
   // whole subset (= all). The empty list is the "serve all channels" sentinel.
@@ -86,16 +78,16 @@ function AccountRow({
   };
 
   return (
-    <div className="flex items-center gap-[10px] border-b border-[#f4f2ef] py-[11px]">
-      <FeedbackMark result={result} />
-      <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
-        {account.name}
-      </span>
-      {account.linked ? (
-        // Each linked account gets a ~180px multi-select of the campaign's channels;
-        // an empty selection ("Все каналы") = comment on all. Custom tb-dd menu (not a
-        // native <select>) so the open list matches the design and allows multi-pick.
-        <div ref={ddRef} className="relative w-[180px] shrink-0">
+    <div className="border-b border-[#f4f2ef] py-[11px]">
+      <div className="flex items-center gap-[10px]">
+        <FeedbackMark result={result} />
+        <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
+          {account.name}
+        </span>
+        {account.linked ? (
+          // Each linked account gets a ~180px multi-select of the campaign's channels;
+          // an empty selection ("Все каналы") = comment on all. Custom tb-dd list (not a
+          // native <select>) so it matches the design and allows multi-pick.
           <button
             type="button"
             aria-haspopup="listbox"
@@ -107,7 +99,7 @@ function AccountRow({
             onKeyDown={(e) => {
               if (e.key === 'Escape') setOpen(false);
             }}
-            className="tb-time flex w-full items-center justify-between gap-2 rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink"
+            className="tb-time flex w-[180px] shrink-0 items-center justify-between gap-2 rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}
@@ -125,78 +117,84 @@ function AccountRow({
               </svg>
             </span>
           </button>
-          <div
-            role="listbox"
-            aria-multiselectable
-            className={`tb-dd absolute inset-x-0 top-[calc(100%+5px)] z-20 rounded-[10px] border border-line bg-white p-1 shadow-[0_10px_30px_rgba(11,11,12,0.1)] ${open ? 'open' : ''}`}
+        ) : (
+          <button
+            type="button"
+            onClick={() => {
+              onPick(account.account_id);
+            }}
+            className="w-[180px] shrink-0 rounded-[9px] border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary"
           >
-            <button
-              key={ALL_CHANNELS}
-              type="button"
-              role="option"
-              aria-selected={selected.length === 0}
-              onClick={() => {
-                onChannelChange(account.account_id, []);
-              }}
-              className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
-                selected.length === 0 ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
-              }`}
-            >
-              <span className="min-w-0 truncate">{allChannels}</span>
-              {selected.length === 0 ? <CheckIcon /> : null}
-            </button>
-            {options.map((channel) => {
-              const isSelected = selected.includes(channel);
-              return (
-                <button
-                  key={channel}
-                  type="button"
-                  role="option"
-                  aria-selected={isSelected}
-                  onClick={() => {
-                    toggleChannel(channel);
-                  }}
-                  className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
-                    isSelected ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
-                  }`}
-                >
-                  <span className="min-w-0 truncate">{channel}</span>
-                  {isSelected ? <CheckIcon /> : null}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      ) : (
+            {t('neurocomment.modal.neuroAccounts.assign')}
+          </button>
+        )}
         <button
           type="button"
+          aria-label={t('neurocomment.modal.neuroAccounts.remove')}
           onClick={() => {
-            onPick(account.account_id);
+            setConfirmRemove(true);
           }}
-          className="w-[180px] shrink-0 rounded-[9px] border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary"
+          className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-line bg-white text-danger hover:border-[#f0c9c5] hover:bg-danger-tint"
         >
-          {t('neurocomment.modal.neuroAccounts.assign')}
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.9"
+          >
+            <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+          </svg>
         </button>
-      )}
-      <button
-        type="button"
-        aria-label={t('neurocomment.modal.neuroAccounts.remove')}
-        onClick={() => {
-          setConfirmRemove(true);
-        }}
-        className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[9px] border border-line bg-white text-danger hover:border-[#f0c9c5] hover:bg-danger-tint"
-      >
-        <svg
-          width="15"
-          height="15"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.9"
+      </div>
+      {account.linked ? (
+        // The list expands inside the row instead of floating over it: the modal is its
+        // own scroll box, so an absolutely-positioned menu was clipped at the modal edge
+        // and had to be scrolled into view. At row width the channels also fit.
+        <div
+          role="listbox"
+          aria-multiselectable
+          className={`tb-dd rounded-[10px] border border-line bg-white p-1 ${open ? 'open mt-2' : ''}`}
         >
-          <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
-        </svg>
-      </button>
+          <button
+            key={ALL_CHANNELS}
+            type="button"
+            role="option"
+            aria-selected={selected.length === 0}
+            onClick={() => {
+              onChannelChange(account.account_id, []);
+            }}
+            className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
+              selected.length === 0 ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
+            }`}
+          >
+            <span className="min-w-0 truncate">{allChannels}</span>
+            {selected.length === 0 ? <CheckIcon /> : null}
+          </button>
+          {options.map((channel) => {
+            const isSelected = selected.includes(channel);
+            return (
+              <button
+                key={channel}
+                type="button"
+                role="option"
+                aria-selected={isSelected}
+                onClick={() => {
+                  toggleChannel(channel);
+                }}
+                className={`flex w-full items-center justify-between gap-2 rounded-[7px] px-[10px] py-2 text-left text-[12.5px] transition-colors hover:bg-[#f2f6ff] ${
+                  isSelected ? 'bg-[#f2f6ff] font-semibold text-primary' : 'text-ink'
+                }`}
+                title={channel}
+              >
+                <span className="min-w-0 truncate">{shortChannel(channel)}</span>
+                {isSelected ? <CheckIcon /> : null}
+              </button>
+            );
+          })}
+        </div>
+      ) : null}
       {confirmRemove ? (
         <ConfirmModal
           title={t('neurocomment.modal.neuroAccounts.removeTitle', { name: account.name })}
