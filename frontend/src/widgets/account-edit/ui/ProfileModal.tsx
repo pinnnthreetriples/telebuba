@@ -173,7 +173,20 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // The bio the last successful save sent, or null if nothing was saved since
   // the modal opened / the field was edited again. Compared against the live
   // snapshot below — never used as a value to display or re-submit.
+  //
+  // Held in a ref as well as state, and the seeding guard below reads the REF.
+  // Not for timing: making the guard read the state would mean adding it to
+  // `seedForm`'s deps, and that re-runs the seeding effect on every verdict
+  // change — against whatever snapshot is cached at that moment, which right
+  // after a save is still the pre-save one, reverting the other fields to it.
+  // A ref keeps `seedForm` stable so the effect fires only on a fresh snapshot.
+  // The rendered verdict still needs the state, or nothing re-renders to show it.
+  const savedBioRef = useRef<string | null>(null);
   const [savedBio, setSavedBio] = useState<string | null>(null);
+  const rememberSavedBio = (bio: string | null) => {
+    savedBioRef.current = bio;
+    setSavedBio(bio);
+  };
   const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
   const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
   const [confirmMusic, setConfirmMusic] = useState<MusicRemoveRequest | null>(null);
@@ -191,13 +204,21 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     addMusic.isPending ||
     removeMusic.isPending;
 
+  // `form.reset(saved)` alone does not survive. form-core moves the form's own
+  // `options.defaultValues` to the values it was reset with, so the next render
+  // passes defaults that DEEP-DIFFER from them — and `FormApi.update` re-applies
+  // `defaultValues` whenever they differ and the form is untouched, which a reset
+  // has just made it. An inline object built from `account` therefore restores
+  // the pre-save values one render later. Moving the baseline in step keeps the
+  // comparison equal, so the re-apply becomes a no-op instead of a revert.
+  const baseline = useRef({
+    first_name: account.first_name ?? '',
+    last_name: account.last_name ?? '',
+    username: account.username ?? '',
+    bio: account.bio ?? '',
+  });
   const form = useForm({
-    defaultValues: {
-      first_name: account.first_name ?? '',
-      last_name: account.last_name ?? '',
-      username: account.username ?? '',
-      bio: account.bio ?? '',
-    },
+    defaultValues: baseline.current,
     validators: { onChange: profileSchema, onMount: profileSchema },
     onSubmit: ({ value }) => {
       updateProfile.mutate(
@@ -217,10 +238,13 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             // Remember what the bio write carried: `updateProfile` answers with
             // a `User`, which has no `about`, so ok does not prove the bio
             // landed and only the live re-pull below can tell.
-            setSavedBio(value.bio.trim());
+            rememberSavedBio(value.bio.trim());
             // Reset the baseline to the just-saved values so the form is no
             // longer "dirty" — otherwise closing afterwards wrongly prompts
-            // "discard unsaved edits?" even though everything was saved.
+            // "discard unsaved edits?" even though everything was saved. Both
+            // halves are needed: `reset` clears the dirty meta, the baseline
+            // write stops the next render from restoring the pre-save values.
+            baseline.current = { ...value };
             form.reset(value);
             setSaved(true);
             window.setTimeout(() => {
@@ -314,7 +338,25 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       }
       seedField('last_name', view.last_name ?? '');
       seedField('username', view.username ?? '');
-      seedField('bio', view.bio ?? '');
+      // Hold the bio while a save is outstanding. Seeding it hands the operator
+      // back the text Telegram refused, and the next save — dirty through any
+      // other field — pushes that old text while the warning vanishes as though
+      // it had resolved. Their own text stays; the warning says why Telegram
+      // lacks it. No `=== savedBio` half: when the two agree this seed writes
+      // the value already in the field, so it would never be observable. The
+      // hold is released by editing the field (`rememberSavedBio(null)`), which
+      // is also what lets «Обновить» pull the bio back down.
+      if (savedBioRef.current === null) {
+        seedField('bio', view.bio ?? '');
+      }
+      // ponytail: the same hold is NOT applied to the names or the username. A
+      // save whose forced pull lags AND carries unrelated drift re-seeds them to
+      // the pre-save values while the baseline holds the new ones, so a later
+      // save dirtied elsewhere re-pushes the old name — the bio failure, minus
+      // the warning that explains it. Left alone deliberately: `about` is the
+      // only field Telegram is documented to ignore silently, so for the rest
+      // this needs a real lag, and holding every field would freeze «Обновить»
+      // after every save. Revisit if an operator reports a name reverting.
     },
     [seedField],
   );
@@ -353,6 +395,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       }
     } catch {
       setRefreshState('error');
+      // Same as the fire-and-forget `refresh()` path: a refused pull must mark
+      // the snapshot untrustworthy, not just flash a 1.4s ✗. Otherwise the
+      // stale fields keep rendering as current — and the bio verdict, which
+      // stays silent while `loadError` holds, would be recomputed from them.
+      setSyncError(true);
     } finally {
       window.setTimeout(() => {
         setRefreshState('idle');
@@ -614,7 +661,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         value={field.state.value}
                         onChange={(event) => {
                           // A new edit supersedes the verdict on the last save.
-                          setSavedBio(null);
+                          rememberSavedBio(null);
                           field.handleChange(event.target.value);
                         }}
                         onBlur={field.handleBlur}
