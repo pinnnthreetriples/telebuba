@@ -7,7 +7,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
 
-__all__ = ["AccountActionError", "raise_for_result"]
+__all__ = ["AccountActionError", "AccountNotFoundError", "raise_for_result"]
+
+
+class AccountNotFoundError(LookupError):
+    """No such account row — the API must answer 404, not 400.
+
+    A ``LookupError`` on purpose, NOT part of the ``ValueError`` family: that is
+    what lets ``api.v1._errors.service_errors_to_http`` map it to 404 without
+    being swallowed by the generic ``ValueError`` → 400 collapse.
+    """
 
 
 class AccountActionError(ValueError):

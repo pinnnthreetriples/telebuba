@@ -79,6 +79,9 @@ import type {
   GetAccountChannelData,
   GetAccountChannelErrors,
   GetAccountChannelResponses,
+  GetAccountPrivacyData,
+  GetAccountPrivacyErrors,
+  GetAccountPrivacyResponses,
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
@@ -210,9 +213,15 @@ import type {
   SetAccountPhotoMainErrors,
   SetAccountPhotoMainResponses,
   SetAccountPhotoResponses,
+  SetAccountPrivacyData,
+  SetAccountPrivacyErrors,
+  SetAccountPrivacyResponses,
   SetAccountStoryPinnedData,
   SetAccountStoryPinnedErrors,
   SetAccountStoryPinnedResponses,
+  SetAllAccountsPrivacyData,
+  SetAllAccountsPrivacyErrors,
+  SetAllAccountsPrivacyResponses,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelErrors,
   SetCampaignAccountChannelResponses,
@@ -874,6 +883,58 @@ export const deleteAccountChannelPost = <ThrowOnError extends boolean = false>(
   >({
     url: '/api/v1/accounts/{account_id}/channels/{channel_id}/posts/{post_id}/delete',
     ...options,
+  });
+
+/**
+ * Get Account Privacy
+ *
+ * Live Profile photo / Bio / Last seen privacy levels for one account.
+ */
+export const getAccountPrivacy = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountPrivacyData, ThrowOnError>,
+): RequestResult<GetAccountPrivacyResponses, GetAccountPrivacyErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetAccountPrivacyResponses, GetAccountPrivacyErrors, ThrowOnError>(
+    { url: '/api/v1/accounts/{account_id}/privacy', ...options },
+  );
+
+/**
+ * Set Account Privacy
+ *
+ * Apply the given keys, then answer with the re-read state (one round trip).
+ */
+export const setAccountPrivacy = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountPrivacyData, ThrowOnError>,
+): RequestResult<SetAccountPrivacyResponses, SetAccountPrivacyErrors, ThrowOnError> =>
+  (options.client ?? client).put<SetAccountPrivacyResponses, SetAccountPrivacyErrors, ThrowOnError>(
+    {
+      url: '/api/v1/accounts/{account_id}/privacy',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    },
+  );
+
+/**
+ * Set All Accounts Privacy
+ *
+ * Apply the same keys to every account; unusable sessions come back skipped.
+ */
+export const setAllAccountsPrivacy = <ThrowOnError extends boolean = false>(
+  options: Options<SetAllAccountsPrivacyData, ThrowOnError>,
+): RequestResult<SetAllAccountsPrivacyResponses, SetAllAccountsPrivacyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    SetAllAccountsPrivacyResponses,
+    SetAllAccountsPrivacyErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/privacy/all',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
   });
 
 /**

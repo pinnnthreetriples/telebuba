@@ -12,6 +12,7 @@ empty result with ``supported=False`` so the UI can hide the music block.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, cast
 
 from telethon import errors
@@ -25,6 +26,7 @@ from telethon.tl.types import (
 from core.db import fetch_account
 from core.telegram_client._channels import ChannelGatewayError
 from core.telegram_client._pool import TelegramClientPoolError, get_client
+from core.telegram_client._privacy import dispatch_get_privacy_settings
 from core.telegram_client._read_challenge import dispatch_wait_for_bot_challenge
 from core.telegram_client._read_channels import (
     dispatch_check_channel_username,
@@ -52,6 +54,7 @@ from schemas.telegram_actions import (
     CheckMessagesAliveResult,
     GetLinkedDiscussionGroup,
     GetOwnChannel,
+    GetPrivacySettings,
     GetSimilarChannels,
     GetUserProfile,
     LinkedDiscussionGroupResult,
@@ -99,6 +102,9 @@ class TelegramReadError(RuntimeError):
     def __init__(self, reason: str) -> None:
         super().__init__(reason)
         self.reason = reason
+
+
+logger = logging.getLogger(__name__)
 
 
 async def execute_read(account_id: str, action: TelegramReadAction) -> BaseModel:
@@ -149,7 +155,17 @@ async def execute_read_many(
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
         # Pool/socket failures must not leak raw past the gateway — services
         # only handle ``TelegramReadError`` (layer contract, non-negotiable #6).
-        reason = f"{type(exc).__name__}: {exc}"
+        #
+        # Class name only, like the RPCError arm above, and for the same reason
+        # the write side collapses this family to the flat "unavailable" code:
+        # ``TelegramClientPoolError`` stringifies as "…failed for {account_id}:
+        # {cause}", and the cause of a proxy failure carries the proxy endpoint
+        # (``python_socks`` errors name host:port, and they are OSError but NOT
+        # ConnectionError, so they reach here wrapped rather than filtered).
+        # This reason is rendered verbatim in the operator's browser through the
+        # profile and privacy error envelopes, so it must stay content-free.
+        logger.warning("read failed for %s", account_id, exc_info=exc)
+        reason = f"unavailable: {type(exc).__name__}"
         raise TelegramReadError(reason) from exc
     else:
         return results
@@ -170,6 +186,8 @@ async def _dispatch_read_action(  # noqa: C901, PLR0911, PLR0912 - one return pe
             return await dispatch_wait_for_bot_challenge(client, action)
         case GetUserProfile():
             return await _dispatch_get_user_profile(client)
+        case GetPrivacySettings():
+            return await dispatch_get_privacy_settings(client)
         case ListPinnedStories():
             return await dispatch_list_pinned_stories(client, action)
         case ListActiveStories():

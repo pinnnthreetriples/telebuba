@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 
 import {
+  accountPrivacyQueryKey,
   accountProfileSnapshotQueryOptions,
   accountsQueryKey,
   addAccountMusicMutation,
@@ -33,6 +34,7 @@ import { AddStoryModal } from './AddStoryModal';
 import { ChannelsTab } from './ChannelsTab';
 import { MusicTab } from './MusicTab';
 import { PhotoTab } from './PhotoTab';
+import { PrivacyTab } from './PrivacyTab';
 import { StoriesTab } from './StoriesTab';
 
 // Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
@@ -53,14 +55,14 @@ const profileSchema = z.object({
   bio: z.string().trim().max(70, 'accounts.profile.errBioMax'),
 });
 
-// The design's profile-edit modal: hero header, a 5-tab segmented header
-// (text / photo / stories / music / channels), per-tab bodies, and a
+// The design's profile-edit modal: hero header, a 6-tab segmented header
+// (text / photo / stories / music / channels / privacy), per-tab bodies, and a
 // save→saved swap footer. Every tab is wired to /api/v1: Текст persists the
 // profile, the photo / stories / music tabs render the account's live media
-// (the profile-snapshot view) with real upload + remove, and the channels tab
-// manages the account's own channels (its own queries — outside the snapshot
-// busy scrim).
-type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels';
+// (the profile-snapshot view) with real upload + remove, and the channels and
+// privacy tabs manage the account's own channels and its Telegram privacy
+// levels (their own queries — outside the snapshot busy scrim).
+type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy';
 
 // "Обновлено {только что | N мин назад}" from the snapshot query's last fetch.
 // Its own component with its own 30s tick, so only this label re-renders while
@@ -302,6 +304,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // rendered snapshot, and reseed the header + text fields from the fresh profile.
   const onRefresh = async () => {
     setRefreshState('loading');
+    // The privacy tab runs its own query, outside the snapshot: without this,
+    // «Обновить» resets the «Обновлено … назад» label while the levels on
+    // screen stay stale — the control would be lying on that tab. Only when it
+    // is the visible tab: three getPrivacy round trips per press from the text
+    // or media tabs is spend for nothing.
+    if (tab === 'privacy') {
+      void queryClient.invalidateQueries({
+        queryKey: accountPrivacyQueryKey({ path: { account_id: account.account_id } }),
+      });
+    }
     try {
       const fresh = await forcePull();
       if (fresh) {
@@ -480,18 +492,20 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
           {/* tabs */}
           <div className="flex gap-5 border-b border-[#f0eeeb] px-5">
-            {(['text', 'photo', 'stories', 'music', 'channels'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => {
-                  setTab(value);
-                }}
-                className={tabBtn(value)}
-              >
-                {t(`accounts.profile.tab.${value}`)}
-              </button>
-            ))}
+            {(['text', 'photo', 'stories', 'music', 'channels', 'privacy'] as const).map(
+              (value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setTab(value);
+                  }}
+                  className={tabBtn(value)}
+                >
+                  {t(`accounts.profile.tab.${value}`)}
+                </button>
+              ),
+            )}
           </div>
 
           {/* content */}
@@ -502,8 +516,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 submits. It sits inside the overflow container, so `inset-0` pins it
                 to the visible viewport rather than scrolling away. The text tab is
                 excluded — its Save keeps the footer's own spinner/✓ — and so is
-                the channels tab, which runs on its own queries. */}
-            {busy && tab !== 'text' && tab !== 'channels' && (
+                the channels and privacy tabs, which run on their own queries. */}
+            {busy && tab !== 'text' && tab !== 'channels' && tab !== 'privacy' && (
               <div
                 role="status"
                 aria-live="polite"
@@ -518,7 +532,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 </span>
               </div>
             )}
-            {loadError && tab !== 'channels' && (
+            {loadError && tab !== 'channels' && tab !== 'privacy' && (
               <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                 <span>{t('accounts.profile.loadError')}</span>
                 <button
@@ -667,6 +681,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             )}
 
             {tab === 'channels' && <ChannelsTab accountId={account.account_id} />}
+
+            {tab === 'privacy' && <PrivacyTab accountId={account.account_id} />}
           </div>
 
           {/* footer */}

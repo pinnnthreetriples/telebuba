@@ -62,6 +62,11 @@ from schemas.telegram_actions_media import (
     WatchPeerStories,
 )
 
+# The account-privacy pair likewise lives in a sibling module; both unions below
+# reference these names, so importing them here keeps
+# ``from schemas.telegram_actions import SetPrivacySettings`` working.
+from schemas.telegram_actions_privacy import GetPrivacySettings, SetPrivacySettings
+
 
 class JoinChannel(BaseModel):
     action_type: Literal["join_channel"] = "join_channel"
@@ -246,6 +251,7 @@ TelegramAction = Annotated[
     | CommentOnPost
     | ClickButton
     | UpdateProfile
+    | SetPrivacySettings
     | SetOnline
     | ReadChannel
     | ReactToPost
@@ -275,6 +281,7 @@ TelegramReadAction = Annotated[
     | CheckMessagesAlive
     | CheckBannedInChannel
     | GetUserProfile
+    | GetPrivacySettings
     | ListPinnedStories
     | ListActiveStories
     | ListProfileMusic

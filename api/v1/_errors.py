@@ -21,9 +21,16 @@ def service_errors_to_http() -> Iterator[None]:
     ``AccountActionError`` subclasses ``ValueError`` but must reach its dedicated
     handler in :mod:`api.errors` (stable code + retry seconds in the envelope), so
     it is re-raised untouched before the generic ``str(exc)`` collapse.
+    ``AccountNotFoundError`` is a missing row, not a bad request, so it maps to
+    404 (it is a ``LookupError``, deliberately outside the ``ValueError`` family).
     """
     try:
         yield
+    except accounts.AccountNotFoundError as exc:
+        raise HTTPException(
+            status_code=http_status.HTTP_404_NOT_FOUND,
+            detail=f"account not found: {exc}",
+        ) from exc
     except accounts.AccountActionError:
         raise
     except ValueError as exc:
