@@ -243,6 +243,7 @@
       "errFirstNameMax": "First name must be at most 64 characters",
       "errLastNameMax": "Last name must be at most 64 characters",
       "errBioMax": "Bio must be at most 70 characters",
+      "bioNotApplied": "Telegram reports a different bio. On young accounts and text with links that usually means the bio was not kept: hit Refresh in a minute to check.",
       "errUsername": "Username: 5–32 characters, latin letters, digits and _, starting with a letter",
       "photoHint": "Current photo and history · drag to replace",
       "removePhoto": "Remove photo",

@@ -136,6 +136,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     const gen = ++pullGen.current;
     try {
       const fresh = await fetchLiveProfileSnapshot(account.account_id);
+      // The plain (cacheable) read this modal mounted with is a separate
+      // request against the same key. Left running, it resolves AFTER this
+      // write and puts pre-mutation fields back — reverting the form and, for
+      // a bio, raising a "Telegram did not keep it" warning about a value that
+      // did land. Nothing re-pulls on its own afterwards, so drop it first.
+      await queryClient.cancelQueries({ queryKey: snapOpts.queryKey });
+      // Re-checked here, not before the cancel: the await is another window in
+      // which a newer pull can start, and the older one must not write last.
       if (gen !== pullGen.current) return null;
       queryClient.setQueryData(snapOpts.queryKey, fresh);
       setSyncError(false);
@@ -162,6 +170,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  // The bio the last successful save sent, or null if nothing was saved since
+  // the modal opened / the field was edited again. Compared against the live
+  // snapshot below — never used as a value to display or re-submit.
+  const [savedBio, setSavedBio] = useState<string | null>(null);
   const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
   const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
   const [confirmMusic, setConfirmMusic] = useState<MusicRemoveRequest | null>(null);
@@ -202,6 +214,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         },
         {
           onSuccess: () => {
+            // Remember what the bio write carried: `updateProfile` answers with
+            // a `User`, which has no `about`, so ok does not prove the bio
+            // landed and only the live re-pull below can tell.
+            setSavedBio(value.bio.trim());
             // Reset the baseline to the just-saved values so the form is no
             // longer "dirty" — otherwise closing afterwards wrongly prompts
             // "discard unsaved edits?" even though everything was saved.
@@ -218,6 +234,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   });
   const canSave = useStore(form.store, (state) => state.canSubmit);
   const isDirty = useStore(form.store, (state) => state.isDirty);
+
+  // Telegram can accept `updateProfile` and silently ignore `about` — young
+  // accounts, typically a bio advertising a channel. The post-save live pull is
+  // the only witness, so a snapshot still reporting something else means the
+  // text did not land. Derived, not state: every later pull re-evaluates it, so
+  // a replication lag that briefly answers with the pre-write value clears
+  // itself instead of leaving a permanent false alarm. Gated on the pull having
+  // settled and on it having succeeded — a stale or failed read is not evidence.
+  const bioDropped =
+    savedBio !== null && !syncing && !loadError && (snapshot.data?.bio ?? '') !== savedBio;
 
   // A rejected save carries a stable code in the error envelope; username/bio
   // codes render under their field, the rest beside the footer's Save button
@@ -583,9 +609,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.bio')}>
                       <textarea
+                        data-testid="profile-bio"
                         rows={3}
                         value={field.state.value}
                         onChange={(event) => {
+                          // A new edit supersedes the verdict on the last save.
+                          setSavedBio(null);
                           field.handleChange(event.target.value);
                         }}
                         onBlur={field.handleBlur}
@@ -594,6 +623,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span className="mt-[5px] block text-[11px] font-medium text-[#c0473f]">
                           {saveErrorText}
+                        </span>
+                      )}
+                      {bioDropped && (
+                        <span
+                          data-testid="bio-not-applied"
+                          className="mt-[5px] block text-[11px] font-medium text-[#9a6700]"
+                        >
+                          {t('accounts.profile.bioNotApplied')}
                         </span>
                       )}
                     </FormField>
