@@ -217,7 +217,8 @@
         "story_video_invalid": "The video could not be processed — choose an MP4/MOV file",
         "story_collage_requires_image": "A collage can only contain photos, not video",
         "story_collage_too_many_images": "Too many photos for one collage",
-        "story_collage_unknown_layout": "That collage layout is not available for this number of photos"
+        "story_collage_unknown_layout": "That collage layout is not available for this number of photos",
+        "failed": "Telegram refused the story — try a different file"
       }
     },
     "profile": {
@@ -297,7 +298,8 @@
         "profile_photo_not_found": "Photo not found in the profile — refresh the list",
         "profile_photo_download_failed": "Couldn't download the photo from Telegram",
         "profile_music_invalid": "The audio file could not be processed — pick another one",
-        "profile_music_stale_reference": "The track changed on Telegram — refresh the list"
+        "profile_music_stale_reference": "The track changed on Telegram — refresh the list",
+        "failed": "Telegram refused the action — try again"
       },
       "privacy": {
         "hint": "When the Telegram photo or bio is limited to contacts, strangers see a letter placeholder instead of the avatar and an empty bio. The button below opens the photo and bio only. It leaves “Last seen” alone: an open status publishes the account's activity schedule, so change that in its row by hand.",
@@ -410,6 +412,7 @@
         "channel_read_failed": "Couldn't read the channel data from Telegram",
         "channel_create_failed": "Couldn't create the channel",
         "channel_username_assign_failed": "Channel was created as private — the username could not be assigned",
+        "failed": "Telegram refused the action — try again",
         "unavailable": "Telegram is temporarily unavailable — try again"
       }
     },
