@@ -92,12 +92,14 @@ async def test_update_account_profile_surfaces_action_failure(
             status="failed",
             action_type="update_profile",
             account_id=account_id,
+            error_type="RuntimeError",
             error_message="boom",
         )
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
 
-    with pytest.raises(ValueError, match="boom"):
+    # An unmapped exception's prose is not a code: the bounded status surfaces.
+    with pytest.raises(ValueError, match="failed"):
         await update_account_profile(
             AccountProfileUpdateRequest(account_id="account-profile-fail", first_name="Alice"),
         )
@@ -188,8 +190,10 @@ async def test_update_account_profile_invalidates_cache_on_failure(
             status="failed",
             action_type="update_profile",
             account_id=account_id,
-            error_type="UsernameOccupiedError",
-            error_message="USERNAME_OCCUPIED",
+            # The gateway maps the Telethon refusal to its stable code before
+            # the result is built (``_profile._PROFILE_ERROR_CODES``).
+            error_type="ProfileGatewayError",
+            error_message="username_occupied",
         )
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
@@ -248,11 +252,14 @@ async def test_update_account_profile_invalidates_cache_when_db_write_fails(
 
 
 def _patch_failed_execute(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A generic (unmapped) refusal — its prose collapses to the ``failed`` code."""
+
     async def fake_execute(account_id: str, _action: object) -> ActionResult:
         return ActionResult(
             status="failed",
             action_type="update_profile",
             account_id=account_id,
+            error_type="RuntimeError",
             error_message="boom",
         )
 
@@ -353,7 +360,7 @@ async def test_refused_resync_read_still_surfaces_the_refusal(
     _patch_failed_execute(monkeypatch)
     monkeypatch.setattr("services.accounts.profile.execute_read", failing_read)
 
-    with pytest.raises(AccountActionError, match="boom"):
+    with pytest.raises(AccountActionError, match=r"^failed$"):
         await update_account_profile(
             AccountProfileUpdateRequest(
                 account_id="account-profile-readfail",
@@ -386,7 +393,7 @@ async def test_resync_with_unstorable_live_username_keeps_original_error(
     _patch_failed_execute(monkeypatch)
     monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
 
-    with pytest.raises(AccountActionError, match="boom"):
+    with pytest.raises(AccountActionError, match=r"^failed$"):
         await update_account_profile(
             AccountProfileUpdateRequest(
                 account_id="account-profile-nft",

@@ -62,6 +62,11 @@ from schemas.telegram_actions_media import (
     WatchPeerStories,
 )
 
+# The account-privacy pair likewise lives in a sibling module; both unions below
+# reference these names, so importing them here keeps
+# ``from schemas.telegram_actions import SetPrivacySettings`` working.
+from schemas.telegram_actions_privacy import GetPrivacySettings, SetPrivacySettings
+
 
 class JoinChannel(BaseModel):
     action_type: Literal["join_channel"] = "join_channel"
@@ -165,6 +170,10 @@ class SendDirectMessage(BaseModel):
     # Per-account typing tempo (WPM) for the "typing…" simulation; ``None`` falls
     # back to the global ``typing_wpm``.
     typing_wpm: int | None = None
+    # Recipient's phone, used to teach a fresh session the peer's access_hash
+    # (a raw user_id it has never seen cannot be resolved). ``None`` = resolve
+    # from the session cache only.
+    peer_phone: str | None = None
 
 
 class MarkDirectMessageRead(BaseModel):
@@ -172,6 +181,8 @@ class MarkDirectMessageRead(BaseModel):
 
     action_type: Literal["mark_dm_read"] = "mark_dm_read"
     user_id: int
+    # Same role as on ``SendDirectMessage`` — peer resolution for a cold session.
+    peer_phone: str | None = None
 
 
 class GetLinkedDiscussionGroup(BaseModel):
@@ -246,6 +257,7 @@ TelegramAction = Annotated[
     | CommentOnPost
     | ClickButton
     | UpdateProfile
+    | SetPrivacySettings
     | SetOnline
     | ReadChannel
     | ReactToPost
@@ -275,6 +287,7 @@ TelegramReadAction = Annotated[
     | CheckMessagesAlive
     | CheckBannedInChannel
     | GetUserProfile
+    | GetPrivacySettings
     | ListPinnedStories
     | ListActiveStories
     | ListProfileMusic

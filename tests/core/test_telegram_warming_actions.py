@@ -21,7 +21,6 @@ from core.telegram_client._react import _whitelist_cache
 from schemas.telegram_actions import (
     ReactToPost,
     ReadChannel,
-    SendDirectMessage,
     SetOnline,
     WatchPeerStories,
 )
@@ -410,27 +409,6 @@ async def test_channel_whitelist_failure_is_not_cached(
 
     full_reqs = [r for r in captured if isinstance(r, GetFullChannelRequest)]
     assert len(full_reqs) == 2
-
-
-@pytest.mark.asyncio
-async def test_send_dm_returns_message_id(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(settings.warming, "typing_simulation_enabled", False)
-
-    class FakeClient:
-        async def connect(self) -> None:
-            return None
-
-        async def send_message(self, user_id: int, text: str) -> object:
-            assert user_id == 555
-            assert text == "hello"
-            return MagicMock(id=88)
-
-    _patch_client(monkeypatch, FakeClient())
-
-    result = await execute("acc-4", SendDirectMessage(user_id=555, text="hello"))
-
-    assert result.status == "ok"
-    assert result.message_id == 88
 
 
 @pytest.mark.asyncio

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import asyncio
 import random
 from typing import TYPE_CHECKING
 
@@ -16,7 +15,6 @@ from telethon.tl.functions.channels import (
 from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
 from telethon.tl.types import ReactionEmoji
 
-from core.config import settings
 from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._action_results import (
@@ -26,8 +24,10 @@ from core.telegram_client._action_results import (
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
+from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
 from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
+from core.telegram_client._privacy import dispatch_set_privacy_settings
 from core.telegram_client._profile import (
     _PROFILE_EDIT_ACTION_TYPES,
     _dispatch_update_profile,
@@ -55,6 +55,7 @@ from schemas.telegram_actions import (
     SendDirectMessage,
     SetMainProfilePhoto,
     SetOnline,
+    SetPrivacySettings,
     SetProfilePhoto,
     ToggleStoryPinned,
     UpdateProfile,
@@ -163,27 +164,6 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
     )
 
 
-def _typing_seconds(text: str, wpm: int | None = None) -> float:
-    """Length-proportional typing time (≈ WPM), clamped to a sane window.
-
-    ``wpm`` is the per-account tempo; ``None`` falls back to the global default.
-    """
-    warm = settings.warming
-    base = len(text) * 60.0 / (5.0 * (wpm or warm.typing_wpm))
-    return max(warm.typing_sim_min_seconds, min(warm.typing_sim_max_seconds, base))
-
-
-async def _send_dm_with_typing(client: TelegramClient, action: SendDirectMessage) -> int | None:
-    """Send a DM, optionally preceded by a length-proportional "typing…" action."""
-    if settings.warming.typing_simulation_enabled:
-        async with client.action(action.user_id, "typing"):  # ty: ignore[invalid-context-manager]
-            await asyncio.sleep(_typing_seconds(action.text, action.typing_wpm))
-            message = await client.send_message(action.user_id, action.text)
-    else:
-        message = await client.send_message(action.user_id, action.text)
-    return int(getattr(message, "id", 0)) or None
-
-
 async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _DispatchResult:  # noqa: C901, PLR0912
     """Run one action against an already-connected client.
 
@@ -222,6 +202,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             await _dispatch_click_button(client, action)
         case UpdateProfile():
             await _dispatch_update_profile(client, action)
+        case SetPrivacySettings():
+            await dispatch_set_privacy_settings(client, action)
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
@@ -236,7 +218,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             message_id = await _send_dm_with_typing(client, action)
         case MarkDirectMessageRead():
             # send_read_acknowledge on a user peer marks the DM conversation read.
-            await client.send_read_acknowledge(action.user_id)
+            await client.send_read_acknowledge(await _resolve_dm_peer(client, action))
         case _ if action.action_type.startswith("channel_"):
             # Channel management (create/edit/post/delete) — its own dispatcher
             # builds the full result (channel_create carries the new id).
@@ -374,6 +356,17 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
                 "has_last_name": action.last_name is not None,
                 "has_username": action.username is not None,
                 "has_bio": action.bio is not None,
+            }
+        case SetPrivacySettings():
+            # The LEVELS, not just which keys were touched: this action has a
+            # fleet-wide, non-undoable caller (setPrivacy replaces a key's whole
+            # rule vector), so the activity log is the only record of what was
+            # pushed to N accounts. Unlike profile text, a privacy level is not
+            # account content, so logging the value leaks nothing.
+            extra = {
+                "profile_photo": action.profile_photo,
+                "bio": action.bio,
+                "last_seen": action.last_seen,
             }
         case SetProfilePhoto() | PostStory() | AddProfileMusic():
             extra = {"filename": action.filename}

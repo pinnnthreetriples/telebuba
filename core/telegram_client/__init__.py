@@ -13,6 +13,7 @@ to keep each file small:
 - ``_listener``— standing NewMessage subscription → typed NewPostEvent callback
 - ``_media``   — profile photo / story / music actions
 - ``_profile`` — profile-field edit dispatch + edit-time status bookkeeping
+- ``_privacy`` — account-privacy key read/write dispatch (avatar/bio visibility)
 
 Tests that monkeypatch internals target the submodule that owns the name
 (e.g. ``core.telegram_client._actions.get_client``), not this namespace.

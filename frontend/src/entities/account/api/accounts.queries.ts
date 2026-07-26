@@ -63,6 +63,8 @@ export {
   checkAccountChannelUsernameQueryKey as accountChannelUsernameCheckQueryKey,
   getAccountChannelOptions as accountChannelQueryOptions,
   getAccountChannelQueryKey as accountChannelQueryKey,
+  getAccountPrivacyOptions as accountPrivacyQueryOptions,
+  getAccountPrivacyQueryKey as accountPrivacyQueryKey,
   getAccountProfileSnapshotOptions as accountProfileSnapshotQueryOptions,
   getAccountProfileSnapshotQueryKey as accountProfileSnapshotQueryKey,
   listAccountChannelPostsOptions as accountChannelPostsQueryOptions,

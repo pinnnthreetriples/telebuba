@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { z } from 'zod';
 
 import {
+  accountPrivacyQueryKey,
   accountProfileSnapshotQueryOptions,
   accountsQueryKey,
   addAccountMusicMutation,
@@ -33,6 +34,7 @@ import { AddStoryModal } from './AddStoryModal';
 import { ChannelsTab } from './ChannelsTab';
 import { MusicTab } from './MusicTab';
 import { PhotoTab } from './PhotoTab';
+import { PrivacyTab } from './PrivacyTab';
 import { StoriesTab } from './StoriesTab';
 
 // Telegram's real profile limits: non-empty first name ≤64, last name ≤64,
@@ -53,14 +55,14 @@ const profileSchema = z.object({
   bio: z.string().trim().max(70, 'accounts.profile.errBioMax'),
 });
 
-// The design's profile-edit modal: hero header, a 5-tab segmented header
-// (text / photo / stories / music / channels), per-tab bodies, and a
+// The design's profile-edit modal: hero header, a 6-tab segmented header
+// (text / photo / stories / music / channels / privacy), per-tab bodies, and a
 // save→saved swap footer. Every tab is wired to /api/v1: Текст persists the
 // profile, the photo / stories / music tabs render the account's live media
-// (the profile-snapshot view) with real upload + remove, and the channels tab
-// manages the account's own channels (its own queries — outside the snapshot
-// busy scrim).
-type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels';
+// (the profile-snapshot view) with real upload + remove, and the channels and
+// privacy tabs manage the account's own channels and its Telegram privacy
+// levels (their own queries — outside the snapshot busy scrim).
+type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy';
 
 // "Обновлено {только что | N мин назад}" from the snapshot query's last fetch.
 // Its own component with its own 30s tick, so only this label re-renders while
@@ -134,6 +136,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     const gen = ++pullGen.current;
     try {
       const fresh = await fetchLiveProfileSnapshot(account.account_id);
+      // The plain (cacheable) read this modal mounted with is a separate
+      // request against the same key. Left running, it resolves AFTER this
+      // write and puts pre-mutation fields back — reverting the form and, for
+      // a bio, raising a "Telegram did not keep it" warning about a value that
+      // did land. Nothing re-pulls on its own afterwards, so drop it first.
+      await queryClient.cancelQueries({ queryKey: snapOpts.queryKey });
+      // Re-checked here, not before the cancel: the await is another window in
+      // which a newer pull can start, and the older one must not write last.
       if (gen !== pullGen.current) return null;
       queryClient.setQueryData(snapOpts.queryKey, fresh);
       setSyncError(false);
@@ -160,6 +170,23 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [photoProgress, setPhotoProgress] = useState<{ done: number; total: number } | null>(null);
   const [storyOpen, setStoryOpen] = useState(false);
   const [saved, setSaved] = useState(false);
+  // The bio the last successful save sent, or null if nothing was saved since
+  // the modal opened / the field was edited again. Compared against the live
+  // snapshot below — never used as a value to display or re-submit.
+  //
+  // Held in a ref as well as state, and the seeding guard below reads the REF.
+  // Not for timing: making the guard read the state would mean adding it to
+  // `seedForm`'s deps, and that re-runs the seeding effect on every verdict
+  // change — against whatever snapshot is cached at that moment, which right
+  // after a save is still the pre-save one, reverting the other fields to it.
+  // A ref keeps `seedForm` stable so the effect fires only on a fresh snapshot.
+  // The rendered verdict still needs the state, or nothing re-renders to show it.
+  const savedBioRef = useRef<string | null>(null);
+  const [savedBio, setSavedBio] = useState<string | null>(null);
+  const rememberSavedBio = (bio: string | null) => {
+    savedBioRef.current = bio;
+    setSavedBio(bio);
+  };
   const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
   const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
   const [confirmMusic, setConfirmMusic] = useState<MusicRemoveRequest | null>(null);
@@ -177,13 +204,21 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     addMusic.isPending ||
     removeMusic.isPending;
 
+  // `form.reset(saved)` alone does not survive. form-core moves the form's own
+  // `options.defaultValues` to the values it was reset with, so the next render
+  // passes defaults that DEEP-DIFFER from them — and `FormApi.update` re-applies
+  // `defaultValues` whenever they differ and the form is untouched, which a reset
+  // has just made it. An inline object built from `account` therefore restores
+  // the pre-save values one render later. Moving the baseline in step keeps the
+  // comparison equal, so the re-apply becomes a no-op instead of a revert.
+  const baseline = useRef({
+    first_name: account.first_name ?? '',
+    last_name: account.last_name ?? '',
+    username: account.username ?? '',
+    bio: account.bio ?? '',
+  });
   const form = useForm({
-    defaultValues: {
-      first_name: account.first_name ?? '',
-      last_name: account.last_name ?? '',
-      username: account.username ?? '',
-      bio: account.bio ?? '',
-    },
+    defaultValues: baseline.current,
     validators: { onChange: profileSchema, onMount: profileSchema },
     onSubmit: ({ value }) => {
       updateProfile.mutate(
@@ -200,9 +235,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         },
         {
           onSuccess: () => {
+            // Remember what the bio write carried: `updateProfile` answers with
+            // a `User`, which has no `about`, so ok does not prove the bio
+            // landed and only the live re-pull below can tell.
+            rememberSavedBio(value.bio.trim());
             // Reset the baseline to the just-saved values so the form is no
             // longer "dirty" — otherwise closing afterwards wrongly prompts
-            // "discard unsaved edits?" even though everything was saved.
+            // "discard unsaved edits?" even though everything was saved. Both
+            // halves are needed: `reset` clears the dirty meta, the baseline
+            // write stops the next render from restoring the pre-save values.
+            baseline.current = { ...value };
             form.reset(value);
             setSaved(true);
             window.setTimeout(() => {
@@ -216,6 +258,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   });
   const canSave = useStore(form.store, (state) => state.canSubmit);
   const isDirty = useStore(form.store, (state) => state.isDirty);
+
+  // Telegram can accept `updateProfile` and silently ignore `about` — young
+  // accounts, typically a bio advertising a channel. The post-save live pull is
+  // the only witness, so a snapshot still reporting something else means the
+  // text did not land. Derived, not state: every later pull re-evaluates it, so
+  // a replication lag that briefly answers with the pre-write value clears
+  // itself instead of leaving a permanent false alarm. Gated on the pull having
+  // settled and on it having succeeded — a stale or failed read is not evidence.
+  const bioDropped =
+    savedBio !== null && !syncing && !loadError && (snapshot.data?.bio ?? '') !== savedBio;
 
   // A rejected save carries a stable code in the error envelope; username/bio
   // codes render under their field, the rest beside the footer's Save button
@@ -286,7 +338,25 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       }
       seedField('last_name', view.last_name ?? '');
       seedField('username', view.username ?? '');
-      seedField('bio', view.bio ?? '');
+      // Hold the bio while a save is outstanding. Seeding it hands the operator
+      // back the text Telegram refused, and the next save — dirty through any
+      // other field — pushes that old text while the warning vanishes as though
+      // it had resolved. Their own text stays; the warning says why Telegram
+      // lacks it. No `=== savedBio` half: when the two agree this seed writes
+      // the value already in the field, so it would never be observable. The
+      // hold is released by editing the field (`rememberSavedBio(null)`), which
+      // is also what lets «Обновить» pull the bio back down.
+      if (savedBioRef.current === null) {
+        seedField('bio', view.bio ?? '');
+      }
+      // ponytail: the same hold is NOT applied to the names or the username. A
+      // save whose forced pull lags AND carries unrelated drift re-seeds them to
+      // the pre-save values while the baseline holds the new ones, so a later
+      // save dirtied elsewhere re-pushes the old name — the bio failure, minus
+      // the warning that explains it. Left alone deliberately: `about` is the
+      // only field Telegram is documented to ignore silently, so for the rest
+      // this needs a real lag, and holding every field would freeze «Обновить»
+      // after every save. Revisit if an operator reports a name reverting.
     },
     [seedField],
   );
@@ -302,6 +372,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // rendered snapshot, and reseed the header + text fields from the fresh profile.
   const onRefresh = async () => {
     setRefreshState('loading');
+    // The privacy tab runs its own query, outside the snapshot: without this,
+    // «Обновить» resets the «Обновлено … назад» label while the levels on
+    // screen stay stale — the control would be lying on that tab. Only when it
+    // is the visible tab: three getPrivacy round trips per press from the text
+    // or media tabs is spend for nothing.
+    if (tab === 'privacy') {
+      void queryClient.invalidateQueries({
+        queryKey: accountPrivacyQueryKey({ path: { account_id: account.account_id } }),
+      });
+    }
     try {
       const fresh = await forcePull();
       if (fresh) {
@@ -315,6 +395,11 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       }
     } catch {
       setRefreshState('error');
+      // Same as the fire-and-forget `refresh()` path: a refused pull must mark
+      // the snapshot untrustworthy, not just flash a 1.4s ✗. Otherwise the
+      // stale fields keep rendering as current — and the bio verdict, which
+      // stays silent while `loadError` holds, would be recomputed from them.
+      setSyncError(true);
     } finally {
       window.setTimeout(() => {
         setRefreshState('idle');
@@ -480,18 +565,20 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
           {/* tabs */}
           <div className="flex gap-5 border-b border-[#f0eeeb] px-5">
-            {(['text', 'photo', 'stories', 'music', 'channels'] as const).map((value) => (
-              <button
-                key={value}
-                type="button"
-                onClick={() => {
-                  setTab(value);
-                }}
-                className={tabBtn(value)}
-              >
-                {t(`accounts.profile.tab.${value}`)}
-              </button>
-            ))}
+            {(['text', 'photo', 'stories', 'music', 'channels', 'privacy'] as const).map(
+              (value) => (
+                <button
+                  key={value}
+                  type="button"
+                  onClick={() => {
+                    setTab(value);
+                  }}
+                  className={tabBtn(value)}
+                >
+                  {t(`accounts.profile.tab.${value}`)}
+                </button>
+              ),
+            )}
           </div>
 
           {/* content */}
@@ -502,8 +589,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 submits. It sits inside the overflow container, so `inset-0` pins it
                 to the visible viewport rather than scrolling away. The text tab is
                 excluded — its Save keeps the footer's own spinner/✓ — and so is
-                the channels tab, which runs on its own queries. */}
-            {busy && tab !== 'text' && tab !== 'channels' && (
+                the channels and privacy tabs, which run on their own queries. */}
+            {busy && tab !== 'text' && tab !== 'channels' && tab !== 'privacy' && (
               <div
                 role="status"
                 aria-live="polite"
@@ -518,7 +605,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 </span>
               </div>
             )}
-            {loadError && tab !== 'channels' && (
+            {loadError && tab !== 'channels' && tab !== 'privacy' && (
               <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
                 <span>{t('accounts.profile.loadError')}</span>
                 <button
@@ -569,9 +656,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   {(field) => (
                     <FormField field={field} label={t('accounts.profile.bio')}>
                       <textarea
+                        data-testid="profile-bio"
                         rows={3}
                         value={field.state.value}
                         onChange={(event) => {
+                          // A new edit supersedes the verdict on the last save.
+                          rememberSavedBio(null);
                           field.handleChange(event.target.value);
                         }}
                         onBlur={field.handleBlur}
@@ -580,6 +670,14 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                       {saveErrorField === 'bio' && saveErrorText != null && (
                         <span className="mt-[5px] block text-[11px] font-medium text-[#c0473f]">
                           {saveErrorText}
+                        </span>
+                      )}
+                      {bioDropped && (
+                        <span
+                          data-testid="bio-not-applied"
+                          className="mt-[5px] block text-[11px] font-medium text-[#9a6700]"
+                        >
+                          {t('accounts.profile.bioNotApplied')}
                         </span>
                       )}
                     </FormField>
@@ -667,6 +765,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             )}
 
             {tab === 'channels' && <ChannelsTab accountId={account.account_id} />}
+
+            {tab === 'privacy' && <PrivacyTab accountId={account.account_id} />}
           </div>
 
           {/* footer */}

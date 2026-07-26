@@ -108,3 +108,50 @@ test('redirects a mutation-only unauthorized to /login without toasting', async 
   expect(toastError).not.toHaveBeenCalled();
   assign.mockRestore();
 });
+
+test('translates a story code in the toast, not just inline in the modal', async () => {
+  vi.mocked(toastError).mockClear();
+  const { result } = renderHook(
+    () =>
+      useMutation({
+        mutationFn: () =>
+          Promise.reject({
+            error: { code: 'bad_request', message: 'story_video_ffmpeg_missing' },
+          }),
+      }),
+    { wrapper },
+  );
+  result.current.mutate(undefined);
+  await waitFor(() => {
+    // This toast fires for EVERY mutation including a story publish, so the
+    // addStory table has to be in its fallback chain — otherwise the operator
+    // reads correct copy inline and the raw code in the toast beside it.
+    expect(toastError).toHaveBeenCalledWith(
+      'На сервере нет ffmpeg — обрабатывать видео нечем. Это настройка сервера, а не проблема файла',
+    );
+  });
+});
+
+test('a slow-mode refusal reads as copy with its retry-after seconds', async () => {
+  vi.mocked(toastError).mockClear();
+  const { result } = renderHook(
+    () =>
+      useMutation({
+        mutationFn: () =>
+          Promise.reject({
+            error: {
+              code: 'bad_request',
+              message: 'slow_mode_wait',
+              fields: { retry_after_seconds: '30' },
+            },
+          }),
+      }),
+    { wrapper },
+  );
+  result.current.mutate(undefined);
+  await waitFor(() => {
+    expect(toastError).toHaveBeenCalledWith(
+      'В канале включён медленный режим — повторите через 30 с',
+    );
+  });
+});
