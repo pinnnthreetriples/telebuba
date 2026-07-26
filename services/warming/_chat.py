@@ -1,13 +1,13 @@
-"""Gemini-driven inter-account chat — one dialogue turn per cycle.
+"""One inter-account dialogue turn per cycle — who talks to whom, and the send.
 
-Reaches Telegram, Gemini and randomness through :mod:`services.warming._seams`
-so tests patch those seams in one place.
+The line itself comes from :mod:`services.warming._chat_text`. Telegram and
+randomness are reached through :mod:`services.warming._seams` so tests patch
+those seams in one place.
 """
 
 from __future__ import annotations
 
 import dataclasses
-import re
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -19,16 +19,15 @@ from core.db import (
     mark_message_replied,
     mark_message_unreplied,
     pair_key,
-    recent_pair_messages,
     record_dialogue_message,
     try_claim_message_reply,
 )
 from core.logging import log_event
-from schemas.gemini import GeminiRequest
 from schemas.telegram_actions import ActionResult, MarkDirectMessageRead, SendDirectMessage
-from services.content import is_acceptable, release_sent_text, similarity, try_reserve_sent
+from services.content import release_sent_text
 from services.dialogues import get_partners
 from services.warming import _seams
+from services.warming._chat_text import _opener_text, _reply_text
 from services.warming._fleet import _stable_fraction
 from services.warming.pacing import _HALT_STATUSES, _classify_flood, persona_dm_probability
 
@@ -38,46 +37,9 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingCycleRequest, WarmingSettingsSecret
     from services.warming._cycle import _ChannelTally
 
-# Control characters: strip from Gemini output before sending it as a DM.
-_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
-
-_CHAT_PROMPTS = (
-    "Напиши одно короткое дружелюбное сообщение для чата в Telegram (1-2 предложения), "
-    "без хэштегов и без кавычек.",
-    "Сгенерируй одну живую неформальную реплику для переписки в Telegram, "
-    "максимум два предложения, без эмодзи-спама.",
-    "Придумай короткое сообщение, как будто пишешь приятелю в Telegram. "
-    "Только текст, без пояснений.",
-)
-
-_REPLY_PROMPT = (
-    "Ответь коротко и по-дружески, как другу в Telegram, на это сообщение: "
-    "«{incoming}». Только текст ответа, без кавычек."
-)
-
-# History-aware prompt: given the recent transcript («Я» = this account) the
-# model continues THIS conversation instead of emitting a generic greeting. Only
-# the instruction line differs — replying to the last message vs. reopening.
-_HISTORY_PROMPT = (
-    "Ты и твой друг переписываетесь в Telegram. Вот последние сообщения "
-    "(«Я» — это ты):\n{transcript}\n\n{instruction}"
-)
-_REPLY_INSTRUCTION = (
-    "Продолжи разговор естественно: коротко ответь по-дружески на последнюю "
-    "реплику собеседника. 1-2 предложения, без кавычек, без хэштегов, без "
-    "эмодзи-спама. Только текст ответа."
-)
-_OPENER_INSTRUCTION = (
-    "Напиши короткое сообщение, чтобы естественно возобновить разговор, учитывая "
-    "то, что вы обсуждали ранее. 1-2 предложения, без кавычек, без хэштегов. "
-    "Только текст."
-)
-
-
-@dataclasses.dataclass
-class GenerateResult:
-    text: str | None = None
-    failure_reason: str | None = None
+# The gateway's class name for "this partner is permanently unaddressable" —
+# no phone to look up, or phone-lookup privacy hides them.
+_PEER_UNRESOLVED = "DmPeerUnresolvedError"
 
 
 @dataclasses.dataclass
@@ -89,27 +51,6 @@ class ChatResult:
     last_failed_action: str | None = None
 
 
-async def _build_transcript(sender_id: str, partner_id: str) -> tuple[str, list[str]]:
-    """Recent pair transcript from ``sender_id``'s POV, plus the raw message texts.
-
-    Labels each line "Я:" when the sender wrote it, else "Собеседник:". Returns
-    ``("", [])`` when context is disabled or the pair has no history — the caller
-    then falls back to the context-free opener/reply prompt. The texts are reused
-    as the near-duplicate corpus (Task D) so no extra DB query is issued.
-    """
-    limit = settings.warming.dialogue_context_messages
-    if limit <= 0:
-        return "", []
-    history = await recent_pair_messages(pair_key(sender_id, partner_id), limit)
-    if not history:
-        return "", []
-    lines = [
-        f"{'Я' if message.from_account == sender_id else 'Собеседник'}: {message.text}"
-        for message in history
-    ]
-    return "\n".join(lines), [message.text for message in history]
-
-
 def _account_typing_wpm(account_id: str) -> int:
     """Stable-but-distinct typing tempo for an account, uniform in [min, max].
 
@@ -119,74 +60,6 @@ def _account_typing_wpm(account_id: str) -> int:
     warm = settings.warming
     span = warm.typing_wpm_max - warm.typing_wpm_min + 1
     return warm.typing_wpm_min + int(_stable_fraction(f"wpm:{account_id}") * span)
-
-
-def _sanitize_chat_text(raw: str) -> str | None:
-    """Strip control chars, trim, enforce length / line limits. ``None`` if empty."""
-    cleaned = _CONTROL_CHARS_RE.sub("", raw).strip()
-    if not cleaned:
-        return None
-    lines = [line.strip() for line in cleaned.splitlines() if line.strip()]
-    lines = lines[: settings.warming.chat_message_max_lines]
-    cleaned = "\n".join(lines)
-    if len(cleaned) > settings.warming.chat_message_max_chars:
-        cleaned = cleaned[: settings.warming.chat_message_max_chars].rstrip()
-    return cleaned or None
-
-
-async def _generate_chat_text(
-    sender_id: str,
-    secret: WarmingSettingsSecret,
-    *,
-    prompt: str | None = None,
-    recent_texts: list[str] | None = None,
-) -> GenerateResult:
-    """Generate a chat line, retrying until it passes the filter and dedup.
-
-    ``prompt`` overrides the random opener (used for context-aware replies).
-    ``recent_texts`` is this conversation's recent lines: a candidate too similar
-    to any of them (Task D near-duplicate gate) is rejected and regenerated.
-    Returns ``GenerateResult`` with text if successful, or the specific
-    failure reason.
-    """
-    recent_texts = recent_texts or []
-    threshold = settings.warming.dialogue_similarity_max
-    failure = "generate_chat_text"
-    for _ in range(settings.warming.content_max_attempts):
-        generated = await _seams.generate_text(
-            GeminiRequest(
-                api_key=secret.gemini_api_key,
-                prompt=prompt or _seams.rng.choice(_CHAT_PROMPTS),
-                model=secret.gemini_model,
-                temperature=settings.gemini.temperature,
-                max_output_tokens=settings.gemini.max_output_tokens,
-            ),
-        )
-        if generated.status != "ok" or not generated.text:
-            await log_event(
-                "WARNING",
-                "warming_chat_generation_failed",
-                account_id=sender_id,
-                extra={"error": generated.error},
-            )
-            return GenerateResult(failure_reason="generate_chat_text")
-        candidate = _sanitize_chat_text(generated.text)
-        if candidate is None:
-            continue
-        if not is_acceptable(candidate):
-            await log_event("INFO", "warming_chat_filtered", account_id=sender_id)
-            failure = "chat_content_filtered"
-            continue
-        if any(similarity(candidate, prior) >= threshold for prior in recent_texts):
-            await log_event("INFO", "warming_chat_too_similar", account_id=sender_id)
-            failure = "chat_too_similar"
-            continue
-        if not await try_reserve_sent(candidate):
-            await log_event("INFO", "warming_chat_duplicate", account_id=sender_id)
-            failure = "chat_duplicate"
-            continue
-        return GenerateResult(text=candidate)
-    return GenerateResult(failure_reason=failure)
 
 
 async def _maybe_inter_account_chat(
@@ -293,8 +166,19 @@ async def _reply_to_partner(  # noqa: PLR0911
     # Read receipt + read-to-reply delay: a real user opens and reads the DM
     # before answering, so mark it read then pause briefly. A failed read-ack is
     # not a dialogue failure — proceed to reply regardless.
-    read = await _seams.execute(sender_id, MarkDirectMessageRead(user_id=target.user_id))
+    read = await _seams.execute(
+        sender_id,
+        MarkDirectMessageRead(
+            user_id=target.user_id,
+            peer_phone=target.phone,
+        ),
+    )
     if read.status != "ok":
+        # The read-ack resolves the same peer the send would, so an unresolvable
+        # partner is already decided here — bail before spending a second lookup
+        # and a Gemini generation on a reply that cannot be delivered.
+        if read.error_type == _PEER_UNRESOLVED:
+            return await _drop_unresolvable_reply(sender_id, incoming)
         await log_event(
             "INFO",
             "warming_dialogue_read_ack_skipped",
@@ -306,13 +190,7 @@ async def _reply_to_partner(  # noqa: PLR0911
         warm.dm_read_reply_delay_min_seconds, warm.dm_read_reply_delay_max_seconds
     )
     await _seams.sleep(delay)
-    transcript, recent_texts = await _build_transcript(sender_id, incoming.from_account)
-    prompt = (
-        _HISTORY_PROMPT.format(transcript=transcript, instruction=_REPLY_INSTRUCTION)
-        if transcript
-        else _REPLY_PROMPT.format(incoming=incoming.text)
-    )
-    gen = await _generate_chat_text(sender_id, secret, prompt=prompt, recent_texts=recent_texts)
+    gen = await _reply_text(sender_id, secret, incoming)
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
     text = gen.text
@@ -330,7 +208,10 @@ async def _reply_to_partner(  # noqa: PLR0911
     result = await _seams.execute(
         sender_id,
         SendDirectMessage(
-            user_id=target.user_id, text=text, typing_wpm=_account_typing_wpm(sender_id)
+            user_id=target.user_id,
+            text=text,
+            typing_wpm=_account_typing_wpm(sender_id),
+            peer_phone=target.phone,
         ),
     )
 
@@ -341,8 +222,10 @@ async def _reply_to_partner(  # noqa: PLR0911
         await release_sent_text(text)
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
-        await mark_message_unreplied(incoming.id)
         await release_sent_text(text)
+        if result.error_type == _PEER_UNRESOLVED:
+            return await _drop_unresolvable_reply(sender_id, incoming)
+        await mark_message_unreplied(incoming.id)
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.
@@ -356,6 +239,45 @@ async def _reply_to_partner(  # noqa: PLR0911
     return ChatResult(messages_sent=1, attempted_actions=1)
 
 
+async def _skip_unresolvable_peer(sender_id: str, partner_id: str) -> ChatResult:
+    """A partner Telegram will never hand us — skip the turn without failing the cycle.
+
+    No usable phone, or their phone-lookup privacy hides them: either way the
+    pair is permanently undeliverable. Counting it as a failure would park an
+    otherwise healthy sender in the terminal ``error`` state.
+
+    The turn still spent RPCs, so it is billed as an attempt: that keeps the
+    phone lookup — the most abuse-monitored call the fleet makes — inside the
+    daily cap instead of running off-budget beside it.
+
+    ponytail: no negative cache. The reply path consumes the message so a stuck
+    pair stops re-arming, but the opener still re-picks this partner and pays
+    the full cold-resolve every cycle — ``users.GetUsers`` for the cache miss,
+    then ``contacts.resolvePhone``. Cycles are hours apart and the cap now
+    absorbs it, so that is a handful of calls a day. Give the pair a cooldown if
+    the fleet ever carries more than a couple of these.
+    """
+    await log_event(
+        "WARNING",
+        "warming_dialogue_peer_unresolved",
+        account_id=sender_id,
+        extra={"with": partner_id},
+    )
+    return ChatResult(attempted_actions=1)
+
+
+async def _drop_unresolvable_reply(sender_id: str, incoming: DialogueMessage) -> ChatResult:
+    """Skip the pair and consume the message that would otherwise re-arm it.
+
+    Leaving it pending would resurface the same undeliverable partner every
+    cycle forever — ``_conversation_faded`` needs 12 turns to let go and a stuck
+    pair never gets past one. Marking it replied ends the thread, exactly as an
+    unknown partner already does at the top of ``_reply_to_partner``.
+    """
+    await mark_message_replied(incoming.id)
+    return await _skip_unresolvable_peer(sender_id, incoming.from_account)
+
+
 async def _conversation_faded(account_a: str, account_b: str) -> bool:
     """True once a pair has exchanged ``dialogue_max_turns`` within the window."""
     warm = settings.warming
@@ -366,7 +288,7 @@ async def _conversation_faded(account_a: str, account_b: str) -> bool:
     return count >= warm.dialogue_max_turns
 
 
-async def _open_with_partner(
+async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure reason
     sender_id: str,
     partners: list[str],
     secret: WarmingSettingsSecret,
@@ -398,15 +320,7 @@ async def _open_with_partner(
     target = _seams.rng.choice(eligible)
     if target.user_id is None:
         return ChatResult()
-    # Resumed opener: if the pair has recent history, continue it with context;
-    # a genuinely fresh pair (no history) falls back to a random cold opener.
-    transcript, recent_texts = await _build_transcript(sender_id, target.account_id)
-    prompt = (
-        _HISTORY_PROMPT.format(transcript=transcript, instruction=_OPENER_INSTRUCTION)
-        if transcript
-        else None
-    )
-    gen = await _generate_chat_text(sender_id, secret, prompt=prompt, recent_texts=recent_texts)
+    gen = await _opener_text(sender_id, secret, target.account_id)
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
     text = gen.text
@@ -414,7 +328,10 @@ async def _open_with_partner(
     result = await _seams.execute(
         sender_id,
         SendDirectMessage(
-            user_id=target.user_id, text=text, typing_wpm=_account_typing_wpm(sender_id)
+            user_id=target.user_id,
+            text=text,
+            typing_wpm=_account_typing_wpm(sender_id),
+            peer_phone=target.phone,
         ),
     )
 
@@ -424,6 +341,8 @@ async def _open_with_partner(
         return ChatResult(attempted_actions=1, flood_result=result, last_failed_action="send_dm")
     if result.status != "ok":
         await release_sent_text(text)
+        if result.error_type == _PEER_UNRESOLVED:
+            return await _skip_unresolvable_peer(sender_id, target.account_id)
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
 
     await record_dialogue_message(sender_id, target.account_id, text)

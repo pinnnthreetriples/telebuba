@@ -15,7 +15,7 @@ from telethon.tl.functions.account import (
 from core.config import settings
 from core.db import create_account, fetch_account
 from core.telegram_client import execute
-from core.telegram_client._actions import _typing_seconds
+from core.telegram_client._dm import _typing_seconds
 from schemas.accounts import AccountCreate
 from schemas.telegram_actions import (
     ClickButton,
@@ -576,14 +576,17 @@ def test_typing_seconds_uses_passed_wpm(monkeypatch: pytest.MonkeyPatch) -> None
 
 @pytest.mark.asyncio
 async def test_execute_mark_dm_read_acknowledges(monkeypatch: pytest.MonkeyPatch) -> None:
-    acked: list[int] = []
+    acked: list[object] = []
 
     class FakeClient:
         async def connect(self) -> None:
             return None
 
-        async def send_read_acknowledge(self, user_id: int) -> object:
-            acked.append(user_id)
+        async def get_input_entity(self, user_id: int) -> str:
+            return f"peer:{user_id}"
+
+        async def send_read_acknowledge(self, peer: object) -> object:
+            acked.append(peer)
             return True
 
     _patch_client(monkeypatch, FakeClient())
@@ -592,7 +595,7 @@ async def test_execute_mark_dm_read_acknowledges(monkeypatch: pytest.MonkeyPatch
 
     assert result.status == "ok"
     assert result.action_type == "mark_dm_read"
-    assert acked == [77]
+    assert acked == ["peer:77"]
 
 
 @pytest.mark.asyncio
@@ -600,22 +603,27 @@ async def test_execute_send_dm_simulates_typing(monkeypatch: pytest.MonkeyPatch)
     monkeypatch.setattr(settings.warming, "typing_simulation_enabled", True)
     monkeypatch.setattr(settings.warming, "typing_sim_min_seconds", 0.0)
     monkeypatch.setattr(settings.warming, "typing_sim_max_seconds", 0.0)
-    typed = {"flag": False}
+    typed: list[object] = []
 
+    # No ``__call__``: an already-cached peer must issue no contact import, and a
+    # redundant one would blow up on the missing method.
     class FakeClient:
         async def connect(self) -> None:
             return None
 
-        def action(self, _entity: object, _action: str) -> object:
+        async def get_input_entity(self, user_id: int) -> str:
+            return f"peer:{user_id}"
+
+        def action(self, entity: object, _action: str) -> object:
             @asynccontextmanager
             async def cm():
-                typed["flag"] = True
+                typed.append(entity)
                 yield
 
             return cm()
 
-        async def send_message(self, user_id: int, text: str) -> object:
-            assert user_id == 42
+        async def send_message(self, peer: object, text: str) -> object:
+            assert peer == "peer:42"
             assert text == "привет"
             return MagicMock(id=555)
 
@@ -625,7 +633,7 @@ async def test_execute_send_dm_simulates_typing(monkeypatch: pytest.MonkeyPatch)
 
     assert result.status == "ok"
     assert result.message_id == 555
-    assert typed["flag"] is True
+    assert typed == ["peer:42"]
 
 
 @pytest.mark.asyncio
@@ -636,7 +644,10 @@ async def test_execute_send_dm_without_typing(monkeypatch: pytest.MonkeyPatch) -
         async def connect(self) -> None:
             return None
 
-        async def send_message(self, _user_id: int, _text: str) -> object:
+        async def get_input_entity(self, user_id: int) -> str:
+            return f"peer:{user_id}"
+
+        async def send_message(self, _peer: object, _text: str) -> object:
             return MagicMock(id=7)
 
     _patch_client(monkeypatch, FakeClient())

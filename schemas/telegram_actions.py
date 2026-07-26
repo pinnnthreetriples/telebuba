@@ -170,6 +170,10 @@ class SendDirectMessage(BaseModel):
     # Per-account typing tempo (WPM) for the "typing…" simulation; ``None`` falls
     # back to the global ``typing_wpm``.
     typing_wpm: int | None = None
+    # Recipient's phone, used to teach a fresh session the peer's access_hash
+    # (a raw user_id it has never seen cannot be resolved). ``None`` = resolve
+    # from the session cache only.
+    peer_phone: str | None = None
 
 
 class MarkDirectMessageRead(BaseModel):
@@ -177,6 +181,8 @@ class MarkDirectMessageRead(BaseModel):
 
     action_type: Literal["mark_dm_read"] = "mark_dm_read"
     user_id: int
+    # Same role as on ``SendDirectMessage`` — peer resolution for a cold session.
+    peer_phone: str | None = None
 
 
 class GetLinkedDiscussionGroup(BaseModel):

@@ -26,10 +26,10 @@ from schemas.telegram_session import TelegramSessionCheckResult
 from services.warming import _seams
 from services.warming._chat import (
     _account_typing_wpm,
-    _generate_chat_text,
     _maybe_inter_account_chat,
     _reply_to_partner,
 )
+from services.warming._chat_text import _generate_chat_text
 from tests.services.warming._support import (
     _seed_channel,
     _seed_two_warming_accounts,
@@ -115,7 +115,7 @@ async def test_history_is_injected_into_reply_prompt(monkeypatch: pytest.MonkeyP
 
     monkeypatch.setattr(_seams, "generate_text", capture_gen)
     monkeypatch.setattr(_seams, "execute", _ok_execute)
-    monkeypatch.setattr("services.warming._chat.recent_pair_messages", fake_history)
+    monkeypatch.setattr("services.warming._chat_text.recent_pair_messages", fake_history)
 
     result = await _reply_to_partner("acc-a", incoming, secret, await _accounts_map())
 
