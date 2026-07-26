@@ -54,14 +54,14 @@ class AccountPrivacyOutcome(BaseModel):
     ``skipped`` = the account is permanently dead, and ``error`` carries the
     account status that caused the skip, so a count is explainable.
 
-    ``failed`` carries whatever ``AccountActionError`` reported. That is USUALLY a
-    stable code the SPA translates under ``accounts.profile.code.*``, but not
-    always: ``raise_for_result`` falls back to ``ActionResult.error_message`` for
-    the generic-failure family, which is a Telethon message. Repo-wide behaviour
-    for every account action, not specific to privacy — so the SPA renders an
-    unknown value as-is rather than pretending it is translatable. The infra
-    family (pool / socket / proxy) is already collapsed to the flat ``unavailable``
-    code before it gets here, which is what keeps a proxy endpoint off the wire.
+    ``failed`` carries whatever ``AccountActionError`` reported: always a stable
+    code the SPA translates under ``accounts.profile.code.*`` — either a gateway
+    code or the bare ``ActionStatus`` (``failed``) when the refusal came from an
+    exception whose message is not a contract, never a Telethon message.
+    Repo-wide behaviour for every account action, not specific to privacy. The
+    infra family (pool / socket / proxy) is already collapsed to the flat
+    ``unavailable`` code before it gets here, which is what keeps a proxy
+    endpoint off the wire.
     """
 
     account_id: str

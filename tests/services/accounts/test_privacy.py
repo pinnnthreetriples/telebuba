@@ -118,16 +118,19 @@ async def test_apply_account_privacy_raises_on_a_refused_write(
     await create_account(AccountCreate(account_id="acc-refused"))
 
     async def _refused(account_id: str, action: object) -> ActionResult:  # noqa: ARG001
+        # The privacy dispatcher maps no Telethon refusal to a stable code, so a
+        # refused write arrives as an unmapped RPCError carrying English prose.
         return ActionResult(
             status="failed",
             action_type="set_privacy_settings",
             account_id=account_id,
-            error_message="privacy_restricted",
+            error_type="RPCError",
+            error_message="PRIVACY_VALUE_INVALID",
         )
 
     monkeypatch.setattr("services.accounts.privacy.execute", _refused)
 
-    with pytest.raises(AccountActionError, match="privacy_restricted"):
+    with pytest.raises(AccountActionError, match=r"^failed$"):
         await apply_account_privacy("acc-refused", AccountPrivacyUpdateRequest(bio="everybody"))
 
 
@@ -172,7 +175,8 @@ async def test_apply_privacy_to_all_accounts_counts_ok_failed_and_skipped(
                 status="failed",
                 action_type="set_privacy_settings",
                 account_id=account_id,
-                error_message="privacy_restricted",
+                error_type="RPCError",
+                error_message="PRIVACY_VALUE_INVALID",
             )
         return _ok(account_id)
 
@@ -189,7 +193,8 @@ async def test_apply_privacy_to_all_accounts_counts_ok_failed_and_skipped(
     assert by_id["acc-new"].status == "ok"
     assert by_id["acc-flood"].status == "ok"
     assert by_id["acc-broken"].status == "failed"
-    assert by_id["acc-broken"].error == "privacy_restricted"
+    # Bounded code, never the RPCError prose (see AccountPrivacyOutcome.error).
+    assert by_id["acc-broken"].error == "failed"
     # A skip names the status that caused it — a bare count reads to the operator
     # as "your sessions are broken", which for `new` or `flood_wait` is false.
     assert by_id["acc-frozen"].status == "skipped"

@@ -22,8 +22,12 @@ class AccountNotFoundError(LookupError):
 class AccountActionError(ValueError):
     """A Telegram action was refused.
 
-    ``str(exc)`` is the stable, locale-neutral code (the SPA translates it —
-    non-negotiable #12). For the flood family it also carries the
+    ``str(exc)`` is always a bounded, locale-neutral code — never third-party
+    prose (non-negotiable #12). It is either a gateway stable code the SPA
+    translates under ``accounts.*.code.*`` (``username_occupied``,
+    ``story_image_invalid``, …) or, when the refusal came from an exception whose
+    message is not a contract, the ``ActionStatus`` itself (``failed``,
+    ``unavailable``, the flood family). For the flood family it also carries the
     server-mandated ``retry_after_seconds`` so the API error envelope can tell
     the client how long to wait instead of dropping the duration.
     ``channel_id`` rides along when a ``channel_create`` failed AFTER the
@@ -44,8 +48,31 @@ class AccountActionError(ValueError):
         self.channel_id = channel_id
 
 
+# Gateway exception classes constructed WITH a stable code, so their ``str(exc)``
+# — and therefore ``ActionResult.error_message`` — IS the contract the SPA
+# translates. Every other exception reaching ``_generic_error`` carries
+# third-party prose (Telethon English, Pillow reasons) that must never become a
+# "code". ``error_type`` (the class name) is the only discriminator
+# ``ActionResult`` carries, so the set is pinned by name rather than by import —
+# ``tests/services/accounts/test_result.py`` keeps it honest against the classes.
+_STABLE_CODE_ERROR_TYPES: frozenset[str] = frozenset(
+    {
+        "ChannelGatewayError",
+        "ProfileGatewayError",
+        "StoryCollageLayoutError",
+        "StoryImageNormalisationError",
+        "StoryVideoNormalisationError",
+    },
+)
+
+
 def raise_for_result(result: ActionResult) -> None:
-    """Raise :class:`AccountActionError` unless ``result`` is ``ok``."""
+    """Raise :class:`AccountActionError` unless ``result`` is ``ok``.
+
+    The code is always bounded: a gateway stable code when the failing exception
+    was one of ours, otherwise the ``ActionStatus`` literal. Third-party
+    exception messages stay in the failure log and never become the code.
+    """
     if result.status == "ok":
         return
     if result.status == "unavailable":
@@ -54,9 +81,9 @@ def raise_for_result(result: ActionResult) -> None:
         # instead of billing an internal outage as a 400 client fault.
         code = "unavailable"
         raise AccountActionError(code)
-    code = result.error_message or result.status
+    stable = result.error_message if result.error_type in _STABLE_CODE_ERROR_TYPES else None
     raise AccountActionError(
-        code,
+        stable or result.status,
         retry_after_seconds=result.flood_wait_seconds,
         channel_id=result.channel_id,
     )
