@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-25
+last_updated: 2026-07-26
 ---
 
 # Frontend Rules
@@ -22,5 +22,9 @@ FSD order: `app → routes → pages → widgets → features → entities → s
   - The js-yaml override is not free: `@hey-api/json-schema-ref-parser` pins js-yaml to the **exact** `4.2.0`, so 4.3.0 is outside its declared spec, and 4.3.0 adds a `maxTotalMergeKeys` cap (default 10000) that `load(data)` cannot raise. Inert while `openapi-ts.config.ts` reads `./openapi.json` — a YAML input or a remote YAML `$ref` with >10000 merge-key expansions would newly fail `gen:api`. Latest published ref-parser still carries the pin, so there is no version to upgrade to instead.
   - `zod` is declared `^3.25.0`, not `^3.24.1`: the override installs `zod-validation-error@4`, which peers on `zod ^3.25.0 || ^4.0.0` and requires the `zod/v4/core` subpath. Anything in 3.24.x satisfies the old range and breaks ESLint at load.
 - `eslint.config.js` names `rules-of-hooks` and `exhaustive-deps` instead of spreading `reactHooks.configs.recommended`: those two ARE the whole preset up to plugin v5, and v7's preset is 16 rules — the two classic ones plus 14 React Compiler rules. So the naming reproduces the old gate exactly and declines new coverage rather than dropping old. The plugin sits on v7 only because it is the first line peering on ESLint 10. Adopting the 14 is its own change — they currently flag 7 spots in existing code (purity, refs ×2, set-state-in-effect ×2, incompatible-library).
+
+- **TanStack Form: `form.reset(saved)` does NOT make `saved` the baseline.** form-core 1.33 moves the form's own `options.defaultValues` to the reset values, and `FormApi.update` re-applies `defaultValues` whenever they deep-differ from the form's **and** the form is untouched — which a reset just made it. So a `defaultValues` object built inline from a prop restores the pre-save values one render later; the reset only cleared the dirty meta. Any "keep what was just saved" flow must move the baseline too (a ref the save writes — see `ProfileModal`). Symptom to recognise: the field snaps back one render after a successful save, with no `setFieldValue` in the stack.
+- **A test whose fetch mock returns the same payload twice cannot exercise a re-seed effect.** TanStack Query structurally shares equal responses, so `data` keeps its identity and a `useEffect` watching it never re-runs. A mutation that deletes such an effect's logic then "survives", and the conclusion "dead code" is a fixture artefact — this cost a wrong deletion in PR #295. Vary one unrelated field (a story `views`, a `file_reference`) to model what a real account returns.
+- Reading a verdict from a **ref** inside a `useCallback` that a `useEffect` depends on is deliberate, not sloppiness: putting the equivalent state in the deps re-runs the effect on every verdict change, against whatever data is cached at that moment rather than a fresh read.
 
 Run frontend gates from `context/setup.md`; `frontend/package.json` and boundary tests are the executable source of truth.
