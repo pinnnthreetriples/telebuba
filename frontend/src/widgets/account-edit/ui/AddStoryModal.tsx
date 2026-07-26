@@ -160,6 +160,10 @@ export function AddStoryModal({
     `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
 
   const onPick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // The add control is disabled while busy/done, but this handler sits on the
+    // hidden input rather than the button, so it keeps its own guard: the
+    // post.reset() below would detach the mutation observer mid-flight.
+    if (busy || done) return;
     // Materialize the FileList BEFORE clearing the input — reading files off a
     // live FileList after value='' yields an empty list in real browsers.
     const picked = Array.from(event.target.files ?? []);
@@ -313,12 +317,18 @@ export function AddStoryModal({
         </div>
 
         {/* Add control — hidden once a collage is full (6 photos). A video
-            replaces photos and vice-versa (handled in onPick). */}
+            replaces photos and vice-versa (handled in onPick). Locked while a
+            publish is in flight or in its success window: onPick calls
+            post.reset(), which detaches the observer — that both re-enables
+            Publish (a second story on the live account) and kills the
+            mutate-level onSuccess, so the grid never refreshes and the modal
+            never closes. Same reason the single-video remove is guarded below. */}
         {!(video === null && count >= MAX_COLLAGE_IMAGES) && (
           <button
             type="button"
             onClick={() => fileInput.current?.click()}
-            className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-white px-4 py-[14px] text-left"
+            disabled={busy || done}
+            className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-white px-4 py-[14px] text-left disabled:opacity-50"
           >
             <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[11px] border border-line bg-white text-primary">
               <svg
@@ -381,8 +391,9 @@ export function AddStoryModal({
                     onClick={() => {
                       removeImage(index);
                     }}
+                    disabled={busy || done}
                     aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
-                    className="absolute right-[3px] top-[3px] inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/55 text-white"
+                    className="absolute right-[3px] top-[3px] inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-40"
                   >
                     <svg
                       width="10"
@@ -402,7 +413,8 @@ export function AddStoryModal({
                     onClick={() => {
                       moveImage(index, index - 1);
                     }}
-                    disabled={index === 0}
+                    // moveImage also resets the mutation — see the add control.
+                    disabled={index === 0 || busy || done}
                     aria-label={t('accounts.addStory.moveLeft', { n: index + 1 })}
                     className="inline-flex h-[22px] flex-1 items-center justify-center rounded-[7px] border border-line-input bg-white text-ink-muted transition hover:border-line hover:bg-[#f4f3f0] hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-input disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >
@@ -424,7 +436,7 @@ export function AddStoryModal({
                     onClick={() => {
                       moveImage(index, index + 1);
                     }}
-                    disabled={index === count - 1}
+                    disabled={index === count - 1 || busy || done}
                     aria-label={t('accounts.addStory.moveRight', { n: index + 1 })}
                     className="inline-flex h-[22px] flex-1 items-center justify-center rounded-[7px] border border-line-input bg-white text-ink-muted transition hover:border-line hover:bg-[#f4f3f0] hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-input disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >

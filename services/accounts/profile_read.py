@@ -272,7 +272,12 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
             account_id=account_id,
             extra={"error_type": type(exc).__name__, "error": str(exc)},
         )
-        return _error_snapshot(account_id, f"{type(exc).__name__}: {exc}")
+        # Class name only: an unexpected exception's message is arbitrary text
+        # (a python_socks failure names the proxy endpoint with credentials, a
+        # session fault its file path) and this value is rendered verbatim in
+        # the operator's browser — it must stay content-free (non-negotiable
+        # #12). The full message is already in the log event above.
+        return _error_snapshot(account_id, type(exc).__name__)
 
     # The gateway returns the snapshot types matching each action's position.
     # ``cast`` documents the contract for type checkers without paying for a

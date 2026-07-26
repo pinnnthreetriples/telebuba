@@ -280,6 +280,33 @@ test('phone method: a failed start-login shows the error and keeps Next disabled
   expect(screen.getByText('Далее')).toBeDisabled();
 });
 
+test('switching method after an account was created re-locks Next', async () => {
+  routeApi();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+
+  // Phone provisions the account; the sign-in is step 3, still ahead.
+  await userEvent.click(screen.getByText('Номер телефона'));
+  await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
+  await userEvent.click(screen.getByText('Продолжить'));
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+
+  // Step 2, back to step 1, then pick a file method without importing anything.
+  await userEvent.click(screen.getByText('Далее'));
+  await userEvent.click(screen.getByText('Назад'));
+  await userEvent.click(screen.getByText('Файл .session'));
+
+  // Pre-fix the phone account still unlocked Next with no file card to show for
+  // it; step 2 announced "account added" and Skip closed the wizard from there,
+  // because afterProxy branches on the NEW method — step 3 never rendered and
+  // the phone account was left permanently signed out.
+  expect(screen.getByText('Далее')).toBeDisabled();
+  expect(
+    screen.queryByText('Аккаунт добавлен. Назначьте прокси для работы.'),
+  ).not.toBeInTheDocument();
+});
+
 test('cancel on step 1 closes', async () => {
   routeApi();
   const onClose = vi.fn();

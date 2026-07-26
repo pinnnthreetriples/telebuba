@@ -81,7 +81,7 @@ def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
     device = profile.device
     proxy = _proxy_config(profile)
     if proxy is not None:
-        return TelegramClient(
+        client = TelegramClient(
             profile.session_path,
             settings.telegram.api_id,
             settings.telegram.api_hash,
@@ -98,22 +98,33 @@ def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
             flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
             proxy=proxy,
         )
-    return TelegramClient(
-        profile.session_path,
-        settings.telegram.api_id,
-        settings.telegram.api_hash,
-        device_model=device.device_model,
-        system_version=device.system_version,
-        app_version=device.app_version,
-        lang_code=device.lang_code,
-        system_lang_code=device.system_lang_code,
-        receive_updates=profile.receive_updates,
-        timeout=settings.telegram.timeout_seconds,
-        connection_retries=settings.telegram.connection_retries,
-        retry_delay=settings.telegram.retry_delay_seconds,
-        request_retries=settings.telegram.request_retries,
-        flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
-    )
+    else:
+        client = TelegramClient(
+            profile.session_path,
+            settings.telegram.api_id,
+            settings.telegram.api_hash,
+            device_model=device.device_model,
+            system_version=device.system_version,
+            app_version=device.app_version,
+            lang_code=device.lang_code,
+            system_lang_code=device.system_lang_code,
+            receive_updates=profile.receive_updates,
+            timeout=settings.telegram.timeout_seconds,
+            connection_retries=settings.telegram.connection_retries,
+            retry_delay=settings.telegram.retry_delay_seconds,
+            request_retries=settings.telegram.request_retries,
+            flood_sleep_threshold=settings.telegram.flood_sleep_threshold,
+        )
+    # Telethon defaults ``parse_mode`` to markdown, which silently EATS the
+    # metacharacters in every text we send: ``__bold__``, `` `code` ``,
+    # ``~~strike~~``, ``**stars**`` and ``[text](url)`` come out stripped, and a
+    # channel post read back → prefilled → re-saved persists the degraded text.
+    # No send/edit site relies on markdown being interpreted (operator free text
+    # and LLM prose), so parsing is off for every client built here — the pool,
+    # the login flow and the ``telegram_client`` context manager alike.
+    # ``None`` disables parsing; Telethon's setter is annotated ``str``.
+    client.parse_mode = None  # ty: ignore[invalid-assignment]
+    return client
 
 
 @asynccontextmanager

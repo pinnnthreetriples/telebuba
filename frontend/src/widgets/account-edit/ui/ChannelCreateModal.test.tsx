@@ -175,7 +175,7 @@ test('a stable failure code renders as translated copy', async () => {
   expect(screen.getByText('Новый канал')).toBeInTheDocument();
 });
 
-test('a create-after-create failure (fields.channel_id) still refreshes the list', async () => {
+test('a create-after-create failure (fields.channel_id) refreshes the list and hands off', async () => {
   routeApi({
     onCreate: () =>
       jsonResponse(
@@ -183,7 +183,7 @@ test('a create-after-create failure (fields.channel_id) still refreshes the list
           error: {
             code: 'bad_request',
             message: 'channel_username_occupied',
-            fields: { channel_id: '321' },
+            fields: { channel_id: '789' },
           },
         },
         400,
@@ -194,11 +194,42 @@ test('a create-after-create failure (fields.channel_id) still refreshes the list
   await userEvent.type(screen.getByLabelText('Название'), 'Новости');
   await userEvent.click(screen.getByText('Создать'));
 
-  expect(await screen.findByText('Юзернейм уже занят')).toBeInTheDocument();
+  // The id means CreateChannelRequest succeeded and only the username step
+  // failed. The dialog used to stay open with Create re-armed, and a second
+  // click made a SECOND real channel (no random_id, nothing keys on the title,
+  // and the pre-check still reports the handle free — so it repeats forever).
+  // Now it is treated as a completed create: hand off into the editor.
+  await waitFor(() => {
+    expect(screen.queryByText('Новый канал')).not.toBeInTheDocument();
+  });
+  expect(createPosts()).toHaveLength(1);
   // The channel exists as private despite the error — the list must re-pull.
   await waitFor(() => {
     expect(listGets()).toBe(2);
   });
+  expect(await screen.findByDisplayValue('Новости')).toBeInTheDocument();
+});
+
+test('an id-less create failure locks Create (a flood-waited create can still exist)', async () => {
+  routeApi({
+    onCreate: () => jsonResponse({ error: { code: 'rate_limited', message: 'flood_wait' } }, 429),
+  });
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.click(screen.getByText('Создать'));
+  await waitFor(() => {
+    expect(createPosts()).toHaveLength(1);
+  });
+
+  // FloodWaitError/PeerFloodError are re-raised bare AFTER the channel was
+  // created, so they carry no channel_id and nothing tells them apart from a
+  // create that never happened. Retrying in the same dialog duplicated it.
+  await userEvent.click(screen.getByText('Создать'));
+  expect(createPosts()).toHaveLength(1);
+  expect(screen.getByText('Создать')).toBeDisabled();
+  // The dialog stays open with the reason on screen — no editor hand-off.
+  expect(screen.getByText('Новый канал')).toBeInTheDocument();
 });
 
 test('the exits are locked while the create is in flight', async () => {

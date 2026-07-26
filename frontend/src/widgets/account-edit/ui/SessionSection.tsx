@@ -181,6 +181,12 @@ export function SessionSection({ account }: { account: AccountRead }) {
           <span className={LABEL}>{t('accounts.edit.twoFA')}</span>
           <input
             type="password"
+            // The account's 2FA password, never the operator's. `new-password`
+            // is the only token browsers honour as "do not fill" on a password
+            // input (`off` is documented as ignored), and `current-password`
+            // would invite the dashboard credential straight into this box —
+            // which onConfirmLogin then POSTs as the account's 2FA password.
+            autoComplete="new-password"
             value={twoFa}
             onChange={(event) => {
               setTwoFa(event.target.value);

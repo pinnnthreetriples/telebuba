@@ -303,6 +303,31 @@ async def test_fetch_live_profile_unexpected_error_returns_error_snapshot(
 
 
 @pytest.mark.asyncio
+async def test_fetch_live_profile_unexpected_error_hides_exception_message(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Only the class name may travel — this field is rendered in the browser.
+
+    A ``python_socks`` failure raised mid-request on an already-pooled client is
+    neither ``RPCError`` nor ``ConnectionError``, so it reaches the last-resort
+    arm carrying the proxy endpoint — credentials included — in its message.
+    """
+    leaky = "socks5://bubauser:sup3rs3cr3t@203.0.113.9:1080 refused"
+
+    async def fake_execute_read_many(_account_id: str, _actions: list[object]) -> list[object]:
+        raise OSError(leaky)
+
+    monkeypatch.setattr(
+        "services.accounts.profile_read.execute_read_many",
+        fake_execute_read_many,
+    )
+
+    snapshot = await fetch_live_account_profile("acc-proxy-leak")
+
+    assert snapshot.error == "OSError"
+
+
+@pytest.mark.asyncio
 async def test_invalidate_cache_drops_entry(monkeypatch: pytest.MonkeyPatch) -> None:
     calls: list[list[object]] = []
     _stub_execute_read_many(monkeypatch, calls)

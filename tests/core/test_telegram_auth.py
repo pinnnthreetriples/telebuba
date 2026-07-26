@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from contextlib import suppress
 from typing import TYPE_CHECKING
 
 import pytest
@@ -14,7 +15,12 @@ from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeRequest, PhoneCodeSubmit
 
 if TYPE_CHECKING:
+    from collections.abc import Callable
     from pathlib import Path
+
+# A proxy transport error stringifies with the credentials; no response field may
+# carry it (non-negotiable #12 / rule 7).
+_PROXY_ERROR_TEXT = "Cannot connect to proxy bubauser:sup3rs3cr3t@203.0.113.9:1080"
 
 
 class FakeUser:
@@ -36,16 +42,21 @@ class FakeAuthClient:
         needs_2fa: bool = False,
         sign_in_error: Exception | None = None,
         send_error: Exception | None = None,
+        on_connect: Callable[[], None] | None = None,
     ) -> None:
         self.needs_2fa = needs_2fa
         self.sign_in_error = sign_in_error
         self.send_error = send_error
+        self.on_connect = on_connect
         self.disconnected = False
         self.logged_out = False
         self.password_used = False
+        # Set by ``_patch_client``: real Telethon's ``log_out()`` deletes this.
+        self.session_file: Path | None = None
 
     async def connect(self) -> None:
-        return None
+        if self.on_connect is not None:
+            self.on_connect()
 
     async def disconnect(self) -> None:
         self.disconnected = True
@@ -70,6 +81,13 @@ class FakeAuthClient:
 
     async def log_out(self) -> bool:
         self.logged_out = True
+        # Telethon's own log_out() ends with ``session.delete()`` — an
+        # ``os.remove`` whose OSError it swallows (sqlite.py). The fake has to do
+        # the same or it hides both the deletion and the Windows live-handle
+        # failure from every test in this file.
+        if self.session_file is not None:
+            with suppress(OSError):
+                self.session_file.unlink()
         return True
 
 
@@ -78,6 +96,8 @@ def _patch_client(monkeypatch: pytest.MonkeyPatch, tmp_path: Path, client: FakeA
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
     monkeypatch.setattr("core.telegram_client._auth.create_telegram_client", lambda _: client)
+    # Every test here logs in as "acc", which resolves to this file on disk.
+    client.session_file = tmp_path / "sessions" / "acc.session"
 
 
 @pytest.mark.asyncio
@@ -244,11 +264,23 @@ async def test_log_out_session_evicts_pool_before_wiping_file(
 
 
 @pytest.mark.asyncio
-async def test_log_out_session_no_wipe_does_not_evict(tmp_path: Path, monkeypatch) -> None:
-    """A plain logout (no wipe) leaves the file — no eviction, no removal."""
+async def test_log_out_session_no_wipe_still_evicts_the_pool(tmp_path: Path, monkeypatch) -> None:
+    """A plain logout evicts too — it revokes the auth key the pool has cached.
+
+    This test used to assert the opposite ("no wipe → no eviction, the file
+    stays"), on a Telethon behavior that does not exist: ``log_out()`` itself
+    calls ``session.delete()``. So a plain logout already removes the file on
+    POSIX, and on Windows only fails to because the pooled client holds the
+    handle — which is also what leaves a *revoked* client in ``_CLIENTS``. The
+    tombstone therefore has to cover the whole logout, not just the wipe branch.
+    """
     configure_database(tmp_path / "telebuba.db")
-    client = FakeAuthClient()
+    marks: list[bool] = []
+    client = FakeAuthClient(on_connect=lambda: marks.append(_is_removing("acc")))
     _patch_client(monkeypatch, tmp_path, client)
+    session_file = tmp_path / "sessions" / "acc.session"
+    session_file.parent.mkdir(parents=True, exist_ok=True)
+    session_file.write_bytes(b"sqlite session bytes")
 
     evicted: list[str] = []
 
@@ -262,4 +294,105 @@ async def test_log_out_session_no_wipe_does_not_evict(tmp_path: Path, monkeypatc
         wipe_session=False,
     )
 
-    assert evicted == [], "no wipe → no eviction"
+    assert evicted == ["acc"], "a revoked auth key must not stay in the pool"
+    assert marks == [True], "the logout RPC itself must run under the tombstone"
+    assert not session_file.exists(), "Telethon's log_out() deletes the session file"
+
+
+@pytest.mark.asyncio
+async def test_request_phone_code_runs_under_the_pool_tombstone(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The login client is a SECOND handle on a ``.session`` the pool may hold open.
+
+    ``check_telegram_session`` pools a client for every account it probes — new
+    and unauthorized ones included — and ``_CLIENTS`` never expires, so two
+    ``SQLiteSession`` handles land on one file: ``database is locked`` on the
+    second writer, and a stale ``auth_key`` read before the first commits.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    marks: list[bool] = []
+    client = FakeAuthClient(on_connect=lambda: marks.append(_is_removing("acc")))
+    _patch_client(monkeypatch, tmp_path, client)
+
+    evicted: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        evicted.append(account_id)
+
+    monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)
+
+    challenge = await request_phone_code(PhoneCodeRequest(account_id="acc", phone="79990001122"))
+
+    assert challenge.phone_code_hash == "HASH-123"
+    assert evicted == ["acc"], "the pooled twin must be disconnected first"
+    assert marks == [True], "rebuilds must be refused for the whole exchange"
+
+
+@pytest.mark.asyncio
+async def test_submit_phone_code_runs_under_the_pool_tombstone(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Same second-handle hazard as request-code, and here the auth key is rewritten."""
+    configure_database(tmp_path / "telebuba.db")
+    marks: list[bool] = []
+    client = FakeAuthClient(on_connect=lambda: marks.append(_is_removing("acc")))
+    _patch_client(monkeypatch, tmp_path, client)
+
+    evicted: list[str] = []
+
+    async def fake_evict(account_id: str) -> None:
+        evicted.append(account_id)
+
+    monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)
+
+    result = await submit_phone_code(
+        PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
+    )
+
+    assert result.status == "alive"
+    assert evicted == ["acc"]
+    assert marks == [True]
+
+
+@pytest.mark.asyncio
+async def test_request_phone_code_error_hides_the_proxy_credentials(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """``challenge.error`` is the HTTP 400 detail — it must be a bounded class name.
+
+    ``python_socks`` transport errors stringify with the proxy
+    ``user:pass@host:port``, so ``str(exc)`` here handed the operator's browser
+    (and anyone reading the response) a live proxy credential.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient(send_error=OSError(_PROXY_ERROR_TEXT))
+    _patch_client(monkeypatch, tmp_path, client)
+
+    challenge = await request_phone_code(PhoneCodeRequest(account_id="acc", phone="79990001122"))
+
+    assert challenge.error == "OSError"
+    assert "sup3rs3cr3t" not in (challenge.error or "")
+
+
+@pytest.mark.asyncio
+async def test_submit_phone_code_error_hides_the_proxy_credentials(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """Same leak on the submit side: ``error_message`` becomes the 400 detail."""
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient(sign_in_error=OSError(_PROXY_ERROR_TEXT))
+    _patch_client(monkeypatch, tmp_path, client)
+
+    result = await submit_phone_code(
+        PhoneCodeSubmit(account_id="acc", phone="79990001122", phone_code_hash="H", code="11111"),
+    )
+
+    assert result.status == "unknown_error"
+    assert result.error_type == "OSError"
+    assert result.error_message == "OSError"
+    assert "sup3rs3cr3t" not in (result.error_message or "")

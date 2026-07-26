@@ -379,6 +379,8 @@
             "required": true,
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._-]+$",
               "title": "Account Id"
             }
           },
@@ -498,6 +500,8 @@
             "required": true,
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._-]+$",
               "title": "Account Id"
             }
           },
@@ -557,6 +561,8 @@
             "required": true,
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._-]+$",
               "title": "Account Id"
             }
           },
@@ -626,6 +632,8 @@
             "required": true,
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._-]+$",
               "title": "Account Id"
             }
           },
@@ -685,6 +693,8 @@
             "required": true,
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._-]+$",
               "title": "Account Id"
             }
           },
@@ -802,6 +812,8 @@
             "required": true,
             "schema": {
               "type": "string",
+              "minLength": 1,
+              "pattern": "^[A-Za-z0-9._-]+$",
               "title": "Account Id"
             }
           },

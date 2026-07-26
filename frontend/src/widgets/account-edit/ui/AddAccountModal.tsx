@@ -231,6 +231,12 @@ export function AddAccountModal({
                 onClick={() => {
                   setMethod('session');
                   setFileName(null);
+                  // Switching method un-provisions the wizard, exactly like the
+                  // phone card below. Without this, an account created by an
+                  // earlier method keeps "Next" unlocked with no file card to
+                  // show for it, and afterProxy then branches on the NEW method
+                  // — a phone account would skip step 3 and never sign in.
+                  setCreatedAccountId(null);
                 }}
                 className={`${choiceCard} ${method === 'session' ? 'border-primary bg-primary-tint' : ''}`}
               >
@@ -261,6 +267,7 @@ export function AddAccountModal({
                 onClick={() => {
                   setMethod('tdata');
                   setFileName(null);
+                  setCreatedAccountId(null);
                 }}
                 className={`${choiceCard} ${method === 'tdata' ? 'border-primary bg-primary-tint' : ''}`}
               >
@@ -553,7 +560,10 @@ export function AddAccountModal({
                   {t('accounts.addWizard.twoFA')}
                   <input
                     type="password"
-                    autoComplete="off"
+                    // `off` is documented as ignored on password inputs;
+                    // `new-password` is the token that actually suppresses the
+                    // fill of the operator's own saved credential.
+                    autoComplete="new-password"
                     value={password}
                     onChange={(event) => {
                       setPassword(event.target.value);

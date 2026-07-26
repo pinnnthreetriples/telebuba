@@ -69,19 +69,21 @@ class RemoveProfilePhoto(BaseModel):
 
 
 class SetMainProfilePhoto(BaseModel):
-    """Promote an existing profile photo to the current avatar.
+    """Make an existing history photo the current avatar.
 
-    True server semantics (official-client parity, PR #249):
-    ``photos.updateProfilePhoto`` on a history photo REPLACES it — the original
-    id is consumed and a brand-new id is minted that inherits the ORIGINAL's
-    date, so the promoted photo is NOT necessarily ``GetUserPhotos`` index 0.
-    The only avatar authority is ``UserFull.profile_photo.id``. The gateway
-    re-resolves a fresh ``InputPhoto`` for this id and promotes it; it never
-    deletes anything (a post-promote "dedup" delete against a lagging read
-    once destroyed an unrelated avatar — permanent data loss). Same
-    ``InputPhoto`` triple as :class:`RemoveProfilePhoto`; all three id fields
-    are required (the gateway re-fetches a fresh ``file_reference`` regardless,
-    since the snapshot's can be stale).
+    True server semantics (live repro 2026-07-15, PR #255): the official
+    promote (``photos.updateProfilePhoto``) mints a new id that INHERITS the
+    original's date, so the promoted photo shows up mid-carousel instead of
+    first and cached galleries display both ids of the same image. The gateway
+    therefore RE-UPLOADS the photo's bytes as a brand-new photo — fresh date,
+    first slide everywhere. The original stays in the history as a visible
+    duplicate the operator can delete from the dashboard; this action itself
+    deletes NOTHING (a post-promote "dedup" delete against a lagging read once
+    destroyed an unrelated avatar — permanent data loss). The only avatar
+    authority is ``UserFull.profile_photo.id``. Same ``InputPhoto`` triple as
+    :class:`RemoveProfilePhoto`; all three id fields are required (the gateway
+    re-resolves the target off a fresh ``GetUserPhotos`` read regardless, since
+    the snapshot's ``file_reference`` can be stale).
     """
 
     action_type: Literal["set_main_profile_photo"] = "set_main_profile_photo"

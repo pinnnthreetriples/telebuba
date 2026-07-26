@@ -23,8 +23,15 @@ exempt, on the assumption that they run once per account lifecycle. They do
 not — the operator can press the check button on any row at any time — and a
 throwaway client on an account the pool already holds dies on the ``.session``
 SQLite lock. They borrow from the pool like everyone else; only the login /
-logout flows in ``_auth`` still build their own client, and they run on an
-account that is by definition not in service.
+logout flows in ``_auth`` still build their own client, because they sign in on
+or revoke that connection.
+
+Those flows are NOT exempt from the lock either — an account with a login in
+flight is not "out of service": ``check_telegram_session`` pools a client for
+every account it probes, new and unauthorized ones included, and ``_CLIENTS``
+has no TTL, so the entry outlives the probe. Each of the three flows therefore
+wraps its own client in :func:`removing_client`, which disconnects the pooled
+twin and refuses rebuilds for the duration.
 """
 
 from __future__ import annotations

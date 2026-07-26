@@ -134,17 +134,31 @@ async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) ->
         attributes=attributes,
         mime_type=mime_type,
     )
-    document = getattr(message, "document", None)
-    if document is None:
-        code = "profile_music_invalid"
-        raise ProfileGatewayError(code) from ValueError(
-            "Telegram did not return an audio document",
-        )
-    await client(SaveMusicRequest(id=utils.get_input_document(document)))
     message_id = getattr(message, "id", None)
-    if isinstance(message_id, int):
-        with suppress(Exception):
-            await client.delete_messages("me", [message_id], revoke=True)
+    try:
+        document = getattr(message, "document", None)
+        if document is None:
+            code = "profile_music_invalid"
+            raise ProfileGatewayError(code) from ValueError(
+                "Telegram did not return an audio document",
+            )
+        # ``account.saveMusic`` answers ``Bool`` in both directions: a ``False``
+        # add (already saved, or the saved-music cap reached) is a silent no-op
+        # that would be reported as a successful add while the next refresh
+        # drops the row (mirrors the unsave branch below).
+        saved = await client(SaveMusicRequest(id=utils.get_input_document(document)))
+        if not saved:
+            code = "profile_music_stale_reference"
+            raise ProfileGatewayError(code) from ValueError(
+                "Telegram did not save the track (already saved or the saved-music limit)",
+            )
+    finally:
+        # The upload sits in the account's Saved Messages — clean it up even
+        # when the save was refused, or a failed add strands the audio there and
+        # every retry leaves another copy.
+        if isinstance(message_id, int):
+            with suppress(Exception):
+                await client.delete_messages("me", [message_id], revoke=True)
 
 
 async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMusic) -> None:

@@ -110,6 +110,9 @@ export function ProxyForm({
               field={field}
               label={t('accounts.proxyForm.login')}
               placeholder={t('accounts.proxyForm.loginPlaceholder')}
+              // name="username" beside a password input is the formless login
+              // shape browsers autofill; both halves opt out (see ProxySection).
+              autoComplete="off"
             />
           )}
         </form.Field>
@@ -125,6 +128,7 @@ export function ProxyForm({
                   }}
                   onBlur={field.handleBlur}
                   type={showPass ? 'text' : 'password'}
+                  autoComplete="new-password"
                   placeholder={t('accounts.proxyForm.passwordPlaceholder')}
                   className={PASS_FIELD}
                 />

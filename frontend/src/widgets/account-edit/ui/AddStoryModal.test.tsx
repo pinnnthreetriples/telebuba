@@ -303,6 +303,60 @@ test('the publish button stays disabled through the success-close window (no dou
   expect(storyPosts()).toBe(1);
 });
 
+test('a reorder inside the success-close window cannot republish the story', async () => {
+  mockStoryOk();
+  const onPosted = vi.fn();
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={onPosted} />);
+  fireEvent.change(fileInput(), { target: { files: [img('a.jpg'), img('b.jpg')] } });
+  const publishBtn = await screen.findByText('Опубликовать');
+  await userEvent.click(publishBtn);
+  await waitFor(() => {
+    expect(onPosted).toHaveBeenCalledTimes(1);
+  });
+
+  // moveImage calls post.reset(), which removes the mutation observer: isSuccess
+  // falls back to the default state, `done` goes false and Publish re-arms
+  // inside the 900ms window — a second click posts the SAME story again.
+  await userEvent.click(screen.getByLabelText('Переместить фото 1 вправо'));
+  await userEvent.click(publishBtn);
+  expect(storyPosts()).toBe(1);
+  expect(publishBtn).toBeDisabled();
+});
+
+test('adding another photo mid-flight cannot start a second publish', async () => {
+  let resolvePost!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation(
+    () =>
+      new Promise((resolve) => {
+        resolvePost = resolve;
+      }),
+  );
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  fireEvent.change(fileInput(), { target: { files: [img('a.jpg')] } });
+  const publishBtn = screen.getByText('Опубликовать');
+  await userEvent.click(publishBtn);
+  await waitFor(() => {
+    expect(publishBtn).toBeDisabled();
+  });
+
+  // onPick resets too, so an "add more" during the upload used to unlock Publish
+  // and run two concurrent publishes of the same story.
+  fireEvent.change(fileInput(), { target: { files: [img('b.jpg')] } });
+  await userEvent.click(publishBtn);
+  expect(storyPosts()).toBe(1);
+  expect(publishBtn).toBeDisabled();
+
+  resolvePost(
+    new Response(JSON.stringify({ status: 'ok', action_type: 'post_story', account_id: 'acc-1' }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json' },
+    }),
+  );
+  await waitFor(() => {
+    expect(screen.getByText('Отмена')).toBeEnabled();
+  });
+});
+
 test('cancel and × are disabled while a publish is in flight (mid-publish close loses the refresh)', async () => {
   let resolvePost!: (response: Response) => void;
   vi.mocked(fetch).mockImplementation(

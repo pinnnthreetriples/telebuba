@@ -97,8 +97,9 @@ class TelegramProfilePhoto(BaseModel):
     """One photo from the user's profile-photo history.
 
     ``GetUserPhotosRequest`` returns these newest-first by date, but index 0
-    is NOT necessarily the current avatar — a set-main mint inherits the
-    consumed original's date, so the avatar can sit anywhere in the list.
+    is NOT necessarily the current avatar — our set-main re-uploads the bytes
+    as a new photo (fresh date, so it sorts first), while an avatar promoted
+    from the official client keeps the original's date and sits mid-list.
     ``UserFull.profile_photo.id`` (``current_photo_id`` on the combined
     snapshot) is the only avatar authority. ``InputPhoto`` needs all three id
     fields for deletion, mirroring the music-removal pattern.

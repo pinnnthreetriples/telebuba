@@ -16,6 +16,7 @@ from core.logging import log_event
 from core.phone_geo import evaluate_geo
 from core.telegram_client import remove_account_session, removing_client
 from schemas.geo import GeoMatch
+from services.accounts._result import AccountNotFoundError
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountCreate, AccountRead
@@ -79,7 +80,14 @@ async def remove_account(account_id: str) -> None:
         # and the unlink aborts the delete with PermissionError.
         async with removing_client(account_id):
             account = await fetch_account(account_id)
-            await remove_account_session(account_id, account.session_name if account else None)
+            if account is None:
+                # The only lifecycle entry point that used to tolerate a missing
+                # row, and the tolerance was the bug: ``session_name=None`` makes
+                # ``_session_path`` fall back to ``session_dir / account_id``, so
+                # an unvalidated id (``..\..\evil``) unlinked whatever that
+                # resolved to. Guard, never sanitise; the API maps this to 404.
+                raise AccountNotFoundError(account_id)
+            await remove_account_session(account_id, account.session_name)
             await delete_account(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 

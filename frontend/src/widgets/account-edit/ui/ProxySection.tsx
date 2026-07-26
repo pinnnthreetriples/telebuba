@@ -11,7 +11,7 @@ import {
   unassignProxyMutation,
 } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
-import { FormField } from '@/shared/ui';
+import { ConfirmModal, FormField } from '@/shared/ui';
 
 import { EMPTY_PROXY_FORM, proxyFormSchema, type ProxyFormValue } from './proxyFormValue';
 import { Section, Spinner } from './_shared';
@@ -39,6 +39,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
   });
   const proxyFormCanSubmit = useStore(proxyForm.store, (state) => state.canSubmit);
   const [showPass, setShowPass] = useState(false);
+  const [confirmReplace, setConfirmReplace] = useState(false);
   const [proxyCheck, setProxyCheck] = useState<CheckState>('idle');
   // Real fields returned by the last successful proxy check (country + exit IP).
   const [proxyResult, setProxyResult] = useState<{
@@ -159,9 +160,21 @@ export function ProxySection({ account }: { account: AccountRead }) {
     );
   };
 
+  // Pool mode really is a check of the assigned proxy. Manual mode is not: it
+  // creates the entered proxy and MOVES the account onto it (the backend assign
+  // is an unconditional update + evict_client, so the live session reconnects
+  // through it), and re-adding an endpoint already in the pool rewrites that
+  // shared row's credentials. Ask first when a proxy is already assigned.
   const onProxyAction = () => {
-    if (proxyMode === 'manual') void proxyForm.handleSubmit();
-    else runProxyCheck();
+    if (proxyMode !== 'manual') {
+      runProxyCheck();
+      return;
+    }
+    if (account.proxy_id) {
+      setConfirmReplace(true);
+      return;
+    }
+    void proxyForm.handleSubmit();
   };
 
   const country = account.proxy_country_code?.toUpperCase() ?? '—';
@@ -248,7 +261,13 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </div>
           <div className="mb-[14px] grid grid-cols-2 gap-[10px]">
             <proxyForm.Field name="username">
-              {(field) => <FormField field={field} label={t('accounts.edit.login')} />}
+              {/* FormField emits name="username" — next to a password input that
+                  is the formless login shape Chrome's password parser matches,
+                  so both halves opt out of autofill (and of the generation
+                  bubble `new-password` would summon on a username neighbour). */}
+              {(field) => (
+                <FormField field={field} label={t('accounts.edit.login')} autoComplete="off" />
+              )}
             </proxyForm.Field>
             <proxyForm.Field name="password">
               {(field) => (
@@ -262,6 +281,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
                       }}
                       onBlur={field.handleBlur}
                       type={showPass ? 'text' : 'password'}
+                      autoComplete="new-password"
                       className={`${FIELD} pr-9`}
                     />
                     <button
@@ -347,7 +367,9 @@ export function ProxySection({ account }: { account: AccountRead }) {
               <path d="M21 3v6h-6" />
             </svg>
           )}
-          {t('accounts.edit.proxyCheck')}
+          {proxyMode === 'manual'
+            ? t('accounts.edit.proxyAddAssign')
+            : t('accounts.edit.proxyCheck')}
         </button>
         {proxyCheck === 'loading' && (
           <span className="text-[12.5px] text-ink-subtle">{t('accounts.edit.proxyChecking')}</span>
@@ -381,6 +403,20 @@ export function ProxySection({ account }: { account: AccountRead }) {
           </span>
         )}
       </div>
+      {confirmReplace ? (
+        <ConfirmModal
+          title={t('accounts.edit.proxyReplaceTitle')}
+          body={t('accounts.edit.proxyReplaceBody')}
+          confirmLabel={t('accounts.edit.proxyReplaceConfirm')}
+          cancelLabel={t('accounts.edit.cancel')}
+          onClose={() => {
+            setConfirmReplace(false);
+          }}
+          onConfirm={() => {
+            void proxyForm.handleSubmit();
+          }}
+        />
+      ) : null}
     </Section>
   );
 }

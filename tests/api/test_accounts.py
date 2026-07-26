@@ -269,6 +269,38 @@ async def test_delete_account_removes_it(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
+async def test_delete_account_rejects_a_traversal_id(app: FastAPI) -> None:
+    r"""A percent-encoded separator must never reach the ``.session`` unlink.
+
+    Starlette decodes ``%5C`` before matching, so the route used to receive
+    ``..\evil`` as a plain ``str``, and ``_session_path`` resolved it to
+    ``session_dir/../evil.session`` — the file seeded below. The path param now
+    carries the same charset the request bodies enforce, so a separator is
+    refused as validation rather than sanitised away.
+    """
+    outside = settings.telegram.session_dir.parent / "evil.session"
+    outside.parent.mkdir(parents=True, exist_ok=True)
+    outside.write_bytes(b"a credential that lives elsewhere")
+
+    async with _client(app) as client:
+        resp = await client.delete("/api/v1/accounts/..%5Cevil")
+
+    assert resp.status_code == 422
+    assert resp.json()["error"]["code"] == "validation_error"
+    assert outside.exists()
+
+
+@pytest.mark.asyncio
+async def test_delete_unknown_account_is_404(app: FastAPI) -> None:
+    """No row to delete is a lookup failure, not a 204 that deleted nothing."""
+    async with _client(app) as client:
+        resp = await client.delete("/api/v1/accounts/never-existed")
+
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
 async def test_account_stats_endpoint_returns_fleet_counts(app: FastAPI) -> None:
     """GET /accounts/stats serves fleet-wide tile counts (all "new" here)."""
     for i in range(3):

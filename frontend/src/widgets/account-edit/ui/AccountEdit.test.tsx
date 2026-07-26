@@ -81,6 +81,18 @@ test('section toggles, import tabs and proxy mode drive the handlers', async () 
   expect(onBack).toHaveBeenCalled();
 });
 
+test('the 2FA password field opts out of browser autofill', async () => {
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(jsonResponse({ items: [], next_cursor: null })),
+  );
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сессия'));
+  // Without a token the browser fills the OPERATOR's saved password for this
+  // origin here, and onConfirmLogin POSTs it as the ACCOUNT's 2FA password.
+  // `off` is documented as ignored on password inputs — `new-password` is not.
+  expect(screen.getByLabelText('2FA-пароль')).toHaveAttribute('autocomplete', 'new-password');
+});
+
 test('login-by-code requests a code then confirms sign-in', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
@@ -154,7 +166,10 @@ test('proxy: manual creates+assigns, pool select assigns', async () => {
   await userEvent.type(screen.getByLabelText('Логин'), 'u');
   await userEvent.type(screen.getAllByLabelText('Пароль')[0]!, 'p');
   await userEvent.selectOptions(screen.getByLabelText('Тип'), 'https');
-  await userEvent.click(screen.getAllByText('Проверить')[0]!);
+  // Manual mode creates + assigns (it never was a "check"), and ACCOUNT already
+  // has a proxy, so the replacement is confirmed first.
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить и назначить' }));
+  await userEvent.click(await screen.findByText('Заменить'));
   await waitFor(() => {
     const created = vi.mocked(fetch).mock.calls.some(([input]) => {
       const request = input as Request;
@@ -272,6 +287,75 @@ test('a proxy check renders the real returned fields, not a fabricated "12ms"', 
   // Real country + exit IP surface; the invented latency is gone.
   await screen.findByText('DE · 5.6.7.8');
   expect(screen.queryByText(/12ms/)).not.toBeInTheDocument();
+});
+
+function proxyPosts(): number {
+  return vi.mocked(fetch).mock.calls.filter(([input]) => {
+    const request = input as Request;
+    return new URL(request.url).pathname === '/api/v1/proxies' && request.method === 'POST';
+  }).length;
+}
+
+function routeProxies() {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/proxies' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ proxies: [] }));
+    }
+    if (pathname === '/api/v1/proxies') {
+      return Promise.resolve(
+        jsonResponse({
+          id: 'newp',
+          proxy_type: 'socks5',
+          host: '1.2.3.4',
+          port: 1080,
+          has_password: false,
+          status: 'tcp_working',
+          created_at: 'now',
+          updated_at: 'now',
+          used: 0,
+          capacity: 3,
+          free: 3,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+}
+
+test('manual proxy mode confirms before it replaces the assigned proxy', async () => {
+  routeProxies();
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Прокси'));
+
+  await userEvent.type(screen.getByLabelText('Host'), '1.2.3.4');
+  await userEvent.type(screen.getByLabelText('Порт'), '1080');
+  // The manual action was labelled «Проверить» while it actually created the
+  // proxy and moved the live account onto it (unconditional assign + client
+  // evict), and the same host/port rewrites the shared pool row's credentials.
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить и назначить' }));
+
+  expect(screen.getByText('Заменить назначенный прокси?')).toBeInTheDocument();
+  expect(proxyPosts()).toBe(0);
+  await userEvent.click(screen.getByText('Отмена'));
+  expect(proxyPosts()).toBe(0);
+});
+
+test('manual proxy mode does not confirm when the account has no proxy yet', async () => {
+  routeProxies();
+  renderWithClient(<AccountEdit account={{ ...ACCOUNT, proxy_id: undefined }} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Прокси'));
+
+  await userEvent.type(screen.getByLabelText('Host'), '1.2.3.4');
+  await userEvent.type(screen.getByLabelText('Порт'), '1080');
+  await userEvent.click(screen.getByRole('button', { name: 'Добавить и назначить' }));
+
+  // Nothing is being displaced — the first assignment stays a one-click action.
+  expect(screen.queryByText('Заменить назначенный прокси?')).not.toBeInTheDocument();
+  await waitFor(() => {
+    expect(proxyPosts()).toBe(1);
+  });
 });
 
 test('the detach-proxy control unassigns the account and refreshes', async () => {

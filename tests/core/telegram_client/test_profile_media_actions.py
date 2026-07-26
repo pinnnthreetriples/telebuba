@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image
+from telethon import errors
 from telethon.tl.functions.account import (
     SaveMusicRequest,
 )
@@ -128,8 +129,9 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
             assert revoke is True
             deleted.extend(message_ids)
 
-        async def __call__(self, request: object) -> None:
+        async def __call__(self, request: object) -> object:
             captured.append(request)
+            return True
 
     _patch_client(monkeypatch, FakeClient())
 
@@ -141,6 +143,92 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
     assert result.status == "ok"
     assert deleted == [99]
     assert any(isinstance(req, SaveMusicRequest) for req in captured)
+
+
+def _add_music_client(deleted: list[int], *, save_answer: object) -> object:
+    """Add-music fake: ``saveMusic`` raises ``save_answer`` or returns it."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_file(self, _entity: str, _file: object, **_kwargs: object) -> object:
+            return MagicMock(id=77, document=object())
+
+        async def delete_messages(
+            self,
+            _entity: str,
+            message_ids: list[int],
+            *,
+            revoke: bool,
+        ) -> None:
+            del revoke
+            deleted.extend(message_ids)
+
+        async def __call__(self, request: object) -> object:
+            assert isinstance(request, SaveMusicRequest)
+            if isinstance(save_answer, Exception):
+                raise save_answer
+            return save_answer
+
+    return FakeClient()
+
+
+@pytest.mark.asyncio
+async def test_execute_add_profile_music_deletes_upload_when_save_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused ``saveMusic`` must not strand the audio in Saved Messages.
+
+    The upload always lands in Saved Messages first; before the cleanup moved
+    into a ``finally`` a flood/RPC refusal left it there, and every retry added
+    another copy.
+    """
+    deleted: list[int] = []
+
+    monkeypatch.setattr(
+        "core.telegram_client._media.utils.get_input_document",
+        lambda _document: MagicMock(),
+    )
+    _patch_client(
+        monkeypatch,
+        _add_music_client(deleted, save_answer=errors.FloodWaitError(request=None, capture=30)),
+    )
+
+    result = await execute(
+        "acc-music-save-fails",
+        AddProfileMusic(filename="track.mp3", content=b"mp3", title="Track"),
+    )
+
+    assert result.status != "ok"
+    assert deleted == [77]
+
+
+@pytest.mark.asyncio
+async def test_execute_add_profile_music_errors_when_server_says_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A false ``saveMusic`` add is a server-side no-op, not a success.
+
+    Discarding the answer reported "music added" while the next refresh silently
+    dropped the row (already saved, or the saved-music cap reached).
+    """
+    deleted: list[int] = []
+
+    monkeypatch.setattr(
+        "core.telegram_client._media.utils.get_input_document",
+        lambda _document: MagicMock(),
+    )
+    _patch_client(monkeypatch, _add_music_client(deleted, save_answer=False))
+
+    result = await execute(
+        "acc-music-add-noop",
+        AddProfileMusic(filename="track.mp3", content=b"mp3", title="Track"),
+    )
+
+    assert result.status != "ok"
+    assert result.error_message == "profile_music_stale_reference"
+    assert deleted == [77]
 
 
 @pytest.mark.asyncio

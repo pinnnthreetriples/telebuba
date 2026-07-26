@@ -252,6 +252,40 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
     }
 
 
+@pytest.mark.parametrize("with_proxy", [False, True])
+def test_create_telegram_client_disables_markdown_parsing(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    with_proxy: bool,
+) -> None:
+    """Both build branches must ship parsing off (a REAL Telethon client).
+
+    Telethon defaults ``parse_mode`` to markdown, which eats ``__bold__``,
+    `` `code` ``, ``~~strike~~``, ``**stars**`` and ``[text](url)`` out of every
+    operator-authored send — and a channel post read back, prefilled and
+    re-saved persists the degraded text.
+    """
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
+
+    client = create_telegram_client(
+        TelegramClientProfile(
+            account_id="account-parse",
+            session_path=str(tmp_path / "account-parse"),
+            receive_updates=False,
+            device=DeviceFingerprintFactory.build(account_id="account-parse"),
+            proxy_type="socks5" if with_proxy else None,
+            proxy_host="proxy.local" if with_proxy else None,
+            proxy_port=1080 if with_proxy else None,
+        ),
+    )
+    try:
+        assert client.parse_mode is None
+    finally:
+        client.session.close()  # ty: ignore[unresolved-attribute]
+
+
 @pytest.mark.asyncio
 async def test_telegram_client_context_disconnects(tmp_path: Path, monkeypatch) -> None:
     configure_database(tmp_path / "telebuba.db")

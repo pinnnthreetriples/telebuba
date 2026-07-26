@@ -435,6 +435,38 @@ async def test_execute_update_profile_invalid_username_yields_stable_code(
 
 
 @pytest.mark.asyncio
+async def test_execute_update_profile_long_bio_yields_stable_code(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An over-long bio is refused by the SECOND RPC, after the username applied.
+
+    The SPA routes ``about_too_long`` onto the bio field, so the code must stay
+    stable — Telethon's English prose would leak into the operator's browser.
+    """
+    captured: list[object] = []
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, request: object) -> None:
+            captured.append(request)
+            if isinstance(request, UpdateProfileRequest):
+                raise errors.AboutTooLongError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute(
+        "acc-4-long-bio",
+        UpdateProfile(first_name="Alice", username="alice", bio="Long bio"),
+    )
+
+    assert result.status == "failed"
+    assert result.error_message == "about_too_long"
+    assert any(isinstance(req, UpdateUsernameRequest) for req in captured)
+
+
+@pytest.mark.asyncio
 async def test_execute_frozen_account_yields_stable_code_and_marks_db(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

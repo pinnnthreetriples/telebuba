@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from typing import Annotated
 
-from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile
 from fastapi import status as http_status
 
 from api.v1._accounts_channel_posts import channel_posts_router
@@ -21,6 +21,7 @@ from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload
 from core.config import settings
 from schemas.accounts import (
+    _ACCOUNT_ID_PATTERN,
     AccountCheckRequest,
     AccountProfileUpdateRequest,
     AccountRead,
@@ -34,6 +35,13 @@ from schemas.tdata import TdataConvertRequest, TdataImportResult
 from services import accounts, spam_status
 
 router = APIRouter(tags=["accounts"])
+
+# Path params default to an unconstrained ``str``, so a percent-encoded separator
+# (``..%5C..%5Cevil``) survives routing and reaches the service layer — on the
+# delete route that lands in the ``.session`` unlink. Same charset the request
+# bodies already enforce, from the same constant (``schemas.profile_media``
+# imports it the same way), so the two entry shapes cannot drift apart.
+AccountIdPath = Annotated[str, Path(min_length=1, pattern=_ACCOUNT_ID_PATTERN)]
 
 
 @router.get("/accounts", response_model=Page[AccountRead], operation_id="listAccounts")
@@ -76,7 +84,7 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
     response_model=SpamStatusVerdict,
     operation_id="spamCheckAccount",
 )
-async def spam_check_account(account_id: str) -> SpamStatusVerdict:
+async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     """Re-probe @SpamBot for one account and return the fresh, cached verdict."""
     return await spam_status.refresh_spam_status(account_id, force=True)
 
@@ -101,7 +109,7 @@ async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
     response_model=PhoneCodeRequestResult,
     operation_id="requestLoginCode",
 )
-async def request_login_code(account_id: str) -> PhoneCodeRequestResult:
+async def request_login_code(account_id: AccountIdPath) -> PhoneCodeRequestResult:
     """Send a Telegram login code to the account's phone (re-auth by code)."""
     try:
         return await accounts.request_login_code(account_id)
@@ -114,7 +122,7 @@ async def request_login_code(account_id: str) -> PhoneCodeRequestResult:
     response_model=AccountRead,
     operation_id="submitLoginCode",
 )
-async def submit_login_code(account_id: str, body: SubmitCodeRequest) -> AccountRead:
+async def submit_login_code(account_id: AccountIdPath, body: SubmitCodeRequest) -> AccountRead:
     """Complete sign-in with the SMS code (+ optional 2FA password)."""
     try:
         return await accounts.submit_login_code(account_id, body.code, body.password)
@@ -127,7 +135,7 @@ async def submit_login_code(account_id: str, body: SubmitCodeRequest) -> Account
     response_model=AccountRead,
     operation_id="logoutAccount",
 )
-async def logout_account(account_id: str) -> AccountRead:
+async def logout_account(account_id: AccountIdPath) -> AccountRead:
     """Log the account out server-side and mark it unauthorized."""
     try:
         return await accounts.logout_account(account_id)
@@ -140,7 +148,7 @@ async def logout_account(account_id: str) -> AccountRead:
     response_model=AccountRead,
     operation_id="resetAccountSession",
 )
-async def reset_account_session(account_id: str) -> AccountRead:
+async def reset_account_session(account_id: AccountIdPath) -> AccountRead:
     """Log out and wipe the local session token so the next login is clean."""
     try:
         return await accounts.reset_account_session(account_id)
@@ -159,8 +167,11 @@ async def update_account_profile(body: AccountProfileUpdateRequest) -> AccountRe
     status_code=http_status.HTTP_204_NO_CONTENT,
     operation_id="deleteAccount",
 )
-async def delete_account(account_id: str) -> None:
-    await accounts.remove_account(account_id)
+async def delete_account(account_id: AccountIdPath) -> None:
+    # 404 on a missing row instead of a 204 that deleted nothing (or, before the
+    # service-side guard, unlinked whatever the id resolved to).
+    with service_errors_to_http():
+        await accounts.remove_account(account_id)
 
 
 @router.post(

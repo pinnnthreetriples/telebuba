@@ -66,9 +66,17 @@ export function ChannelCreateModal({
   // `done` keeps the button locked after success while the caller closes the
   // dialog — a second click would create the SAME channel twice.
   const done = create.isSuccess;
+  // A create that FAILED can have made the channel too: the backend raises
+  // FloodWaitError/PeerFloodError bare, after CreateChannelRequest already
+  // succeeded, so those carry no channel_id to hand off. There is no
+  // idempotency key (no random_id, nothing keys on the title) and the username
+  // pre-check still reports the handle free, so a retry silently makes a SECOND
+  // real channel. One create attempt per dialog.
+  const [blocked, setBlocked] = useState(false);
   const canSubmit =
     !busy &&
     !done &&
+    !blocked &&
     title.trim().length >= 1 &&
     title.trim().length <= CHANNEL_TITLE_MAX &&
     about.trim().length <= CHANNEL_ABOUT_MAX &&
@@ -97,9 +105,20 @@ export function ChannelCreateModal({
         },
         onError: (err) => {
           // The channel may exist as private even though the request failed
-          // (occupied username after a successful create) — its id rides the
-          // envelope's fields, so the list must refresh either way.
-          if (errorChannelId(err) !== null) void invalidateList();
+          // (occupied username after a successful create), so the list refreshes
+          // either way.
+          void invalidateList();
+          const channelId = errorChannelId(err);
+          // An id in the envelope's fields means the create itself SUCCEEDED and
+          // only the public-username step failed. That is a completed create:
+          // hand it off like the success path so the operator lands in the
+          // editor for the real channel (where the handle is fixable) instead of
+          // facing a re-armed Create that would make a second one.
+          if (channelId !== null) {
+            onCreated(channelId);
+            return;
+          }
+          setBlocked(true);
         },
       },
     );
