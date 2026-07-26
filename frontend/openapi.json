@@ -7281,6 +7281,28 @@
             "minLength": 1,
             "title": "From Label"
           },
+          "from_first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From First Name"
+          },
+          "from_last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "From Last Name"
+          },
           "to_account": {
             "type": "string",
             "minLength": 1,
@@ -7290,6 +7312,28 @@
             "type": "string",
             "minLength": 1,
             "title": "To Label"
+          },
+          "to_first_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To First Name"
+          },
+          "to_last_name": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "To Last Name"
           },
           "text": {
             "type": "string",
@@ -7317,7 +7361,7 @@
           "created_at"
         ],
         "title": "DialogueFeedMessage",
-        "description": "One dialogue message with both accounts resolved to display labels.\n\nLocale-neutral (#12): ``from_label``/``to_label`` are the account's own\nphone / label / id strings, never translated UI text; ``created_at`` is the\nstored ISO-8601 timestamp. The SPA owns any presentation."
+        "description": "One dialogue message with both accounts resolved to display labels.\n\nLocale-neutral (#12): ``from_label``/``to_label`` are the account's own\nphone / label / id strings, never translated UI text; ``created_at`` is the\nstored ISO-8601 timestamp. The SPA owns any presentation.\n\nThe Telegram name is carried as *parts*, never pre-joined: account display\nidentity is per-surface, so the SPA composes it with ``accountDisplayName``\nexactly as the warming cards do. ``None`` on both parts (a never-registered\npeer, or one that has not been logged in yet) leaves the label as the name."
       },
       "DiscoveryAdoptOutcome": {
         "properties": {

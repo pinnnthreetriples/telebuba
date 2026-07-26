@@ -984,6 +984,11 @@ export type DialogueFeed = {
  * Locale-neutral (#12): ``from_label``/``to_label`` are the account's own
  * phone / label / id strings, never translated UI text; ``created_at`` is the
  * stored ISO-8601 timestamp. The SPA owns any presentation.
+ *
+ * The Telegram name is carried as *parts*, never pre-joined: account display
+ * identity is per-surface, so the SPA composes it with ``accountDisplayName``
+ * exactly as the warming cards do. ``None`` on both parts (a never-registered
+ * peer, or one that has not been logged in yet) leaves the label as the name.
  */
 export type DialogueFeedMessage = {
   /**
@@ -995,6 +1000,14 @@ export type DialogueFeedMessage = {
    */
   from_label: string;
   /**
+   * From First Name
+   */
+  from_first_name?: string | null;
+  /**
+   * From Last Name
+   */
+  from_last_name?: string | null;
+  /**
    * To Account
    */
   to_account: string;
@@ -1002,6 +1015,14 @@ export type DialogueFeedMessage = {
    * To Label
    */
   to_label: string;
+  /**
+   * To First Name
+   */
+  to_first_name?: string | null;
+  /**
+   * To Last Name
+   */
+  to_last_name?: string | null;
   /**
    * Text
    */

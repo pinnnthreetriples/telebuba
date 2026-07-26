@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-26
+last_updated: 2026-07-27
 ---
 
 # Frontend Rules
@@ -11,7 +11,7 @@ FSD order: `app → routes → pages → widgets → features → entities → s
 - No `any` or ignored type failures without a precise upstream justification.
 - All display strings and formatting use react-i18next/`Intl` (`ru`, `en`).
 - Reuse Tailwind tokens and local `shared/ui`; do not duplicate backend policy.
-- Account display identity is per-surface: reuse `entities/account` helpers (`accountDisplayName`, `accountInitials`, `<AccountAvatar>`); any account-bearing payload (e.g. warming cards) must carry `first_name`/`last_name`/`phone`/`avatar_etag`, not just a label.
+- Account display identity is per-surface: reuse `entities/account` helpers (`accountDisplayName`, `accountInitials`, `<AccountAvatar>`); any account-bearing payload (e.g. warming cards, the dialogue feed) must carry `first_name`/`last_name`/`phone`/`avatar_etag`, not just a label. `DialogueFeedMessage` is the narrow case: it pre-resolves phone → account label → bare id into one non-empty `*_label`, so that label IS the surface's last resort and goes into `accountDisplayName`'s required `account_id` slot — passing it as `phone` too just leaves one fallback dead.
 - Frontend configuration uses `VITE_*`.
 - Vitest logic coverage stays at least 80%; Steiger, ESLint, Prettier, TypeScript, tests and build must pass. CVEs are a separate CI job (`npm-audit`), not part of `npm run gates`: an upstream disclosure turns it red with no change of ours, and that must not read as a broken SPA.
 - `npm audit` must stay at 0, run as `npm audit --package-lock-only --audit-level=info`. Both flags are load-bearing. `--audit-level=info` because a bare `npm audit` is NOT unfiltered: npm leaves the config null and `npm-audit-report` falls back to `low`, so info findings exit 0. Never add `--omit=dev` and never raise the floor — devDependencies are where the whole 2026-07 backlog lived, including a critical happy-dom VM escape that runs during CI, and the one browser-facing finding was rated merely "high". `--package-lock-only` is enough: lockfileVersion 3 records the resolved tree including `overrides`, so an `npm ci` adds no coverage, only ways to go red over registry flake under a "CVE" label.

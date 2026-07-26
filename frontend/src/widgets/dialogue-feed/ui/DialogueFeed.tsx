@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { accountDisplayName } from '@/entities/account';
 import { warmingDialoguesQueryOptions } from '@/entities/warming';
 import type { DialogueFeedMessage } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
@@ -16,11 +17,26 @@ function messageKey(message: DialogueFeedMessage): string {
   return `${message.from_account}→${message.to_account}@${message.created_at}`;
 }
 
+// The Telegram name, falling back to the label the API already resolved for us
+// (phone → account label → bare id). That label goes in as `account_id` because
+// it is this surface's last resort and is `min_length=1` on the wire: the shared
+// helper's own phone/id fallbacks are already folded into it, so passing it
+// twice would just leave one slot dead.
+function participant(
+  label: string,
+  firstName: string | null | undefined,
+  lastName: string | null | undefined,
+): string {
+  return accountDisplayName({ first_name: firstName, last_name: lastName, account_id: label });
+}
+
 function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: boolean }) {
   return (
     <div className={isNew ? 'tb-swapin' : undefined}>
       <div className="mb-[3px] flex items-center gap-[5px] text-[10.5px] text-ink-subtle">
-        <span className="font-medium text-ink-muted">{message.from_label}</span>
+        <span className="font-medium text-ink-muted">
+          {participant(message.from_label, message.from_first_name, message.from_last_name)}
+        </span>
         <svg
           width="11"
           height="11"
@@ -31,7 +47,9 @@ function DialogueRow({ message, isNew }: { message: DialogueFeedMessage; isNew: 
         >
           <path d="M5 12h14M13 6l6 6-6 6" />
         </svg>
-        <span className="font-medium text-ink-muted">{message.to_label}</span>
+        <span className="font-medium text-ink-muted">
+          {participant(message.to_label, message.to_first_name, message.to_last_name)}
+        </span>
         <span className="ml-auto shrink-0 tabular-nums text-[10px] text-line-strong">
           {formatLocalTime(message.created_at)}
         </span>

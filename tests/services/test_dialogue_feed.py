@@ -44,7 +44,12 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     reset_logging_for_tests()
 
 
-async def _seed_account(account_id: str, phone: str) -> None:
+async def _seed_account(
+    account_id: str,
+    phone: str,
+    first_name: str | None = None,
+    last_name: str | None = None,
+) -> None:
     await create_account(AccountCreate(account_id=account_id, label=f"lbl-{account_id}"))
     await update_account_from_session_check(
         TelegramSessionCheckResult(
@@ -53,6 +58,8 @@ async def _seed_account(account_id: str, phone: str) -> None:
             status="alive",
             is_temporary=False,
             phone=phone,
+            first_name=first_name,
+            last_name=last_name,
         ),
     )
 
@@ -157,6 +164,37 @@ async def test_load_overview_falls_back_to_label_then_id() -> None:
     msg = feed.messages[0]
     assert msg.from_label == "Alfa"
     assert msg.to_label == "ghost"
+
+
+@pytest.mark.asyncio
+async def test_load_overview_carries_name_parts_for_both_sides() -> None:
+    # The feed row shows a name; the parts cross the wire unjoined so the SPA
+    # composes per-surface identity itself (non-negotiable #12).
+    await _seed_account("a", "527717224137", first_name="Polina")
+    await _seed_account("b", "528671176536", first_name="Alisa", last_name="K")
+    await record_dialogue_message("a", "b", "Йоу! Как")
+
+    msg = (await load_dialogue_overview()).messages[0]
+
+    assert (msg.from_first_name, msg.from_last_name) == ("Polina", None)
+    assert (msg.to_first_name, msg.to_last_name) == ("Alisa", "K")
+    # The label is untouched, so the SPA still has the phone to fall back to.
+    assert (msg.from_label, msg.to_label) == ("527717224137", "528671176536")
+
+
+@pytest.mark.asyncio
+async def test_load_overview_leaves_name_parts_none_when_unknown() -> None:
+    # A logged-in account that never reported a name, and a peer that was never
+    # registered at all: both must yield None rather than an empty string, so
+    # the SPA's fallback to the label is the only thing that can fire.
+    await _seed_account("a", "+15550001111")
+    await record_dialogue_message("a", "ghost", "orphan")
+
+    msg = (await load_dialogue_overview()).messages[0]
+
+    assert (msg.from_first_name, msg.from_last_name) == (None, None)
+    assert (msg.to_first_name, msg.to_last_name) == (None, None)
+    assert (msg.from_label, msg.to_label) == ("+15550001111", "ghost")
 
 
 @pytest.mark.asyncio

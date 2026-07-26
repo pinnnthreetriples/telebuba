@@ -34,12 +34,21 @@ class DialogueFeedMessage(BaseModel):
     Locale-neutral (#12): ``from_label``/``to_label`` are the account's own
     phone / label / id strings, never translated UI text; ``created_at`` is the
     stored ISO-8601 timestamp. The SPA owns any presentation.
+
+    The Telegram name is carried as *parts*, never pre-joined: account display
+    identity is per-surface, so the SPA composes it with ``accountDisplayName``
+    exactly as the warming cards do. ``None`` on both parts (a never-registered
+    peer, or one that has not been logged in yet) leaves the label as the name.
     """
 
     from_account: str = Field(min_length=1)
     from_label: str = Field(min_length=1)
+    from_first_name: str | None = None
+    from_last_name: str | None = None
     to_account: str = Field(min_length=1)
     to_label: str = Field(min_length=1)
+    to_first_name: str | None = None
+    to_last_name: str | None = None
     text: str = Field(min_length=1)
     created_at: str = Field(min_length=1)
     replied: bool = False
