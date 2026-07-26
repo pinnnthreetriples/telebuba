@@ -1,7 +1,7 @@
 ---
 name: agents
 description: Always-loaded project anchor with identity, hard rules, commands, and navigation.
-last_updated: 2026-07-17
+last_updated: 2026-07-26
 ---
 
 # Telebuba
@@ -22,6 +22,12 @@ Telegram operations dashboard for accounts, proxies, warming, neurocomment, prof
 - Quality: `uv run pre-commit run --all-files`
 - Frontend: `cd frontend && npm run gates && npm run build`
 - Memory: `npx mex-agent check --quiet`
+
+On a Windows checkout (`core.autocrlf=true`) the two repo-wide steps trip on
+pre-existing CRLF files, not on your change: `npm run gates` fails at its
+`format` step and `pre-commit run --all-files` rewrites every such file. Run
+`prettier --write` on the files you touched, the other frontend gates
+individually, and check scope with `git diff HEAD --name-only`, not `git status`.
 
 ## GROW
 After meaningful work:
