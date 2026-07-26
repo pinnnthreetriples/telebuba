@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, get_args
 
 import pytest
@@ -362,6 +363,53 @@ async def test_campaign_probes_spam_once_per_account(monkeypatch: pytest.MonkeyP
 
     # Once per serving account, not once per (account, channel) pair (2 accts x 2 chans).
     assert sorted(probed) == ["acc-1", "acc-2"]
+
+
+@pytest.mark.parametrize(
+    ("cached_stamp", "sleeps_before_each_probe", "total_sleeps"),
+    # None = a real probe, stamped now; a stamp = the older cached verdict of a TTL hit.
+    [(None, [0, 1], 2), ("2026-01-01T00:00:00", [0, 0], 1)],
+)
+@pytest.mark.asyncio
+async def test_campaign_spaces_real_spam_probes_only(
+    monkeypatch: pytest.MonkeyPatch,
+    cached_stamp: str | None,
+    sleeps_before_each_probe: list[int],
+    total_sleeps: int,
+) -> None:
+    """A real @SpamBot probe pauses before the next account; a TTL cache hit must not.
+
+    The per-probe assert is the sleep count observed *at* each probe, so it stays
+    independent of how many join sleeps follow. The total pins the rest: 1 join pause
+    (2 accounts, 1 channel) plus the spam pauses — so a pause after the LAST probe, which
+    nothing follows, would show up here as one sleep too many.
+    """
+    for acc in ("acc-1", "acc-2"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@one")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
+
+    sleeps: list[float] = []
+    seen: list[int] = []
+
+    async def _probe(account_id: str, **_kwargs: object) -> SpamStatusVerdict:
+        seen.append(len(sleeps))
+        checked_at = cached_stamp or datetime.now(UTC).isoformat()
+        return SpamStatusVerdict(account_id=account_id, status="clean", checked_at=checked_at)
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", _probe)
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", _JoinStub().execute)
+    monkeypatch.setattr(_seams.rng, "uniform", lambda _a, _b: 9.0)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep(sleeps))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    assert seen == sleeps_before_each_probe
+    assert len(sleeps) == total_sleeps
 
 
 @pytest.mark.asyncio

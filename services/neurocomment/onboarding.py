@@ -20,7 +20,8 @@ place; the inter-join sleep uses ``asyncio.sleep`` (patched in tests).
 
 from __future__ import annotations
 
-import asyncio  # noqa: F401 - re-exported so tests can patch onboarding.asyncio.sleep
+import asyncio  # module-level so tests can patch onboarding.asyncio.sleep
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -207,6 +208,24 @@ async def _join_pair_safely(
         )
 
 
+def _probed_this_run(checked_at: str, run_start: datetime) -> bool:
+    """True when the verdict was stamped during this run, i.e. @SpamBot traffic just went out.
+
+    ``refresh_spam_status`` returns the *cached* verdict (older stamp, no Telegram
+    traffic) on a TTL hit, so the stamp is the only signal telling a probe apart from
+    a cache hit — and only a real probe needs the anti-burst pause below. A verdict a
+    concurrent warming cycle just probed reads as ours; pausing on it is still right,
+    the traffic happened. A legacy naive stamp is read as UTC, matching ``spam_status``.
+    """
+    try:
+        checked = datetime.fromisoformat(checked_at)
+    except ValueError:
+        return False
+    if checked.tzinfo is None:
+        checked = checked.replace(tzinfo=UTC)
+    return checked >= run_start
+
+
 async def _probe_account_spam(
     accounts: list[str],
     report: Callable[[OnboardingProgressEvent], None] | None = None,
@@ -216,12 +235,19 @@ async def _probe_account_spam(
     Selection reads the cached verdict and never re-probes @SpamBot per post (anti-ban),
     so onboarding establishes one up front. ``force=False`` reuses a fresh cache; a probe
     failure is logged, never fatal — onboarding proceeds.
+
+    Real probes are spaced by the same jittered pause as joins: several accounts (often
+    sharing one proxy IP) opening @SpamBot inside a minute is itself a farm signal, and
+    this was the one burst left in the Start path. A cache hit sends nothing, so it never
+    pays the pause — otherwise every re-Start inside the verdict TTL would idle for
+    minutes before its first join. The last account never pauses: nothing follows it.
     """
-    for account_id in accounts:
+    run_start = datetime.now(UTC)
+    for index, account_id in enumerate(accounts):
         if report:
             report(OnboardingProgressEvent(code="spam_probe_started", account_id=account_id))
         try:
-            await _seams.refresh_spam_status(account_id, force=False)
+            verdict = await _seams.refresh_spam_status(account_id, force=False)
         except Exception as exc:  # noqa: BLE001 - a spam probe must never abort onboarding
             await log_event(
                 "WARNING",
@@ -231,6 +257,9 @@ async def _probe_account_spam(
             )
             if report:
                 report(OnboardingProgressEvent(code="spam_probe_failed", account_id=account_id))
+        else:
+            if index + 1 < len(accounts) and _probed_this_run(verdict.checked_at, run_start):
+                await asyncio.sleep(_join_jitter_seconds())
 
 
 # The join-outcome classification + solver recording live in ``_classify`` (file-size
