@@ -9,6 +9,7 @@ The implementations live in per-concern submodules:
 - :mod:`.lifecycle` — registration + geo evaluation
 - :mod:`.sessions`  — ``.session`` and tdata-archive imports + liveness check
 - :mod:`.profile`   — profile-field updates (name / username / bio)
+- :mod:`.privacy`   — Telegram privacy keys (who may see photo / bio / last seen)
 - :mod:`.media`     — profile photo / story / music uploads
 - :mod:`.channels`  — own-channel management (create / edit / photo / delete)
 - :mod:`.channel_posts` — own-channel posts (publish / list / edit / delete)
@@ -25,7 +26,7 @@ fake an external collaborator monkeypatch it on its owning submodule, e.g.
 from __future__ import annotations
 
 from core.db import list_accounts
-from services.accounts._result import AccountActionError
+from services.accounts._result import AccountActionError, AccountNotFoundError
 from services.accounts._table import (
     InvalidCursorError,
     account_stats,
@@ -66,6 +67,11 @@ from services.accounts.media import (
     set_account_profile_photo,
     set_account_story_pinned,
 )
+from services.accounts.privacy import (
+    apply_account_privacy,
+    apply_privacy_to_all_accounts,
+    read_account_privacy,
+)
 from services.accounts.profile import update_account_profile
 from services.accounts.profile_read import (
     account_avatar_image,
@@ -83,6 +89,7 @@ from services.accounts.sessions import (
 
 __all__ = [
     "AccountActionError",
+    "AccountNotFoundError",
     "InvalidCursorError",
     "PhoneLoginError",
     "SessionAlreadyExistsError",
@@ -92,6 +99,8 @@ __all__ = [
     "account_stats",
     "add_account",
     "add_account_profile_music",
+    "apply_account_privacy",
+    "apply_privacy_to_all_accounts",
     "check_account_channel_username",
     "check_account_session",
     "create_account_channel",
@@ -112,6 +121,7 @@ __all__ = [
     "logout_account",
     "post_account_story",
     "publish_account_channel_post",
+    "read_account_privacy",
     "remove_account",
     "remove_account_profile_music",
     "remove_account_profile_photo",

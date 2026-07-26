@@ -42,6 +42,14 @@ _PROFILE_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
 # executor, but flood there is a routine pacing event with automatic recovery —
 # a sticky status would block start_warming (readiness requires ``alive``) and
 # park reconcile in error on restart, so their floods never touch the status.
+#
+# ``set_privacy_settings`` is deliberately NOT a member, even though it is an
+# operator-driven profile edit. It has a fleet-wide fan-out (apply-to-all), so a
+# single burst could mark a large slice of the fleet ``flood_wait`` and thereby
+# block start_warming across it — the same damage this set exists to keep the
+# automated paths from doing. The operator loses nothing: every refusal is
+# already surfaced per account in ``BulkPrivacyResult``/``AccountPrivacyOutcome``
+# and in the activity log, so the sticky DB status adds no information.
 _PROFILE_EDIT_ACTION_TYPES: frozenset[str] = frozenset(
     {
         "update_profile",

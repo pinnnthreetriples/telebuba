@@ -1,20 +1,17 @@
 name: CI
 
+# No `paths-ignore`. It used to skip .mex/**, Markdown, .gitignore and LICENSE to
+# save runner minutes, but these jobs are now REQUIRED status checks on main, and a
+# workflow that does not run reports nothing: a docs-only PR would sit forever on
+# "Expected — waiting for status to be reported", unmergeable. Since the whole point
+# of requiring them is that nothing reaches main ungated, paying ~2 parallel minutes
+# on a README typo is the right side of that trade. Do not reintroduce the filter
+# without also adding same-named no-op jobs for the skipped paths.
 on:
   pull_request:
     branches: [main]
-    paths-ignore:
-      - '.mex/**'
-      - '**.md'
-      - '.gitignore'
-      - 'LICENSE'
   push:
     branches: [main]
-    paths-ignore:
-      - '.mex/**'
-      - '**.md'
-      - '.gitignore'
-      - 'LICENSE'
   workflow_dispatch:
 
 concurrency:
@@ -131,6 +128,52 @@ jobs:
         # dev dependency. click is dev-tooling / uvicorn-CLI only, not a runtime
         # request path. Drop this ignore once semgrep loosens its click pin.
         run: uv run pip-audit --strict --ignore-vuln PYSEC-2026-2132
+
+  # ---------------------------------------------------------------------------
+  # The npm half of the same gate. Its absence is why eighteen vulnerable packages
+  # (16 distinct advisories) accumulated unnoticed while pip-audit kept the Python
+  # tree clean -- one of them, a prototype pollution in @tanstack/form-core, in the
+  # shipped bundle, and three rated critical in tooling that runs in this workflow.
+  #
+  # Its own job rather than a step in `frontend`: an upstream disclosure turns this
+  # red without a single line of our code changing, and that must not read as "the
+  # SPA is broken". Same shape as pip-audit above, same reviewed-ignore convention
+  # if a finding ever turns out to be unfixable.
+  #
+  # Both audit jobs also run nightly. On PR/push alone, a CVE disclosed during a
+  # quiet week stays invisible until the next unrelated change -- which is the
+  # failure mode that produced the backlog in the first place.
+  # ---------------------------------------------------------------------------
+  npm-audit:
+    name: npm audit (CVE)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      # --audit-level=info, spelled out: omitting the flag is NOT "no floor". npm
+      # leaves the config null and npm-audit-report falls back to ``low``, so an
+      # info-severity advisory prints in the log and the job exits 0. The backlog
+      # this gate exists for included a browser-facing prototype-pollution hole
+      # rated merely "moderate", so guessing a floor is exactly the wrong instinct.
+      #
+      # No --omit=dev either: devDependencies are where the backlog lived, and one
+      # of them (@hey-api/openapi-ts) emits code INTO the shipped client.
+      #
+      # --package-lock-only, and deliberately no ``npm ci``: lockfileVersion 3
+      # records the fully resolved tree including what ``overrides`` resolved to, so
+      # the install buys no extra coverage -- it only adds a way for this job to go
+      # red over registry flake or lockfile drift under a label that says "CVE".
+      # Drift is the `frontend` job's business; it runs npm ci already.
+      - name: Run npm audit
+        run: npm audit --package-lock-only --audit-level=info
 
   # ---------------------------------------------------------------------------
   # SAST scan on every PR and push, so the security gate fires before merge

@@ -33,6 +33,7 @@ import {
   deleteProxy,
   editAccountChannelPost,
   getAccountChannel,
+  getAccountPrivacy,
   getAccountProfileSnapshot,
   getCampaignDiscovery,
   getHealth,
@@ -78,7 +79,9 @@ import {
   setAccountChannelPhoto,
   setAccountPhoto,
   setAccountPhotoMain,
+  setAccountPrivacy,
   setAccountStoryPinned,
+  setAllAccountsPrivacy,
   setCampaignAccountChannel,
   setCampaignSolver,
   setCampaignStatus,
@@ -169,6 +172,9 @@ import type {
   GetAccountChannelData,
   GetAccountChannelError,
   GetAccountChannelResponse,
+  GetAccountPrivacyData,
+  GetAccountPrivacyError,
+  GetAccountPrivacyResponse,
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotError,
   GetAccountProfileSnapshotResponse,
@@ -300,9 +306,15 @@ import type {
   SetAccountPhotoMainError,
   SetAccountPhotoMainResponse,
   SetAccountPhotoResponse,
+  SetAccountPrivacyData,
+  SetAccountPrivacyError,
+  SetAccountPrivacyResponse,
   SetAccountStoryPinnedData,
   SetAccountStoryPinnedError,
   SetAccountStoryPinnedResponse,
+  SetAllAccountsPrivacyData,
+  SetAllAccountsPrivacyError,
+  SetAllAccountsPrivacyResponse,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelError,
   SetCampaignAccountChannelResponse,
@@ -549,8 +561,8 @@ export const listAccountsInfiniteQueryKey = (
 /**
  * List Accounts
  */
-export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) =>
-  infiniteQueryOptions<
+export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>) => {
+  const opts = infiniteQueryOptions<
     ListAccountsResponse,
     ListAccountsError,
     InfiniteData<ListAccountsResponse>,
@@ -586,6 +598,8 @@ export const listAccountsInfiniteOptions = (options?: Options<ListAccountsData>)
       queryKey: listAccountsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
 
 export const accountStatsQueryKey = (options?: Options<AccountStatsData>) =>
   createQueryKey('accountStats', options);
@@ -1379,8 +1393,8 @@ export const listAccountChannelPostsInfiniteQueryKey = (
  */
 export const listAccountChannelPostsInfiniteOptions = (
   options: Options<ListAccountChannelPostsData>,
-) =>
-  infiniteQueryOptions<
+) => {
+  const opts = infiniteQueryOptions<
     ListAccountChannelPostsResponse,
     ListAccountChannelPostsError,
     InfiniteData<ListAccountChannelPostsResponse>,
@@ -1416,6 +1430,8 @@ export const listAccountChannelPostsInfiniteOptions = (
       queryKey: listAccountChannelPostsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
 
 /**
  * Publish Account Channel Post
@@ -1488,6 +1504,91 @@ export const deleteAccountChannelPostMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await deleteAccountChannelPost({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+export const getAccountPrivacyQueryKey = (options: Options<GetAccountPrivacyData>) =>
+  createQueryKey('getAccountPrivacy', options);
+
+/**
+ * Get Account Privacy
+ *
+ * Live Profile photo / Bio / Last seen privacy levels for one account.
+ */
+export const getAccountPrivacyOptions = (options: Options<GetAccountPrivacyData>) =>
+  queryOptions<
+    GetAccountPrivacyResponse,
+    GetAccountPrivacyError,
+    GetAccountPrivacyResponse,
+    ReturnType<typeof getAccountPrivacyQueryKey>
+  >({
+    queryFn: async ({ queryKey, signal }) => {
+      const { data } = await getAccountPrivacy({
+        ...options,
+        ...queryKey[0],
+        signal,
+        throwOnError: true,
+      });
+      return data;
+    },
+    queryKey: getAccountPrivacyQueryKey(options),
+  });
+
+/**
+ * Set Account Privacy
+ *
+ * Apply the given keys, then answer with the re-read state (one round trip).
+ */
+export const setAccountPrivacyMutation = (
+  options?: Partial<Options<SetAccountPrivacyData>>,
+): UseMutationOptions<
+  SetAccountPrivacyResponse,
+  SetAccountPrivacyError,
+  Options<SetAccountPrivacyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAccountPrivacyResponse,
+    SetAccountPrivacyError,
+    Options<SetAccountPrivacyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAccountPrivacy({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Set All Accounts Privacy
+ *
+ * Apply the same keys to every account; unusable sessions come back skipped.
+ */
+export const setAllAccountsPrivacyMutation = (
+  options?: Partial<Options<SetAllAccountsPrivacyData>>,
+): UseMutationOptions<
+  SetAllAccountsPrivacyResponse,
+  SetAllAccountsPrivacyError,
+  Options<SetAllAccountsPrivacyData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    SetAllAccountsPrivacyResponse,
+    SetAllAccountsPrivacyError,
+    Options<SetAllAccountsPrivacyData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await setAllAccountsPrivacy({
         ...options,
         ...fnOptions,
         throwOnError: true,
@@ -2224,8 +2325,8 @@ export const listNeurocommentCommentsInfiniteQueryKey = (
  */
 export const listNeurocommentCommentsInfiniteOptions = (
   options: Options<ListNeurocommentCommentsData>,
-) =>
-  infiniteQueryOptions<
+) => {
+  const opts = infiniteQueryOptions<
     ListNeurocommentCommentsResponse,
     ListNeurocommentCommentsError,
     InfiniteData<ListNeurocommentCommentsResponse>,
@@ -2264,6 +2365,8 @@ export const listNeurocommentCommentsInfiniteOptions = (
       queryKey: listNeurocommentCommentsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};
 
 /**
  * Link Channel
@@ -2880,8 +2983,8 @@ export const listLogsInfiniteQueryKey = (
 /**
  * List Logs
  */
-export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) =>
-  infiniteQueryOptions<
+export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) => {
+  const opts = infiniteQueryOptions<
     ListLogsResponse,
     ListLogsError,
     InfiniteData<ListLogsResponse>,
@@ -2915,3 +3018,5 @@ export const listLogsInfiniteOptions = (options?: Options<ListLogsData>) =>
       queryKey: listLogsInfiniteQueryKey(options),
     },
   );
+  return opts as Omit<typeof opts, 'initialData'>;
+};

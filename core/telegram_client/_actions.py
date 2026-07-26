@@ -27,6 +27,7 @@ from core.telegram_client._channels import _channel_log_extra, _dispatch_channel
 from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
 from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
+from core.telegram_client._privacy import dispatch_set_privacy_settings
 from core.telegram_client._profile import (
     _PROFILE_EDIT_ACTION_TYPES,
     _dispatch_update_profile,
@@ -54,6 +55,7 @@ from schemas.telegram_actions import (
     SendDirectMessage,
     SetMainProfilePhoto,
     SetOnline,
+    SetPrivacySettings,
     SetProfilePhoto,
     ToggleStoryPinned,
     UpdateProfile,
@@ -200,6 +202,8 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
             await _dispatch_click_button(client, action)
         case UpdateProfile():
             await _dispatch_update_profile(client, action)
+        case SetPrivacySettings():
+            await dispatch_set_privacy_settings(client, action)
         case SetOnline():
             await client(UpdateStatusRequest(offline=not action.online))
         case ReadChannel():
@@ -352,6 +356,17 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
                 "has_last_name": action.last_name is not None,
                 "has_username": action.username is not None,
                 "has_bio": action.bio is not None,
+            }
+        case SetPrivacySettings():
+            # The LEVELS, not just which keys were touched: this action has a
+            # fleet-wide, non-undoable caller (setPrivacy replaces a key's whole
+            # rule vector), so the activity log is the only record of what was
+            # pushed to N accounts. Unlike profile text, a privacy level is not
+            # account content, so logging the value leaks nothing.
+            extra = {
+                "profile_photo": action.profile_photo,
+                "bio": action.bio,
+                "last_seen": action.last_seen,
             }
         case SetProfilePhoto() | PostStory() | AddProfileMusic():
             extra = {"filename": action.filename}

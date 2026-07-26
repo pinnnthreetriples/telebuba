@@ -165,6 +165,7 @@ async def test_create_account_channel_failed_result_raises_code(
             status="failed",
             action_type="channel_create",
             account_id="acc-1",
+            error_type="ChannelGatewayError",
             error_message="channel_username_occupied",
         ),
     )
@@ -189,6 +190,7 @@ async def test_create_failed_after_create_carries_channel_id(
             action_type="channel_create",
             account_id="acc-1",
             channel_id="987",
+            error_type="ChannelGatewayError",
             error_message="channels_admin_public_too_much",
         ),
     )
@@ -537,6 +539,7 @@ async def test_publish_post_failed_result_raises(
             status="failed",
             action_type="channel_post_publish",
             account_id="acc-1",
+            error_type="ChannelGatewayError",
             error_message="chat_admin_required",
         ),
     )

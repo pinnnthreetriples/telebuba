@@ -2,8 +2,10 @@
 
 import {
   type Client,
+  type ClientMeta,
   formDataBodySerializer,
   type Options as Options2,
+  type RequestResult,
   type TDataShape,
 } from './client';
 import { client } from './client.gen';
@@ -77,6 +79,9 @@ import type {
   GetAccountChannelData,
   GetAccountChannelErrors,
   GetAccountChannelResponses,
+  GetAccountPrivacyData,
+  GetAccountPrivacyErrors,
+  GetAccountPrivacyResponses,
   GetAccountProfileSnapshotData,
   GetAccountProfileSnapshotErrors,
   GetAccountProfileSnapshotResponses,
@@ -208,9 +213,15 @@ import type {
   SetAccountPhotoMainErrors,
   SetAccountPhotoMainResponses,
   SetAccountPhotoResponses,
+  SetAccountPrivacyData,
+  SetAccountPrivacyErrors,
+  SetAccountPrivacyResponses,
   SetAccountStoryPinnedData,
   SetAccountStoryPinnedErrors,
   SetAccountStoryPinnedResponses,
+  SetAllAccountsPrivacyData,
+  SetAllAccountsPrivacyErrors,
+  SetAllAccountsPrivacyResponses,
   SetCampaignAccountChannelData,
   SetCampaignAccountChannelErrors,
   SetCampaignAccountChannelResponses,
@@ -285,7 +296,7 @@ export type Options<
    * You can pass arbitrary values through the `meta` object. This can be
    * used to access values that aren't defined as part of the SDK function.
    */
-  meta?: Record<string, unknown>;
+  meta?: keyof ClientMeta extends never ? Record<string, unknown> : ClientMeta;
 };
 
 /**
@@ -293,7 +304,7 @@ export type Options<
  */
 export const login = <ThrowOnError extends boolean = false>(
   options: Options<LoginData, ThrowOnError>,
-) =>
+): RequestResult<LoginResponses, LoginErrors, ThrowOnError> =>
   (options.client ?? client).post<LoginResponses, LoginErrors, ThrowOnError>({
     url: '/api/v1/auth/login',
     ...options,
@@ -308,7 +319,7 @@ export const login = <ThrowOnError extends boolean = false>(
  */
 export const logout = <ThrowOnError extends boolean = false>(
   options?: Options<LogoutData, ThrowOnError>,
-) =>
+): RequestResult<LogoutResponses, LogoutErrors, ThrowOnError> =>
   (options?.client ?? client).post<LogoutResponses, LogoutErrors, ThrowOnError>({
     url: '/api/v1/auth/logout',
     ...options,
@@ -319,7 +330,7 @@ export const logout = <ThrowOnError extends boolean = false>(
  */
 export const getMe = <ThrowOnError extends boolean = false>(
   options?: Options<GetMeData, ThrowOnError>,
-) =>
+): RequestResult<GetMeResponses, GetMeErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetMeResponses, GetMeErrors, ThrowOnError>({
     url: '/api/v1/auth/me',
     ...options,
@@ -330,7 +341,7 @@ export const getMe = <ThrowOnError extends boolean = false>(
  */
 export const getHealth = <ThrowOnError extends boolean = false>(
   options?: Options<GetHealthData, ThrowOnError>,
-) =>
+): RequestResult<GetHealthResponses, unknown, ThrowOnError> =>
   (options?.client ?? client).get<GetHealthResponses, unknown, ThrowOnError>({
     url: '/api/v1/health',
     ...options,
@@ -341,7 +352,7 @@ export const getHealth = <ThrowOnError extends boolean = false>(
  */
 export const listAccounts = <ThrowOnError extends boolean = false>(
   options?: Options<ListAccountsData, ThrowOnError>,
-) =>
+): RequestResult<ListAccountsResponses, ListAccountsErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListAccountsResponses, ListAccountsErrors, ThrowOnError>({
     url: '/api/v1/accounts',
     ...options,
@@ -354,7 +365,7 @@ export const listAccounts = <ThrowOnError extends boolean = false>(
  */
 export const accountStats = <ThrowOnError extends boolean = false>(
   options?: Options<AccountStatsData, ThrowOnError>,
-) =>
+): RequestResult<AccountStatsResponses, AccountStatsErrors, ThrowOnError> =>
   (options?.client ?? client).get<AccountStatsResponses, AccountStatsErrors, ThrowOnError>({
     url: '/api/v1/accounts/stats',
     ...options,
@@ -365,7 +376,7 @@ export const accountStats = <ThrowOnError extends boolean = false>(
  */
 export const checkAccount = <ThrowOnError extends boolean = false>(
   options: Options<CheckAccountData, ThrowOnError>,
-) =>
+): RequestResult<CheckAccountResponses, CheckAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<CheckAccountResponses, CheckAccountErrors, ThrowOnError>({
     url: '/api/v1/accounts/check',
     ...options,
@@ -382,7 +393,7 @@ export const checkAccount = <ThrowOnError extends boolean = false>(
  */
 export const spamCheckAccount = <ThrowOnError extends boolean = false>(
   options: Options<SpamCheckAccountData, ThrowOnError>,
-) =>
+): RequestResult<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<SpamCheckAccountResponses, SpamCheckAccountErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}/spam-check',
     ...options,
@@ -395,7 +406,7 @@ export const spamCheckAccount = <ThrowOnError extends boolean = false>(
  */
 export const startPhoneLogin = <ThrowOnError extends boolean = false>(
   options: Options<StartPhoneLoginData, ThrowOnError>,
-) =>
+): RequestResult<StartPhoneLoginResponses, StartPhoneLoginErrors, ThrowOnError> =>
   (options.client ?? client).post<StartPhoneLoginResponses, StartPhoneLoginErrors, ThrowOnError>({
     url: '/api/v1/accounts/start-login',
     ...options,
@@ -412,7 +423,7 @@ export const startPhoneLogin = <ThrowOnError extends boolean = false>(
  */
 export const requestLoginCode = <ThrowOnError extends boolean = false>(
   options: Options<RequestLoginCodeData, ThrowOnError>,
-) =>
+): RequestResult<RequestLoginCodeResponses, RequestLoginCodeErrors, ThrowOnError> =>
   (options.client ?? client).post<RequestLoginCodeResponses, RequestLoginCodeErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}/request-code',
     ...options,
@@ -425,7 +436,7 @@ export const requestLoginCode = <ThrowOnError extends boolean = false>(
  */
 export const submitLoginCode = <ThrowOnError extends boolean = false>(
   options: Options<SubmitLoginCodeData, ThrowOnError>,
-) =>
+): RequestResult<SubmitLoginCodeResponses, SubmitLoginCodeErrors, ThrowOnError> =>
   (options.client ?? client).post<SubmitLoginCodeResponses, SubmitLoginCodeErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}/submit-code',
     ...options,
@@ -442,7 +453,7 @@ export const submitLoginCode = <ThrowOnError extends boolean = false>(
  */
 export const logoutAccount = <ThrowOnError extends boolean = false>(
   options: Options<LogoutAccountData, ThrowOnError>,
-) =>
+): RequestResult<LogoutAccountResponses, LogoutAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<LogoutAccountResponses, LogoutAccountErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}/logout',
     ...options,
@@ -455,7 +466,7 @@ export const logoutAccount = <ThrowOnError extends boolean = false>(
  */
 export const resetAccountSession = <ThrowOnError extends boolean = false>(
   options: Options<ResetAccountSessionData, ThrowOnError>,
-) =>
+): RequestResult<ResetAccountSessionResponses, ResetAccountSessionErrors, ThrowOnError> =>
   (options.client ?? client).post<
     ResetAccountSessionResponses,
     ResetAccountSessionErrors,
@@ -467,7 +478,7 @@ export const resetAccountSession = <ThrowOnError extends boolean = false>(
  */
 export const updateAccountProfile = <ThrowOnError extends boolean = false>(
   options: Options<UpdateAccountProfileData, ThrowOnError>,
-) =>
+): RequestResult<UpdateAccountProfileResponses, UpdateAccountProfileErrors, ThrowOnError> =>
   (options.client ?? client).post<
     UpdateAccountProfileResponses,
     UpdateAccountProfileErrors,
@@ -486,7 +497,7 @@ export const updateAccountProfile = <ThrowOnError extends boolean = false>(
  */
 export const deleteAccount = <ThrowOnError extends boolean = false>(
   options: Options<DeleteAccountData, ThrowOnError>,
-) =>
+): RequestResult<DeleteAccountResponses, DeleteAccountErrors, ThrowOnError> =>
   (options.client ?? client).delete<DeleteAccountResponses, DeleteAccountErrors, ThrowOnError>({
     url: '/api/v1/accounts/{account_id}',
     ...options,
@@ -497,7 +508,7 @@ export const deleteAccount = <ThrowOnError extends boolean = false>(
  */
 export const importAccountTdata = <ThrowOnError extends boolean = false>(
   options: Options<ImportAccountTdataData, ThrowOnError>,
-) =>
+): RequestResult<ImportAccountTdataResponses, ImportAccountTdataErrors, ThrowOnError> =>
   (options.client ?? client).post<
     ImportAccountTdataResponses,
     ImportAccountTdataErrors,
@@ -517,7 +528,7 @@ export const importAccountTdata = <ThrowOnError extends boolean = false>(
  */
 export const importAccountSession = <ThrowOnError extends boolean = false>(
   options: Options<ImportAccountSessionData, ThrowOnError>,
-) =>
+): RequestResult<ImportAccountSessionResponses, ImportAccountSessionErrors, ThrowOnError> =>
   (options.client ?? client).post<
     ImportAccountSessionResponses,
     ImportAccountSessionErrors,
@@ -537,7 +548,7 @@ export const importAccountSession = <ThrowOnError extends boolean = false>(
  */
 export const setAccountPhoto = <ThrowOnError extends boolean = false>(
   options: Options<SetAccountPhotoData, ThrowOnError>,
-) =>
+): RequestResult<SetAccountPhotoResponses, SetAccountPhotoErrors, ThrowOnError> =>
   (options.client ?? client).post<SetAccountPhotoResponses, SetAccountPhotoErrors, ThrowOnError>({
     ...formDataBodySerializer,
     url: '/api/v1/accounts/photo',
@@ -558,7 +569,11 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
  */
 export const getAccountProfileSnapshot = <ThrowOnError extends boolean = false>(
   options: Options<GetAccountProfileSnapshotData, ThrowOnError>,
-) =>
+): RequestResult<
+  GetAccountProfileSnapshotResponses,
+  GetAccountProfileSnapshotErrors,
+  ThrowOnError
+> =>
   (options.client ?? client).get<
     GetAccountProfileSnapshotResponses,
     GetAccountProfileSnapshotErrors,
@@ -570,7 +585,7 @@ export const getAccountProfileSnapshot = <ThrowOnError extends boolean = false>(
  */
 export const postAccountStory = <ThrowOnError extends boolean = false>(
   options: Options<PostAccountStoryData, ThrowOnError>,
-) =>
+): RequestResult<PostAccountStoryResponses, PostAccountStoryErrors, ThrowOnError> =>
   (options.client ?? client).post<PostAccountStoryResponses, PostAccountStoryErrors, ThrowOnError>({
     ...formDataBodySerializer,
     url: '/api/v1/accounts/{account_id}/story',
@@ -586,7 +601,7 @@ export const postAccountStory = <ThrowOnError extends boolean = false>(
  */
 export const addAccountMusic = <ThrowOnError extends boolean = false>(
   options: Options<AddAccountMusicData, ThrowOnError>,
-) =>
+): RequestResult<AddAccountMusicResponses, AddAccountMusicErrors, ThrowOnError> =>
   (options.client ?? client).post<AddAccountMusicResponses, AddAccountMusicErrors, ThrowOnError>({
     ...formDataBodySerializer,
     url: '/api/v1/accounts/{account_id}/music',
@@ -602,7 +617,7 @@ export const addAccountMusic = <ThrowOnError extends boolean = false>(
  */
 export const removeAccountStory = <ThrowOnError extends boolean = false>(
   options: Options<RemoveAccountStoryData, ThrowOnError>,
-) =>
+): RequestResult<RemoveAccountStoryResponses, RemoveAccountStoryErrors, ThrowOnError> =>
   (options.client ?? client).post<
     RemoveAccountStoryResponses,
     RemoveAccountStoryErrors,
@@ -621,7 +636,7 @@ export const removeAccountStory = <ThrowOnError extends boolean = false>(
  */
 export const setAccountStoryPinned = <ThrowOnError extends boolean = false>(
   options: Options<SetAccountStoryPinnedData, ThrowOnError>,
-) =>
+): RequestResult<SetAccountStoryPinnedResponses, SetAccountStoryPinnedErrors, ThrowOnError> =>
   (options.client ?? client).post<
     SetAccountStoryPinnedResponses,
     SetAccountStoryPinnedErrors,
@@ -640,7 +655,7 @@ export const setAccountStoryPinned = <ThrowOnError extends boolean = false>(
  */
 export const removeAccountMusic = <ThrowOnError extends boolean = false>(
   options: Options<RemoveAccountMusicData, ThrowOnError>,
-) =>
+): RequestResult<RemoveAccountMusicResponses, RemoveAccountMusicErrors, ThrowOnError> =>
   (options.client ?? client).post<
     RemoveAccountMusicResponses,
     RemoveAccountMusicErrors,
@@ -659,7 +674,7 @@ export const removeAccountMusic = <ThrowOnError extends boolean = false>(
  */
 export const removeAccountPhoto = <ThrowOnError extends boolean = false>(
   options: Options<RemoveAccountPhotoData, ThrowOnError>,
-) =>
+): RequestResult<RemoveAccountPhotoResponses, RemoveAccountPhotoErrors, ThrowOnError> =>
   (options.client ?? client).post<
     RemoveAccountPhotoResponses,
     RemoveAccountPhotoErrors,
@@ -678,7 +693,7 @@ export const removeAccountPhoto = <ThrowOnError extends boolean = false>(
  */
 export const setAccountPhotoMain = <ThrowOnError extends boolean = false>(
   options: Options<SetAccountPhotoMainData, ThrowOnError>,
-) =>
+): RequestResult<SetAccountPhotoMainResponses, SetAccountPhotoMainErrors, ThrowOnError> =>
   (options.client ?? client).post<
     SetAccountPhotoMainResponses,
     SetAccountPhotoMainErrors,
@@ -697,7 +712,7 @@ export const setAccountPhotoMain = <ThrowOnError extends boolean = false>(
  */
 export const listAccountChannels = <ThrowOnError extends boolean = false>(
   options: Options<ListAccountChannelsData, ThrowOnError>,
-) =>
+): RequestResult<ListAccountChannelsResponses, ListAccountChannelsErrors, ThrowOnError> =>
   (options.client ?? client).get<
     ListAccountChannelsResponses,
     ListAccountChannelsErrors,
@@ -709,7 +724,7 @@ export const listAccountChannels = <ThrowOnError extends boolean = false>(
  */
 export const createAccountChannel = <ThrowOnError extends boolean = false>(
   options: Options<CreateAccountChannelData, ThrowOnError>,
-) =>
+): RequestResult<CreateAccountChannelResponses, CreateAccountChannelErrors, ThrowOnError> =>
   (options.client ?? client).post<
     CreateAccountChannelResponses,
     CreateAccountChannelErrors,
@@ -728,7 +743,11 @@ export const createAccountChannel = <ThrowOnError extends boolean = false>(
  */
 export const checkAccountChannelUsername = <ThrowOnError extends boolean = false>(
   options: Options<CheckAccountChannelUsernameData, ThrowOnError>,
-) =>
+): RequestResult<
+  CheckAccountChannelUsernameResponses,
+  CheckAccountChannelUsernameErrors,
+  ThrowOnError
+> =>
   (options.client ?? client).get<
     CheckAccountChannelUsernameResponses,
     CheckAccountChannelUsernameErrors,
@@ -740,7 +759,7 @@ export const checkAccountChannelUsername = <ThrowOnError extends boolean = false
  */
 export const getAccountChannel = <ThrowOnError extends boolean = false>(
   options: Options<GetAccountChannelData, ThrowOnError>,
-) =>
+): RequestResult<GetAccountChannelResponses, GetAccountChannelErrors, ThrowOnError> =>
   (options.client ?? client).get<GetAccountChannelResponses, GetAccountChannelErrors, ThrowOnError>(
     { url: '/api/v1/accounts/{account_id}/channels/{channel_id}', ...options },
   );
@@ -750,7 +769,7 @@ export const getAccountChannel = <ThrowOnError extends boolean = false>(
  */
 export const updateAccountChannel = <ThrowOnError extends boolean = false>(
   options: Options<UpdateAccountChannelData, ThrowOnError>,
-) =>
+): RequestResult<UpdateAccountChannelResponses, UpdateAccountChannelErrors, ThrowOnError> =>
   (options.client ?? client).post<
     UpdateAccountChannelResponses,
     UpdateAccountChannelErrors,
@@ -769,7 +788,7 @@ export const updateAccountChannel = <ThrowOnError extends boolean = false>(
  */
 export const setAccountChannelPhoto = <ThrowOnError extends boolean = false>(
   options: Options<SetAccountChannelPhotoData, ThrowOnError>,
-) =>
+): RequestResult<SetAccountChannelPhotoResponses, SetAccountChannelPhotoErrors, ThrowOnError> =>
   (options.client ?? client).post<
     SetAccountChannelPhotoResponses,
     SetAccountChannelPhotoErrors,
@@ -789,7 +808,7 @@ export const setAccountChannelPhoto = <ThrowOnError extends boolean = false>(
  */
 export const deleteAccountChannel = <ThrowOnError extends boolean = false>(
   options: Options<DeleteAccountChannelData, ThrowOnError>,
-) =>
+): RequestResult<DeleteAccountChannelResponses, DeleteAccountChannelErrors, ThrowOnError> =>
   (options.client ?? client).post<
     DeleteAccountChannelResponses,
     DeleteAccountChannelErrors,
@@ -801,7 +820,7 @@ export const deleteAccountChannel = <ThrowOnError extends boolean = false>(
  */
 export const listAccountChannelPosts = <ThrowOnError extends boolean = false>(
   options: Options<ListAccountChannelPostsData, ThrowOnError>,
-) =>
+): RequestResult<ListAccountChannelPostsResponses, ListAccountChannelPostsErrors, ThrowOnError> =>
   (options.client ?? client).get<
     ListAccountChannelPostsResponses,
     ListAccountChannelPostsErrors,
@@ -813,7 +832,11 @@ export const listAccountChannelPosts = <ThrowOnError extends boolean = false>(
  */
 export const publishAccountChannelPost = <ThrowOnError extends boolean = false>(
   options: Options<PublishAccountChannelPostData, ThrowOnError>,
-) =>
+): RequestResult<
+  PublishAccountChannelPostResponses,
+  PublishAccountChannelPostErrors,
+  ThrowOnError
+> =>
   (options.client ?? client).post<
     PublishAccountChannelPostResponses,
     PublishAccountChannelPostErrors,
@@ -833,7 +856,7 @@ export const publishAccountChannelPost = <ThrowOnError extends boolean = false>(
  */
 export const editAccountChannelPost = <ThrowOnError extends boolean = false>(
   options: Options<EditAccountChannelPostData, ThrowOnError>,
-) =>
+): RequestResult<EditAccountChannelPostResponses, EditAccountChannelPostErrors, ThrowOnError> =>
   (options.client ?? client).post<
     EditAccountChannelPostResponses,
     EditAccountChannelPostErrors,
@@ -852,7 +875,7 @@ export const editAccountChannelPost = <ThrowOnError extends boolean = false>(
  */
 export const deleteAccountChannelPost = <ThrowOnError extends boolean = false>(
   options: Options<DeleteAccountChannelPostData, ThrowOnError>,
-) =>
+): RequestResult<DeleteAccountChannelPostResponses, DeleteAccountChannelPostErrors, ThrowOnError> =>
   (options.client ?? client).post<
     DeleteAccountChannelPostResponses,
     DeleteAccountChannelPostErrors,
@@ -863,11 +886,63 @@ export const deleteAccountChannelPost = <ThrowOnError extends boolean = false>(
   });
 
 /**
+ * Get Account Privacy
+ *
+ * Live Profile photo / Bio / Last seen privacy levels for one account.
+ */
+export const getAccountPrivacy = <ThrowOnError extends boolean = false>(
+  options: Options<GetAccountPrivacyData, ThrowOnError>,
+): RequestResult<GetAccountPrivacyResponses, GetAccountPrivacyErrors, ThrowOnError> =>
+  (options.client ?? client).get<GetAccountPrivacyResponses, GetAccountPrivacyErrors, ThrowOnError>(
+    { url: '/api/v1/accounts/{account_id}/privacy', ...options },
+  );
+
+/**
+ * Set Account Privacy
+ *
+ * Apply the given keys, then answer with the re-read state (one round trip).
+ */
+export const setAccountPrivacy = <ThrowOnError extends boolean = false>(
+  options: Options<SetAccountPrivacyData, ThrowOnError>,
+): RequestResult<SetAccountPrivacyResponses, SetAccountPrivacyErrors, ThrowOnError> =>
+  (options.client ?? client).put<SetAccountPrivacyResponses, SetAccountPrivacyErrors, ThrowOnError>(
+    {
+      url: '/api/v1/accounts/{account_id}/privacy',
+      ...options,
+      headers: {
+        'Content-Type': 'application/json',
+        ...options.headers,
+      },
+    },
+  );
+
+/**
+ * Set All Accounts Privacy
+ *
+ * Apply the same keys to every account; unusable sessions come back skipped.
+ */
+export const setAllAccountsPrivacy = <ThrowOnError extends boolean = false>(
+  options: Options<SetAllAccountsPrivacyData, ThrowOnError>,
+): RequestResult<SetAllAccountsPrivacyResponses, SetAllAccountsPrivacyErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    SetAllAccountsPrivacyResponses,
+    SetAllAccountsPrivacyErrors,
+    ThrowOnError
+  >({
+    url: '/api/v1/accounts/privacy/all',
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...options.headers,
+    },
+  });
+
+/**
  * List Proxies
  */
 export const listProxies = <ThrowOnError extends boolean = false>(
   options?: Options<ListProxiesData, ThrowOnError>,
-) =>
+): RequestResult<ListProxiesResponses, ListProxiesErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListProxiesResponses, ListProxiesErrors, ThrowOnError>({
     url: '/api/v1/proxies',
     ...options,
@@ -878,7 +953,7 @@ export const listProxies = <ThrowOnError extends boolean = false>(
  */
 export const createProxy = <ThrowOnError extends boolean = false>(
   options: Options<CreateProxyData, ThrowOnError>,
-) =>
+): RequestResult<CreateProxyResponses, CreateProxyErrors, ThrowOnError> =>
   (options.client ?? client).post<CreateProxyResponses, CreateProxyErrors, ThrowOnError>({
     url: '/api/v1/proxies',
     ...options,
@@ -893,7 +968,7 @@ export const createProxy = <ThrowOnError extends boolean = false>(
  */
 export const probeProxy = <ThrowOnError extends boolean = false>(
   options: Options<ProbeProxyData, ThrowOnError>,
-) =>
+): RequestResult<ProbeProxyResponses, ProbeProxyErrors, ThrowOnError> =>
   (options.client ?? client).post<ProbeProxyResponses, ProbeProxyErrors, ThrowOnError>({
     url: '/api/v1/proxies/probe',
     ...options,
@@ -908,7 +983,7 @@ export const probeProxy = <ThrowOnError extends boolean = false>(
  */
 export const checkProxy = <ThrowOnError extends boolean = false>(
   options: Options<CheckProxyData, ThrowOnError>,
-) =>
+): RequestResult<CheckProxyResponses, CheckProxyErrors, ThrowOnError> =>
   (options.client ?? client).post<CheckProxyResponses, CheckProxyErrors, ThrowOnError>({
     url: '/api/v1/proxies/{proxy_id}/check',
     ...options,
@@ -919,7 +994,7 @@ export const checkProxy = <ThrowOnError extends boolean = false>(
  */
 export const assignProxy = <ThrowOnError extends boolean = false>(
   options: Options<AssignProxyData, ThrowOnError>,
-) =>
+): RequestResult<AssignProxyResponses, AssignProxyErrors, ThrowOnError> =>
   (options.client ?? client).post<AssignProxyResponses, AssignProxyErrors, ThrowOnError>({
     url: '/api/v1/proxies/{proxy_id}/assign',
     ...options,
@@ -934,7 +1009,7 @@ export const assignProxy = <ThrowOnError extends boolean = false>(
  */
 export const unassignProxy = <ThrowOnError extends boolean = false>(
   options: Options<UnassignProxyData, ThrowOnError>,
-) =>
+): RequestResult<UnassignProxyResponses, UnassignProxyErrors, ThrowOnError> =>
   (options.client ?? client).post<UnassignProxyResponses, UnassignProxyErrors, ThrowOnError>({
     url: '/api/v1/proxies/unassign',
     ...options,
@@ -949,7 +1024,7 @@ export const unassignProxy = <ThrowOnError extends boolean = false>(
  */
 export const deleteProxy = <ThrowOnError extends boolean = false>(
   options: Options<DeleteProxyData, ThrowOnError>,
-) =>
+): RequestResult<DeleteProxyResponses, DeleteProxyErrors, ThrowOnError> =>
   (options.client ?? client).delete<DeleteProxyResponses, DeleteProxyErrors, ThrowOnError>({
     url: '/api/v1/proxies/{proxy_id}',
     ...options,
@@ -960,7 +1035,7 @@ export const deleteProxy = <ThrowOnError extends boolean = false>(
  */
 export const getWarmingBoard = <ThrowOnError extends boolean = false>(
   options?: Options<GetWarmingBoardData, ThrowOnError>,
-) =>
+): RequestResult<GetWarmingBoardResponses, GetWarmingBoardErrors, ThrowOnError> =>
   (options?.client ?? client).get<GetWarmingBoardResponses, GetWarmingBoardErrors, ThrowOnError>({
     url: '/api/v1/warming/board',
     ...options,
@@ -973,7 +1048,7 @@ export const getWarmingBoard = <ThrowOnError extends boolean = false>(
  */
 export const listWarmedAccounts = <ThrowOnError extends boolean = false>(
   options?: Options<ListWarmedAccountsData, ThrowOnError>,
-) =>
+): RequestResult<ListWarmedAccountsResponses, ListWarmedAccountsErrors, ThrowOnError> =>
   (options?.client ?? client).get<
     ListWarmedAccountsResponses,
     ListWarmedAccountsErrors,
@@ -987,7 +1062,7 @@ export const listWarmedAccounts = <ThrowOnError extends boolean = false>(
  */
 export const promoteToNeurocomment = <ThrowOnError extends boolean = false>(
   options: Options<PromoteToNeurocommentData, ThrowOnError>,
-) =>
+): RequestResult<PromoteToNeurocommentResponses, PromoteToNeurocommentErrors, ThrowOnError> =>
   (options.client ?? client).post<
     PromoteToNeurocommentResponses,
     PromoteToNeurocommentErrors,
@@ -1008,7 +1083,7 @@ export const promoteToNeurocomment = <ThrowOnError extends boolean = false>(
  */
 export const handoffToNeurocomment = <ThrowOnError extends boolean = false>(
   options: Options<HandoffToNeurocommentData, ThrowOnError>,
-) =>
+): RequestResult<HandoffToNeurocommentResponses, HandoffToNeurocommentErrors, ThrowOnError> =>
   (options.client ?? client).post<
     HandoffToNeurocommentResponses,
     HandoffToNeurocommentErrors,
@@ -1029,7 +1104,11 @@ export const handoffToNeurocomment = <ThrowOnError extends boolean = false>(
  */
 export const unpromoteFromNeurocomment = <ThrowOnError extends boolean = false>(
   options: Options<UnpromoteFromNeurocommentData, ThrowOnError>,
-) =>
+): RequestResult<
+  UnpromoteFromNeurocommentResponses,
+  UnpromoteFromNeurocommentErrors,
+  ThrowOnError
+> =>
   (options.client ?? client).post<
     UnpromoteFromNeurocommentResponses,
     UnpromoteFromNeurocommentErrors,
@@ -1048,7 +1127,7 @@ export const unpromoteFromNeurocomment = <ThrowOnError extends boolean = false>(
  */
 export const startWarming = <ThrowOnError extends boolean = false>(
   options: Options<StartWarmingData, ThrowOnError>,
-) =>
+): RequestResult<StartWarmingResponses, StartWarmingErrors, ThrowOnError> =>
   (options.client ?? client).post<StartWarmingResponses, StartWarmingErrors, ThrowOnError>({
     url: '/api/v1/warming/start',
     ...options,
@@ -1063,7 +1142,7 @@ export const startWarming = <ThrowOnError extends boolean = false>(
  */
 export const stopWarming = <ThrowOnError extends boolean = false>(
   options: Options<StopWarmingData, ThrowOnError>,
-) =>
+): RequestResult<StopWarmingResponses, StopWarmingErrors, ThrowOnError> =>
   (options.client ?? client).post<StopWarmingResponses, StopWarmingErrors, ThrowOnError>({
     url: '/api/v1/warming/stop',
     ...options,
@@ -1078,7 +1157,7 @@ export const stopWarming = <ThrowOnError extends boolean = false>(
  */
 export const listWarmingChannels = <ThrowOnError extends boolean = false>(
   options?: Options<ListWarmingChannelsData, ThrowOnError>,
-) =>
+): RequestResult<ListWarmingChannelsResponses, ListWarmingChannelsErrors, ThrowOnError> =>
   (options?.client ?? client).get<
     ListWarmingChannelsResponses,
     ListWarmingChannelsErrors,
@@ -1090,7 +1169,7 @@ export const listWarmingChannels = <ThrowOnError extends boolean = false>(
  */
 export const addWarmingChannels = <ThrowOnError extends boolean = false>(
   options: Options<AddWarmingChannelsData, ThrowOnError>,
-) =>
+): RequestResult<AddWarmingChannelsResponses, AddWarmingChannelsErrors, ThrowOnError> =>
   (options.client ?? client).post<
     AddWarmingChannelsResponses,
     AddWarmingChannelsErrors,
@@ -1109,7 +1188,7 @@ export const addWarmingChannels = <ThrowOnError extends boolean = false>(
  */
 export const removeWarmingChannel = <ThrowOnError extends boolean = false>(
   options: Options<RemoveWarmingChannelData, ThrowOnError>,
-) =>
+): RequestResult<RemoveWarmingChannelResponses, RemoveWarmingChannelErrors, ThrowOnError> =>
   (options.client ?? client).post<
     RemoveWarmingChannelResponses,
     RemoveWarmingChannelErrors,
@@ -1128,7 +1207,7 @@ export const removeWarmingChannel = <ThrowOnError extends boolean = false>(
  */
 export const getWarmingSettings = <ThrowOnError extends boolean = false>(
   options?: Options<GetWarmingSettingsData, ThrowOnError>,
-) =>
+): RequestResult<GetWarmingSettingsResponses, GetWarmingSettingsErrors, ThrowOnError> =>
   (options?.client ?? client).get<
     GetWarmingSettingsResponses,
     GetWarmingSettingsErrors,
@@ -1140,7 +1219,7 @@ export const getWarmingSettings = <ThrowOnError extends boolean = false>(
  */
 export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
   options: Options<UpdateWarmingSettingsData, ThrowOnError>,
-) =>
+): RequestResult<UpdateWarmingSettingsResponses, UpdateWarmingSettingsErrors, ThrowOnError> =>
   (options.client ?? client).put<
     UpdateWarmingSettingsResponses,
     UpdateWarmingSettingsErrors,
@@ -1161,7 +1240,7 @@ export const updateWarmingSettings = <ThrowOnError extends boolean = false>(
  */
 export const listWarmingDialogues = <ThrowOnError extends boolean = false>(
   options?: Options<ListWarmingDialoguesData, ThrowOnError>,
-) =>
+): RequestResult<ListWarmingDialoguesResponses, ListWarmingDialoguesErrors, ThrowOnError> =>
   (options?.client ?? client).get<
     ListWarmingDialoguesResponses,
     ListWarmingDialoguesErrors,
@@ -1173,7 +1252,7 @@ export const listWarmingDialogues = <ThrowOnError extends boolean = false>(
  */
 export const startCampaignDiscovery = <ThrowOnError extends boolean = false>(
   options: Options<StartCampaignDiscoveryData, ThrowOnError>,
-) =>
+): RequestResult<StartCampaignDiscoveryResponses, StartCampaignDiscoveryErrors, ThrowOnError> =>
   (options.client ?? client).post<
     StartCampaignDiscoveryResponses,
     StartCampaignDiscoveryErrors,
@@ -1192,7 +1271,7 @@ export const startCampaignDiscovery = <ThrowOnError extends boolean = false>(
  */
 export const getCampaignDiscovery = <ThrowOnError extends boolean = false>(
   options: Options<GetCampaignDiscoveryData, ThrowOnError>,
-) =>
+): RequestResult<GetCampaignDiscoveryResponses, GetCampaignDiscoveryErrors, ThrowOnError> =>
   (options.client ?? client).get<
     GetCampaignDiscoveryResponses,
     GetCampaignDiscoveryErrors,
@@ -1204,7 +1283,7 @@ export const getCampaignDiscovery = <ThrowOnError extends boolean = false>(
  */
 export const adoptCampaignDiscovery = <ThrowOnError extends boolean = false>(
   options: Options<AdoptCampaignDiscoveryData, ThrowOnError>,
-) =>
+): RequestResult<AdoptCampaignDiscoveryResponses, AdoptCampaignDiscoveryErrors, ThrowOnError> =>
   (options.client ?? client).post<
     AdoptCampaignDiscoveryResponses,
     AdoptCampaignDiscoveryErrors,
@@ -1223,7 +1302,7 @@ export const adoptCampaignDiscovery = <ThrowOnError extends boolean = false>(
  */
 export const listCampaigns = <ThrowOnError extends boolean = false>(
   options?: Options<ListCampaignsData, ThrowOnError>,
-) =>
+): RequestResult<ListCampaignsResponses, ListCampaignsErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListCampaignsResponses, ListCampaignsErrors, ThrowOnError>({
     url: '/api/v1/neurocomment/campaigns',
     ...options,
@@ -1234,7 +1313,7 @@ export const listCampaigns = <ThrowOnError extends boolean = false>(
  */
 export const createCampaign = <ThrowOnError extends boolean = false>(
   options: Options<CreateCampaignData, ThrowOnError>,
-) =>
+): RequestResult<CreateCampaignResponses, CreateCampaignErrors, ThrowOnError> =>
   (options.client ?? client).post<CreateCampaignResponses, CreateCampaignErrors, ThrowOnError>({
     url: '/api/v1/neurocomment/campaigns',
     ...options,
@@ -1249,7 +1328,7 @@ export const createCampaign = <ThrowOnError extends boolean = false>(
  */
 export const getNeurocommentBoard = <ThrowOnError extends boolean = false>(
   options: Options<GetNeurocommentBoardData, ThrowOnError>,
-) =>
+): RequestResult<GetNeurocommentBoardResponses, GetNeurocommentBoardErrors, ThrowOnError> =>
   (options.client ?? client).get<
     GetNeurocommentBoardResponses,
     GetNeurocommentBoardErrors,
@@ -1263,7 +1342,7 @@ export const getNeurocommentBoard = <ThrowOnError extends boolean = false>(
  */
 export const checkCampaignChannelBans = <ThrowOnError extends boolean = false>(
   options: Options<CheckCampaignChannelBansData, ThrowOnError>,
-) =>
+): RequestResult<CheckCampaignChannelBansResponses, CheckCampaignChannelBansErrors, ThrowOnError> =>
   (options.client ?? client).post<
     CheckCampaignChannelBansResponses,
     CheckCampaignChannelBansErrors,
@@ -1277,7 +1356,7 @@ export const checkCampaignChannelBans = <ThrowOnError extends boolean = false>(
  */
 export const listNeurocommentComments = <ThrowOnError extends boolean = false>(
   options: Options<ListNeurocommentCommentsData, ThrowOnError>,
-) =>
+): RequestResult<ListNeurocommentCommentsResponses, ListNeurocommentCommentsErrors, ThrowOnError> =>
   (options.client ?? client).get<
     ListNeurocommentCommentsResponses,
     ListNeurocommentCommentsErrors,
@@ -1289,7 +1368,7 @@ export const listNeurocommentComments = <ThrowOnError extends boolean = false>(
  */
 export const linkCampaignChannel = <ThrowOnError extends boolean = false>(
   options: Options<LinkCampaignChannelData, ThrowOnError>,
-) =>
+): RequestResult<LinkCampaignChannelResponses, LinkCampaignChannelErrors, ThrowOnError> =>
   (options.client ?? client).post<
     LinkCampaignChannelResponses,
     LinkCampaignChannelErrors,
@@ -1308,7 +1387,7 @@ export const linkCampaignChannel = <ThrowOnError extends boolean = false>(
  */
 export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
   options: Options<AssignCampaignAccountData, ThrowOnError>,
-) =>
+): RequestResult<AssignCampaignAccountResponses, AssignCampaignAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<
     AssignCampaignAccountResponses,
     AssignCampaignAccountErrors,
@@ -1327,7 +1406,7 @@ export const assignCampaignAccount = <ThrowOnError extends boolean = false>(
  */
 export const removeCampaignAccount = <ThrowOnError extends boolean = false>(
   options: Options<RemoveCampaignAccountData, ThrowOnError>,
-) =>
+): RequestResult<RemoveCampaignAccountResponses, RemoveCampaignAccountErrors, ThrowOnError> =>
   (options.client ?? client).post<
     RemoveCampaignAccountResponses,
     RemoveCampaignAccountErrors,
@@ -1352,7 +1431,11 @@ export const removeCampaignAccount = <ThrowOnError extends boolean = false>(
  */
 export const setCampaignAccountChannel = <ThrowOnError extends boolean = false>(
   options: Options<SetCampaignAccountChannelData, ThrowOnError>,
-) =>
+): RequestResult<
+  SetCampaignAccountChannelResponses,
+  SetCampaignAccountChannelErrors,
+  ThrowOnError
+> =>
   (options.client ?? client).post<
     SetCampaignAccountChannelResponses,
     SetCampaignAccountChannelErrors,
@@ -1373,7 +1456,7 @@ export const setCampaignAccountChannel = <ThrowOnError extends boolean = false>(
  */
 export const deleteCampaign = <ThrowOnError extends boolean = false>(
   options: Options<DeleteCampaignData, ThrowOnError>,
-) =>
+): RequestResult<DeleteCampaignResponses, DeleteCampaignErrors, ThrowOnError> =>
   (options.client ?? client).delete<DeleteCampaignResponses, DeleteCampaignErrors, ThrowOnError>({
     url: '/api/v1/neurocomment/campaigns/{campaign_id}',
     ...options,
@@ -1386,7 +1469,7 @@ export const deleteCampaign = <ThrowOnError extends boolean = false>(
  */
 export const removeCampaignChannel = <ThrowOnError extends boolean = false>(
   options: Options<RemoveCampaignChannelData, ThrowOnError>,
-) =>
+): RequestResult<RemoveCampaignChannelResponses, RemoveCampaignChannelErrors, ThrowOnError> =>
   (options.client ?? client).post<
     RemoveCampaignChannelResponses,
     RemoveCampaignChannelErrors,
@@ -1407,7 +1490,7 @@ export const removeCampaignChannel = <ThrowOnError extends boolean = false>(
  */
 export const updateCampaignPrompt = <ThrowOnError extends boolean = false>(
   options: Options<UpdateCampaignPromptData, ThrowOnError>,
-) =>
+): RequestResult<UpdateCampaignPromptResponses, UpdateCampaignPromptErrors, ThrowOnError> =>
   (options.client ?? client).put<
     UpdateCampaignPromptResponses,
     UpdateCampaignPromptErrors,
@@ -1428,7 +1511,7 @@ export const updateCampaignPrompt = <ThrowOnError extends boolean = false>(
  */
 export const setCampaignSolver = <ThrowOnError extends boolean = false>(
   options: Options<SetCampaignSolverData, ThrowOnError>,
-) =>
+): RequestResult<SetCampaignSolverResponses, SetCampaignSolverErrors, ThrowOnError> =>
   (options.client ?? client).post<
     SetCampaignSolverResponses,
     SetCampaignSolverErrors,
@@ -1452,7 +1535,7 @@ export const setCampaignSolver = <ThrowOnError extends boolean = false>(
  */
 export const retryChallenge = <ThrowOnError extends boolean = false>(
   options: Options<RetryChallengeData, ThrowOnError>,
-) =>
+): RequestResult<RetryChallengeResponses, RetryChallengeErrors, ThrowOnError> =>
   (options.client ?? client).post<RetryChallengeResponses, RetryChallengeErrors, ThrowOnError>({
     url: '/api/v1/neurocomment/retry',
     ...options,
@@ -1469,7 +1552,7 @@ export const retryChallenge = <ThrowOnError extends boolean = false>(
  */
 export const listCampaignChallenges = <ThrowOnError extends boolean = false>(
   options: Options<ListCampaignChallengesData, ThrowOnError>,
-) =>
+): RequestResult<ListCampaignChallengesResponses, ListCampaignChallengesErrors, ThrowOnError> =>
   (options.client ?? client).get<
     ListCampaignChallengesResponses,
     ListCampaignChallengesErrors,
@@ -1483,7 +1566,11 @@ export const listCampaignChallenges = <ThrowOnError extends boolean = false>(
  */
 export const countCampaignChallengeOutcomes = <ThrowOnError extends boolean = false>(
   options: Options<CountCampaignChallengeOutcomesData, ThrowOnError>,
-) =>
+): RequestResult<
+  CountCampaignChallengeOutcomesResponses,
+  CountCampaignChallengeOutcomesErrors,
+  ThrowOnError
+> =>
   (options.client ?? client).get<
     CountCampaignChallengeOutcomesResponses,
     CountCampaignChallengeOutcomesErrors,
@@ -1497,7 +1584,7 @@ export const countCampaignChallengeOutcomes = <ThrowOnError extends boolean = fa
  */
 export const listChannelChallenges = <ThrowOnError extends boolean = false>(
   options: Options<ListChannelChallengesData, ThrowOnError>,
-) =>
+): RequestResult<ListChannelChallengesResponses, ListChannelChallengesErrors, ThrowOnError> =>
   (options.client ?? client).get<
     ListChannelChallengesResponses,
     ListChannelChallengesErrors,
@@ -1511,7 +1598,7 @@ export const listChannelChallenges = <ThrowOnError extends boolean = false>(
  */
 export const skipNeurocommentPair = <ThrowOnError extends boolean = false>(
   options: Options<SkipNeurocommentPairData, ThrowOnError>,
-) =>
+): RequestResult<SkipNeurocommentPairResponses, SkipNeurocommentPairErrors, ThrowOnError> =>
   (options.client ?? client).post<
     SkipNeurocommentPairResponses,
     SkipNeurocommentPairErrors,
@@ -1532,7 +1619,7 @@ export const skipNeurocommentPair = <ThrowOnError extends boolean = false>(
  */
 export const setCampaignStatus = <ThrowOnError extends boolean = false>(
   options: Options<SetCampaignStatusData, ThrowOnError>,
-) =>
+): RequestResult<SetCampaignStatusResponses, SetCampaignStatusErrors, ThrowOnError> =>
   (options.client ?? client).post<
     SetCampaignStatusResponses,
     SetCampaignStatusErrors,
@@ -1551,7 +1638,7 @@ export const setCampaignStatus = <ThrowOnError extends boolean = false>(
  */
 export const getNeurocommentRuntime = <ThrowOnError extends boolean = false>(
   options?: Options<GetNeurocommentRuntimeData, ThrowOnError>,
-) =>
+): RequestResult<GetNeurocommentRuntimeResponses, GetNeurocommentRuntimeErrors, ThrowOnError> =>
   (options?.client ?? client).get<
     GetNeurocommentRuntimeResponses,
     GetNeurocommentRuntimeErrors,
@@ -1563,7 +1650,7 @@ export const getNeurocommentRuntime = <ThrowOnError extends boolean = false>(
  */
 export const startNeurocomment = <ThrowOnError extends boolean = false>(
   options: Options<StartNeurocommentData, ThrowOnError>,
-) =>
+): RequestResult<StartNeurocommentResponses, StartNeurocommentErrors, ThrowOnError> =>
   (options.client ?? client).post<
     StartNeurocommentResponses,
     StartNeurocommentErrors,
@@ -1584,7 +1671,7 @@ export const startNeurocomment = <ThrowOnError extends boolean = false>(
  */
 export const stopNeurocomment = <ThrowOnError extends boolean = false>(
   options?: Options<StopNeurocommentData, ThrowOnError>,
-) =>
+): RequestResult<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError> =>
   (options?.client ?? client).post<StopNeurocommentResponses, StopNeurocommentErrors, ThrowOnError>(
     { url: '/api/v1/neurocomment/stop', ...options },
   );
@@ -1596,7 +1683,11 @@ export const stopNeurocomment = <ThrowOnError extends boolean = false>(
  */
 export const clearNeurocommentListener = <ThrowOnError extends boolean = false>(
   options?: Options<ClearNeurocommentListenerData, ThrowOnError>,
-) =>
+): RequestResult<
+  ClearNeurocommentListenerResponses,
+  ClearNeurocommentListenerErrors,
+  ThrowOnError
+> =>
   (options?.client ?? client).post<
     ClearNeurocommentListenerResponses,
     ClearNeurocommentListenerErrors,
@@ -1608,7 +1699,7 @@ export const clearNeurocommentListener = <ThrowOnError extends boolean = false>(
  */
 export const getNeurocommentSettings = <ThrowOnError extends boolean = false>(
   options?: Options<GetNeurocommentSettingsData, ThrowOnError>,
-) =>
+): RequestResult<GetNeurocommentSettingsResponses, GetNeurocommentSettingsErrors, ThrowOnError> =>
   (options?.client ?? client).get<
     GetNeurocommentSettingsResponses,
     GetNeurocommentSettingsErrors,
@@ -1620,7 +1711,11 @@ export const getNeurocommentSettings = <ThrowOnError extends boolean = false>(
  */
 export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>(
   options: Options<UpdateNeurocommentSettingsData, ThrowOnError>,
-) =>
+): RequestResult<
+  UpdateNeurocommentSettingsResponses,
+  UpdateNeurocommentSettingsErrors,
+  ThrowOnError
+> =>
   (options.client ?? client).put<
     UpdateNeurocommentSettingsResponses,
     UpdateNeurocommentSettingsErrors,
@@ -1641,7 +1736,7 @@ export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>
  */
 export const clearLogs = <ThrowOnError extends boolean = false>(
   options?: Options<ClearLogsData, ThrowOnError>,
-) =>
+): RequestResult<ClearLogsResponses, ClearLogsErrors, ThrowOnError> =>
   (options?.client ?? client).delete<ClearLogsResponses, ClearLogsErrors, ThrowOnError>({
     url: '/api/v1/logs',
     ...options,
@@ -1652,7 +1747,7 @@ export const clearLogs = <ThrowOnError extends boolean = false>(
  */
 export const listLogs = <ThrowOnError extends boolean = false>(
   options?: Options<ListLogsData, ThrowOnError>,
-) =>
+): RequestResult<ListLogsResponses, ListLogsErrors, ThrowOnError> =>
   (options?.client ?? client).get<ListLogsResponses, ListLogsErrors, ThrowOnError>({
     url: '/api/v1/logs',
     ...options,

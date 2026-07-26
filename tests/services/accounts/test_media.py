@@ -615,7 +615,11 @@ async def test_set_account_story_pinned_raises_on_failure(
 async def test_remove_account_profile_photo_raises_on_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Telegram refusals surface as ``ValueError`` — the UI shows the message inline."""
+    """Telegram refusals surface as ``ValueError``, but never as Telethon prose.
+
+    An unmapped ``RPCError`` has no stable code, so the UI gets the bounded
+    ``failed`` status instead of the raw ``PHOTO_INVALID`` text.
+    """
 
     async def fake_execute(account_id: str, _action: object) -> ActionResult:
         return ActionResult(
@@ -628,7 +632,7 @@ async def test_remove_account_profile_photo_raises_on_failure(
 
     monkeypatch.setattr("services.accounts.media.execute", fake_execute)
 
-    with pytest.raises(ValueError, match="PHOTO_INVALID"):
+    with pytest.raises(ValueError, match=r"^failed$"):
         await remove_account_profile_photo(
             AccountProfilePhotoRemove(
                 account_id="acc",
