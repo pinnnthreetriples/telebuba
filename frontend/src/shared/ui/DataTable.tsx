@@ -6,7 +6,9 @@ import {
   type Row,
   useReactTable,
 } from '@tanstack/react-table';
-import { Fragment, type HTMLAttributes, type ReactNode, useSyncExternalStore } from 'react';
+import { Fragment, type HTMLAttributes, type ReactNode } from 'react';
+
+import { useWideViewport } from './useWideViewport';
 
 // A thin, headless-table wrapper over @tanstack/react-table: one consistent
 // `<table>` shell (uppercase header on the surface tint, hover rows) that later
@@ -17,16 +19,12 @@ import { Fragment, type HTMLAttributes, type ReactNode, useSyncExternalStore } f
 export interface DataTableColumnMeta {
   className?: string;
   cellClassName?: string;
-  // Card layout only (viewport < CARD_BELOW): puts this column in the card's
-  // header row instead of the labelled label/value list beneath it.
-  //   'title'   — the row's identity (grows, wraps): phone, @channel, account, time.
-  //   'control' — a checkbox / button / chevron / badge (never shrinks), placed in
-  //               column order so a *leading* checkbox stays leading.
-  // Unset → a labelled row: the column's `header` is the label, its `cell` the value.
+  // Card layout only: put this column in the card's header row ('title' grows and
+  // wraps, 'control' never shrinks and keeps column order so a leading checkbox
+  // stays leading) instead of the labelled label/value list beneath it.
   // meta.cellClassName is deliberately NOT applied on the card path: it encodes
-  // table-cell geometry (w-px, max-w + nowrap, text-right) that a card must not
-  // inherit — w-px would squeeze a chevron to 1px, and a nowrap ellipsis would
-  // truncate a comment inside a card where wrapping is the whole point.
+  // table-cell geometry — w-px would squeeze a chevron to 1px, and a nowrap ellipsis
+  // would truncate a comment inside a card where wrapping is the whole point.
   cardSlot?: 'title' | 'control';
 }
 
@@ -60,33 +58,6 @@ function join(...parts: (string | undefined)[]): string {
   return parts.filter(Boolean).join(' ');
 }
 
-// The table/card switch. 880px is the table's own minimum and the shell gives
-// content viewport−48px (AppShell: mx-auto max-w-[1340px] px-4/px-6), so 1024 is
-// the narrowest viewport where the widest tables fit without the horizontal scroll
-// the card layout exists to replace.
-const CARD_BELOW = 1024;
-const WIDE_MQ = `(min-width: ${String(CARD_BELOW)}px)`;
-
-function subscribeWide(onChange: () => void): () => void {
-  const mql = window.matchMedia(WIDE_MQ);
-  mql.addEventListener('change', onChange);
-  return () => {
-    mql.removeEventListener('change', onChange);
-  };
-}
-
-function getWide(): boolean {
-  return window.matchMedia(WIDE_MQ).matches;
-}
-
-// A media *query* rather than `hidden lg:table` + `lg:hidden`, so exactly one tree
-// is in the DOM. The CSS form renders every cell, event handler and accessible name
-// twice; since no stylesheet is loaded under happy-dom, `hidden` is inert there and
-// both copies would answer every testing-library query.
-function useWide(): boolean {
-  return useSyncExternalStore(subscribeWide, getWide);
-}
-
 export function DataTable<TData>({
   data,
   columns,
@@ -101,15 +72,9 @@ export function DataTable<TData>({
     getRowCanExpand: () => renderSubRow !== undefined,
   });
 
-  const wide = useWide();
+  const wide = useWideViewport();
 
   if (!wide) {
-    // Column id → its header, so a card label can flexRender `header` with a real
-    // HeaderContext. Do not pass cell.getContext(): today's headers ignore the
-    // context, but a future `({ table }) => …` header would throw.
-    const headerById = new Map(
-      table.getHeaderGroups().flatMap((group) => group.headers.map((h) => [h.column.id, h])),
-    );
     return (
       <div>
         {table.getRowModel().rows.map((row) => {
@@ -134,7 +99,10 @@ export function DataTable<TData>({
                 </div>
               ) : null}
               {body.map((cell) => {
-                const header = headerById.get(cell.column.id);
+                // The column's own header, so the label renders with a real
+                // HeaderContext — not cell.getContext(), which today's headers
+                // ignore but a future `({ table }) => …` header would choke on.
+                const header = table.getFlatHeaders().find((h) => h.column.id === cell.column.id);
                 return (
                   <div
                     key={cell.id}

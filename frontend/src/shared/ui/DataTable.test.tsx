@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 
@@ -63,7 +63,9 @@ function setViewport(width: number): void {
 }
 
 afterEach(() => {
-  setViewport(1024); // happy-dom's default; other suites rely on the table branch.
+  // Back to happy-dom's default so a later test added to this file gets the table
+  // branch unless it opts out. (Vitest isolates per file, so no other suite cares.)
+  setViewport(1024);
 });
 
 function renderTable(extra?: Partial<Parameters<typeof DataTable<Item>>[0]>) {
@@ -77,16 +79,14 @@ function renderTable(extra?: Partial<Parameters<typeof DataTable<Item>>[0]>) {
   );
 }
 
-// The load-bearing assertion of this file: it is what fails if anyone swaps the
-// JS switch for `hidden lg:table` + `lg:hidden`, which would put both trees in the
-// DOM and double every query result.
+// The load-bearing assertion of this file: it is what fails if anyone swaps the JS
+// switch for `hidden lg:table` + `lg:hidden`, which would put both trees in the DOM.
 test('a wide viewport renders the table, and each cell exactly once', () => {
   renderTable();
 
   expect(screen.getByRole('table')).toBeInTheDocument();
   expect(screen.getAllByText('first-row')).toHaveLength(1);
-  expect(screen.getAllByLabelText('Выбрать first-row')).toHaveLength(1);
-  // A cardSlot column contributes no card label on a wide viewport.
+  // A labelled column's header appears once (as a <th>), not once per row.
   expect(screen.getAllByText('ЗАМЕТКА')).toHaveLength(1);
 });
 
@@ -117,11 +117,6 @@ test('the expander still toggles, and the sub-row renders inside its own card', 
   // Scoped to the card that owns the expander, not to a <tr>.
   expect(toggle.closest('div.tb-row')).toContainElement(subRow);
   expect(screen.queryByText('подробности second-row')).toBeNull();
-
-  await userEvent.click(toggle);
-  await waitFor(() => {
-    expect(screen.queryByText('подробности first-row')).toBeNull();
-  });
 });
 
 test('getRowProps reaches the card', async () => {

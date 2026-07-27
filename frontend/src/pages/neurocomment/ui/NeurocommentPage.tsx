@@ -427,10 +427,9 @@ export function NeurocommentPage() {
         {t('neurocomment.title')}
       </h1>
 
-      {/* Single column below `lg`, where DOM order takes over: the pipeline and
-          board come first, the config rail after. The col-start pinning must stay
-          `lg:`-scoped — unprefixed it would make the one-column grid sprout an
-          implicit second column and sit both children side by side. */}
+      {/* The col-start pinning must stay `lg:`-scoped: unprefixed it would make the
+          one-column grid sprout an implicit second column and sit both children side
+          by side. Below `lg`, DOM order puts the board before the config rail. */}
       <div className="grid items-start gap-4 lg:grid-cols-[340px_1fr]">
         {/* RIGHT column */}
         <div className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1">

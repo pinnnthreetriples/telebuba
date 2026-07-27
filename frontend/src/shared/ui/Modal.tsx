@@ -10,19 +10,26 @@ const FOCUSABLE =
 // topmost (last-registered) modal should handle it.
 const modalStack: object[] = [];
 
-// Overlay/card class pairs per shell shape. They are presets rather than two free
-// `className` props because both halves set the same properties (radius, animation,
-// height): letting a caller pass `rounded-none` alongside the base `rounded-[18px]`
-// would depend on Tailwind's emit order, which is not a guarantee. `center` keeps
-// the design's centred card; `drawer-left` is the mobile nav's flush side panel.
+// body.overflow as it was before the FIRST dialog locked it. Module-level, not
+// per-instance: a nested dialog captures the state after its parent already wrote
+// 'hidden', and React runs deletion cleanups parent-first, so when both unmount in
+// one commit the nested one restores last — writing 'hidden' back and leaving the
+// page permanently unscrollable. Only the 0→1 and 1→0 transitions touch this.
+let overflowBeforeLock = '';
+
+// Presets rather than two free `className` props: both halves set the same
+// properties (radius, animation, height), and a caller's `rounded-none` beside the
+// base `rounded-[18px]` would depend on Tailwind's emit order, which is no guarantee.
 const SHELL = {
   center: {
+    // The card's max-h must match the overlay's padding box at every width, or a
+    // tall dialog overflows the unscrollable fixed overlay by the difference.
     overlay: 'items-center justify-center p-4 sm:p-5',
-    card: 'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[18px] [animation:fadeup_0.25s_ease]',
+    card: 'max-h-[calc(100dvh-2rem)] rounded-[18px] [animation:fadeup_0.25s_ease] sm:max-h-[calc(100dvh-2.5rem)]',
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',
-    card: 'h-full overflow-y-auto overscroll-contain tb-drawerin',
+    card: 'h-full tb-drawerin',
   },
 } as const;
 
@@ -53,16 +60,16 @@ export function Modal({
   // only) so the Escape handler can tell whether it is the topmost one.
   useEffect(() => {
     const id = idRef.current;
-    modalStack.push(id);
     // The card scrolls internally, so the page behind it must not: on a phone a
-    // scrollable body lets the backdrop drag away under the dialog. Restore only
-    // when the last dialog leaves, so a nested one closing doesn't unlock early.
-    const previousOverflow = document.body.style.overflow;
+    // scrollable body lets the backdrop drag away under the dialog. Only the first
+    // dialog locks and only the last unlocks, so a nested one can't unlock early.
+    if (modalStack.length === 0) overflowBeforeLock = document.body.style.overflow;
+    modalStack.push(id);
     document.body.style.overflow = 'hidden';
     return () => {
       const index = modalStack.indexOf(id);
       if (index !== -1) modalStack.splice(index, 1);
-      if (modalStack.length === 0) document.body.style.overflow = previousOverflow;
+      if (modalStack.length === 0) document.body.style.overflow = overflowBeforeLock;
     };
   }, []);
 
@@ -121,7 +128,7 @@ export function Modal({
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={`max-w-full bg-white outline-none ${SHELL[variant].card} ${className}`}
+        className={`max-w-full overflow-y-auto overscroll-contain bg-white outline-none ${SHELL[variant].card} ${className}`}
       >
         {children}
       </div>

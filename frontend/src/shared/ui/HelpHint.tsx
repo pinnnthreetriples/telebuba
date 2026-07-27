@@ -15,12 +15,14 @@ export function HelpHint({ text, example }: { text: string; example?: string }) 
       <span role="note" aria-label={title} tabIndex={0} title={title} className={BADGE}>
         ?
       </span>
-      {/* Below `md` the popover is pinned to the viewport rather than to the badge:
-          a 230px box centred on a badge near either screen edge clips, and no fixed
-          anchor is safe without measuring. group-focus-within is what opens it on a
-          touch device — the badge is tabIndex=0, and hover never fires there. */}
+      {/* ponytail: stays badge-anchored at every width. A 230px box centred on a
+          badge near a screen edge can clip on a phone, but the viewport-pinned
+          alternative (fixed inset-x-3 bottom-3 below md) is worse: inside a centred
+          modal it paints on the backdrop *below* the dialog, and two hints resolving
+          to the same rect can overlap. Fix properly with measurement, not a media
+          query, if the clipping ever actually bites. */}
       <span
-        className="pointer-events-none fixed inset-x-3 bottom-3 z-20 hidden rounded-[10px] border border-line bg-white p-[10px] text-left text-[11.5px] leading-snug text-ink-muted shadow-[0_6px_20px_rgba(0,0,0,0.12)] group-hover:block group-focus-within:block md:absolute md:inset-x-auto md:bottom-auto md:left-1/2 md:top-[22px] md:w-[230px] md:-translate-x-1/2"
+        className="pointer-events-none absolute left-1/2 top-[22px] z-20 hidden w-[230px] -translate-x-1/2 rounded-[10px] border border-line bg-white p-[10px] text-left text-[11.5px] leading-snug text-ink-muted shadow-[0_6px_20px_rgba(0,0,0,0.12)] group-hover:block group-focus-within:block"
         role="tooltip"
       >
         {text}

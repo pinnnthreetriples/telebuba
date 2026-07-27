@@ -25,8 +25,7 @@ export function PipelineCard({
 }) {
   const { t } = useTranslation();
   // Decorative pipeline position: a mid-flight look while running, idle when off.
-  // Annotated `number`, not the inferred `2 | -1`: it is an index into STAGES, and
-  // the literal union makes TS reject the lookup as a negative tuple index.
+  // `number`, not the inferred `2 | -1`: TS rejects a negative literal tuple index.
   const activeCell: number = running ? 2 : -1;
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;

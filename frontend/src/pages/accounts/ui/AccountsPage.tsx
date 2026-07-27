@@ -139,8 +139,7 @@ export function AccountsPage() {
       <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
         <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
         <div className="flex w-full items-center gap-2 sm:w-auto">
-          {/* The wrapper carries the growth, not the input: the search icon is an
-              absolutely-positioned sibling inside it. */}
+          {/* The wrapper grows, not the input: the icon is an absolute sibling. */}
           <div className="relative flex flex-1 items-center sm:flex-none">
             <svg
               className="pointer-events-none absolute left-3 text-ink-subtle"

@@ -55,7 +55,6 @@
     opacity: 1;
   }
 }
-/* The mobile nav drawer sliding in from the left edge (Modal's 'drawer-left'). */
 @keyframes drawerin {
   from {
     transform: translateX(-100%);

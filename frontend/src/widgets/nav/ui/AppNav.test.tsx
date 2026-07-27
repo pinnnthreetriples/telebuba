@@ -104,8 +104,8 @@ test('does not schedule animation frames forever when the nav has no layout boxe
     expect(screen.getByText('AD')).toBeInTheDocument();
   });
 
-  // Long enough that an unbounded chain would be far into the thousands (measured:
-  // ~14k in 60ms before the fix), while the bounded one drains to a couple of dozen.
+  // Long enough that an unbounded chain reaches the thousands while the bounded one
+  // drains to a couple of dozen.
   await new Promise((resolve) => {
     setTimeout(resolve, 200);
   });

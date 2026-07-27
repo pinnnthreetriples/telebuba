@@ -82,6 +82,21 @@ export function AppNav() {
     setDrawerOpen(false);
   }, [pathname]);
 
+  // …and close it when the viewport reaches `lg`, where the hamburger that opened it
+  // is display:none and the horizontal nav is back. A 1024x768 tablet crosses this
+  // on rotation, which would otherwise leave a full-screen backdrop over the desktop
+  // nav with page scroll still locked.
+  useEffect(() => {
+    const mql = window.matchMedia('(min-width: 1024px)');
+    const close = () => {
+      if (mql.matches) setDrawerOpen(false);
+    };
+    mql.addEventListener('change', close);
+    return () => {
+      mql.removeEventListener('change', close);
+    };
+  }, []);
+
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur-[10px]">
       <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-3 px-4 lg:gap-7 lg:px-6">
@@ -154,8 +169,6 @@ export function AppNav() {
             <span
               className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success-dot' : 'bg-ink-subtle'}`}
             />
-            {/* Narrow screens keep only the dot; the pill's aria-label carries the
-                meaning that the hidden text would have. */}
             <span
               className={`hidden text-[12px] font-medium lg:inline ${systemActive ? 'text-success' : 'text-ink-muted'}`}
             >

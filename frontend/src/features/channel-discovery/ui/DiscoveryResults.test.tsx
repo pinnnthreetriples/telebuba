@@ -273,6 +273,27 @@ describe('DiscoveryResults', () => {
     expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toBeChecked();
   });
 
+  // Below 1024 DataTable renders cards, which have no column headers — and the
+  // select-all lives in one. It moves into the toolbar there, and there must still be
+  // exactly ONE of it, or every query by accessible name matches two.
+  it('keeps select-all reachable on a narrow viewport, without duplicating it', async () => {
+    (
+      window as unknown as { happyDOM: { setViewport: (v: { width: number }) => void } }
+    ).happyDOM.setViewport({ width: 375 });
+    try {
+      render(<Harness data={board([candidate({ channel: 'good' })])} />);
+      expect(screen.queryByRole('table')).toBeNull();
+
+      const all = () => screen.getByRole('checkbox', { name: 'Выбрать все подходящие' });
+      await userEvent.click(all());
+      expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).toBeChecked();
+    } finally {
+      (
+        window as unknown as { happyDOM: { setViewport: (v: { width: number }) => void } }
+      ).happyDOM.setViewport({ width: 1024 });
+    }
+  });
+
   it('shows qualification progress while the pass runs', () => {
     render(
       <Harness
