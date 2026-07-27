@@ -100,18 +100,26 @@ export function WarmingPage() {
   const handoff = useMutation(handoffToNeurocommentMutation());
 
   // promote (graduate) / unpromote (return to warming) share the {account_id} body.
+  // mutateAsync for the same reason as runOnAccount below: busyId is a single id,
+  // so it only disables the card that was clicked — graduating a second account
+  // fires the same mutation again, and mutate's callbacks live in ONE slot per
+  // hook, so the first account's feedback mark and invalidate were dropped.
   const runGraduation = (mutation: typeof promote, accountId: string) => {
     setBusyId(accountId);
-    mutation.mutate(
-      { body: { account_id: accountId } },
-      {
-        onSettled: (_data, error) => {
-          setBusyId(null);
-          accountFeedback.mark(accountId, !error);
-          invalidate();
+    return mutation
+      .mutateAsync({ body: { account_id: accountId } })
+      .then(
+        () => {
+          accountFeedback.mark(accountId, true);
         },
-      },
-    );
+        () => {
+          accountFeedback.mark(accountId, false);
+        },
+      )
+      .finally(() => {
+        setBusyId(null);
+        invalidate();
+      });
   };
 
   const cancelAddChannel = () => {

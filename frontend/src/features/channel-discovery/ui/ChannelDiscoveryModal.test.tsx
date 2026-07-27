@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import '@/shared/i18n';
 
+import { campaignsQueryOptions, neurocommentBoardQueryOptions } from '@/entities/campaign';
 import type { DiscoveryBoard, DiscoveryCandidate } from '@/shared/api';
 
 import { ChannelDiscoveryModal } from './ChannelDiscoveryModal';
@@ -505,6 +506,72 @@ describe('ChannelDiscoveryModal', () => {
       { timeout: 8000 },
     );
   }, 15000);
+
+  it('closing mid-adopt still invalidates the campaign caches', async () => {
+    // Escape or a backdrop click unmounts the modal, and mutate()'s onSuccess
+    // lives on the mutation OBSERVER, which goes with it: the channels were
+    // linked server-side and all three invalidations were dropped, so the
+    // neurocomment board and campaign list kept a campaign without them.
+    let releaseAdopt!: (response: Response) => void;
+    vi.mocked(fetch).mockImplementation((input) => {
+      const url = new URL((input as Request).url);
+      if (url.pathname === '/api/v1/warming/settings') {
+        return Promise.resolve(
+          jsonResponse({
+            inter_account_chat: false,
+            reactions_enabled: true,
+            gemini_model: 'gemini-2.5-flash',
+            has_telemetr_key: true,
+            updated_at: 'now',
+          }),
+        );
+      }
+      if (url.pathname.endsWith('/discovery/search')) {
+        return Promise.resolve(jsonResponse({ status: 'started' }));
+      }
+      if (url.pathname.endsWith('/discovery/adopt')) {
+        return new Promise<Response>((resolve) => {
+          releaseAdopt = resolve;
+        });
+      }
+      if (url.pathname.endsWith('/discovery')) {
+        return Promise.resolve(jsonResponse(boardPayload([candidate({ channel: 'good' })])));
+      }
+      return Promise.resolve(jsonResponse({}));
+    });
+
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    const boardKey = neurocommentBoardQueryOptions({ path: { campaign_id: 'c1' } }).queryKey;
+    const campaignsKey = campaignsQueryOptions().queryKey;
+    queryClient.setQueryData(boardKey, {
+      campaign_id: 'c1',
+      campaign_name: 'Promo',
+      status: 'active',
+      channels: [],
+      accounts: [],
+    });
+    queryClient.setQueryData(campaignsKey, { campaigns: [] });
+    const { unmount } = render(
+      <QueryClientProvider client={queryClient}>
+        <ChannelDiscoveryModal campaignId="c1" campaignName="Promo" onClose={vi.fn()} />
+      </QueryClientProvider>,
+    );
+
+    await startSearch();
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+    await userEvent.click(screen.getByRole('checkbox', { name: 'Выбрать канал good' }));
+    await userEvent.click(screen.getByRole('button', { name: /Добавить выбранные \(1\)/ }));
+
+    unmount();
+    releaseAdopt(jsonResponse({ outcomes: [{ status: 'linked', channel: 'good' }] }));
+
+    await waitFor(() => {
+      expect(queryClient.getQueryState(boardKey)?.isInvalidated).toBe(true);
+    });
+    expect(queryClient.getQueryState(campaignsKey)?.isInvalidated).toBe(true);
+  });
 
   it('shows the empty state when nothing was found', async () => {
     route({ board: boardPayload([]) });

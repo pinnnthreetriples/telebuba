@@ -75,6 +75,7 @@ import {
   removeWarmingChannel,
   requestLoginCode,
   resetAccountSession,
+  resyncAccountAvatar,
   retryChallenge,
   setAccountChannelPhoto,
   setAccountPhoto,
@@ -294,6 +295,9 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionError,
   ResetAccountSessionResponse,
+  ResyncAccountAvatarData,
+  ResyncAccountAvatarError,
+  ResyncAccountAvatarResponse,
   RetryChallengeData,
   RetryChallengeError,
   RetryChallengeResponse,
@@ -942,6 +946,39 @@ export const setAccountPhotoMutation = (
   > = {
     mutationFn: async (fnOptions) => {
       const { data } = await setAccountPhoto({
+        ...options,
+        ...fnOptions,
+        throwOnError: true,
+      });
+      return data;
+    },
+  };
+  return mutationOptions;
+};
+
+/**
+ * Resync Account Avatar
+ *
+ * Re-pull the accounts-table avatar from Telegram; answers the updated row.
+ *
+ * Call this ONCE after a photo batch: ``POST /accounts/photo`` uploads one file
+ * per request, so re-syncing inside it would spend a ``get_me`` plus a thumb
+ * download per photo when only the last one survives.
+ */
+export const resyncAccountAvatarMutation = (
+  options?: Partial<Options<ResyncAccountAvatarData>>,
+): UseMutationOptions<
+  ResyncAccountAvatarResponse,
+  ResyncAccountAvatarError,
+  Options<ResyncAccountAvatarData>
+> => {
+  const mutationOptions: UseMutationOptions<
+    ResyncAccountAvatarResponse,
+    ResyncAccountAvatarError,
+    Options<ResyncAccountAvatarData>
+  > = {
+    mutationFn: async (fnOptions) => {
+      const { data } = await resyncAccountAvatar({
         ...options,
         ...fnOptions,
         throwOnError: true,

@@ -84,10 +84,11 @@ function isWarmingConflict(error: unknown): boolean {
 export function NeurocommentPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    void queryClient.invalidateQueries();
-  };
-  // SSE-driven refresh: narrowed to this page's query keys (finding #11).
+  // The page's ONE refresh scope — narrowed to the query keys above (finding
+  // #11). Used by the SSE stream and by every mutation on this page, because
+  // they need exactly the same thing: none of them touches an account row, a
+  // proxy, the warming board or the settings, and a bare invalidateQueries()
+  // refetched all of those plus every open profile snapshot.
   const invalidateNeuro = () => {
     void queryClient.invalidateQueries({
       predicate: (query) => {
@@ -97,6 +98,20 @@ export function NeurocommentPage() {
     });
   };
   useLogEventStream(invalidateNeuro);
+  // One useMutation is ONE callback slot. A second .mutate() before the first
+  // settles takes that slot over, so the first call's onSettled never runs — and
+  // most buttons below are PER ROW on a shared hook (two captcha rows, two
+  // accounts in the modal, two campaign run/pause toggles), which lost the first
+  // row's feedback mark and its refresh. mutateAsync hands back one promise per
+  // call, so what follows a call cannot be taken over by the next one.
+  const afterSettle = (call: Promise<unknown>, mark?: (ok: boolean) => void) => {
+    void call
+      .then(
+        () => mark?.(true),
+        () => mark?.(false),
+      )
+      .finally(invalidateNeuro);
+  };
 
   const [selected, setSelected] = useState<string | null>(null);
   const [listener, setListener] = useState('');
@@ -290,7 +305,7 @@ export function NeurocommentPage() {
         onError: (error) => {
           setStartRejectedWarming(isWarmingConflict(error));
         },
-        onSettled: invalidate,
+        onSettled: invalidateNeuro,
       },
     );
   };
@@ -299,7 +314,7 @@ export function NeurocommentPage() {
   // per-campaign run/pause below.
   const toggleRuntime = () => {
     if (running) {
-      stop.mutate({}, { onSettled: invalidate });
+      stop.mutate({}, { onSettled: invalidateNeuro });
     } else if (listenerId && !warmingIds.has(listenerId)) {
       startListener(listenerId);
     }
@@ -310,30 +325,29 @@ export function NeurocommentPage() {
   // The engine skips paused campaigns; this never touches the global engine.
   const toggleCampaignStatus = (campaign: NeurocommentCampaign) => {
     const next = campaign.status === 'active' ? 'paused' : 'active';
-    setStatus.mutate(
-      { path: { campaign_id: campaign.campaign_id }, body: { status: next } },
-      { onSettled: invalidate },
+    afterSettle(
+      setStatus.mutateAsync({
+        path: { campaign_id: campaign.campaign_id },
+        body: { status: next },
+      }),
     );
   };
 
   // Remove the listener entirely (finding #4) — distinct from pausing (stop).
   const removeListener = () => {
     setListener('');
-    clearListener.mutate({}, { onSettled: invalidate });
+    clearListener.mutate({}, { onSettled: invalidateNeuro });
   };
 
   const addChannel = () => {
     const value = channelInput.trim();
     if (!value || campaignId === null) return;
-    linkChannel.mutate(
-      { path: { campaign_id: campaignId }, body: { channel: value } },
-      {
-        onSettled: (_data, error) => {
-          setChannelInput('');
-          setAddingChannel(false);
-          channelFeedback.mark(value, !error);
-          invalidate();
-        },
+    afterSettle(
+      linkChannel.mutateAsync({ path: { campaign_id: campaignId }, body: { channel: value } }),
+      (ok) => {
+        setChannelInput('');
+        setAddingChannel(false);
+        channelFeedback.mark(value, ok);
       },
     );
   };
@@ -347,7 +361,7 @@ export function NeurocommentPage() {
       {
         onSettled: (_data, error) => {
           channelFeedback.mark(channel, !error);
-          invalidate();
+          invalidateNeuro();
         },
       },
     );
@@ -474,16 +488,15 @@ export function NeurocommentPage() {
               if (campaignId !== null) {
                 setSolver.mutate(
                   { path: { campaign_id: campaignId }, body: { enabled: !solverEnabled } },
-                  { onSettled: invalidate },
+                  { onSettled: invalidateNeuro },
                 );
               }
             }}
             captchaQueue={captchaQueue}
             accountLabel={accountLabel}
             onSolve={(item) => {
-              retry.mutate(
-                { body: { account_id: item.account_id, channel: item.channel } },
-                { onSettled: invalidate },
+              afterSettle(
+                retry.mutateAsync({ body: { account_id: item.account_id, channel: item.channel } }),
               );
             }}
           />
@@ -547,42 +560,39 @@ export function NeurocommentPage() {
           }}
           onPick={(accountId) => {
             if (campaignId !== null) {
-              assignAccount.mutate(
-                { path: { campaign_id: campaignId }, body: { account_id: accountId } },
-                {
-                  onSettled: (_data, error) => {
-                    accountFeedback.mark(accountId, !error);
-                    invalidate();
-                  },
+              afterSettle(
+                assignAccount.mutateAsync({
+                  path: { campaign_id: campaignId },
+                  body: { account_id: accountId },
+                }),
+                (ok) => {
+                  accountFeedback.mark(accountId, ok);
                 },
               );
             }
           }}
           onRemove={(accountId) => {
             if (campaignId !== null) {
-              removeAccount.mutate(
-                { path: { campaign_id: campaignId }, body: { account_id: accountId } },
-                {
-                  onSettled: (_data, error) => {
-                    accountFeedback.mark(accountId, !error);
-                    invalidate();
-                  },
+              afterSettle(
+                removeAccount.mutateAsync({
+                  path: { campaign_id: campaignId },
+                  body: { account_id: accountId },
+                }),
+                (ok) => {
+                  accountFeedback.mark(accountId, ok);
                 },
               );
             }
           }}
           onChannelChange={(accountId, channels) => {
             if (campaignId !== null) {
-              setAccountChannel.mutate(
-                {
+              afterSettle(
+                setAccountChannel.mutateAsync({
                   path: { campaign_id: campaignId, account_id: accountId },
                   body: { channels },
-                },
-                {
-                  onSettled: (_data, error) => {
-                    accountFeedback.mark(accountId, !error);
-                    invalidate();
-                  },
+                }),
+                (ok) => {
+                  accountFeedback.mark(accountId, ok);
                 },
               );
             }
@@ -637,21 +647,35 @@ export function NeurocommentPage() {
             setShowCreate(false);
           }}
           onCreate={({ name, prompt, channels }) => {
-            createCampaign.mutate(
-              { body: { name, prompt } },
-              {
-                onSuccess: (created) => {
-                  channels.forEach((channel) => {
-                    linkChannel.mutate({
-                      path: { campaign_id: created.campaign_id },
-                      body: { channel },
-                    });
-                  });
-                  setSelected(created.campaign_id);
-                },
-                onSettled: invalidate,
-              },
-            );
+            void createCampaign
+              .mutateAsync({ body: { name, prompt } })
+              .then(async (created) => {
+                setSelected(created.campaign_id);
+                // The old forEach fired N linkChannel.mutate() calls into the one
+                // observer, so N-1 outcomes were unobservable, and the single
+                // invalidate hung off createCampaign — it refetched the board
+                // BEFORE any channel was linked, so a new campaign came up with
+                // none of them. Await every link, marking each, then refresh once.
+                await Promise.all(
+                  channels.map((channel) =>
+                    linkChannel
+                      .mutateAsync({
+                        path: { campaign_id: created.campaign_id },
+                        body: { channel },
+                      })
+                      .then(
+                        () => {
+                          channelFeedback.mark(channel, true);
+                        },
+                        () => {
+                          channelFeedback.mark(channel, false);
+                        },
+                      ),
+                  ),
+                );
+              })
+              .catch(() => undefined)
+              .finally(invalidateNeuro);
           }}
         />
       ) : null}
@@ -703,14 +727,16 @@ export function NeurocommentPage() {
           onSave={(prompt) => {
             updatePrompt.mutate(
               { path: { campaign_id: promptFor.campaign_id }, body: { prompt } },
-              { onSettled: invalidate },
+              { onSettled: invalidateNeuro },
             );
             setPromptFor(null);
           }}
           onRemoveAccount={(accountId) => {
-            removeAccount.mutate(
-              { path: { campaign_id: promptFor.campaign_id }, body: { account_id: accountId } },
-              { onSettled: invalidate },
+            afterSettle(
+              removeAccount.mutateAsync({
+                path: { campaign_id: promptFor.campaign_id },
+                body: { account_id: accountId },
+              }),
             );
           }}
         />
@@ -725,7 +751,7 @@ export function NeurocommentPage() {
           onConfirm={() => {
             deleteCampaign.mutate(
               { path: { campaign_id: deleteFor.campaign_id } },
-              { onSettled: invalidate },
+              { onSettled: invalidateNeuro },
             );
             setDeleteFor(null);
             if (selected === deleteFor.campaign_id) setSelected(null);

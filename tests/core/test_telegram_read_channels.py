@@ -179,7 +179,7 @@ async def test_get_own_channel_maps_about_and_participants(
             requested.append(request)
             return SimpleNamespace(
                 full_chat=SimpleNamespace(about="All about it", participants_count=77),
-                chats=[SimpleNamespace(title="Mine", username="mine")],
+                chats=[SimpleNamespace(id=100, title="Mine", username="mine")],
             )
 
     _patch_client(monkeypatch, FakeClient())
@@ -193,6 +193,84 @@ async def test_get_own_channel_maps_about_and_participants(
     assert result.about == "All about it"
     assert result.participants_count == 77
     assert any(isinstance(r, GetFullChannelRequest) for r in requested)
+
+
+@pytest.mark.asyncio
+async def test_get_own_channel_picks_the_requested_chat_not_the_first(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``chatFull.chats`` is unordered and also carries the discussion group.
+
+    Index 0 paired the requested channel's id with the linked group's
+    title/username — and the edit modal prefills its title field from that
+    value, so a title edit wrote the group's name onto the channel.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
+
+        async def __call__(self, _request: object) -> object:
+            return SimpleNamespace(
+                full_chat=SimpleNamespace(about="All about it", participants_count=77),
+                chats=[
+                    # The linked discussion group comes first in the vector.
+                    SimpleNamespace(id=555, title="Mine Chat", username="mine_chat"),
+                    SimpleNamespace(id=100, title="Mine", username="mine"),
+                ],
+            )
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-detail-linked", GetOwnChannel(channel_id=100))
+
+    assert isinstance(result, TelegramOwnChannelDetail)
+    assert result.channel_id == 100
+    assert result.title == "Mine"
+    assert result.username == "mine"
+
+
+@pytest.mark.asyncio
+async def test_get_own_channel_blank_when_no_chat_matches(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No id match → blank title/username, never another chat's identity.
+
+    Documenting the invariant this branch is defensive against, because nothing
+    else records it: ``messages.chatFull`` always carries the channel that was
+    requested, and the id spaces line up because ``_input_channel`` resolves
+    ``PeerChannel(channel_id)`` — the same bare id we then compare. So the
+    fallback cannot fire in production. It stays because the alternative that
+    once shipped, ``chats[0]``, silently paired this channel's id with the linked
+    discussion group's title, and the edit modal wrote that title back onto the
+    channel. This test pins the safe shape of the branch, not a reachable path.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def get_input_entity(self, _peer: object) -> object:
+            return MagicMock()
+
+        async def __call__(self, _request: object) -> object:
+            return SimpleNamespace(
+                full_chat=SimpleNamespace(about="About", participants_count=None),
+                chats=[SimpleNamespace(id=555, title="Mine Chat", username="mine_chat")],
+            )
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute_read("acc-detail-nomatch", GetOwnChannel(channel_id=100))
+
+    assert isinstance(result, TelegramOwnChannelDetail)
+    assert result.channel_id == 100
+    assert result.title == ""
+    assert result.username is None
+    assert result.about == "About"
 
 
 @pytest.mark.asyncio

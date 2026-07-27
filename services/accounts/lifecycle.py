@@ -16,6 +16,7 @@ from core.logging import log_event
 from core.phone_geo import evaluate_geo
 from core.telegram_client import remove_account_session, removing_client
 from schemas.geo import GeoMatch
+from services.accounts._result import AccountNotFoundError
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountCreate, AccountRead
@@ -36,6 +37,22 @@ async def add_account(data: AccountCreate) -> AccountRead:
         extra={"session_name": persisted.session_name},
     )
     return persisted
+
+
+async def require_account(account_id: str) -> AccountRead:
+    """One account's read model, or :class:`AccountNotFoundError`.
+
+    For routes whose service call deliberately degrades on a missing row instead
+    of raising — ``spam_status.refresh_spam_status`` returns an uncached
+    ``unknown`` verdict, because warming and neurocomment onboarding also call it
+    and a hard raise there would change cycle behaviour. The route does the hard
+    lookup so its HTTP surface answers 404 like its siblings while those two
+    internal callers keep the soft path.
+    """
+    account = await fetch_account(account_id)
+    if account is None:
+        raise AccountNotFoundError(account_id)
+    return account
 
 
 async def remove_account(account_id: str) -> None:
@@ -79,7 +96,14 @@ async def remove_account(account_id: str) -> None:
         # and the unlink aborts the delete with PermissionError.
         async with removing_client(account_id):
             account = await fetch_account(account_id)
-            await remove_account_session(account_id, account.session_name if account else None)
+            if account is None:
+                # The only lifecycle entry point that used to tolerate a missing
+                # row, and the tolerance was the bug: ``session_name=None`` makes
+                # ``_session_path`` fall back to ``session_dir / account_id``, so
+                # an unvalidated id (``..\..\evil``) unlinked whatever that
+                # resolved to. Guard, never sanitise; the API maps this to 404.
+                raise AccountNotFoundError(account_id)
+            await remove_account_session(account_id, account.session_name)
             await delete_account(account_id)
     await log_event("INFO", "account_removed", account_id=account_id)
 

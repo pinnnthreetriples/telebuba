@@ -10,7 +10,11 @@ from telethon.tl.functions.help import GetAppConfigRequest
 
 from core.config import settings
 from core.telegram_client._client import prepare_session_check_profile
-from core.telegram_client._pool import TelegramClientPoolError, get_client
+from core.telegram_client._pool import (
+    TelegramClientPoolError,
+    TelegramClientUnavailableError,
+    get_client,
+)
 from core.telegram_client._util import optional_str
 from schemas.telegram_session import TelegramSessionCheckResult
 
@@ -100,6 +104,10 @@ async def _probe_client(account_id: str) -> TelegramClient:
     ``TelegramClientPoolError`` only wraps a connect failure, so re-raising
     ``cause`` hands the real Telethon/proxy/network error to the caller's
     classification ladder rather than collapsing it to ``unknown_error``.
+    :class:`TelegramClientUnavailableError` is the exception: the pool refused
+    without connecting, so its ``cause`` is the pool's own bare ``RuntimeError``,
+    which matched no arm in that ladder and landed in the catch-all. It travels
+    unwrapped so the caller's dedicated arm sees it.
 
     The pool keys on ``account_id`` and passes no session name, so the request's
     ``session_name`` no longer selects the file directly — but it still decides
@@ -108,6 +116,8 @@ async def _probe_client(account_id: str) -> TelegramClient:
     """
     try:
         return await get_client(account_id)
+    except TelegramClientUnavailableError:
+        raise
     except TelegramClientPoolError as exc:
         raise exc.cause from exc
 
@@ -127,7 +137,15 @@ _ACCOUNT_ERRORS = (
     errors.UserDeactivatedBanError,
     errors.UserDeactivatedError,
 )
-_NETWORK_ERRORS = (ConnectionError, OSError, TimeoutError)
+# ``TelegramClientUnavailableError`` rides with the transport family, exactly as
+# ``_actions`` and ``_read`` group the pool's failures with ConnectionError /
+# TimeoutError. It means the pool refused to serve a client at all — shutting down,
+# or a login / logout / removal holds the tombstone — so nothing was learned about
+# this session and the verdict must not read as a fault of the account. It used to
+# reach the catch-all as a bare ``RuntimeError`` and answer ``unknown_error``, which
+# ``services.accounts.sessions`` PERSISTS: pressing Check while a login was in
+# flight left a healthy row looking broken until the next check.
+_NETWORK_ERRORS = (ConnectionError, OSError, TimeoutError, TelegramClientUnavailableError)
 _PROXY_ERRORS = (ProxyConnectionError, ProxyError, ProxyTimeoutError)
 
 

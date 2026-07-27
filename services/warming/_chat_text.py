@@ -16,7 +16,12 @@ from core.config import settings
 from core.db import pair_key, recent_pair_messages
 from core.logging import log_event
 from schemas.gemini import GeminiRequest
-from services.content import is_acceptable, similarity, try_reserve_sent
+from services.content import (
+    is_acceptable,
+    similarity,
+    strip_markdown_delimiters,
+    try_reserve_sent,
+)
 from services.warming import _seams
 
 if TYPE_CHECKING:
@@ -87,8 +92,15 @@ async def _build_transcript(sender_id: str, partner_id: str) -> tuple[str, list[
 
 
 def _sanitize_chat_text(raw: str) -> str | None:
-    """Strip control chars, trim, enforce length / line limits. ``None`` if empty."""
-    cleaned = _CONTROL_CHARS_RE.sub("", raw).strip()
+    """Strip control chars + markdown, trim, enforce length / line limits.
+
+    ``None`` if nothing survives. The markdown strip runs before the length caps so
+    the cap applies to what is actually sent. Gemini is not told to avoid markup
+    (no prompt here forbids it, and the hashtag/quote instructions show how well
+    that holds), and with ``parse_mode`` disabled a ``**bold**`` reply would reach
+    the DM with the asterisks showing — see ``services.content``.
+    """
+    cleaned = strip_markdown_delimiters(_CONTROL_CHARS_RE.sub("", raw)).strip()
     if not cleaned:
         return None
     lines = [line.strip() for line in cleaned.splitlines() if line.strip()]

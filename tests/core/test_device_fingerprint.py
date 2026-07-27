@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pathlib
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -21,8 +22,10 @@ from core.telegram_client import (
     check_telegram_session,
     create_telegram_client,
     prepare_telegram_client_profile,
+    remove_account_session,
     telegram_client,
 )
+from core.telegram_client._client import _session_dir_child
 from schemas.device_fingerprint import (
     DeviceFingerprint,
     TelegramClientProfile,
@@ -130,6 +133,131 @@ async def test_telegram_client_profile_prefers_an_explicit_session_name(
     )
 
     assert profile.session_path == str(tmp_path / "sessions" / "explicit")
+
+
+# The guard's contract as data: a session name must be one plain child component.
+# Every name here is refused on EVERY platform and whether or not the sessions
+# directory exists, because the refusal is now reached lexically. The trailing-space
+# and repeated-dot forms are in the list because they are exactly where a
+# ``resolve()``-only verdict diverged (see the two tests below).
+_NON_CHILD_NAMES = (
+    ".",
+    "..",
+    "...",
+    "....",
+    ".. ",
+    ". ",
+    "../evil",
+    "..\\evil",
+    "/abs",
+    "sub/x",
+)
+
+
+def test_session_name_refusal_never_reaches_the_filesystem(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    r"""Property: the verdict is a pure function of the NAME — no OS, no filesystem.
+
+    Deciding by comparing ``candidate.resolve().parent`` to the session dir made the
+    answer platform-specific. Win32 strips trailing dots and reads ``\`` as a
+    separator; POSIX does neither, so ``"..."`` resolved to ``sessions/...`` and
+    ``"..\evil"`` to ``sessions/..\evil`` there — ordinary filenames INSIDE the
+    directory, hence ALLOWED. Both are refused on Windows. Nothing escaped on POSIX,
+    but the same name got two verdicts, and every CI job runs ``ubuntu-latest``.
+
+    Asserting that ``resolve()`` is never even called is what makes that
+    platform-independent: a predicate that reads only the string cannot diverge.
+    The second half checks the resolved-parent comparison is still there as the
+    symlink backstop for a name the lexical rules accept.
+
+    Pre-fix this fails on the FIRST name on both platforms: the old guard called
+    ``resolve()`` before deciding anything, so the exploding patch below fired.
+    """
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+
+    def _explode(_self: pathlib.Path) -> pathlib.Path:
+        msg = "the guard must decide lexically, before any resolve()"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(pathlib.Path, "resolve", _explode)
+
+    for name in _NON_CHILD_NAMES:
+        with pytest.raises(ValueError, match="escapes the session directory"):
+            _session_dir_child(name)
+    with pytest.raises(AssertionError, match="before any resolve"):
+        _session_dir_child("acc-1")
+
+
+@pytest.mark.parametrize("name", _NON_CHILD_NAMES)
+@pytest.mark.asyncio
+async def test_session_name_refusal_survives_a_missing_sessions_dir(
+    tmp_path: Path,
+    monkeypatch,
+    name: str,
+) -> None:
+    r"""The same verdict with the sessions directory ABSENT — the guard was fs-stateful.
+
+    ``resolve()`` cannot collapse a ``".."`` component against a directory that is
+    not there, so with the dir missing (the relative ``sessions`` default on first
+    boot, or one someone deleted) ``"..."``, ``".. "`` and ``". "`` were ALLOWED
+    where the very same names were refused once it existed.
+
+    ``remove_account_session`` is the reacher that makes this concrete: it is the one
+    caller that gets to the sink without ``_ensure_session_dir()`` running first —
+    and it UNLINKS. Pre-fix this fails on Windows for ``"..."``/``".. "``/``". "``
+    and on POSIX for those plus ``"...."`` and ``"..\\evil"``.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    missing = tmp_path / "never-created" / "sessions"
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", missing)
+    assert not missing.exists()
+
+    with pytest.raises(ValueError, match="escapes the session directory"):
+        await remove_account_session("acc-1", name)
+
+
+@pytest.mark.parametrize("name", [".", "..", "...", "../evil", "..\\evil", "/abs"])
+@pytest.mark.asyncio
+async def test_session_path_refuses_a_name_outside_the_session_dir(
+    tmp_path: Path,
+    monkeypatch,
+    name: str,
+) -> None:
+    r"""The shared sink, not the charset, is what closes the traversal.
+
+    ``Path`` DROPS a "." component, so ``session_dir / "."`` collapses to the
+    directory itself and ``_auth``'s ``Path(f"{session_path}.session")`` then names
+    ``<parent>/sessions.session`` — one level UP, beside the database. Every
+    Telethon open and the DELETE unlink both come through here, so a name that
+    does not resolve to a direct child is refused here rather than at each entry.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+
+    with pytest.raises(ValueError, match="escapes the session directory"):
+        await prepare_telegram_client_profile(
+            TelegramClientRequest(account_id="acc-1", session_name=name),
+        )
+
+
+@pytest.mark.asyncio
+async def test_session_path_refuses_a_dot_account_id_with_no_row(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The missing-row fallback is the other way an unvalidated id reached disk.
+
+    With no account row ``_session_path`` composes ``session_dir / account_id``,
+    and Telethon's ``SQLiteSession`` CREATES the file it is handed — which is how
+    a spam-check on ``account_id="."`` minted ``<parent>/sessions.session``.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+
+    with pytest.raises(ValueError, match="escapes the session directory"):
+        await prepare_telegram_client_profile(TelegramClientRequest(account_id="."))
 
 
 @pytest.mark.asyncio
@@ -250,6 +378,46 @@ def test_create_telegram_client_passes_proxy(monkeypatch) -> None:
         "username": "bob",
         "password": "pw",
     }
+
+
+@pytest.mark.parametrize("with_proxy", [False, True])
+def test_create_telegram_client_disables_markdown_parsing(
+    tmp_path: Path,
+    monkeypatch,
+    *,
+    with_proxy: bool,
+) -> None:
+    """Both build branches must ship parsing off (a REAL Telethon client).
+
+    Telethon defaults ``parse_mode`` to markdown, which eats ``__bold__``,
+    `` `code` ``, ``~~strike~~``, ``**stars**`` and ``[text](url)`` out of every
+    operator-authored send — and a channel post read back, prefilled and
+    re-saved persists the degraded text.
+
+    Scope: ``create_telegram_client`` is the only client builder on the SENDING
+    paths (pool, login, ``telegram_client``), which is what this pins. It is not
+    every Telethon client in the process — ``core.tdata_import`` gets one back
+    from opentele2's ``ToTelethon`` — but that one only converts credentials and
+    never sends, so its parse mode is irrelevant.
+    """
+    monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
+    monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")
+
+    client = create_telegram_client(
+        TelegramClientProfile(
+            account_id="account-parse",
+            session_path=str(tmp_path / "account-parse"),
+            receive_updates=False,
+            device=DeviceFingerprintFactory.build(account_id="account-parse"),
+            proxy_type="socks5" if with_proxy else None,
+            proxy_host="proxy.local" if with_proxy else None,
+            proxy_port=1080 if with_proxy else None,
+        ),
+    )
+    try:
+        assert client.parse_mode is None
+    finally:
+        client.session.close()  # ty: ignore[unresolved-attribute]
 
 
 @pytest.mark.asyncio

@@ -15,7 +15,12 @@ from pydantic import ValidationError
 
 from core.config import settings
 from core.logging import log_event
-from core.telegram_client import TelegramReadError, execute, execute_read
+from core.telegram_client import (
+    TelegramAccountNotFoundError,
+    TelegramReadError,
+    execute,
+    execute_read,
+)
 from schemas.api import Page
 from schemas.channels import ChannelDetailView, ChannelUsernameCheckView, ChannelView
 from schemas.telegram_actions import (
@@ -27,7 +32,11 @@ from schemas.telegram_actions import (
     ListOwnChannels,
     SetChannelPhoto,
 )
-from services.accounts._result import AccountActionError, raise_for_result
+from services.accounts._result import (
+    AccountNotFoundError,
+    action_error_for_read,
+    raise_for_result,
+)
 from services.accounts._uploads import _PROFILE_PHOTO_SUFFIXES, _validate_upload
 
 if TYPE_CHECKING:
@@ -53,16 +62,24 @@ __all__ = [
 
 
 async def _read(account_id: str, action: TelegramReadAction) -> BaseModel:
-    """Read via the gateway; wrap gateway failures in the stable read code.
+    """Read via the gateway; map gateway failures onto stable codes.
 
-    ``TelegramAccountNotFoundError`` propagates untouched (same contract as
-    the profile-media services).
+    The gateway's own classification decides the code, so a flood-waited read
+    reports ``flood_wait`` WITH its duration and an outage reports ``unavailable``
+    (503) instead of everything flattening to ``channel_read_failed`` — see
+    :func:`services.accounts._result.action_error_for_read`.
+
+    ``TelegramAccountNotFoundError`` is the gateway's own "no such row" type,
+    unrelated to :class:`AccountNotFoundError`; it is raised BEFORE ``execute_read``
+    reaches Telegram, so without translating it the route would answer 500 instead
+    of 404 (same fix, and same reason, as ``privacy.read_account_privacy``).
     """
     try:
         return await execute_read(account_id, action)
+    except TelegramAccountNotFoundError as exc:
+        raise AccountNotFoundError(account_id) from exc
     except TelegramReadError as exc:
-        code = "channel_read_failed"
-        raise AccountActionError(code) from exc
+        raise action_error_for_read(exc, "channel_read_failed") from exc
 
 
 async def create_account_channel(

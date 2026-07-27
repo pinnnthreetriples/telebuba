@@ -1,11 +1,13 @@
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 import httpx
 import pytest
 import respx
 
+from core import _proxy_http as proxy_http_module
 from core import proxy_check as proxy_check_module
 from core.config import settings
 from core.proxy_check import (
@@ -78,6 +80,30 @@ def test_parse_http_json_rejects_non_200_response() -> None:
         _parse_http_json(payload)
 
 
+def test_parse_http_json_keeps_the_status_code_and_drops_the_remote_reason() -> None:
+    """The status CODE is ours to report; the remote server's status LINE is not.
+
+    This message becomes ``last_error`` → ``AccountRead.proxy_last_error`` → the
+    operator's browser, so a reason phrase (or anything else) the remote endpoint
+    chose must not ride along inside a diagnostic the code treats as its own.
+    """
+    payload = b"HTTP/1.1 429 Too Many <b>Requests</b>\r\n\r\n{}"
+    with pytest.raises(OSError, match=r"^HTTPS endpoint returned HTTP 429$"):
+        _parse_http_json(payload)
+
+
+@pytest.mark.parametrize(
+    "head",
+    [b"", b"garbage", b"HTTP/1.1 <script>alert(1)</script> Nope"],
+)
+def test_parse_http_json_reports_an_unparsable_status_line_without_quoting_it(
+    head: bytes,
+) -> None:
+    """No 3-digit status to report → a fixed diagnostic, never the raw bytes."""
+    with pytest.raises(OSError, match=r"^HTTPS endpoint returned an unparsable status line$"):
+        _parse_http_json(head + b"\r\n\r\n{}")
+
+
 def test_parse_http_json_decodes_chunked_response() -> None:
     raw = (
         b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"
@@ -119,7 +145,8 @@ async def test_fetch_exit_ip_uses_authenticated_tls_tunnel(
         captured["open_kwargs"] = kwargs
         return reader, writer
 
-    monkeypatch.setattr(proxy_check_module, "Proxy", FakeProxy)
+    # ``Proxy`` is resolved from ``core._proxy_http``, which owns the tunnel.
+    monkeypatch.setattr(proxy_http_module, "Proxy", FakeProxy)
     monkeypatch.setattr(proxy_check_module.asyncio, "open_connection", fake_open_connection)
     monkeypatch.setattr(settings.proxy, "exit_ip_host", "example.test")
     monkeypatch.setattr(settings.proxy, "exit_ip_path", "/ip")
@@ -279,6 +306,55 @@ async def test_check_proxy_connectivity_maps_timeout(monkeypatch: pytest.MonkeyP
     )
     assert result.status == "failed"
     assert result.last_error == "Proxy check timed out"
+
+
+@pytest.mark.asyncio
+async def test_third_party_failure_text_never_reaches_last_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``last_error`` is stored, returned by the API and rendered in the browser.
+
+    ``str(exc)`` from a proxy library is unbounded third-party prose that names the
+    proxy endpoint — it must not cross the wire (non-negotiable #12). Only the class
+    name does; the full text goes to the log instead.
+    """
+
+    async def fake_fetch(_proxy: ProxySettings) -> str:
+        msg = "Could not connect to proxy 203.0.113.7:1080 [Connection refused]"
+        raise ConnectionRefusedError(msg)
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", fake_fetch)
+
+    with caplog.at_level(logging.WARNING, logger="core.proxy_check"):
+        result = await check_proxy_connectivity(
+            ProxySettings(proxy_type="socks5", host="203.0.113.7", port=1080),
+        )
+
+    assert result.status == "failed"
+    assert result.last_error == "ConnectionRefusedError"
+    assert "203.0.113.7" not in (result.last_error or "")
+    # The detail is not lost, it just isn't on the wire.
+    assert "Connection refused" in caplog.text
+    assert "203.0.113.7" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_own_diagnostic_keeps_its_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    """This module's own bounded prose IS a contract and stays useful to the operator."""
+
+    async def fake_fetch(_proxy: ProxySettings) -> str:
+        msg = "Proxy returned a non-public exit IP address"
+        raise proxy_check_module._ProxyCheckError(msg)
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", fake_fetch)
+
+    result = await check_proxy_connectivity(
+        ProxySettings(proxy_type="socks5", host="proxy.example", port=1080),
+    )
+
+    assert result.status == "failed"
+    assert result.last_error == "Proxy returned a non-public exit IP address"
 
 
 @pytest.mark.asyncio

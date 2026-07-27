@@ -8,7 +8,7 @@ exception are mapped too, so the wire contract has exactly one error shape.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
 from fastapi.exceptions import RequestValidationError
@@ -31,6 +31,33 @@ _HTTP_ERROR_CODES: dict[int, str] = {
     409: "conflict",
     429: "rate_limited",
     503: "unavailable",
+}
+
+# The envelope, declared for OpenAPI so the generated TypeScript client TYPES the
+# error body instead of the SPA hand-casting it. Without this a route documents
+# only FastAPI's auto 422 ``HTTPValidationError`` with its ``detail`` key — a body
+# ``_handle_validation_error`` below replaces, so ``detail`` never reaches the wire
+# and the CI drift gate could not see a change to the real shape. Declaring 422
+# here also suppresses that auto-generated response.
+#
+# The statuses are the ones the accounts routers genuinely produce, collectively:
+# 400 (``HTTPException``/refused action), 401 (the session gate in ``api.deps``),
+# 404 (``AccountNotFoundError``), 422 (request validation), 500
+# (``_handle_unexpected``) and 503 (a gateway outage). 409 is NOT here — only the
+# two session-creating routes can conflict, so they declare it themselves.
+ERROR_RESPONSES: dict[int | str, dict[str, Any]] = {
+    status: {"model": ErrorEnvelope, "description": description}
+    for status, description in (
+        (400, "Bad request, or Telegram refused the action"),
+        (401, "Not authenticated"),
+        (404, "Account not found"),
+        (422, "Request validation failed"),
+        (500, "Internal server error"),
+        (503, "Telegram gateway unavailable"),
+    )
+}
+CONFLICT_RESPONSE: dict[int | str, dict[str, Any]] = {
+    409: {"model": ErrorEnvelope, "description": "That session already exists"},
 }
 
 
@@ -78,9 +105,13 @@ async def _handle_validation_error(
     exc: RequestValidationError,
 ) -> JSONResponse:
     fields = {".".join(str(part) for part in err["loc"]): err["msg"] for err in exc.errors()}
+    # ``message`` is a locale-neutral CODE like every other envelope message
+    # (non-negotiable #12) — the SPA renders it verbatim as the toast fallback, so
+    # English prose here reached the operator's UI untranslated. The per-field
+    # reasons stay in ``fields`` keyed ``body.<name>`` / ``query.<name>``.
     return _envelope(
         code="validation_error",
-        message="Request validation failed",
+        message="validation_error",
         status_code=422,
         fields=fields,
     )

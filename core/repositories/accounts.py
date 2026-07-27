@@ -46,8 +46,6 @@ if TYPE_CHECKING:
 
     from schemas.telegram_session import TelegramSessionCheckResult
 
-_MASK_PASSTHROUGH_LENGTH = 2
-
 
 class DuplicateSessionNameError(ValueError):
     """Two accounts cannot share one Telethon session file (F5)."""

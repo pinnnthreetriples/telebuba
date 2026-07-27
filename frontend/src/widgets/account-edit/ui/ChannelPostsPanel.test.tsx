@@ -207,6 +207,39 @@ test('inline edit sends the new text to the edit endpoint', async () => {
   });
 });
 
+test('editing a post with media caps the text at the caption limit', async () => {
+  routeApi();
+  renderWithClient(<ChannelPostsPanel accountId="acc-1" channelId="123" />);
+  await screen.findByText('Второй пост');
+
+  // post 10 carries a photo, so its text IS a caption and Telegram caps those at
+  // 1024 — the composer already respects the split, the edit box did not, and
+  // the backend schema has no media-aware branch to catch it.
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[0] as HTMLElement);
+  expect(screen.getByDisplayValue('Второй пост')).toHaveAttribute('maxlength', '1024');
+
+  // A text-only post keeps the full 4096.
+  await userEvent.click(screen.getByText('Отмена'));
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[1] as HTMLElement);
+  expect(screen.getByDisplayValue('Первый пост')).toHaveAttribute('maxlength', '4096');
+});
+
+test('the edit box shows the same char count the composer does', async () => {
+  routeApi();
+  renderWithClient(<ChannelPostsPanel accountId="acc-1" channelId="123" />);
+  await screen.findByText('Второй пост');
+
+  // Post 10 carries a photo → the caption cap. Without the readout the box just
+  // stopped accepting input at 1024 with nothing on screen explaining why.
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[0] as HTMLElement);
+  expect(screen.getByText('11/1024')).toBeInTheDocument();
+
+  // Text-only post → the full 4096, same as the composer's own readout.
+  await userEvent.click(screen.getByText('Отмена'));
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[1] as HTMLElement);
+  expect(screen.getByText('11/4096')).toBeInTheDocument();
+});
+
 test('a failed edit surfaces the translated stable code inline', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
@@ -280,6 +313,48 @@ test('the publish button is locked while a publish is in flight (no double post)
   await waitFor(() => {
     expect(composer().value).toBe('');
   });
+});
+
+test('clicking Edit on another row mid-save still re-reads the history', async () => {
+  let resolveEdit!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === POSTS_PATH && request.method === 'GET') {
+      return Promise.resolve(jsonResponse(PAGE_ONE));
+    }
+    if (url.pathname.endsWith('/posts/10/edit')) {
+      return new Promise((resolve) => {
+        resolveEdit = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ChannelPostsPanel accountId="acc-1" channelId="123" />);
+  await screen.findByText('Второй пост');
+  const getsBefore = requests(POSTS_PATH, 'GET').length;
+
+  // Save post 10, then reach for post 9's Edit while that save is still in
+  // flight. That button calls editPost.reset(), which drops the mutation
+  // observer — with mutate+callbacks the settle handler went with it, so
+  // Telegram edited the post and the panel never re-read the history.
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[0] as HTMLElement);
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(() => {
+    expect(requests('/posts/10/edit')).toHaveLength(1);
+  });
+  // byRole, not byLabelText: the open edit box carries the same aria-label.
+  await userEvent.click(
+    screen.getAllByRole('button', { name: 'Редактировать пост' })[1] as HTMLElement,
+  );
+
+  resolveEdit(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  await waitFor(() => {
+    expect(requests(POSTS_PATH, 'GET').length).toBeGreaterThan(getsBefore);
+  });
+  // The row the operator moved to stays open — the resolved save must not close
+  // post 9's box just because it was post 10's that settled.
+  expect(screen.getByDisplayValue('Первый пост')).toBeInTheDocument();
 });
 
 test('a failed history load shows a retryable error', async () => {

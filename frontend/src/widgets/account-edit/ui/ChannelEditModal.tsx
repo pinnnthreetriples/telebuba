@@ -55,7 +55,22 @@ export function ChannelEditModal({
     detail.data != null && about !== null && about.trim() !== (detail.data.about ?? '');
   const dirty = titleChanged || aboutChanged;
   const busy = update.isPending || setPhoto.isPending;
-  const canSave = dirty && !busy && shownTitle.trim() !== '';
+  // The blank-title guard belongs to the title alone: the title is only sent
+  // when it changed, so an about-only edit must stay saveable whatever the title
+  // prefill holds — otherwise a detail read that returned a blank title makes
+  // Save dead forever, with the "enter a title" hint gated off too.
+  const canSave = dirty && !busy && (!titleChanged || shownTitle.trim() !== '');
+  // INVARIANT: the detail read never returns a blank title in practice. The
+  // backend falls back to one when no chat in the response vector matches the
+  // requested id, and that branch is effectively dead — `messages.chatFull`
+  // always carries the requested channel, and the id spaces line up because the
+  // gateway resolves `PeerChannel(channel_id)`, i.e. the UNMARKED id, which is
+  // exactly what `Channel.id` holds. Had a `-100…`-prefixed id ever reached it,
+  // no chat would match on EVERY read, not just an odd one: the header would
+  // render empty (`??` does not catch '') and the badge below would confidently
+  // announce "Private" for a public channel. So a blank title means "nothing
+  // known about this channel" and the identity line says nothing at all.
+  const detailBlank = detail.isSuccess && detail.data.title === '';
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: detailOpts.queryKey });
@@ -126,13 +141,15 @@ export function ChannelEditModal({
               <div className="truncate text-[16px] font-bold">
                 {detail.data?.title ?? t('accounts.channel.loading')}
               </div>
-              <div className="truncate text-[12px] text-ink-subtle">
-                {detail.data?.username != null
-                  ? `@${detail.data.username}`
-                  : t('accounts.channel.privateBadge')}
-                {detail.data?.participants_count != null &&
-                  ` · ${t('accounts.channel.participants', { n: detail.data.participants_count })}`}
-              </div>
+              {!detailBlank && (
+                <div className="truncate text-[12px] text-ink-subtle">
+                  {detail.data?.username != null
+                    ? `@${detail.data.username}`
+                    : t('accounts.channel.privateBadge')}
+                  {detail.data?.participants_count != null &&
+                    ` · ${t('accounts.channel.participants', { n: detail.data.participants_count })}`}
+                </div>
+              )}
             </div>
             <button
               type="button"

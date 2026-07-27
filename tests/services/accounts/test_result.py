@@ -17,10 +17,12 @@ import pytest
 from PIL import UnidentifiedImageError
 from telethon import errors
 
+from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import ActionResult
 from services.accounts._result import (
     _STABLE_CODE_ERROR_TYPES,
     AccountActionError,
+    action_error_for_read,
     raise_for_result,
 )
 
@@ -106,3 +108,39 @@ def test_every_gateway_value_error_is_allowlisted() -> None:
     contract break this allowlist exists to stop.
     """
     assert _gateway_value_error_names() == _STABLE_CODE_ERROR_TYPES
+
+
+# --------------------------------------------------------------------------- #
+# Reads used to flatten EVERY gateway refusal into the caller's residual code, so
+# a flood-waited read reported no duration (the operator then retried in a loop
+# and extended the wait) and an infrastructure outage was billed as a 400 client
+# fault. ``TelegramReadError.kind`` is the gateway's own classification, so the
+# mapping needs no re-parsing of the ``reason`` string this module never built.
+# --------------------------------------------------------------------------- #
+def test_a_flood_waited_read_keeps_its_duration() -> None:
+    error = action_error_for_read(
+        TelegramReadError("FloodWait(30s)", kind="flood_wait", seconds=30),
+        "channel_read_failed",
+    )
+
+    assert error.code == "flood_wait"
+    assert error.retry_after_seconds == 30
+
+
+def test_an_unavailable_read_gets_the_code_that_maps_to_503() -> None:
+    error = action_error_for_read(
+        TelegramReadError("unavailable: TelegramClientPoolError", kind="unavailable"),
+        "channel_read_failed",
+    )
+
+    assert error.code == "unavailable"
+
+
+def test_everything_else_keeps_the_caller_s_residual_code() -> None:
+    error = action_error_for_read(
+        TelegramReadError("RPC: ChannelPrivateError"),
+        "channel_read_failed",
+    )
+
+    assert error.code == "channel_read_failed"
+    assert error.retry_after_seconds is None

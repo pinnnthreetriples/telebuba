@@ -27,6 +27,30 @@ export default tseslint.config(
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
       'react-refresh/only-export-components': ['warn', { allowConstantExport: true }],
+      // One useMutation is ONE callback slot and ONE result: calling .mutate()
+      // once per item of a list drives N requests through it, so N-1 outcomes
+      // are unobservable and N-1 onSettled handlers never run. That exact shape
+      // shipped twice on this branch (a story published twice, and a new
+      // campaign whose channels were linked but never re-read).
+      //
+      // Deliberately narrow. The broad version of this rule — flag every
+      // `.mutate(vars, { onSuccess })` and every `.reset()` — flags 51 and 12
+      // existing sites respectively, across 23 files, and most are correct:
+      // a modal with one submit button or a single global start/stop has no
+      // second concurrent caller to take the slot. A syntactic rule cannot tell
+      // "per row on a shared hook" from "the only caller", so the broad form
+      // would have to be suppressed nearly everywhere, which buys less than
+      // nothing. A mutation inside a loop is unambiguous, and costs no
+      // suppressions: it flags zero existing sites.
+      'no-restricted-syntax': [
+        'error',
+        {
+          selector:
+            "CallExpression[callee.property.name=/^(forEach|map|flatMap)$/] CallExpression[callee.property.name='mutate']",
+          message:
+            'One useMutation cannot carry N concurrent calls: its result and callbacks are a single slot. Use mutateAsync and await the batch (Promise.all/allSettled), handling each result.',
+        },
+      ],
     },
   },
   prettier,

@@ -74,12 +74,24 @@ async def dispatch_get_own_channel(
     The id resolves through the shared ``_input_channel`` guard: an unknown /
     unresolvable id raises the stable ``channel_not_found`` code instead of
     letting Telethon's raw ``ValueError`` prose escape the read ladder.
+
+    ``chatFull.chats`` is an unordered vector that also carries the channel's
+    linked discussion group, so the requested channel is matched by id (same
+    idiom as ``_read._resolve_linked_group_entity``). Index 0 once paired this
+    channel's id with the discussion group's title/username — and the edit
+    modal prefills from that title.
     """
     entity = await _input_channel(client, action.channel_id)
     full = await client(GetFullChannelRequest(channel=entity))  # ty: ignore[invalid-argument-type]
     full_chat = getattr(full, "full_chat", None)
-    chats = getattr(full, "chats", []) or []
-    chat = chats[0] if chats else None
+    chat = next(
+        (
+            item
+            for item in getattr(full, "chats", []) or []
+            if int(getattr(item, "id", 0) or 0) == action.channel_id
+        ),
+        None,
+    )
     return TelegramOwnChannelDetail(
         channel_id=action.channel_id,
         title=str(getattr(chat, "title", "") or ""),

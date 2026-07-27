@@ -13,9 +13,9 @@ function renderWithClient(ui: ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
 }
@@ -86,6 +86,19 @@ function routeApi() {
 
 function fileInput(): HTMLInputElement {
   return document.body.querySelector('input[type="file"]') as HTMLInputElement;
+}
+
+function calls(fragment: string): Request[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => input as Request)
+    .filter((request) => request.url.includes(fragment));
+}
+
+function pickSession(): void {
+  fireEvent.change(fileInput(), {
+    target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
+  });
 }
 
 test('stepper navigates method → choice → manual/pool → back to step 1', async () => {
@@ -169,7 +182,92 @@ test('session upload imports then a pool proxy is assigned', async () => {
       .mock.calls.some(([input]) => (input as Request).url.includes('/proxies/pool-1/assign'));
     expect(assigned).toBe(true);
   });
-  expect(onClose).toHaveBeenCalled();
+  // The close is the assign's own onSuccess now, so it lands after the response,
+  // not beside the request.
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+// Routes everything the pool flow needs, with the assign under the test's control.
+function routePoolAssign(assign: (request: Request) => Promise<Response>) {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/proxies' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ proxies: [POOL_PROXY] }));
+    }
+    if (pathname === '/api/v1/accounts/import-session') {
+      return Promise.resolve(
+        jsonResponse({ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }),
+      );
+    }
+    if (pathname.endsWith('/assign')) return assign(request);
+    return Promise.resolve(jsonResponse({}));
+  });
+}
+
+async function reachPool(): Promise<void> {
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSession();
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByText('Далее'));
+  await userEvent.click(screen.getByText('Выбрать из пула'));
+  await userEvent.click(await screen.findByText('nl-1.proxyhub.net:1080'));
+}
+
+test('a pool assign advances only once it has RESOLVED, not while it is in flight', async () => {
+  let resolveAssign!: (response: Response) => void;
+  routePoolAssign(
+    () =>
+      new Promise((resolve) => {
+        resolveAssign = resolve;
+      }),
+  );
+  const onClose = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
+  await reachPool();
+
+  // Pre-fix `afterProxy()` ran synchronously beside the mutate, so the wizard
+  // left this step — for a file method, unmounting the modal — while the assign
+  // was still in flight. The row is disabled instead, so a second press cannot
+  // fire a second assign onto the same observer.
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByText('nl-1.proxyhub.net:1080')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByText('nl-1.proxyhub.net:1080').closest('button')).toBeDisabled();
+  });
+
+  resolveAssign(jsonResponse(POOL_PROXY));
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+test('a FAILED pool assign keeps the wizard on the proxy step and tells the operator', async () => {
+  routePoolAssign(() =>
+    Promise.resolve(jsonResponse({ error: { code: 'conflict', message: 'full' } }, 409)),
+  );
+  const onClose = vi.fn();
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={onImported} />);
+  await reachPool();
+
+  // Pre-fix a refusal advanced exactly like a success: the operator got a
+  // proxyless account with nothing on screen saying the assignment had failed.
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось назначить прокси');
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByText('nl-1.proxyhub.net:1080')).toBeInTheDocument();
+
+  // `onSettled: onImported` still fires — the modal is only unmounted BY
+  // afterProxy, so the observer is still attached when the mutation settles.
+  // Synchronously advancing used to detach it and drop this callback too (once
+  // for the import, once for the assign = 2).
+  await waitFor(() => {
+    expect(onImported).toHaveBeenCalledTimes(2);
+  });
 });
 
 test('manual proxy form creates and assigns on done', async () => {
@@ -277,6 +375,129 @@ test('phone method: a failed start-login shows the error and keeps Next disabled
   await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
   await userEvent.click(screen.getByText('Продолжить'));
   expect(await screen.findByText('Не удалось создать аккаунт')).toBeInTheDocument();
+  expect(screen.getByText('Далее')).toBeDisabled();
+});
+
+test('switching method after an account was created re-locks Next', async () => {
+  routeApi();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+
+  // Phone provisions the account; the sign-in is step 3, still ahead.
+  await userEvent.click(screen.getByText('Номер телефона'));
+  await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
+  await userEvent.click(screen.getByText('Продолжить'));
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+
+  // Step 2, back to step 1, then pick a file method without importing anything.
+  await userEvent.click(screen.getByText('Далее'));
+  await userEvent.click(screen.getByText('Назад'));
+  await userEvent.click(screen.getByText('Файл .session'));
+
+  // Pre-fix the phone account still unlocked Next with no file card to show for
+  // it; step 2 announced "account added" and Skip closed the wizard from there,
+  // because afterProxy branches on the NEW method — step 3 never rendered and
+  // the phone account was left permanently signed out.
+  expect(screen.getByText('Далее')).toBeDisabled();
+  expect(
+    screen.queryByText('Аккаунт добавлен. Назначьте прокси для работы.'),
+  ).not.toBeInTheDocument();
+});
+
+test('re-clicking the ALREADY selected method keeps the imported account', async () => {
+  routeApi();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSession();
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+
+  // The account really exists now, and the only in-wizard recovery would be
+  // re-importing the same file — which the backend refuses ("already exists.
+  // Delete it before importing."). So an identity re-click that un-provisioned
+  // the wizard left step 2 unreachable with nothing to do but × and delete the
+  // account by hand.
+  await userEvent.click(screen.getByText('Файл .session'));
+  expect(screen.getByText('Далее')).toBeEnabled();
+  expect(screen.getByText('acc.session')).toBeInTheDocument();
+  expect(screen.getByText('Аккаунт импортирован')).toBeInTheDocument();
+  expect(calls('/accounts/import-session')).toHaveLength(1);
+});
+
+test('an import landing after a method switch does not provision the wizard', async () => {
+  let resolveImport!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-session') {
+      return new Promise((resolve) => {
+        resolveImport = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
+
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSession();
+  // Switch method while the import is still in flight.
+  await userEvent.click(screen.getByText('Номер телефона'));
+  resolveImport(
+    jsonResponse({ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }),
+  );
+  // onSettled runs after onSuccess, so this proves the callbacks have run.
+  await waitFor(() => {
+    expect(onImported).toHaveBeenCalled();
+  });
+
+  // The mutate-level onSuccess is never cancelled. Adopting its id here would
+  // unlock "Next" for the PHONE method, and afterProxy would then fire
+  // request-code at the already-authorised .session account.
+  expect(screen.getByText('Далее')).toBeDisabled();
+  expect(screen.getByText('Продолжить')).toBeInTheDocument();
+  expect(screen.queryByText('Аккаунт создан')).not.toBeInTheDocument();
+});
+
+test('a start-login that resolves after a method switch is not silently forgotten', async () => {
+  let resolveStart!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/start-login') {
+      return new Promise((resolve) => {
+        resolveStart = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
+
+  await userEvent.click(screen.getByText('Номер телефона'));
+  await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
+  await userEvent.click(screen.getByText('Продолжить'));
+  // Switch method while start-login is still in flight.
+  await userEvent.click(screen.getByText('Файл .session'));
+  resolveStart(
+    jsonResponse({
+      account_id: '79990001122',
+      status: 'new',
+      phone: '+79990001122',
+      created_at: 'n',
+      updated_at: 'n',
+    }),
+  );
+
+  // selectMethod used to `reset()` the pending mutation, which DETACHES the
+  // observer — every mutate-level callback was dropped, `onSettled: onImported`
+  // included, so the account existed server-side and nothing in the app ever
+  // heard about it. methodRef cannot help when the callback never fires.
+  await waitFor(() => {
+    expect(onImported).toHaveBeenCalled();
+  });
+  // Still not adopted for the NEW method (the methodRef guard is unchanged).
   expect(screen.getByText('Далее')).toBeDisabled();
 });
 

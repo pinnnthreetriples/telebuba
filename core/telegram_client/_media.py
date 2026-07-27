@@ -5,16 +5,15 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from telethon import utils
+from telethon import errors, utils
 from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import (
     DeletePhotosRequest,
     GetUserPhotosRequest,
     UploadProfilePhotoRequest,
 )
-from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
     InputDocument,
@@ -67,7 +66,49 @@ class ProfileGatewayError(ValueError):
         super().__init__(code)
 
 
+# Telethon refusal family → stable, locale-neutral code for profile-media writes.
+# The two sibling dispatchers already had one (``_profile._PROFILE_ERROR_CODES``,
+# ``_channels._TELETHON_ERROR_CODES``); this family had none, so a 100x100 avatar,
+# a non-Premium account reaching for profile music and a rejected story file all
+# collapsed to the same opaque ``failed``. Flood-family errors are deliberately NOT
+# mapped — they must reach ``execute``'s dedicated flood-wait ladder unchanged.
+_MEDIA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
+    (errors.PremiumAccountRequiredError, "premium_required"),
+    (errors.PhotoCropSizeSmallError, "photo_too_small"),
+    (errors.PhotoInvalidDimensionsError, "photo_too_small"),
+    (errors.PhotoExtInvalidError, "media_invalid"),
+    (errors.PhotoInvalidError, "media_invalid"),
+    (errors.ImageProcessFailedError, "media_invalid"),
+    (errors.MediaEmptyError, "media_invalid"),
+)
+
+# The saved-music codes this module raises DIRECTLY, not through the ladder above.
+# A Literal because the i18n parity gate can only enumerate what it can import:
+# it walks the four error ladders plus ``StoryVideoErrorCode``, so a hand-raised
+# code was invisible to it and could ship with no copy in either locale.
+MusicSaveErrorCode = Literal[
+    "profile_music_invalid",
+    # ``saveMusic`` returned False on an ADD — the cap, or already saved.
+    "profile_music_add_refused",
+    # ``saveMusic(unsave=True)`` returned False — the reference really is stale.
+    "profile_music_stale_reference",
+]
+
+
 async def _dispatch_profile_media_action(
+    client: TelegramClient,
+    action: TelegramAction,
+) -> int | None:
+    try:
+        return await _run_profile_media_action(client, action)
+    except errors.RPCError as exc:
+        for error_cls, code in _MEDIA_ERROR_CODES:
+            if isinstance(exc, error_cls):
+                raise ProfileGatewayError(code) from exc
+        raise
+
+
+async def _run_profile_media_action(
     client: TelegramClient,
     action: TelegramAction,
 ) -> int | None:
@@ -134,17 +175,36 @@ async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) ->
         attributes=attributes,
         mime_type=mime_type,
     )
-    document = getattr(message, "document", None)
-    if document is None:
-        code = "profile_music_invalid"
-        raise ProfileGatewayError(code) from ValueError(
-            "Telegram did not return an audio document",
-        )
-    await client(SaveMusicRequest(id=utils.get_input_document(document)))
     message_id = getattr(message, "id", None)
-    if isinstance(message_id, int):
-        with suppress(Exception):
-            await client.delete_messages("me", [message_id], revoke=True)
+    try:
+        document = getattr(message, "document", None)
+        if document is None:
+            code: MusicSaveErrorCode = "profile_music_invalid"
+            raise ProfileGatewayError(code) from ValueError(
+                "Telegram did not return an audio document",
+            )
+        # ``account.saveMusic`` answers ``Bool`` in both directions: a ``False``
+        # add (already saved, or the saved-music cap reached) is a silent no-op
+        # that would be reported as a successful add while the next refresh
+        # drops the row (mirrors the unsave branch below).
+        saved = await client(SaveMusicRequest(id=utils.get_input_document(document)))
+        if not saved:
+            # NOT the remove path's ``profile_music_stale_reference``: this add
+            # uploaded fresh bytes seconds ago, so its document id cannot be
+            # stale and there is no list to refresh. What ``False`` means here is
+            # the saved-music cap (or the track already being on the profile),
+            # which is what the operator has to act on.
+            code = "profile_music_add_refused"
+            raise ProfileGatewayError(code) from ValueError(
+                "Telegram did not save the track (already saved or the saved-music limit)",
+            )
+    finally:
+        # The upload sits in the account's Saved Messages — clean it up even
+        # when the save was refused, or a failed add strands the audio there and
+        # every retry leaves another copy.
+        if isinstance(message_id, int):
+            with suppress(Exception):
+                await client.delete_messages("me", [message_id], revoke=True)
 
 
 async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMusic) -> None:
@@ -170,7 +230,7 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
         ),
     )
     if not removed:
-        code = "profile_music_stale_reference"
+        code: MusicSaveErrorCode = "profile_music_stale_reference"
         raise ProfileGatewayError(code) from ValueError(
             "Telegram did not remove the track (unknown or expired reference)",
         )
@@ -238,13 +298,6 @@ def _find_history_photo(photos: list[object], photo_id: int) -> object | None:
     return None
 
 
-async def _current_avatar_id(client: TelegramClient) -> int | None:
-    """The current avatar's photo id per ``users.getFullUser`` (authoritative)."""
-    full = await client(GetFullUserRequest(InputUserSelf()))
-    photo_id = getattr(getattr(getattr(full, "full_user", None), "profile_photo", None), "id", None)
-    return photo_id if isinstance(photo_id, int) else None
-
-
 async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:
     """Make a history photo the avatar by RE-UPLOADING its bytes as a new photo.
 
@@ -268,6 +321,10 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
     ``current_avatar_id``.
     """
     photos = await _history_photos(client)
+    # The history read is load-bearing (it re-resolves the target below); the
+    # ``current_avatar_id`` field that used to sit here was not — it cost a
+    # ``users.getFullUser`` per click purely for the debug log, the same reason
+    # the AFTER phase already logs only what this call already knows.
     await log_event(
         "INFO",
         "telegram_set_main_id_flow",
@@ -275,7 +332,6 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
             "phase": "before",
             "target_photo_id": action.photo_id,
             "history_ids": _photo_ids(photos),
-            "current_avatar_id": await _current_avatar_id(client),
         },
     )
     target = _find_history_photo(photos, action.photo_id)

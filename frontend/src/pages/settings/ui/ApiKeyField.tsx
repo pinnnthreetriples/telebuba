@@ -62,6 +62,9 @@ export function ApiKeyField({
       <div className="flex gap-2">
         <input
           type={show ? 'text' : 'password'}
+          // A provider API key, not a credential of this origin: `new-password`
+          // is the token browsers honour as "do not fill" on a password input.
+          autoComplete="new-password"
           value={value}
           onChange={(event) => {
             onChange(event.target.value);

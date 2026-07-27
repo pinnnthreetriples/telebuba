@@ -95,6 +95,20 @@ export type AccountCheckRequest = {
  * infra family (pool / socket / proxy) is already collapsed to the flat
  * ``unavailable`` code before it gets here, which is what keeps a proxy
  * endpoint off the wire.
+ *
+ * ``applied`` names the keys that DID change on Telegram before the refusal.
+ * ``account.setPrivacy`` is one call per key and nothing is rolled back, so a
+ * ``failed`` row can already have published the avatar — reporting it as a bare
+ * failure inverted the safety-relevant fact for a feature whose entire purpose is
+ * controlling visibility. Only meaningful on ``failed``: an ``ok`` row applied
+ * every key the request set and a ``skipped`` row applied none, so both leave it
+ * empty rather than restating the request.
+ *
+ * ``retry_after_seconds`` is the server-mandated wait that came with a flood-family
+ * refusal. ``AccountActionError`` has always carried it, but this model dropped it,
+ * so a ``flood_wait`` row rendered "retry in ? s" — the one fact that makes the
+ * error actionable. Only the flood family sets it; every other refusal leaves it
+ * ``None``.
  */
 export type AccountPrivacyOutcome = {
   /**
@@ -109,6 +123,14 @@ export type AccountPrivacyOutcome = {
    * Error
    */
   error?: string | null;
+  /**
+   * Applied
+   */
+  applied?: Array<string>;
+  /**
+   * Retry After Seconds
+   */
+  retry_after_seconds?: number | null;
 };
 
 /**
@@ -445,6 +467,10 @@ export type ActionResult = {
    * Flood Wait Seconds
    */
   flood_wait_seconds?: number | null;
+  /**
+   * Applied Privacy Keys
+   */
+  applied_privacy_keys?: Array<string> | null;
   /**
    * Error Type
    */
@@ -1205,6 +1231,33 @@ export type DiscoverySearchRequest = {
    * Use Telemetr
    */
   use_telemetr?: boolean;
+};
+
+/**
+ * ErrorDetail
+ */
+export type ErrorDetail = {
+  /**
+   * Code
+   */
+  code: string;
+  /**
+   * Message
+   */
+  message: string;
+  /**
+   * Fields
+   */
+  fields?: {
+    [key: string]: string;
+  } | null;
+};
+
+/**
+ * ErrorEnvelope
+ */
+export type ErrorEnvelope = {
+  error: ErrorDetail;
 };
 
 /**
@@ -2922,9 +2975,29 @@ export type ListAccountsData = {
 
 export type ListAccountsErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ListAccountsError = ListAccountsErrors[keyof ListAccountsErrors];
@@ -2947,9 +3020,29 @@ export type AccountStatsData = {
 
 export type AccountStatsErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type AccountStatsError = AccountStatsErrors[keyof AccountStatsErrors];
@@ -2972,9 +3065,29 @@ export type CheckAccountData = {
 
 export type CheckAccountErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type CheckAccountError = CheckAccountErrors[keyof CheckAccountErrors];
@@ -3002,9 +3115,29 @@ export type SpamCheckAccountData = {
 
 export type SpamCheckAccountErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SpamCheckAccountError = SpamCheckAccountErrors[keyof SpamCheckAccountErrors];
@@ -3027,9 +3160,33 @@ export type StartPhoneLoginData = {
 
 export type StartPhoneLoginErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * That session already exists
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type StartPhoneLoginError = StartPhoneLoginErrors[keyof StartPhoneLoginErrors];
@@ -3057,9 +3214,29 @@ export type RequestLoginCodeData = {
 
 export type RequestLoginCodeErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type RequestLoginCodeError = RequestLoginCodeErrors[keyof RequestLoginCodeErrors];
@@ -3087,9 +3264,29 @@ export type SubmitLoginCodeData = {
 
 export type SubmitLoginCodeErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SubmitLoginCodeError = SubmitLoginCodeErrors[keyof SubmitLoginCodeErrors];
@@ -3117,9 +3314,29 @@ export type LogoutAccountData = {
 
 export type LogoutAccountErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type LogoutAccountError = LogoutAccountErrors[keyof LogoutAccountErrors];
@@ -3147,9 +3364,29 @@ export type ResetAccountSessionData = {
 
 export type ResetAccountSessionErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ResetAccountSessionError = ResetAccountSessionErrors[keyof ResetAccountSessionErrors];
@@ -3173,9 +3410,29 @@ export type UpdateAccountProfileData = {
 
 export type UpdateAccountProfileErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type UpdateAccountProfileError =
@@ -3205,9 +3462,29 @@ export type DeleteAccountData = {
 
 export type DeleteAccountErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type DeleteAccountError = DeleteAccountErrors[keyof DeleteAccountErrors];
@@ -3230,9 +3507,29 @@ export type ImportAccountTdataData = {
 
 export type ImportAccountTdataErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ImportAccountTdataError = ImportAccountTdataErrors[keyof ImportAccountTdataErrors];
@@ -3256,9 +3553,33 @@ export type ImportAccountSessionData = {
 
 export type ImportAccountSessionErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * That session already exists
+   */
+  409: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ImportAccountSessionError =
@@ -3283,9 +3604,29 @@ export type SetAccountPhotoData = {
 
 export type SetAccountPhotoErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SetAccountPhotoError = SetAccountPhotoErrors[keyof SetAccountPhotoErrors];
@@ -3298,6 +3639,57 @@ export type SetAccountPhotoResponses = {
 };
 
 export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
+
+export type ResyncAccountAvatarData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/avatar/resync';
+};
+
+export type ResyncAccountAvatarErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ResyncAccountAvatarError = ResyncAccountAvatarErrors[keyof ResyncAccountAvatarErrors];
+
+export type ResyncAccountAvatarResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type ResyncAccountAvatarResponse =
+  ResyncAccountAvatarResponses[keyof ResyncAccountAvatarResponses];
 
 export type GetAccountProfileSnapshotData = {
   body?: never;
@@ -3318,9 +3710,29 @@ export type GetAccountProfileSnapshotData = {
 
 export type GetAccountProfileSnapshotErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type GetAccountProfileSnapshotError =
@@ -3350,9 +3762,29 @@ export type PostAccountStoryData = {
 
 export type PostAccountStoryErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type PostAccountStoryError = PostAccountStoryErrors[keyof PostAccountStoryErrors];
@@ -3380,9 +3812,29 @@ export type AddAccountMusicData = {
 
 export type AddAccountMusicErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type AddAccountMusicError = AddAccountMusicErrors[keyof AddAccountMusicErrors];
@@ -3410,9 +3862,29 @@ export type RemoveAccountStoryData = {
 
 export type RemoveAccountStoryErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type RemoveAccountStoryError = RemoveAccountStoryErrors[keyof RemoveAccountStoryErrors];
@@ -3441,9 +3913,29 @@ export type SetAccountStoryPinnedData = {
 
 export type SetAccountStoryPinnedErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SetAccountStoryPinnedError =
@@ -3473,9 +3965,29 @@ export type RemoveAccountMusicData = {
 
 export type RemoveAccountMusicErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type RemoveAccountMusicError = RemoveAccountMusicErrors[keyof RemoveAccountMusicErrors];
@@ -3504,9 +4016,29 @@ export type RemoveAccountPhotoData = {
 
 export type RemoveAccountPhotoErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type RemoveAccountPhotoError = RemoveAccountPhotoErrors[keyof RemoveAccountPhotoErrors];
@@ -3535,9 +4067,29 @@ export type SetAccountPhotoMainData = {
 
 export type SetAccountPhotoMainErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SetAccountPhotoMainError = SetAccountPhotoMainErrors[keyof SetAccountPhotoMainErrors];
@@ -3566,9 +4118,29 @@ export type ListAccountChannelsData = {
 
 export type ListAccountChannelsErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ListAccountChannelsError = ListAccountChannelsErrors[keyof ListAccountChannelsErrors];
@@ -3597,9 +4169,29 @@ export type CreateAccountChannelData = {
 
 export type CreateAccountChannelErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type CreateAccountChannelError =
@@ -3634,9 +4226,29 @@ export type CheckAccountChannelUsernameData = {
 
 export type CheckAccountChannelUsernameErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type CheckAccountChannelUsernameError =
@@ -3670,9 +4282,29 @@ export type GetAccountChannelData = {
 
 export type GetAccountChannelErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type GetAccountChannelError = GetAccountChannelErrors[keyof GetAccountChannelErrors];
@@ -3705,9 +4337,29 @@ export type UpdateAccountChannelData = {
 
 export type UpdateAccountChannelErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type UpdateAccountChannelError =
@@ -3741,9 +4393,29 @@ export type SetAccountChannelPhotoData = {
 
 export type SetAccountChannelPhotoErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SetAccountChannelPhotoError =
@@ -3777,9 +4449,29 @@ export type DeleteAccountChannelData = {
 
 export type DeleteAccountChannelErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type DeleteAccountChannelError =
@@ -3822,9 +4514,29 @@ export type ListAccountChannelPostsData = {
 
 export type ListAccountChannelPostsErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type ListAccountChannelPostsError =
@@ -3858,9 +4570,29 @@ export type PublishAccountChannelPostData = {
 
 export type PublishAccountChannelPostErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type PublishAccountChannelPostError =
@@ -3898,9 +4630,29 @@ export type EditAccountChannelPostData = {
 
 export type EditAccountChannelPostErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type EditAccountChannelPostError =
@@ -3938,9 +4690,29 @@ export type DeleteAccountChannelPostData = {
 
 export type DeleteAccountChannelPostErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type DeleteAccountChannelPostError =
@@ -3970,9 +4742,29 @@ export type GetAccountPrivacyData = {
 
 export type GetAccountPrivacyErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type GetAccountPrivacyError = GetAccountPrivacyErrors[keyof GetAccountPrivacyErrors];
@@ -4001,9 +4793,29 @@ export type SetAccountPrivacyData = {
 
 export type SetAccountPrivacyErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SetAccountPrivacyError = SetAccountPrivacyErrors[keyof SetAccountPrivacyErrors];
@@ -4027,9 +4839,29 @@ export type SetAllAccountsPrivacyData = {
 
 export type SetAllAccountsPrivacyErrors = {
   /**
-   * Validation Error
+   * Bad request, or Telegram refused the action
    */
-  422: HttpValidationError;
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
 };
 
 export type SetAllAccountsPrivacyError =

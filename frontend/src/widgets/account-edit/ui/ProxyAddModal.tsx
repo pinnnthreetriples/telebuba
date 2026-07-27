@@ -2,7 +2,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { createProxyMutation } from '@/entities/proxy';
+import { createProxyMutation, proxyPoolQueryOptions } from '@/entities/proxy';
 import { Modal } from '@/shared/ui';
 
 import { ProxyForm } from './ProxyForm';
@@ -31,7 +31,10 @@ export function ProxyAddModal({ onClose }: { onClose: () => void }) {
       },
       {
         onSuccess: () => {
-          void queryClient.invalidateQueries();
+          // A brand-new pool proxy is assigned to nobody yet, so only the pool
+          // changed — not the accounts table, the stat tiles, or anything else
+          // a bare invalidateQueries() was refetching.
+          void queryClient.invalidateQueries({ queryKey: proxyPoolQueryOptions().queryKey });
           onClose();
         },
       },

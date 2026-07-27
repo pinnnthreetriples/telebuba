@@ -581,10 +581,28 @@ async def test_list_posts_full_page_builds_next_cursor(
 
 
 @pytest.mark.asyncio
-async def test_list_posts_short_page_ends_pagination(
+async def test_list_posts_short_page_still_pages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A short page is not the end: the gateway drops id-less entries.
+
+    ``_read_channels.dispatch_list_channel_posts`` filters out service-message
+    placeholders before the service sees them, so a full Telegram page of 20 with
+    one dropped arrived as 19. Ending pagination on that hid "load more" and made
+    the rest of the channel's history unreachable.
+    """
     _patch_read(monkeypatch, "channel_posts", _posts(2))
+
+    page = await list_account_channel_posts("acc-1", 42, limit=3)
+
+    assert page.next_cursor == "99"
+
+
+@pytest.mark.asyncio
+async def test_list_posts_empty_page_ends_pagination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_read(monkeypatch, "channel_posts", _posts(0))
 
     page = await list_account_channel_posts("acc-1", 42, limit=3)
 
@@ -623,7 +641,7 @@ async def test_list_posts_read_error_maps_to_stable_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def failing_read(_account_id: str, _action: object) -> BaseModel:
-        reason = "FloodWait(30s)"
+        reason = "RPC: ChannelPrivateError"
         raise TelegramReadError(reason)
 
     monkeypatch.setattr("services.accounts.channel_posts.execute_read", failing_read)
@@ -631,6 +649,24 @@ async def test_list_posts_read_error_maps_to_stable_code(
     with pytest.raises(AccountActionError) as excinfo:
         await list_account_channel_posts("acc-1", 42)
     assert excinfo.value.code == "channel_read_failed"
+
+
+@pytest.mark.asyncio
+async def test_list_posts_flood_wait_keeps_the_duration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flood wait must not flatten into the residual code — it drops the seconds."""
+
+    async def flooded_read(_account_id: str, _action: object) -> BaseModel:
+        reason = "FloodWait(30s)"
+        raise TelegramReadError(reason, kind="flood_wait", seconds=30)
+
+    monkeypatch.setattr("services.accounts.channel_posts.execute_read", flooded_read)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await list_account_channel_posts("acc-1", 42)
+    assert excinfo.value.code == "flood_wait"
+    assert excinfo.value.retry_after_seconds == 30
 
 
 @pytest.mark.asyncio

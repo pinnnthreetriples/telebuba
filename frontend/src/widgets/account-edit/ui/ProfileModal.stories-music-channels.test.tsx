@@ -157,6 +157,38 @@ test('a selected_contacts story renders a translated privacy badge, not the raw 
   expect(screen.queryByText('accounts.addStory.selected_contacts')).not.toBeInTheDocument();
 });
 
+test('the music tab does not present an in-flight snapshot as an empty profile', async () => {
+  // Every other fixture resolves the read immediately, so this state was
+  // unreachable in the suite: on a slow proxy the tab rendered «Музыка не
+  // выбрана» — a definitive claim about a live account — while the header said
+  // «Обновлено только что» about data that had not arrived. `snapshot.isError`
+  // was the only query flag the modal read; isLoading/isPending appeared nowhere.
+  let resolveSnapshot!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return new Promise((resolve) => {
+        resolveSnapshot = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.click(screen.getByText('Музыка'));
+
+  // The busy scrim covers the tab, and the freshness label makes no claim.
+  expect(screen.getByRole('status')).toBeInTheDocument();
+  expect(screen.queryByText('Обновлено только что')).not.toBeInTheDocument();
+
+  resolveSnapshot(jsonResponse({ ...VIEW, music: [] }));
+  await waitFor(() => {
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+  // Only now is "no saved music" a statement the snapshot supports.
+  expect(screen.getByText('Музыка не выбрана')).toBeInTheDocument();
+  expect(screen.getByText('Обновлено только что')).toBeInTheDocument();
+});
+
 test('the channels tab renders its own list outside the snapshot scrim', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

@@ -115,6 +115,59 @@ test('paginates forward with the next cursor', async () => {
   });
 });
 
+function listGets(): number {
+  return vi.mocked(fetch).mock.calls.filter(([input]) => {
+    const request = input as Request;
+    return new URL(request.url).pathname === '/api/v1/accounts' && request.method === 'GET';
+  }).length;
+}
+
+test('typing in the search box keeps the table on screen and fires one request', async () => {
+  routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  const before = listGets();
+
+  await userEvent.type(screen.getByPlaceholderText('Поиск по аккаунтам…'), 'abc');
+
+  // The generated key embeds `query`, so each keystroke was a fresh key with no
+  // cached data: the table AND the pagination block were replaced by the loading
+  // line on every character.
+  expect(screen.queryByText('Загрузка…')).not.toBeInTheDocument();
+  expect(screen.getByText('acc-1')).toBeInTheDocument();
+  // ...and three keystrokes cost one request, not three.
+  await waitFor(() => {
+    expect(listGets()).toBe(before + 1);
+  });
+});
+
+test('an emptied non-first page still offers the way back', async () => {
+  routeApi({
+    page1: { items: [account('acc-1')], next_cursor: '20' },
+    page2: { items: [], next_cursor: null },
+  });
+  renderWithClient(<AccountsPage />);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getByText('Вперёд'));
+
+  // Deleting the last row of page 2 lands here. Prev used to live inside the
+  // non-empty branch, so it vanished with the table and the only escapes were
+  // the search box and a reload.
+  await waitFor(() => {
+    expect(screen.getByText('Аккаунтов нет')).toBeInTheDocument();
+  });
+  const prev = screen.getByText('Назад');
+  expect(prev).toBeEnabled();
+  await userEvent.click(prev);
+  await waitFor(() => {
+    expect(screen.getByText('acc-1')).toBeInTheDocument();
+  });
+});
+
 test('runs the check action on a row', async () => {
   routeApi({ page1: { items: [account('acc-1')], next_cursor: null } });
   renderWithClient(<AccountsPage />);

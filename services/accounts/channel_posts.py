@@ -11,7 +11,12 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from core.config import settings
 from core.logging import log_event
-from core.telegram_client import TelegramReadError, execute, execute_read
+from core.telegram_client import (
+    TelegramAccountNotFoundError,
+    TelegramReadError,
+    execute,
+    execute_read,
+)
 from schemas.api import Page
 from schemas.channels import ChannelPostView
 from schemas.telegram_actions import (
@@ -21,7 +26,11 @@ from schemas.telegram_actions import (
     PublishChannelPost,
 )
 from schemas.telegram_actions_channels import CHANNEL_POST_ID_MAX
-from services.accounts._result import AccountActionError, raise_for_result
+from services.accounts._result import (
+    AccountNotFoundError,
+    action_error_for_read,
+    raise_for_result,
+)
 from services.accounts._uploads import (
     _PROFILE_PHOTO_SUFFIXES,
     _STORY_VIDEO_SUFFIXES,
@@ -43,12 +52,18 @@ __all__ = [
 
 
 async def _read(account_id: str, action: TelegramReadAction) -> BaseModel:
-    """Read via the gateway; wrap gateway failures in the stable read code."""
+    """Read via the gateway; map gateway failures onto stable codes.
+
+    Same contract as ``channels._read``: the gateway's classification picks the
+    code (so a flood wait keeps its duration and an unknown account is a 404, not
+    a 500), with ``channel_read_failed`` as the residual.
+    """
     try:
         return await execute_read(account_id, action)
+    except TelegramAccountNotFoundError as exc:
+        raise AccountNotFoundError(account_id) from exc
     except TelegramReadError as exc:
-        code = "channel_read_failed"
-        raise AccountActionError(code) from exc
+        raise action_error_for_read(exc, "channel_read_failed") from exc
 
 
 def _derive_media_kind(filename: str) -> Literal["photo", "video"]:
@@ -157,8 +172,14 @@ async def list_account_channel_posts(
         )
         for post in posts.items
     ]
-    # A full page means there may be older posts; a short page is the end.
-    next_cursor = str(items[-1].post_id) if len(items) == page_limit else None
+    # Any non-empty page may have older posts behind it, so it carries a cursor;
+    # only an EMPTY page ends pagination. Comparing ``len(items)`` against the
+    # limit was wrong because the gateway drops id-less entries (service-message
+    # placeholders) before the service sees them, so a full Telegram page of 20
+    # with one dropped arrived as 19 and hid "load more" over the remaining
+    # history. The cost is one extra empty request at the end of a channel — which
+    # a history that is an exact multiple of the page size already paid.
+    next_cursor = str(items[-1].post_id) if items else None
     return Page(items=items, next_cursor=next_cursor)
 
 

@@ -159,6 +159,52 @@ test('a public channel sends the username and the debounced check shows taken/fr
   expect(body).toEqual({ title: 'Новости', about: '', username: 'freshname' });
 });
 
+test('a definite "taken" verdict disarms Create (no round-trip that cannot succeed)', async () => {
+  routeApi({
+    onCheck: () => jsonResponse({ available: false, code: 'channel_username_occupied' }),
+  });
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.click(screen.getByText('Публичный канал'));
+  await userEvent.type(screen.getByLabelText(/Юзернейм/), 'newshub');
+  expect(await screen.findByText('Юзернейм уже занят', {}, { timeout: 3000 })).toBeInTheDocument();
+
+  // canSubmit never consulted the verdict, so the hint said "taken" while Create
+  // stayed blue — a guaranteed-to-fail POST, and the whole point of the client
+  // probe is the up-front gate.
+  expect(screen.getByText('Создать')).toBeDisabled();
+  await userEvent.click(screen.getByText('Создать'));
+  expect(createPosts()).toHaveLength(0);
+});
+
+test('a FAILED availability probe says so and leaves Create armed', async () => {
+  routeApi({
+    onCheck: () => jsonResponse({ error: { code: 'bad_gateway', message: 'nope' } }, 502),
+  });
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.click(screen.getByText('Публичный канал'));
+  await userEvent.type(screen.getByLabelText(/Юзернейм/), 'newshub');
+
+  // A failed probe rendered NOTHING, which reads exactly like "not checked yet".
+  expect(
+    await screen.findByText(
+      'Не удалось проверить доступность — Telegram ответит при создании',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeInTheDocument();
+  // And it must NOT gate Create: only a definite "taken" does, or a failing probe
+  // would be a new dead end.
+  expect(screen.getByText('Создать')).toBeEnabled();
+  await userEvent.click(screen.getByText('Создать'));
+  await waitFor(() => {
+    expect(createPosts()).toHaveLength(1);
+  });
+});
+
 test('a stable failure code renders as translated copy', async () => {
   routeApi({
     onCreate: () =>
@@ -175,7 +221,7 @@ test('a stable failure code renders as translated copy', async () => {
   expect(screen.getByText('Новый канал')).toBeInTheDocument();
 });
 
-test('a create-after-create failure (fields.channel_id) still refreshes the list', async () => {
+test('a create-after-create failure (fields.channel_id) keeps the reason, then hands off', async () => {
   routeApi({
     onCreate: () =>
       jsonResponse(
@@ -183,7 +229,7 @@ test('a create-after-create failure (fields.channel_id) still refreshes the list
           error: {
             code: 'bad_request',
             message: 'channel_username_occupied',
-            fields: { channel_id: '321' },
+            fields: { channel_id: '789' },
           },
         },
         400,
@@ -194,11 +240,95 @@ test('a create-after-create failure (fields.channel_id) still refreshes the list
   await userEvent.type(screen.getByLabelText('Название'), 'Новости');
   await userEvent.click(screen.getByText('Создать'));
 
+  // The id means CreateChannelRequest succeeded and only the username step
+  // failed, so Create must not re-arm: a second click makes a SECOND real
+  // channel (no random_id, nothing keys on the title, and the pre-check still
+  // reports the handle free). But the hand-off is deliberate, not automatic —
+  // an automatic one unmounts the dialog with the reason still in it, and the
+  // editor cannot assign a handle (EditChannel carries only title/about), so
+  // the operator would land on "приватный" believing the channel went public.
   expect(await screen.findByText('Юзернейм уже занят')).toBeInTheDocument();
+  expect(screen.getByText('Новый канал')).toBeInTheDocument();
+  expect(screen.queryByText('Создать')).not.toBeInTheDocument();
+  expect(createPosts()).toHaveLength(1);
   // The channel exists as private despite the error — the list must re-pull.
   await waitFor(() => {
     expect(listGets()).toBe(2);
   });
+
+  // Having read why, the operator opens the channel that really was created.
+  await userEvent.click(screen.getByText('Изменить'));
+  expect(await screen.findByDisplayValue('Новости')).toBeInTheDocument();
+  expect(screen.queryByText('Новый канал')).not.toBeInTheDocument();
+});
+
+test('a post-create failure code locks Create (a flood-waited create can still exist)', async () => {
+  routeApi({
+    onCreate: () => jsonResponse({ error: { code: 'rate_limited', message: 'flood_wait' } }, 429),
+  });
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.click(screen.getByText('Создать'));
+  await waitFor(() => {
+    expect(createPosts()).toHaveLength(1);
+  });
+
+  // FloodWaitError/PeerFloodError are re-raised bare AFTER the channel was
+  // created, so they carry no channel_id and nothing tells them apart from a
+  // create that never happened. Retrying in the same dialog duplicated it.
+  await userEvent.click(screen.getByText('Создать'));
+  expect(createPosts()).toHaveLength(1);
+  expect(screen.getByText('Создать')).toBeDisabled();
+  // The dialog stays open with the reason on screen — no editor hand-off.
+  expect(screen.getByText('Новый канал')).toBeInTheDocument();
+});
+
+test('an id-less PRE-create refusal keeps Create armed so the handle can be corrected', async () => {
+  let attempt = 0;
+  routeApi({
+    onCreate: () => {
+      attempt += 1;
+      return attempt === 1
+        ? jsonResponse(
+            { error: { code: 'bad_request', message: 'channel_username_occupied' } },
+            400,
+          )
+        : jsonResponse({
+            status: 'ok',
+            action_type: 'channel_create',
+            account_id: 'acc-1',
+            channel_id: '789',
+          });
+    },
+  });
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.click(screen.getByText('Публичный канал'));
+  const usernameInput = screen.getByLabelText(/Юзернейм/);
+  await userEvent.type(usernameInput, 'newshub');
+  await userEvent.click(screen.getByText('Создать'));
+
+  // The handle pre-check refuses BEFORE CreateChannelRequest runs — nothing was
+  // created. This is the MOST COMMON create failure (as are a 503 pool outage, a
+  // 422 and a dead socket, all equally id-less), so Create has to stay armed:
+  // locking it dead-ends the operator, who then loses the typed title and about
+  // to a × and a full retype.
+  expect(await screen.findByText('Юзернейм уже занят')).toBeInTheDocument();
+  expect(screen.getByText('Создать')).toBeEnabled();
+  expect(screen.getByLabelText('Название')).toHaveValue('Новости');
+
+  // Correcting the handle and resubmitting works in the same dialog.
+  await userEvent.clear(usernameInput);
+  await userEvent.type(usernameInput, 'freshname');
+  await userEvent.click(screen.getByText('Создать'));
+  await waitFor(() => {
+    expect(createPosts()).toHaveLength(2);
+  });
+  const body = (await (createPosts()[1] as Request).clone().json()) as Record<string, unknown>;
+  expect(body).toEqual({ title: 'Новости', about: '', username: 'freshname' });
+  expect(await screen.findByDisplayValue('Новости')).toBeInTheDocument();
 });
 
 test('the exits are locked while the create is in flight', async () => {

@@ -119,29 +119,34 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
     // A retry after failed outcomes must not carry the previous attempt's counts: the
     // footer and its paragraphs would otherwise describe two attempts at once.
     setAdopted(null);
-    adopt.mutate(
-      { path: { campaign_id: campaignId }, body: { channels: picks } },
-      {
-        onSuccess: (result) => {
-          const outcomes = result.outcomes ?? [];
-          const count = (status: string) =>
-            outcomes.filter((outcome) => outcome.status === status).length;
-          // "Taken by another campaign" and "the link itself failed" need different
-          // copy: the first is final, the second is worth retrying.
-          const linked = count('linked');
-          setAdopted({ linked, refused: count('already_assigned'), failed: count('failed') });
-          void queryClient.invalidateQueries({
-            queryKey: neurocommentBoardQueryOptions({ path: { campaign_id: campaignId } }).queryKey,
-          });
-          void queryClient.invalidateQueries({ queryKey: campaignsQueryOptions().queryKey });
-          void queryClient.invalidateQueries({ queryKey: discoveryOptions.queryKey });
-          // Anything refused was taken between the last poll and the click. Closing on a
-          // partial result would hide which picks never made it, so only a clean sweep
-          // gets the green flash and the auto-close.
-          if (linked === requested) setTimeout(onClose, CLOSE_DELAY_MS);
-        },
-      },
-    );
+    // mutateAsync, not mutate+onSuccess: the callbacks live on the mutation
+    // OBSERVER, which this modal unmounts with. Escape or a backdrop click while
+    // the adopt was in flight linked the channels server-side and then dropped
+    // all three invalidations, leaving the neurocomment board and the campaign
+    // list showing a campaign without its new channels. The promise outlives the
+    // component, so the cache is refreshed either way.
+    void adopt
+      .mutateAsync({ path: { campaign_id: campaignId }, body: { channels: picks } })
+      .then((result) => {
+        const outcomes = result.outcomes ?? [];
+        const count = (status: string) =>
+          outcomes.filter((outcome) => outcome.status === status).length;
+        // "Taken by another campaign" and "the link itself failed" need different
+        // copy: the first is final, the second is worth retrying.
+        const linked = count('linked');
+        setAdopted({ linked, refused: count('already_assigned'), failed: count('failed') });
+        void queryClient.invalidateQueries({
+          queryKey: neurocommentBoardQueryOptions({ path: { campaign_id: campaignId } }).queryKey,
+        });
+        void queryClient.invalidateQueries({ queryKey: campaignsQueryOptions().queryKey });
+        void queryClient.invalidateQueries({ queryKey: discoveryOptions.queryKey });
+        // Anything refused was taken between the last poll and the click. Closing on a
+        // partial result would hide which picks never made it, so only a clean sweep
+        // gets the green flash and the auto-close.
+        if (linked === requested) setTimeout(onClose, CLOSE_DELAY_MS);
+      })
+      // adopt.isError renders the "add failed" paragraph while the modal is open.
+      .catch(() => undefined);
   };
 
   // Both transitions unmount the button that had focus ("Найти" / "← Изменить

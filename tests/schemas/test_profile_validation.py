@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 import pytest
 from pydantic import ValidationError
 
-from schemas.accounts import AccountProfileUpdateRequest
+from schemas.accounts import AccountCreate, AccountProfileUpdateRequest
 from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfileMusicUpload,
@@ -151,6 +151,41 @@ def test_post_story_rejects_extra_images_on_video() -> None:
 def test_post_story_rejects_layout_without_extra_images() -> None:
     with pytest.raises(ValidationError):
         PostStory(filename="s.jpg", content=b"x", media_kind="image", collage_layout="v2")
+
+
+@pytest.mark.parametrize("account_id", [".", "..", "...", ".hidden"])
+def test_account_create_refuses_a_leading_dot_id(account_id: str) -> None:
+    """A dot-leading id is a path primitive, not a name.
+
+    ``Path`` DROPS a "." component, so ``session_dir / "."`` is the directory
+    itself and the ".session" suffix then lands one level UP. These four all
+    matched the earlier ``^[A-Za-z0-9._-]+$``, and ``Path("..session").stem`` is
+    ".", so the session-file import could really mint the id.
+    """
+    with pytest.raises(ValidationError):
+        AccountCreate(account_id=account_id)
+
+
+@pytest.mark.parametrize("session_name", [".", "..", "../evil", "..\\evil"])
+def test_account_create_refuses_a_traversal_session_name(session_name: str) -> None:
+    """``session_name`` outranks ``account_id`` when the ``.session`` path is composed.
+
+    ``_client._session_path`` returns the stored name first, so leaving this field
+    unconstrained rested the guard on the unenforced invariant that every id
+    generator derives one from the other.
+    """
+    with pytest.raises(ValidationError):
+        AccountCreate(account_id="acc-1", session_name=session_name)
+
+
+@pytest.mark.parametrize(
+    "account_id",
+    # One per id generator: login.py (phone digits), tdata_import.py (user id and
+    # its ``tdata_<n>`` fallback), sessions.py / _tdata.py (the session-file stem).
+    ["79991234567", "1234567890", "tdata_0", "acc-1", "my.account", "Account42"],
+)
+def test_account_create_still_accepts_every_generated_id(account_id: str) -> None:
+    assert AccountCreate(account_id=account_id).account_id == account_id
 
 
 def test_account_story_upload_carries_collage_fields() -> None:

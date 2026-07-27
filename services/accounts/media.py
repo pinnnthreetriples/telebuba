@@ -30,9 +30,11 @@ from services.accounts._uploads import (
     _validate_content,
     _validate_upload,
 )
+from services.accounts.lifecycle import require_account
 from services.accounts.profile_read import invalidate_account_profile_cache
 
 if TYPE_CHECKING:
+    from schemas.accounts import AccountRead
     from schemas.profile_media import (
         AccountProfileMusicRemove,
         AccountProfileMusicUpload,
@@ -51,6 +53,7 @@ __all__ = [
     "remove_account_profile_music",
     "remove_account_profile_photo",
     "remove_account_story",
+    "resync_account_avatar",
     "set_account_main_profile_photo",
     "set_account_profile_photo",
     "set_account_story_pinned",
@@ -74,9 +77,8 @@ async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionRe
     # touched server state, and a kept-stale snapshot keeps offering dead ids.
     invalidate_account_profile_cache(data.account_id)
     raise_for_result(result)
-    # Best-effort DB avatar re-sync so the accounts list shows the new photo
-    # immediately instead of after the next session check.
-    await refresh_account_avatar(data.account_id)
+    # NO avatar re-sync here: a batch reaches this endpoint one file per call, so the
+    # client calls ``resync_account_avatar`` once at the end instead (see there).
     await log_event(
         "INFO",
         "account_profile_photo_updated",
@@ -84,6 +86,27 @@ async def set_account_profile_photo(data: AccountProfilePhotoUpload) -> ActionRe
         extra={"filename": data.filename},
     )
     return result
+
+
+async def resync_account_avatar(account_id: str) -> AccountRead:
+    """Re-sync the accounts-table avatar from Telegram, and answer the fresh row.
+
+    Its own operation because ``set_account_profile_photo`` takes ONE file per
+    request and the SPA uploads a batch strictly sequentially, awaiting each POST,
+    to keep the session's FLOOD_WAIT budget. Re-syncing inside every upload spent a
+    ``get_me`` plus a thumb download per file, and every one but the last was
+    immediately superseded — 18 wasted RPCs on a 10-photo batch, working against the
+    very budget the sequential design protects. The client calls this ONCE, after
+    the batch. The single-photo mutations that are NOT batched
+    (``remove_account_profile_photo``, ``set_account_main_profile_photo``) keep their
+    own re-sync: one click, one refresh, nothing superseded.
+
+    The 404 guard runs first so an unknown id costs no RPC; the row is re-read
+    afterwards because the refresh is precisely what changed it.
+    """
+    await require_account(account_id)
+    await refresh_account_avatar(account_id)
+    return await require_account(account_id)
 
 
 async def post_account_story(data: AccountStoryUpload) -> ActionResult:

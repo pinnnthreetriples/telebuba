@@ -36,12 +36,12 @@ const DETAIL = {
   about: 'Описание канала',
 };
 
-function routeApi() {
+function routeApi(detail: Record<string, unknown> = DETAIL) {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const { pathname } = new URL(request.url);
     if (pathname === '/api/v1/accounts/acc-1/channels/123' && request.method === 'GET') {
-      return Promise.resolve(jsonResponse(DETAIL));
+      return Promise.resolve(jsonResponse(detail));
     }
     if (pathname === '/api/v1/accounts/acc-1/channels/123/posts' && request.method === 'GET') {
       return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
@@ -115,6 +115,42 @@ test('editing only the about sends only the about', async () => {
     unknown
   >;
   expect(body).toEqual({ about: 'Новое описание' });
+});
+
+test('an about-only edit stays saveable when the title prefill came back blank', async () => {
+  routeApi({ ...DETAIL, title: '' });
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  const about = await screen.findByDisplayValue('Описание канала');
+
+  await userEvent.clear(about);
+  await userEvent.type(about, 'Новое описание');
+
+  // The blank-title guard belongs to the title alone: an unchanged title is not
+  // sent at all, so a read that returned no title must not make Save dead
+  // forever — and silently, the "enter a title" hint being gated on the title
+  // having been touched.
+  expect(screen.getByText('Сохранить')).toBeEnabled();
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(() => {
+    expect(requests('/channels/123/update')).toHaveLength(1);
+  });
+  const body = (await (requests('/channels/123/update')[0] as Request).clone().json()) as Record<
+    string,
+    unknown
+  >;
+  expect(body).toEqual({ about: 'Новое описание' });
+});
+
+test('a blank-title read says nothing rather than announcing "Private"', async () => {
+  // The no-match fallback in the backend detail read is effectively dead (see the
+  // invariant on ChannelEditModal), but if it ever fired the identity line
+  // confidently called a public channel private on EVERY read.
+  routeApi({ ...DETAIL, title: '', username: null });
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Описание канала');
+
+  expect(screen.queryByText(/Приватный/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/подписчиков/)).not.toBeInTheDocument();
 });
 
 test('an oversized or wrong-type avatar is rejected client-side with a toast', async () => {

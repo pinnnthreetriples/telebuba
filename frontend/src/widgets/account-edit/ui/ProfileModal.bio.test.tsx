@@ -268,7 +268,11 @@ test('a refused «Обновить» marks the snapshot untrustworthy instead of
   await userEvent.click(screen.getByText('Обновить'));
 
   await waitFor(() => {
-    expect(screen.getByText('Не удалось загрузить данные профиля из Telegram')).toBeInTheDocument();
+    // A raw transport rejection is not our envelope, so there is no reason to
+    // name — the banner says so instead of implying one.
+    expect(
+      screen.getByText('Не удалось загрузить данные профиля из Telegram (причина неизвестна)'),
+    ).toBeInTheDocument();
   });
   expect(screen.queryByTestId('bio-not-applied')).not.toBeInTheDocument();
 });

@@ -8,7 +8,7 @@ are reached via :mod:`services.warming._seams`.
 from __future__ import annotations
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -19,6 +19,7 @@ from services.trust import account_trust_score
 from services.warming import _seams
 from services.warming._cycle import run_one_cycle
 from services.warming._fleet import _is_quiet_day
+from services.warming._quarantine import _recover_from_quarantine
 from services.warming._state import _set_state
 from services.warming._transitions import (
     _calculate_next_run,
@@ -38,7 +39,7 @@ from services.warming.pacing import (
 )
 
 if TYPE_CHECKING:
-    from schemas.warming import WarmingState, WarmingStateRecord
+    from schemas.warming import WarmingState
 
     _Schedule = tuple[int, datetime, WarmingState]
 
@@ -61,97 +62,6 @@ _PROGRESS_STEPS: tuple[str, ...] = ("set_online", "join", "read", "react", "stor
 # ``run_one_cycle`` below, never the long inter-cycle sleep. Tests reset it (the
 # conftest rebinds it per test, mirroring ``_ACCOUNT_LOCKS``).
 _cycle_semaphore = asyncio.Semaphore(settings.warming.cycle_concurrency)
-
-
-async def _recover_from_quarantine(
-    account_id: str,
-    record: WarmingStateRecord,
-    now: datetime,
-    *,
-    run_id: str | None = None,
-) -> WarmingCycleResult:
-    """Re-check a quarantined account: resume if cleared, escalate otherwise.
-
-    Called when a quarantine window has elapsed. Re-probes @SpamBot; a cleared
-    account returns to warming, a still-limited one is re-quarantined until the
-    configured repeat cap, after which it is given up on (error + alert).
-
-    ``run_id`` (Round-2 P1 + Round-5 P1): if supplied, every write is
-    CAS-guarded against the row's current run_id. A new CAS-write fires
-    *before* ``refresh_spam_status`` so a stale loop does not issue the
-    external @SpamBot probe on behalf of a generation that's already been
-    replaced — the round-4 P1.2 fix only protected the regular cycle path,
-    quarantine was still open.
-    """
-    warm = settings.warming
-    # Round-5 P1: pre-probe CAS. Telegram I/O lives behind this gate.
-    probe_started = await _set_state(
-        account_id,
-        "quarantine",
-        last_event="quarantine_probe_started",
-        heartbeat_at=now.isoformat(),
-        quarantine_count=record.quarantine_count,
-        expected_run_id=run_id,
-    )
-    if run_id is not None and not probe_started.applied:
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
-
-    verdict = await _seams.refresh_spam_status(account_id, force=True)
-    if verdict.status != "limited":
-        next_run = (now + timedelta(seconds=warm.startup_jitter_max_seconds)).isoformat()
-        await _set_state(
-            account_id,
-            "sleeping",
-            last_event="quarantine_recovered",
-            next_run_at=next_run,
-            heartbeat_at=now.isoformat(),
-            last_error=None,
-            quarantine_count=0,
-            expected_run_id=run_id,
-        )
-        await log_event("INFO", "warming_quarantine_recovered", account_id=account_id)
-        return WarmingCycleResult(account_id=account_id, status="skipped", detail="recovered")
-
-    count = record.quarantine_count + 1
-    if count >= warm.quarantine_max_repeats:
-        await _set_state(
-            account_id,
-            "error",
-            last_event="quarantine_exhausted",
-            last_error=f"peer-flood not lifted after {count} checks",
-            heartbeat_at=now.isoformat(),
-            quarantine_count=count,
-            expected_run_id=run_id,
-        )
-        await log_event(
-            "ERROR",
-            "warming_quarantine_exhausted",
-            account_id=account_id,
-            extra={"checks": count},
-        )
-        return WarmingCycleResult(
-            account_id=account_id,
-            status="error",
-            detail="quarantine exhausted",
-        )
-
-    next_run = (now + timedelta(hours=warm.quarantine_hours)).isoformat()
-    await _set_state(
-        account_id,
-        "quarantine",
-        last_event="quarantine_extended",
-        next_run_at=next_run,
-        heartbeat_at=now.isoformat(),
-        quarantine_count=count,
-        expected_run_id=run_id,
-    )
-    await log_event(
-        "WARNING",
-        "warming_quarantine_extended",
-        account_id=account_id,
-        extra={"checks": count},
-    )
-    return WarmingCycleResult(account_id=account_id, status="skipped", detail="quarantine extended")
 
 
 async def _gate_quiet_day(

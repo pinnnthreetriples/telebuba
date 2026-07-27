@@ -2,8 +2,9 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { spamCheckAccountMutation } from '@/entities/account';
+import { invalidateAccountViews, spamCheckAccountMutation } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
+import { useClearedTimeouts } from '@/shared/lib';
 
 import { Section, Spinner } from './_shared';
 import { type CheckState } from './_styles';
@@ -21,6 +22,7 @@ export function SignalsSection({ account }: { account: AccountRead }) {
   const { t } = useTranslation();
   const [spamCheck, setSpamCheck] = useState<CheckState>('idle');
   const queryClient = useQueryClient();
+  const later = useClearedTimeouts();
   const spamMutation = useMutation(spamCheckAccountMutation());
 
   // Real @SpamBot probe; the result also refreshes the signals on next load.
@@ -31,10 +33,10 @@ export function SignalsSection({ account }: { account: AccountRead }) {
       {
         onSuccess: (verdict) => {
           setSpamCheck(verdict.status === 'clean' ? 'ok' : 'err');
-          window.setTimeout(() => {
+          later(() => {
             setSpamCheck('idle');
           }, 2400);
-          void queryClient.invalidateQueries();
+          invalidateAccountViews(queryClient);
         },
         onError: () => {
           setSpamCheck('err');

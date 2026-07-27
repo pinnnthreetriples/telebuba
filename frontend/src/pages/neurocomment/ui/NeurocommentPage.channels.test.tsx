@@ -1,4 +1,5 @@
-import { screen, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { expect, test, vi } from 'vitest';
 
@@ -53,6 +54,33 @@ test('removing a campaign channel asks for confirmation, then calls the deactiva
       .mock.calls.some(([input]) => (input as Request).url.includes('/channels/remove'));
     expect(removed).toBe(true);
   });
+});
+
+test('a channel mutation invalidates this page only, not the whole cache', async () => {
+  routeApi();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+  render(
+    <QueryClientProvider client={queryClient}>
+      <NeurocommentPage />
+    </QueryClientProvider>,
+  );
+  await waitFor(() => {
+    expect(screen.getAllByText('@news').length).toBeGreaterThan(0);
+  });
+
+  await userEvent.click(screen.getByLabelText('Убрать канал'));
+  await userEvent.click(await screen.findByText('Убрать'));
+
+  await waitFor(() => {
+    expect(invalidate).toHaveBeenCalled();
+  });
+  // No mutation on this page touches an account row, a proxy, the warming board
+  // or the settings, yet a bare invalidateQueries() refetched all of them plus
+  // every open profile snapshot. The page's own scope is the predicate.
+  for (const [filters] of invalidate.mock.calls) {
+    expect(filters?.predicate).toBeDefined();
+  }
 });
 
 test('the add-channel pill reveals an input and adds the channel', async () => {

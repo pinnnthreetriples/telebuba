@@ -13,7 +13,7 @@ empty result with ``supported=False`` so the UI can hide the music block.
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING, cast
+from typing import TYPE_CHECKING, Literal, cast
 
 from telethon import errors
 from telethon.tl.functions.channels import GetFullChannelRequest, GetParticipantRequest
@@ -92,16 +92,34 @@ class TelegramAccountNotFoundError(LookupError):
     """Raised when ``execute_read`` can't find the account in the DB."""
 
 
+ReadErrorKind = Literal["flood_wait", "unavailable", "other"]
+
+
 class TelegramReadError(RuntimeError):
     """Wraps a Telethon failure so callers don't need to import telethon.
 
     Keeps the layer boundary clean: :mod:`services/` catches
     ``TelegramReadError`` and never sees ``telethon.errors.*`` directly.
+
+    ``reason`` is a human-readable, content-free label for logs and the profile /
+    privacy error envelopes. ``kind`` and ``seconds`` are the machine-readable half:
+    services map an outcome onto a stable code from ``kind`` and thread the
+    server-mandated wait from ``seconds`` instead of re-parsing a string this module
+    just formatted. Without them the channel reads dropped the flood duration, so
+    the operator retried in a loop and EXTENDED the wait.
     """
 
-    def __init__(self, reason: str) -> None:
+    def __init__(
+        self,
+        reason: str,
+        *,
+        kind: ReadErrorKind = "other",
+        seconds: int | None = None,
+    ) -> None:
         super().__init__(reason)
         self.reason = reason
+        self.kind = kind
+        self.seconds = seconds
 
 
 logger = logging.getLogger(__name__)
@@ -143,7 +161,7 @@ async def execute_read_many(
         ]
     except errors.FloodWaitError as exc:
         reason = f"FloodWait({exc.seconds}s)"
-        raise TelegramReadError(reason) from exc
+        raise TelegramReadError(reason, kind="flood_wait", seconds=exc.seconds) from exc
     except errors.RPCError as exc:
         reason = f"RPC: {type(exc).__name__}"
         raise TelegramReadError(reason) from exc
@@ -166,7 +184,7 @@ async def execute_read_many(
         # profile and privacy error envelopes, so it must stay content-free.
         logger.warning("read failed for %s", account_id, exc_info=exc)
         reason = f"unavailable: {type(exc).__name__}"
-        raise TelegramReadError(reason) from exc
+        raise TelegramReadError(reason, kind="unavailable") from exc
     else:
         return results
 

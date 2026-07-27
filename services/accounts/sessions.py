@@ -68,10 +68,18 @@ async def import_account_session(data: AccountSessionFileImport) -> AccountRead:
                 "Delete it first if you want to replace the credentials."
             )
             raise SessionAlreadyExistsError(msg)
-        await asyncio.to_thread(_write_session_file, session_path, data.content)
-        return await add_account(
-            AccountCreate(account_id=session_name, label=data.label, session_name=session_name),
+        # Validate the id BEFORE the credential lands on disk. ``_session_filename``
+        # only enforces the suffix and a non-empty stem, so ``..session`` (stem
+        # ``.``) passed it and was written, then rejected by ``AccountCreate``'s
+        # charset pattern — leaving orphaned bytes in ``session_dir`` with no row to
+        # delete them. Building the model first turns that into a pure refusal.
+        create = AccountCreate(
+            account_id=session_name,
+            label=data.label,
+            session_name=session_name,
         )
+        await asyncio.to_thread(_write_session_file, session_path, data.content)
+        return await add_account(create)
 
 
 async def check_account_session(data: AccountCheckRequest) -> AccountRead:

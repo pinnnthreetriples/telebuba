@@ -80,7 +80,10 @@ async def create_account_channel(account_id: str, body: ChannelCreateRequest) ->
     operation_id="listAccountChannels",
 )
 async def list_account_channels(account_id: str) -> Page[ChannelView]:
-    return await accounts.list_account_channels(account_id)
+    # Wrapped like every sibling route: without the mapper an unknown account id
+    # (AccountNotFoundError, a LookupError) escapes as a 500 instead of a 404.
+    with service_errors_to_http():
+        return await accounts.list_account_channels(account_id)
 
 
 # Flat path on purpose: nesting it as /channels/username-check would collide
@@ -94,7 +97,8 @@ async def check_account_channel_username(
     account_id: str,
     username: Annotated[str, Query(min_length=1)],
 ) -> ChannelUsernameCheckView:
-    return await accounts.check_account_channel_username(account_id, username)
+    with service_errors_to_http():
+        return await accounts.check_account_channel_username(account_id, username)
 
 
 @channels_router.get(
@@ -103,7 +107,8 @@ async def check_account_channel_username(
     operation_id="getAccountChannel",
 )
 async def get_account_channel(account_id: str, channel_id: str) -> ChannelDetailView:
-    return await accounts.get_account_channel(account_id, _decode_channel_id(channel_id))
+    with service_errors_to_http():
+        return await accounts.get_account_channel(account_id, _decode_channel_id(channel_id))
 
 
 @channels_router.post(

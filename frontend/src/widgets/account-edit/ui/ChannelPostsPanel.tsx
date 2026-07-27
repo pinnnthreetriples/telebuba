@@ -139,20 +139,36 @@ export function ChannelPostsPanel({
     );
   };
 
+  // Editing a post that carries media edits its CAPTION, and Telegram caps
+  // captions at 1024 — the composer already respects that split, the edit box
+  // did not, and the backend has no media-aware branch to catch it.
+  const editingMedia = items.find((post) => post.post_id === editingId)?.media_kind ?? 'none';
+  const editMax = editingMedia === 'none' ? POST_TEXT_MAX : POST_CAPTION_MAX;
+  const canSaveEdit = editText.trim() !== '' && editText.length <= editMax;
+
+  // mutateAsync, not mutate+callbacks: one useMutation is ONE callback slot, and
+  // the per-row «Изменить» button below calls editPost.reset(), which drops the
+  // observer outright ("there is no way to get it back" upstream). Clicking Edit
+  // on another row while this save was in flight therefore lost both the
+  // setEditingId(null) and the refresh — Telegram had edited the post and the
+  // panel kept showing the old text. A promise per call cannot be taken over.
   const saveEdit = () => {
-    if (editingId === null || editPost.isPending || editText.trim() === '') return;
-    editPost.mutate(
-      {
-        path: { account_id: accountId, channel_id: channelId, post_id: editingId },
+    if (editingId === null || editPost.isPending || !canSaveEdit) return;
+    const savedId = editingId;
+    void editPost
+      .mutateAsync({
+        path: { account_id: accountId, channel_id: channelId, post_id: savedId },
         body: { text: editText.trim() },
-      },
-      {
-        onSuccess: () => {
-          setEditingId(null);
-        },
-        onSettled: refresh,
-      },
-    );
+      })
+      .then(() => {
+        // Close the box only if it is still THIS post's: the operator may have
+        // moved to another row while the save was in flight.
+        setEditingId((current) => (current === savedId ? null : current));
+      })
+      // finally, not then: a rejected edit may still have changed the channel.
+      .finally(refresh)
+      // The inline footer above renders editPost.error; nothing else to do here.
+      .catch(() => undefined);
   };
 
   const formatDate = (unix: number): string =>
@@ -351,7 +367,7 @@ export function ChannelPostsPanel({
                   <textarea
                     rows={3}
                     value={editText}
-                    maxLength={POST_TEXT_MAX}
+                    maxLength={editMax}
                     aria-label={t('accounts.channel.postEdit')}
                     onChange={(event) => {
                       setEditText(event.target.value);
@@ -363,7 +379,13 @@ export function ChannelPostsPanel({
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </div>
                   )}
-                  <div className="mt-2 flex justify-end gap-2">
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    {/* The same readout the composer carries: without it the box
+                        just stops accepting input at the media-aware cap with
+                        nothing on screen explaining why. */}
+                    <span className="mr-auto text-[11px] text-ink-subtle">
+                      {t('accounts.channel.charCount', { n: editText.length, max: editMax })}
+                    </span>
                     <button
                       type="button"
                       onClick={() => {
@@ -377,7 +399,7 @@ export function ChannelPostsPanel({
                     <button
                       type="button"
                       onClick={saveEdit}
-                      disabled={editPost.isPending || editText.trim() === ''}
+                      disabled={editPost.isPending || !canSaveEdit}
                       className="rounded-full bg-primary px-[16px] py-[6px] text-[12px] font-medium text-white disabled:opacity-50"
                     >
                       {t('accounts.channel.postSave')}

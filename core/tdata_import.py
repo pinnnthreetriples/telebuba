@@ -180,6 +180,31 @@ def _find_tdata_dir(root: Path) -> Path | None:
     return None
 
 
+def _bounded_conversion_error(exc: BaseException) -> TdataConvertResult:
+    """A ``conversion_error`` whose ``error`` is the exception's CLASS NAME only.
+
+    ``str(exc)`` here is opentele2's prose, and it is not a contract: its
+    ``OpenTeleException.__str__`` is built from the RAISING FRAME'S PARAMETER
+    VALUES, and the tdata loader is called with ``basePath=str(tdata_dir)`` — so
+    the text carries a staging path, and any proxy that frame was holding arrives
+    with ``user:pass@host:port`` in it. ``services.accounts._tdata`` turns this
+    result into the ``ValueError`` that ``service_errors_to_http`` renders as the
+    HTTP 400 ``message`` (non-negotiable #12), the same bounding
+    ``_spam.check_spam_status`` and ``_auth._error_result`` apply.
+
+    The full text goes to this module's STDLIB logger at the two call sites,
+    deliberately — NOT to ``log_event``. ``core.logging.log_event`` is not log-only:
+    it persists ``extra`` as JSON in the ``logs`` table, ``GET /logs`` serves that
+    back as ``LogEntry.extra`` and ``GET /events`` streams it, so an unbounded
+    ``extra`` is an HTTP body too, just a different route. Nothing in the project
+    configures stdlib logging, so ``logger.exception`` lands on the process's stderr
+    (the uvicorn console) via ``logging.lastResort`` and on no route —
+    ``core.proxy_check._failed_result`` and ``_profile._mark_account_status`` reach
+    for the same sink for the same reason.
+    """
+    return TdataConvertResult(status="conversion_error", error=type(exc).__name__)
+
+
 async def _load_tdesktop_from_zip(
     req: TdataConvertRequest,
     tmp_dir: Path,
@@ -222,16 +247,14 @@ async def _load_tdesktop_from_zip(
     try:
         td = await asyncio.to_thread(tdesktop_factory, basePath=str(tdata_dir))
     except Exception as exc:
+        # Full text to the STDLIB logger only (see ``_bounded_conversion_error``).
         logger.exception("TDesktop load failed")
         await log_event(
             "ERROR",
             "tdata_convert_tdesktop_load_failed",
-            extra={"error_type": type(exc).__name__, "error": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
-        return TdataConvertResult(
-            status="conversion_error",
-            error=f"TDesktop load failed: {exc}",
-        )
+        return _bounded_conversion_error(exc)
     await log_event(
         "INFO",
         "tdata_convert_tdesktop_loaded",
@@ -268,6 +291,7 @@ async def _convert_one_account(
     try:
         client = await account.ToTelethon(session=str(session_path), flag=use_current_session)
     except Exception as exc:
+        # Full text to the STDLIB logger only (see ``_bounded_conversion_error``).
         logger.exception("ToTelethon failed for user_id=%s", user_id)
         await log_event(
             "ERROR",
@@ -276,13 +300,9 @@ async def _convert_one_account(
                 "index": index,
                 "user_id": user_id,
                 "error_type": type(exc).__name__,
-                "error": str(exc),
             },
         )
-        return TdataConvertResult(
-            status="conversion_error",
-            error=f"ToTelethon failed for user_id={user_id}: {exc}",
-        )
+        return _bounded_conversion_error(exc)
 
     with suppress(Exception):
         await client.disconnect()

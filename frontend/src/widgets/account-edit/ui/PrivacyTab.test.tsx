@@ -45,16 +45,19 @@ const ALL_OPEN = {
 } satisfies PrivacySettingsResult;
 
 // Distinct counts on purpose: with ok/failed/skipped all 1, swapping two count
-// labels in the component still passed.
+// labels in the component still passed. The reasons are what the backend really
+// sends: a gateway code on `failed`, the AccountStatus that disqualified the
+// account on `skipped` (services/accounts/privacy.py), plus the keys a partial
+// write already changed.
 const BULK = {
   outcomes: [
     { account_id: 'acc-1', status: 'ok', error: null },
     { account_id: 'acc-5', status: 'ok', error: null },
     { account_id: 'acc-6', status: 'ok', error: null },
     { account_id: 'acc-7', status: 'ok', error: null },
-    { account_id: 'acc-2', status: 'failed', error: 'account_frozen' },
-    { account_id: 'acc-3', status: 'skipped', error: 'banned' },
-    { account_id: 'acc-4', status: 'skipped', error: 'logged_out' },
+    { account_id: 'acc-2', status: 'failed', error: 'account_frozen', applied: ['profile_photo'] },
+    { account_id: 'acc-3', status: 'skipped', error: 'unauthorized' },
+    { account_id: 'acc-4', status: 'skipped', error: 'session_error' },
   ],
   ok: 4,
   failed: 1,
@@ -369,17 +372,66 @@ test('the fleet result shows the counts, the failures and why accounts were skip
   expect(await screen.findByText('Применено: 4')).toBeInTheDocument();
   expect(screen.getByText('Ошибок: 1')).toBeInTheDocument();
   expect(screen.getByText('Пропущено: 2')).toBeInTheDocument();
-  // A failure is inspectable, not swallowed into the count...
+  // A failure is inspectable, not swallowed into the count — and the reason is
+  // TRANSLATED: these values are stable backend codes, and the report used to
+  // read "acc-2 — account_frozen". A `failed` row also names the keys that DID
+  // land before the refusal: setPrivacy is one call per key with no rollback, so
+  // this account's avatar is already public despite the failure.
   const list = screen.getByRole('list');
-  expect(within(list).getByText('acc-2 — account_frozen')).toBeInTheDocument();
+  expect(
+    within(list).getByText(
+      'acc-2 — Аккаунт заморожен Telegram — редактирование недоступно · уже изменено в Telegram: Фото профиля',
+    ),
+  ).toBeInTheDocument();
   // ...and so is a skip: "2 skipped" without the accounts and their status is
   // not actionable.
-  expect(within(list).getByText('acc-3 — пропущен (banned)')).toBeInTheDocument();
-  expect(within(list).getByText('acc-4 — пропущен (logged_out)')).toBeInTheDocument();
+  expect(within(list).getByText('acc-3 — пропущен (Не авторизован)')).toBeInTheDocument();
+  expect(within(list).getByText('acc-4 — пропущен (Ошибка сессии)')).toBeInTheDocument();
   // Accounts that succeeded are NOT in the problem list.
   expect(within(list).queryByText(/acc-1/)).not.toBeInTheDocument();
   expect(within(list).queryByText(/acc-5/)).not.toBeInTheDocument();
   expect(within(list).getAllByRole('listitem')).toHaveLength(3);
+});
+
+test('a flooded fleet row shows the real wait, not «повторите через ? с»', async () => {
+  // `retry_after_seconds` is the wait Telegram actually mandated, carried on the
+  // outcome. An earlier round substituted '?' because no payload had a duration;
+  // the schema carries one now, and "retry in ? s" is advice the operator cannot
+  // act on. The other reasonText call sites (a refused read, a refused write
+  // re-read) have no such field and keep the '?' — see the `noReason` tests.
+  const flooded = {
+    outcomes: [
+      { account_id: 'acc-2', status: 'failed', error: 'flood_wait', retry_after_seconds: 30 },
+      // A non-flood refusal in the same report proves the fallback is untouched:
+      // account_frozen interpolates no duration at all.
+      { account_id: 'acc-3', status: 'failed', error: 'account_frozen' },
+    ],
+    ok: 0,
+    failed: 2,
+    skipped: 0,
+  } satisfies BulkPrivacyResult;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts/privacy/all') return Promise.resolve(jsonResponse(flooded));
+    if (pathname === '/api/v1/accounts/acc-1/privacy') {
+      return Promise.resolve(jsonResponse({ settings: MIXED, error: null }));
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<PrivacyTab accountId="acc-1" />);
+  await screen.findByText('Фото профиля');
+
+  await userEvent.click(screen.getByRole('button', { name: FLEET_BUTTON }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Применить' }));
+
+  const list = await screen.findByRole('list');
+  expect(
+    within(list).getByText('acc-2 — Telegram ограничил действия — повторите через 30 с'),
+  ).toBeInTheDocument();
+  expect(
+    within(list).getByText('acc-3 — Аккаунт заморожен Telegram — редактирование недоступно'),
+  ).toBeInTheDocument();
 });
 
 test('a new write clears the previous fleet report', async () => {
@@ -406,7 +458,11 @@ test('a refused read renders the reason instead of an empty form', async () => {
   routeApi({ settings: null, error: 'flood_wait' });
   renderWithClient(<PrivacyTab accountId="acc-1" />);
 
-  expect(await screen.findByText(READ_FAILED('flood_wait'))).toBeInTheDocument();
+  // The banner used to interpolate the raw code; the reason is a code table
+  // entry, so it is translated (the duration is not in this payload, hence '?').
+  expect(
+    await screen.findByText(READ_FAILED('Telegram ограничил действия — повторите через ? с')),
+  ).toBeInTheDocument();
   expect(screen.queryByText('Фото профиля')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: OPEN_ALL_BUTTON })).not.toBeInTheDocument();
 });

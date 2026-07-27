@@ -284,3 +284,54 @@ async def test_refresh_concurrent_callers_share_probe(monkeypatch: pytest.Monkey
     await task2
 
     assert calls == 1
+
+
+@pytest.mark.asyncio
+async def test_refresh_never_probes_an_account_with_no_row(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No row means no session name — the probe would MINT a ``.session`` file.
+
+    ``_session_path``'s missing-row fallback composes ``session_dir / account_id``
+    and Telethon's ``SQLiteSession`` creates whatever file it is handed, which is
+    how ``POST /accounts/%2E/spam-check`` wrote ``<parent>/sessions.session``
+    (and then 500'd). The verdict is also deliberately not cached — there is no
+    account to cache it for.
+    """
+    probed: list[str] = []
+
+    async def fake_probe(account_id: str) -> SpamStatusProbe:
+        probed.append(account_id)
+        return SpamStatusProbe(account_id=account_id, reply_text="Good news, no limits.")
+
+    monkeypatch.setattr(spam_status, "check_spam_status", fake_probe)
+
+    verdict = await spam_status.refresh_spam_status("never-existed", force=True)
+
+    assert probed == []
+    assert verdict.status == "unknown"
+    assert verdict.detail == "account not found"
+    assert await get_spam_status("never-existed") is None
+
+
+@pytest.mark.asyncio
+async def test_refresh_does_not_cache_a_probe_error(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A probe that never reached @SpamBot is not a reading of the account.
+
+    Cached, it was served as fresh for ``spam_status_ttl_hours`` (36 h by default),
+    and ``services.warming._loop`` reads any non-``limited`` verdict as "quarantine
+    recovered" — so one refused probe let a limited account out of quarantine for a
+    day and a half.
+    """
+    await create_account(AccountCreate(account_id="acc-1"))
+
+    async def failing_probe(account_id: str) -> SpamStatusProbe:
+        return SpamStatusProbe(account_id=account_id, error="TelegramClientPoolError")
+
+    monkeypatch.setattr(spam_status, "check_spam_status", failing_probe)
+
+    verdict = await spam_status.refresh_spam_status("acc-1", force=True)
+
+    assert verdict.status == "unknown"
+    assert verdict.detail == "TelegramClientPoolError"
+    assert await get_spam_status("acc-1") is None, "a refusal must not occupy the TTL cache"

@@ -291,6 +291,17 @@ async def test_sanitize_chat_text_strips_control_and_caps_length(
 
 
 @pytest.mark.asyncio
+async def test_sanitize_chat_text_strips_markdown_markers() -> None:
+    """No prompt here forbids markup, and ``parse_mode`` is off on every client.
+
+    So a Gemini reply of ``**Привет!** как дела`` used to render bold and now
+    arrives in the DM with the asterisks showing — a machine tell on a surface
+    whose only job is to look like a person typing.
+    """
+    assert warming._sanitize_chat_text("**Привет!** как дела") == "Привет! как дела"
+
+
+@pytest.mark.asyncio
 async def test_sanitize_chat_text_returns_none_for_blank() -> None:
     assert warming._sanitize_chat_text("\x00\x01\n  ") is None
 

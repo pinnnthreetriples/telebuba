@@ -1,4 +1,4 @@
-import { type ReactNode, useLayoutEffect, useRef, useState } from 'react';
+import { type ReactNode, useId, useLayoutEffect, useRef, useState } from 'react';
 
 // The design's collapsible accordion card: a header row (free-form content +
 // chevron) over a max-height-collapsing body. Used across the account-edit,
@@ -43,11 +43,29 @@ export function CollapsibleCard({
 }) {
   const [open, setOpen] = useState(defaultOpen);
   const collapseRef = useRef<HTMLDivElement>(null);
+  const bodyId = useId();
   // Drop the max-height cap once the open transition settles, so content is
   // never clipped (the .tb-collapse `var(--mh)` cap is only for the animation).
   const [settled, setSettled] = useState(defaultOpen);
+  // A collapsed body is only VISUALLY gone (max-height:0 + opacity:0), so
+  // without this every control inside it stays in the tab order and the a11y
+  // tree — a keyboard operator reached a hidden 2FA password field and a
+  // "delete account" button. `hidden` goes back on only when the close
+  // transition ends.
+  //
+  // On open, `hidden` comes off in the SAME React commit that adds `.tb-open`,
+  // so the body goes from not-rendered to rendered with the open styles already
+  // applied. An element that was not rendered has no before-change style, so
+  // that step generates no transition on its own — measured in Chrome, the body
+  // snapped straight to the CSS fallback `max-height: 600px` (clientHeight 600
+  // against scrollHeight 976, `overflow: hidden`, no scrollbar) and only the
+  // later `--mh` write animated. `@starting-style` in index.css supplies the
+  // missing before-change style; do not replace it with a rAF that defers
+  // `reachable` by a frame without re-measuring that.
+  const [reachable, setReachable] = useState(defaultOpen);
   const toggle = () => {
     setSettled(false);
+    setReachable(true);
     setOpen((value) => !value);
   };
 
@@ -69,6 +87,8 @@ export function CollapsibleCard({
         <button
           type="button"
           onClick={toggle}
+          aria-expanded={open}
+          aria-controls={bodyId}
           className="flex min-w-0 flex-1 items-center gap-[9px] text-left"
         >
           {header}
@@ -78,6 +98,8 @@ export function CollapsibleCard({
           type="button"
           onClick={toggle}
           aria-label={label}
+          aria-expanded={open}
+          aria-controls={bodyId}
           className="flex shrink-0 items-center"
         >
           <Chevron open={open} />
@@ -85,9 +107,13 @@ export function CollapsibleCard({
       </div>
       <div
         ref={collapseRef}
+        id={bodyId}
+        hidden={!reachable}
         className={`tb-collapse ${open ? 'tb-open' : ''} ${open && settled ? 'tb-settled' : ''}`}
         onTransitionEnd={(event) => {
-          if (event.propertyName === 'max-height' && open) setSettled(true);
+          if (event.propertyName !== 'max-height') return;
+          if (open) setSettled(true);
+          else setReachable(false);
         }}
       >
         <div className={bodyClassName}>{children}</div>

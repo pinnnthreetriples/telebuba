@@ -96,11 +96,13 @@ async def dispatch_list_profile_photos(
     """Pull the account's profile-photo history with a small thumb per photo.
 
     ``GetUserPhotosRequest`` returns the history newest-first by date, but the
-    first item is NOT necessarily the current avatar: a set-main mints a new
-    id that inherits the ORIGINAL photo's date, so the avatar can sit anywhere
-    in the list — ``UserFull.profile_photo.id`` is the only avatar authority
-    (see ``_dispatch_get_user_profile``). Each photo carries the ``InputPhoto``
-    id triple needed for the matching ``RemoveProfilePhoto`` write action.
+    first item is NOT necessarily the current avatar: our set-main re-uploads
+    the bytes as a new photo (fresh date, so it does sort first), while the
+    official client's promote mints an id that inherits the ORIGINAL photo's
+    date — an avatar set that way sits mid-list. ``UserFull.profile_photo.id``
+    is the only avatar authority (see ``_dispatch_get_user_profile``). Each
+    photo carries the ``InputPhoto`` id triple needed for the matching
+    ``RemoveProfilePhoto`` write action.
     """
     result = await client(
         GetUserPhotosRequest(

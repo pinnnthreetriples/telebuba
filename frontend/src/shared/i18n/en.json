@@ -86,6 +86,11 @@
       "login": "Login",
       "password": "Password",
       "proxyCheck": "Check",
+      "proxyAddAssign": "Add and assign",
+      "proxyReplaceTitle": "Replace the assigned proxy?",
+      "proxyReplaceBody": "The account will be moved onto this proxy and its session will reconnect through it immediately. If this host and port are already in the pool, the stored login and password are overwritten for every account using them.",
+      "proxyReplaceConfirm": "Replace",
+      "cancel": "Cancel",
       "device": "Device fingerprint",
       "deviceLocked": "Device profile was fixed at registration",
       "deviceModel": "Device model",
@@ -271,7 +276,7 @@
       "removeMusicConfirm": "Remove",
       "noMusic": "No music selected",
       "musicUnsupported": "Profile music isn't available for this account",
-      "loadError": "Couldn't load the profile data from Telegram",
+      "loadError": "Couldn't load the profile data from Telegram ({{reason}})",
       "pickTrack": "Pick a track",
       "cancel": "Cancel",
       "save": "Save",
@@ -306,7 +311,14 @@
         "profile_photo_not_found": "Photo not found in the profile — refresh the list",
         "profile_photo_download_failed": "Couldn't download the photo from Telegram",
         "profile_music_invalid": "The audio file could not be processed — pick another one",
+        "profile_music_add_refused": "Telegram didn't save the track — the profile's saved-music list is full, or the track is already on it",
         "profile_music_stale_reference": "The track changed on Telegram — refresh the list",
+        "session_dead": "The account's Telegram session is dead — log it in again",
+        "account_deactivated": "Telegram deactivated or banned this account — it cannot be recovered",
+        "premium_required": "Telegram Premium is required on the account for this",
+        "photo_too_small": "The image is too small for Telegram — use a larger, roughly square one",
+        "media_invalid": "Telegram rejected the file — try another one",
+        "validation_error": "The request was rejected — check the highlighted fields",
         "failed": "Telegram refused the action — try again"
       },
       "privacy": {
@@ -341,6 +353,7 @@
         "bulkSkipped": "Skipped: {{n}}",
         "outcomeFailed": "{{id}} — {{reason}}",
         "outcomeSkipped": "{{id}} — skipped ({{reason}})",
+        "outcomeApplied": "already changed on Telegram: {{keys}}",
         "writeReadError": "The settings were applied, but reading them back from Telegram failed ({{reason}}) — the levels below are the last known ones, reading again.",
         "noReason": "reason unknown"
       }
@@ -373,6 +386,7 @@
       "errAboutMax": "Description must be at most 255 characters",
       "errUsername": "Username: 5–32 characters, latin letters, digits and _, starting with a letter",
       "usernameChecking": "Checking availability…",
+      "usernameCheckFailed": "Could not check availability — Telegram will answer on create",
       "usernameFree": "Username is available",
       "usernameTaken": "Username is taken",
       "createBtn": "Create",
@@ -469,7 +483,8 @@
       "proxyPool": "Pick from pool",
       "proxyPoolDesc": "Ready, checked proxies from the shared pool",
       "poolEmpty": "No free proxies in the pool",
-      "poolFree": "{{count}} free"
+      "poolFree": "{{count}} free",
+      "proxyAssignError": "Could not assign the proxy — the account has none yet"
     }
   },
   "nav": {
@@ -645,6 +660,7 @@
     "warming_unpromoted_from_neurocomment": "Account returned from neurocommenting",
     "warming_quarantine_recovered": "Account recovered from quarantine",
     "warming_quarantine_exhausted": "Quarantine exhausted",
+    "warming_quarantine_unreadable": "Quarantine given up: spam status unreadable",
     "warming_settings_saved": "Warming settings saved",
     "warming_start_blocked": "Warming start blocked",
     "warming_runtime_reconciled": "Warming reconciled",
@@ -685,6 +701,7 @@
     "phone_login_started": "Phone sign-in started",
     "phone_login_success": "Signed in",
     "proxy_added": "Proxy added",
+    "proxy_checked": "Proxy checked",
     "proxy_removed": "Proxy removed",
     "proxy_assigned": "Proxy assigned",
     "proxy_unassigned": "Proxy unassigned",
@@ -728,6 +745,7 @@
     "tdata_import_completed": "Import completed",
     "tdata_import_failed": "Import failed",
     "tdata_import_rolled_back": "Import rolled back",
+    "tdata_rollback_unlink_failed": "Could not remove the session file during rollback",
     "neurocomment_discovery_started": "Channel search started",
     "neurocomment_discovery_finished": "Channel search finished",
     "neurocomment_discovery_failed": "Channel search failed",

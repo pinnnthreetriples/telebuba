@@ -87,6 +87,11 @@
       "login": "Логин",
       "password": "Пароль",
       "proxyCheck": "Проверить",
+      "proxyAddAssign": "Добавить и назначить",
+      "proxyReplaceTitle": "Заменить назначенный прокси?",
+      "proxyReplaceBody": "Аккаунт будет переведён на этот прокси, и его сессия сразу переподключится через него. Если такой хост и порт уже есть в пуле, сохранённые логин и пароль перезапишутся для всех аккаунтов, которые их используют.",
+      "proxyReplaceConfirm": "Заменить",
+      "cancel": "Отмена",
       "device": "Device fingerprint",
       "deviceLocked": "Профиль устройства зафиксирован при регистрации",
       "deviceModel": "Модель устройства",
@@ -272,7 +277,7 @@
       "removeMusicConfirm": "Убрать",
       "noMusic": "Музыка не выбрана",
       "musicUnsupported": "Профильная музыка недоступна для этого аккаунта",
-      "loadError": "Не удалось загрузить данные профиля из Telegram",
+      "loadError": "Не удалось загрузить данные профиля из Telegram ({{reason}})",
       "pickTrack": "Выбрать трек",
       "cancel": "Отмена",
       "save": "Сохранить",
@@ -307,7 +312,14 @@
         "profile_photo_not_found": "Фото не найдено в профиле — обновите список",
         "profile_photo_download_failed": "Не удалось скачать фото из Telegram",
         "profile_music_invalid": "Аудиофайл не удалось обработать — выберите другой",
+        "profile_music_add_refused": "Telegram не сохранил трек — список сохранённой музыки заполнен или трек уже в профиле",
         "profile_music_stale_reference": "Трек изменился на Telegram — обновите список",
+        "session_dead": "Сессия аккаунта в Telegram недействительна — войдите заново",
+        "account_deactivated": "Telegram удалил или заблокировал аккаунт — восстановить его нельзя",
+        "premium_required": "Для этого действия нужен Telegram Premium на аккаунте",
+        "photo_too_small": "Изображение слишком маленькое для Telegram — возьмите крупнее и ближе к квадрату",
+        "media_invalid": "Telegram отклонил файл — выберите другой",
+        "validation_error": "Запрос отклонён — проверьте выделенные поля",
         "failed": "Telegram отклонил действие — попробуйте ещё раз"
       },
       "privacy": {
@@ -342,6 +354,7 @@
         "bulkSkipped": "Пропущено: {{n}}",
         "outcomeFailed": "{{id}} — {{reason}}",
         "outcomeSkipped": "{{id}} — пропущен ({{reason}})",
+        "outcomeApplied": "уже изменено в Telegram: {{keys}}",
         "writeReadError": "Настройки применены, но перечитать их из Telegram не удалось ({{reason}}) — ниже последние известные значения, читаем заново.",
         "noReason": "причина неизвестна"
       }
@@ -374,6 +387,7 @@
       "errAboutMax": "Описание — не более 255 символов",
       "errUsername": "Юзернейм: 5–32 символа, латиница, цифры и _, начинается с буквы",
       "usernameChecking": "Проверяем доступность…",
+      "usernameCheckFailed": "Не удалось проверить доступность — Telegram ответит при создании",
       "usernameFree": "Юзернейм свободен",
       "usernameTaken": "Юзернейм занят",
       "createBtn": "Создать",
@@ -470,7 +484,8 @@
       "proxyPool": "Выбрать из пула",
       "proxyPoolDesc": "Готовые проверенные прокси из общего пула",
       "poolEmpty": "В пуле нет свободных прокси",
-      "poolFree": "{{count}} своб."
+      "poolFree": "{{count}} своб.",
+      "proxyAssignError": "Не удалось назначить прокси — у аккаунта его пока нет"
     }
   },
   "nav": {
@@ -646,6 +661,7 @@
     "warming_unpromoted_from_neurocomment": "Аккаунт возвращён из нейрокомментинга",
     "warming_quarantine_recovered": "Аккаунт восстановлен после карантина",
     "warming_quarantine_exhausted": "Карантин исчерпан",
+    "warming_quarantine_unreadable": "Карантин прекращён: спам-статус не читается",
     "warming_settings_saved": "Настройки прогрева сохранены",
     "warming_start_blocked": "Запуск прогрева заблокирован",
     "warming_runtime_reconciled": "Прогрев синхронизирован",
@@ -686,6 +702,7 @@
     "phone_login_started": "Начат вход по номеру",
     "phone_login_success": "Вход выполнен",
     "proxy_added": "Прокси добавлен",
+    "proxy_checked": "Прокси проверен",
     "proxy_removed": "Прокси удалён",
     "proxy_assigned": "Прокси назначен",
     "proxy_unassigned": "Прокси снят",
@@ -729,6 +746,7 @@
     "tdata_import_completed": "Импорт завершён",
     "tdata_import_failed": "Ошибка импорта",
     "tdata_import_rolled_back": "Импорт отменён",
+    "tdata_rollback_unlink_failed": "Не удалось удалить файл сессии при отмене импорта",
     "neurocomment_discovery_started": "Поиск каналов запущен",
     "neurocomment_discovery_finished": "Поиск каналов завершён",
     "neurocomment_discovery_failed": "Поиск каналов не удался",

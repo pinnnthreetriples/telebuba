@@ -5,6 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { postAccountStoryMutation } from '@/entities/account';
 import { Modal } from '@/shared/ui';
 
+import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
+import { retryAfterSeconds } from './_profileShared';
+import { FIELD, seg } from './_styles';
 import {
   type CollageCell,
   MAX_COLLAGE_IMAGES,
@@ -30,9 +33,6 @@ const PRIVACY: Record<Audience, 'contacts' | 'close_friends' | 'public'> = {
   public: 'public',
 };
 
-const FIELD =
-  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-
 function fileSize(
   file: File | null,
   t: (key: string, opts: Record<string, unknown>) => string,
@@ -45,16 +45,26 @@ function fileSize(
 
 // Pull the reason out of the /api/v1 error envelope ({error:{code,message}}) the
 // failed publish rejects with, so the hover tooltip shows *why* it failed.
-// Known locale-neutral failure codes (story_image_invalid / story_video_invalid)
-// translate via accounts.addStory.code.*; anything else shows as-is.
-function errorText(
-  err: unknown,
-  t: (key: string, opts?: Record<string, unknown>) => string,
-  fallback: string,
-): string {
-  const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
-  if (typeof message !== 'string' || !message.trim()) return fallback;
-  return t(`accounts.addStory.code.${message}`, { defaultValue: message });
+//
+// The same three code tables the global mutation toast walks
+// (shared/lib/query-client.ts), story table FIRST so `failed` keeps its
+// story-specific wording. The other two carry what a story publish can also be
+// refused with and this namespace has no copy for: the rate-limit family
+// (flood_wait, peer_flood, slow_mode_wait, premium_wait) and `unavailable`, all
+// reachable through raise_for_result. A chain rather than five new keys — two
+// copies of one string in two namespaces are two strings that drift. Anything
+// unknown still shows as-is.
+function errorText(err: unknown, t: Translate, fallback: string): string {
+  const message = envelopeMessage(err);
+  if (!message) return fallback;
+  return t(
+    [
+      `accounts.addStory.code.${message}`,
+      `accounts.profile.code.${message}`,
+      `accounts.channel.code.${message}`,
+    ],
+    { defaultValue: message, s: retryAfterSeconds(err) ?? '?' },
+  );
 }
 
 // A 9:16 mini-preview of a collage layout: each cell drawn as a rounded rect
@@ -156,10 +166,11 @@ export function AddStoryModal({
   }
   const errorDetail = errorText(post.error, t, t('accounts.addStory.stError'));
 
-  const seg = (on: boolean): string =>
-    `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
-
   const onPick = (event: React.ChangeEvent<HTMLInputElement>) => {
+    // The add control is disabled while busy/done, but this handler sits on the
+    // hidden input rather than the button, so it keeps its own guard: the
+    // post.reset() below would detach the mutation observer mid-flight.
+    if (busy || done) return;
     // Materialize the FileList BEFORE clearing the input — reading files off a
     // live FileList after value='' yields an empty list in real browsers.
     const picked = Array.from(event.target.files ?? []);
@@ -195,6 +206,16 @@ export function AddStoryModal({
     post.reset();
   };
 
+  // The success window's auto-close timer, cleared on unmount: fired after the
+  // tree is gone it calls an onClose whose owner has moved on.
+  const closeTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
   const publish = () => {
     const files = video !== null ? [video] : images;
     if (files.length === 0) return;
@@ -215,7 +236,7 @@ export function AddStoryModal({
         // animation plays before the profile refresh + close, per the design.
         onSuccess: () => {
           onPosted();
-          window.setTimeout(onClose, 900);
+          closeTimer.current = window.setTimeout(onClose, 900);
         },
       },
     );
@@ -270,6 +291,10 @@ export function AddStoryModal({
             onChange={(event) => {
               setCaption(event.target.value);
             }}
+            // Mirrors the server's own Form(max_length=1024) on the caption: past
+            // it the whole upload is spent to come back a 422 naming a field the
+            // operator can no longer see the end of.
+            maxLength={POST_CAPTION_MAX}
             placeholder={t('accounts.addStory.captionPlaceholder')}
             className={FIELD}
           />
@@ -313,12 +338,18 @@ export function AddStoryModal({
         </div>
 
         {/* Add control — hidden once a collage is full (6 photos). A video
-            replaces photos and vice-versa (handled in onPick). */}
+            replaces photos and vice-versa (handled in onPick). Locked while a
+            publish is in flight or in its success window: onPick calls
+            post.reset(), which detaches the observer — that both re-enables
+            Publish (a second story on the live account) and kills the
+            mutate-level onSuccess, so the grid never refreshes and the modal
+            never closes. Same reason the single-video remove is guarded below. */}
         {!(video === null && count >= MAX_COLLAGE_IMAGES) && (
           <button
             type="button"
             onClick={() => fileInput.current?.click()}
-            className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-white px-4 py-[14px] text-left"
+            disabled={busy || done}
+            className="flex w-full items-center gap-[11px] rounded-[12px] border border-dashed border-line bg-white px-4 py-[14px] text-left disabled:opacity-50"
           >
             <div className="flex h-[42px] w-[42px] shrink-0 items-center justify-center rounded-[11px] border border-line bg-white text-primary">
               <svg
@@ -381,8 +412,9 @@ export function AddStoryModal({
                     onClick={() => {
                       removeImage(index);
                     }}
+                    disabled={busy || done}
                     aria-label={t('accounts.addStory.removePhoto', { n: index + 1 })}
-                    className="absolute right-[3px] top-[3px] inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/55 text-white"
+                    className="absolute right-[3px] top-[3px] inline-flex h-[18px] w-[18px] items-center justify-center rounded-full bg-black/55 text-white disabled:opacity-40"
                   >
                     <svg
                       width="10"
@@ -402,7 +434,8 @@ export function AddStoryModal({
                     onClick={() => {
                       moveImage(index, index - 1);
                     }}
-                    disabled={index === 0}
+                    // moveImage also resets the mutation — see the add control.
+                    disabled={index === 0 || busy || done}
                     aria-label={t('accounts.addStory.moveLeft', { n: index + 1 })}
                     className="inline-flex h-[22px] flex-1 items-center justify-center rounded-[7px] border border-line-input bg-white text-ink-muted transition hover:border-line hover:bg-[#f4f3f0] hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-input disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >
@@ -424,7 +457,7 @@ export function AddStoryModal({
                     onClick={() => {
                       moveImage(index, index + 1);
                     }}
-                    disabled={index === count - 1}
+                    disabled={index === count - 1 || busy || done}
                     aria-label={t('accounts.addStory.moveRight', { n: index + 1 })}
                     className="inline-flex h-[22px] flex-1 items-center justify-center rounded-[7px] border border-line-input bg-white text-ink-muted transition hover:border-line hover:bg-[#f4f3f0] hover:text-ink active:scale-[0.94] disabled:cursor-not-allowed disabled:opacity-35 disabled:hover:border-line-input disabled:hover:bg-white disabled:hover:text-ink-muted"
                   >

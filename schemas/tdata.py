@@ -68,6 +68,10 @@ class TdataConvertResult(BaseModel):
 
     status: TdataConvertStatus
     accounts: list[TdataAccountSummary] = Field(default_factory=list)
+    # Bounded diagnostic — an exception CLASS NAME, never ``str(exc)``. The service
+    # layer surfaces this failure as an HTTP 400 and opentele2's prose carries the
+    # tdata staging path plus any proxy credentials the raising frame held
+    # (non-negotiable #12; see ``core.tdata_import._bounded_conversion_error``).
     error: str | None = None
 
 

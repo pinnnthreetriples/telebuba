@@ -23,8 +23,17 @@ exempt, on the assumption that they run once per account lifecycle. They do
 not — the operator can press the check button on any row at any time — and a
 throwaway client on an account the pool already holds dies on the ``.session``
 SQLite lock. They borrow from the pool like everyone else; only the login /
-logout flows in ``_auth`` still build their own client, and they run on an
-account that is by definition not in service.
+logout flows in ``_auth`` still build their own client, because they sign in on
+or revoke that connection. Those flows also serialise against each other on
+``_auth``'s own per-account lock — the tombstone below stops POOL rebuilds, not a
+second ``_auth`` client.
+
+Those flows are NOT exempt from the lock either — an account with a login in
+flight is not "out of service": ``check_telegram_session`` pools a client for
+every account it probes, new and unauthorized ones included, and ``_CLIENTS``
+has no TTL, so the entry outlives the probe. Each of the three flows therefore
+wraps its own client in :func:`removing_client`, which disconnects the pooled
+twin and refuses rebuilds for the duration.
 """
 
 from __future__ import annotations
@@ -46,6 +55,7 @@ if TYPE_CHECKING:
 
 __all__ = [
     "TelegramClientPoolError",
+    "TelegramClientUnavailableError",
     "evict_client",
     "get_client",
     "register_rebuild_hook",
@@ -61,6 +71,22 @@ class TelegramClientPoolError(RuntimeError):
         super().__init__(f"telegram pool connect failed for {account_id}: {cause}")
         self.account_id = account_id
         self.cause = cause
+
+
+class TelegramClientUnavailableError(TelegramClientPoolError):
+    """The POOL refused to serve the account — shutdown, or a live tombstone.
+
+    Distinct from its parent because nothing was learned about Telegram or the
+    session here: no connect was attempted, and ``cause`` is the pool's own
+    ``RuntimeError`` rather than a Telethon / transport failure. The probe paths
+    have to tell the two apart — ``_session._probe_client`` unwraps ``cause`` so
+    the real error reaches its classification ladder, and a bare ``RuntimeError``
+    matched no arm there, so a login in flight wrote a sticky ``unknown_error``
+    onto a row whose session was fine.
+
+    A subclass, so every ``except TelegramClientPoolError`` borrower
+    (``_actions``, ``_read``) keeps classifying it as an unavailable account.
+    """
 
 
 _CLIENTS: dict[str, TelegramClient] = {}
@@ -113,9 +139,9 @@ def _is_removing(account_id: str) -> bool:
     return account_id in _REMOVING
 
 
-def _removing_error(account_id: str) -> TelegramClientPoolError:
+def _removing_error(account_id: str) -> TelegramClientUnavailableError:
     msg = "account is being removed"
-    return TelegramClientPoolError(account_id, RuntimeError(msg))
+    return TelegramClientUnavailableError(account_id, RuntimeError(msg))
 
 
 def _connect_lock(account_id: str) -> asyncio.Lock:
@@ -139,7 +165,7 @@ async def get_client(account_id: str) -> TelegramClient:
     """
     if _SHUTTING_DOWN:
         msg = "telegram pool is shutting down"
-        raise TelegramClientPoolError(account_id, RuntimeError(msg))
+        raise TelegramClientUnavailableError(account_id, RuntimeError(msg))
     if _is_removing(account_id):
         raise _removing_error(account_id)
 
@@ -246,8 +272,16 @@ async def removing_client(account_id: str) -> AsyncIterator[None]:
     raises ``PermissionError`` and aborts the removal *before* the row is
     deleted; past the unlink it resurrects an orphan file for an account that no
     longer exists. Borrowers refused here raise
-    :class:`TelegramClientPoolError`, which ``execute(...)`` already classifies
-    as an unavailable account.
+    :class:`TelegramClientUnavailableError`. ``execute(...)`` classifies that as an
+    unavailable account — but only ``execute``: the two probe paths
+    (``check_telegram_session``, ``check_spam_status``) run their own ladders and
+    had to be taught the refusal separately, which is why it is a distinct class
+    rather than a message on the parent.
+
+    It refuses POOL rebuilds and nothing else. It does NOT serialise the ``_auth``
+    flows against each other — each builds its own client and would open a second
+    ``SQLiteSession`` on the same file; ``_auth``'s per-account lock covers that.
+    Safe to nest inside that lock: this manager holds none across its ``yield``.
     """
     _REMOVING[account_id] = _REMOVING.get(account_id, 0) + 1
     try:

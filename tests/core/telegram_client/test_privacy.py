@@ -332,3 +332,88 @@ async def test_set_privacy_settings_flood_does_not_mark_the_account(
 
     assert result.status == "flood_wait"
     assert marked == []
+
+
+# --------------------------------------------------------------------------- #
+# ``setPrivacy`` is one call per key with NO rollback, so a refusal on key 2
+# leaves key 1 already changed on Telegram. The single-account route leaves that
+# to the SPA's re-read; the fleet route has no equivalent and reported the account
+# as plainly "failed" — i.e. untouched — while its avatar was already public.
+# --------------------------------------------------------------------------- #
+class _RefuseAfterFirstClient:
+    """Applies the first key, then refuses with ``exc``."""
+
+    def __init__(self, exc: Exception) -> None:
+        self._exc = exc
+        self.calls = 0
+
+    async def connect(self) -> None:
+        return None
+
+    async def __call__(self, _request: object) -> object:
+        self.calls += 1
+        if self.calls > 1:
+            raise self._exc
+        return object()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("exc", "status"),
+    [
+        (errors.FloodWaitError(request=None, capture=30), "flood_wait"),
+        (errors.RPCError(request=None, message="nope", code=400), "failed"),
+        (ConnectionError("socket closed"), "unavailable"),
+    ],
+    ids=["flood", "rpc", "infra"],
+)
+async def test_a_partial_privacy_write_reports_the_keys_that_landed(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+    status: str,
+) -> None:
+    client = _RefuseAfterFirstClient(exc)
+    patch_action_client(monkeypatch, client)
+
+    result = await execute(
+        "acc-priv",
+        SetPrivacySettings(profile_photo="everybody", bio="everybody"),
+    )
+
+    assert result.status == status
+    # profile_photo went first and SUCCEEDED — the avatar is public now, so a bare
+    # failure would invert the safety-relevant fact.
+    assert result.applied_privacy_keys == ["profile_photo"]
+
+
+@pytest.mark.asyncio
+async def test_a_privacy_write_refused_on_its_first_key_reports_nothing_applied(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> object:
+            raise errors.RPCError(request=None, message="nope", code=400)
+
+    patch_action_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-priv", SetPrivacySettings(profile_photo="everybody", bio="nobody"))
+
+    assert result.status == "failed"
+    assert result.applied_privacy_keys is None
+
+
+@pytest.mark.asyncio
+async def test_a_successful_privacy_write_carries_no_applied_keys(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``ok`` applied every requested key by definition — no need to restate them."""
+    client = _SetClient()
+    patch_action_client(monkeypatch, client)
+
+    result = await execute("acc-priv", SetPrivacySettings(bio="everybody"))
+
+    assert result.status == "ok"
+    assert result.applied_privacy_keys is None

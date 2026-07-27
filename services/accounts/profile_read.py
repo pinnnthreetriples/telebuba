@@ -199,8 +199,21 @@ async def fetch_live_account_profile(
     anyway, showing whatever fields are still populated.
     """
     cached = _CACHE.get(account_id)
-    if cached is not None and not force_refresh and _is_fresh(cached):
-        return cached
+    if cached is not None:
+        if not force_refresh and _is_fresh(cached):
+            return cached
+        # ``_is_fresh`` gates USE, not retention: nothing but an explicit
+        # invalidation ever removed an entry, so a shift of dialog opens across
+        # hundreds of accounts pinned one snapshot each — up to
+        # ``set_main_history_limit`` photo + story thumbnails — for the process
+        # lifetime, none of which can ever be served again. Drop it here; the
+        # fetch below repopulates when it succeeds.
+        _CACHE.pop(account_id, None)
+        if account_id not in _INFLIGHT:
+            # Only when nothing is mid-flight: no captured generation is still
+            # being compared against this counter, so resetting it cannot make a
+            # live fetch look stale, nor split the single flight into two.
+            _CACHE_GEN.pop(account_id, None)
 
     gen = _CACHE_GEN.get(account_id, 0)
     inflight = _INFLIGHT.get(account_id)
@@ -272,7 +285,17 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
             account_id=account_id,
             extra={"error_type": type(exc).__name__, "error": str(exc)},
         )
-        return _error_snapshot(account_id, f"{type(exc).__name__}: {exc}")
+        # Class name only: an unexpected exception's message is arbitrary text
+        # (a python_socks failure names the proxy endpoint with credentials, a
+        # session fault its file path) and this value is rendered verbatim in
+        # the operator's browser — it must stay content-free (non-negotiable
+        # #12). That stands on the response contract alone, NOT on "the full
+        # message is already in the log event above": ``log_event`` persists
+        # ``extra`` to the ``logs`` table and ``GET /logs`` serves it back as
+        # ``LogEntry.extra`` (``GET /events`` streams it), so the event above is
+        # an HTTP body by another route rather than a safe sink. The ``str(exc)``
+        # in it is pre-existing ``GET /logs`` exposure, tracked separately.
+        return _error_snapshot(account_id, type(exc).__name__)
 
     # The gateway returns the snapshot types matching each action's position.
     # ``cast`` documents the contract for type checkers without paying for a

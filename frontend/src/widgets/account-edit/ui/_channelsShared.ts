@@ -53,6 +53,12 @@ export function envelopeMessage(err: unknown): string | null {
   return typeof message === 'string' && message.trim() ? message : null;
 }
 
+// The envelope's `fields` bag, where the backend carries the extras a code needs
+// (retry_after_seconds, channel_id). Serialised as strings, so callers coerce.
+function envelopeFields(err: unknown): Record<string, unknown> | undefined {
+  return (err as { error?: { fields?: Record<string, unknown> } } | null)?.error?.fields;
+}
+
 // Codes translate via accounts.channel.code.*, falling back to the profile table
 // for the account-wide codes both surfaces share (the rate-limit family, which a
 // slow-mode channel post hits); anything unknown shows as-is, same contract as
@@ -61,8 +67,14 @@ export function envelopeMessage(err: unknown): string | null {
 export function channelErrorText(err: unknown, t: Translate, fallback: string): string {
   const message = envelopeMessage(err);
   if (!message) return fallback;
+  // The rate-limit family's strings carry a {{s}} slot, and the backend puts the
+  // server-mandated duration in `fields.retry_after_seconds` (now on channel
+  // READ failures too). Without passing it the operator got a blank where the
+  // wait should be. '?' when it's absent, same as the global mutation toast.
+  const seconds = Number(envelopeFields(err)?.retry_after_seconds ?? NaN);
   return t([`accounts.channel.code.${message}`, `accounts.profile.code.${message}`], {
     defaultValue: message,
+    s: Number.isFinite(seconds) ? seconds : '?',
   });
 }
 
@@ -71,7 +83,6 @@ export function channelErrorText(err: unknown, t: Translate, fallback: string): 
 // must still refresh the list so the private channel shows up instead of
 // being re-created.
 export function errorChannelId(err: unknown): string | null {
-  const fields = (err as { error?: { fields?: Record<string, unknown> } } | null)?.error?.fields;
-  const value = fields?.channel_id;
+  const value = envelopeFields(err)?.channel_id;
   return typeof value === 'string' && value !== '' ? value : null;
 }

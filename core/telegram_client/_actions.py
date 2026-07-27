@@ -18,6 +18,7 @@ from telethon.tl.types import ReactionEmoji
 from core.db import fetch_account
 from core.logging import log_event
 from core.telegram_client._action_results import (
+    _applied_privacy_keys,
     _DispatchResult,
     _flood_action_result,
     _generic_error,
@@ -29,7 +30,9 @@ from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_m
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._privacy import dispatch_set_privacy_settings
 from core.telegram_client._profile import (
+    _DEAD_SESSION_ERRORS,
     _PROFILE_EDIT_ACTION_TYPES,
+    _dead_session_code,
     _dispatch_update_profile,
     _mark_account_status,
 )
@@ -72,7 +75,7 @@ if TYPE_CHECKING:
 _rng = random.SystemRandom()
 
 
-async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: C901, PLR0911 - one except per Telegram error family
+async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: C901, PLR0911, PLR0912 - one except per Telegram error family
     """Dispatch a typed Telegram action against ``account_id``.
 
     The only entry point for Telethon calls from outside ``core/``. Borrows
@@ -115,11 +118,31 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
         frozen = ProfileGatewayError("account_frozen")
         frozen.__cause__ = exc  # same chain ``raise ... from exc`` would build
         return await _generic_error(account_id, action, frozen)
+    # A dead auth key / revoked session / deactivated account: the classification
+    # ``check_telegram_session`` already makes, reused here so the operator is told
+    # to re-login instead of reading the opaque ``failed``. Disjoint from the flood
+    # family above (all ``UnauthorizedError``, never ``FloodError``), so the order
+    # relative to those clauses does not matter. The DB status is deliberately not
+    # written: unlike ``frozen`` this is what the session check itself records, and
+    # a sticky write from any action family (warming included) would block
+    # start_warming — the same reason ``_PROFILE_EDIT_ACTION_TYPES`` exists.
+    except _DEAD_SESSION_ERRORS as exc:
+        dead = ProfileGatewayError(_dead_session_code(exc))
+        dead.__cause__ = exc  # same chain ``raise ... from exc`` would build
+        return await _generic_error(account_id, action, dead)
     except errors.FloodWaitError as exc:
         if action.action_type in _PROFILE_EDIT_ACTION_TYPES:
             await _mark_account_status(account_id, "flood_wait")
         return await _flood_action_result(
-            account_id, action, status="flood_wait", seconds=exc.seconds
+            account_id,
+            action,
+            status="flood_wait",
+            seconds=exc.seconds,
+            # The one flood arm a partial privacy write can reach: setPrivacy is
+            # per-key, so key 2 can flood after key 1 already applied. Slow mode,
+            # premium waits and peer-flood belong to message-sending families that
+            # issue a single call, so they have nothing partial to report.
+            applied_privacy_keys=_applied_privacy_keys(exc),
         )
     except errors.UserAlreadyParticipantError as exc:
         if action.action_type in {"join_channel", "join_discussion_group"}:

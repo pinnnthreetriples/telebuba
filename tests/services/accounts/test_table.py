@@ -24,6 +24,7 @@ from schemas.proxy import ProxyCheckUpdate
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_session import TelegramSessionCheckResult
 from services.accounts import (
+    AccountNotFoundError,
     account_stats,
     add_account,
     check_account_session,
@@ -69,6 +70,26 @@ async def test_remove_account_unlinks_session_file() -> None:
     await remove_account("acc-del")
 
     assert not session_file.exists()
+
+
+@pytest.mark.asyncio
+async def test_remove_account_unknown_id_raises_and_touches_no_file() -> None:
+    """A missing row is 404, not a silent unlink of whatever the id resolves to.
+
+    ``remove_account`` was the only lifecycle entry point without an existence
+    check: ``fetch_account`` returning None yielded ``session_name=None``, and
+    ``_session_path`` then fell back to ``session_dir / account_id`` — so an
+    unvalidated id deleted a ``.session`` file for an account that never existed.
+    """
+    session_dir = settings.telegram.session_dir
+    session_dir.mkdir(parents=True, exist_ok=True)
+    bystander = session_dir / "evil.session"
+    bystander.write_bytes(b"someone else's credential")
+
+    with pytest.raises(AccountNotFoundError):
+        await remove_account("evil")
+
+    assert bystander.exists(), "an unknown account must not unlink anything"
 
 
 @pytest.mark.asyncio

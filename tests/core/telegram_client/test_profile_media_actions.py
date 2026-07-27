@@ -8,6 +8,7 @@ from unittest.mock import MagicMock
 
 import pytest
 from PIL import Image
+from telethon import errors
 from telethon.tl.functions.account import (
     SaveMusicRequest,
 )
@@ -128,8 +129,9 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
             assert revoke is True
             deleted.extend(message_ids)
 
-        async def __call__(self, request: object) -> None:
+        async def __call__(self, request: object) -> object:
             captured.append(request)
+            return True
 
     _patch_client(monkeypatch, FakeClient())
 
@@ -141,6 +143,95 @@ async def test_execute_add_profile_music_saves_uploaded_audio(
     assert result.status == "ok"
     assert deleted == [99]
     assert any(isinstance(req, SaveMusicRequest) for req in captured)
+
+
+def _add_music_client(deleted: list[int], *, save_answer: object) -> object:
+    """Add-music fake: ``saveMusic`` raises ``save_answer`` or returns it."""
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def send_file(self, _entity: str, _file: object, **_kwargs: object) -> object:
+            return MagicMock(id=77, document=object())
+
+        async def delete_messages(
+            self,
+            _entity: str,
+            message_ids: list[int],
+            *,
+            revoke: bool,
+        ) -> None:
+            del revoke
+            deleted.extend(message_ids)
+
+        async def __call__(self, request: object) -> object:
+            assert isinstance(request, SaveMusicRequest)
+            if isinstance(save_answer, Exception):
+                raise save_answer
+            return save_answer
+
+    return FakeClient()
+
+
+@pytest.mark.asyncio
+async def test_execute_add_profile_music_deletes_upload_when_save_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused ``saveMusic`` must not strand the audio in Saved Messages.
+
+    The upload always lands in Saved Messages first; before the cleanup moved
+    into a ``finally`` a flood/RPC refusal left it there, and every retry added
+    another copy.
+    """
+    deleted: list[int] = []
+
+    monkeypatch.setattr(
+        "core.telegram_client._media.utils.get_input_document",
+        lambda _document: MagicMock(),
+    )
+    _patch_client(
+        monkeypatch,
+        _add_music_client(deleted, save_answer=errors.FloodWaitError(request=None, capture=30)),
+    )
+
+    result = await execute(
+        "acc-music-save-fails",
+        AddProfileMusic(filename="track.mp3", content=b"mp3", title="Track"),
+    )
+
+    assert result.status != "ok"
+    assert deleted == [77]
+
+
+@pytest.mark.asyncio
+async def test_execute_add_profile_music_errors_when_server_says_false(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A false ``saveMusic`` add is a server-side no-op, not a success.
+
+    Discarding the answer reported "music added" while the next refresh silently
+    dropped the row. The code must be the ADD path's own: this call uploaded fresh
+    bytes seconds earlier, so its document id cannot be stale, and the remove
+    path's ``profile_music_stale_reference`` renders as "refresh the list" — which
+    does nothing about the saved-music cap that actually caused it.
+    """
+    deleted: list[int] = []
+
+    monkeypatch.setattr(
+        "core.telegram_client._media.utils.get_input_document",
+        lambda _document: MagicMock(),
+    )
+    _patch_client(monkeypatch, _add_music_client(deleted, save_answer=False))
+
+    result = await execute(
+        "acc-music-add-noop",
+        AddProfileMusic(filename="track.mp3", content=b"mp3", title="Track"),
+    )
+
+    assert result.status != "ok"
+    assert result.error_message == "profile_music_add_refused"
+    assert deleted == [77]
 
 
 @pytest.mark.asyncio
@@ -281,13 +372,12 @@ def _set_main_client(  # noqa: PLR0913 - keyword-only fake configuration
     updated_id: int | None,
     history_ids: list[int] | None = None,
     history_ids_after: list[int] | None = None,
-    avatar_ids: tuple[int | None, int | None] = (None, None),
     photo_bytes: bytes | None = b"jpeg-bytes",
 ) -> object:
     """Build a fake for fresh lookup, download, and profile-photo re-upload."""
     ids = history_ids if history_ids is not None else [target_id]
     ids_after = history_ids_after if history_ids_after is not None else ids
-    calls = {"get_user_photos": 0, "get_full_user": 0}
+    calls = {"get_user_photos": 0}
 
     class FakeClient:
         def __init__(self) -> None:
@@ -319,12 +409,6 @@ def _set_main_client(  # noqa: PLR0913 - keyword-only fake configuration
                     for pid in seed
                 ]
                 return SimpleNamespace(photos=photos)
-            if isinstance(request, GetFullUserRequest):
-                calls["get_full_user"] += 1
-                index = 0 if calls["get_full_user"] == 1 else 1
-                avatar_id = avatar_ids[index]
-                profile_photo = SimpleNamespace(id=avatar_id) if avatar_id is not None else None
-                return SimpleNamespace(full_user=SimpleNamespace(profile_photo=profile_photo))
             if isinstance(request, DeletePhotosRequest):
                 return [photo.id for photo in request.id if isinstance(photo, InputPhoto)]
             photo = SimpleNamespace(id=updated_id) if updated_id is not None else None
@@ -366,7 +450,6 @@ async def test_execute_set_main_photo_reuploads_as_new_and_logs_id_flow(
         updated_id=555,
         history_ids=[old_main, filler, big_id],
         history_ids_after=[555, old_main, filler, big_id],
-        avatar_ids=(old_main, 555),
     )
     _patch_client(monkeypatch, client)
 
@@ -380,10 +463,12 @@ async def test_execute_set_main_photo_reuploads_as_new_and_logs_id_flow(
     assert [req for req in captured if isinstance(req, UpdateProfilePhotoRequest)] == []
     assert len([req for req in captured if isinstance(req, UploadProfilePhotoRequest)]) == 1
     assert [getattr(media, "id", None) for media in client.downloaded] == [big_id]  # ty: ignore[unresolved-attribute]
-    # One history read + one full-user read: the "after" phase no longer
-    # re-fetches either purely for the debug log.
+    # ONE history read and nothing else: the history re-resolves the target, so it
+    # is load-bearing, while the ``users.getFullUser`` that used to feed
+    # ``current_avatar_id`` into the before-phase log was a whole RPC per click
+    # spent purely on a debug field. Neither phase re-fetches for the log now.
     assert len([req for req in captured if isinstance(req, GetUserPhotosRequest)]) == 1
-    assert len([req for req in captured if isinstance(req, GetFullUserRequest)]) == 1
+    assert [req for req in captured if isinstance(req, GetFullUserRequest)] == []
     flow = [(event, extra) for _level, event, extra in events]
     assert [event for event, _extra in flow] == [
         "telegram_set_main_id_flow",
@@ -393,7 +478,7 @@ async def test_execute_set_main_photo_reuploads_as_new_and_logs_id_flow(
     assert before["phase"] == "before"
     assert before["target_photo_id"] == big_id
     assert before["history_ids"] == [old_main, filler, big_id]
-    assert before["current_avatar_id"] == old_main
+    assert "current_avatar_id" not in before
     assert after["phase"] == "after"
     assert after["target_photo_id"] == big_id
     assert after["promoted_photo_id"] == 555
@@ -415,7 +500,6 @@ async def test_set_main_profile_photo_never_deletes_anything(
             updated_id=555,
             history_ids=[old_main, big_id],
             history_ids_after=[555, old_main, big_id],
-            avatar_ids=(old_main, 555),
         ),
     )
 
@@ -471,7 +555,7 @@ async def test_execute_set_main_photo_tolerates_bare_server_responses(
     assert [req for req in captured if isinstance(req, DeletePhotosRequest)] == []
     assert len([req for req in captured if isinstance(req, UploadProfilePhotoRequest)]) == 1
     before, after = (extra for _level, _event, extra in events)
-    assert before["current_avatar_id"] is None
+    assert "current_avatar_id" not in before
     assert after["promoted_photo_id"] is None
 
 

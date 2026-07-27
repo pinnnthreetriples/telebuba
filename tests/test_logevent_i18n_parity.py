@@ -11,16 +11,15 @@ operator.
 
 from __future__ import annotations
 
+import ast
 import json
 import re
 from pathlib import Path
 
 _ROOT = Path(__file__).resolve().parents[1]
 _CODE_ROOTS = ("api", "services", "core")
-_LOG_EVENT = re.compile(
-    r'log_event\(\s*"(?:INFO|WARNING|ERROR|DEBUG)"\s*,\s*"([a-z0-9_]+)"',
-    re.DOTALL,
-)
+# ``log_event(level, code, ...)`` — the code is the second positional argument.
+_CODE_ARG_INDEX = 1
 # The Telegram gateway logs action outcomes with dynamically composed codes
 # (``telegram_{action}`` / ``telegram_{action}_{status}``) that the SPA labels
 # compositionally from ``logEventTelegram.action`` + ``.status`` — so those maps
@@ -32,12 +31,46 @@ _TELEGRAM_STATUSES = frozenset(
 )
 
 
+def _module_event_codes(source: str, path: Path) -> set[str]:
+    """Every literal code passed to a ``log_event`` call in one module.
+
+    An AST walk over the calls, not a pattern over the text: the level argument is
+    NOT always a literal — ``services.proxies.check_proxy`` picks INFO/WARNING from
+    the check outcome — and a regex anchored on a literal level silently dropped
+    those calls, so ``proxy_checked`` shipped with no label in either locale and the
+    operator read a raw snake_case code in the activity log. Reading the call's
+    second positional argument cannot be defeated by the next formatting variation.
+
+    A code that is itself not a literal (an f-string in the Telegram gateway, a
+    caller-supplied event name) is skipped: the composed ones are covered by
+    :func:`test_every_telegram_action_and_status_has_a_compositional_label`, and the
+    rest cannot be resolved statically at all.
+    """
+    codes: set[str] = set()
+    for node in ast.walk(ast.parse(source, filename=str(path))):
+        if not isinstance(node, ast.Call):
+            continue
+        func = node.func
+        name = func.attr if isinstance(func, ast.Attribute) else getattr(func, "id", "")
+        if name != "log_event":
+            continue
+        # Positional in every current call site; the keyword form is accepted too so
+        # the next call to spell it ``event=`` is not invisible either.
+        code = next(
+            (kw.value for kw in node.keywords if kw.arg == "event"),
+            node.args[_CODE_ARG_INDEX] if len(node.args) > _CODE_ARG_INDEX else None,
+        )
+        if isinstance(code, ast.Constant) and isinstance(code.value, str):
+            codes.add(code.value)
+    return codes
+
+
 def _backend_event_codes() -> set[str]:
     files = [path for root in _CODE_ROOTS for path in (_ROOT / root).rglob("*.py")]
     files.append(_ROOT / "main.py")
     codes: set[str] = set()
     for path in files:
-        codes.update(_LOG_EVENT.findall(path.read_text(encoding="utf-8")))
+        codes.update(_module_event_codes(path.read_text(encoding="utf-8"), path))
     return codes
 
 
@@ -57,6 +90,19 @@ def test_every_backend_log_event_has_ru_and_en_translation() -> None:
     for locale in ("ru", "en"):
         keys = set(_i18n(locale)["logEvent"])
         assert sorted(codes - keys) == [], f"codes missing a {locale} logEvent label"
+
+
+def test_enumeration_catches_a_code_logged_at_a_computed_level() -> None:
+    """A level chosen at runtime must not hide its code from the parity check.
+
+    The previous regex required a literal ``"INFO"``/``"WARNING"`` as the first
+    argument, so ``services.proxies.check_proxy`` — which picks the level from the
+    check outcome — was never enumerated and shipped an untranslated
+    ``proxy_checked`` into the operator's activity log.
+    """
+    source = 'log_event("INFO" if ok else "WARNING", "computed_level_event")'
+    assert _module_event_codes(source, Path("probe.py")) == {"computed_level_event"}
+    assert "proxy_checked" in _backend_event_codes()
 
 
 def test_every_telegram_action_and_status_has_a_compositional_label() -> None:

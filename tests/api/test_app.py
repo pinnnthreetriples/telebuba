@@ -74,6 +74,9 @@ async def test_validation_error_is_remapped_into_envelope(app: FastAPI) -> None:
     assert resp.status_code == 422
     error = resp.json()["error"]
     assert error["code"] == "validation_error"
+    # ``message`` is a CODE, not English prose: the SPA renders it verbatim as the
+    # toast fallback, so a hardcoded sentence reached the operator untranslated.
+    assert error["message"] == "validation_error"
     # The offending field path is reported so the SPA can attach it to the input.
     assert any("limit" in key for key in error["fields"])
 
@@ -92,3 +95,54 @@ async def test_unexpected_error_returns_generic_envelope(
         resp = await client.get("/api/v1/accounts")
     assert resp.status_code == 500
     assert resp.json() == {"error": {"code": "internal_error", "message": "Internal server error"}}
+
+
+# --------------------------------------------------------------------------- #
+# The envelope must also be DECLARED, not just emitted. The runtime tests above
+# passed for months while the OpenAPI document described the accounts routes as
+# answering FastAPI's ``HTTPValidationError`` with a ``detail`` key — a body
+# ``_handle_validation_error`` replaces, so ``detail`` never reached the wire.
+# Every error type in the generated TypeScript client was therefore wrong, and
+# the CI drift gate could not see a change to the real shape.
+# --------------------------------------------------------------------------- #
+_DECLARED_ERROR_STATUSES = ("400", "401", "404", "422", "500", "503")
+
+
+def test_error_envelope_is_declared_in_the_openapi_document(app: FastAPI) -> None:
+    schema = app.openapi()
+    assert "ErrorEnvelope" in schema["components"]["schemas"]
+    responses = schema["paths"]["/api/v1/accounts"]["get"]["responses"]
+    for status in _DECLARED_ERROR_STATUSES:
+        ref = responses[status]["content"]["application/json"]["schema"]["$ref"]
+        assert ref.endswith("/ErrorEnvelope"), f"{status} does not document the envelope"
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/api/v1/accounts/{account_id}/story",
+        "/api/v1/accounts/{account_id}/channels",
+        "/api/v1/accounts/{account_id}/privacy",
+    ],
+)
+def test_the_envelope_reaches_the_mounted_sub_routers(app: FastAPI, path: str) -> None:
+    """Media / channels / privacy are mounted onto the accounts router.
+
+    ``include_router`` merges the including router's ``responses`` into each child
+    route, so declaring them once covers the whole account-editing surface. If that
+    ever stops holding, the generated client silently loses its error types again.
+    """
+    operation = next(iter(app.openapi()["paths"][path].values()))
+    for status in _DECLARED_ERROR_STATUSES:
+        ref = operation["responses"][status]["content"]["application/json"]["schema"]["$ref"]
+        assert ref.endswith("/ErrorEnvelope")
+    # The auto-generated 422 it replaces must be gone from these operations.
+    assert "HTTPValidationError" not in str(operation["responses"]["422"])
+
+
+def test_only_the_session_creating_routes_declare_a_conflict(app: FastAPI) -> None:
+    """409 is real on exactly two routes, so it is not declared router-wide."""
+    paths = app.openapi()["paths"]
+    assert "409" in paths["/api/v1/accounts/import-session"]["post"]["responses"]
+    assert "409" in paths["/api/v1/accounts/start-login"]["post"]["responses"]
+    assert "409" not in paths["/api/v1/accounts"]["get"]["responses"]

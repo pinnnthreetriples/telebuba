@@ -107,13 +107,29 @@ async def dispatch_set_privacy_settings(
     on that key is dropped. Deliberate: the dashboard exposes the three coarse
     levels only, and a "contacts plus exceptions" state is exactly what made the
     avatar invisible to strangers in the first place.
+
+    There is no rollback (never auto-undo — repo data-safety rule), so a refusal on
+    the second key leaves the first already changed on Telegram. The names that DID
+    land are attached to the escaping exception as ``privacy_applied`` and the
+    executor threads them into the ``ActionResult`` — the same ``getattr`` contract
+    ``ChannelGatewayError.channel_id`` already rides. The fleet-wide apply has no
+    other way to learn it, and reporting such an account as plainly ``failed`` told
+    the operator it was untouched while its avatar was already public.
     """
-    targets: tuple[tuple[object, PrivacyTarget | None], ...] = (
-        (InputPrivacyKeyProfilePhoto(), action.profile_photo),
-        (InputPrivacyKeyAbout(), action.bio),
-        (InputPrivacyKeyStatusTimestamp(), action.last_seen),
+    targets: tuple[tuple[object, PrivacyTarget | None, str], ...] = (
+        (InputPrivacyKeyProfilePhoto(), action.profile_photo, "profile_photo"),
+        (InputPrivacyKeyAbout(), action.bio, "bio"),
+        (InputPrivacyKeyStatusTimestamp(), action.last_seen, "last_seen"),
     )
-    for key, target in targets:
+    applied: list[str] = []
+    for key, target, name in targets:
         if target is None:
             continue
-        await client(SetPrivacyRequest(key=key, rules=[_INPUT_VALUES[target]()]))
+        try:
+            await client(SetPrivacyRequest(key=key, rules=[_INPUT_VALUES[target]()]))
+        except Exception as exc:
+            # Annotated and re-raised untouched, so ``execute``'s flood / frozen /
+            # dead-session ladders still classify it exactly as before.
+            exc.privacy_applied = list(applied)  # ty: ignore[unresolved-attribute]
+            raise
+        applied.append(name)

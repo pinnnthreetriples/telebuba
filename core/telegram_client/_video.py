@@ -122,7 +122,11 @@ async def normalize_story_video_for_telegram(
         source_path = td / "input.bin"
         output_path = td / "story.mp4"
         thumb_path = td / "thumb.jpg"
-        source_path.write_bytes(content)
+        # Offloaded: ``story_video_max_bytes`` defaults to 100 MB, and a synchronous
+        # write/read of that on the event loop stalls every other API request plus
+        # all warming/neurocomment tasks (one uvicorn worker). Mirrors the rest of
+        # the slice (``_validate_profile_photo``, ``_compose_story_collage``).
+        await asyncio.to_thread(source_path.write_bytes, content)
         await _run_ffmpeg(
             ffmpeg_bin,
             _encode_args(source_path, output_path),
@@ -135,8 +139,8 @@ async def normalize_story_video_for_telegram(
         )
         duration = await _extract_duration_seconds(ffmpeg_bin, output_path)
         return (
-            output_path.read_bytes(),
-            thumb_path.read_bytes(),
+            await asyncio.to_thread(output_path.read_bytes),
+            await asyncio.to_thread(thumb_path.read_bytes),
             duration,
             _TARGET_WIDTH,
             _TARGET_HEIGHT,
@@ -168,7 +172,8 @@ async def normalize_channel_video_for_telegram(
         source_path = td / "input.bin"
         output_path = td / "post.mp4"
         thumb_path = td / "thumb.jpg"
-        source_path.write_bytes(content)
+        # Same offload rationale as the story normaliser above.
+        await asyncio.to_thread(source_path.write_bytes, content)
         encode_stderr = await _run_ffmpeg(
             ffmpeg_bin,
             _channel_encode_args(source_path, output_path),
@@ -182,8 +187,8 @@ async def normalize_channel_video_for_telegram(
         duration = await _extract_duration_seconds(ffmpeg_bin, output_path)
         width, height = await _output_resolution(ffmpeg_bin, encode_stderr, output_path)
         return (
-            output_path.read_bytes(),
-            thumb_path.read_bytes(),
+            await asyncio.to_thread(output_path.read_bytes),
+            await asyncio.to_thread(thumb_path.read_bytes),
             int(duration),
             width,
             height,

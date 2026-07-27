@@ -5,10 +5,12 @@ import { useTranslation } from 'react-i18next';
 import {
   checkAccountMutation,
   deleteAccountMutation,
+  invalidateAccountViews,
   resetAccountSessionMutation,
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
-import { FeedbackMark, Modal } from '@/shared/ui';
+import { useClearedTimeouts } from '@/shared/lib';
+import { ConfirmModal, FeedbackMark } from '@/shared/ui';
 
 import { Section, Spinner } from './_shared';
 import { type CheckState } from './_styles';
@@ -22,11 +24,12 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const queryClient = useQueryClient();
+  const later = useClearedTimeouts();
   const aliveMutation = useMutation(checkAccountMutation());
   const resetSession = useMutation(resetAccountSessionMutation());
   const deleteAccount = useMutation(deleteAccountMutation());
   const invalidate = () => {
-    void queryClient.invalidateQueries();
+    invalidateAccountViews(queryClient);
   };
 
   const path = { path: { account_id: account.account_id } } as const;
@@ -39,7 +42,7 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
       {
         onSuccess: (checked) => {
           setAliveCheck(checked.status === 'alive' ? 'ok' : 'err');
-          window.setTimeout(() => {
+          later(() => {
             setAliveCheck('idle');
           }, 2400);
           invalidate();
@@ -62,21 +65,23 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
         setResetCheck('err');
       },
       onSettled: () => {
-        window.setTimeout(() => {
+        later(() => {
           setResetCheck('idle');
         }, 1600);
       },
     });
   };
 
-  const onDelete = () => {
-    deleteAccount.mutate(path, {
-      onSuccess: () => {
-        invalidate();
-        onBack();
-      },
+  // Returns the promise so ConfirmModal keeps the dialog open (with a pending
+  // spinner) until the DELETE actually resolves: it can now legitimately fail
+  // — a missing row answers 404 — and the old fire-and-forget closed the dialog
+  // first, so a failure left the account listed with no explanation and no
+  // `onBack()`.
+  const onDelete = () =>
+    deleteAccount.mutateAsync(path).then(() => {
+      invalidate();
+      onBack();
     });
-  };
 
   return (
     <>
@@ -101,6 +106,11 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
           <button
             type="button"
             onClick={runAliveCheck}
+            // Same guard the reset button carries: a second click before the
+            // first check settles takes over the mutation's one callback slot,
+            // so the first result's verdict and invalidate() are dropped — on
+            // top of a wasted Telegram round-trip.
+            disabled={aliveMutation.isPending}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-300"
@@ -206,43 +216,16 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
       </Section>
 
       {confirmDelete ? (
-        <Modal
+        <ConfirmModal
+          title={t('accounts.deleteModal.title', { phone: account.phone ?? account.account_id })}
+          body={t('accounts.deleteModal.body')}
+          confirmLabel={t('accounts.deleteModal.confirm')}
+          cancelLabel={t('accounts.deleteModal.cancel')}
           onClose={() => {
             setConfirmDelete(false);
           }}
-          z={70}
-          className="w-[420px]"
-        >
-          <div className="p-6">
-            <div className="mb-2 text-[16px] font-bold">
-              {t('accounts.deleteModal.title', { phone: account.phone ?? account.account_id })}
-            </div>
-            <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">
-              {t('accounts.deleteModal.body')}
-            </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmDelete(false);
-                }}
-                className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
-              >
-                {t('accounts.deleteModal.cancel')}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setConfirmDelete(false);
-                  onDelete();
-                }}
-                className="rounded-full border border-[#f0c9c5] bg-danger-tint px-5 py-[9px] text-[13px] font-semibold text-danger"
-              >
-                {t('accounts.deleteModal.confirm')}
-              </button>
-            </div>
-          </div>
-        </Modal>
+          onConfirm={onDelete}
+        />
       ) : null}
     </>
   );

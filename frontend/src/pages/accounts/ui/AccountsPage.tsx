@@ -1,22 +1,24 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
-  accountsQueryKey,
   accountsQueryOptions,
-  accountStatsQueryKey,
   accountStatsQueryOptions,
   checkAccountMutation,
   deleteAccountMutation,
+  invalidateAccountViews,
 } from '@/entities/account';
-import { proxyPoolQueryOptions } from '@/entities/proxy';
 import type { AccountRead } from '@/shared/api';
 import { AccountEdit, AddAccountModal, ProfileModal, ProxyAddModal } from '@/widgets/account-edit';
 import { AccountsTable, DeleteAccountModal } from '@/widgets/accounts-table';
 import { ProxyPool } from '@/widgets/proxy-pool';
 
 const PAGE_SIZE = 20;
+// The generated query key embeds `query`, so an undebounced search box means a
+// brand-new key per keystroke — no cached data, `isPending` true, and the table
+// plus the pagination row replaced by the loading line on every character.
+const SEARCH_DEBOUNCE_MS = 300;
 
 export function AccountsPage() {
   const { t } = useTranslation();
@@ -31,20 +33,33 @@ export function AccountsPage() {
   const [proxyAdding, setProxyAdding] = useState(false);
   const [profilingRow, setProfilingRow] = useState<AccountRead | null>(null);
 
+  const [debouncedSearch, setDebouncedSearch] = useState('');
+  useEffect(() => {
+    const id = window.setTimeout(() => {
+      setDebouncedSearch(search);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => {
+      window.clearTimeout(id);
+    };
+  }, [search]);
+
   const cursor = cursorStack[cursorStack.length - 1] ?? undefined;
-  const { data, isPending, isError } = useQuery(
-    accountsQueryOptions({ query: { query: search, status: 'all', cursor, limit: PAGE_SIZE } }),
-  );
+  const { data, isPending, isError } = useQuery({
+    ...accountsQueryOptions({
+      query: { query: debouncedSearch, status: 'all', cursor, limit: PAGE_SIZE },
+    }),
+    // Keep the last page on screen while the next key loads, so a search or a
+    // page turn doesn't blank the table (and unmount an open edit view).
+    placeholderData: keepPreviousData,
+  });
   // Fleet-wide status roll-up for the tiles — spans the whole table, so the
   // counts stay correct across pagination and search (unlike counting items).
   const { data: fleetStats } = useQuery(accountStatsQueryOptions());
 
-  // Scoped: check / delete / import touch the accounts table, the fleet stat
-  // tiles, and proxy usage (an account holds a pool slot) — not the whole cache.
+  // Scoped, never the whole cache — the entity owns the key set (check / delete
+  // / import all touch exactly those three queries).
   const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
-    void queryClient.invalidateQueries({ queryKey: accountStatsQueryKey() });
-    void queryClient.invalidateQueries({ queryKey: proxyPoolQueryOptions().queryKey });
+    invalidateAccountViews(queryClient);
   };
   const check = useMutation(checkAccountMutation());
   const remove = useMutation(deleteAccountMutation());
@@ -177,46 +192,54 @@ export function AccountsPage() {
         <p role="alert" className="text-danger">
           {t('accounts.error')}
         </p>
-      ) : items.length === 0 ? (
-        <div className="rounded-2xl border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
-          {t('accounts.empty')}
-        </div>
       ) : (
         <>
-          <AccountsTable
-            data={items}
-            onCheck={onCheck}
-            onDelete={onDelete}
-            onOpen={(account) => {
-              setEditingId(account.account_id);
-            }}
-            onProfile={(account) => {
-              setProfilingRow(account);
-            }}
-            busyId={busyId}
-          />
-          <div className="mt-4 flex items-center justify-end gap-2">
-            <button
-              type="button"
-              disabled={!hasPrev}
-              onClick={() => {
-                setCursorStack((stack) => stack.slice(0, -1));
+          {items.length === 0 ? (
+            <div className="rounded-2xl border border-line bg-white px-4 py-16 text-center text-[13px] text-ink-subtle">
+              {t('accounts.empty')}
+            </div>
+          ) : (
+            <AccountsTable
+              data={items}
+              onCheck={onCheck}
+              onDelete={onDelete}
+              onOpen={(account) => {
+                setEditingId(account.account_id);
               }}
-              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
-            >
-              {t('accounts.pagination.prev')}
-            </button>
-            <button
-              type="button"
-              disabled={!hasNext}
-              onClick={() => {
-                setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
+              onProfile={(account) => {
+                setProfilingRow(account);
               }}
-              className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
-            >
-              {t('accounts.pagination.next')}
-            </button>
-          </div>
+              busyId={busyId}
+            />
+          )}
+          {/* The pagination row lives outside the empty branch: deleting the
+              last row of page 2 empties the list, and with Prev buried in the
+              else-branch the only ways back were the search box and a reload.
+              A genuinely empty FIRST page still shows the bare empty state. */}
+          {items.length > 0 || hasPrev ? (
+            <div className="mt-4 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                disabled={!hasPrev}
+                onClick={() => {
+                  setCursorStack((stack) => stack.slice(0, -1));
+                }}
+                className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+              >
+                {t('accounts.pagination.prev')}
+              </button>
+              <button
+                type="button"
+                disabled={!hasNext}
+                onClick={() => {
+                  setCursorStack((stack) => [...stack, data?.next_cursor ?? null]);
+                }}
+                className="rounded-full border border-line bg-white px-4 py-[7px] text-[13px] disabled:opacity-50"
+              >
+                {t('accounts.pagination.next')}
+              </button>
+            </div>
+          ) : null}
         </>
       )}
       {deletingId ? (

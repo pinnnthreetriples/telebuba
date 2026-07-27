@@ -48,7 +48,12 @@ from services.accounts.channels import (
     set_account_channel_photo,
     update_account_channel,
 )
-from services.accounts.lifecycle import add_account, evaluate_account_geo, remove_account
+from services.accounts.lifecycle import (
+    add_account,
+    evaluate_account_geo,
+    remove_account,
+    require_account,
+)
 from services.accounts.login import (
     PhoneLoginError,
     logout_account,
@@ -63,6 +68,7 @@ from services.accounts.media import (
     remove_account_profile_music,
     remove_account_profile_photo,
     remove_account_story,
+    resync_account_avatar,
     set_account_main_profile_photo,
     set_account_profile_photo,
     set_account_story_pinned,
@@ -127,7 +133,9 @@ __all__ = [
     "remove_account_profile_photo",
     "remove_account_story",
     "request_login_code",
+    "require_account",
     "reset_account_session",
+    "resync_account_avatar",
     "set_account_channel_photo",
     "set_account_main_profile_photo",
     "set_account_profile_photo",

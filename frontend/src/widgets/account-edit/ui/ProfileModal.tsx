@@ -18,17 +18,12 @@ import {
   setAccountStoryPinnedMutation,
   updateAccountProfileMutation,
 } from '@/entities/account';
-import type {
-  AccountProfileView,
-  AccountRead,
-  MusicRemoveRequest,
-  ProfilePhotoView,
-  ProfileStoryView,
-} from '@/shared/api';
+import { resyncAccountAvatar } from '@/shared/api';
+import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shared/api';
 import { ConfirmModal, FormField, Modal, toastError } from '@/shared/ui';
 
 import { isUploadablePhoto, PHOTO_MAX_BYTES } from './_channelsShared';
-import { dedupeById, profileErrorField, profileErrorText } from './_profileShared';
+import { dedupeById, profileCodeText, profileErrorField, profileErrorText } from './_profileShared';
 import { FIELD } from './_styles';
 import { AddStoryModal } from './AddStoryModal';
 import { ChannelsTab } from './ChannelsTab';
@@ -63,6 +58,14 @@ const profileSchema = z.object({
 // privacy tabs manage the account's own channels and its Telegram privacy
 // levels (their own queries — outside the snapshot busy scrim).
 type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy';
+const TABS = [
+  'text',
+  'photo',
+  'stories',
+  'music',
+  'channels',
+  'privacy',
+] as const satisfies readonly Tab[];
 
 // "Обновлено {только что | N мин назад}" from the snapshot query's last fetch.
 // Its own component with its own 30s tick, so only this label re-renders while
@@ -79,15 +82,44 @@ function SyncLabel({ updatedAt }: { updatedAt: number }) {
       window.clearInterval(id);
     };
   }, []);
-  const mins = updatedAt ? Math.floor((Date.now() - updatedAt) / 60000) : 0;
+  // 0 = never fetched (dataUpdatedAt before the first success). Saying "Обновлено
+  // только что" about data that has not arrived yet is a confident false claim —
+  // and it sat next to media tabs rendering their empty state, so render nothing
+  // until there is a fetch to date.
+  if (!updatedAt) return null;
+  const mins = Math.floor((Date.now() - updatedAt) / 60000);
   return (
     <span className="text-[11px] text-ink-subtle">
-      {!updatedAt || mins < 1
+      {mins < 1
         ? t('accounts.profile.updatedJustNow')
         : t('accounts.profile.updatedMinAgo', { n: mins })}
     </span>
   );
 }
+
+// «Обновить» in its three looks. idle and loading share the ↻ glyph (loading
+// spins it); ok/error swap in a ✓/✗ and recolour the border. A 3-entry lookup
+// instead of the same <svg> written out three times under nested ternaries.
+const REFRESH_LOOK = {
+  idle: {
+    path: 'M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16',
+    stroke: '2',
+    labelKey: 'accounts.profile.refresh',
+    border: 'border-line-input text-ink hover:border-[#bfd6ff] hover:text-primary',
+  },
+  ok: {
+    path: 'M20 6 9 17l-5-5',
+    stroke: '2.4',
+    labelKey: 'accounts.profile.refreshOk',
+    border: 'border-[#bfe4cc] text-[#2e9e64]',
+  },
+  error: {
+    path: 'M18 6 6 18M6 6l12 12',
+    stroke: '2.4',
+    labelKey: 'accounts.profile.refreshError',
+    border: 'border-[#f0c9c5] text-danger',
+  },
+} as const;
 
 export function ProfileModal({ account, onClose }: { account: AccountRead; onClose: () => void }) {
   const { t } = useTranslation();
@@ -112,15 +144,29 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const [syncing, setSyncing] = useState(false);
   // A failed background re-pull rejects outside any rendered query, which
   // loadError (watching the plain key) can't see — track it here so the banner
-  // shows instead of silently presenting a pre-mutation grid as current.
-  const [syncError, setSyncError] = useState(false);
+  // shows instead of silently presenting a pre-mutation grid as current. Holds
+  // the rendered reason, not a flag: nothing else keeps that rejection.
+  const [syncError, setSyncError] = useState<string | null>(null);
   const photos = dedupeById(snapshot.data?.photos ?? []);
   const stories = snapshot.data?.stories ?? [];
   const music = snapshot.data?.music ?? [];
   // A transport failure (snapshot.isError) or a Telegram refusal (200 carrying
   // `error`) must show an explicit error + retry — otherwise the media tabs
   // render empty and read as "this account has no photos/stories/music".
-  const loadError = snapshot.isError || Boolean(snapshot.data?.error) || syncError;
+  //
+  // WHY it failed decides what the operator does next — wait out a FloodWait,
+  // re-login a dead session, fix a down proxy — so the reason is rendered, not
+  // collapsed to a boolean. Two shapes reach here: a 200 whose `error` carries
+  // the gateway's own label (services/accounts/profile_read.py) and a rejected
+  // request carrying the error envelope's stable code. `noReason` is the same
+  // "we don't know" copy the privacy tab uses for a rejection that isn't ours.
+  const loadErrorReason =
+    snapshot.data?.error != null
+      ? profileCodeText(snapshot.data.error, t)
+      : snapshot.isError
+        ? profileErrorText(snapshot.error, t, t('accounts.profile.privacy.noReason'))
+        : syncError;
+  const loadError = loadErrorReason != null;
   // Older Telethon builds lack the saved-music TL methods; the snapshot flags
   // that so the UI shows an "unsupported" note instead of a picker that fails.
   const musicSupported = snapshot.data?.music_supported !== false;
@@ -146,7 +192,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       // which a newer pull can start, and the older one must not write last.
       if (gen !== pullGen.current) return null;
       queryClient.setQueryData(snapOpts.queryKey, fresh);
-      setSyncError(false);
+      setSyncError(null);
       return fresh;
     } catch (error) {
       if (gen !== pullGen.current) return null;
@@ -160,8 +206,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // show in the list) — not the whole cache.
   const refresh = () => {
     setSyncing(true);
-    void forcePull().catch(() => {
-      setSyncError(true);
+    void forcePull().catch((error: unknown) => {
+      setSyncError(profileErrorText(error, t, t('accounts.profile.privacy.noReason')));
     });
     void queryClient.invalidateQueries({ queryKey: accountsQueryKey() });
   };
@@ -187,15 +233,31 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     savedBioRef.current = bio;
     setSavedBio(bio);
   };
-  const [confirmPhoto, setConfirmPhoto] = useState<ProfilePhotoView | null>(null);
-  const [confirmStory, setConfirmStory] = useState<ProfileStoryView | null>(null);
-  const [confirmMusic, setConfirmMusic] = useState<MusicRemoveRequest | null>(null);
+  // The three remove confirmations are one dialog: same four labels keyed off the
+  // subject, same "run it, then re-pull either way" body. `kind` picks the copy,
+  // `run` is the removal itself — `finally`, not `then`, because a failed remove
+  // has already invalidated the server-side cache, so the grid must re-pull or it
+  // keeps dead ids; the rejection still propagates so the dialog stays open.
+  const [confirm, setConfirm] = useState<{
+    kind: 'Photo' | 'Story' | 'Music';
+    run: () => Promise<unknown>;
+  } | null>(null);
 
-  // A single "media in flight" flag: any photo/story/music write plus the
-  // post-action background sync. Drives the content-body overlay and disables
-  // the media controls. Excludes the text Save (footer has its own spinner).
+  // A single "the media on screen isn't the account's current state" flag: any
+  // photo/story/music write, the post-action background sync, and the very first
+  // snapshot read. Drives the content-body overlay and disables the media
+  // controls. Excludes the text Save (footer has its own spinner).
+  //
+  // `isPending` is in it because an empty list while the read is still in flight
+  // renders as «Нет сохранённой музыки» — a definitive claim about a live
+  // account, the same failure the error branch above already guards against.
   const busy =
     syncing ||
+    // `&& !loadError`: a cancelled first read that then failed leaves the query
+    // pending for good (nothing re-fetches on its own), and the scrim sits ON TOP
+    // of the error banner — including its retry button. With a reason on screen
+    // the empty tabs are already explained, so the scrim has nothing to add.
+    (snapshot.isPending && !loadError) ||
     Boolean(photoProgress) ||
     setMainPhoto.isPending ||
     removePhoto.isPending ||
@@ -282,15 +344,32 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // A stale server error must not outlive the edit that addresses it: while an
   // error is shown, the first form-value change clears it. Store subscription,
   // not a values selector — typing must not re-render the whole modal.
+  //
+  // A programmatic re-seed is NOT such an edit, and it is indistinguishable from
+  // one by the values reference alone: `seedField` writes through
+  // `setFieldValue`, which builds a new `values` object even for an identical
+  // value. So «Обновить» — pressed to check the account the save error is about —
+  // erased the error with nothing fixed: the flood_wait duration telling the
+  // operator how long to wait, or the "username taken" verdict next to a handle
+  // the same pull had just re-seeded to Telegram's own. `seeding` swallows the
+  // notification the seed raises, and moves the baseline with it so the next
+  // unrelated store event (a blur, a validation settling) doesn't clear it
+  // either. The user's own keystroke still does — that is the point of the effect.
+  const seeding = useRef(false);
+  const errorBaseline = useRef<unknown>(null);
   const showingSaveError = updateProfile.isError;
   const resetSaveError = updateProfile.reset;
   useEffect(() => {
     if (!showingSaveError) return;
-    const baseline = form.store.state.values;
+    errorBaseline.current = form.store.state.values;
     // ``subscribe`` hands back a Subscription, not the bare unsubscribe function
     // (@tanstack/store, since react-form 1.x), so the effect cleans up through it.
     const subscription = form.store.subscribe(() => {
-      if (form.store.state.values !== baseline) resetSaveError();
+      if (seeding.current) {
+        errorBaseline.current = form.store.state.values;
+        return;
+      }
+      if (form.store.state.values !== errorBaseline.current) resetSaveError();
     });
     return () => subscription.unsubscribe();
   }, [showingSaveError, resetSaveError, form]);
@@ -320,12 +399,21 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // value that is itself invalid. Neither step marks the form dirty.
   const seedField = useCallback(
     (name: 'first_name' | 'last_name' | 'username' | 'bio', value: string) => {
-      form.setFieldValue(name, value, { dontUpdateMeta: true });
-      form.setFieldMeta(name, (meta) => ({
-        ...meta,
-        errorMap: { ...meta.errorMap, onMount: undefined },
-      }));
-      form.validateField(name, 'change');
+      // Flagged for the save-error subscription above: these writes are the
+      // dashboard's, not the operator's, so they must not count as addressing
+      // the error. Cleared in `finally` — a throwing validator must not leave
+      // the guard latched, which would make the real next edit a no-op.
+      seeding.current = true;
+      try {
+        form.setFieldValue(name, value, { dontUpdateMeta: true });
+        form.setFieldMeta(name, (meta) => ({
+          ...meta,
+          errorMap: { ...meta.errorMap, onMount: undefined },
+        }));
+        form.validateField(name, 'change');
+      } finally {
+        seeding.current = false;
+      }
     },
     [form],
   );
@@ -368,10 +456,27 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
     if (snapshotData && !form.state.isDirty) seedForm(snapshotData);
   }, [snapshotData, form, seedForm]);
 
+  // The ✓/✗ flash timer, kept so a later press or an unmount can cancel it.
+  const flashTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+    },
+    [],
+  );
+
   // «Обновить»: force a live re-pull (bypasses the read cache), write it into the
   // rendered snapshot, and reseed the header + text fields from the fresh profile.
   const onRefresh = async () => {
     setRefreshState('loading');
+    // Own the overlay for the whole pull, exactly as the post-action `refresh()`
+    // does — `forcePull`'s latest-gen `finally` is what clears it. Without this
+    // the button's only guard was `refreshState`, which the 1.4s timer below
+    // clears: a ✓ armed at t≈50ms re-enabled the button at t=1450 while a second
+    // press's pull was still in flight, and every press is a `refresh=true`
+    // round trip that deliberately bypasses the server's 30s read cache — the
+    // FLOOD_WAIT hazard the rest of this file is built to avoid.
+    setSyncing(true);
     // The privacy tab runs its own query, outside the snapshot: without this,
     // «Обновить» resets the «Обновлено … назад» label while the levels on
     // screen stay stale — the control would be lying on that tab. Only when it
@@ -393,15 +498,19 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
         // Superseded by a newer pull — that one reports the outcome.
         setRefreshState('idle');
       }
-    } catch {
+    } catch (error) {
       setRefreshState('error');
       // Same as the fire-and-forget `refresh()` path: a refused pull must mark
       // the snapshot untrustworthy, not just flash a 1.4s ✗. Otherwise the
       // stale fields keep rendering as current — and the bio verdict, which
       // stays silent while `loadError` holds, would be recomputed from them.
-      setSyncError(true);
+      setSyncError(profileErrorText(error, t, t('accounts.profile.privacy.noReason')));
     } finally {
-      window.setTimeout(() => {
+      // Held in a ref so a press supersedes the previous press's timer and the
+      // unmount cleanup below cancels the last one: an orphan timer lands 'idle'
+      // on a tree that is gone, or on a newer pull that has not finished.
+      if (flashTimer.current !== null) window.clearTimeout(flashTimer.current);
+      flashTimer.current = window.setTimeout(() => {
         setRefreshState('idle');
       }, 1400);
     }
@@ -410,6 +519,13 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   // Escape / backdrop / × ask before discarding unsaved text edits.
   const [confirmDiscard, setConfirmDiscard] = useState(false);
   const requestClose = () => {
+    // A photo batch outlives the modal: `uploadPhotos` is a sequential loop with
+    // no abort path and react-query keeps the mutation in its cache, so closing
+    // after file #2 hides the progress overlay while #3..#5 keep uploading — each
+    // one becoming the account's avatar — and the post-batch refresh() is gone
+    // with the tree that owned it. Same reason AddStoryModal locks its exits
+    // mid-publish; the buttons below are disabled so this is not a dead click.
+    if (photoProgress) return;
     if (form.state.isDirty) setConfirmDiscard(true);
     else onClose();
   };
@@ -457,11 +573,57 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       setPhotoProgress({ done: index + 1, total: uploadable.length });
     }
     setPhotoProgress(null);
+    // ONE avatar re-sync for the whole batch, never per file. /accounts/photo
+    // takes one file per call, so the server-side re-sync it used to do spent a
+    // get_me plus a thumb download on every upload and all but the last were
+    // immediately superseded — working against the very FLOOD_WAIT budget this
+    // sequential loop exists to protect. It is its own endpoint now, and this is
+    // the only caller: the loop above is the sole frontend path to
+    // /accounts/photo (a single-file pick runs the same loop with one entry).
+    //
+    // Called through the SDK rather than a useMutation on purpose: every
+    // mutation rejection goes through MutationCache.onError, which toasts it
+    // (shared/lib/query-client.ts), and the list avatar is cosmetic — a refused
+    // re-sync must not raise an error over a batch that uploaded fine. Swallowed
+    // like the per-file failures above, minus the toast they DO deserve. The row
+    // then keeps its previous thumbnail until the next session check.
+    //
+    // Not applied to remove-photo or set-main: those keep their own server-side
+    // re-sync (services/accounts/media.py), where one click re-syncs once and
+    // nothing is superseded.
+    try {
+      await resyncAccountAvatar({ path: { account_id: account.account_id } });
+    } catch {
+      // cosmetic — deliberately silent, see above
+    }
+    // refresh()'s accounts-key invalidation is what pulls the new avatar_thumb
+    // into the table, so the re-sync has to land BEFORE it.
     refresh();
   };
 
   const tabBtn = (value: Tab): string =>
     `border-b-2 py-[14px] text-[13px] font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
+
+  // The other half of the ARIA tabs pattern (the roles landed with the tablist):
+  // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
+  // between the tabs — otherwise a keyboard user Tabs through all six.
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    let next: Tab | undefined;
+    if (step !== 0) next = TABS[(TABS.indexOf(tab) + step + TABS.length) % TABS.length];
+    else if (event.key === 'Home') next = TABS[0];
+    else if (event.key === 'End') next = TABS[TABS.length - 1];
+    if (next === undefined) return;
+    event.preventDefault();
+    setTab(next);
+    // Automatic activation: selection follows focus, so focus has to follow too.
+    document.getElementById(`profile-tab-${next}`)?.focus();
+  };
+
+  const refreshLook = REFRESH_LOOK[refreshState === 'loading' ? 'idle' : refreshState];
+  // An in-flight photo batch owns the modal: the exits are locked (see
+  // requestClose) and must look it rather than silently ignoring the click.
+  const uploading = Boolean(photoProgress);
 
   return (
     <>
@@ -497,92 +659,74 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 onClick={() => {
                   void onRefresh();
                 }}
-                className={`inline-flex items-center gap-[6px] rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${
-                  refreshState === 'ok'
-                    ? 'border-[#bfe4cc] text-[#2e9e64]'
-                    : refreshState === 'error'
-                      ? 'border-[#f0c9c5] text-danger'
-                      : 'border-line-input text-ink hover:border-[#bfd6ff] hover:text-primary'
-                }`}
+                className={`inline-flex items-center gap-[6px] rounded-full border bg-white px-3 py-[6px] text-[12.5px] font-medium transition-colors disabled:opacity-70 ${refreshLook.border}`}
               >
-                {refreshState === 'ok' ? (
-                  <span className="tb-swapin inline-flex">
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                    >
-                      <path d="M20 6 9 17l-5-5" />
-                    </svg>
-                  </span>
-                ) : refreshState === 'error' ? (
-                  <span className="tb-swapin inline-flex">
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2.4"
-                    >
-                      <path d="M18 6 6 18M6 6l12 12" />
-                    </svg>
-                  </span>
-                ) : (
-                  <span className={`inline-flex ${refreshState === 'loading' ? 'tb-spin' : ''}`}>
-                    <svg
-                      width="13"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    >
-                      <path d="M21 2v6h-6M3 12a9 9 0 0 1 15-6.7L21 8M3 22v-6h6M21 12a9 9 0 0 1-15 6.7L3 16" />
-                    </svg>
-                  </span>
-                )}
-                {refreshState === 'ok'
-                  ? t('accounts.profile.refreshOk')
-                  : refreshState === 'error'
-                    ? t('accounts.profile.refreshError')
-                    : t('accounts.profile.refresh')}
+                <span
+                  className={`inline-flex ${
+                    refreshState === 'loading'
+                      ? 'tb-spin'
+                      : refreshState === 'idle'
+                        ? ''
+                        : 'tb-swapin'
+                  }`}
+                >
+                  <svg
+                    width="13"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={refreshLook.stroke}
+                  >
+                    <path d={refreshLook.path} />
+                  </svg>
+                </span>
+                {t(refreshLook.labelKey)}
               </button>
               <SyncLabel updatedAt={snapshot.dataUpdatedAt} />
             </div>
             <button
               type="button"
               onClick={requestClose}
+              disabled={uploading}
               aria-label={t('accounts.profile.close')}
-              className="ml-[2px] h-[30px] w-[30px] shrink-0 rounded-full border border-line bg-white text-[16px] text-ink-muted"
+              className="ml-[2px] h-[30px] w-[30px] shrink-0 rounded-full border border-line bg-white text-[16px] text-ink-muted disabled:opacity-50"
             >
               ×
             </button>
           </div>
 
-          {/* tabs */}
-          <div className="flex gap-5 border-b border-[#f0eeeb] px-5">
-            {(['text', 'photo', 'stories', 'music', 'channels', 'privacy'] as const).map(
-              (value) => (
-                <button
-                  key={value}
-                  type="button"
-                  onClick={() => {
-                    setTab(value);
-                  }}
-                  className={tabBtn(value)}
-                >
-                  {t(`accounts.profile.tab.${value}`)}
-                </button>
-              ),
-            )}
+          {/* tabs — a real tablist: the active tab was conveyed by colour and a
+              bottom border only, so a screen reader announced six plain buttons
+              with no way to tell which one is showing. */}
+          <div role="tablist" className="flex gap-5 border-b border-[#f0eeeb] px-5">
+            {TABS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                id={`profile-tab-${value}`}
+                aria-selected={tab === value}
+                aria-controls="profile-tabpanel"
+                tabIndex={tab === value ? 0 : -1}
+                onKeyDown={onTabKeyDown}
+                onClick={() => {
+                  setTab(value);
+                }}
+                className={tabBtn(value)}
+              >
+                {t(`accounts.profile.tab.${value}`)}
+              </button>
+            ))}
           </div>
 
           {/* content */}
-          <div className="tb-scroll relative flex-1 overflow-y-auto p-5">
+          <div
+            role="tabpanel"
+            id="profile-tabpanel"
+            aria-labelledby={`profile-tab-${tab}`}
+            className="tb-scroll relative flex-1 overflow-y-auto p-5"
+          >
             {/* Applying overlay: every media edit calls refresh(), which re-pulls
                 the snapshot from Telegram in the background. A greyed scrim with a
                 spinner signals "still working" and blocks input to stop double-
@@ -607,7 +751,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             )}
             {loadError && tab !== 'channels' && tab !== 'privacy' && (
               <div className="mb-4 flex items-center justify-between gap-3 rounded-[10px] border border-[#f0c9c5] bg-danger-tint px-3 py-[10px] text-[12.5px] text-danger">
-                <span>{t('accounts.profile.loadError')}</span>
+                <span>{t('accounts.profile.loadError', { reason: loadErrorReason })}</span>
                 <button
                   type="button"
                   disabled={refreshState === 'loading' || syncing}
@@ -645,7 +789,10 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         />
                       </div>
                       {saveErrorField === 'username' && saveErrorText != null && (
-                        <span className="mt-[5px] block text-[11px] font-medium text-[#c0473f]">
+                        <span
+                          role="alert"
+                          className="mt-[5px] block text-[11px] font-medium text-[#c0473f]"
+                        >
                           {saveErrorText}
                         </span>
                       )}
@@ -661,19 +808,28 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                         value={field.state.value}
                         onChange={(event) => {
                           // A new edit supersedes the verdict on the last save.
-                          rememberSavedBio(null);
+                          // Guarded: `rememberSavedBio` setStates, and this is the
+                          // one field not isolated behind its own `form.Field`
+                          // subscription, so unguarded it re-rendered the whole
+                          // modal on every keystroke — which the save-error
+                          // subscription and `canSubmit`'s useStore exist to avoid.
+                          if (savedBioRef.current !== null) rememberSavedBio(null);
                           field.handleChange(event.target.value);
                         }}
                         onBlur={field.handleBlur}
                         className={`${FIELD} resize-none [font-family:inherit]`}
                       />
                       {saveErrorField === 'bio' && saveErrorText != null && (
-                        <span className="mt-[5px] block text-[11px] font-medium text-[#c0473f]">
+                        <span
+                          role="alert"
+                          className="mt-[5px] block text-[11px] font-medium text-[#c0473f]"
+                        >
                           {saveErrorText}
                         </span>
                       )}
                       {bioDropped && (
                         <span
+                          role="alert"
                           data-testid="bio-not-applied"
                           className="mt-[5px] block text-[11px] font-medium text-[#9a6700]"
                         >
@@ -690,11 +846,26 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               <PhotoTab
                 photos={photos}
                 busy={busy}
-                uploading={Boolean(photoProgress)}
+                uploading={uploading}
                 onUpload={(files) => {
                   void uploadPhotos(files);
                 }}
-                onRemove={setConfirmPhoto}
+                onRemove={(photo) => {
+                  setConfirm({
+                    kind: 'Photo',
+                    run: () =>
+                      removePhoto
+                        .mutateAsync({
+                          path: { account_id: account.account_id },
+                          body: {
+                            photo_id: photo.photo_id,
+                            access_hash: photo.access_hash,
+                            file_reference: photo.file_reference,
+                          },
+                        })
+                        .finally(refresh),
+                  });
+                }}
                 onMakeMain={(photo) => {
                   setMainPhoto.mutate(
                     {
@@ -722,7 +893,18 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 onAdd={() => {
                   setStoryOpen(true);
                 }}
-                onRemove={setConfirmStory}
+                onRemove={(story) => {
+                  setConfirm({
+                    kind: 'Story',
+                    run: () =>
+                      removeStory
+                        .mutateAsync({
+                          path: { account_id: account.account_id },
+                          body: { story_id: story.story_id },
+                        })
+                        .finally(refresh),
+                  });
+                }}
                 onPinToggle={(story) => {
                   setStoryPinned.mutate(
                     {
@@ -755,10 +937,17 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                   // the guard keeps the narrowing honest (no '' fallback ever
                   // reaches the wire).
                   if (!track.file_reference) return;
-                  setConfirmMusic({
+                  const body: MusicRemoveRequest = {
                     file_id: track.file_id,
                     access_hash: track.access_hash ?? '0',
                     file_reference: track.file_reference,
+                  };
+                  setConfirm({
+                    kind: 'Music',
+                    run: () =>
+                      removeMusic
+                        .mutateAsync({ path: { account_id: account.account_id }, body })
+                        .finally(refresh),
                   });
                 }}
               />
@@ -775,6 +964,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
                 live beside the global Save button, visible from any tab. */}
             {saveErrorField === null && saveErrorText != null && (
               <div
+                role="alert"
                 title={saveErrorText}
                 className="mr-auto min-w-0 truncate text-[12px] font-medium text-danger"
               >
@@ -784,7 +974,8 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             <button
               type="button"
               onClick={requestClose}
-              className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink"
+              disabled={uploading}
+              className="rounded-full border border-line-input bg-white px-[18px] py-[9px] text-[13px] font-medium text-ink disabled:opacity-50"
             >
               {t('accounts.profile.cancel')}
             </button>
@@ -835,68 +1026,16 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           onPosted={refresh}
         />
       )}
-      {confirmPhoto ? (
+      {confirm ? (
         <ConfirmModal
-          title={t('accounts.profile.removePhotoTitle')}
-          body={t('accounts.profile.removePhotoBody')}
-          confirmLabel={t('accounts.profile.removePhotoConfirm')}
+          title={t(`accounts.profile.remove${confirm.kind}Title`)}
+          body={t(`accounts.profile.remove${confirm.kind}Body`)}
+          confirmLabel={t(`accounts.profile.remove${confirm.kind}Confirm`)}
           cancelLabel={t('accounts.profile.cancel')}
           onClose={() => {
-            setConfirmPhoto(null);
+            setConfirm(null);
           }}
-          onConfirm={() =>
-            removePhoto
-              .mutateAsync({
-                path: { account_id: account.account_id },
-                body: {
-                  photo_id: confirmPhoto.photo_id,
-                  access_hash: confirmPhoto.access_hash,
-                  file_reference: confirmPhoto.file_reference,
-                },
-              })
-              // finally, not then: a failed remove has already invalidated the
-              // server-side cache, so the grid must re-pull or it keeps dead
-              // ids; the rejection still propagates so the dialog stays open.
-              .finally(refresh)
-          }
-        />
-      ) : null}
-      {confirmStory ? (
-        <ConfirmModal
-          title={t('accounts.profile.removeStoryTitle')}
-          body={t('accounts.profile.removeStoryBody')}
-          confirmLabel={t('accounts.profile.removeStoryConfirm')}
-          cancelLabel={t('accounts.profile.cancel')}
-          onClose={() => {
-            setConfirmStory(null);
-          }}
-          onConfirm={() =>
-            removeStory
-              .mutateAsync({
-                path: { account_id: account.account_id },
-                body: { story_id: confirmStory.story_id },
-              })
-              .finally(refresh)
-          }
-        />
-      ) : null}
-      {confirmMusic ? (
-        <ConfirmModal
-          title={t('accounts.profile.removeMusicTitle')}
-          body={t('accounts.profile.removeMusicBody')}
-          confirmLabel={t('accounts.profile.removeMusicConfirm')}
-          cancelLabel={t('accounts.profile.cancel')}
-          onClose={() => {
-            setConfirmMusic(null);
-          }}
-          onConfirm={() =>
-            removeMusic
-              .mutateAsync({
-                path: { account_id: account.account_id },
-                body: confirmMusic,
-              })
-              .finally(refresh)
-          }
+          onConfirm={confirm.run}
         />
       ) : null}
       {confirmDiscard ? (
