@@ -45,11 +45,16 @@ async def _classify_join(
     if result.status in _RETRY_STATUSES:
         # Non-terminal: do not write ready; surface the wait so the account is
         # retried later instead of getting stuck. Return promptly (no sleep).
+        # ``error_type`` names the Telegram exception when there is one; absent rather than
+        # null otherwise, which is every flood-family status that reaches this branch.
+        extra: dict[str, object] = {"channel": channel, "status": result.status}
+        if result.error_type:
+            extra["error_type"] = result.error_type
         await log_event(
             "INFO",
             "neurocomment_onboard_retry_later",
             account_id=account_id,
-            extra={"channel": channel, "status": result.status},
+            extra=extra,
         )
         return AccountChannelOnboarding(
             account_id=account_id,

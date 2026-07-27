@@ -358,12 +358,17 @@ async def _classify_post(
         # retry, and no readiness write — an unknown error is not evidence of lost access.
         await _apply_cooldown(account_id, None, event.channel)
         event_name = "neurocomment_post_failed"
-    await log_event(
-        "WARNING",
-        event_name,
-        account_id=account_id,
-        extra={"channel": event.channel, "post_id": event.post_id, "status": result.status},
-    )
+    # ``error_type`` is the Telegram exception class behind ``status``: the feed reported a
+    # failed post without ever saying why, and the reason was already in hand right here.
+    # Absent rather than null when the gateway set none (the flood family never does).
+    extra: dict[str, object] = {
+        "channel": event.channel,
+        "post_id": event.post_id,
+        "status": result.status,
+    }
+    if result.error_type:
+        extra["error_type"] = result.error_type
+    await log_event("WARNING", event_name, account_id=account_id, extra=extra)
 
 
 async def _apply_cooldown(

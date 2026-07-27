@@ -62,6 +62,12 @@ async def run_join_pass(listener_account_id: str) -> None:
             if result.status == "ok":
                 await record_join(listener_account_id)
             continue
+        # ``error_type`` (the Telegram exception class) is what turns a bare status="failed"
+        # into an actionable line; absent rather than null when the gateway set none, which
+        # is always the case for the flood family below.
+        extra: dict[str, object] = {"channel": channel, "status": result.status}
+        if result.error_type:
+            extra["error_type"] = result.error_type
         if result.status in _COOLDOWN_STATUSES:
             # Telegram is rate-limiting this account: stop the burst rather than fire the
             # next RPC and escalate a soft flood-wait into a hard freeze. Unjoined channels
@@ -70,12 +76,12 @@ async def run_join_pass(listener_account_id: str) -> None:
                 "WARNING",
                 "neurocomment_listener_join_flood",
                 account_id=listener_account_id,
-                extra={"channel": channel, "status": result.status},
+                extra=extra,
             )
             break
         await log_event(
             "WARNING",
             "neurocomment_listener_join_failed",
             account_id=listener_account_id,
-            extra={"channel": channel, "status": result.status},
+            extra=extra,
         )

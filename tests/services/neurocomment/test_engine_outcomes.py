@@ -50,6 +50,13 @@ async def _has_event(event: str) -> bool:
     return any(entry.event == event for entry in await list_recent_logs(limit=50))
 
 
+async def _latest_extra(event: str, key: str) -> object | None:
+    for entry in await list_recent_logs(limit=50):
+        if entry.event == event:
+            return entry.extra.get(key)
+    return None
+
+
 # --------------------------------------------------------------------------- #
 # Post-time error classification
 # --------------------------------------------------------------------------- #
@@ -646,6 +653,8 @@ async def test_unclassified_failure_parks_the_pair_on_a_bounded_cooldown(
     assert len(comment.calls) == 1  # parked, not re-attempted on the channel's next post
     assert await _latest_reason("neurocomment_no_account_available") == "cooldown"
     assert await _has_event("neurocomment_post_failed") is True
+    # The feed said "failed" without the cause; the Telegram exception class must ride along.
+    assert await _latest_extra("neurocomment_post_failed", "error_type") == "SomeUnmappedRpcError"
     now = datetime.now(UTC)
     assert _state.in_cooldown("acc-1", now, "@chan") is True
     # Bounded and self-expiring: an unknown error is not evidence of lost access, so no
