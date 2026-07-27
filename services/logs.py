@@ -49,7 +49,7 @@ async def list_logs_page(log_filter: LogFilter, cursor: str | None = None) -> Pa
 
 
 async def clear_logs(event_prefix: str = "") -> LogPurgeResult:
-    """Delete the log rows matching ``event_prefix`` (all rows when empty); return the count."""
+    """Delete the rows matching ``event_prefix``; return how many went."""
     deleted = await purge_logs(event_prefix)
     return LogPurgeResult(deleted=deleted)
 

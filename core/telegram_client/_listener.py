@@ -100,9 +100,15 @@ async def subscribe_posts(
             try:
                 peer_id = await client.get_peer_id(channel)
             except Exception as exc:  # noqa: BLE001 - one bad channel must not disable the whole listener
+                # ponytail: transport code named after its caller's domain. The log
+                # feeds are separated only by event-name prefix, and neurocomment is
+                # today the sole consumer of the post listener (services/neurocomment/
+                # _watch.py), so a neutral ``telegram_*`` name would be invisible in the
+                # 'neurocomment' view. A second consumer is the ceiling: at that point
+                # the rows need a real domain column instead of a prefix convention.
                 await log_event(
                     "WARNING",
-                    "post_listener_channel_unresolved",
+                    "neurocomment_listener_channel_unresolved",
                     account_id=account_id,
                     extra={"channel": channel, "error_type": type(exc).__name__},
                 )
@@ -177,7 +183,7 @@ def _make_handler(
         except Exception as exc:  # noqa: BLE001 — a callback fault must not kill the listener.
             await log_event(
                 "ERROR",
-                "post_listener_callback_failed",
+                "neurocomment_listener_callback_failed",
                 extra={"channel": channel, "error_type": type(exc).__name__, "message": str(exc)},
             )
 

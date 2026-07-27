@@ -52,10 +52,11 @@ class LogFilter(BaseModel):
     # When True, drop ``success`` rows — i.e. only warnings + errors. Powers the
     # board's global "problems" feed (every account's failures in one place).
     problems_only: bool = False
-    # Keep only rows whose ``event`` starts with this string (SQL ``LIKE 'prefix%'``).
-    # Empty = no event filter. Scopes a domain feed, e.g. the neurocomment logs panel
-    # (``event_prefix="neurocomment"``), since neurocomment events are not all
-    # account-scoped (listener / sweep rows carry no account_id).
+    # Comma-separated prefixes: keep rows whose ``event`` starts with any of them
+    # (an OR of SQL ``LIKE 'prefix%'``). Empty = no event filter. Scopes a domain
+    # feed, e.g. the neurocomment logs panel (``event_prefix="neurocomment"``) or the
+    # warming terminal (``event_prefix="warming_,telegram_"``), since domain events are
+    # not all account-scoped (listener / sweep rows carry no account_id).
     event_prefix: str = ""
 
 

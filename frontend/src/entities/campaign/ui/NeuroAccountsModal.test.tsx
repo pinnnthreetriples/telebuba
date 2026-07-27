@@ -31,6 +31,9 @@ test('assigns an idle account, confirms removal, and closes', async () => {
   expect(screen.getByText('Vika Ix')).toBeInTheDocument();
   // an already-assigned account shows its single channel in the dropdown trigger
   expect(screen.getByLabelText('Каналы аккаунта')).toHaveTextContent('@crypto');
+  // the channel list belongs to the linked account only — one per linked row, never for
+  // an idle one (the list is a sibling of the row's top line, not part of the trigger).
+  expect(screen.getAllByRole('listbox')).toHaveLength(1);
 
   // assign the idle account to the campaign
   await userEvent.click(screen.getByText('Добавить в кампанию'));
@@ -134,6 +137,42 @@ test('toggling channels adds/removes; "all channels" clears the subset', async (
   // "Все каналы" clears the whole subset (= all channels)
   await userEvent.click(screen.getByRole('option', { name: 'Все каналы' }));
   expect(onChannelChange).toHaveBeenLastCalledWith('a3', []);
+});
+
+test('a t.me channel is labelled by the part that tells it apart', async () => {
+  // Channels entered as full links share their first 13 characters, so a truncating
+  // label used to keep only "https://t.me/…" — the identical half. Full link on hover.
+  render(
+    <NeuroAccountsModal
+      accounts={[
+        {
+          account_id: 'a4',
+          name: 'Marina',
+          linked: true,
+          pinned_channels: ['https://t.me/iris_shop'],
+        },
+      ]}
+      channels={['https://t.me/laqueshia', 'https://t.me/iris_shop']}
+      onClose={vi.fn()}
+      onPick={vi.fn()}
+      onRemove={vi.fn()}
+      onChannelChange={vi.fn()}
+    />,
+  );
+  const trigger = screen.getByLabelText('Каналы аккаунта');
+  expect(trigger).toHaveTextContent('iris_shop');
+  expect(trigger).not.toHaveTextContent('t.me');
+
+  await userEvent.click(trigger);
+  expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
+    'Все каналы',
+    'laqueshia',
+    'iris_shop',
+  ]);
+  expect(screen.getByRole('option', { name: 'iris_shop' })).toHaveAttribute(
+    'title',
+    'https://t.me/iris_shop',
+  );
 });
 
 test('empty list shows the empty hint', () => {

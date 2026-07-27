@@ -65,6 +65,42 @@ async def test_logs_filter_by_event_prefix(app: FastAPI) -> None:
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("blank", [",", " "])
+async def test_blank_only_event_prefix_purges_nothing_over_http(app: FastAPI, blank: str) -> None:
+    """The whole-table-wipe regression arrives as ``DELETE /logs?event_prefix=,``.
+
+    Guarded at the service layer too, but only this test pins the HTTP contract: a
+    ``Query`` coercion or a ``.strip()`` added to the endpoint could reintroduce the
+    wipe with every service test still green.
+    """
+    await log_event("INFO", "warming_subscribe")
+    await log_event("INFO", "neurocomment_posted")
+    async with _client(app) as client:
+        listed = await client.get("/api/v1/logs", params={"event_prefix": blank})
+        assert listed.json()["items"] == []
+        deleted = await client.request("DELETE", "/api/v1/logs", params={"event_prefix": blank})
+        assert deleted.json() == {"deleted": 0}
+        left = await client.get("/api/v1/logs")
+    assert len(left.json()["items"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_clear_logs_by_comma_separated_prefixes_deletes_the_union(app: FastAPI) -> None:
+    await log_event("INFO", "warming_subscribe")
+    await log_event("WARNING", "telegram_action_unavailable")
+    await log_event("INFO", "spam_status_refreshed")
+    await log_event("INFO", "neurocomment_posted")
+    async with _client(app) as client:
+        resp = await client.request(
+            "DELETE", "/api/v1/logs", params={"event_prefix": "warming_,telegram_"}
+        )
+        assert resp.json() == {"deleted": 2}
+        left = await client.get("/api/v1/logs")
+    events = {row["event"] for row in left.json()["items"]}
+    assert events == {"spam_status_refreshed", "neurocomment_posted"}
+
+
+@pytest.mark.asyncio
 async def test_logs_invalid_cursor_is_400(app: FastAPI) -> None:
     async with _client(app) as client:
         resp = await client.get("/api/v1/logs", params={"cursor": "nope"})

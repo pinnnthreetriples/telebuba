@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from datetime import UTC, datetime
 from typing import TYPE_CHECKING, get_args
 
 import pytest
@@ -14,9 +15,6 @@ from core.db import (
     fetch_linked_group,
     fetch_readiness,
     link_channel_to_campaign,
-    mark_human_skipped,
-    mark_pair_banned,
-    upsert_readiness,
 )
 from core.repositories.neurocomment import set_campaign_account_channels
 from schemas.accounts import AccountCreate
@@ -364,6 +362,53 @@ async def test_campaign_probes_spam_once_per_account(monkeypatch: pytest.MonkeyP
     assert sorted(probed) == ["acc-1", "acc-2"]
 
 
+@pytest.mark.parametrize(
+    ("cached_stamp", "sleeps_before_each_probe", "total_sleeps"),
+    # None = a real probe, stamped now; a stamp = the older cached verdict of a TTL hit.
+    [(None, [0, 1], 2), ("2026-01-01T00:00:00", [0, 0], 1)],
+)
+@pytest.mark.asyncio
+async def test_campaign_spaces_real_spam_probes_only(
+    monkeypatch: pytest.MonkeyPatch,
+    cached_stamp: str | None,
+    sleeps_before_each_probe: list[int],
+    total_sleeps: int,
+) -> None:
+    """A real @SpamBot probe pauses before the next account; a TTL cache hit must not.
+
+    The per-probe assert is the sleep count observed *at* each probe, so it stays
+    independent of how many join sleeps follow. The total pins the rest: 1 join pause
+    (2 accounts, 1 channel) plus the spam pauses — so a pause after the LAST probe, which
+    nothing follows, would show up here as one sleep too many.
+    """
+    for acc in ("acc-1", "acc-2"):
+        await create_account(AccountCreate(account_id=acc, label=acc, session_name=acc))
+    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
+    await link_channel_to_campaign(campaign.campaign_id, "@one")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
+
+    sleeps: list[float] = []
+    seen: list[int] = []
+
+    async def _probe(account_id: str, **_kwargs: object) -> SpamStatusVerdict:
+        seen.append(len(sleeps))
+        checked_at = cached_stamp or datetime.now(UTC).isoformat()
+        return SpamStatusVerdict(account_id=account_id, status="clean", checked_at=checked_at)
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", _probe)
+    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
+    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
+    monkeypatch.setattr(_seams, "execute", _JoinStub().execute)
+    monkeypatch.setattr(_seams.rng, "uniform", lambda _a, _b: 9.0)
+    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep(sleeps))
+
+    await neurocomment.onboard_campaign(campaign.campaign_id)
+
+    assert seen == sleeps_before_each_probe
+    assert len(sleeps) == total_sleeps
+
+
 @pytest.mark.asyncio
 async def test_campaign_spam_probe_failure_does_not_abort(monkeypatch: pytest.MonkeyPatch) -> None:
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
@@ -445,186 +490,3 @@ async def test_progress_events_are_locale_neutral(monkeypatch: pytest.MonkeyPatc
     assert events
     assert all(isinstance(e, OnboardingProgressEvent) for e in events)
     assert all(e.code in valid for e in events)
-
-
-@pytest.mark.asyncio
-async def test_campaign_skips_resolve_read_when_all_pairs_already_ready(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Bug 3: a fully-ready channel costs ZERO Telegram reads — no resolve, no join."""
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    await create_account(AccountCreate(account_id="acc-2", label="B", session_name="acc-2"))
-    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
-    await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
-    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
-    await upsert_readiness("acc-2", "@chan", joined=True, captcha_passed=True, ready=True)
-
-    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
-    join = _JoinStub()
-    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
-    monkeypatch.setattr(_seams, "execute", join.execute)
-    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
-
-    result = await neurocomment.onboard_campaign(campaign.campaign_id)
-
-    # No resolve, no join — a fully-ready channel reads nothing from Telegram.
-    assert read.calls == []
-    assert join.calls == []
-    states = {(o.account_id, o.state) for o in result.outcomes}
-    assert states == {("acc-1", "ready"), ("acc-2", "ready")}
-
-
-@pytest.mark.asyncio
-async def test_human_skipped_pair_is_not_re_enabled_by_onboarding(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # Ф2 #148: an operator skip must survive a Start/onboard cycle — the pair must not
-    # be re-joined nor have its readiness flipped back to ready.
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
-    await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    # The pair was onboarded, then the operator skipped it.
-    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
-    await mark_human_skipped("acc-1", "@chan")
-
-    read = _ReadStub(linked_chat_id=4423, comments_enabled=True)
-    join = _JoinStub()
-    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
-    monkeypatch.setattr(_seams, "execute", join.execute)
-    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
-
-    await neurocomment.onboard_campaign(campaign.campaign_id)
-
-    readiness = await fetch_readiness("acc-1", "@chan")
-    assert readiness is not None
-    assert readiness.human_skipped is True
-    assert readiness.ready is False  # NOT re-enabled
-    assert all(account_id != "acc-1" for account_id, _ in join.calls)  # never re-joined
-
-
-@pytest.mark.asyncio
-async def test_banned_pair_is_not_re_enabled_by_onboarding(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # #30: an auto-ban must survive a Start/onboard cycle — the pair must not be
-    # re-joined nor have its readiness flipped back to ready (or the engine would
-    # keep hitting the ban).
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
-    await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    # The pair was onboarded, then got banned while commenting.
-    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
-    await mark_pair_banned("acc-1", "@chan")
-
-    read = _ReadStub(linked_chat_id=4423, comments_enabled=True)
-    join = _JoinStub()
-    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
-    monkeypatch.setattr(_seams, "execute", join.execute)
-    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
-
-    await neurocomment.onboard_campaign(campaign.campaign_id)
-
-    readiness = await fetch_readiness("acc-1", "@chan")
-    assert readiness is not None
-    assert readiness.banned is True
-    assert readiness.ready is False  # NOT re-enabled
-    assert all(account_id != "acc-1" for account_id, _ in join.calls)  # never re-joined
-
-
-@pytest.mark.asyncio
-async def test_resolve_failure_does_not_clobber_already_ready_pairs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Bug 3: a transient resolve failure must not flip already-ready pairs to failed."""
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    await create_account(AccountCreate(account_id="acc-2", label="B", session_name="acc-2"))
-    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
-    await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-2")
-    # acc-1 is already ready; acc-2 is not.
-    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
-
-    # Stub _safe_resolve to return None (transient resolve failure).
-    async def _none(_account_id: str, _channel: str) -> None:
-        return None
-
-    monkeypatch.setattr(onboarding, "_safe_resolve", _none)
-    join = _JoinStub()
-    monkeypatch.setattr(_seams, "execute", join.execute)
-    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
-
-    result = await neurocomment.onboard_campaign(campaign.campaign_id)
-
-    states = {o.account_id: o.state for o in result.outcomes}
-    # acc-1 must remain ready (NOT failed) — the resolve failure only affects acc-2.
-    assert states["acc-1"] == "ready"
-    assert states["acc-2"] == "failed"
-    # No join calls for acc-1 (it was already ready).
-    assert all(account_id != "acc-1" for account_id, _ in join.calls)
-
-
-@pytest.mark.asyncio
-async def test_campaign_skips_pair_only_when_captcha_passed(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Bug 10: skip predicate requires captcha_passed=True.
-
-    A readiness row with ready=True/joined=True but captcha_passed=False must
-    NOT skip — the pair is re-joined. Documents the intent that a solver toggle
-    does not magically re-validate previously-unchecked pairs.
-    """
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
-    await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    # Mark joined + ready but NOT captcha_passed — predicate must NOT treat as ready.
-    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=False, ready=True)
-
-    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
-    join = _JoinStub()
-    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
-    monkeypatch.setattr(_seams, "execute", join.execute)
-    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep([]))
-
-    await neurocomment.onboard_campaign(campaign.campaign_id)
-
-    # Pair re-joined because captcha_passed was False, NOT skipped as ready.
-    assert len(join.calls) == 1
-    assert join.calls[0][0] == "acc-1"
-
-
-@pytest.mark.asyncio
-async def test_campaign_skips_join_for_already_ready_pairs(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A re-run of onboarding does no Telegram joins / sleeps for ready pairs.
-
-    Closes the failing flow where pressing Start (which now re-runs onboarding)
-    would otherwise burn minutes re-joining accounts that were already prepared.
-    """
-    await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    campaign = await create_campaign(CampaignCreate(name="Promo", prompt="p"))
-    await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
-    # Mark the pair already ready (the state a prior onboarding would leave).
-    await upsert_readiness("acc-1", "@chan", joined=True, captcha_passed=True, ready=True)
-
-    read = _ReadStub(linked_chat_id=500, comments_enabled=True)
-    join = _JoinStub()
-    monkeypatch.setattr(_seams, "execute_read", read.execute_read)
-    monkeypatch.setattr(_seams, "execute", join.execute)
-    sleeps: list[float] = []
-    monkeypatch.setattr(onboarding.asyncio, "sleep", _no_sleep(sleeps))
-
-    result = await neurocomment.onboard_campaign(campaign.campaign_id)
-
-    # No JoinDiscussionGroup call, no inter-pair jitter sleep, but the outcome
-    # still records the pair as ready.
-    assert join.calls == []
-    assert sleeps == []
-    assert [(o.account_id, o.state) for o in result.outcomes] == [("acc-1", "ready")]

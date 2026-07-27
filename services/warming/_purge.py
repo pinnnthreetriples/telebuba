@@ -29,17 +29,17 @@ async def purge_stale_history() -> None:
     plans = [
         (
             settings.warming.log_retention_days,
-            "log_retention_purged",
+            "warming_log_retention_purged",
             purge_logs_older_than,
         ),
         (
             settings.warming.dialogue_message_retention_days,
-            "dialogue_message_retention_purged",
+            "warming_dialogue_message_retention_purged",
             purge_dialogue_messages_older_than,
         ),
         (
             settings.warming.sent_hash_retention_days,
-            "sent_hash_retention_purged",
+            "warming_sent_hash_retention_purged",
             purge_sent_hashes_older_than,
         ),
     ]
@@ -52,7 +52,7 @@ async def purge_stale_history() -> None:
         except Exception as exc:  # noqa: BLE001 - retention failures must not block reconcile.
             await log_event(
                 "WARNING",
-                "retention_purge_failed",
+                "warming_retention_purge_failed",
                 extra={"event": event, "error": str(exc)},
             )
             continue

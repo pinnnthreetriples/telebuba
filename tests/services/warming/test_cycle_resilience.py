@@ -214,10 +214,10 @@ async def test_cycle_skipped_when_only_set_online_fits(
 
 
 @pytest.mark.asyncio
-async def test_phase_advanced_not_logged_when_finalize_cas_rejected(
+async def test_warming_phase_advanced_not_logged_when_finalize_cas_rejected(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No phantom phase_advanced when the final CAS write is rejected (#100)."""
+    """No phantom warming_phase_advanced when the final CAS write is rejected (#100)."""
     await create_account(AccountCreate(account_id="acc-1"))
     today = datetime.now(UTC).date().isoformat()
     await upsert_warming_state(
@@ -257,11 +257,11 @@ async def test_phase_advanced_not_logged_when_finalize_cas_rejected(
         run_id="run-a",
     )
 
-    assert "phase_advanced" not in events
+    assert "warming_phase_advanced" not in events
 
 
 @pytest.mark.asyncio
-async def test_phase_advanced_logged_when_finalize_applies(
+async def test_warming_phase_advanced_logged_when_finalize_applies(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """The transition is still announced when the write actually lands (#100)."""
@@ -291,4 +291,4 @@ async def test_phase_advanced_logged_when_finalize_applies(
         run_id="run-a",
     )
 
-    assert "phase_advanced" in events
+    assert "warming_phase_advanced" in events

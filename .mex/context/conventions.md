@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-26
+last_updated: 2026-07-27
 ---
 
 # Backend Rules
@@ -7,7 +7,7 @@ last_updated: 2026-07-26
 1. `api/` validates, authorizes, calls a service, maps errors, and serializes—nothing else.
 2. Business policy/state transitions live in `services/`; persistence and SDK access live in `core/`.
 3. Cross-layer inputs/outputs are Pydantic models; collections use typed wrappers such as `Page[T]`.
-4. DB uses repositories; Telegram uses typed gateway actions; AI/auth/logging/events use their `core/` gateways.
+4. DB uses repositories; Telegram uses typed gateway actions; AI/auth/logging/events use their `core/` gateways. Every `log_event` name carries its domain prefix (`warming_`, `neurocomment_`, …) — including from a shared `core/` helper only one domain reaches — because the per-domain feeds separate solely by `event LIKE 'prefix%'`; see `patterns/add-log-event.md`.
 5. No `print()`, raw environment reads, operational magic values, or translated display text in backend responses. Every `core/config.py` field needs a matching `.env.example` key holding its in-code default.
 6. Public I/O is async and typed; wrapped exceptions use `raise ... from e`.
 7. Device fingerprints are immutable; secrets, `.session`, tdata and proxy passwords never enter logs or git.
