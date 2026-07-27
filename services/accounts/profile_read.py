@@ -16,6 +16,7 @@ from __future__ import annotations
 import asyncio
 import base64
 import hashlib
+import logging
 import time
 from typing import TYPE_CHECKING, Literal, cast
 
@@ -52,6 +53,9 @@ if TYPE_CHECKING:
         TelegramProfileSnapshot,
         TelegramStoryThumb,
     )
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "account_avatar_image",
@@ -278,12 +282,13 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
         return _error_snapshot(account_id, exc.reason)
     except TelegramAccountNotFoundError as exc:
         return _error_snapshot(account_id, str(exc))
-    except Exception as exc:  # noqa: BLE001 — last-resort: dialog must still open
+    except Exception as exc:  # last-resort: dialog must still open
+        logger.exception("unexpected profile read failure for %s", account_id)
         await log_event(
             "ERROR",
             "account_profile_read_failed_unexpected",
             account_id=account_id,
-            extra={"error_type": type(exc).__name__, "error": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
         # Class name only: an unexpected exception's message is arbitrary text
         # (a python_socks failure names the proxy endpoint with credentials, a
@@ -293,8 +298,9 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
         # message is already in the log event above": ``log_event`` persists
         # ``extra`` to the ``logs`` table and ``GET /logs`` serves it back as
         # ``LogEntry.extra`` (``GET /events`` streams it), so the event above is
-        # an HTTP body by another route rather than a safe sink. The ``str(exc)``
-        # in it is pre-existing ``GET /logs`` exposure, tracked separately.
+        # an HTTP body by another route rather than a safe sink — so the event's
+        # ``extra`` is bounded the same way, with the full text on the stdlib logger
+        # above, which reaches no route.
         return _error_snapshot(account_id, type(exc).__name__)
 
     # The gateway returns the snapshot types matching each action's position.

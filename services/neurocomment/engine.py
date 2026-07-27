@@ -19,6 +19,7 @@ tests patch ``engine.<name>``. The reply delay uses ``asyncio.sleep`` (patched).
 from __future__ import annotations
 
 import asyncio  # also re-exported so tests can patch engine.asyncio.sleep (used by _generate).
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING, NamedTuple
 
@@ -52,6 +53,9 @@ if TYPE_CHECKING:
     from schemas.telegram_actions import NewPostEvent
     from schemas.warming import WarmingStateRecord
 
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
+
 
 # One lock per account serialises its [re-read quota → claim] section so a burst of
 # concurrent events for the same account can't each read an under-cap count and all
@@ -72,7 +76,8 @@ async def handle_new_post(event: NewPostEvent) -> None:
     """Comment on one fresh post, end-to-end. Never raises (listener-safe)."""
     try:
         await _handle_new_post(event)
-    except Exception as exc:  # noqa: BLE001 - a fault must never kill the listener task.
+    except Exception as exc:  # a fault must never kill the listener task.
+        logger.exception("pipeline failed for %s post %s", event.channel, event.post_id)
         await log_event(
             "ERROR",
             "neurocomment_pipeline_failed",
@@ -80,7 +85,6 @@ async def handle_new_post(event: NewPostEvent) -> None:
                 "channel": event.channel,
                 "post_id": event.post_id,
                 "error_type": type(exc).__name__,
-                "message": str(exc),
             },
         )
 

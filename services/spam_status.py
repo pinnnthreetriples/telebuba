@@ -211,8 +211,9 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
         probe = await check_spam_status(account_id)
         status, detail = classify_spam_probe(probe)
         if probe.error:
-            # No second log line: the gateway already recorded the refusal with the
-            # full exception text under ``telegram_spam_status_probe_failed``.
+            # No second log line: the gateway already recorded the refusal under
+            # ``telegram_spam_status_probe_failed`` (bounded to the exception class
+            # name — the full text is on its stdlib logger, not in ``extra``).
             return _uncached_unknown(account_id, detail, now)
         saved = await upsert_spam_status(
             SpamStatusVerdict(

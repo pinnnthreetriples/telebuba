@@ -7,6 +7,7 @@ aislop file-size gate; the function itself is unchanged. Invoked once per
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 from core.config import settings
@@ -16,6 +17,9 @@ from core.db import (
     purge_sent_hashes_older_than,
 )
 from core.logging import log_event
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 
 async def purge_stale_history() -> None:
@@ -49,11 +53,12 @@ async def purge_stale_history() -> None:
         cutoff = (now - timedelta(days=window_days)).isoformat()
         try:
             removed = await purge(cutoff)
-        except Exception as exc:  # noqa: BLE001 - retention failures must not block reconcile.
+        except Exception as exc:  # retention failures must not block reconcile.
+            logger.exception("retention purge failed for %s", event)
             await log_event(
                 "WARNING",
                 "warming_retention_purge_failed",
-                extra={"event": event, "error": str(exc)},
+                extra={"event": event, "error_type": type(exc).__name__},
             )
             continue
         if removed:

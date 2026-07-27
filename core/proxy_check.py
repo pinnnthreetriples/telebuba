@@ -291,10 +291,9 @@ def _failed_result(exc: BaseException) -> ProxyCheckResult:
     operator-visible as prose — ``log_event`` persists ``extra`` to the ``logs``
     table and ``GET /logs`` serves it back as ``LogEntry.extra`` (``GET /events``
     streams it), so routing an unbounded ``str(exc)`` through ``extra`` would put
-    it in an HTTP body just the same. Nothing configures stdlib logging here, so
-    this lands on the process's stderr (the uvicorn console) via
-    ``logging.lastResort`` — not in ``logs``, not in loguru's ``debug.log``, and on
-    no route.
+    it in an HTTP body just the same. This lands on the process's stderr (the uvicorn
+    console) and in loguru's ``debug.log`` via ``core.logging._StdlibToLoguru`` — not
+    in ``logs``, and on no route.
     """
     logger.warning(
         "proxy check failed (error_type=%s): %s",

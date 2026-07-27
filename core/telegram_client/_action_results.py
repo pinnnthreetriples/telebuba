@@ -7,6 +7,7 @@ family), infrastructure (``unavailable``), and generic failure.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
@@ -16,6 +17,11 @@ from schemas.telegram_actions import ActionResult
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionStatus, TelegramAction
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+# ``exc`` arrives here from ``execute``'s ladder, so the traceback is passed
+# explicitly rather than read from the ambient handler.
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -83,6 +89,12 @@ async def _unavailable_result(
     Distinct from ``failed`` so the API layer maps it to 503 unavailable
     instead of billing an internal outage as a 400 client error.
     """
+    logger.warning(
+        "action %s unavailable for %s",
+        action.action_type,
+        account_id,
+        exc_info=exc,
+    )
     await log_event(
         "WARNING",
         # A fixed name, but still an action outcome, so it carries the domain
@@ -93,7 +105,6 @@ async def _unavailable_result(
         extra={
             "action_type": action.action_type,
             "error_type": type(exc).__name__,
-            "message": str(exc),
         },
     )
     return ActionResult(
@@ -130,17 +141,26 @@ async def _generic_error(
     *,
     domain: str | None = None,
 ) -> ActionResult:
-    # Stable-code wrappers chain the real reason (Pillow error + magic bytes) as __cause__.
-    cause = str(exc.__cause__) if exc.__cause__ is not None else None
     # A partially-completed channel_create carries the already-created id
     # (ChannelGatewayError.channel_id) so the caller can adopt the private
     # channel instead of re-creating a duplicate.
     created_id = getattr(exc, "channel_id", None)
+    # Stable-code wrappers chain the real reason (Pillow error + magic bytes) as
+    # __cause__, and unmapped Telethon errors are prose all the way down — both are
+    # third-party text, so the whole chain goes to stderr and not into ``extra``.
+    # Nothing is lost above: the stable code still rides ``error_message`` below into
+    # ``AccountActionError`` and the HTTP envelope, which is where the SPA reads it.
+    logger.error(
+        "action %s failed for %s",
+        action.action_type,
+        account_id,
+        exc_info=exc,
+    )
     await log_event(
         "ERROR",
         event_name(domain, f"telegram_{action.action_type}_failed"),
         account_id=account_id,
-        extra={"error_type": type(exc).__name__, "message": str(exc), "cause": cause},
+        extra={"error_type": type(exc).__name__},
     )
     return ActionResult(
         status="failed",

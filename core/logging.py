@@ -7,7 +7,10 @@ exclusively call :func:`log_event`.
 Tiers (per ``context/logging.md``):
 
 1. **loguru** rotating ``debug.log`` — diagnostic noise (stacktraces, retries,
-   timings). Always on.
+   timings). Always on. :class:`_StdlibToLoguru` feeds the **stdlib** root logger
+   into the same file, so the full third-party exception text that the
+   ``extra``-bounding rule sends to a module's ``logging.getLogger(__name__)`` is
+   durable on disk instead of living only in the process's stderr stream.
 2. **SQLite ``logs`` table** via ``core.db.insert_log_row`` — structured
    business events with normalised ``status`` (success/warning/error). Drives
    the future Logs page.
@@ -20,6 +23,8 @@ call performs side effects). ``main.py`` calls it once at startup.
 
 from __future__ import annotations
 
+import inspect
+import logging
 from typing import TYPE_CHECKING
 
 import sentry_sdk
@@ -42,6 +47,33 @@ class _State:
 _state = _State()
 
 
+class _StdlibToLoguru(logging.Handler):
+    """Forward stdlib records into the loguru sink (the docs' ``InterceptHandler``).
+
+    Not a second logging system: the one sink is the rotating file configured in
+    :func:`setup_logging`, and this only gives stdlib records a way into it. The frame
+    walk is the documented recipe — without it every bridged line would blame
+    ``core.logging:emit`` instead of the module that logged it.
+
+    No feedback loop is possible: ``log_event`` writes to loguru, loguru writes to a
+    file, and nothing in that path emits a stdlib record.
+    """
+
+    def emit(self, record: logging.LogRecord) -> None:
+        try:
+            level: str | int = logger.level(record.levelname).name
+        except ValueError:  # a custom stdlib level loguru does not know
+            level = record.levelno
+        frame, depth = inspect.currentframe(), 0
+        while frame and (depth == 0 or frame.f_code.co_filename == logging.__file__):
+            frame = frame.f_back
+            depth += 1
+        logger.opt(depth=depth, exception=record.exc_info).log(level, record.getMessage())
+
+
+_bridge = _StdlibToLoguru()
+
+
 def setup_logging() -> None:
     """Configure loguru sink and Sentry. Idempotent."""
     if _state.initialized:
@@ -58,6 +90,27 @@ def setup_logging() -> None:
         diagnose=False,  # avoid leaking variable values into the file
     )
 
+    # Retention for the stdlib sink. Full third-party exception text goes to each
+    # module's ``logging.getLogger(__name__)`` and never into ``extra`` (see
+    # ``tests/test_logevent_extra_bounds``), but uvicorn's ``LOGGING_CONFIG`` has no
+    # ``root`` key, so those records fell to ``logging.lastResort`` — stderr and
+    # nothing durable. An operator could not recover why a proxy failed six hours ago
+    # unless whatever launched uvicorn captured stderr. Bridging root into the sink
+    # above puts the text back on disk. Deliberately file-only: loguru serves no
+    # route, so this adds nothing to ``GET /logs`` or ``GET /events``.
+    #
+    # ``lastResort`` is re-added explicitly because it is exactly the handler that
+    # fires today and it stops firing the moment root has any handler of its own —
+    # reusing it (rather than a fresh ``StreamHandler``) is what makes the console
+    # byte-identical instead of merely similar. Root's level stays at its default
+    # WARNING, so the two handlers see the same records stderr saw before. uvicorn's
+    # own loggers set ``propagate=False`` and keep their own handler, so their format
+    # is untouched and they are not echoed here.
+    root = logging.getLogger()
+    if logging.lastResort is not None:  # typed optional — ``None`` only if disabled.
+        root.addHandler(logging.lastResort)
+    root.addHandler(_bridge)
+
     if settings.logging.sentry_dsn:
         sentry_sdk.init(
             dsn=settings.logging.sentry_dsn,
@@ -73,6 +126,12 @@ def setup_logging() -> None:
 
 def reset_logging_for_tests() -> None:
     """Drop all loguru sinks and reset module state. For tests only."""
+    root = logging.getLogger()
+    # Paired with ``setup_logging``: the fixtures reset-then-setup per test, so leaving
+    # these attached would stack a duplicate pair on every one of them.
+    if logging.lastResort is not None:
+        root.removeHandler(logging.lastResort)
+    root.removeHandler(_bridge)
     logger.remove()
     _state.initialized = False
     _state.sentry_active = False

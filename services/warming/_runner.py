@@ -9,6 +9,7 @@ the generation guard are only used by it (the helpers are also unit-tested).
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
@@ -30,6 +31,9 @@ from services.warming.pacing import (
 
 if TYPE_CHECKING:
     from schemas.warming import WarmingStateRecord
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 
 def _is_live_generation(record: WarmingStateRecord | None, run_id: str | None) -> bool:
@@ -172,12 +176,13 @@ async def _warming_loop(
             await asyncio.sleep(_loop_sleep_seconds(record, datetime.now(UTC)))
     except asyncio.CancelledError:
         raise
-    except Exception as exc:  # noqa: BLE001 - a background loop must never crash silently.
+    except Exception as exc:  # a background loop must never crash silently.
+        logger.exception("warming loop crashed for %s", account_id)
         await log_event(
             "ERROR",
             "warming_loop_crashed",
             account_id=account_id,
-            extra={"error_type": type(exc).__name__, "message": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
         # Round-6 P1: pre-check generation so a stale crash does not even try
         # to write. The CAS predicate below is the suspenders — if our pre-read
@@ -186,11 +191,22 @@ async def _warming_loop(
         latest = await fetch_warming_state(account_id)
         if not _is_live_generation(latest, run_id):
             return
+        # Class name only, for the same reason the ``extra`` above carries one.
+        # ``last_error`` is a field of ``WarmingAccountState``, the response model of
+        # ``GET /warming/board`` — so the interpolated ``{exc}`` was the identical
+        # leak one route over: a python_socks connect failure stringifies as
+        # ``proxy socks5://user:pass@host:port refused``. Every other writer of this
+        # field already composes its own prose (readiness reasons in ``_runtime`` and
+        # ``_transitions``, a check count in ``_quarantine``, ``result.detail`` in
+        # ``_loop``); this was the only one handing it a third-party exception. The
+        # field stays populated — nothing pattern-matches it and the board shows the
+        # red pill off ``state``, so the class name is all it ever needed to carry.
+        # The full text is on the stdlib logger above.
         await _set_state(
             account_id,
             "error",
             last_event="loop_crashed",
-            last_error=f"{type(exc).__name__}: {exc}",
+            last_error=type(exc).__name__,
             heartbeat_at=_now_iso(),
             expected_run_id=run_id,
         )

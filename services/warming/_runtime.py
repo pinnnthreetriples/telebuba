@@ -12,6 +12,7 @@ patch it on this module.
 from __future__ import annotations
 
 import asyncio
+import logging
 import uuid
 from contextlib import suppress
 from typing import TYPE_CHECKING, NamedTuple
@@ -52,6 +53,9 @@ if TYPE_CHECKING:
         WarmingReadiness,
         WarmingStateRecord,
     )
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 # account_id -> running warming loop. Genuine runtime state (rare exception to
 # the "no classes for stateless logic" rule): the loops must outlive a single
@@ -374,11 +378,12 @@ def _start_purge_task() -> None:
 async def _refresh_dialogue_pairs() -> None:
     try:
         await assign_pairs()
-    except Exception as exc:  # noqa: BLE001 - reconcile must not fail because dialogues did.
+    except Exception as exc:  # reconcile must not fail because dialogues did.
+        logger.exception("dialogue pair refresh failed")
         await log_event(
             "WARNING",
             "warming_dialogue_pair_refresh_failed",
-            extra={"error": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
 
 

@@ -16,6 +16,7 @@ still takes effect here.
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -37,6 +38,9 @@ if TYPE_CHECKING:
         WarmingAccountState,
     )
 
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
+
 
 async def _stop_warming_locked(account_id: str) -> None:
     """Inner stop, run with ``_account_lock(account_id)`` already held.
@@ -57,12 +61,13 @@ async def _stop_warming_locked(account_id: str) -> None:
             # Either we timed out or the cancel propagated correctly —
             # in both cases the task is no longer ours to await.
             pass
-        except Exception as exc:  # noqa: BLE001 - log+continue; stop must not fail.
+        except Exception as exc:  # log+continue; stop must not fail.
+            logger.exception("warming stop task failed for %s", account_id)
             await log_event(
                 "WARNING",
                 "warming_stop_task_error",
                 account_id=account_id,
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
+                extra={"error_type": type(exc).__name__},
             )
     account = await fetch_account(account_id)
     if account is not None:

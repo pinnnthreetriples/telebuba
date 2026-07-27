@@ -606,3 +606,40 @@ async def test_stale_loop_crash_cannot_overwrite_new_generation(
     assert state.run_id == "run-b"
     assert state.last_event != "loop_crashed"
     assert state.last_error is None
+
+
+@pytest.mark.asyncio
+async def test_loop_crash_last_error_is_bounded_to_the_exception_class(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``last_error`` is a ``GET /warming/board`` field, so it carries no exception text.
+
+    ``WarmingAccountState.last_error`` is part of the board's response model. The crash
+    handler used to write ``f"{type(exc).__name__}: {exc}"``, so a python_socks connect
+    failure put ``socks5://user:pass@host:port`` in an HTTP body — the same leak the
+    event's ``extra`` was bounded against, one route over. The field stays populated
+    (the operator still sees *what* failed); only the prose goes, to the stdlib logger.
+    """
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="active", run_id="run-a"),
+    )
+
+    monkeypatch.setattr(_runner, "_initial_delay_seconds", _no_initial_delay)
+    monkeypatch.setattr(_runner, "_loop_sleep_seconds", lambda *_args, **_kwargs: 0.0)
+
+    secret = "proxy socks5://leakuser:LEAKPASS123@10.9.8.7:1080 refused"
+
+    async def crash(account_id: str, *, run_id: str | None = None) -> WarmingCycleResult:
+        del account_id, run_id
+        raise OSError(secret)
+
+    monkeypatch.setattr(_runner, "run_loop_iteration", crash)
+
+    await _runner._warming_loop("acc-1", run_id="run-a")
+
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.last_event == "loop_crashed"
+    assert state.last_error == "OSError"
+    assert "LEAKPASS123" not in (state.last_error or "")

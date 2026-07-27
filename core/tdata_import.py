@@ -196,11 +196,11 @@ def _bounded_conversion_error(exc: BaseException) -> TdataConvertResult:
     deliberately — NOT to ``log_event``. ``core.logging.log_event`` is not log-only:
     it persists ``extra`` as JSON in the ``logs`` table, ``GET /logs`` serves that
     back as ``LogEntry.extra`` and ``GET /events`` streams it, so an unbounded
-    ``extra`` is an HTTP body too, just a different route. Nothing in the project
-    configures stdlib logging, so ``logger.exception`` lands on the process's stderr
-    (the uvicorn console) via ``logging.lastResort`` and on no route —
-    ``core.proxy_check._failed_result`` and ``_profile._mark_account_status`` reach
-    for the same sink for the same reason.
+    ``extra`` is an HTTP body too, just a different route. ``logger.exception`` lands
+    on the process's stderr (the uvicorn console) and, via
+    ``core.logging._StdlibToLoguru``, in loguru's ``debug.log`` — on no route either
+    way. ``core.proxy_check._failed_result`` and ``_profile._mark_account_status``
+    reach for the same sink for the same reason.
     """
     return TdataConvertResult(status="conversion_error", error=type(exc).__name__)
 

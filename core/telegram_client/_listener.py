@@ -15,6 +15,7 @@ re-invokes :func:`subscribe_posts` (idempotent) to re-establish it.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from telethon import events
@@ -29,6 +30,9 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
     _EventHandler = Callable[[events.NewMessage.Event], Awaitable[None]]
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "stop_post_listener",
@@ -180,11 +184,12 @@ def _make_handler(
         )
         try:
             await on_post(post)
-        except Exception as exc:  # noqa: BLE001 — a callback fault must not kill the listener.
+        except Exception as exc:  # a callback fault must not kill the listener.
+            logger.exception("listener callback failed for %s", channel)
             await log_event(
                 "ERROR",
                 "neurocomment_listener_callback_failed",
-                extra={"channel": channel, "error_type": type(exc).__name__, "message": str(exc)},
+                extra={"channel": channel, "error_type": type(exc).__name__},
             )
 
     return handler
