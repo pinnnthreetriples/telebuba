@@ -1,5 +1,5 @@
 import type { ColumnDef } from '@tanstack/react-table';
-import { render, screen } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { afterEach, expect, test } from 'vitest';
 
@@ -129,6 +129,11 @@ test('the expander still toggles, and the sub-row renders inside its own card', 
   // Scoped to the card that owns the expander, not to a <tr>.
   expect(toggle.closest('div.tb-row')).toContainElement(subRow);
   expect(screen.queryByText('подробности second-row')).toBeNull();
+
+  await userEvent.click(toggle);
+  await waitFor(() => {
+    expect(screen.queryByText('подробности first-row')).toBeNull();
+  });
 });
 
 test('getRowProps reaches the card', async () => {

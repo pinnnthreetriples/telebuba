@@ -95,10 +95,12 @@ export function DataTable<TData>({
           const head = cells.filter((cell) => slotOf(cell) !== undefined);
           const body = cells.filter((cell) => slotOf(cell) === undefined);
           return (
+            // role after the spread, like className: it is part of the role="list"
+            // parent's structure, so a caller must not be able to clobber it.
             <div
               key={row.id}
-              role="listitem"
               {...rowProps}
+              role="listitem"
               className={join(CARD, rowProps?.className)}
             >
               {head.length > 0 ? (

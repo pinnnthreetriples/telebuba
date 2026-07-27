@@ -48,6 +48,27 @@ test('Escape only closes the topmost modal, not the parent underneath it', async
   expect(onCloseParent).not.toHaveBeenCalled();
 });
 
+// A dialog taller than the viewport has to stay reachable. The overlay is `fixed` and
+// body scroll is locked, so if the overlay does not scroll, the card's overflowing top
+// and bottom cannot be reached by any means — and it must be the OVERLAY that scrolls,
+// not the card, or the card clips absolutely-positioned children meant to escape it.
+test('a too-tall dialog scrolls via the overlay, and the card does not clip', () => {
+  render(
+    <Modal onClose={vi.fn()}>
+      <div>высокое содержимое</div>
+    </Modal>,
+  );
+
+  const overlay = screen.getByRole('presentation');
+  expect(overlay).toHaveClass('overflow-y-auto');
+  // m-auto, not items-center: centring with align-items makes the overflowing top
+  // unreachable once the container scrolls.
+  const card = screen.getByRole('dialog');
+  expect(card).toHaveClass('m-auto');
+  expect(overlay).not.toHaveClass('items-center');
+  expect(card.className).not.toContain('overflow-y-auto');
+});
+
 test('locks page scroll while any dialog is open and restores it when the last one closes', () => {
   const { unmount } = render(
     <Modal onClose={vi.fn()}>
@@ -59,13 +80,13 @@ test('locks page scroll while any dialog is open and restores it when the last o
   expect(document.body.style.overflow).toBe('');
 });
 
-// A nested dialog captures body.overflow *after* the outer one already set it to
-// 'hidden'. React runs deletion cleanups parent-first, so when both unmount in one
-// commit the nested one runs LAST — if each instance restored its own snapshot, that
-// snapshot is 'hidden' and the page could never be scrolled again without a reload.
-// Reachable for real via ProfileModal's "discard changes" confirm, whose onConfirm
-// closes the parent.
-test('a nested dialog closing with its parent still unlocks page scroll', () => {
+// A second dialog captures body.overflow *after* the first already set it to 'hidden'.
+// Cleanup order follows document order, so the later sibling restores LAST — and if
+// each instance restored its own snapshot, that snapshot is 'hidden' and the page could
+// never be scrolled again without a reload. This is the real shape of ProfileModal's
+// "discard changes" confirm: a sibling of the dialog in the same fragment, whose
+// onConfirm closes the parent, so both unmount together.
+test('a second dialog closing with the first still unlocks page scroll', () => {
   function Pair({ open }: { open: boolean }) {
     if (!open) return null;
     return (

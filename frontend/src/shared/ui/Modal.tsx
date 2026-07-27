@@ -11,28 +11,36 @@ const FOCUSABLE =
 const modalStack: object[] = [];
 
 // body.overflow as it was before the FIRST dialog locked it. Module-level, not
-// per-instance: a nested dialog captures the state after its parent already wrote
-// 'hidden', and React runs deletion cleanups parent-first, so when both unmount in
-// one commit the nested one restores last — writing 'hidden' back and leaving the
-// page permanently unscrollable. Only the 0→1 and 1→0 transitions touch this.
+// per-instance: a second dialog opening over the first captures 'hidden', because the
+// first already wrote it. Whichever instance restores LAST then decides the final
+// value, and cleanup order follows document order, so a confirm rendered as the later
+// sibling of its parent dialog (ProfileModal's discard-changes confirm) restores
+// 'hidden' and leaves the page permanently unscrollable.
+// Note it is the SIBLING case that bites. A dialog genuinely nested in another's
+// `children` would be fine on its own — mount effects run child-first, so it captures
+// the real value before its parent locks anything.
+// Gating both the capture and the restore on an empty stack makes the ordering
+// irrelevant: only the true 0→1 and 1→0 transitions touch this.
 let overflowBeforeLock = '';
 
 // Presets rather than two free `className` props: both halves set the same
 // properties (radius, animation, height), and a caller's `rounded-none` beside the
 // base `rounded-[18px]` would depend on Tailwind's emit order, which is no guarantee.
 //
-// Deliberately NO max-height or overflow on `center`. Capping and scrolling every
-// card looks like a free mobile win, but `overflow-y: auto` computes `overflow-x` to
-// `auto` too, so the card starts clipping absolutely-positioned children that are
-// meant to escape it — ListenerEditModal's dropdown, and WarmDaysModal's nowrap
-// `.tb-tip-pop`, which is ~1000px wide at opacity 0 and would give that dialog a
-// permanent horizontal scrollbar. A caller cannot opt out either: Tailwind emits
-// `.overflow-visible` before `.overflow-y-auto`. The callers whose content really can
-// outgrow the viewport carry their own `max-h-[88dvh] overflow-y-auto`.
+// A card taller than the viewport scrolls via the OVERLAY, never via the card. Both
+// alternatives are wrong: `overflow-y-auto` on the card computes `overflow-x` to
+// `auto` as well, so it clips absolutely-positioned children meant to escape it
+// (ListenerEditModal's dropdown; WarmDaysModal's nowrap `.tb-tip-pop`, ~1000px wide at
+// opacity 0, which turns into a permanent horizontal scrollbar) — and no cap at all
+// leaves a tall dialog clipped at BOTH ends with nothing to scroll, since the overlay
+// is `fixed` and `body.overflow` is locked while it is open.
+// `m-auto` on the card rather than `items-center` on the overlay: centring a flex item
+// with `align-items` makes the overflowing top unreachable once the container scrolls,
+// whereas auto margins centre it and still yield to the scroll.
 const SHELL = {
   center: {
-    overlay: 'items-center justify-center p-4 sm:p-5',
-    card: 'rounded-[18px] [animation:fadeup_0.25s_ease]',
+    overlay: 'justify-center overflow-y-auto overscroll-contain p-4 sm:p-5',
+    card: 'm-auto rounded-[18px] [animation:fadeup_0.25s_ease]',
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',

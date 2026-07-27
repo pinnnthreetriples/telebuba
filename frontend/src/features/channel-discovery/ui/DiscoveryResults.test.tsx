@@ -274,9 +274,11 @@ describe('DiscoveryResults', () => {
   });
 
   // Below 1024 DataTable renders cards, which have no column headers — and the
-  // select-all lives in one. It moves into the toolbar there, and there must still be
-  // exactly ONE of it, or every query by accessible name matches two.
-  it('keeps select-all reachable on a narrow viewport, without duplicating it', async () => {
+  // select-all lives in one, so it moves into the toolbar there.
+  // This covers the narrow side only. What catches a *duplicate* select-all is the
+  // wide-viewport tests above (and in ChannelDiscoveryModal.test.tsx), which query it
+  // by accessible name at the default 1024px and throw on two matches.
+  it('keeps select-all reachable on a narrow viewport', async () => {
     (
       window as unknown as { happyDOM: { setViewport: (v: { width: number }) => void } }
     ).happyDOM.setViewport({ width: 375 });
