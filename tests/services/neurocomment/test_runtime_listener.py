@@ -629,7 +629,7 @@ async def test_reconcile_records_channels_the_listener_cannot_watch(
 ) -> None:
     """A channel the listener cannot resolve is requested but never watched — say so.
 
-    Live incident: 16 ``post_listener_channel_unresolved`` events for one channel while
+    Live incident: 16 ``neurocomment_listener_channel_unresolved`` events for one channel while
     its readiness row still read ready=1 and the UI was all green. Nothing above the
     listener knew, because reconcile reported the REQUESTED channel count.
     """

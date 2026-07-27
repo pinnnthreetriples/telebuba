@@ -187,7 +187,7 @@ async def test_join_pass_resubscribes_a_channel_that_became_resolvable(
 
     ``subscribe_posts`` runs before the paced joins, so a not-yet-joined channel cannot
     resolve to a peer id and is left out of the filter. Nothing re-subscribed afterwards:
-    live logs show 16 ``post_listener_channel_unresolved`` rows for one channel across two
+    live logs show 16 ``neurocomment_listener_channel_unresolved`` rows for one channel across two
     days and several boots, never healing inside a process — and now permanently red too.
     """
     await _seed_channels("@a", "@b")

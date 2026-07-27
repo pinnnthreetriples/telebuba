@@ -140,7 +140,7 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
             await replace_dialogue_pairs(new_pairs)
             await log_event(
                 "INFO",
-                "dialogue_pairs_assigned",
+                "warming_dialogue_pairs_assigned",
                 extra={"accounts": len(eligible), "pairs": len(new_pairs)},
             )
             return DialoguePairsResult(pairs=await list_dialogue_pairs())
@@ -156,7 +156,7 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
         await prune_and_add_pairs(removed, new_pairs)
         await log_event(
             "INFO",
-            "dialogue_pairs_patched",
+            "warming_dialogue_pairs_patched",
             extra={"removed": len(removed), "added": len(added), "new_pairs": len(new_pairs)},
         )
         return DialoguePairsResult(pairs=await list_dialogue_pairs())

@@ -114,7 +114,7 @@ async def _resubscribe_unwatched(listener_account_id: str) -> None:
     minutes of jittered joins), so a channel the listener has not joined yet cannot
     resolve to a peer id and is left out of the ``NewMessage`` filter. Nothing else brings
     it back: no periodic reconcile exists, and the pool-rebuild hook re-attaches the OLD
-    filter. Live evidence: 16 ``post_listener_channel_unresolved`` rows for one channel
+    filter. Live evidence: 16 ``neurocomment_listener_channel_unresolved`` rows for one channel
     across two days and several boots, never healing inside a process — and since #279
     that channel is also permanently red in the SPA.
 

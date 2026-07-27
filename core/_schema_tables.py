@@ -170,7 +170,7 @@ _warming_account_state = Table(
     # P1.2: see schemas.warming.WarmingStateRecord.run_id.
     Column("run_id", String, nullable=True),
     # Lifecycle phase persisted between cycles — the previous-phase snapshot
-    # the loop diffs against to detect transitions and fire ``phase_advanced``.
+    # the loop diffs against to detect transitions and fire ``warming_phase_advanced``.
     Column("current_phase", String, nullable=True),
     Column("phase_entered_at", String, nullable=True),
     # Operator-set: account has been manually promoted out of warming into the

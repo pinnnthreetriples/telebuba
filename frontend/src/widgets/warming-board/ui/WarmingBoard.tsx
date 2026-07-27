@@ -151,8 +151,19 @@ function WarmingCard({
   const [stopOpen, setStopOpen] = useState(false);
   const [cfgOpen, setCfgOpen] = useState(false);
   // Real per-account activity log, fetched only while the terminal is expanded.
+  // The prefixes keep the neurocomment engine's own events out. `telegram_*` and
+  // `spam_status_*` are NOT warming-exclusive — the gateway stamps `telegram_*` for
+  // every execute() caller (profile/channel actions too) and spam status is probed
+  // from several pages — but they are account-scoped, and warming both drives them
+  // (actions, quarantine re-probe) and needs their outcomes here, so they stay.
   const logQuery = useQuery({
-    ...logsQueryOptions({ query: { account_id: account.account_id, limit: logLimit } }),
+    ...logsQueryOptions({
+      query: {
+        account_id: account.account_id,
+        limit: logLimit,
+        event_prefix: 'warming_,telegram_,spam_status',
+      },
+    }),
     enabled: open,
   });
   // Client-side "clear": hide everything up to the click; new events still show.

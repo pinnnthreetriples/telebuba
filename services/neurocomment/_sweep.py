@@ -93,7 +93,7 @@ async def _prune_history_if_due(now: datetime) -> None:
     except Exception as exc:  # noqa: BLE001 - retention must never abort the deletion sweep.
         await log_event(
             "WARNING",
-            "retention_purge_failed",
+            "neurocomment_retention_purge_failed",
             extra={"event": "neurocomment_retention_purged", "error": str(exc)},
         )
         return

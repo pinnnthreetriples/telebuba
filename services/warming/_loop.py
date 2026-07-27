@@ -302,7 +302,7 @@ async def _finalize_after_cycle(  # noqa: PLR0913 - explicit post-cycle inputs r
     if phase_event is not None and (run_id is None or write.applied):
         await log_event(
             phase_event.level,
-            "phase_advanced",
+            "warming_phase_advanced",
             account_id=account_id,
             extra=phase_event.extra,
         )

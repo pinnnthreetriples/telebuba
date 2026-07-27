@@ -26,7 +26,8 @@ const FALLBACK_POLL_MS = 30000;
 // The only queries this page reads (createQueryKey stamps _id on key[0]); a live
 // event refreshes just these, never the whole cache. The warmed pool now rides
 // the board payload, so there's no separate listWarmedAccounts fetch here.
-const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmingChannels'];
+// listLogs is included so the card terminals actually pick up new events.
+const WARMING_QUERY_IDS = ['getWarmingBoard', 'listWarmingChannels', 'listLogs'];
 
 // Trust 3-tier colour (design): healthy / watch / risk.
 function trustColor(trust: number): string {

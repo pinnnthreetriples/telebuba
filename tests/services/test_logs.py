@@ -140,6 +140,96 @@ async def test_event_prefix_keeps_only_matching_events() -> None:
 
 
 @pytest.mark.asyncio
+async def test_event_prefix_accepts_several_comma_separated_prefixes() -> None:
+    """The warming terminal asks for ``warming_,telegram_`` and must get both, only both."""
+    await log_event("INFO", "warming_cycle_completed", account_id="acc-1")
+    await log_event("WARNING", "telegram_action_unavailable", account_id="acc-1")
+    await log_event("INFO", "neurocomment_posted", account_id="acc-1")
+
+    state = await load_logs_page(LogFilter(event_prefix="warming_,telegram_"))
+
+    assert {e.event for e in state.entries} == {
+        "warming_cycle_completed",
+        "telegram_action_unavailable",
+    }
+
+
+@pytest.mark.asyncio
+async def test_event_prefix_ignores_a_blank_part_among_valid_ones() -> None:
+    """A trailing comma must not widen the filter to everything."""
+    await log_event("INFO", "warming_cycle_completed")
+    await log_event("INFO", "neurocomment_posted")
+
+    state = await load_logs_page(LogFilter(event_prefix="warming_,"))
+
+    assert {e.event for e in state.entries} == {"warming_cycle_completed"}
+
+
+@pytest.mark.asyncio
+async def test_clear_logs_by_prefix_list_deletes_exactly_the_union() -> None:
+    await log_event("INFO", "warming_cycle_completed")
+    await log_event("WARNING", "telegram_action_unavailable")
+    await log_event("INFO", "spam_status_refreshed")
+    await log_event("INFO", "neurocomment_posted")
+
+    result = await clear_logs("warming_,telegram_")
+
+    assert result.deleted == 2
+    remaining = await load_logs_page(LogFilter())
+    assert {e.event for e in remaining.entries} == {"spam_status_refreshed", "neurocomment_posted"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("wildcard", ["_", "%"])
+async def test_event_prefix_wildcards_are_literal_not_patterns(wildcard: str) -> None:
+    """``_`` / ``%`` must be escaped: unescaped they matched (and purged) every row."""
+    await log_event("INFO", "warming_cycle_completed")
+    await log_event("INFO", "neurocomment_posted")
+
+    state = await load_logs_page(LogFilter(event_prefix=wildcard))
+    assert state.entries == []
+
+    result = await clear_logs(wildcard)
+    assert result.deleted == 0
+    assert (await load_logs_page(LogFilter())).summary.total == 2
+
+
+@pytest.mark.asyncio
+async def test_event_prefix_matches_a_literal_backslash() -> None:
+    r"""A backslash in the prefix must survive as data, not be eaten as the escape char.
+
+    Doubling it is what makes that work: ``LIKE 'warm\path%' ESCAPE '\'`` reads ``\p``
+    as an escaped ``p`` and so matches ``warmpath_x`` instead — the decoy row below
+    catches exactly that, in both directions.
+    """
+    await log_event("INFO", "warm\\path_x")
+    await log_event("INFO", "warmpath_x")
+
+    state = await load_logs_page(LogFilter(event_prefix="warm\\path"))
+
+    assert {e.event for e in state.entries} == {"warm\\path_x"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blank", [" ", ",", ",,", " , "])
+async def test_all_blank_event_prefix_matches_nothing_and_purges_nothing(blank: str) -> None:
+    """A non-empty prefix whose parts are all blank is a filter, NOT "no filter".
+
+    Collapsing it to "no filter" would make ``DELETE /api/v1/logs?event_prefix=,``
+    wipe the whole table — the same class of bug as the unescaped-wildcard one.
+    """
+    await log_event("INFO", "warming_cycle_completed")
+    await log_event("INFO", "neurocomment_posted")
+
+    state = await load_logs_page(LogFilter(event_prefix=blank))
+    assert state.entries == []
+
+    result = await clear_logs(blank)
+    assert result.deleted == 0
+    assert (await load_logs_page(LogFilter())).summary.total == 2
+
+
+@pytest.mark.asyncio
 async def test_event_prefix_empty_is_no_filter() -> None:
     await log_event("INFO", "neurocomment_posted")
     await log_event("INFO", "warming_cycle_completed")
