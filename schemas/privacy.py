@@ -70,12 +70,19 @@ class AccountPrivacyOutcome(BaseModel):
     controlling visibility. Only meaningful on ``failed``: an ``ok`` row applied
     every key the request set and a ``skipped`` row applied none, so both leave it
     empty rather than restating the request.
+
+    ``retry_after_seconds`` is the server-mandated wait that came with a flood-family
+    refusal. ``AccountActionError`` has always carried it, but this model dropped it,
+    so a ``flood_wait`` row rendered "retry in ? s" — the one fact that makes the
+    error actionable. Only the flood family sets it; every other refusal leaves it
+    ``None``.
     """
 
     account_id: str
     status: Literal["ok", "failed", "skipped"]
     error: str | None = None
     applied: list[str] = []
+    retry_after_seconds: int | None = None
 
 
 class BulkPrivacyResult(BaseModel):

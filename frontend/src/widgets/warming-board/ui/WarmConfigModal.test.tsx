@@ -107,6 +107,29 @@ test('save writes the toggled global warming settings via the real mutation', as
   });
 });
 
+test('saving invalidates the settings and the board, not the whole cache', async () => {
+  routeApi();
+  const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  const invalidate = vi.spyOn(queryClient, 'invalidateQueries');
+  render(
+    <QueryClientProvider client={queryClient}>
+      <WarmConfigModal phone="+79991234567" onClose={vi.fn()} />
+    </QueryClientProvider>,
+  );
+
+  await userEvent.click(screen.getByRole('switch', { name: 'Взаимный чат' }));
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  await waitFor(() => {
+    expect(invalidate).toHaveBeenCalled();
+  });
+  // An unfiltered invalidateQueries() also refetched the accounts table, the
+  // proxies, the neurocomment campaigns and every open profile snapshot.
+  for (const [filters] of invalidate.mock.calls) {
+    expect(filters?.queryKey).toBeDefined();
+  }
+});
+
 test('the per-account scope is disabled (not yet persisted)', async () => {
   routeApi();
   renderWithClient(<WarmConfigModal phone="+79991234567" onClose={vi.fn()} />);

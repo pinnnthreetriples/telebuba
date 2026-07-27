@@ -373,6 +373,47 @@ test('two imports of the same filename settle independently', async () => {
   expect(screen.getAllByText('ошибка')).toHaveLength(1);
 });
 
+test('two CONCURRENT imports both reach a terminal state', async () => {
+  const settle: ((response: Response) => void)[] = [];
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-session') {
+      return new Promise((resolve) => {
+        settle.push(resolve);
+      });
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+
+  renderWithClient(<AccountEdit account={ACCOUNT} onBack={vi.fn()} />);
+  await userEvent.click(screen.getByText('Сессия'));
+  const input = document.body.querySelector('input[type="file"]') as HTMLInputElement;
+  const pick = (name: string) => {
+    fireEvent.change(input, {
+      target: { files: [new File(['x'], name, { type: 'application/octet-stream' })] },
+    });
+  };
+
+  // Both in flight at once — the SECOND must not start after the first resolved.
+  pick('one.session');
+  pick('two.session');
+  await waitFor(() => {
+    expect(settle).toHaveLength(2);
+  });
+
+  const ok = (id: string) =>
+    jsonResponse({ account_id: id, status: 'new', created_at: 'n', updated_at: 'n' });
+  settle[1]?.(ok('b'));
+  settle[0]?.(ok('a'));
+
+  // Both mutate calls shared one useMutation, and the observer keeps exactly ONE
+  // callback set: the second `mutate` overwrote it and detached the observer from
+  // the first mutation, so card #1 sat on «загрузка…» forever.
+  await waitFor(() => {
+    expect(screen.getAllByText('готово')).toHaveLength(2);
+  });
+});
+
 test('a space-separated SMS code is trimmed before it is sent', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

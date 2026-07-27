@@ -78,10 +78,13 @@ async def account_stats() -> AccountStats:
 
 @router.post("/accounts/check", response_model=AccountRead, operation_id="checkAccount")
 async def check_account(body: AccountCheckRequest) -> AccountRead:
-    try:
+    # 404 on a missing row like every sibling route — the service's own guard for
+    # that case is a ``ValueError``, which the mapper below would bill as a 400
+    # client fault. The guard stays in the service for its other caller (the tdata
+    # import); here the route does the hard lookup, exactly as ``spam-check`` does.
+    with service_errors_to_http():
+        await accounts.require_account(body.account_id)
         return await accounts.check_account_session(body)
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post(
@@ -204,15 +207,19 @@ async def import_account_tdata(
         detail="tdata archive is too large",
     )
     content = await file.read()
-    request = TdataConvertRequest(
-        filename=file.filename or "tdata.zip",
-        content=content,
-        label=label,
-    )
-    try:
+    # Model construction stays INSIDE the mapper (same as ``import-session``): the
+    # request model is assembled here from Form/File params, so an empty archive or a
+    # blank ``label`` reaches this route as a Pydantic ``ValidationError`` and the
+    # local 400 answered with its multi-line English prose naming the model
+    # (non-negotiable #12). It now gets the same 422 ``validation_error`` envelope
+    # every other malformed request gets; genuine service refusals still map to 400.
+    with service_errors_to_http():
+        request = TdataConvertRequest(
+            filename=file.filename or "tdata.zip",
+            content=content,
+            label=label,
+        )
         return await accounts.import_account_tdata(request)
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
 
 @router.post(

@@ -1,13 +1,11 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
-import { Fragment, useRef, useState, type ChangeEvent } from 'react';
+import { Fragment, useRef, useState, type ChangeEvent, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
   importAccountSessionMutation,
   importAccountTdataMutation,
-  requestLoginCodeMutation,
   startPhoneLoginMutation,
-  submitLoginCodeMutation,
 } from '@/entities/account';
 import {
   assignProxyMutation,
@@ -17,6 +15,7 @@ import {
 } from '@/entities/proxy';
 import { Modal } from '@/shared/ui';
 
+import { CodeLoginStep } from './CodeLoginStep';
 import { ProxyForm } from './ProxyForm';
 import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 
@@ -28,6 +27,53 @@ import { EMPTY_PROXY_FORM, type ProxyFormValue } from './proxyFormValue';
 // created account's id threads across all steps.
 type Method = 'session' | 'tdata' | 'phone' | null;
 type ProxyStep = 'choice' | 'form' | 'pool';
+
+// The wizard's five choice rows — three method cards on step 1 and the two proxy
+// choices on step 2 — were byte-identical apart from the icon, the two strings
+// and which of `selected` / `chevron` they carried.
+function ChoiceCard({
+  icon,
+  title,
+  desc,
+  selected = false,
+  chevron = false,
+  onClick,
+}: {
+  icon: ReactNode;
+  title: string;
+  desc: string;
+  selected?: boolean;
+  chevron?: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex cursor-pointer items-center gap-[11px] rounded-[12px] border bg-white px-[14px] py-[13px] text-left transition-colors hover:border-[#bfd6ff] ${selected ? 'border-primary bg-primary-tint' : 'border-line-input'}`}
+    >
+      <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+        {icon}
+      </span>
+      <span className="flex-1">
+        <span className="block text-[13.5px] font-semibold">{title}</span>
+        <span className="mt-px block text-[11.5px] text-ink-subtle">{desc}</span>
+      </span>
+      {chevron && (
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="#c8c6c2"
+          strokeWidth="2"
+        >
+          <path d="m9 18 6-6-6-6" />
+        </svg>
+      )}
+    </button>
+  );
+}
 
 export function AddAccountModal({
   onClose,
@@ -42,8 +88,6 @@ export function AddAccountModal({
   const [method, setMethod] = useState<Method>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [phone, setPhone] = useState('');
-  const [code, setCode] = useState('');
-  const [password, setPassword] = useState('');
   const [proxyStep, setProxyStep] = useState<ProxyStep>('choice');
   const [proxyValue, setProxyValue] = useState<ProxyFormValue>(EMPTY_PROXY_FORM);
   const [proxyValid, setProxyValid] = useState(false);
@@ -60,8 +104,6 @@ export function AddAccountModal({
   const importTdata = useMutation(importAccountTdataMutation());
   const importSession = useMutation(importAccountSessionMutation());
   const startLogin = useMutation(startPhoneLoginMutation());
-  const requestCode = useMutation(requestLoginCodeMutation());
-  const submitCode = useMutation(submitLoginCodeMutation());
   const createProxy = useMutation(createProxyMutation());
   const assignProxy = useMutation(assignProxyMutation());
   const pool = useQuery(proxyPoolQueryOptions());
@@ -69,6 +111,18 @@ export function AddAccountModal({
 
   const importing = importTdata.isPending || importSession.isPending;
   const importFailed = importTdata.isError || importSession.isError;
+
+  // Clear a FINISHED start-login only. `reset()` detaches the observer from the
+  // mutation ("there is no way to get it back" — mutationObserver.ts), so
+  // resetting one still in flight drops its mutate-level callbacks entirely,
+  // including `onSettled: onImported`. The account is created server-side
+  // regardless, so that left a real orphan the operator had to hunt down and
+  // delete by hand — methodRef can only make the outcome correct when the
+  // callback fires at all. A pending mutation has no error/success to clear, so
+  // skipping the reset costs nothing.
+  const clearFinishedStartLogin = () => {
+    if (!startLogin.isPending) startLogin.reset();
+  };
 
   const totalSteps = method === 'phone' ? 3 : 2;
 
@@ -83,7 +137,7 @@ export function AddAccountModal({
     if (method === next) return;
     setFileName(null);
     setCreatedAccountId(null);
-    startLogin.reset();
+    clearFinishedStartLogin();
     setMethod(next);
   };
 
@@ -113,22 +167,6 @@ export function AddAccountModal({
     } else {
       onClose();
     }
-  };
-
-  const onConfirmLogin = () => {
-    if (!createdAccountId) return;
-    submitCode.mutate(
-      {
-        path: { account_id: createdAccountId },
-        body: { code: code.trim(), password: password.trim() || null },
-      },
-      {
-        onSuccess: () => {
-          onImported();
-          onClose();
-        },
-      },
-    );
   };
 
   const onFile = (event: ChangeEvent<HTMLInputElement>) => {
@@ -206,9 +244,6 @@ export function AddAccountModal({
     );
   };
 
-  const choiceCard =
-    'flex cursor-pointer items-center gap-[11px] rounded-[12px] border border-line-input bg-white px-[14px] py-[13px] text-left transition-colors hover:border-[#bfd6ff]';
-
   return (
     <Modal onClose={onClose} z={70} className="w-[480px]">
       <div className="px-6 pb-5 pt-[22px]">
@@ -255,14 +290,8 @@ export function AddAccountModal({
         {step === 1 ? (
           <>
             <div className="flex flex-col gap-[10px]">
-              <button
-                type="button"
-                onClick={() => {
-                  selectMethod('session');
-                }}
-                className={`${choiceCard} ${method === 'session' ? 'border-primary bg-primary-tint' : ''}`}
-              >
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+              <ChoiceCard
+                icon={
                   <svg
                     width="18"
                     height="18"
@@ -274,24 +303,16 @@ export function AddAccountModal({
                     <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <path d="M14 2v6h6" />
                   </svg>
-                </span>
-                <span className="flex-1">
-                  <span className="block text-[13.5px] font-semibold">
-                    {t('accounts.addWizard.sessionTitle')}
-                  </span>
-                  <span className="mt-px block text-[11.5px] text-ink-subtle">
-                    {t('accounts.addWizard.sessionDesc')}
-                  </span>
-                </span>
-              </button>
-              <button
-                type="button"
+                }
+                title={t('accounts.addWizard.sessionTitle')}
+                desc={t('accounts.addWizard.sessionDesc')}
+                selected={method === 'session'}
                 onClick={() => {
-                  selectMethod('tdata');
+                  selectMethod('session');
                 }}
-                className={`${choiceCard} ${method === 'tdata' ? 'border-primary bg-primary-tint' : ''}`}
-              >
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+              />
+              <ChoiceCard
+                icon={
                   <svg
                     width="18"
                     height="18"
@@ -302,25 +323,16 @@ export function AddAccountModal({
                   >
                     <path d="M21 8v13H3V8M1 3h22v5H1zM10 12h4" />
                   </svg>
-                </span>
-                <span className="flex-1">
-                  <span className="block text-[13.5px] font-semibold">
-                    {t('accounts.addWizard.tdataTitle')}
-                  </span>
-                  <span className="mt-px block text-[11.5px] text-ink-subtle">
-                    {t('accounts.addWizard.tdataDesc')}
-                  </span>
-                </span>
-              </button>
-
-              <button
-                type="button"
+                }
+                title={t('accounts.addWizard.tdataTitle')}
+                desc={t('accounts.addWizard.tdataDesc')}
+                selected={method === 'tdata'}
                 onClick={() => {
-                  selectMethod('phone');
+                  selectMethod('tdata');
                 }}
-                className={`${choiceCard} ${method === 'phone' ? 'border-primary bg-primary-tint' : ''}`}
-              >
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+              />
+              <ChoiceCard
+                icon={
                   <svg
                     width="18"
                     height="18"
@@ -331,16 +343,14 @@ export function AddAccountModal({
                   >
                     <path d="M22 16.92v3a2 2 0 0 1-2.18 2 19.79 19.79 0 0 1-8.63-3.07 19.5 19.5 0 0 1-6-6 19.79 19.79 0 0 1-3.07-8.67A2 2 0 0 1 4.11 2h3a2 2 0 0 1 2 1.72c.13.96.36 1.9.7 2.81a2 2 0 0 1-.45 2.11L8.09 9.91a16 16 0 0 0 6 6l1.27-1.27a2 2 0 0 1 2.11-.45c.9.34 1.85.57 2.81.7A2 2 0 0 1 22 16.92z" />
                   </svg>
-                </span>
-                <span className="flex-1">
-                  <span className="block text-[13.5px] font-semibold">
-                    {t('accounts.addWizard.phoneTitle')}
-                  </span>
-                  <span className="mt-px block text-[11.5px] text-ink-subtle">
-                    {t('accounts.addWizard.phoneDesc')}
-                  </span>
-                </span>
-              </button>
+                }
+                title={t('accounts.addWizard.phoneTitle')}
+                desc={t('accounts.addWizard.phoneDesc')}
+                selected={method === 'phone'}
+                onClick={() => {
+                  selectMethod('phone');
+                }}
+              />
 
               {method === 'phone' && (
                 <div className="tb-fadeup flex flex-col gap-[10px] rounded-[12px] border border-line bg-white px-3 py-[13px]">
@@ -353,7 +363,7 @@ export function AddAccountModal({
                     onChange={(event) => {
                       setPhone(event.target.value);
                       setCreatedAccountId(null);
-                      startLogin.reset();
+                      clearFinishedStartLogin();
                     }}
                     placeholder={t('accounts.addWizard.phonePlaceholder')}
                     className="rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none focus:border-primary"
@@ -529,83 +539,14 @@ export function AddAccountModal({
             </div>
           </>
         ) : step === 3 ? (
-          <>
-            {!requestCode.isSuccess ? (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-[12px] border border-line bg-white px-4 py-[14px] text-[12.5px] text-ink-subtle">
-                  {phone}
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (createdAccountId) {
-                      requestCode.mutate({ path: { account_id: createdAccountId } });
-                    }
-                  }}
-                  disabled={requestCode.isPending || !createdAccountId}
-                  className="self-start rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
-                >
-                  {requestCode.isPending
-                    ? t('accounts.addWizard.sending')
-                    : t('accounts.addWizard.sendCode')}
-                </button>
-                {requestCode.isError && (
-                  <div className="text-[12px] text-[#c0473f]">
-                    {t('accounts.addWizard.loginErr')}
-                  </div>
-                )}
-              </div>
-            ) : (
-              <div className="flex flex-col gap-3">
-                <div className="rounded-[10px] bg-[#e7f2ec] px-3 py-[10px] text-[12.5px] font-medium text-[#2e7d55]">
-                  {t('accounts.addWizard.codeSent', { phone })}
-                </div>
-                <label className="block text-[11.5px] font-medium text-ink-subtle">
-                  {t('accounts.addWizard.smsCode')}
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    autoComplete="one-time-code"
-                    value={code}
-                    onChange={(event) => {
-                      setCode(event.target.value);
-                    }}
-                    className="mt-[6px] w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] font-normal text-ink outline-none focus:border-primary"
-                  />
-                </label>
-                <label className="block text-[11.5px] font-medium text-ink-subtle">
-                  {t('accounts.addWizard.twoFA')}
-                  <input
-                    type="password"
-                    // `off` is documented as ignored on password inputs;
-                    // `new-password` is the token that actually suppresses the
-                    // fill of the operator's own saved credential.
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(event) => {
-                      setPassword(event.target.value);
-                    }}
-                    className="mt-[6px] w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] font-normal text-ink outline-none focus:border-primary"
-                  />
-                </label>
-                {submitCode.isError && (
-                  <div className="text-[12px] text-[#c0473f]">
-                    {t('accounts.addWizard.loginErr')}
-                  </div>
-                )}
-              </div>
-            )}
-            <div className="mt-5 flex justify-end gap-2">
-              <button
-                type="button"
-                onClick={onConfirmLogin}
-                disabled={!code.trim() || !requestCode.isSuccess || submitCode.isPending}
-                className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
-              >
-                {t('accounts.addWizard.confirmLogin')}
-              </button>
-            </div>
-          </>
+          <CodeLoginStep
+            accountId={createdAccountId}
+            phone={phone}
+            onDone={() => {
+              onImported();
+              onClose();
+            }}
+          />
         ) : proxyStep === 'choice' ? (
           <>
             <div className="mb-[14px] flex items-center gap-2 rounded-[10px] bg-[#e7f2ec] px-3 py-[10px]">
@@ -624,14 +565,8 @@ export function AddAccountModal({
               </span>
             </div>
             <div className="flex flex-col gap-[10px]">
-              <button
-                type="button"
-                onClick={() => {
-                  setProxyStep('form');
-                }}
-                className={choiceCard}
-              >
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+              <ChoiceCard
+                icon={
                   <svg
                     width="18"
                     height="18"
@@ -642,34 +577,16 @@ export function AddAccountModal({
                   >
                     <path d="M12 5v14M5 12h14" />
                   </svg>
-                </span>
-                <span className="flex-1">
-                  <span className="block text-[13.5px] font-semibold">
-                    {t('accounts.addWizard.proxyManual')}
-                  </span>
-                  <span className="mt-px block text-[11.5px] text-ink-subtle">
-                    {t('accounts.addWizard.proxyManualDesc')}
-                  </span>
-                </span>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#c8c6c2"
-                  strokeWidth="2"
-                >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </button>
-              <button
-                type="button"
+                }
+                title={t('accounts.addWizard.proxyManual')}
+                desc={t('accounts.addWizard.proxyManualDesc')}
+                chevron
                 onClick={() => {
-                  setProxyStep('pool');
+                  setProxyStep('form');
                 }}
-                className={choiceCard}
-              >
-                <span className="flex h-[38px] w-[38px] shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff]">
+              />
+              <ChoiceCard
+                icon={
                   <svg
                     width="18"
                     height="18"
@@ -680,26 +597,14 @@ export function AddAccountModal({
                   >
                     <path d="M3 6h18M3 12h18M3 18h18" />
                   </svg>
-                </span>
-                <span className="flex-1">
-                  <span className="block text-[13.5px] font-semibold">
-                    {t('accounts.addWizard.proxyPool')}
-                  </span>
-                  <span className="mt-px block text-[11.5px] text-ink-subtle">
-                    {t('accounts.addWizard.proxyPoolDesc')}
-                  </span>
-                </span>
-                <svg
-                  width="16"
-                  height="16"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="#c8c6c2"
-                  strokeWidth="2"
-                >
-                  <path d="m9 18 6-6-6-6" />
-                </svg>
-              </button>
+                }
+                title={t('accounts.addWizard.proxyPool')}
+                desc={t('accounts.addWizard.proxyPoolDesc')}
+                chevron
+                onClick={() => {
+                  setProxyStep('pool');
+                }}
+              />
             </div>
             <div className="mt-5 flex justify-between gap-2">
               <button

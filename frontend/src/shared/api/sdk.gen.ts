@@ -201,6 +201,9 @@ import type {
   ResetAccountSessionData,
   ResetAccountSessionErrors,
   ResetAccountSessionResponses,
+  ResyncAccountAvatarData,
+  ResyncAccountAvatarErrors,
+  ResyncAccountAvatarResponses,
   RetryChallengeData,
   RetryChallengeErrors,
   RetryChallengeResponses,
@@ -558,6 +561,24 @@ export const setAccountPhoto = <ThrowOnError extends boolean = false>(
       ...options.headers,
     },
   });
+
+/**
+ * Resync Account Avatar
+ *
+ * Re-pull the accounts-table avatar from Telegram; answers the updated row.
+ *
+ * Call this ONCE after a photo batch: ``POST /accounts/photo`` uploads one file
+ * per request, so re-syncing inside it would spend a ``get_me`` plus a thumb
+ * download per photo when only the last one survives.
+ */
+export const resyncAccountAvatar = <ThrowOnError extends boolean = false>(
+  options: Options<ResyncAccountAvatarData, ThrowOnError>,
+): RequestResult<ResyncAccountAvatarResponses, ResyncAccountAvatarErrors, ThrowOnError> =>
+  (options.client ?? client).post<
+    ResyncAccountAvatarResponses,
+    ResyncAccountAvatarErrors,
+    ThrowOnError
+  >({ url: '/api/v1/accounts/{account_id}/avatar/resync', ...options });
 
 /**
  * Get Account Profile Snapshot

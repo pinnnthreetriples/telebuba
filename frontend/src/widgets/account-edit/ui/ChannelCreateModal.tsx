@@ -88,6 +88,19 @@ export function ChannelCreateModal({
   // Set when a refusal carried the created channel's id: the create SUCCEEDED
   // and only the public-username step failed, so the channel exists as private.
   const [createdId, setCreatedId] = useState<string | null>(null);
+  // The up-front gate `_channelsShared.ts` says the probe exists to provide: a
+  // DEFINITE "taken" verdict for exactly the handle that is typed now. Nothing
+  // else blocks — an absent, debouncing, in-flight, stale or FAILED probe is
+  // indistinguishable from "not checked yet", and locking on those would put
+  // back the dead end last round removed (the operator could no longer correct
+  // the handle). Without this, the hint read «Юзернейм занят» while Create
+  // stayed blue, guaranteeing a round-trip that cannot succeed.
+  const usernameTaken =
+    isPublic &&
+    usernameValid &&
+    username === debounced &&
+    !check.isFetching &&
+    check.data?.available === false;
   const canSubmit =
     !busy &&
     !done &&
@@ -96,7 +109,8 @@ export function ChannelCreateModal({
     title.trim().length >= 1 &&
     title.trim().length <= CHANNEL_TITLE_MAX &&
     about.trim().length <= CHANNEL_ABOUT_MAX &&
-    (!isPublic || usernameValid);
+    (!isPublic || usernameValid) &&
+    !usernameTaken;
 
   const invalidateList = () =>
     queryClient.invalidateQueries({
@@ -143,13 +157,19 @@ export function ChannelCreateModal({
     );
   };
 
-  // Username hint line: format error → debounce/probe spinner → verdict.
+  // Username hint line: format error → debounce/probe spinner → probe failure →
+  // verdict.
   let usernameHint: { text: string; tone: 'muted' | 'ok' | 'error' } | null = null;
   if (isPublic) {
     if (username !== '' && !usernameValid) {
       usernameHint = { text: t('accounts.channel.errUsername'), tone: 'error' };
     } else if (usernameValid && (username !== debounced || check.isFetching)) {
       usernameHint = { text: t('accounts.channel.usernameChecking'), tone: 'muted' };
+    } else if (usernameValid && check.isError) {
+      // A failed probe used to render NOTHING, which looks exactly like "not
+      // checked yet". Muted, not error: Create stays armed, so an alarming
+      // colour next to a live button would just repeat the contradiction above.
+      usernameHint = { text: t('accounts.channel.usernameCheckFailed'), tone: 'muted' };
     } else if (usernameValid && check.data) {
       usernameHint = check.data.available
         ? { text: t('accounts.channel.usernameFree'), tone: 'ok' }

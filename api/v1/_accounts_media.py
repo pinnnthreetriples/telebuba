@@ -18,6 +18,7 @@ from fastapi import status as http_status
 from api.v1._errors import service_errors_to_http
 from api.v1._uploads import reject_oversized_upload
 from core.config import settings
+from schemas.accounts import AccountRead
 from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfileMusicUpload,
@@ -66,6 +67,22 @@ async def set_account_photo(
             content=content,
         )
         return await accounts.set_account_profile_photo(upload)
+
+
+@media_router.post(
+    "/accounts/{account_id}/avatar/resync",
+    response_model=AccountRead,
+    operation_id="resyncAccountAvatar",
+)
+async def resync_account_avatar(account_id: str) -> AccountRead:
+    """Re-pull the accounts-table avatar from Telegram; answers the updated row.
+
+    Call this ONCE after a photo batch: ``POST /accounts/photo`` uploads one file
+    per request, so re-syncing inside it would spend a ``get_me`` plus a thumb
+    download per photo when only the last one survives.
+    """
+    with service_errors_to_http():
+        return await accounts.resync_account_avatar(account_id)
 
 
 def _decode_ref(value: str) -> bytes:

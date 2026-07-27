@@ -153,11 +153,16 @@ async def apply_privacy_to_all_accounts(
                 # the gap. Without it an account whose photo key landed before the
                 # bio key flooded was reported "failed" — i.e. unchanged — while its
                 # avatar was already public.
+                #
+                # ``retry_after_seconds`` rides along for the same reason: a
+                # ``flood_wait`` row without the duration renders "retry in ? s",
+                # and the error carries it already.
                 return AccountPrivacyOutcome(
                     account_id=account.account_id,
                     status="failed",
                     error=exc.code,
                     applied=exc.applied_privacy_keys or [],
+                    retry_after_seconds=exc.retry_after_seconds,
                 )
             except Exception as exc:  # one bad account must not abort the sweep
                 # Class name only: an unexpected exception's message is arbitrary

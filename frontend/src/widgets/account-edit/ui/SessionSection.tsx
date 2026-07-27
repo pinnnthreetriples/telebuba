@@ -123,16 +123,24 @@ export function SessionSection({ account }: { account: AccountRead }) {
       setUploads((list) => list.map((item) => (item.id === id ? { ...item, status } : item)));
       if (status === 'done') invalidate();
     };
-    const handlers = {
-      onSuccess: () => {
+    // `mutateAsync`, NOT `mutate` with mutate-level callbacks: both imports share
+    // one useMutation, and the observer holds exactly ONE callback set — a second
+    // `mutate` overwrites `#mutateOptions` and detaches the observer from the
+    // first mutation (mutationObserver.ts: "there is no way to get it back"), so
+    // picking a second file before the first resolved left card #1 on
+    // «загрузка…» forever. The promise `mutateAsync` returns belongs to THIS
+    // mutation and survives both.
+    const upload = archive
+      ? importTdata.mutateAsync({ body: { file } })
+      : importSession.mutateAsync({ body: { file } });
+    void upload.then(
+      () => {
         settle('done');
       },
-      onError: () => {
+      () => {
         settle('error');
       },
-    };
-    if (archive) importTdata.mutate({ body: { file } }, handlers);
-    else importSession.mutate({ body: { file } }, handlers);
+    );
     event.target.value = '';
   };
 

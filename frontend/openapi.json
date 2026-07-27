@@ -1748,6 +1748,115 @@
         }
       }
     },
+    "/api/v1/accounts/{account_id}/avatar/resync": {
+      "post": {
+        "tags": [
+          "accounts"
+        ],
+        "summary": "Resync Account Avatar",
+        "description": "Re-pull the accounts-table avatar from Telegram; answers the updated row.\n\nCall this ONCE after a photo batch: ``POST /accounts/photo`` uploads one file\nper request, so re-syncing inside it would spend a ``get_me`` plus a thumb\ndownload per photo when only the last one survives.",
+        "operationId": "resyncAccountAvatar",
+        "parameters": [
+          {
+            "name": "account_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "title": "Account Id"
+            }
+          },
+          {
+            "name": "tb_session",
+            "in": "cookie",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Tb Session"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful Response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AccountRead"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad request, or Telegram refused the action",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Not authenticated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Account not found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "Request validation failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Telegram gateway unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorEnvelope"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/accounts/{account_id}/profile-snapshot": {
       "get": {
         "tags": [
@@ -7537,6 +7646,17 @@
             "type": "array",
             "title": "Applied",
             "default": []
+          },
+          "retry_after_seconds": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Retry After Seconds"
           }
         },
         "type": "object",
@@ -7545,7 +7665,7 @@
           "status"
         ],
         "title": "AccountPrivacyOutcome",
-        "description": "One account's result in the fleet-wide apply.\n\n``skipped`` = the account is permanently dead, and ``error`` carries the\naccount status that caused the skip, so a count is explainable.\n\n``failed`` carries whatever ``AccountActionError`` reported: always a stable\ncode the SPA translates under ``accounts.profile.code.*`` \u2014 either a gateway\ncode or the bare ``ActionStatus`` (``failed``) when the refusal came from an\nexception whose message is not a contract, never a Telethon message.\nRepo-wide behaviour for every account action, not specific to privacy. The\ninfra family (pool / socket / proxy) is already collapsed to the flat\n``unavailable`` code before it gets here, which is what keeps a proxy\nendpoint off the wire.\n\n``applied`` names the keys that DID change on Telegram before the refusal.\n``account.setPrivacy`` is one call per key and nothing is rolled back, so a\n``failed`` row can already have published the avatar \u2014 reporting it as a bare\nfailure inverted the safety-relevant fact for a feature whose entire purpose is\ncontrolling visibility. Only meaningful on ``failed``: an ``ok`` row applied\nevery key the request set and a ``skipped`` row applied none, so both leave it\nempty rather than restating the request."
+        "description": "One account's result in the fleet-wide apply.\n\n``skipped`` = the account is permanently dead, and ``error`` carries the\naccount status that caused the skip, so a count is explainable.\n\n``failed`` carries whatever ``AccountActionError`` reported: always a stable\ncode the SPA translates under ``accounts.profile.code.*`` \u2014 either a gateway\ncode or the bare ``ActionStatus`` (``failed``) when the refusal came from an\nexception whose message is not a contract, never a Telethon message.\nRepo-wide behaviour for every account action, not specific to privacy. The\ninfra family (pool / socket / proxy) is already collapsed to the flat\n``unavailable`` code before it gets here, which is what keeps a proxy\nendpoint off the wire.\n\n``applied`` names the keys that DID change on Telegram before the refusal.\n``account.setPrivacy`` is one call per key and nothing is rolled back, so a\n``failed`` row can already have published the avatar \u2014 reporting it as a bare\nfailure inverted the safety-relevant fact for a feature whose entire purpose is\ncontrolling visibility. Only meaningful on ``failed``: an ``ok`` row applied\nevery key the request set and a ``skipped`` row applied none, so both leave it\nempty rather than restating the request.\n\n``retry_after_seconds`` is the server-mandated wait that came with a flood-family\nrefusal. ``AccountActionError`` has always carried it, but this model dropped it,\nso a ``flood_wait`` row rendered \"retry in ? s\" \u2014 the one fact that makes the\nerror actionable. Only the flood family sets it; every other refusal leaves it\n``None``."
       },
       "AccountPrivacyUpdateRequest": {
         "properties": {

@@ -414,6 +414,31 @@ test('the tab header is a real tablist with the shown tab marked', async () => {
   expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'profile-tab-photo');
 });
 
+test('the tablist is one tab stop and the arrow keys move between the tabs', async () => {
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+
+  // Roving tabindex: only the selected tab is reachable with Tab, so the six tabs
+  // are one stop in the page order instead of six.
+  const tabs = screen.getAllByRole('tab');
+  expect(tabs.filter((tab) => tab.getAttribute('tabindex') === '0')).toHaveLength(1);
+  expect(screen.getByRole('tab', { selected: true })).toHaveAttribute('tabindex', '0');
+
+  const tablist = screen.getByRole('tab', { name: 'Текст' });
+  tablist.focus();
+  await userEvent.keyboard('{ArrowRight}');
+  expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Фото');
+  expect(screen.getByRole('tab', { name: 'Фото' })).toHaveFocus();
+
+  // Wraps backwards off the first tab, and Home/End jump to the ends.
+  await userEvent.keyboard('{ArrowLeft}{ArrowLeft}');
+  expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Приватность');
+  await userEvent.keyboard('{Home}');
+  expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Текст');
+  await userEvent.keyboard('{End}');
+  expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Приватность');
+});
+
 test('an account with no stored first name shows why Save is disabled', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const { pathname } = new URL((input as Request).url);

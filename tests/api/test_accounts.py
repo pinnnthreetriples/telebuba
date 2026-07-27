@@ -33,6 +33,7 @@ async def test_check_account_returns_the_checked_account(
         return _account("acc-1")
 
     monkeypatch.setattr("services.accounts.check_account_session", _fake)
+    await add_account(AccountCreate(account_id="acc-1"))
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/check", json={"account_id": "acc-1"})
     assert resp.status_code == 200
@@ -44,15 +45,41 @@ async def test_check_account_maps_value_error_to_400(
     app: FastAPI,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A refused check on an EXISTING row is still a 400 (only the 404 moved)."""
+
     async def _boom(body: object) -> AccountRead:  # noqa: ARG001
         msg = "no session"
         raise ValueError(msg)
 
     monkeypatch.setattr("services.accounts.check_account_session", _boom)
+    await add_account(AccountCreate(account_id="acc-1"))
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/check", json={"account_id": "acc-1"})
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.asyncio
+async def test_check_unknown_account_is_404_not_400(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing row is a lookup failure like every sibling route, not a bad request.
+
+    The service's own guard raises a plain ``ValueError`` (it also serves the tdata
+    import, which must keep it), so the route does the hard lookup — and the service
+    must not be reached at all.
+    """
+
+    async def _fake(body: object) -> AccountRead:  # noqa: ARG001
+        msg = "service must not be reached for a missing account"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.accounts.check_account_session", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/check", json={"account_id": "never-existed"})
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
 
 
 @pytest.mark.asyncio
@@ -280,6 +307,30 @@ async def test_import_tdata_maps_value_error_to_400(
         )
     assert resp.status_code == 400
     assert resp.json()["error"]["code"] == "bad_request"
+
+
+@pytest.mark.asyncio
+async def test_import_tdata_rejected_request_is_422_not_pydantic_prose(app: FastAPI) -> None:
+    """The route's own 400 answered with Pydantic's multi-line English prose.
+
+    ``TdataConvertRequest`` is assembled here from Form/File params, so its refusal
+    (here: an archive with no bytes) reaches the route as a ``ValidationError`` —
+    unbounded third-party text naming the model on the wire (non-negotiable #12). It
+    now gets the same 422 ``validation_error`` envelope as every other malformed
+    request. The service is NOT patched: this exercises the real refusal.
+    """
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-tdata",
+            files={"file": ("tdata.zip", b"", "application/zip")},
+        )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"]["code"] == "validation_error"
+    # The locale-neutral code, not Pydantic's "N validation errors for <Model>" —
+    # the per-field detail rides in ``fields`` exactly as for a native body model.
+    assert body["error"]["message"] == "validation_error"
+    assert "validation error" not in str(body).lower().replace("validation_error", "")
 
 
 @pytest.mark.asyncio

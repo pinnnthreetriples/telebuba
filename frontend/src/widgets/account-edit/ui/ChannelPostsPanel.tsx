@@ -370,7 +370,13 @@ export function ChannelPostsPanel({
                       {channelErrorText(editPost.error, t, t('accounts.channel.error'))}
                     </div>
                   )}
-                  <div className="mt-2 flex justify-end gap-2">
+                  <div className="mt-2 flex items-center justify-end gap-2">
+                    {/* The same readout the composer carries: without it the box
+                        just stops accepting input at the media-aware cap with
+                        nothing on screen explaining why. */}
+                    <span className="mr-auto text-[11px] text-ink-subtle">
+                      {t('accounts.channel.charCount', { n: editText.length, max: editMax })}
+                    </span>
                     <button
                       type="button"
                       onClick={() => {

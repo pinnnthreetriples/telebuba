@@ -103,6 +103,12 @@ export type AccountCheckRequest = {
  * controlling visibility. Only meaningful on ``failed``: an ``ok`` row applied
  * every key the request set and a ``skipped`` row applied none, so both leave it
  * empty rather than restating the request.
+ *
+ * ``retry_after_seconds`` is the server-mandated wait that came with a flood-family
+ * refusal. ``AccountActionError`` has always carried it, but this model dropped it,
+ * so a ``flood_wait`` row rendered "retry in ? s" — the one fact that makes the
+ * error actionable. Only the flood family sets it; every other refusal leaves it
+ * ``None``.
  */
 export type AccountPrivacyOutcome = {
   /**
@@ -121,6 +127,10 @@ export type AccountPrivacyOutcome = {
    * Applied
    */
   applied?: Array<string>;
+  /**
+   * Retry After Seconds
+   */
+  retry_after_seconds?: number | null;
 };
 
 /**
@@ -3608,6 +3618,57 @@ export type SetAccountPhotoResponses = {
 };
 
 export type SetAccountPhotoResponse = SetAccountPhotoResponses[keyof SetAccountPhotoResponses];
+
+export type ResyncAccountAvatarData = {
+  body?: never;
+  path: {
+    /**
+     * Account Id
+     */
+    account_id: string;
+  };
+  query?: never;
+  url: '/api/v1/accounts/{account_id}/avatar/resync';
+};
+
+export type ResyncAccountAvatarErrors = {
+  /**
+   * Bad request, or Telegram refused the action
+   */
+  400: ErrorEnvelope;
+  /**
+   * Not authenticated
+   */
+  401: ErrorEnvelope;
+  /**
+   * Account not found
+   */
+  404: ErrorEnvelope;
+  /**
+   * Request validation failed
+   */
+  422: ErrorEnvelope;
+  /**
+   * Internal server error
+   */
+  500: ErrorEnvelope;
+  /**
+   * Telegram gateway unavailable
+   */
+  503: ErrorEnvelope;
+};
+
+export type ResyncAccountAvatarError = ResyncAccountAvatarErrors[keyof ResyncAccountAvatarErrors];
+
+export type ResyncAccountAvatarResponses = {
+  /**
+   * Successful Response
+   */
+  200: AccountRead;
+};
+
+export type ResyncAccountAvatarResponse =
+  ResyncAccountAvatarResponses[keyof ResyncAccountAvatarResponses];
 
 export type GetAccountProfileSnapshotData = {
   body?: never;

@@ -2,7 +2,11 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { updateWarmingSettingsMutation, warmingSettingsQueryOptions } from '@/entities/warming';
+import {
+  updateWarmingSettingsMutation,
+  warmingBoardQueryOptions,
+  warmingSettingsQueryOptions,
+} from '@/entities/warming';
 import type { WarmingSettings } from '@/shared/api';
 
 import { Modal } from '@/shared/ui';
@@ -110,7 +114,15 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
       },
       {
         onSettled: () => {
-          void queryClient.invalidateQueries();
+          // What this write actually touches: the settings row, and the warming
+          // board — whose read model embeds those same settings
+          // (WarmingBoardState.settings). NOT the whole cache: a bare
+          // invalidateQueries() also refetched the accounts table, the proxies,
+          // the neurocomment campaigns and every open profile snapshot.
+          void queryClient.invalidateQueries({
+            queryKey: warmingSettingsQueryOptions().queryKey,
+          });
+          void queryClient.invalidateQueries({ queryKey: warmingBoardQueryOptions().queryKey });
           onClose();
         },
       },

@@ -79,6 +79,30 @@ def test_parse_http_json_rejects_non_200_response() -> None:
         _parse_http_json(payload)
 
 
+def test_parse_http_json_keeps_the_status_code_and_drops_the_remote_reason() -> None:
+    """The status CODE is ours to report; the remote server's status LINE is not.
+
+    This message becomes ``last_error`` → ``AccountRead.proxy_last_error`` → the
+    operator's browser, so a reason phrase (or anything else) the remote endpoint
+    chose must not ride along inside a diagnostic the code treats as its own.
+    """
+    payload = b"HTTP/1.1 429 Too Many <b>Requests</b>\r\n\r\n{}"
+    with pytest.raises(OSError, match=r"^HTTPS endpoint returned HTTP 429$"):
+        _parse_http_json(payload)
+
+
+@pytest.mark.parametrize(
+    "head",
+    [b"", b"garbage", b"HTTP/1.1 <script>alert(1)</script> Nope"],
+)
+def test_parse_http_json_reports_an_unparsable_status_line_without_quoting_it(
+    head: bytes,
+) -> None:
+    """No 3-digit status to report → a fixed diagnostic, never the raw bytes."""
+    with pytest.raises(OSError, match=r"^HTTPS endpoint returned an unparsable status line$"):
+        _parse_http_json(head + b"\r\n\r\n{}")
+
+
 def test_parse_http_json_decodes_chunked_response() -> None:
     raw = (
         b"HTTP/1.1 200 OK\r\nTransfer-Encoding: chunked\r\n\r\n"

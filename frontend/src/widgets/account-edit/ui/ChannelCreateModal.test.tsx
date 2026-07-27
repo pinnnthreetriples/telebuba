@@ -159,6 +159,52 @@ test('a public channel sends the username and the debounced check shows taken/fr
   expect(body).toEqual({ title: 'Новости', about: '', username: 'freshname' });
 });
 
+test('a definite "taken" verdict disarms Create (no round-trip that cannot succeed)', async () => {
+  routeApi({
+    onCheck: () => jsonResponse({ available: false, code: 'channel_username_occupied' }),
+  });
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.click(screen.getByText('Публичный канал'));
+  await userEvent.type(screen.getByLabelText(/Юзернейм/), 'newshub');
+  expect(await screen.findByText('Юзернейм уже занят', {}, { timeout: 3000 })).toBeInTheDocument();
+
+  // canSubmit never consulted the verdict, so the hint said "taken" while Create
+  // stayed blue — a guaranteed-to-fail POST, and the whole point of the client
+  // probe is the up-front gate.
+  expect(screen.getByText('Создать')).toBeDisabled();
+  await userEvent.click(screen.getByText('Создать'));
+  expect(createPosts()).toHaveLength(0);
+});
+
+test('a FAILED availability probe says so and leaves Create armed', async () => {
+  routeApi({
+    onCheck: () => jsonResponse({ error: { code: 'bad_gateway', message: 'nope' } }, 502),
+  });
+  await openCreate();
+
+  await userEvent.type(screen.getByLabelText('Название'), 'Новости');
+  await userEvent.click(screen.getByText('Публичный канал'));
+  await userEvent.type(screen.getByLabelText(/Юзернейм/), 'newshub');
+
+  // A failed probe rendered NOTHING, which reads exactly like "not checked yet".
+  expect(
+    await screen.findByText(
+      'Не удалось проверить доступность — Telegram ответит при создании',
+      {},
+      { timeout: 3000 },
+    ),
+  ).toBeInTheDocument();
+  // And it must NOT gate Create: only a definite "taken" does, or a failing probe
+  // would be a new dead end.
+  expect(screen.getByText('Создать')).toBeEnabled();
+  await userEvent.click(screen.getByText('Создать'));
+  await waitFor(() => {
+    expect(createPosts()).toHaveLength(1);
+  });
+});
+
 test('a stable failure code renders as translated copy', async () => {
   routeApi({
     onCreate: () =>

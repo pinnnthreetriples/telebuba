@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.config import settings
+from schemas.accounts import AccountRead
 from schemas.profile_media import (
     AccountProfileMusicRemove,
     AccountProfilePhotoSetMain,
@@ -665,3 +666,26 @@ async def test_a_bad_account_id_form_field_is_a_validation_error_not_a_500(
         )
     assert resp.status_code == 422
     assert "body.account_id" in resp.json()["error"]["fields"]
+
+
+@pytest.mark.asyncio
+async def test_resync_avatar_returns_the_refreshed_row(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The batch's single post-upload re-sync; 404 comes from the shared mapper."""
+
+    async def _fake(account_id: str) -> AccountRead:
+        return AccountRead(
+            account_id=account_id,
+            status="alive",
+            created_at="now",
+            updated_at="now",
+            avatar_etag="fresh",
+        )
+
+    monkeypatch.setattr("services.accounts.resync_account_avatar", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-1/avatar/resync")
+    assert resp.status_code == 200
+    assert resp.json()["avatar_etag"] == "fresh"

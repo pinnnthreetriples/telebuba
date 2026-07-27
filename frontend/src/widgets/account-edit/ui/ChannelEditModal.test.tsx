@@ -141,6 +141,18 @@ test('an about-only edit stays saveable when the title prefill came back blank',
   expect(body).toEqual({ about: 'Новое описание' });
 });
 
+test('a blank-title read says nothing rather than announcing "Private"', async () => {
+  // The no-match fallback in the backend detail read is effectively dead (see the
+  // invariant on ChannelEditModal), but if it ever fired the identity line
+  // confidently called a public channel private on EVERY read.
+  routeApi({ ...DETAIL, title: '', username: null });
+  renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);
+  await screen.findByDisplayValue('Описание канала');
+
+  expect(screen.queryByText(/Приватный/)).not.toBeInTheDocument();
+  expect(screen.queryByText(/подписчиков/)).not.toBeInTheDocument();
+});
+
 test('an oversized or wrong-type avatar is rejected client-side with a toast', async () => {
   routeApi();
   renderWithClient(<ChannelEditModal accountId="acc-1" channelId="123" onClose={vi.fn()} />);

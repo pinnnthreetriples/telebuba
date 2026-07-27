@@ -22,6 +22,7 @@ _PROXY_TYPE_BY_NAME: dict[ProxyType, SocksProxyType] = {
     "https": SocksProxyType.HTTP,
 }
 _HTTP_STATUS_INDEX = 1
+_HTTP_STATUS_CODE_LENGTH = 3
 _MAX_ERROR_LENGTH = 240
 _MAX_RESPONSE_BYTES = 64 * 1024
 _COUNTRY_CODE_LENGTH = 2
@@ -196,10 +197,20 @@ def _parse_http_json(raw: bytes) -> dict[str, Any]:
         msg = "HTTPS endpoint returned an incomplete response"
         raise _ProxyCheckError(msg)
     lines = head.split(b"\r\n")
-    first_line = lines[0].decode(errors="replace")
-    parts = first_line.split()
-    if len(parts) <= _HTTP_STATUS_INDEX or parts[_HTTP_STATUS_INDEX] != "200":
-        msg = f"HTTPS endpoint returned {first_line or 'empty response'}"
+    parts = lines[0].decode(errors="replace").split()
+    status_code = parts[_HTTP_STATUS_INDEX] if len(parts) > _HTTP_STATUS_INDEX else ""
+    if status_code != "200":
+        # The status CODE is actionable and ours to report; the rest of the status
+        # LINE is a reason phrase the remote server chose, and this message ends up
+        # in ``proxy_last_error`` (see ``_failed_result``) — bounded is not enough,
+        # remote-controlled text has no business in our own diagnostic.
+        msg = (
+            f"HTTPS endpoint returned HTTP {status_code}"
+            if len(status_code) == _HTTP_STATUS_CODE_LENGTH
+            and status_code.isascii()
+            and status_code.isdigit()
+            else "HTTPS endpoint returned an unparsable status line"
+        )
         raise _ProxyCheckError(msg)
 
     headers: dict[str, str] = {}

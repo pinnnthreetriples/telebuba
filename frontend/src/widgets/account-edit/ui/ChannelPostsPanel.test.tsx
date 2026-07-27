@@ -224,6 +224,22 @@ test('editing a post with media caps the text at the caption limit', async () =>
   expect(screen.getByDisplayValue('Первый пост')).toHaveAttribute('maxlength', '4096');
 });
 
+test('the edit box shows the same char count the composer does', async () => {
+  routeApi();
+  renderWithClient(<ChannelPostsPanel accountId="acc-1" channelId="123" />);
+  await screen.findByText('Второй пост');
+
+  // Post 10 carries a photo → the caption cap. Without the readout the box just
+  // stopped accepting input at 1024 with nothing on screen explaining why.
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[0] as HTMLElement);
+  expect(screen.getByText('11/1024')).toBeInTheDocument();
+
+  // Text-only post → the full 4096, same as the composer's own readout.
+  await userEvent.click(screen.getByText('Отмена'));
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[1] as HTMLElement);
+  expect(screen.getByText('11/4096')).toBeInTheDocument();
+});
+
 test('a failed edit surfaces the translated stable code inline', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

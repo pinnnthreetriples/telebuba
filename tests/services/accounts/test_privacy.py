@@ -330,3 +330,6 @@ async def test_a_partially_applied_fleet_account_reports_which_keys_landed(
     outcome = result.outcomes[0]
     assert (outcome.status, outcome.error) == ("failed", "flood_wait")
     assert outcome.applied == ["profile_photo"]
+    # The duration too: the error has always carried it, but the outcome dropped it,
+    # so the fleet report rendered "retry in ? s" — the one actionable fact.
+    assert outcome.retry_after_seconds == 30

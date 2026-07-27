@@ -57,6 +57,14 @@ const profileSchema = z.object({
 // privacy tabs manage the account's own channels and its Telegram privacy
 // levels (their own queries — outside the snapshot busy scrim).
 type Tab = 'text' | 'photo' | 'stories' | 'music' | 'channels' | 'privacy';
+const TABS = [
+  'text',
+  'photo',
+  'stories',
+  'music',
+  'channels',
+  'privacy',
+] as const satisfies readonly Tab[];
 
 // "Обновлено {только что | N мин назад}" from the snapshot query's last fetch.
 // Its own component with its own 30s tick, so only this label re-renders while
@@ -570,6 +578,22 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   const tabBtn = (value: Tab): string =>
     `border-b-2 py-[14px] text-[13px] font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
 
+  // The other half of the ARIA tabs pattern (the roles landed with the tablist):
+  // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
+  // between the tabs — otherwise a keyboard user Tabs through all six.
+  const onTabKeyDown = (event: React.KeyboardEvent<HTMLButtonElement>) => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0;
+    let next: Tab | undefined;
+    if (step !== 0) next = TABS[(TABS.indexOf(tab) + step + TABS.length) % TABS.length];
+    else if (event.key === 'Home') next = TABS[0];
+    else if (event.key === 'End') next = TABS[TABS.length - 1];
+    if (next === undefined) return;
+    event.preventDefault();
+    setTab(next);
+    // Automatic activation: selection follows focus, so focus has to follow too.
+    document.getElementById(`profile-tab-${next}`)?.focus();
+  };
+
   const refreshLook = REFRESH_LOOK[refreshState === 'loading' ? 'idle' : refreshState];
   // An in-flight photo batch owns the modal: the exits are locked (see
   // requestClose) and must look it rather than silently ignoring the click.
@@ -650,24 +674,24 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
               bottom border only, so a screen reader announced six plain buttons
               with no way to tell which one is showing. */}
           <div role="tablist" className="flex gap-5 border-b border-[#f0eeeb] px-5">
-            {(['text', 'photo', 'stories', 'music', 'channels', 'privacy'] as const).map(
-              (value) => (
-                <button
-                  key={value}
-                  type="button"
-                  role="tab"
-                  id={`profile-tab-${value}`}
-                  aria-selected={tab === value}
-                  aria-controls="profile-tabpanel"
-                  onClick={() => {
-                    setTab(value);
-                  }}
-                  className={tabBtn(value)}
-                >
-                  {t(`accounts.profile.tab.${value}`)}
-                </button>
-              ),
-            )}
+            {TABS.map((value) => (
+              <button
+                key={value}
+                type="button"
+                role="tab"
+                id={`profile-tab-${value}`}
+                aria-selected={tab === value}
+                aria-controls="profile-tabpanel"
+                tabIndex={tab === value ? 0 : -1}
+                onKeyDown={onTabKeyDown}
+                onClick={() => {
+                  setTab(value);
+                }}
+                className={tabBtn(value)}
+              >
+                {t(`accounts.profile.tab.${value}`)}
+              </button>
+            ))}
           </div>
 
           {/* content */}

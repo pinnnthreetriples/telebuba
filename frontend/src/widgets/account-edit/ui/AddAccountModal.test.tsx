@@ -376,6 +376,46 @@ test('an import landing after a method switch does not provision the wizard', as
   expect(screen.queryByText('Аккаунт создан')).not.toBeInTheDocument();
 });
 
+test('a start-login that resolves after a method switch is not silently forgotten', async () => {
+  let resolveStart!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/start-login') {
+      return new Promise((resolve) => {
+        resolveStart = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
+
+  await userEvent.click(screen.getByText('Номер телефона'));
+  await userEvent.type(screen.getByPlaceholderText('+7 999 000-11-22'), '+79990001122');
+  await userEvent.click(screen.getByText('Продолжить'));
+  // Switch method while start-login is still in flight.
+  await userEvent.click(screen.getByText('Файл .session'));
+  resolveStart(
+    jsonResponse({
+      account_id: '79990001122',
+      status: 'new',
+      phone: '+79990001122',
+      created_at: 'n',
+      updated_at: 'n',
+    }),
+  );
+
+  // selectMethod used to `reset()` the pending mutation, which DETACHES the
+  // observer — every mutate-level callback was dropped, `onSettled: onImported`
+  // included, so the account existed server-side and nothing in the app ever
+  // heard about it. methodRef cannot help when the callback never fires.
+  await waitFor(() => {
+    expect(onImported).toHaveBeenCalled();
+  });
+  // Still not adopted for the NEW method (the methodRef guard is unchanged).
+  expect(screen.getByText('Далее')).toBeDisabled();
+});
+
 test('cancel on step 1 closes', async () => {
   routeApi();
   const onClose = vi.fn();

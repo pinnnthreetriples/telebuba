@@ -84,10 +84,11 @@ function isWarmingConflict(error: unknown): boolean {
 export function NeurocommentPage() {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const invalidate = () => {
-    void queryClient.invalidateQueries();
-  };
-  // SSE-driven refresh: narrowed to this page's query keys (finding #11).
+  // The page's ONE refresh scope — narrowed to the query keys above (finding
+  // #11). Used by the SSE stream and by every mutation on this page, because
+  // they need exactly the same thing: none of them touches an account row, a
+  // proxy, the warming board or the settings, and a bare invalidateQueries()
+  // refetched all of those plus every open profile snapshot.
   const invalidateNeuro = () => {
     void queryClient.invalidateQueries({
       predicate: (query) => {
@@ -290,7 +291,7 @@ export function NeurocommentPage() {
         onError: (error) => {
           setStartRejectedWarming(isWarmingConflict(error));
         },
-        onSettled: invalidate,
+        onSettled: invalidateNeuro,
       },
     );
   };
@@ -299,7 +300,7 @@ export function NeurocommentPage() {
   // per-campaign run/pause below.
   const toggleRuntime = () => {
     if (running) {
-      stop.mutate({}, { onSettled: invalidate });
+      stop.mutate({}, { onSettled: invalidateNeuro });
     } else if (listenerId && !warmingIds.has(listenerId)) {
       startListener(listenerId);
     }
@@ -312,14 +313,14 @@ export function NeurocommentPage() {
     const next = campaign.status === 'active' ? 'paused' : 'active';
     setStatus.mutate(
       { path: { campaign_id: campaign.campaign_id }, body: { status: next } },
-      { onSettled: invalidate },
+      { onSettled: invalidateNeuro },
     );
   };
 
   // Remove the listener entirely (finding #4) — distinct from pausing (stop).
   const removeListener = () => {
     setListener('');
-    clearListener.mutate({}, { onSettled: invalidate });
+    clearListener.mutate({}, { onSettled: invalidateNeuro });
   };
 
   const addChannel = () => {
@@ -332,7 +333,7 @@ export function NeurocommentPage() {
           setChannelInput('');
           setAddingChannel(false);
           channelFeedback.mark(value, !error);
-          invalidate();
+          invalidateNeuro();
         },
       },
     );
@@ -347,7 +348,7 @@ export function NeurocommentPage() {
       {
         onSettled: (_data, error) => {
           channelFeedback.mark(channel, !error);
-          invalidate();
+          invalidateNeuro();
         },
       },
     );
@@ -474,7 +475,7 @@ export function NeurocommentPage() {
               if (campaignId !== null) {
                 setSolver.mutate(
                   { path: { campaign_id: campaignId }, body: { enabled: !solverEnabled } },
-                  { onSettled: invalidate },
+                  { onSettled: invalidateNeuro },
                 );
               }
             }}
@@ -483,7 +484,7 @@ export function NeurocommentPage() {
             onSolve={(item) => {
               retry.mutate(
                 { body: { account_id: item.account_id, channel: item.channel } },
-                { onSettled: invalidate },
+                { onSettled: invalidateNeuro },
               );
             }}
           />
@@ -552,7 +553,7 @@ export function NeurocommentPage() {
                 {
                   onSettled: (_data, error) => {
                     accountFeedback.mark(accountId, !error);
-                    invalidate();
+                    invalidateNeuro();
                   },
                 },
               );
@@ -565,7 +566,7 @@ export function NeurocommentPage() {
                 {
                   onSettled: (_data, error) => {
                     accountFeedback.mark(accountId, !error);
-                    invalidate();
+                    invalidateNeuro();
                   },
                 },
               );
@@ -581,7 +582,7 @@ export function NeurocommentPage() {
                 {
                   onSettled: (_data, error) => {
                     accountFeedback.mark(accountId, !error);
-                    invalidate();
+                    invalidateNeuro();
                   },
                 },
               );
@@ -649,7 +650,7 @@ export function NeurocommentPage() {
                   });
                   setSelected(created.campaign_id);
                 },
-                onSettled: invalidate,
+                onSettled: invalidateNeuro,
               },
             );
           }}
@@ -703,14 +704,14 @@ export function NeurocommentPage() {
           onSave={(prompt) => {
             updatePrompt.mutate(
               { path: { campaign_id: promptFor.campaign_id }, body: { prompt } },
-              { onSettled: invalidate },
+              { onSettled: invalidateNeuro },
             );
             setPromptFor(null);
           }}
           onRemoveAccount={(accountId) => {
             removeAccount.mutate(
               { path: { campaign_id: promptFor.campaign_id }, body: { account_id: accountId } },
-              { onSettled: invalidate },
+              { onSettled: invalidateNeuro },
             );
           }}
         />
@@ -725,7 +726,7 @@ export function NeurocommentPage() {
           onConfirm={() => {
             deleteCampaign.mutate(
               { path: { campaign_id: deleteFor.campaign_id } },
-              { onSettled: invalidate },
+              { onSettled: invalidateNeuro },
             );
             setDeleteFor(null);
             if (selected === deleteFor.campaign_id) setSelected(null);
