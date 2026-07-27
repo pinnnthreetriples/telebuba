@@ -623,7 +623,7 @@ async def test_list_posts_read_error_maps_to_stable_code(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     async def failing_read(_account_id: str, _action: object) -> BaseModel:
-        reason = "FloodWait(30s)"
+        reason = "RPC: ChannelPrivateError"
         raise TelegramReadError(reason)
 
     monkeypatch.setattr("services.accounts.channel_posts.execute_read", failing_read)
@@ -631,6 +631,24 @@ async def test_list_posts_read_error_maps_to_stable_code(
     with pytest.raises(AccountActionError) as excinfo:
         await list_account_channel_posts("acc-1", 42)
     assert excinfo.value.code == "channel_read_failed"
+
+
+@pytest.mark.asyncio
+async def test_list_posts_flood_wait_keeps_the_duration(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A flood wait must not flatten into the residual code — it drops the seconds."""
+
+    async def flooded_read(_account_id: str, _action: object) -> BaseModel:
+        reason = "FloodWait(30s)"
+        raise TelegramReadError(reason, kind="flood_wait", seconds=30)
+
+    monkeypatch.setattr("services.accounts.channel_posts.execute_read", flooded_read)
+
+    with pytest.raises(AccountActionError) as excinfo:
+        await list_account_channel_posts("acc-1", 42)
+    assert excinfo.value.code == "flood_wait"
+    assert excinfo.value.retry_after_seconds == 30
 
 
 @pytest.mark.asyncio

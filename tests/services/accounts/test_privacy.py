@@ -295,3 +295,38 @@ async def test_read_account_privacy_translates_a_gateway_not_found_into_404(
 
     with pytest.raises(AccountNotFoundError):
         await read_account_privacy("acc-1")
+
+
+@pytest.mark.asyncio
+async def test_a_partially_applied_fleet_account_reports_which_keys_landed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A bare ``failed`` inverted the safety-relevant fact for this feature.
+
+    ``setPrivacy`` is one call per key with no rollback, and the fleet route has no
+    per-account SPA re-read to fall back on: an account whose ``profile_photo`` key
+    landed before ``bio`` flooded was reported as untouched while its avatar was
+    already public.
+    """
+    await create_account(AccountCreate(account_id="acc-partial"))
+    await update_account_status("acc-partial", status="alive")
+
+    async def _partial(account_id: str, _action: SetPrivacySettings) -> ActionResult:
+        return ActionResult(
+            status="flood_wait",
+            action_type="set_privacy_settings",
+            account_id=account_id,
+            flood_wait_seconds=30,
+            applied_privacy_keys=["profile_photo"],
+        )
+
+    monkeypatch.setattr("services.accounts.privacy.execute", _partial)
+
+    result = await apply_privacy_to_all_accounts(
+        AccountPrivacyUpdateRequest(profile_photo="everybody", bio="everybody"),
+    )
+
+    assert result.failed == 1
+    outcome = result.outcomes[0]
+    assert (outcome.status, outcome.error) == ("failed", "flood_wait")
+    assert outcome.applied == ["profile_photo"]

@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+import io
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock
 
 import pytest
+from PIL import Image
 from telethon import errors
 
 from core.config import settings
@@ -14,6 +16,7 @@ from core.telegram_client._pool import TelegramClientPoolError
 from schemas.device_fingerprint import TelegramClientProfile
 from schemas.telegram_actions import (
     JoinChannel,
+    SetProfilePhoto,
 )
 from tests.factories import DeviceFingerprintFactory
 
@@ -142,6 +145,138 @@ async def test_execute_handles_generic_failure(monkeypatch: pytest.MonkeyPatch) 
     assert result.status == "failed"
     assert result.error_type == "RuntimeError"
     assert result.error_message == "boom"
+
+
+# --------------------------------------------------------------------------- #
+# Actionable Telegram refusals used to collapse to the opaque ``failed``: only
+# five gateway error-class names carry a stable code, and neither the dead-session
+# family nor the media family was mapped to one. So a dead session and a 100x100
+# avatar produced the same "Telegram refused the action — try again" toast.
+# --------------------------------------------------------------------------- #
+def _jpeg_bytes() -> bytes:
+    """A real decodable JPEG, so the media dispatcher's Pillow gate lets it through."""
+    buffer = io.BytesIO()
+    Image.new("RGB", (32, 32), (200, 30, 30)).save(buffer, format="JPEG")
+    return buffer.getvalue()
+
+
+def _raising_client(exc: Exception) -> object:
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise exc
+
+        async def upload_file(self, *_args: object, **_kwargs: object) -> object:
+            return object()
+
+    return FakeClient()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("exc", "code"),
+    [
+        (errors.AuthKeyUnregisteredError(request=None), "session_dead"),
+        (errors.SessionRevokedError(request=None), "session_dead"),
+        (errors.AuthKeyDuplicatedError(request=None), "session_dead"),
+        (errors.UserDeactivatedBanError(request=None), "account_deactivated"),
+        (errors.UserDeactivatedError(request=None), "account_deactivated"),
+    ],
+)
+async def test_a_dead_session_gets_the_code_the_session_check_already_knows(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+    code: str,
+) -> None:
+    """``check_telegram_session`` classifies these; the action path threw it away.
+
+    Two codes, not one: a dead auth key is fixed by re-logging the account in,
+    while a deactivated account cannot be recovered at all.
+    """
+    _patch_client(monkeypatch, _raising_client(exc))
+
+    result = await execute("acc-dead", JoinChannel(channel="@hot"))
+
+    assert result.status == "failed"
+    # ProfileGatewayError is on the stable-code allowlist, so this message IS the
+    # code the SPA translates (raise_for_result keeps it verbatim).
+    assert result.error_type == "ProfileGatewayError"
+    assert result.error_message == code
+
+
+@pytest.mark.asyncio
+async def test_a_deleted_dm_peer_is_not_reported_as_a_dead_account(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``InputUserDeactivatedError`` names the PEER, not us — it stays unmapped.
+
+    It is a member of ``_session._ACCOUNT_ERRORS`` (where the subject IS this
+    account), so sharing that tuple wholesale would tell the operator their own
+    account was banned because a DM target deleted theirs.
+    """
+    _patch_client(monkeypatch, _raising_client(errors.InputUserDeactivatedError(request=None)))
+
+    result = await execute("acc-peer-gone", JoinChannel(channel="@hot"))
+
+    assert result.status == "failed"
+    assert result.error_type == "InputUserDeactivatedError"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("exc", "code"),
+    [
+        (errors.PremiumAccountRequiredError(request=None), "premium_required"),
+        (errors.PhotoCropSizeSmallError(request=None), "photo_too_small"),
+        (errors.PhotoInvalidDimensionsError(request=None), "photo_too_small"),
+        (errors.PhotoExtInvalidError(request=None), "media_invalid"),
+        (errors.PhotoInvalidError(request=None), "media_invalid"),
+        (errors.ImageProcessFailedError(request=None), "media_invalid"),
+        (errors.MediaEmptyError(request=None), "media_invalid"),
+    ],
+)
+async def test_the_media_family_maps_telethon_refusals_to_stable_codes(
+    monkeypatch: pytest.MonkeyPatch,
+    exc: Exception,
+    code: str,
+) -> None:
+    """``_media.py`` had no error map at all, unlike both of its sibling dispatchers."""
+    _patch_client(monkeypatch, _raising_client(exc))
+
+    result = await execute("acc-media", SetProfilePhoto(filename="a.jpg", content=_jpeg_bytes()))
+
+    assert result.status == "failed"
+    assert result.error_type == "ProfileGatewayError"
+    assert result.error_message == code
+
+
+@pytest.mark.asyncio
+async def test_an_unmapped_media_rpc_error_still_falls_back_to_failed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``failed`` stays the residual — specific codes were added ABOVE it, not instead."""
+    unmapped = errors.RPCError(request=None, message="X", code=400)
+    _patch_client(monkeypatch, _raising_client(unmapped))
+
+    result = await execute("acc-media", SetProfilePhoto(filename="a.jpg", content=_jpeg_bytes()))
+
+    assert result.status == "failed"
+    assert result.error_type == "RPCError"
+
+
+@pytest.mark.asyncio
+async def test_a_media_flood_wait_still_reaches_the_flood_ladder(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """FloodWaitError is an RPCError too, so the new map must not swallow it."""
+    _patch_client(monkeypatch, _raising_client(errors.FloodWaitError(request=None, capture=11)))
+
+    result = await execute("acc-media", SetProfilePhoto(filename="a.jpg", content=_jpeg_bytes()))
+
+    assert result.status == "flood_wait"
+    assert result.flood_wait_seconds == 11
 
 
 @pytest.mark.asyncio

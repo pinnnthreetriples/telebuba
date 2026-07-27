@@ -377,6 +377,10 @@ class ActionResult(BaseModel):
     # rationale as ``channel_id``.
     recent_message_ids: list[str] | None = None
     flood_wait_seconds: int | None = None
+    # Privacy keys that DID apply before a ``set_privacy_settings`` was refused
+    # (``account.setPrivacy`` is one call per key with no rollback). ``None`` for
+    # every other action, and for a privacy write that failed on its first key.
+    applied_privacy_keys: list[str] | None = None
     error_type: str | None = None
     error_message: str | None = None
 

@@ -9,6 +9,7 @@ import httpx
 import pytest
 
 from core.config import settings
+from core.telegram_client import TelegramAccountNotFoundError, TelegramReadError
 from schemas.api import Page
 from schemas.channels import (
     ChannelDetailView,
@@ -604,3 +605,79 @@ async def test_create_failure_envelope_carries_created_channel_id(
     body = resp.json()
     assert body["error"]["message"] == "channels_admin_public_too_much"
     assert body["error"]["fields"]["channel_id"] == "987"
+
+
+# --------------------------------------------------------------------------- #
+# An unknown account used to get three different answers on three paths: 404 on
+# GET /privacy, but 500 on every channel read. ``execute_read`` raises
+# ``TelegramAccountNotFoundError`` (a LookupError, unrelated to the service's
+# ``AccountNotFoundError``) BEFORE its try block, the ``_read`` helpers caught
+# only ``TelegramReadError``, and three of the GET routes were not wrapped in the
+# error mapper at all.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("module", "url"),
+    [
+        ("channels", "/api/v1/accounts/nope/channels"),
+        ("channels", "/api/v1/accounts/nope/channels/42"),
+        ("channels", "/api/v1/accounts/nope/channel-username-check?username=valid_name"),
+        ("channel_posts", "/api/v1/accounts/nope/channels/42/posts"),
+    ],
+    ids=["list", "detail", "username_check", "posts"],
+)
+async def test_a_channel_read_on_an_unknown_account_is_404_not_500(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+    module: str,
+    url: str,
+) -> None:
+    async def _missing(account_id: str, _action: object) -> object:
+        msg = f"Account not found: {account_id}"
+        raise TelegramAccountNotFoundError(msg)
+
+    monkeypatch.setattr(f"services.accounts.{module}.execute_read", _missing)
+    async with _client(app) as client:
+        resp = await client.get(url)
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
+
+
+@pytest.mark.asyncio
+async def test_a_flood_waited_channel_read_reports_the_duration(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The read path used to flatten every refusal, so the operator saw no wait.
+
+    With no duration shown the operator retries in a loop and EXTENDS the wait,
+    which is why the seconds now ride the envelope like they do on the write path.
+    """
+
+    async def _flooded(_account_id: str, _action: object) -> object:
+        reason = "FloodWait(30s)"
+        raise TelegramReadError(reason, kind="flood_wait", seconds=30)
+
+    monkeypatch.setattr("services.accounts.channel_posts.execute_read", _flooded)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/channels/42/posts")
+    assert resp.status_code == 400
+    body = resp.json()
+    assert body["error"]["message"] == "flood_wait"
+    assert body["error"]["fields"]["retry_after_seconds"] == "30"
+
+
+@pytest.mark.asyncio
+async def test_an_unavailable_channel_read_is_503_not_a_client_fault(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def _down(_account_id: str, _action: object) -> object:
+        reason = "unavailable: TelegramClientPoolError"
+        raise TelegramReadError(reason, kind="unavailable")
+
+    monkeypatch.setattr("services.accounts.channels.execute_read", _down)
+    async with _client(app) as client:
+        resp = await client.get("/api/v1/accounts/acc-1/channels")
+    assert resp.status_code == 503
+    assert resp.json()["error"]["code"] == "unavailable"

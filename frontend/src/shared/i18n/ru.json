@@ -313,6 +313,12 @@
         "profile_photo_download_failed": "Не удалось скачать фото из Telegram",
         "profile_music_invalid": "Аудиофайл не удалось обработать — выберите другой",
         "profile_music_stale_reference": "Трек изменился на Telegram — обновите список",
+        "session_dead": "Сессия аккаунта в Telegram недействительна — войдите заново",
+        "account_deactivated": "Telegram удалил или заблокировал аккаунт — восстановить его нельзя",
+        "premium_required": "Для этого действия нужен Telegram Premium на аккаунте",
+        "photo_too_small": "Изображение слишком маленькое для Telegram — возьмите крупнее и ближе к квадрату",
+        "media_invalid": "Telegram отклонил файл — выберите другой",
+        "validation_error": "Запрос отклонён — проверьте выделенные поля",
         "failed": "Telegram отклонил действие — попробуйте ещё раз"
       },
       "privacy": {

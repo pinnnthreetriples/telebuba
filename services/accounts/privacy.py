@@ -127,7 +127,9 @@ async def apply_privacy_to_all_accounts(
     accounts the single-account button writes happily.
 
     Per-account failures are collected into ``outcomes`` and never raised, so one
-    dead account cannot abort the sweep.
+    dead account cannot abort the sweep. A failed outcome also carries ``applied``:
+    the keys that already changed before the refusal, which the single-account route
+    leaves to the SPA's re-read and this one has no equivalent for.
     """
     action = _action(request)
 
@@ -145,10 +147,17 @@ async def apply_privacy_to_all_accounts(
             try:
                 raise_for_result(await execute(account.account_id, action))
             except AccountActionError as exc:
+                # ``applied`` is the fleet path's only signal about a PARTIAL write:
+                # setPrivacy is one call per key with no rollback, and unlike the
+                # single-account route there is no SPA re-read per account to close
+                # the gap. Without it an account whose photo key landed before the
+                # bio key flooded was reported "failed" — i.e. unchanged — while its
+                # avatar was already public.
                 return AccountPrivacyOutcome(
                     account_id=account.account_id,
                     status="failed",
                     error=exc.code,
+                    applied=exc.applied_privacy_keys or [],
                 )
             except Exception as exc:  # one bad account must not abort the sweep
                 # Class name only: an unexpected exception's message is arbitrary

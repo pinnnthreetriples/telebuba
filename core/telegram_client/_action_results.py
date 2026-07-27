@@ -42,6 +42,7 @@ async def _flood_action_result(
     *,
     status: ActionStatus,
     seconds: int | None,
+    applied_privacy_keys: list[str] | None = None,
 ) -> ActionResult:
     """Log a Telegram rate-limit event and build the matching ``ActionResult``.
 
@@ -49,6 +50,9 @@ async def _flood_action_result(
     ``PEER_FLOOD`` (no duration), per-chat slow mode, and premium-gated waits —
     so callers can react per type instead of treating a moderation restriction
     as an ordinary failure.
+
+    ``applied_privacy_keys`` is threaded only by the caller that can produce a
+    partial write (``set_privacy_settings`` hitting a flood on its second key).
     """
     await log_event(
         "WARNING",
@@ -61,6 +65,7 @@ async def _flood_action_result(
         action_type=action.action_type,
         account_id=account_id,
         flood_wait_seconds=seconds,
+        applied_privacy_keys=applied_privacy_keys,
     )
 
 
@@ -88,9 +93,27 @@ async def _unavailable_result(
         status="unavailable",
         action_type=action.action_type,
         account_id=account_id,
+        applied_privacy_keys=_applied_privacy_keys(exc),
         error_type=type(exc).__name__,
         error_message=str(exc),
     )
+
+
+def _applied_privacy_keys(exc: BaseException) -> list[str] | None:
+    """Privacy keys ``dispatch_set_privacy_settings`` applied before this refusal.
+
+    Attached to the escaping exception by the gateway rather than returned, so the
+    flood / frozen / dead-session ladders keep classifying the original error. Same
+    ``getattr`` contract as ``ChannelGatewayError.channel_id`` below.
+
+    The ``__cause__`` is checked too: those ladders hand us a stable-code wrapper
+    (``ProfileGatewayError("account_frozen")``) whose cause is the annotated error.
+    """
+    for candidate in (exc, exc.__cause__):
+        applied = getattr(candidate, "privacy_applied", None)
+        if isinstance(applied, list) and applied:
+            return [str(key) for key in applied]
+    return None
 
 
 async def _generic_error(account_id: str, action: TelegramAction, exc: Exception) -> ActionResult:
@@ -111,6 +134,7 @@ async def _generic_error(account_id: str, action: TelegramAction, exc: Exception
         action_type=action.action_type,
         account_id=account_id,
         channel_id=str(created_id) if isinstance(created_id, int) else None,
+        applied_privacy_keys=_applied_privacy_keys(exc),
         error_type=type(exc).__name__,
         error_message=str(exc),
     )

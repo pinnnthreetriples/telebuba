@@ -7,7 +7,7 @@ import mimetypes
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
-from telethon import utils
+from telethon import errors, utils
 from telethon.tl.functions.account import SaveMusicRequest
 from telethon.tl.functions.photos import (
     DeletePhotosRequest,
@@ -67,7 +67,37 @@ class ProfileGatewayError(ValueError):
         super().__init__(code)
 
 
+# Telethon refusal family → stable, locale-neutral code for profile-media writes.
+# The two sibling dispatchers already had one (``_profile._PROFILE_ERROR_CODES``,
+# ``_channels._TELETHON_ERROR_CODES``); this family had none, so a 100x100 avatar,
+# a non-Premium account reaching for profile music and a rejected story file all
+# collapsed to the same opaque ``failed``. Flood-family errors are deliberately NOT
+# mapped — they must reach ``execute``'s dedicated flood-wait ladder unchanged.
+_MEDIA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
+    (errors.PremiumAccountRequiredError, "premium_required"),
+    (errors.PhotoCropSizeSmallError, "photo_too_small"),
+    (errors.PhotoInvalidDimensionsError, "photo_too_small"),
+    (errors.PhotoExtInvalidError, "media_invalid"),
+    (errors.PhotoInvalidError, "media_invalid"),
+    (errors.ImageProcessFailedError, "media_invalid"),
+    (errors.MediaEmptyError, "media_invalid"),
+)
+
+
 async def _dispatch_profile_media_action(
+    client: TelegramClient,
+    action: TelegramAction,
+) -> int | None:
+    try:
+        return await _run_profile_media_action(client, action)
+    except errors.RPCError as exc:
+        for error_cls, code in _MEDIA_ERROR_CODES:
+            if isinstance(exc, error_cls):
+                raise ProfileGatewayError(code) from exc
+        raise
+
+
+async def _run_profile_media_action(
     client: TelegramClient,
     action: TelegramAction,
 ) -> int | None:

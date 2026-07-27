@@ -11,7 +11,12 @@ from typing import TYPE_CHECKING, Literal, cast
 
 from core.config import settings
 from core.logging import log_event
-from core.telegram_client import TelegramReadError, execute, execute_read
+from core.telegram_client import (
+    TelegramAccountNotFoundError,
+    TelegramReadError,
+    execute,
+    execute_read,
+)
 from schemas.api import Page
 from schemas.channels import ChannelPostView
 from schemas.telegram_actions import (
@@ -21,7 +26,11 @@ from schemas.telegram_actions import (
     PublishChannelPost,
 )
 from schemas.telegram_actions_channels import CHANNEL_POST_ID_MAX
-from services.accounts._result import AccountActionError, raise_for_result
+from services.accounts._result import (
+    AccountNotFoundError,
+    action_error_for_read,
+    raise_for_result,
+)
 from services.accounts._uploads import (
     _PROFILE_PHOTO_SUFFIXES,
     _STORY_VIDEO_SUFFIXES,
@@ -43,12 +52,18 @@ __all__ = [
 
 
 async def _read(account_id: str, action: TelegramReadAction) -> BaseModel:
-    """Read via the gateway; wrap gateway failures in the stable read code."""
+    """Read via the gateway; map gateway failures onto stable codes.
+
+    Same contract as ``channels._read``: the gateway's classification picks the
+    code (so a flood wait keeps its duration and an unknown account is a 404, not
+    a 500), with ``channel_read_failed`` as the residual.
+    """
     try:
         return await execute_read(account_id, action)
+    except TelegramAccountNotFoundError as exc:
+        raise AccountNotFoundError(account_id) from exc
     except TelegramReadError as exc:
-        code = "channel_read_failed"
-        raise AccountActionError(code) from exc
+        raise action_error_for_read(exc, "channel_read_failed") from exc
 
 
 def _derive_media_kind(filename: str) -> Literal["photo", "video"]:

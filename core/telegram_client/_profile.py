@@ -17,6 +17,7 @@ from telethon.tl.functions.account import UpdateProfileRequest, UpdateUsernameRe
 
 from core.db import update_account_status
 from core.telegram_client._media import ProfileGatewayError
+from core.telegram_client._session import _ACCOUNT_ERRORS, _SESSION_ERRORS
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
@@ -35,6 +36,42 @@ _PROFILE_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
     (errors.UsernameInvalidError, "username_invalid"),
     (errors.AboutTooLongError, "about_too_long"),
 )
+
+# The account's own session/identity is gone, so no action of any family can
+# succeed until the operator re-logs it in. ``check_telegram_session`` already
+# classifies exactly these errors (into the ``unauthorized``/``session_error``/
+# ``account_error`` statuses on the accounts list); the action path used to throw
+# that away and report the opaque ``failed``. The session tuple is SHARED with the
+# check (``_session._SESSION_ERRORS``) so the two cannot drift.
+#
+# ``_ACCOUNT_ERRORS`` is filtered to the self-deactivation members:
+# ``InputUserDeactivatedError`` is a ``BadRequestError`` about the PEER of an
+# action (a deleted DM target), not about this account, so telling the operator
+# their account is banned would be wrong. The remaining two are
+# ``UnauthorizedError``s Telegram raises about the caller.
+# Two codes, not one: a dead auth key is fixed by re-logging the account in, while a
+# deactivated/banned account cannot be recovered at all, so one message for both
+# would send the operator down the wrong path.
+_DEAD_SESSION_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
+    *(
+        (cls, "account_deactivated")
+        for cls in _ACCOUNT_ERRORS
+        if issubclass(cls, errors.UnauthorizedError)
+    ),
+    *((cls, "session_dead") for cls in _SESSION_ERRORS),
+)
+_DEAD_SESSION_ERRORS: tuple[type[Exception], ...] = tuple(
+    error_cls for error_cls, _code in _DEAD_SESSION_ERROR_CODES
+)
+
+
+def _dead_session_code(exc: BaseException) -> str:
+    """The stable code for a dead-session/deactivated-account refusal."""
+    for error_cls, code in _DEAD_SESSION_ERROR_CODES:
+        if isinstance(exc, error_cls):
+            return code
+    return "session_dead"  # pragma: no cover - only reached via the tuple above
+
 
 # Operator-driven profile/media edits: the only action family whose FloodWait
 # marks the account ``flood_wait`` in the DB (the operator sees why the edit

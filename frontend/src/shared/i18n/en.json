@@ -312,6 +312,12 @@
         "profile_photo_download_failed": "Couldn't download the photo from Telegram",
         "profile_music_invalid": "The audio file could not be processed — pick another one",
         "profile_music_stale_reference": "The track changed on Telegram — refresh the list",
+        "session_dead": "The account's Telegram session is dead — log it in again",
+        "account_deactivated": "Telegram deactivated or banned this account — it cannot be recovered",
+        "premium_required": "Telegram Premium is required on the account for this",
+        "photo_too_small": "The image is too small for Telegram — use a larger, roughly square one",
+        "media_invalid": "Telegram rejected the file — try another one",
+        "validation_error": "The request was rejected — check the highlighted fields",
         "failed": "Telegram refused the action — try again"
       },
       "privacy": {

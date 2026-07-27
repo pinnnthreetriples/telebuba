@@ -55,12 +55,16 @@ async def set_account_photo(
         detail="profile photo file is too large",
     )
     content = await file.read()
-    upload = AccountProfilePhotoUpload(
-        account_id=account_id,
-        filename=file.filename or "photo.jpg",
-        content=content,
-    )
+    # Model construction stays INSIDE the mapper: it validates (account_id charset,
+    # non-empty content), and a Pydantic refusal outside it escapes unhandled as a
+    # 500 plus an ``api_unhandled_exception`` ERROR log line — client input
+    # polluting the operator's error log. Same reason at every site below.
     with service_errors_to_http():
+        upload = AccountProfilePhotoUpload(
+            account_id=account_id,
+            filename=file.filename or "photo.jpg",
+            content=content,
+        )
         return await accounts.set_account_profile_photo(upload)
 
 
@@ -116,7 +120,10 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
     account_id: str,
     files: Annotated[list[UploadFile], File()],
     media_kind: Annotated[StoryMediaKind, Form()] = "image",
-    caption: Annotated[str | None, Form()] = None,
+    # The cap is declared HERE as well as on AccountStoryUpload.caption so it is
+    # part of the OpenAPI contract the SPA generates from, instead of a surprise
+    # rejection after the whole multipart body was uploaded.
+    caption: Annotated[str | None, Form(max_length=1024)] = None,
     privacy_preset: Annotated[StoryPrivacyPreset, Form()] = "contacts",
     protect_content: Annotated[bool, Form()] = False,  # noqa: FBT002 - multipart form field
     collage_layout: Annotated[str | None, Form()] = None,
@@ -151,18 +158,18 @@ async def post_account_story(  # noqa: PLR0913 - one Form param per story field
             max_bytes=settings.profile_media.story_image_max_bytes,
             detail="story image file is too large",
         )
-    upload = AccountStoryUpload(
-        account_id=account_id,
-        filename=primary.filename or "story",
-        content=await primary.read(),
-        media_kind=media_kind,
-        caption=caption,
-        privacy_preset=privacy_preset,
-        protect_content=protect_content,
-        extra_images=[await extra.read() for extra in extras],
-        collage_layout=collage_layout,
-    )
     with service_errors_to_http():
+        upload = AccountStoryUpload(
+            account_id=account_id,
+            filename=primary.filename or "story",
+            content=await primary.read(),
+            media_kind=media_kind,
+            caption=caption,
+            privacy_preset=privacy_preset,
+            protect_content=protect_content,
+            extra_images=[await extra.read() for extra in extras],
+            collage_layout=collage_layout,
+        )
         return await accounts.post_account_story(upload)
 
 
@@ -183,14 +190,14 @@ async def add_account_music(
         detail="profile music file is too large",
     )
     content = await file.read()
-    upload = AccountProfileMusicUpload(
-        account_id=account_id,
-        filename=file.filename or "track",
-        content=content,
-        title=title,
-        performer=performer,
-    )
     with service_errors_to_http():
+        upload = AccountProfileMusicUpload(
+            account_id=account_id,
+            filename=file.filename or "track",
+            content=content,
+            title=title,
+            performer=performer,
+        )
         return await accounts.add_account_profile_music(upload)
 
 
@@ -224,13 +231,13 @@ async def set_account_story_pinned(account_id: str, body: StoryPinRequest) -> Ac
     operation_id="removeAccountMusic",
 )
 async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> ActionResult:
-    remove = AccountProfileMusicRemove(
-        account_id=account_id,
-        file_id=_decode_id(body.file_id),
-        access_hash=_decode_id(body.access_hash),
-        file_reference=_decode_ref(body.file_reference),
-    )
     with service_errors_to_http():
+        remove = AccountProfileMusicRemove(
+            account_id=account_id,
+            file_id=_decode_id(body.file_id),
+            access_hash=_decode_id(body.access_hash),
+            file_reference=_decode_ref(body.file_reference),
+        )
         return await accounts.remove_account_profile_music(remove)
 
 
@@ -240,13 +247,13 @@ async def remove_account_music(account_id: str, body: MusicRemoveRequest) -> Act
     operation_id="removeAccountPhoto",
 )
 async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> ActionResult:
-    remove = AccountProfilePhotoRemove(
-        account_id=account_id,
-        photo_id=_decode_id(body.photo_id),
-        access_hash=_decode_id(body.access_hash),
-        file_reference=_decode_ref(body.file_reference),
-    )
     with service_errors_to_http():
+        remove = AccountProfilePhotoRemove(
+            account_id=account_id,
+            photo_id=_decode_id(body.photo_id),
+            access_hash=_decode_id(body.access_hash),
+            file_reference=_decode_ref(body.file_reference),
+        )
         return await accounts.remove_account_profile_photo(remove)
 
 
@@ -256,11 +263,11 @@ async def remove_account_photo(account_id: str, body: PhotoRemoveRequest) -> Act
     operation_id="setAccountPhotoMain",
 )
 async def set_account_photo_main(account_id: str, body: PhotoMainRequest) -> ActionResult:
-    set_main = AccountProfilePhotoSetMain(
-        account_id=account_id,
-        photo_id=_decode_id(body.photo_id),
-        access_hash=_decode_id(body.access_hash),
-        file_reference=_decode_ref(body.file_reference),
-    )
     with service_errors_to_http():
+        set_main = AccountProfilePhotoSetMain(
+            account_id=account_id,
+            photo_id=_decode_id(body.photo_id),
+            access_hash=_decode_id(body.access_hash),
+            file_reference=_decode_ref(body.file_reference),
+        )
         return await accounts.set_account_main_profile_photo(set_main)

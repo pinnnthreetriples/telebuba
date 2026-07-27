@@ -13,6 +13,7 @@ from typing import Annotated
 from fastapi import APIRouter, File, Form, HTTPException, Path, Query, UploadFile
 from fastapi import status as http_status
 
+from api.errors import CONFLICT_RESPONSE, ERROR_RESPONSES
 from api.v1._accounts_channel_posts import channel_posts_router
 from api.v1._accounts_channels import channels_router
 from api.v1._accounts_media import media_router
@@ -34,7 +35,11 @@ from schemas.spam_status import SpamStatusVerdict
 from schemas.tdata import TdataConvertRequest, TdataImportResult
 from services import accounts, spam_status
 
-router = APIRouter(tags=["accounts"])
+# ``responses`` declares the error envelope on every route of this router AND on
+# the four sub-routers mounted at the bottom (``include_router`` merges the
+# including router's responses into each child route), which is the whole
+# account-editing surface. See api.errors.ERROR_RESPONSES for the status set.
+router = APIRouter(tags=["accounts"], responses=ERROR_RESPONSES)
 
 # Path params default to an unconstrained ``str``, so a percent-encoded separator
 # (``..%5C..%5Cevil``) survives routing and reaches the service layer — on the
@@ -93,6 +98,7 @@ async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     "/accounts/start-login",
     response_model=AccountRead,
     operation_id="startPhoneLogin",
+    responses=CONFLICT_RESPONSE,
 )
 async def start_phone_login(body: StartPhoneLoginRequest) -> AccountRead:
     """Create a new account from a bare phone number, ready for request-code."""
@@ -206,6 +212,7 @@ async def import_account_tdata(
     "/accounts/import-session",
     response_model=AccountRead,
     operation_id="importAccountSession",
+    responses=CONFLICT_RESPONSE,
 )
 async def import_account_session(
     file: Annotated[UploadFile, File()],

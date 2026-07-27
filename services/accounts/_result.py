@@ -5,9 +5,15 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
+    from core.telegram_client import TelegramReadError
     from schemas.telegram_actions import ActionResult
 
-__all__ = ["AccountActionError", "AccountNotFoundError", "raise_for_result"]
+__all__ = [
+    "AccountActionError",
+    "AccountNotFoundError",
+    "action_error_for_read",
+    "raise_for_result",
+]
 
 
 class AccountNotFoundError(LookupError):
@@ -33,6 +39,10 @@ class AccountActionError(ValueError):
     ``channel_id`` rides along when a ``channel_create`` failed AFTER the
     channel was created (post-create username refusal): the channel exists as
     private, so the UI can adopt it instead of re-creating a duplicate.
+    ``applied_privacy_keys`` does the same for a partially-applied privacy write:
+    ``account.setPrivacy`` is one call per key with no rollback, so the keys that
+    DID land must be reported or the operator is told the account is untouched
+    while its avatar is already public.
     """
 
     def __init__(
@@ -41,11 +51,13 @@ class AccountActionError(ValueError):
         *,
         retry_after_seconds: int | None = None,
         channel_id: str | None = None,
+        applied_privacy_keys: list[str] | None = None,
     ) -> None:
         super().__init__(code)
         self.code = code
         self.retry_after_seconds = retry_after_seconds
         self.channel_id = channel_id
+        self.applied_privacy_keys = applied_privacy_keys
 
 
 # Gateway exception classes constructed WITH a stable code, so their ``str(exc)``
@@ -80,10 +92,27 @@ def raise_for_result(result: ActionResult) -> None:
         # not the raw exception message, so the API maps it to 503 unavailable
         # instead of billing an internal outage as a 400 client fault.
         code = "unavailable"
-        raise AccountActionError(code)
+        raise AccountActionError(code, applied_privacy_keys=result.applied_privacy_keys)
     stable = result.error_message if result.error_type in _STABLE_CODE_ERROR_TYPES else None
     raise AccountActionError(
         stable or result.status,
         retry_after_seconds=result.flood_wait_seconds,
         channel_id=result.channel_id,
+        applied_privacy_keys=result.applied_privacy_keys,
     )
+
+
+def action_error_for_read(exc: TelegramReadError, residual_code: str) -> AccountActionError:
+    """Map a refused gateway READ onto a stable code, keeping the flood duration.
+
+    Reads used to flatten every refusal into one caller-supplied code, so a
+    flood-waited account was reported with no duration and an infrastructure outage
+    was billed as a 400 client fault — both facts the write path already reports.
+    ``TelegramReadError.kind`` is the gateway's own classification, so this needs no
+    string parsing; ``residual_code`` stays the answer for everything else.
+    """
+    if exc.kind == "flood_wait":
+        return AccountActionError("flood_wait", retry_after_seconds=exc.seconds)
+    if exc.kind == "unavailable":
+        return AccountActionError("unavailable")
+    return AccountActionError(residual_code)

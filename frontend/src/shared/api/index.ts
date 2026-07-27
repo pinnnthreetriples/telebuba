@@ -252,6 +252,8 @@ export type {
   EditAccountChannelPostErrors,
   EditAccountChannelPostResponse,
   EditAccountChannelPostResponses,
+  ErrorDetail,
+  ErrorEnvelope,
   GetAccountChannelData,
   GetAccountChannelError,
   GetAccountChannelErrors,

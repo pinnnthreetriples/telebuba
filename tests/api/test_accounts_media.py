@@ -591,3 +591,77 @@ async def test_set_photo_main_preserves_int64_ids(
     assert resp.status_code == 200
     assert seen["photo_id"] == 9007199254740993
     assert seen["access_hash"] == -8000000000000000000
+
+
+# --------------------------------------------------------------------------- #
+# Request models are assembled INSIDE the route (the multipart fields arrive as
+# separate Form/File params), so a Pydantic refusal used to escape the error
+# mapper entirely: HTTP 500 ``internal_error`` plus an ``api_unhandled_exception``
+# ERROR log line — client input polluting the operator's error log. Every case
+# below is operator-reachable and answered 500 before the fix.
+# --------------------------------------------------------------------------- #
+@pytest.mark.asyncio
+async def test_over_long_story_caption_is_a_validation_error_not_a_500(app: FastAPI) -> None:
+    """1024 is ``AccountStoryUpload``'s cap and the SPA's input has no maxLength."""
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/acc-1/story",
+            files={"files": ("a.jpg", b"\xff\xd8\xff", "image/jpeg")},
+            data={"caption": "x" * 1100},
+        )
+    assert resp.status_code == 422
+    error = resp.json()["error"]
+    assert error["code"] == "validation_error"
+    assert "body.caption" in error["fields"]
+
+
+def test_the_caption_cap_is_declared_in_the_openapi_contract(app: FastAPI) -> None:
+    """Declared on the Form param too, so the SPA generates against it."""
+    schema = app.openapi()
+    operation = schema["paths"]["/api/v1/accounts/{account_id}/story"]["post"]
+    body = operation["requestBody"]["content"]["multipart/form-data"]["schema"]
+    model_name = body["$ref"].rsplit("/", 1)[-1]
+    field = schema["components"]["schemas"][model_name]["properties"]["caption"]
+    assert 1024 in [option.get("maxLength") for option in field.get("anyOf", [field])]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("url", "payload", "field"),
+    [
+        ("/api/v1/accounts/acc-1/photo/main", {"photo_id": "-5"}, "body.photo_id"),
+        ("/api/v1/accounts/acc-1/photo/remove", {"photo_id": "-5"}, "body.photo_id"),
+        ("/api/v1/accounts/acc-1/music/remove", {"file_id": "-5"}, "body.file_id"),
+    ],
+)
+async def test_a_non_positive_int64_id_is_a_validation_error_not_a_500(
+    app: FastAPI,
+    url: str,
+    payload: dict[str, str],
+    field: str,
+) -> None:
+    """``_Int64Str`` admits a leading minus; the model's ``gt=0`` is what refuses it."""
+    async with _client(app) as client:
+        resp = await client.post(
+            url,
+            json={"access_hash": "1", "file_reference": "AAA=", **payload},
+        )
+    assert resp.status_code == 422
+    error = resp.json()["error"]
+    assert error["code"] == "validation_error"
+    assert field in error["fields"]
+
+
+@pytest.mark.asyncio
+async def test_a_bad_account_id_form_field_is_a_validation_error_not_a_500(
+    app: FastAPI,
+) -> None:
+    """``account_id`` is a Form field here, so the path-param charset guard misses it."""
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/photo",
+            files={"file": ("a.jpg", b"\xff\xd8\xff", "image/jpeg")},
+            data={"account_id": "bad id!"},
+        )
+    assert resp.status_code == 422
+    assert "body.account_id" in resp.json()["error"]["fields"]

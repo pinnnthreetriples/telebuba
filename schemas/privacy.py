@@ -62,11 +62,20 @@ class AccountPrivacyOutcome(BaseModel):
     infra family (pool / socket / proxy) is already collapsed to the flat
     ``unavailable`` code before it gets here, which is what keeps a proxy
     endpoint off the wire.
+
+    ``applied`` names the keys that DID change on Telegram before the refusal.
+    ``account.setPrivacy`` is one call per key and nothing is rolled back, so a
+    ``failed`` row can already have published the avatar — reporting it as a bare
+    failure inverted the safety-relevant fact for a feature whose entire purpose is
+    controlling visibility. Only meaningful on ``failed``: an ``ok`` row applied
+    every key the request set and a ``skipped`` row applied none, so both leave it
+    empty rather than restating the request.
     """
 
     account_id: str
     status: Literal["ok", "failed", "skipped"]
     error: str | None = None
+    applied: list[str] = []
 
 
 class BulkPrivacyResult(BaseModel):
