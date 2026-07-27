@@ -14,9 +14,11 @@ import { NavDrawer } from './NavDrawer';
 // active link and CSS-transitioning a single underline), "system active" pill,
 // bell, avatar. Reproduced with Tailwind utilities to match 1:1.
 // Below `lg` the horizontal nav is display:none and a hamburger opens NavDrawer;
-// the bell and avatar grow to 44px touch targets. ponytail: the ~40 in-card
-// 34-38px icon buttons on pages and in modals stay as they are — bumping them
-// globally would reflow every dense card for 6-10px.
+// the bell and avatar grow to 44px touch targets. ponytail: the in-card icon buttons
+// on pages and in modals stay as they are — 30px (AccountsTable's ACTION_BTN, the
+// per-row check/edit/delete) up to 38px, so up to 14px short of the 44px guideline.
+// Bumping them globally would reflow every dense card; the row actions are the ones
+// to fix first if this ever bites.
 export function AppNav() {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });

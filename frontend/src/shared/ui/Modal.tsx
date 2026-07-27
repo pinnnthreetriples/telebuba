@@ -79,9 +79,10 @@ export function Modal({
   // only) so the Escape handler can tell whether it is the topmost one.
   useEffect(() => {
     const id = idRef.current;
-    // The card scrolls internally, so the page behind it must not: on a phone a
-    // scrollable body lets the backdrop drag away under the dialog. Only the first
-    // dialog locks and only the last unlocks, so a nested one can't unlock early.
+    // The overlay scrolls, so the page behind it must not: on a phone a scrollable
+    // body lets the backdrop drag away under the dialog, and a nested scroll chain
+    // hands the overscroll to the page. Only the first dialog locks and only the last
+    // unlocks, so a second one closing can't unlock early.
     if (modalStack.length === 0) overflowBeforeLock = document.body.style.overflow;
     modalStack.push(id);
     document.body.style.overflow = 'hidden';
