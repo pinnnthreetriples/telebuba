@@ -86,6 +86,8 @@ test('a wide viewport renders the table, and each cell exactly once', () => {
 
   expect(screen.getByRole('table')).toBeInTheDocument();
   expect(screen.getAllByText('first-row')).toHaveLength(1);
+  // Separately from text: no duplicated *accessible names* either.
+  expect(screen.getAllByLabelText('Выбрать first-row')).toHaveLength(1);
   // A labelled column's header appears once (as a <th>), not once per row.
   expect(screen.getAllByText('ЗАМЕТКА')).toHaveLength(1);
 });
@@ -104,6 +106,16 @@ test('a narrow viewport replaces the table with one card per row', () => {
   // 'control' column: its header never becomes a per-card label.
   expect(screen.queryByLabelText('Выбрать все')).toBeNull();
   expect(screen.getAllByLabelText(/^Выбрать /)).toHaveLength(DATA.length);
+});
+
+// Cards are anonymous divs; without list semantics a screen reader gets one flat run
+// of text with nothing marking where a record ends — what <tr> used to provide.
+test('cards expose record boundaries as list items', () => {
+  setViewport(375);
+  renderTable();
+
+  expect(screen.getByRole('list')).toBeInTheDocument();
+  expect(screen.getAllByRole('listitem')).toHaveLength(DATA.length);
 });
 
 test('the expander still toggles, and the sub-row renders inside its own card', async () => {

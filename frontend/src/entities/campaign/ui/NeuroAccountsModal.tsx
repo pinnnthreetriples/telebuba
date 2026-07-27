@@ -241,7 +241,7 @@ export function NeuroAccountsModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} z={72} className="w-[560px]">
+    <Modal onClose={onClose} z={72} className="max-h-[88dvh] w-[560px] overflow-y-auto">
       <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary-tint text-primary">
           <svg

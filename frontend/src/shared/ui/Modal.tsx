@@ -20,16 +20,23 @@ let overflowBeforeLock = '';
 // Presets rather than two free `className` props: both halves set the same
 // properties (radius, animation, height), and a caller's `rounded-none` beside the
 // base `rounded-[18px]` would depend on Tailwind's emit order, which is no guarantee.
+//
+// Deliberately NO max-height or overflow on `center`. Capping and scrolling every
+// card looks like a free mobile win, but `overflow-y: auto` computes `overflow-x` to
+// `auto` too, so the card starts clipping absolutely-positioned children that are
+// meant to escape it — ListenerEditModal's dropdown, and WarmDaysModal's nowrap
+// `.tb-tip-pop`, which is ~1000px wide at opacity 0 and would give that dialog a
+// permanent horizontal scrollbar. A caller cannot opt out either: Tailwind emits
+// `.overflow-visible` before `.overflow-y-auto`. The callers whose content really can
+// outgrow the viewport carry their own `max-h-[88dvh] overflow-y-auto`.
 const SHELL = {
   center: {
-    // The card's max-h must match the overlay's padding box at every width, or a
-    // tall dialog overflows the unscrollable fixed overlay by the difference.
     overlay: 'items-center justify-center p-4 sm:p-5',
-    card: 'max-h-[calc(100dvh-2rem)] rounded-[18px] [animation:fadeup_0.25s_ease] sm:max-h-[calc(100dvh-2.5rem)]',
+    card: 'rounded-[18px] [animation:fadeup_0.25s_ease]',
   },
   'drawer-left': {
     overlay: 'items-stretch justify-start',
-    card: 'h-full tb-drawerin',
+    card: 'h-full overflow-y-auto overscroll-contain tb-drawerin',
   },
 } as const;
 
@@ -43,6 +50,7 @@ export function Modal({
   children,
   className = 'w-[420px]',
   variant = 'center',
+  label,
   z = 70,
   backdrop = 0.4,
 }: {
@@ -50,6 +58,9 @@ export function Modal({
   children: ReactNode;
   className?: string;
   variant?: keyof typeof SHELL;
+  // Accessible name for the dialog. Without it a screen reader announces only
+  // "dialog"; pass one wherever the surrounding heading isn't the whole story.
+  label?: string;
   z?: number;
   backdrop?: number;
 }) {
@@ -123,12 +134,13 @@ export function Modal({
         ref={dialogRef}
         role="dialog"
         aria-modal="true"
+        aria-label={label}
         tabIndex={-1}
         onKeyDown={onTrapTab}
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={`max-w-full overflow-y-auto overscroll-contain bg-white outline-none ${SHELL[variant].card} ${className}`}
+        className={`max-w-full bg-white outline-none ${SHELL[variant].card} ${className}`}
       >
         {children}
       </div>

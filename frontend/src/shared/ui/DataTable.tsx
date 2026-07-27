@@ -75,8 +75,18 @@ export function DataTable<TData>({
   const wide = useWideViewport();
 
   if (!wide) {
+    // Column id → header, so a card label renders with a real HeaderContext — not
+    // cell.getContext(), which today's headers ignore but a future `({ table }) => …`
+    // header would choke on. A Map, not getFlatHeaders().find(): the lookup runs once
+    // per cell per row, and the logs table is long.
+    const headerById = new Map(
+      table.getHeaderGroups().flatMap((group) => group.headers.map((h) => [h.column.id, h])),
+    );
+    // role=list/listitem: the cards are anonymous divs, so without this a screen
+    // reader gets one flat run of text with nothing marking where a record ends —
+    // the boundary that <tr> used to provide.
     return (
-      <div>
+      <div role="list">
         {table.getRowModel().rows.map((row) => {
           const rowProps = getRowProps?.(row);
           const cells = row.getVisibleCells();
@@ -85,7 +95,12 @@ export function DataTable<TData>({
           const head = cells.filter((cell) => slotOf(cell) !== undefined);
           const body = cells.filter((cell) => slotOf(cell) === undefined);
           return (
-            <div key={row.id} {...rowProps} className={join(CARD, rowProps?.className)}>
+            <div
+              key={row.id}
+              role="listitem"
+              {...rowProps}
+              className={join(CARD, rowProps?.className)}
+            >
               {head.length > 0 ? (
                 <div className="flex items-center gap-[10px]">
                   {head.map((cell) => (
@@ -99,10 +114,7 @@ export function DataTable<TData>({
                 </div>
               ) : null}
               {body.map((cell) => {
-                // The column's own header, so the label renders with a real
-                // HeaderContext — not cell.getContext(), which today's headers
-                // ignore but a future `({ table }) => …` header would choke on.
-                const header = table.getFlatHeaders().find((h) => h.column.id === cell.column.id);
+                const header = headerById.get(cell.column.id);
                 return (
                   <div
                     key={cell.id}

@@ -20,6 +20,7 @@ export function NavDrawer({ activeIdx, onClose }: { activeIdx: number; onClose: 
     <Modal
       onClose={onClose}
       variant="drawer-left"
+      label={t('shell.menu')}
       z={60}
       backdrop={0.45}
       className="flex w-[min(84vw,300px)] flex-col"

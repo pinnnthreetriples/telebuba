@@ -162,15 +162,19 @@ export function AppNav() {
             this cluster right below `lg`. */}
         <div className="ml-auto flex shrink-0 items-center gap-[10px]">
           <div
-            role="status"
-            aria-label={systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             className={`flex items-center gap-[7px] rounded-full px-[9px] py-[9px] lg:px-[11px] lg:py-[5px] ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
           >
             <span
               className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success-dot' : 'bg-ink-subtle'}`}
             />
+            {/* sr-only, not `hidden`: below `lg` only the dot shows, but the text has
+                to stay in the accessibility tree — a display:none span leaves the
+                status with no readable text at all. sr-only is position:absolute, so
+                it also leaves the flex row and the pill keeps its dot-only shape.
+                No role="status" here: EventSource reconnects on every blip, and a live
+                region in the app shell would announce each one on every route. */}
             <span
-              className={`hidden text-[12px] font-medium lg:inline ${systemActive ? 'text-success' : 'text-ink-muted'}`}
+              className={`sr-only text-[12px] font-medium lg:not-sr-only ${systemActive ? 'text-success' : 'text-ink-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>
@@ -235,7 +239,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex min-h-[44px] w-full items-center gap-[8px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors hover:bg-[#faf2f1]"
+                    className="flex w-full items-center gap-[8px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors max-lg:min-h-[44px] hover:bg-[#faf2f1]"
                   >
                     <svg
                       width="15"

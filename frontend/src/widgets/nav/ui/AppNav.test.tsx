@@ -113,6 +113,20 @@ test('does not schedule animation frames forever when the nav has no layout boxe
   raf.mockRestore();
 });
 
+// The connection text is sr-only rather than `hidden` below `lg`: a display:none span
+// has no text in the accessibility tree, so the status would read as nothing at all on
+// a phone. And no role="status" — EventSource reconnects on every network blip, and a
+// live region in the app shell would announce each one on every route.
+test('the connection status stays readable to assistive tech and is not a live region', async () => {
+  routeApi();
+  renderWithClient(<AppNav />);
+
+  const status = await screen.findByText('Нет соединения');
+  expect(status).toHaveClass('sr-only');
+  expect(status.className).toContain('lg:not-sr-only');
+  expect(screen.queryByRole('status')).toBeNull();
+});
+
 test('the hamburger opens a drawer with the nav destinations', async () => {
   routeApi();
   renderWithClient(<AppNav />);
@@ -121,7 +135,8 @@ test('the hamburger opens a drawer with the nav destinations', async () => {
   expect(hamburger).toHaveAttribute('aria-expanded', 'false');
 
   await userEvent.click(hamburger);
-  const drawer = await screen.findByRole('dialog');
+  // Named, so it does not announce as a bare "dialog".
+  const drawer = await screen.findByRole('dialog', { name: 'Меню' });
   expect(hamburger).toHaveAttribute('aria-expanded', 'true');
   expect(drawer).toHaveTextContent('Аккаунты');
   expect(drawer).toHaveTextContent('Настройки');
