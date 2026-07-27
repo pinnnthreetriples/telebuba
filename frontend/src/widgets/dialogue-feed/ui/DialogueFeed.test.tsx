@@ -46,6 +46,47 @@ test('renders each fed message with its from→to labels and text', () => {
   expect(screen.getByText('Привет!')).toBeInTheDocument();
 });
 
+test('shows the Telegram name instead of the phone when the account has one', () => {
+  render(
+    <DialogueTranscript
+      messages={[
+        message({
+          from_label: '527717224137',
+          from_first_name: 'Polina',
+          to_label: '528671176536',
+          to_first_name: 'Alisa',
+          to_last_name: 'K',
+        }),
+      ]}
+    />,
+  );
+  // Order-aware on purpose: getByText alone is blind to the two sides being
+  // swapped, so it would stay green on a from/to mix-up. Assert the sender is
+  // the FIRST name in the row, ahead of the recipient.
+  const names = screen.getAllByText(/Polina|Alisa K/).map((el) => el.textContent);
+  expect(names).toEqual(['Polina', 'Alisa K']);
+  expect(screen.queryByText('527717224137')).not.toBeInTheDocument();
+  expect(screen.queryByText('528671176536')).not.toBeInTheDocument();
+});
+
+test('falls back per side: named side shows the name, unnamed side keeps its label', () => {
+  render(
+    <DialogueTranscript
+      messages={[
+        message({
+          from_label: '527717224137',
+          from_first_name: 'Polina',
+          to_label: 'ghost-account',
+          to_first_name: null,
+          to_last_name: null,
+        }),
+      ]}
+    />,
+  );
+  expect(screen.getByText('Polina')).toBeInTheDocument();
+  expect(screen.getByText('ghost-account')).toBeInTheDocument();
+});
+
 test('shows the empty state when there are no messages', () => {
   render(<DialogueTranscript messages={[]} />);
   expect(screen.getByText('Пока нет переписки')).toBeInTheDocument();

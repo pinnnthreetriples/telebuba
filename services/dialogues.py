@@ -163,32 +163,41 @@ async def assign_pairs(*, force: bool = False) -> DialoguePairsResult:
 
 
 async def load_dialogue_overview(*, recent_limit: int = 30) -> DialogueFeed:
-    """Recent inter-account messages with both sides resolved to a display label.
+    """Recent inter-account messages with both sides resolved for display.
 
-    The label is the account's phone (fallback: label, fallback: bare id) so the
-    feed stays locale-neutral (#12). Accounts are read in a single pass and
-    indexed, so resolving both ends of every message is O(1), never N+1.
+    Each side carries a label — the account's phone (fallback: label, fallback:
+    bare id) — plus its Telegram name parts, so the SPA can show the name and
+    fall back to the label on its own. Both stay locale-neutral (#12). Accounts
+    are read in a single pass and indexed, so resolving both ends of every
+    message is O(1), never N+1.
     """
     messages = await list_recent_dialogue_messages(recent_limit)
-    labels = {
-        account.account_id: account.phone or account.label or account.account_id
-        for account in (await list_accounts()).accounts
-    }
+    accounts = {account.account_id: account for account in (await list_accounts()).accounts}
 
-    def _label(account_id: str) -> str:
-        return labels.get(account_id, account_id)
+    def _identity(account_id: str) -> tuple[str, str | None, str | None]:
+        """``(label, first_name, last_name)`` for one side of a message."""
+        account = accounts.get(account_id)
+        if account is None:
+            return account_id, None, None
+        return account.phone or account.label or account_id, account.first_name, account.last_name
 
-    return DialogueFeed(
-        messages=[
+    feed: list[DialogueFeedMessage] = []
+    for message in messages:
+        from_label, from_first, from_last = _identity(message.from_account)
+        to_label, to_first, to_last = _identity(message.to_account)
+        feed.append(
             DialogueFeedMessage(
                 from_account=message.from_account,
-                from_label=_label(message.from_account),
+                from_label=from_label,
+                from_first_name=from_first,
+                from_last_name=from_last,
                 to_account=message.to_account,
-                to_label=_label(message.to_account),
+                to_label=to_label,
+                to_first_name=to_first,
+                to_last_name=to_last,
                 text=message.text,
                 created_at=message.created_at,
                 replied=message.replied,
-            )
-            for message in messages
-        ],
-    )
+            ),
+        )
+    return DialogueFeed(messages=feed)

@@ -1,3 +1,7 @@
+---
+last_updated: 2026-07-27
+---
+
 # Add a Channel-Discovery Source
 1. Add the transport to `core/`: a typed read action + dispatcher for MTProto (`core/telegram_client/_read_discovery.py`), or an httpx gateway that never raises for HTTP (`core/telemetr.py`).
 2. Add one literal to `DiscoverySource` in `schemas/neurocomment_discovery.py` and its i18n label under `neurocomment.modal.discovery.source.*` (ru + en).
