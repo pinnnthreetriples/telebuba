@@ -241,7 +241,7 @@ export function WarmingPage() {
         </div>
       </div>
 
-      <div className="grid grid-cols-[340px_1fr] items-start gap-4">
+      <div className="grid items-start gap-4 lg:grid-cols-[340px_1fr]">
         <div className="flex flex-col gap-4">
           <div className="rounded-2xl border border-line bg-white p-[14px]">
             <div className="mb-3 flex items-center justify-between">
@@ -617,7 +617,7 @@ export function WarmingPage() {
             <div className="mb-[13px] text-[11px] leading-[1.4] text-[#9a9893]">
               {t('warming.howto.hint')}
             </div>
-            <div className="grid grid-cols-2 gap-x-[22px] gap-y-[11px]">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-[22px] gap-y-[11px]">
               {[0, 1, 2, 3, 4, 5].map((index) => (
                 <div key={index} className="flex items-start gap-[9px]">
                   <span className="mt-px flex h-[18px] w-[18px] shrink-0 items-center justify-center rounded-full bg-primary text-[10px] font-semibold text-white">

@@ -1,29 +1,29 @@
 import { useMutation, useQuery } from '@tanstack/react-query';
 import { Link, useNavigate, useRouterState } from '@tanstack/react-router';
-import { useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { logoutMutation, meQueryOptions } from '@/shared/auth';
 import { queryClient, useLogEventStream, type SseStatus } from '@/shared/lib';
 
-const LINKS = [
-  { to: '/', key: 'accounts' },
-  { to: '/warming', key: 'warming' },
-  { to: '/neurocomment', key: 'neurocomment' },
-  { to: '/logs', key: 'logs' },
-  { to: '/settings', key: 'settings' },
-] as const;
+import { NAV_LINKS as LINKS } from './links';
+import { NavDrawer } from './NavDrawer';
 
 // The design's sticky top bar (Telebuba.dc.html header): logo, nav with a
 // sliding active indicator (the GSAP layoutId slide, done here by measuring the
 // active link and CSS-transitioning a single underline), "system active" pill,
 // bell, avatar. Reproduced with Tailwind utilities to match 1:1.
+// Below `lg` the horizontal nav is display:none and a hamburger opens NavDrawer;
+// the bell and avatar grow to 44px touch targets. ponytail: the ~40 in-card
+// 34-38px icon buttons on pages and in modals stay as they are — bumping them
+// globally would reflow every dense card for 6-10px.
 export function AppNav() {
   const { t } = useTranslation();
   const pathname = useRouterState({ select: (state) => state.location.pathname });
   const navRef = useRef<HTMLElement>(null);
   const [indicator, setIndicator] = useState({ left: 0, width: 0 });
   const [menuOpen, setMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const navigate = useNavigate();
   const me = useQuery(meQueryOptions());
   const logout = useMutation(logoutMutation());
@@ -40,6 +40,7 @@ export function AppNav() {
     const nav = navRef.current;
     if (!nav) return;
     let raf = 0;
+    let retries = 0;
     const move = () => {
       const active = nav.querySelectorAll('a')[activeIdx];
       if (!(active instanceof HTMLElement)) return;
@@ -48,10 +49,18 @@ export function AppNav() {
       // The link may not be laid out yet (width 0) right after a route change /
       // before webfonts settle — retry next frame instead of committing a 0-width
       // bar that would otherwise stick (leaving a missing/stray indicator).
+      // Bounded, because a 0 width is also *permanent* whenever the nav generates
+      // no boxes at all — display:none below `lg` — and an unbounded retry would
+      // then re-arm rAF every frame for the rest of the session. A handful of
+      // frames covers the transient case; fonts.ready and the ResizeObserver below
+      // re-trigger this independently once real widths exist.
       if (rect.width === 0) {
+        if (retries >= 10) return;
+        retries += 1;
         raf = requestAnimationFrame(move);
         return;
       }
+      retries = 0;
       setIndicator({ left: rect.left - navRect.left, width: rect.width });
     };
     raf = requestAnimationFrame(move);
@@ -66,9 +75,38 @@ export function AppNav() {
     };
   }, [activeIdx]);
 
+  // Close the drawer on any route change. The per-link onClick covers a tap, but
+  // not back/forward — and a tap on the current route short-circuits in TanStack
+  // <Link> without ever firing that handler.
+  useEffect(() => {
+    setDrawerOpen(false);
+  }, [pathname]);
+
   return (
     <header className="sticky top-0 z-40 border-b border-line bg-white/85 backdrop-blur-[10px]">
-      <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-7 px-6">
+      <div className="mx-auto flex h-14 max-w-[1340px] items-center gap-3 px-4 lg:gap-7 lg:px-6">
+        <button
+          type="button"
+          aria-label={t('shell.menu')}
+          aria-expanded={drawerOpen}
+          onClick={() => {
+            setDrawerOpen(true);
+          }}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-[10px] border border-line bg-white text-ink lg:hidden"
+        >
+          <svg
+            width="18"
+            height="18"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.8"
+            strokeLinecap="round"
+          >
+            <path d="M4 7h16M4 12h16M4 17h16" />
+          </svg>
+        </button>
+
         <div className="flex shrink-0 items-center gap-[9px]">
           <div className="flex h-[26px] w-[26px] items-center justify-center rounded-lg bg-ink">
             <div className="h-[9px] w-[9px] rounded-full bg-primary" />
@@ -76,7 +114,10 @@ export function AppNav() {
           <span className="text-[15px] font-bold tracking-[-0.01em]">Telebuba</span>
         </div>
 
-        <nav ref={navRef} className="relative flex flex-1 items-center gap-[22px] self-stretch">
+        <nav
+          ref={navRef}
+          className="relative hidden flex-1 items-center gap-[22px] self-stretch lg:flex"
+        >
           {LINKS.map((link, index) => (
             <Link
               key={link.to}
@@ -102,15 +143,21 @@ export function AppNav() {
           />
         </nav>
 
-        <div className="flex shrink-0 items-center gap-[10px]">
+        {/* ml-auto: the hidden nav no longer contributes the flex-1 that pushed
+            this cluster right below `lg`. */}
+        <div className="ml-auto flex shrink-0 items-center gap-[10px]">
           <div
-            className={`flex items-center gap-[7px] rounded-full px-[11px] py-[5px] ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
+            role="status"
+            aria-label={systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
+            className={`flex items-center gap-[7px] rounded-full px-[9px] py-[9px] lg:px-[11px] lg:py-[5px] ${systemActive ? 'bg-success-tint' : 'bg-track'}`}
           >
             <span
               className={`h-[7px] w-[7px] rounded-full ${systemActive ? 'bg-success-dot' : 'bg-ink-subtle'}`}
             />
+            {/* Narrow screens keep only the dot; the pill's aria-label carries the
+                meaning that the hidden text would have. */}
             <span
-              className={`text-[12px] font-medium ${systemActive ? 'text-success' : 'text-ink-muted'}`}
+              className={`hidden text-[12px] font-medium lg:inline ${systemActive ? 'text-success' : 'text-ink-muted'}`}
             >
               {systemActive ? t('shell.systemActive') : t('shell.systemOffline')}
             </span>
@@ -118,7 +165,7 @@ export function AppNav() {
           <button
             type="button"
             aria-label={t('shell.notifications')}
-            className="relative flex h-[34px] w-[34px] items-center justify-center rounded-full border border-line bg-white text-ink-muted"
+            className="relative flex h-11 w-11 items-center justify-center rounded-full border border-line bg-white text-ink-muted lg:h-[34px] lg:w-[34px]"
           >
             <svg
               width="16"
@@ -131,7 +178,7 @@ export function AppNav() {
               <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
               <path d="M13.73 21a2 2 0 0 1-3.46 0" />
             </svg>
-            <span className="absolute right-[8px] top-[6px] h-[6px] w-[6px] rounded-full border-[1.5px] border-white bg-primary" />
+            <span className="absolute right-[11px] top-[9px] h-[6px] w-[6px] rounded-full border-[1.5px] border-white bg-primary lg:right-[8px] lg:top-[6px]" />
           </button>
           <div className="relative">
             <button
@@ -140,7 +187,7 @@ export function AppNav() {
               onClick={() => {
                 setMenuOpen((open) => !open);
               }}
-              className="flex h-[34px] w-[34px] items-center justify-center rounded-full bg-primary text-[13px] font-semibold text-white"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-primary text-[13px] font-semibold text-white lg:h-[34px] lg:w-[34px]"
             >
               {initials}
             </button>
@@ -155,7 +202,7 @@ export function AppNav() {
                   }}
                   className="fixed inset-0 z-40 cursor-default"
                 />
-                <div className="absolute right-0 top-[42px] z-50 w-[190px] overflow-hidden rounded-[12px] border border-line bg-white py-1 shadow-[0_8px_24px_rgba(11,11,12,0.12)]">
+                <div className="absolute right-0 top-[48px] z-50 w-[190px] overflow-hidden rounded-[12px] border border-line bg-white py-1 shadow-[0_8px_24px_rgba(11,11,12,0.12)] lg:top-[42px]">
                   {me.data ? (
                     <div className="truncate border-b border-[#f0eeeb] px-[14px] py-[8px] text-[12px] text-ink-muted">
                       {me.data.username}
@@ -175,7 +222,7 @@ export function AppNav() {
                         },
                       );
                     }}
-                    className="flex w-full items-center gap-[8px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors hover:bg-[#faf2f1]"
+                    className="flex min-h-[44px] w-full items-center gap-[8px] px-[14px] py-[8px] text-left text-[13px] font-medium text-danger transition-colors hover:bg-[#faf2f1]"
                   >
                     <svg
                       width="15"
@@ -199,6 +246,15 @@ export function AppNav() {
           </div>
         </div>
       </div>
+
+      {drawerOpen ? (
+        <NavDrawer
+          activeIdx={activeIdx}
+          onClose={() => {
+            setDrawerOpen(false);
+          }}
+        />
+      ) : null}
     </header>
   );
 }

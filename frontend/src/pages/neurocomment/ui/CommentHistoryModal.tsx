@@ -48,6 +48,7 @@ export function CommentHistoryModal({
         meta: {
           className: 'w-[130px]',
           cellClassName: 'font-mono text-[12px] text-ink-subtle',
+          cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -90,7 +91,7 @@ export function CommentHistoryModal({
   );
 
   return (
-    <Modal onClose={onClose} z={72} className="max-h-[88vh] w-[760px] overflow-y-auto">
+    <Modal onClose={onClose} z={72} className="w-[760px]">
       <div className="border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
         <div className="text-[16px] font-bold text-ink">{t('neurocomment.history.title')}</div>
       </div>

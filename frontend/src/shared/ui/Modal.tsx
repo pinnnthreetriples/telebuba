@@ -10,6 +10,22 @@ const FOCUSABLE =
 // topmost (last-registered) modal should handle it.
 const modalStack: object[] = [];
 
+// Overlay/card class pairs per shell shape. They are presets rather than two free
+// `className` props because both halves set the same properties (radius, animation,
+// height): letting a caller pass `rounded-none` alongside the base `rounded-[18px]`
+// would depend on Tailwind's emit order, which is not a guarantee. `center` keeps
+// the design's centred card; `drawer-left` is the mobile nav's flush side panel.
+const SHELL = {
+  center: {
+    overlay: 'items-center justify-center p-4 sm:p-5',
+    card: 'max-h-[calc(100dvh-2rem)] overflow-y-auto overscroll-contain rounded-[18px] [animation:fadeup_0.25s_ease]',
+  },
+  'drawer-left': {
+    overlay: 'items-stretch justify-start',
+    card: 'h-full overflow-y-auto overscroll-contain tb-drawerin',
+  },
+} as const;
+
 // The design's modal shell: a fixed dimmed backdrop (ovfade) centering a white
 // card (fadeup). Backdrop-click and Escape close; the card stops propagation.
 // z and backdrop opacity match the design's per-modal values. Focus moves into
@@ -19,12 +35,14 @@ export function Modal({
   onClose,
   children,
   className = 'w-[420px]',
+  variant = 'center',
   z = 70,
   backdrop = 0.4,
 }: {
   onClose: () => void;
   children: ReactNode;
   className?: string;
+  variant?: keyof typeof SHELL;
   z?: number;
   backdrop?: number;
 }) {
@@ -36,9 +54,15 @@ export function Modal({
   useEffect(() => {
     const id = idRef.current;
     modalStack.push(id);
+    // The card scrolls internally, so the page behind it must not: on a phone a
+    // scrollable body lets the backdrop drag away under the dialog. Restore only
+    // when the last dialog leaves, so a nested one closing doesn't unlock early.
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
     return () => {
       const index = modalStack.indexOf(id);
       if (index !== -1) modalStack.splice(index, 1);
+      if (modalStack.length === 0) document.body.style.overflow = previousOverflow;
     };
   }, []);
 
@@ -85,7 +109,7 @@ export function Modal({
     <div
       role="presentation"
       onClick={onClose}
-      className="fixed inset-0 flex items-center justify-center p-5 [animation:ovfade_0.2s_ease]"
+      className={`fixed inset-0 flex [animation:ovfade_0.2s_ease] ${SHELL[variant].overlay}`}
       style={{ zIndex: z, background: `rgba(11,11,12,${String(backdrop)})` }}
     >
       <div
@@ -97,7 +121,7 @@ export function Modal({
         onClick={(event) => {
           event.stopPropagation();
         }}
-        className={`max-w-full rounded-[18px] bg-white outline-none [animation:fadeup_0.25s_ease] ${className}`}
+        className={`max-w-full bg-white outline-none ${SHELL[variant].card} ${className}`}
       >
         {children}
       </div>

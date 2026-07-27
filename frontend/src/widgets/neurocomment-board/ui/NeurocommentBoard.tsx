@@ -180,6 +180,7 @@ export function NeurocommentBoard({
         cell: (info) => info.getValue<string>(),
         meta: {
           cellClassName: 'whitespace-nowrap text-[12.5px] font-medium',
+          cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
       {
@@ -220,6 +221,7 @@ export function NeurocommentBoard({
             <ChannelStatusBadge status={row.status} />
           );
         },
+        meta: { cardSlot: 'control' } satisfies DataTableColumnMeta,
       },
       {
         id: 'expander',
@@ -245,7 +247,11 @@ export function NeurocommentBoard({
           </button>
         ),
         // Last column, sized to the chevron so it hugs the row's right edge.
-        meta: { className: 'w-px', cellClassName: 'w-px' } satisfies DataTableColumnMeta,
+        meta: {
+          className: 'w-px',
+          cellClassName: 'w-px',
+          cardSlot: 'control',
+        } satisfies DataTableColumnMeta,
       },
     ],
     [t, onboarding],

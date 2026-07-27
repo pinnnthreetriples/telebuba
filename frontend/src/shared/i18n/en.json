@@ -498,6 +498,8 @@
     "systemActive": "System active",
     "systemOffline": "Disconnected",
     "notifications": "Notifications",
+    "menu": "Menu",
+    "closeMenu": "Close menu",
     "account": "Account",
     "logout": "Log out",
     "avatarFallback": "OP",

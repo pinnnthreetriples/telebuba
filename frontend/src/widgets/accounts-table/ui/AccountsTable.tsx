@@ -95,7 +95,8 @@ export function AccountsTable({
     {
       id: 'phone',
       header: () => t('accounts.table.phone'),
-      meta: LEFT_META,
+      // Spread rather than editing LEFT_META itself — five columns share it.
+      meta: { ...LEFT_META, cardSlot: 'title' } satisfies DataTableColumnMeta,
       cell: ({ row }) => {
         const account = row.original;
         return (
@@ -178,7 +179,7 @@ export function AccountsTable({
     {
       id: 'actions',
       header: () => t('accounts.table.actions'),
-      meta: RIGHT_META,
+      meta: { ...RIGHT_META, cardSlot: 'control' } satisfies DataTableColumnMeta,
       cell: ({ row }) => {
         const account = row.original;
         const busy = busyId === account.account_id;

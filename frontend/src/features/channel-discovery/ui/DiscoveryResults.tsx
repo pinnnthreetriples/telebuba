@@ -110,12 +110,20 @@ export function DiscoveryResults({
           className={CHECKBOX}
         />
       ),
-      meta: { className: 'w-[38px]', cellClassName: 'w-[38px]' } satisfies DataTableColumnMeta,
+      // cardSlot 'control' is load-bearing here, not cosmetic: this column's header
+      // is the select-all checkbox, so as a card *label* it would render one
+      // select-all per card, each toggling the whole result set.
+      meta: {
+        className: 'w-[38px]',
+        cellClassName: 'w-[38px]',
+        cardSlot: 'control',
+      } satisfies DataTableColumnMeta,
     },
     {
       id: 'channel',
       header: () => t('neurocomment.modal.discovery.results.colChannel'),
       cell: ({ row }) => <span className="font-medium">@{row.original.channel}</span>,
+      meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
     },
     {
       id: 'title',
@@ -170,6 +178,9 @@ export function DiscoveryResults({
         }
         return null;
       },
+      // 'control' rather than a labelled row: the cell is null for most rows, which
+      // as a labelled row would leave an empty "state" stub in every card.
+      meta: { cardSlot: 'control' } satisfies DataTableColumnMeta,
     },
   ];
 

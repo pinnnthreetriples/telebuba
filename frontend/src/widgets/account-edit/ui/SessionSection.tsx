@@ -184,7 +184,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
           {requestCode.isPending ? <Spinner size={12} /> : t('accounts.edit.sendCode')}
         </button>
       </div>
-      <div className="mb-[9px] grid grid-cols-2 gap-[10px]">
+      <div className="mb-[9px] grid grid-cols-1 md:grid-cols-2 gap-[10px]">
         <label>
           <span className={LABEL}>{t('accounts.edit.smsCode')}</span>
           <input

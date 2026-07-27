@@ -79,13 +79,14 @@ export function LogsPage() {
         meta: {
           className: 'w-[120px]',
           cellClassName: 'font-mono text-[12px] text-ink-subtle',
+          cardSlot: 'title',
         } satisfies DataTableColumnMeta,
       },
       {
         id: 'level',
         header: () => t('logs.col.level'),
         cell: ({ row }) => <LogStatusBadge status={row.original.status} />,
-        meta: { className: 'w-[110px]' } satisfies DataTableColumnMeta,
+        meta: { className: 'w-[110px]', cardSlot: 'control' } satisfies DataTableColumnMeta,
       },
       {
         id: 'account',
@@ -182,7 +183,7 @@ export function LogsPage() {
           ))}
         </div>
         <div className="flex-1" />
-        <div ref={accountRef} className="relative w-[200px] shrink-0">
+        <div ref={accountRef} className="relative w-full shrink-0 sm:w-[200px]">
           <button
             type="button"
             aria-label={t('logs.filter.account')}

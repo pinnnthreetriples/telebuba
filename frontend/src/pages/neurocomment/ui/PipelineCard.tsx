@@ -25,7 +25,9 @@ export function PipelineCard({
 }) {
   const { t } = useTranslation();
   // Decorative pipeline position: a mid-flight look while running, idle when off.
-  const activeCell = running ? 2 : -1;
+  // Annotated `number`, not the inferred `2 | -1`: it is an index into STAGES, and
+  // the literal union makes TS reject the lookup as a negative tuple index.
+  const activeCell: number = running ? 2 : -1;
   const greenPct = activeCell > 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   const bluePct = activeCell >= 0 ? (activeCell / (STAGES.length - 1)) * 100 : 0;
   return (
@@ -98,7 +100,16 @@ export function PipelineCard({
           ))}
         </div>
       </div>
-      <div className="mb-3 flex justify-between px-px">
+      {/* The six labels are ~530px intrinsic (w-[88px], nowrap), so below `md` they
+          are replaced by the active stage's name alone — the dots above stay at
+          every width and would otherwise lose their meaning. Nothing to name while
+          stopped (activeCell -1); the status banner below already says so. */}
+      {activeCell >= 0 ? (
+        <div className="mb-3 text-center text-[11px] font-semibold text-primary md:hidden">
+          {t(`neurocomment.stage.${STAGES[activeCell]}`)}
+        </div>
+      ) : null}
+      <div className="mb-3 hidden justify-between px-px md:flex">
         {STAGES.map((stage, index) => (
           <span
             key={stage}
@@ -124,9 +135,11 @@ export function PipelineCard({
         </span>
       </div>
 
-      <div className="grid grid-cols-5 gap-px overflow-hidden rounded-xl border border-[#e4ecfa] bg-[#e4ecfa]">
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-[#e4ecfa] bg-[#e4ecfa] md:grid-cols-5">
         {stats.map((stat) => (
-          <div key={stat.label} className="bg-white px-4 py-[14px]">
+          // 2+2+1 below `md`: the last tile spans both columns so the gap-px/tint
+          // border trick doesn't leave a light-blue hole in the final row.
+          <div key={stat.label} className="bg-white px-4 py-[14px] max-md:last:col-span-2">
             <Odometer value={stat.value} color={stat.color} />
             <div className="mt-[2px] text-[11px] text-ink-subtle">{stat.label}</div>
           </div>

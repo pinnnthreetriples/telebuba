@@ -15,8 +15,12 @@ export function HelpHint({ text, example }: { text: string; example?: string }) 
       <span role="note" aria-label={title} tabIndex={0} title={title} className={BADGE}>
         ?
       </span>
+      {/* Below `md` the popover is pinned to the viewport rather than to the badge:
+          a 230px box centred on a badge near either screen edge clips, and no fixed
+          anchor is safe without measuring. group-focus-within is what opens it on a
+          touch device — the badge is tabIndex=0, and hover never fires there. */}
       <span
-        className="pointer-events-none absolute left-1/2 top-[22px] z-20 hidden w-[230px] -translate-x-1/2 rounded-[10px] border border-line bg-white p-[10px] text-left text-[11.5px] leading-snug text-ink-muted shadow-[0_6px_20px_rgba(0,0,0,0.12)] group-hover:block group-focus-within:block"
+        className="pointer-events-none fixed inset-x-3 bottom-3 z-20 hidden rounded-[10px] border border-line bg-white p-[10px] text-left text-[11.5px] leading-snug text-ink-muted shadow-[0_6px_20px_rgba(0,0,0,0.12)] group-hover:block group-focus-within:block md:absolute md:inset-x-auto md:bottom-auto md:left-1/2 md:top-[22px] md:w-[230px] md:-translate-x-1/2"
         role="tooltip"
       >
         {text}

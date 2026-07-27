@@ -138,8 +138,10 @@ export function AccountsPage() {
 
       <div className="mb-[18px] flex flex-wrap items-center justify-between gap-4">
         <h1 className="m-0 text-[22px] font-bold tracking-[-0.02em]">{t('accounts.title')}</h1>
-        <div className="flex items-center gap-2">
-          <div className="relative flex items-center">
+        <div className="flex w-full items-center gap-2 sm:w-auto">
+          {/* The wrapper carries the growth, not the input: the search icon is an
+              absolutely-positioned sibling inside it. */}
+          <div className="relative flex flex-1 items-center sm:flex-none">
             <svg
               className="pointer-events-none absolute left-3 text-ink-subtle"
               width="15"
@@ -159,7 +161,7 @@ export function AccountsPage() {
                 setCursorStack([null]);
               }}
               placeholder={t('accounts.searchPlaceholder')}
-              className="tb-time h-[38px] w-[220px] rounded-full border border-line bg-white pl-9 pr-3 text-[13px] outline-none"
+              className="tb-time h-[38px] w-full rounded-full border border-line bg-white pl-9 pr-3 text-[13px] outline-none sm:w-[220px]"
             />
           </div>
           <button

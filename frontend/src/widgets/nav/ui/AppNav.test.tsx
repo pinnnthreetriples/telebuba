@@ -90,6 +90,48 @@ test('logs out from the avatar menu and redirects to login', async () => {
   });
 });
 
+// Regression guard for an unbounded requestAnimationFrame chain. The sliding
+// active-indicator measures the nav in JS and retries next frame while the active
+// link's rect is 0-wide. That width is *permanent* whenever the nav generates no
+// boxes — display:none below `lg` in a browser, and every element under happy-dom
+// — so without the retry bound in AppNav this re-arms rAF every frame for the
+// whole session (measured: ~14k frames here). The only cancel is effect cleanup.
+test('does not schedule animation frames forever when the nav has no layout boxes', async () => {
+  routeApi();
+  const raf = vi.spyOn(window, 'requestAnimationFrame');
+  renderWithClient(<AppNav />);
+  await waitFor(() => {
+    expect(screen.getByText('AD')).toBeInTheDocument();
+  });
+
+  // Long enough that an unbounded chain would be far into the thousands (measured:
+  // ~14k in 60ms before the fix), while the bounded one drains to a couple of dozen.
+  await new Promise((resolve) => {
+    setTimeout(resolve, 200);
+  });
+  expect(raf.mock.calls.length).toBeLessThan(100);
+  raf.mockRestore();
+});
+
+test('the hamburger opens a drawer with the nav destinations', async () => {
+  routeApi();
+  renderWithClient(<AppNav />);
+
+  const hamburger = await screen.findByLabelText('Меню');
+  expect(hamburger).toHaveAttribute('aria-expanded', 'false');
+
+  await userEvent.click(hamburger);
+  const drawer = await screen.findByRole('dialog');
+  expect(hamburger).toHaveAttribute('aria-expanded', 'true');
+  expect(drawer).toHaveTextContent('Аккаунты');
+  expect(drawer).toHaveTextContent('Настройки');
+
+  await userEvent.click(screen.getByLabelText('Закрыть меню'));
+  await waitFor(() => {
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+});
+
 test('clears the query cache on logout so authed data cannot leak on back-nav', async () => {
   navigate.mockClear();
   const clearSpy = vi.spyOn(queryClient, 'clear');

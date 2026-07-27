@@ -38,6 +38,7 @@ export function CaptchaQueue({
             </div>
           </div>
         ),
+        meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
       },
       {
         id: 'action',
@@ -53,7 +54,7 @@ export function CaptchaQueue({
             {t('neurocomment.captcha.solve')}
           </button>
         ),
-        meta: { cellClassName: 'text-right' } satisfies DataTableColumnMeta,
+        meta: { cellClassName: 'text-right', cardSlot: 'control' } satisfies DataTableColumnMeta,
       },
     ],
     [t, accountLabel, onSolve],
