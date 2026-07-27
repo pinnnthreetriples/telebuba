@@ -1772,7 +1772,7 @@ export const clearLogs = <ThrowOnError extends boolean = false>(
  * List log rows, newest first.
  *
  * ``event_prefix`` accepts a comma-separated list of prefixes and keeps rows whose
- * event starts with any of them (e.g. ``warming_,telegram_``). Omitting it, or passing
+ * event starts with any of them (e.g. ``warming_,spam_status``). Omitting it, or passing
  * the empty string, applies no filter; a value that yields no usable prefix (``" "``,
  * ``","``) is still a filter and matches nothing.
  */

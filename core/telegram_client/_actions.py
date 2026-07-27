@@ -38,7 +38,7 @@ from core.telegram_client._profile import (
 )
 from core.telegram_client._react import _channel_reaction_whitelist, _pick_reaction
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
-from core.telegram_client._util import extract_invite_hash
+from core.telegram_client._util import event_name, extract_invite_hash
 from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
@@ -75,7 +75,12 @@ if TYPE_CHECKING:
 _rng = random.SystemRandom()
 
 
-async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # noqa: C901, PLR0911, PLR0912 - one except per Telegram error family
+async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram error family
+    account_id: str,
+    action: TelegramAction,
+    *,
+    domain: str | None = None,
+) -> ActionResult:
     """Dispatch a typed Telegram action against ``account_id``.
 
     The only entry point for Telethon calls from outside ``core/``. Borrows
@@ -84,6 +89,12 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
     classifies the Telegram rate-limit family (flood-wait / slow-mode /
     premium / peer-flood) separately, logs every outcome, and returns a typed
     ``ActionResult`` — never raises Telethon errors upward.
+
+    ``domain`` prefixes every event name this call writes
+    (``warming_telegram_join_channel`` instead of ``telegram_join_channel``) so
+    the calling domain's log feed sees its own gateway rows and no one else's —
+    see :func:`core.telegram_client._util.event_name`. It is bound once per
+    domain at ``services.<domain>._seams.execute``, so call sites pass nothing.
     """
     account = await fetch_account(account_id)
     if account is None:
@@ -100,14 +111,16 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
         outcome = await _dispatch_action(client, action)
     except errors.SlowModeWaitError as exc:
         return await _flood_action_result(
-            account_id, action, status="slow_mode_wait", seconds=exc.seconds
+            account_id, action, status="slow_mode_wait", seconds=exc.seconds, domain=domain
         )
     except errors.FloodPremiumWaitError as exc:
         return await _flood_action_result(
-            account_id, action, status="premium_wait", seconds=exc.seconds
+            account_id, action, status="premium_wait", seconds=exc.seconds, domain=domain
         )
     except errors.PeerFloodError:
-        return await _flood_action_result(account_id, action, status="peer_flood", seconds=None)
+        return await _flood_action_result(
+            account_id, action, status="peer_flood", seconds=None, domain=domain
+        )
     # Frozen errors subclass FloodError (420) / BadRequestError (400); classify
     # them above FloodWaitError so the broader flood clause cannot swallow them
     # (mirrors check_telegram_session). The status write keeps the accounts list
@@ -117,7 +130,7 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
         await _mark_account_status(account_id, "frozen")
         frozen = ProfileGatewayError("account_frozen")
         frozen.__cause__ = exc  # same chain ``raise ... from exc`` would build
-        return await _generic_error(account_id, action, frozen)
+        return await _generic_error(account_id, action, frozen, domain=domain)
     # A dead auth key / revoked session / deactivated account: the classification
     # ``check_telegram_session`` already makes, reused here so the operator is told
     # to re-login instead of reading the opaque ``failed``. Disjoint from the flood
@@ -129,7 +142,7 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
     except _DEAD_SESSION_ERRORS as exc:
         dead = ProfileGatewayError(_dead_session_code(exc))
         dead.__cause__ = exc  # same chain ``raise ... from exc`` would build
-        return await _generic_error(account_id, action, dead)
+        return await _generic_error(account_id, action, dead, domain=domain)
     except errors.FloodWaitError as exc:
         if action.action_type in _PROFILE_EDIT_ACTION_TYPES:
             await _mark_account_status(account_id, "flood_wait")
@@ -143,12 +156,13 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
             # premium waits and peer-flood belong to message-sending families that
             # issue a single call, so they have nothing partial to report.
             applied_privacy_keys=_applied_privacy_keys(exc),
+            domain=domain,
         )
     except errors.UserAlreadyParticipantError as exc:
         if action.action_type in {"join_channel", "join_discussion_group"}:
             await log_event(
                 "INFO",
-                f"telegram_{action.action_type}_already_participant",
+                event_name(domain, f"telegram_{action.action_type}_already_participant"),
                 account_id=account_id,
                 extra={"channel": getattr(action, "channel", None)},
             )
@@ -157,18 +171,18 @@ async def execute(account_id: str, action: TelegramAction) -> ActionResult:  # n
                 action_type=action.action_type,
                 account_id=account_id,
             )
-        return await _generic_error(account_id, action, exc)
+        return await _generic_error(account_id, action, exc, domain=domain)
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
-        return await _unavailable_result(account_id, action, exc)
+        return await _unavailable_result(account_id, action, exc, domain=domain)
     except Exception as exc:  # noqa: BLE001
-        return await _generic_error(account_id, action, exc)
+        return await _generic_error(account_id, action, exc, domain=domain)
 
     extra = _action_log_extra(action)
     if outcome.log_extra:
         extra |= outcome.log_extra
     await log_event(
         "INFO",
-        f"telegram_{action.action_type}",
+        event_name(domain, f"telegram_{action.action_type}"),
         account_id=account_id,
         extra=extra,
     )

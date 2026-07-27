@@ -55,7 +55,7 @@ class LogFilter(BaseModel):
     # Comma-separated prefixes: keep rows whose ``event`` starts with any of them
     # (an OR of SQL ``LIKE 'prefix%'``). Empty = no event filter. Scopes a domain
     # feed, e.g. the neurocomment logs panel (``event_prefix="neurocomment"``) or the
-    # warming terminal (``event_prefix="warming_,telegram_"``), since domain events are
+    # warming terminal (``event_prefix="warming_,spam_status"``), since domain events are
     # not all account-scoped (listener / sweep rows carry no account_id).
     event_prefix: str = ""
 

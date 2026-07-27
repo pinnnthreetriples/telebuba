@@ -245,7 +245,7 @@ test('the per-card log request uses the served card_log_limit', async () => {
   });
 });
 
-test('the per-card log request scopes itself to warming, gateway and spam-status events', async () => {
+test('the per-card log request scopes itself to warming and spam-status events', async () => {
   vi.mocked(fetch).mockImplementation(() =>
     Promise.resolve(jsonResponse({ items: [], next_cursor: null })),
   );
@@ -263,7 +263,9 @@ test('the per-card log request scopes itself to warming, gateway and spam-status
       const url = new URL((input as Request).url);
       return (
         url.pathname === '/api/v1/logs' &&
-        url.searchParams.get('event_prefix') === 'warming_,telegram_,spam_status'
+        // `warming_` covers the engine's own gateway rows (`warming_telegram_*`);
+        // a bare `telegram_*` row belongs to another domain and must not leak in.
+        url.searchParams.get('event_prefix') === 'warming_,spam_status'
       );
     });
     expect(scoped).toBe(true);
@@ -320,7 +322,7 @@ test('names which channel and which reaction each log action touched', async () 
               level: 'INFO',
               status: 'success',
               account_id: '79051184490',
-              event: 'telegram_join_channel',
+              event: 'warming_telegram_join_channel',
               extra: { channel: '@durov' },
             },
             {
@@ -329,7 +331,7 @@ test('names which channel and which reaction each log action touched', async () 
               level: 'INFO',
               status: 'success',
               account_id: '79051184490',
-              event: 'telegram_react_to_post',
+              event: 'warming_telegram_react_to_post',
               extra: { channel: '@news', reaction: '🔥' },
             },
           ],
@@ -381,7 +383,7 @@ test('shows reaction-skip reasons and stories-seen detail in the log', async () 
               level: 'INFO',
               status: 'success',
               account_id: '79051184490',
-              event: 'telegram_watch_peer_stories',
+              event: 'warming_telegram_watch_peer_stories',
               extra: { peer: '@durov', stories_seen: 3 },
             },
             {
@@ -390,7 +392,7 @@ test('shows reaction-skip reasons and stories-seen detail in the log', async () 
               level: 'INFO',
               status: 'success',
               account_id: '79051184490',
-              event: 'telegram_watch_peer_stories',
+              event: 'warming_telegram_watch_peer_stories',
               extra: { peer: '@news', stories_seen: 0 },
             },
           ],

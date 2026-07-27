@@ -50,7 +50,13 @@ import { PipelineCard } from './PipelineCard';
 // frame per progress step, so the board refreshes live during it too); this poll
 // is just the fallback net.
 const FALLBACK_POLL_MS = 30000;
-const NEURO_LOG_LIMIT = 40;
+// Raised from 40 when the gateway started stamping its rows `neurocomment_telegram_*`:
+// a comment attempt now writes two rows under this prefix (the transport outcome plus the
+// service's classified one), and joins and solver clicks add gateway rows of their own, so
+// row density at least doubled. 80 keeps the window — which the Errors tile is computed
+// over — at least as deep as the 40 service-only rows it used to hold. Well under the
+// `le=1000` ceiling on `LogFilter.limit` (schemas/logs.py).
+const NEURO_LOG_LIMIT = 80;
 const CAPTCHA_QUEUE_LIMIT = 20;
 
 function initials(value: string): string {
@@ -266,7 +272,24 @@ export function NeurocommentPage() {
 
   // Errors stat: failure-severity rows in today's loaded neuro activity log
   // (genuine gen/publish failures — skips and busy-account misses don't count).
-  const errorCount = logLines.filter((line) => logSeverity(line) === 'error').length;
+  //
+  // `<domain>_telegram_*` gateway rows are excluded from the COUNT but still shown (and
+  // still red) in the list. Since the gateway started stamping its rows with the calling
+  // domain they reach this feed, and for a comment or a channel join the service layer
+  // writes its own classified row for the same outcome (`_generate.py` / `_join.py`) —
+  // counting both would double every failure, and `_generate.py` deliberately classifies
+  // some of them as amber (`neurocomment_post_access_lost` / `_post_gated` / `_post_cooldown`).
+  // The tile measures domain failures; the list shows raw transport truth.
+  //
+  // Known residual, deliberately not fixed here: two gateway sites have NO service twin —
+  // `_onboard_pair.py` (JoinDiscussionGroup) writes nothing on 4 of `_classify.py`'s 6
+  // branches (invite-request, ban, gate, hard-failure tail), and `challenge.py`
+  // (ClickButton / PostComment) has no `log_event` at all. Their failures stay visible and
+  // red in the list but are not counted in this tile. Adding service rows on those paths is
+  // the right fix and is out of scope for this change.
+  const errorCount = logLines.filter(
+    (line) => !line.event.includes('_telegram_') && logSeverity(line) === 'error',
+  ).length;
 
   // Idle = graduated ("Прогреты") accounts not yet linked to the selected
   // campaign's board. Only warmed accounts count — a still-warming or un-graduated

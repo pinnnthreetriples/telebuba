@@ -12,10 +12,16 @@ from __future__ import annotations
 
 import asyncio
 import random
+from functools import partial
 
 from core.gemini import generate_text
-from core.telegram_client import execute
+from core.telegram_client import execute as _gateway_execute
 from services.spam_status import refresh_spam_status
+
+# Bound once here so every gateway event the warming engine triggers is named
+# ``warming_telegram_*`` and the card can filter on ``warming_`` alone, instead
+# of pulling in the bare ``telegram_*`` rows other domains write.
+execute = partial(_gateway_execute, domain="warming")
 
 # SystemRandom: non-cryptographic jitter/selection; avoids ruff S311 on the
 # module-level ``random.*`` helpers. Behaviour is identical for our needs.
