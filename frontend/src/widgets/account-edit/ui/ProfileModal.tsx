@@ -18,6 +18,7 @@ import {
   setAccountStoryPinnedMutation,
   updateAccountProfileMutation,
 } from '@/entities/account';
+import { resyncAccountAvatar } from '@/shared/api';
 import type { AccountProfileView, AccountRead, MusicRemoveRequest } from '@/shared/api';
 import { ConfirmModal, FormField, Modal, toastError } from '@/shared/ui';
 
@@ -572,6 +573,31 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
       setPhotoProgress({ done: index + 1, total: uploadable.length });
     }
     setPhotoProgress(null);
+    // ONE avatar re-sync for the whole batch, never per file. /accounts/photo
+    // takes one file per call, so the server-side re-sync it used to do spent a
+    // get_me plus a thumb download on every upload and all but the last were
+    // immediately superseded — working against the very FLOOD_WAIT budget this
+    // sequential loop exists to protect. It is its own endpoint now, and this is
+    // the only caller: the loop above is the sole frontend path to
+    // /accounts/photo (a single-file pick runs the same loop with one entry).
+    //
+    // Called through the SDK rather than a useMutation on purpose: every
+    // mutation rejection goes through MutationCache.onError, which toasts it
+    // (shared/lib/query-client.ts), and the list avatar is cosmetic — a refused
+    // re-sync must not raise an error over a batch that uploaded fine. Swallowed
+    // like the per-file failures above, minus the toast they DO deserve. The row
+    // then keeps its previous thumbnail until the next session check.
+    //
+    // Not applied to remove-photo or set-main: those keep their own server-side
+    // re-sync (services/accounts/media.py), where one click re-syncs once and
+    // nothing is superseded.
+    try {
+      await resyncAccountAvatar({ path: { account_id: account.account_id } });
+    } catch {
+      // cosmetic — deliberately silent, see above
+    }
+    // refresh()'s accounts-key invalidation is what pulls the new avatar_thumb
+    // into the table, so the re-sync has to land BEFORE it.
     refresh();
   };
 

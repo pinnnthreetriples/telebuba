@@ -393,6 +393,47 @@ test('the fleet result shows the counts, the failures and why accounts were skip
   expect(within(list).getAllByRole('listitem')).toHaveLength(3);
 });
 
+test('a flooded fleet row shows the real wait, not «повторите через ? с»', async () => {
+  // `retry_after_seconds` is the wait Telegram actually mandated, carried on the
+  // outcome. An earlier round substituted '?' because no payload had a duration;
+  // the schema carries one now, and "retry in ? s" is advice the operator cannot
+  // act on. The other reasonText call sites (a refused read, a refused write
+  // re-read) have no such field and keep the '?' — see the `noReason` tests.
+  const flooded = {
+    outcomes: [
+      { account_id: 'acc-2', status: 'failed', error: 'flood_wait', retry_after_seconds: 30 },
+      // A non-flood refusal in the same report proves the fallback is untouched:
+      // account_frozen interpolates no duration at all.
+      { account_id: 'acc-3', status: 'failed', error: 'account_frozen' },
+    ],
+    ok: 0,
+    failed: 2,
+    skipped: 0,
+  } satisfies BulkPrivacyResult;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/accounts/privacy/all') return Promise.resolve(jsonResponse(flooded));
+    if (pathname === '/api/v1/accounts/acc-1/privacy') {
+      return Promise.resolve(jsonResponse({ settings: MIXED, error: null }));
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  renderWithClient(<PrivacyTab accountId="acc-1" />);
+  await screen.findByText('Фото профиля');
+
+  await userEvent.click(screen.getByRole('button', { name: FLEET_BUTTON }));
+  await userEvent.click(await screen.findByRole('button', { name: 'Применить' }));
+
+  const list = await screen.findByRole('list');
+  expect(
+    within(list).getByText('acc-2 — Telegram ограничил действия — повторите через 30 с'),
+  ).toBeInTheDocument();
+  expect(
+    within(list).getByText('acc-3 — Аккаунт заморожен Telegram — редактирование недоступно'),
+  ).toBeInTheDocument();
+});
+
 test('a new write clears the previous fleet report', async () => {
   routeApi(
     { settings: MIXED, error: null },

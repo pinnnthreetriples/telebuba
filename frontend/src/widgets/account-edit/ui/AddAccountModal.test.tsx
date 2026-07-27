@@ -13,9 +13,9 @@ function renderWithClient(ui: ReactElement) {
   return render(<QueryClientProvider client={queryClient}>{ui}</QueryClientProvider>);
 }
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
 }
@@ -182,7 +182,92 @@ test('session upload imports then a pool proxy is assigned', async () => {
       .mock.calls.some(([input]) => (input as Request).url.includes('/proxies/pool-1/assign'));
     expect(assigned).toBe(true);
   });
-  expect(onClose).toHaveBeenCalled();
+  // The close is the assign's own onSuccess now, so it lands after the response,
+  // not beside the request.
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+// Routes everything the pool flow needs, with the assign under the test's control.
+function routePoolAssign(assign: (request: Request) => Promise<Response>) {
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const { pathname } = new URL(request.url);
+    if (pathname === '/api/v1/proxies' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ proxies: [POOL_PROXY] }));
+    }
+    if (pathname === '/api/v1/accounts/import-session') {
+      return Promise.resolve(
+        jsonResponse({ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }),
+      );
+    }
+    if (pathname.endsWith('/assign')) return assign(request);
+    return Promise.resolve(jsonResponse({}));
+  });
+}
+
+async function reachPool(): Promise<void> {
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSession();
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByText('Далее'));
+  await userEvent.click(screen.getByText('Выбрать из пула'));
+  await userEvent.click(await screen.findByText('nl-1.proxyhub.net:1080'));
+}
+
+test('a pool assign advances only once it has RESOLVED, not while it is in flight', async () => {
+  let resolveAssign!: (response: Response) => void;
+  routePoolAssign(
+    () =>
+      new Promise((resolve) => {
+        resolveAssign = resolve;
+      }),
+  );
+  const onClose = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={vi.fn()} />);
+  await reachPool();
+
+  // Pre-fix `afterProxy()` ran synchronously beside the mutate, so the wizard
+  // left this step — for a file method, unmounting the modal — while the assign
+  // was still in flight. The row is disabled instead, so a second press cannot
+  // fire a second assign onto the same observer.
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByText('nl-1.proxyhub.net:1080')).toBeInTheDocument();
+  await waitFor(() => {
+    expect(screen.getByText('nl-1.proxyhub.net:1080').closest('button')).toBeDisabled();
+  });
+
+  resolveAssign(jsonResponse(POOL_PROXY));
+  await waitFor(() => {
+    expect(onClose).toHaveBeenCalled();
+  });
+});
+
+test('a FAILED pool assign keeps the wizard on the proxy step and tells the operator', async () => {
+  routePoolAssign(() =>
+    Promise.resolve(jsonResponse({ error: { code: 'conflict', message: 'full' } }, 409)),
+  );
+  const onClose = vi.fn();
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={onClose} onImported={onImported} />);
+  await reachPool();
+
+  // Pre-fix a refusal advanced exactly like a success: the operator got a
+  // proxyless account with nothing on screen saying the assignment had failed.
+  expect(await screen.findByRole('alert')).toHaveTextContent('Не удалось назначить прокси');
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByText('nl-1.proxyhub.net:1080')).toBeInTheDocument();
+
+  // `onSettled: onImported` still fires — the modal is only unmounted BY
+  // afterProxy, so the observer is still attached when the mutation settles.
+  // Synchronously advancing used to detach it and drop this callback too (once
+  // for the import, once for the assign = 2).
+  await waitFor(() => {
+    expect(onImported).toHaveBeenCalledTimes(2);
+  });
 });
 
 test('manual proxy form creates and assigns on done', async () => {

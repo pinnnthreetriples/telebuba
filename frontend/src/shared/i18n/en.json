@@ -483,7 +483,8 @@
       "proxyPool": "Pick from pool",
       "proxyPoolDesc": "Ready, checked proxies from the shared pool",
       "poolEmpty": "No free proxies in the pool",
-      "poolFree": "{{count}} free"
+      "poolFree": "{{count}} free",
+      "proxyAssignError": "Could not assign the proxy — the account has none yet"
     }
   },
   "nav": {

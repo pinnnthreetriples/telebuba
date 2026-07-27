@@ -205,15 +205,32 @@ export function AddAccountModal({
     event.target.value = '';
   };
 
-  // Step 2: assign a pool proxy to the just-imported account, then close.
+  // Step 2: assign a pool proxy to the just-imported account, then advance.
+  //
+  // `afterProxy` must be the assign's OWN callback, not a synchronous call
+  // beside it — the same defect this branch has now fixed three times over. Run
+  // synchronously it advanced on a refusal exactly as on a success, handing the
+  // operator a proxyless account with nothing on screen to say so; and for the
+  // file methods `afterProxy` is `onClose()`, which unmounted the modal while
+  // the assign was still in flight and DETACHED the observer, so
+  // `onSettled: onImported` was dropped too and the accounts table never heard
+  // about the assignment either.
+  //
+  // Both callbacks below do fire: the only thing that unmounts this modal in
+  // this flow is `afterProxy` itself, so the observer is still attached when the
+  // mutation settles — the unmount is now the callback's effect, not a race
+  // against it. `onSuccess`, not `onSettled`, because a failed assign must stay
+  // on this step; `onImported` stays on `onSettled` because a partial failure
+  // can still have changed the account.
   const assignFromPool = (proxyId: string) => {
-    if (createdAccountId) {
-      assignProxy.mutate(
-        { path: { proxy_id: proxyId }, body: { account_id: createdAccountId } },
-        { onSettled: onImported },
-      );
+    if (!createdAccountId) {
+      afterProxy();
+      return;
     }
-    afterProxy();
+    assignProxy.mutate(
+      { path: { proxy_id: proxyId }, body: { account_id: createdAccountId } },
+      { onSuccess: afterProxy, onSettled: onImported },
+    );
   };
 
   // Step 2 manual: create the entered proxy (idempotent), assign it, then close.
@@ -664,10 +681,14 @@ export function AddAccountModal({
                   <button
                     key={proxy.id}
                     type="button"
+                    // The step no longer closes on click, so without this a
+                    // second press would fire a second assign on the SAME
+                    // observer — whose callback slot the first one then loses.
+                    disabled={assignProxy.isPending}
                     onClick={() => {
                       assignFromPool(proxy.id);
                     }}
-                    className="flex items-center gap-[11px] rounded-[12px] border border-line-input bg-white px-[14px] py-3 text-left transition-colors hover:border-[#bfd6ff]"
+                    className="flex items-center gap-[11px] rounded-[12px] border border-line-input bg-white px-[14px] py-3 text-left transition-colors hover:border-[#bfd6ff] disabled:opacity-60"
                   >
                     {proxy.country_code ? (
                       <span
@@ -688,6 +709,14 @@ export function AddAccountModal({
                     </span>
                   </button>
                 ))
+              )}
+              {/* The wizard stays on this step when the assign is refused, so the
+                  refusal has to be visible — otherwise the only signal is a
+                  screen that did not change. */}
+              {assignProxy.isError && (
+                <div role="alert" className="text-[11.5px] text-[#c0473f]">
+                  {t('accounts.addWizard.proxyAssignError')}
+                </div>
               )}
             </div>
             <div className="mt-5 flex justify-between gap-2">

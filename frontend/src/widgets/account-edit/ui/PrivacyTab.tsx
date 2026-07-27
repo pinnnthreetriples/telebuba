@@ -70,12 +70,16 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
   // (accounts.status.*), and a refused read its own code. Rendered raw, the
   // fleet report read "acc-3 — пропущен (unauthorized)". An unknown value (a
   // read reason like `RPC: <Class>`) still shows as-is.
-  const reasonText = (value: string): string =>
+  const reasonText = (value: string, retryAfterSeconds?: number | null): string =>
     t([`accounts.profile.code.${value}`, `accounts.status.${value}`], {
       defaultValue: value,
-      // The rate-limit family interpolates a duration none of these payloads
-      // carry — same '?' the global mutation toast uses.
-      s: '?',
+      // The rate-limit family (flood_wait, slow_mode_wait, premium_wait)
+      // interpolates a duration. Only a fleet outcome carries one —
+      // `AccountPrivacyOutcome.retry_after_seconds`, the wait the server was
+      // actually given — so «повторите через 30 с» is real advice there. The
+      // read and write-read paths have no such field on their schemas, and they
+      // keep the '?' the global mutation toast uses.
+      s: retryAfterSeconds ?? '?',
     });
 
   const settings = privacy.data?.settings ?? null;
@@ -302,7 +306,7 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
                           id: outcome.account_id,
                           reason:
                             outcome.error != null
-                              ? reasonText(outcome.error)
+                              ? reasonText(outcome.error, outcome.retry_after_seconds)
                               : t('accounts.profile.privacy.noReason'),
                         },
                       ),
