@@ -1,7 +1,7 @@
 // The account entity's data-access surface. Wraps the generated TanStack Query
 // options from shared/api (the only data seam, per the FSD ADR) so pages depend
 // on the entity, not on the generated client's internals.
-import { queryOptions } from '@tanstack/react-query';
+import { queryOptions, type QueryClient } from '@tanstack/react-query';
 
 import {
   getAccountProfileSnapshot,
@@ -9,6 +9,11 @@ import {
   type AccountProfileView,
   type AccountRead,
 } from '@/shared/api';
+import {
+  listAccountsQueryKey,
+  listProxiesQueryKey,
+  accountStatsQueryKey as statsQueryKey,
+} from '@/shared/api/@tanstack/react-query.gen';
 
 // The backend caps a page at 200 (api/v1/accounts.py), so pull at that size.
 const ALL_ACCOUNTS_PAGE_SIZE = 200;
@@ -41,6 +46,21 @@ export function allAccountsQueryOptions() {
       return { items };
     },
   });
+}
+
+// What an account action actually invalidates: the accounts table, the fleet
+// stat tiles, and proxy usage (an account holds a pool slot) — NOT the whole
+// cache. A bare `invalidateQueries()` made an @SpamBot check refetch the warming
+// board, the neurocomment campaigns, the logs and every open profile snapshot,
+// and it refetched the accounts list the edit view derives its account from, so
+// a row dropping off the current cursor page unmounted the view mid-input. One
+// definition, so the page and every account-edit card scope it identically.
+// The proxy key is read from the generated client rather than through
+// `entities/proxy` — an entity must not cross-import a sibling slice.
+export function invalidateAccountViews(queryClient: QueryClient): void {
+  void queryClient.invalidateQueries({ queryKey: listAccountsQueryKey() });
+  void queryClient.invalidateQueries({ queryKey: statsQueryKey() });
+  void queryClient.invalidateQueries({ queryKey: listProxiesQueryKey() });
 }
 
 // One-shot forced live pull for the profile modal (refresh=true bypasses the

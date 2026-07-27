@@ -199,8 +199,21 @@ async def fetch_live_account_profile(
     anyway, showing whatever fields are still populated.
     """
     cached = _CACHE.get(account_id)
-    if cached is not None and not force_refresh and _is_fresh(cached):
-        return cached
+    if cached is not None:
+        if not force_refresh and _is_fresh(cached):
+            return cached
+        # ``_is_fresh`` gates USE, not retention: nothing but an explicit
+        # invalidation ever removed an entry, so a shift of dialog opens across
+        # hundreds of accounts pinned one snapshot each — up to
+        # ``set_main_history_limit`` photo + story thumbnails — for the process
+        # lifetime, none of which can ever be served again. Drop it here; the
+        # fetch below repopulates when it succeeds.
+        _CACHE.pop(account_id, None)
+        if account_id not in _INFLIGHT:
+            # Only when nothing is mid-flight: no captured generation is still
+            # being compared against this counter, so resetting it cannot make a
+            # live fetch look stale, nor split the single flight into two.
+            _CACHE_GEN.pop(account_id, None)
 
     gen = _CACHE_GEN.get(account_id, 0)
     inflight = _INFLIGHT.get(account_id)

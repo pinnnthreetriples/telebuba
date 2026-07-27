@@ -276,7 +276,7 @@
       "removeMusicConfirm": "Remove",
       "noMusic": "No music selected",
       "musicUnsupported": "Profile music isn't available for this account",
-      "loadError": "Couldn't load the profile data from Telegram",
+      "loadError": "Couldn't load the profile data from Telegram ({{reason}})",
       "pickTrack": "Pick a track",
       "cancel": "Cancel",
       "save": "Save",
@@ -353,6 +353,7 @@
         "bulkSkipped": "Skipped: {{n}}",
         "outcomeFailed": "{{id}} — {{reason}}",
         "outcomeSkipped": "{{id}} — skipped ({{reason}})",
+        "outcomeApplied": "already changed on Telegram: {{keys}}",
         "writeReadError": "The settings were applied, but reading them back from Telegram failed ({{reason}}) — the levels below are the last known ones, reading again.",
         "noReason": "reason unknown"
       }

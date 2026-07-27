@@ -1,45 +1,41 @@
-import { useState, type ReactNode } from 'react';
+import { type ReactNode } from 'react';
 
-// The accordion primitives shared by every AccountEdit section, plus the
-// profile modal's dashed add-tile. Internal to the slice (not re-exported from
-// index). Styles/types live in ./_styles.
+import { CollapsibleCard } from '@/shared/ui';
+
+// The accordion preset shared by every AccountEdit section, plus the profile
+// modal's dashed add-tile. Internal to the slice (not re-exported from index).
+// Styles/types live in ./_styles.
 
 // Dashed "add" tile used by the profile modal's photo and stories grids.
 export function DashedAdd({
   ratio,
   label,
   onClick,
-  busy = false,
   disabled = false,
 }: {
   ratio: string;
   label: string;
   onClick: () => void;
-  busy?: boolean;
   disabled?: boolean;
 }) {
   return (
     <button
       type="button"
-      disabled={busy || disabled}
+      disabled={disabled}
       onClick={onClick}
       style={{ aspectRatio: ratio }}
       className="flex flex-col items-center justify-center gap-[6px] rounded-[12px] border-[1.5px] border-dashed border-[#d2d0cc] bg-white text-[12px] font-medium text-ink-muted disabled:opacity-60"
     >
-      {busy ? (
-        <span className="tb-spin inline-block h-[18px] w-[18px] rounded-full border-2 border-line-input border-t-primary" />
-      ) : (
-        <svg
-          width="20"
-          height="20"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-        >
-          <path d="M12 5v14M5 12h14" />
-        </svg>
-      )}
+      <svg
+        width="20"
+        height="20"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+      >
+        <path d="M12 5v14M5 12h14" />
+      </svg>
       {label}
     </button>
   );
@@ -54,26 +50,11 @@ export function Spinner({ size }: { size: number }) {
   );
 }
 
-function Chevron({ open }: { open: boolean }) {
-  return (
-    <span
-      className={`flex text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${open ? 'rotate-180' : ''}`}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 24 24"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="2"
-      >
-        <path d="m6 9 6 6 6-6" />
-      </svg>
-    </span>
-  );
-}
-
-// A design accordion card: header (title + chevron) + max-height-collapsing body.
+// The account-edit cards' accordion: the shared CollapsibleCard with this
+// slice's header padding and title style. It used to be a second implementation
+// that omitted the `--mh` measurement (so a tall body was clipped at the CSS
+// fallback 600px with no scrollbar) and the aria-expanded/hidden handling (so
+// every collapsed card's controls stayed in the tab order).
 // `right` renders an action between the title and chevron (the signals @SpamBot check).
 export function Section({
   title,
@@ -88,50 +69,21 @@ export function Section({
   bodyClassName?: string;
   children: ReactNode;
 }) {
-  const [open, setOpen] = useState(false);
-  const toggle = () => {
-    setOpen((value) => !value);
-  };
-  const heading = (
-    <span className="flex items-center gap-[7px] text-[13px] font-semibold text-ink">
-      {title}
-      {icon}
-    </span>
-  );
   return (
-    <div className="self-start overflow-hidden rounded-2xl border border-line bg-white">
-      {right ? (
-        <div className="flex items-center gap-[10px] px-5 py-4">
-          <button
-            type="button"
-            onClick={toggle}
-            className="flex flex-1 items-center gap-[10px] text-left"
-          >
-            {heading}
-          </button>
-          {right}
-          <button
-            type="button"
-            onClick={toggle}
-            aria-label={title}
-            className="flex shrink-0 items-center"
-          >
-            <Chevron open={open} />
-          </button>
-        </div>
-      ) : (
-        <button
-          type="button"
-          onClick={toggle}
-          className="flex w-full items-center justify-between gap-[10px] px-5 py-4 text-left"
-        >
-          {heading}
-          <Chevron open={open} />
-        </button>
-      )}
-      <div className={`tb-collapse ${open ? 'tb-open' : ''}`}>
-        <div className={bodyClassName}>{children}</div>
-      </div>
-    </div>
+    <CollapsibleCard
+      label={title}
+      trailing={right}
+      wrapperClassName="self-start rounded-2xl border border-line bg-white"
+      headerClassName="px-5 py-4"
+      bodyClassName={bodyClassName}
+      header={
+        <span className="flex items-center gap-[7px] text-[13px] font-semibold text-ink">
+          {title}
+          {icon}
+        </span>
+      }
+    >
+      {children}
+    </CollapsibleCard>
   );
 }

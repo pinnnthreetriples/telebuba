@@ -207,6 +207,23 @@ test('inline edit sends the new text to the edit endpoint', async () => {
   });
 });
 
+test('editing a post with media caps the text at the caption limit', async () => {
+  routeApi();
+  renderWithClient(<ChannelPostsPanel accountId="acc-1" channelId="123" />);
+  await screen.findByText('Второй пост');
+
+  // post 10 carries a photo, so its text IS a caption and Telegram caps those at
+  // 1024 — the composer already respects the split, the edit box did not, and
+  // the backend schema has no media-aware branch to catch it.
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[0] as HTMLElement);
+  expect(screen.getByDisplayValue('Второй пост')).toHaveAttribute('maxlength', '1024');
+
+  // A text-only post keeps the full 4096.
+  await userEvent.click(screen.getByText('Отмена'));
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[1] as HTMLElement);
+  expect(screen.getByDisplayValue('Первый пост')).toHaveAttribute('maxlength', '4096');
+});
+
 test('a failed edit surfaces the translated stable code inline', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

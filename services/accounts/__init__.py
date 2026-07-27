@@ -48,7 +48,12 @@ from services.accounts.channels import (
     set_account_channel_photo,
     update_account_channel,
 )
-from services.accounts.lifecycle import add_account, evaluate_account_geo, remove_account
+from services.accounts.lifecycle import (
+    add_account,
+    evaluate_account_geo,
+    remove_account,
+    require_account,
+)
 from services.accounts.login import (
     PhoneLoginError,
     logout_account,
@@ -127,6 +132,7 @@ __all__ = [
     "remove_account_profile_photo",
     "remove_account_story",
     "request_login_code",
+    "require_account",
     "reset_account_session",
     "set_account_channel_photo",
     "set_account_main_profile_photo",

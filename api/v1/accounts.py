@@ -91,7 +91,14 @@ async def check_account(body: AccountCheckRequest) -> AccountRead:
 )
 async def spam_check_account(account_id: AccountIdPath) -> SpamStatusVerdict:
     """Re-probe @SpamBot for one account and return the fresh, cached verdict."""
-    return await spam_status.refresh_spam_status(account_id, force=True)
+    # 404 on a missing row like every sibling route. ``refresh_spam_status`` answers
+    # an uncached ``unknown`` verdict instead of raising, because warming and
+    # neurocomment onboarding call it too and a hard raise there would change cycle
+    # behaviour — so the hard lookup lives here, not in the shared service. Kept out
+    # of the docstring: that text becomes the OpenAPI ``description``.
+    with service_errors_to_http():
+        await accounts.require_account(account_id)
+        return await spam_status.refresh_spam_status(account_id, force=True)
 
 
 @router.post(
@@ -229,12 +236,20 @@ async def import_account_session(
         content=content,
         label=label,
     )
-    try:
-        return await accounts.import_account_session(data)
-    except accounts.SessionAlreadyExistsError as exc:
-        raise HTTPException(status_code=http_status.HTTP_409_CONFLICT, detail=str(exc)) from exc
-    except ValueError as exc:
-        raise HTTPException(status_code=http_status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    # ``service_errors_to_http`` owns the residual ValueError: the request model is
+    # assembled here from Form/File params, so a refused ``account_id`` reaches this
+    # route as a Pydantic ``ValidationError`` and the local 400 used to answer with
+    # its multi-line English prose (non-negotiable #12). It becomes the same 422
+    # ``validation_error`` envelope every other route now returns. The 409 is raised
+    # inside because ``HTTPException`` is no ``ValueError`` and passes it untouched.
+    with service_errors_to_http():
+        try:
+            return await accounts.import_account_session(data)
+        except accounts.SessionAlreadyExistsError as exc:
+            raise HTTPException(
+                status_code=http_status.HTTP_409_CONFLICT,
+                detail=str(exc),
+            ) from exc
 
 
 # Profile-media (photo / story / music) routes live in a sibling module to keep

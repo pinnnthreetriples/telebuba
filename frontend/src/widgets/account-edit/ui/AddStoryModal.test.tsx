@@ -129,6 +129,48 @@ test('a locale-neutral failure code translates to user-facing copy', async () =>
   expect(screen.queryByText('story_image_invalid')).not.toBeInTheDocument();
 });
 
+test('a rate-limited publish shows the wait, not the raw code', async () => {
+  // accounts.addStory.code.* covers the story codes and `failed`, but none of the
+  // rate-limit family — all of which raise_for_result can return for a story
+  // post. Read from one table only, the tooltip showed `flood_wait` and dropped
+  // the duration Telegram mandated.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const req = input as Request;
+    if (req.url.endsWith('/accounts/acc-1/story') && req.method === 'POST') {
+      return Promise.resolve(
+        new Response(
+          JSON.stringify({
+            error: {
+              code: 'bad_request',
+              message: 'flood_wait',
+              // The backend serialises envelope fields as strings.
+              fields: { retry_after_seconds: '345' },
+            },
+          }),
+          { status: 400, headers: { 'Content-Type': 'application/json' } },
+        ),
+      );
+    }
+    return Promise.resolve(
+      new Response('{}', { status: 200, headers: { 'Content-Type': 'application/json' } }),
+    );
+  });
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  fireEvent.change(fileInput(), { target: { files: [img('s.jpg')] } });
+  await userEvent.click(screen.getByText('Опубликовать'));
+  expect(
+    await screen.findByText('Telegram ограничил действия — повторите через 345 с'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText('flood_wait')).not.toBeInTheDocument();
+});
+
+test('the caption input mirrors the server-side 1024-character cap', () => {
+  // Without it the whole upload is spent to come back a 422 about a field whose
+  // end the operator can no longer see.
+  renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
+  expect(screen.getByPlaceholderText('Введите подпись…')).toHaveAttribute('maxlength', '1024');
+});
+
 test('the picked video size uses localized units, not hardcoded RU', async () => {
   renderWithClient(<AddStoryModal accountId="acc-1" onClose={vi.fn()} onPosted={vi.fn()} />);
   // ~2 MB video → the localized "МБ" unit (default RU locale).

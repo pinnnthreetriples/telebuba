@@ -72,9 +72,11 @@ async def _recover_from_quarantine(
 ) -> WarmingCycleResult:
     """Re-check a quarantined account: resume if cleared, escalate otherwise.
 
-    Called when a quarantine window has elapsed. Re-probes @SpamBot; a cleared
-    account returns to warming, a still-limited one is re-quarantined until the
-    configured repeat cap, after which it is given up on (error + alert).
+    Called when a quarantine window has elapsed. Re-probes @SpamBot; only a
+    ``clean`` verdict returns the account to warming, a still-limited one is
+    re-quarantined until the configured repeat cap, after which it is given up on
+    (error + alert). An ``unknown`` verdict read nothing, so it holds the
+    quarantine without spending a repeat.
 
     ``run_id`` (Round-2 P1 + Round-5 P1): if supplied, every write is
     CAS-guarded against the row's current run_id. A new CAS-write fires
@@ -97,7 +99,7 @@ async def _recover_from_quarantine(
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="stale run")
 
     verdict = await _seams.refresh_spam_status(account_id, force=True)
-    if verdict.status != "limited":
+    if verdict.status == "clean":
         next_run = (now + timedelta(seconds=warm.startup_jitter_max_seconds)).isoformat()
         await _set_state(
             account_id,
@@ -112,8 +114,17 @@ async def _recover_from_quarantine(
         await log_event("INFO", "warming_quarantine_recovered", account_id=account_id)
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="recovered")
 
-    count = record.quarantine_count + 1
-    if count >= warm.quarantine_max_repeats:
+    # Only a CONFIRMED ``limited`` spends the escalation budget. ``unknown`` is not
+    # a reading of the account's standing at all — a refused probe (proxy down, dead
+    # session, @SpamBot silent) — so it neither releases the quarantine (that
+    # fail-open let one proxy outage free every quarantined account, once per cycle
+    # since probe errors stopped being cached) nor counts toward
+    # ``quarantine_max_repeats``, whose exhaustion message asserts the flood WAS
+    # re-checked and is still standing. It simply holds the quarantine one window
+    # longer, unchanged, and the next cycle re-probes.
+    still_limited = verdict.status == "limited"
+    count = record.quarantine_count + (1 if still_limited else 0)
+    if still_limited and count >= warm.quarantine_max_repeats:
         await _set_state(
             account_id,
             "error",

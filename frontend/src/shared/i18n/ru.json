@@ -277,7 +277,7 @@
       "removeMusicConfirm": "Убрать",
       "noMusic": "Музыка не выбрана",
       "musicUnsupported": "Профильная музыка недоступна для этого аккаунта",
-      "loadError": "Не удалось загрузить данные профиля из Telegram",
+      "loadError": "Не удалось загрузить данные профиля из Telegram ({{reason}})",
       "pickTrack": "Выбрать трек",
       "cancel": "Отмена",
       "save": "Сохранить",
@@ -354,6 +354,7 @@
         "bulkSkipped": "Пропущено: {{n}}",
         "outcomeFailed": "{{id}} — {{reason}}",
         "outcomeSkipped": "{{id}} — пропущен ({{reason}})",
+        "outcomeApplied": "уже изменено в Telegram: {{keys}}",
         "writeReadError": "Настройки применены, но перечитать их из Telegram не удалось ({{reason}}) — ниже последние известные значения, читаем заново.",
         "noReason": "причина неизвестна"
       }

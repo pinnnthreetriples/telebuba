@@ -64,17 +64,34 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
   // and invite a second press.
   const [writeReadError, setWriteReadError] = useState<string | null>(null);
 
+  // Every reason the backend hands this tab is a stable code, not display text:
+  // a `failed` outcome carries a gateway code (accounts.profile.code.*), a
+  // `skipped` one the AccountStatus that disqualified the account
+  // (accounts.status.*), and a refused read its own code. Rendered raw, the
+  // fleet report read "acc-3 — пропущен (unauthorized)". An unknown value (a
+  // read reason like `RPC: <Class>`) still shows as-is.
+  const reasonText = (value: string): string =>
+    t([`accounts.profile.code.${value}`, `accounts.status.${value}`], {
+      defaultValue: value,
+      // The rate-limit family interpolates a duration none of these payloads
+      // carry — same '?' the global mutation toast uses.
+      s: '?',
+    });
+
   const settings = privacy.data?.settings ?? null;
   // Three shapes of read failure, one banner. A refused read arrives as
   // {settings:null, error:code} with HTTP 200; a rejected request carries the
   // /api/v1 envelope — but a 500 {"detail":…} or a dead fetch does NOT, so
   // `isError` (like the channels tab) must still produce a reason, or the tab
   // renders the hint paragraph and nothing else.
+  const readError =
+    privacy.data?.error ?? (privacy.isError ? envelopeMessage(privacy.error) : null);
   const reason =
-    privacy.data?.error ??
-    (privacy.isError
-      ? (envelopeMessage(privacy.error) ?? t('accounts.profile.privacy.noReason'))
-      : null);
+    readError != null
+      ? reasonText(readError)
+      : privacy.isError
+        ? t('accounts.profile.privacy.noReason')
+        : null;
 
   const refreshRead = () => {
     void queryClient.invalidateQueries({ queryKey: readOpts.queryKey });
@@ -106,7 +123,9 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
             queryClient.setQueryData(readOpts.queryKey, view);
             return;
           }
-          setWriteReadError(view.error ?? t('accounts.profile.privacy.noReason'));
+          setWriteReadError(
+            view.error != null ? reasonText(view.error) : t('accounts.profile.privacy.noReason'),
+          );
           refreshRead();
         },
         // A partial write (key 1 applied, key 2 flooded) rejects, and the rows
@@ -274,15 +293,36 @@ export function PrivacyTab({ accountId }: { accountId: string }) {
                     key={outcome.account_id}
                     className={outcome.status === 'failed' ? 'truncate text-danger' : 'truncate'}
                   >
-                    {t(
-                      outcome.status === 'failed'
-                        ? 'accounts.profile.privacy.outcomeFailed'
-                        : 'accounts.profile.privacy.outcomeSkipped',
-                      {
-                        id: outcome.account_id,
-                        reason: outcome.error ?? t('accounts.profile.privacy.noReason'),
-                      },
-                    )}
+                    {[
+                      t(
+                        outcome.status === 'failed'
+                          ? 'accounts.profile.privacy.outcomeFailed'
+                          : 'accounts.profile.privacy.outcomeSkipped',
+                        {
+                          id: outcome.account_id,
+                          reason:
+                            outcome.error != null
+                              ? reasonText(outcome.error)
+                              : t('accounts.profile.privacy.noReason'),
+                        },
+                      ),
+                      // setPrivacy is one call per key with no rollback, so a
+                      // FAILED account is not necessarily unchanged: with
+                      // applied:["profile_photo"] its avatar is already public.
+                      // For a feature about visibility that fact must be on
+                      // screen, not implied by "failed".
+                      outcome.applied && outcome.applied.length > 0
+                        ? t('accounts.profile.privacy.outcomeApplied', {
+                            keys: outcome.applied
+                              .map((key) =>
+                                t(`accounts.profile.privacy.row.${key}`, { defaultValue: key }),
+                              )
+                              .join(', '),
+                          })
+                        : null,
+                    ]
+                      .filter((part): part is string => part !== null)
+                      .join(' · ')}
                   </li>
                 ))}
             </ul>

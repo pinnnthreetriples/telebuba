@@ -264,6 +264,36 @@ async def test_quarantine_recovers_when_cleared(monkeypatch: pytest.MonkeyPatch)
 
 
 @pytest.mark.asyncio
+async def test_quarantine_holds_on_unknown_verdict(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A REFUSED probe must not release a quarantine, and must not spend a repeat.
+
+    ``unknown`` is not a reading of the account's standing — a proxy outage or a
+    dead session gives one — so treating any non-``limited`` verdict as "recovered"
+    was a fail-open that freed every quarantined account once per cycle. Counting
+    it toward ``quarantine_max_repeats`` would be the mirror lie, since the
+    exhaustion message asserts the flood was re-checked and still stands.
+    """
+    monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
+    await create_account(AccountCreate(account_id="acc-1"))
+    await upsert_warming_state(
+        WarmingStateWrite(account_id="acc-1", state="quarantine", quarantine_count=2),
+    )
+
+    async def fake_refresh(account_id: str, *, force: bool = False) -> SpamStatusVerdict:  # noqa: ARG001
+        return _verdict(account_id, "unknown")
+
+    monkeypatch.setattr(_seams, "refresh_spam_status", fake_refresh)
+
+    result = await warming.run_loop_iteration("acc-1")
+
+    assert result.detail == "quarantine extended"
+    state = await fetch_warming_state("acc-1")
+    assert state is not None
+    assert state.state == "quarantine"
+    assert state.quarantine_count == 2, "a non-reading must not burn the escalation budget"
+
+
+@pytest.mark.asyncio
 async def test_quarantine_extends_when_still_limited(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(settings.warming, "quarantine_max_repeats", 3)
     await create_account(AccountCreate(account_id="acc-1"))

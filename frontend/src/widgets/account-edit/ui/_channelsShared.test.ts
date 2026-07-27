@@ -7,8 +7,8 @@ import { channelErrorText } from './_channelsShared';
 
 const t = i18n.t.bind(i18n);
 
-function envelope(message: string): unknown {
-  return { error: { code: 'bad_request', message } };
+function envelope(message: string, fields?: Record<string, unknown>): unknown {
+  return { error: { code: 'bad_request', message, ...(fields ? { fields } : {}) } };
 }
 
 test('a channel-specific code resolves from the channel table', () => {
@@ -22,8 +22,20 @@ test('an account-wide rate-limit code falls back to the profile table', () => {
   // operator read the raw `slow_mode_wait` inline, and the alternative — copying
   // the whole rate-limit family into a second namespace — is two sets of strings
   // that drift.
-  expect(channelErrorText(envelope('slow_mode_wait'), t, 'fallback')).toBe(
-    'В канале включён медленный режим — повторите через {{s}} с',
+  expect(
+    channelErrorText(envelope('slow_mode_wait', { retry_after_seconds: '42' }), t, 'fallback'),
+  ).toBe('В канале включён медленный режим — повторите через 42 с');
+});
+
+test('the rate-limit duration comes from the envelope fields, and is "?" without one', () => {
+  // The {{s}} slot was never given a value, so the one number the backend goes
+  // out of its way to carry rendered as a literal placeholder on every channel
+  // surface — including channel READ failures, which now carry it too.
+  expect(channelErrorText(envelope('flood_wait', { retry_after_seconds: '300' }), t, 'x')).toBe(
+    'Telegram ограничил действия — повторите через 300 с',
+  );
+  expect(channelErrorText(envelope('flood_wait'), t, 'x')).toBe(
+    'Telegram ограничил действия — повторите через ? с',
   );
 });
 

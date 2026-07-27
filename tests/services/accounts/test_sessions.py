@@ -98,6 +98,24 @@ async def test_import_account_session_rejects_non_session_file() -> None:
 
 
 @pytest.mark.asyncio
+async def test_import_account_session_rejected_id_leaves_no_file() -> None:
+    """A refused id must not leave the credential on disk.
+
+    ``_session_filename`` only checks the suffix and a non-empty stem, and
+    ``Path("..session").stem`` is ``"."`` — so the bytes were written and only then
+    rejected by ``AccountCreate``'s charset pattern, orphaning them in
+    ``session_dir`` with no account row to ever delete them.
+    """
+    with pytest.raises(ValueError, match="account_id"):
+        await import_account_session(
+            AccountSessionFileImport(filename="..session", content=b"credential-bytes"),
+        )
+
+    assert not (settings.telegram.session_dir / "..session").exists()
+    assert list((settings.telegram.session_dir).glob("*")) == []
+
+
+@pytest.mark.asyncio
 async def test_import_account_session_refuses_to_overwrite_existing() -> None:
     """Re-uploading a same-named session must NOT silently replace credentials."""
     await import_account_session(

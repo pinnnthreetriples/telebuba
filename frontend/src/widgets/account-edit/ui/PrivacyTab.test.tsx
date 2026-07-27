@@ -45,16 +45,19 @@ const ALL_OPEN = {
 } satisfies PrivacySettingsResult;
 
 // Distinct counts on purpose: with ok/failed/skipped all 1, swapping two count
-// labels in the component still passed.
+// labels in the component still passed. The reasons are what the backend really
+// sends: a gateway code on `failed`, the AccountStatus that disqualified the
+// account on `skipped` (services/accounts/privacy.py), plus the keys a partial
+// write already changed.
 const BULK = {
   outcomes: [
     { account_id: 'acc-1', status: 'ok', error: null },
     { account_id: 'acc-5', status: 'ok', error: null },
     { account_id: 'acc-6', status: 'ok', error: null },
     { account_id: 'acc-7', status: 'ok', error: null },
-    { account_id: 'acc-2', status: 'failed', error: 'account_frozen' },
-    { account_id: 'acc-3', status: 'skipped', error: 'banned' },
-    { account_id: 'acc-4', status: 'skipped', error: 'logged_out' },
+    { account_id: 'acc-2', status: 'failed', error: 'account_frozen', applied: ['profile_photo'] },
+    { account_id: 'acc-3', status: 'skipped', error: 'unauthorized' },
+    { account_id: 'acc-4', status: 'skipped', error: 'session_error' },
   ],
   ok: 4,
   failed: 1,
@@ -369,13 +372,21 @@ test('the fleet result shows the counts, the failures and why accounts were skip
   expect(await screen.findByText('Применено: 4')).toBeInTheDocument();
   expect(screen.getByText('Ошибок: 1')).toBeInTheDocument();
   expect(screen.getByText('Пропущено: 2')).toBeInTheDocument();
-  // A failure is inspectable, not swallowed into the count...
+  // A failure is inspectable, not swallowed into the count — and the reason is
+  // TRANSLATED: these values are stable backend codes, and the report used to
+  // read "acc-2 — account_frozen". A `failed` row also names the keys that DID
+  // land before the refusal: setPrivacy is one call per key with no rollback, so
+  // this account's avatar is already public despite the failure.
   const list = screen.getByRole('list');
-  expect(within(list).getByText('acc-2 — account_frozen')).toBeInTheDocument();
+  expect(
+    within(list).getByText(
+      'acc-2 — Аккаунт заморожен Telegram — редактирование недоступно · уже изменено в Telegram: Фото профиля',
+    ),
+  ).toBeInTheDocument();
   // ...and so is a skip: "2 skipped" without the accounts and their status is
   // not actionable.
-  expect(within(list).getByText('acc-3 — пропущен (banned)')).toBeInTheDocument();
-  expect(within(list).getByText('acc-4 — пропущен (logged_out)')).toBeInTheDocument();
+  expect(within(list).getByText('acc-3 — пропущен (Не авторизован)')).toBeInTheDocument();
+  expect(within(list).getByText('acc-4 — пропущен (Ошибка сессии)')).toBeInTheDocument();
   // Accounts that succeeded are NOT in the problem list.
   expect(within(list).queryByText(/acc-1/)).not.toBeInTheDocument();
   expect(within(list).queryByText(/acc-5/)).not.toBeInTheDocument();
@@ -406,7 +417,11 @@ test('a refused read renders the reason instead of an empty form', async () => {
   routeApi({ settings: null, error: 'flood_wait' });
   renderWithClient(<PrivacyTab accountId="acc-1" />);
 
-  expect(await screen.findByText(READ_FAILED('flood_wait'))).toBeInTheDocument();
+  // The banner used to interpolate the raw code; the reason is a code table
+  // entry, so it is translated (the duration is not in this payload, hence '?').
+  expect(
+    await screen.findByText(READ_FAILED('Telegram ограничил действия — повторите через ? с')),
+  ).toBeInTheDocument();
   expect(screen.queryByText('Фото профиля')).not.toBeInTheDocument();
   expect(screen.queryByRole('button', { name: OPEN_ALL_BUTTON })).not.toBeInTheDocument();
 });

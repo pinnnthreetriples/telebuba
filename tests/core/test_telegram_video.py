@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import re
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 import pytest
@@ -28,7 +29,7 @@ from core.telegram_client._video import (
 )
 
 if TYPE_CHECKING:
-    from pathlib import Path
+    from collections.abc import Awaitable, Callable
 
 
 def _generate_test_video(ffmpeg_bin: str, output: Path, *, width: int, height: int) -> None:
@@ -96,6 +97,54 @@ async def test_normalize_story_video_produces_720x1280_mp4_with_thumb(
     assert video[4:8] == b"ftyp", "normaliser must output a real MP4"
     # JPEG SOI marker.
     assert thumb[:2] == b"\xff\xd8", "thumbnail must be a real JPEG"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "normalize",
+    [normalize_story_video_for_telegram, normalize_channel_video_for_telegram],
+)
+async def test_normalizers_offload_temp_file_io(
+    monkeypatch: pytest.MonkeyPatch,
+    normalize: Callable[[bytes], Awaitable[tuple[object, ...]]],
+) -> None:
+    """The source write and the two result reads must leave the event loop.
+
+    ``story_video_max_bytes`` defaults to 100 MB and the project runs ONE uvicorn
+    worker, so a synchronous write/read of that stalls every other API request plus
+    all warming and neurocomment tasks. ffmpeg is stubbed out — this test is about
+    where the ``Path`` I/O runs, and before the fix none of it went through
+    ``asyncio.to_thread``.
+    """
+    offloaded: list[str] = []
+    real_to_thread = asyncio.to_thread
+
+    async def spy_to_thread(func: object, /, *args: object, **kwargs: object) -> object:
+        offloaded.append(getattr(func, "__name__", repr(func)))
+        return await real_to_thread(func, *args, **kwargs)  # ty: ignore[invalid-argument-type]
+
+    async def fake_run(_binary: str, args: list[str], *, failure_code: str) -> str:
+        del failure_code
+        Path(args[-1]).write_bytes(b"ffmpeg-output")
+        return ""
+
+    async def fake_duration(_binary: str, _path: Path) -> float:
+        return 2.0
+
+    async def fake_resolution(_binary: str, _stderr: str, _output: Path) -> tuple[int, int]:
+        return (640, 360)
+
+    monkeypatch.setattr("core.telegram_client._video._resolve_ffmpeg_binary", lambda: "ffmpeg")
+    monkeypatch.setattr("core.telegram_client._video._run_ffmpeg", fake_run)
+    monkeypatch.setattr("core.telegram_client._video._extract_duration_seconds", fake_duration)
+    monkeypatch.setattr("core.telegram_client._video._output_resolution", fake_resolution)
+    monkeypatch.setattr("core.telegram_client._video.asyncio.to_thread", spy_to_thread)
+
+    video, thumb, *_ = await normalize(b"source-bytes")
+
+    assert video == b"ffmpeg-output"
+    assert thumb == b"ffmpeg-output"
+    assert offloaded == ["write_bytes", "read_bytes", "read_bytes"]
 
 
 @pytest.mark.asyncio

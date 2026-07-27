@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 from typing import cast
 
 import httpx
@@ -279,6 +280,55 @@ async def test_check_proxy_connectivity_maps_timeout(monkeypatch: pytest.MonkeyP
     )
     assert result.status == "failed"
     assert result.last_error == "Proxy check timed out"
+
+
+@pytest.mark.asyncio
+async def test_third_party_failure_text_never_reaches_last_error(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """``last_error`` is stored, returned by the API and rendered in the browser.
+
+    ``str(exc)`` from a proxy library is unbounded third-party prose that names the
+    proxy endpoint — it must not cross the wire (non-negotiable #12). Only the class
+    name does; the full text goes to the log instead.
+    """
+
+    async def fake_fetch(_proxy: ProxySettings) -> str:
+        msg = "Could not connect to proxy 203.0.113.7:1080 [Connection refused]"
+        raise ConnectionRefusedError(msg)
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", fake_fetch)
+
+    with caplog.at_level(logging.WARNING, logger="core.proxy_check"):
+        result = await check_proxy_connectivity(
+            ProxySettings(proxy_type="socks5", host="203.0.113.7", port=1080),
+        )
+
+    assert result.status == "failed"
+    assert result.last_error == "ConnectionRefusedError"
+    assert "203.0.113.7" not in (result.last_error or "")
+    # The detail is not lost, it just isn't on the wire.
+    assert "Connection refused" in caplog.text
+    assert "203.0.113.7" in caplog.text
+
+
+@pytest.mark.asyncio
+async def test_own_diagnostic_keeps_its_message(monkeypatch: pytest.MonkeyPatch) -> None:
+    """This module's own bounded prose IS a contract and stays useful to the operator."""
+
+    async def fake_fetch(_proxy: ProxySettings) -> str:
+        msg = "Proxy returned a non-public exit IP address"
+        raise proxy_check_module._ProxyCheckError(msg)
+
+    monkeypatch.setattr(proxy_check_module, "_fetch_exit_ip", fake_fetch)
+
+    result = await check_proxy_connectivity(
+        ProxySettings(proxy_type="socks5", host="proxy.example", port=1080),
+    )
+
+    assert result.status == "failed"
+    assert result.last_error == "Proxy returned a non-public exit IP address"
 
 
 @pytest.mark.asyncio

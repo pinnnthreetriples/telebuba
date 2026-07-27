@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import json
+import logging
 import ssl
 from contextlib import suppress
 from dataclasses import dataclass
@@ -24,6 +25,18 @@ _HTTP_STATUS_INDEX = 1
 _MAX_ERROR_LENGTH = 240
 _MAX_RESPONSE_BYTES = 64 * 1024
 _COUNTRY_CODE_LENGTH = 2
+
+logger = logging.getLogger(__name__)
+
+
+class _ProxyCheckError(OSError):
+    """A failure THIS module diagnosed, so its message is our own bounded prose.
+
+    An ``OSError`` subclass so the probe's existing ``except OSError`` arm keeps
+    catching it. It is what lets :func:`_short_error` tell a useful diagnostic
+    ("Proxy returned a non-public exit IP address") apart from a third-party
+    exception whose text is not a contract and must not reach the wire.
+    """
 
 
 class _AsyncReader(Protocol):
@@ -55,9 +68,9 @@ async def check_proxy_connectivity(proxy: ProxySettings) -> ProxyCheckResult:
     except TimeoutError:
         return ProxyCheckResult(status="failed", last_error="Proxy check timed out")
     except OSError as exc:
-        return ProxyCheckResult(status="failed", last_error=_short_error(exc))
+        return _failed_result(exc)
     except Exception as exc:  # noqa: BLE001 - proxy libraries expose mixed exception types.
-        return ProxyCheckResult(status="failed", last_error=_short_error(exc))
+        return _failed_result(exc)
 
     # A reachable proxy must never be marked failed because geolocation errored.
     # The per-provider helpers already degrade to "unavailable", but guard the
@@ -93,15 +106,15 @@ async def _fetch_exit_ip(proxy: ProxySettings) -> str:
     value = _optional_payload_str(payload.get("ip"))
     if value is None:
         msg = "Exit-IP endpoint returned no IP address"
-        raise OSError(msg)
+        raise _ProxyCheckError(msg)
     try:
         address = ipaddress.ip_address(value)
     except ValueError as exc:
         msg = "Exit-IP endpoint returned an invalid IP address"
-        raise OSError(msg) from exc
+        raise _ProxyCheckError(msg) from exc
     if not address.is_global:
         msg = "Proxy returned a non-public exit IP address"
-        raise OSError(msg)
+        raise _ProxyCheckError(msg)
     return address.compressed
 
 
@@ -162,7 +175,7 @@ async def _read_limited(
         total += len(chunk)
         if total > _MAX_RESPONSE_BYTES:
             msg = "Exit-IP endpoint response is too large"
-            raise OSError(msg)
+            raise _ProxyCheckError(msg)
 
 
 def _http_request(host: str, path: str) -> bytes:
@@ -181,13 +194,13 @@ def _parse_http_json(raw: bytes) -> dict[str, Any]:
     head, separator, body = raw.partition(b"\r\n\r\n")
     if not separator:
         msg = "HTTPS endpoint returned an incomplete response"
-        raise OSError(msg)
+        raise _ProxyCheckError(msg)
     lines = head.split(b"\r\n")
     first_line = lines[0].decode(errors="replace")
     parts = first_line.split()
     if len(parts) <= _HTTP_STATUS_INDEX or parts[_HTTP_STATUS_INDEX] != "200":
         msg = f"HTTPS endpoint returned {first_line or 'empty response'}"
-        raise OSError(msg)
+        raise _ProxyCheckError(msg)
 
     headers: dict[str, str] = {}
     for raw_header in lines[1:]:
@@ -202,10 +215,10 @@ def _parse_http_json(raw: bytes) -> dict[str, Any]:
         parsed = json.loads(body.decode())
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
         msg = "HTTPS endpoint returned invalid JSON"
-        raise OSError(msg) from exc
+        raise _ProxyCheckError(msg) from exc
     if not isinstance(parsed, dict):
         msg = "HTTPS endpoint returned non-object JSON"
-        raise OSError(msg)
+        raise _ProxyCheckError(msg)
     return parsed
 
 
@@ -216,17 +229,17 @@ def _decode_chunked(body: bytes) -> bytes:
         size_line, separator, remaining = remaining.partition(b"\r\n")
         if not separator:
             msg = "HTTPS endpoint returned invalid chunked data"
-            raise OSError(msg)
+            raise _ProxyCheckError(msg)
         try:
             size = int(size_line.split(b";", 1)[0], 16)
         except ValueError as exc:
             msg = "HTTPS endpoint returned invalid chunk size"
-            raise OSError(msg) from exc
+            raise _ProxyCheckError(msg) from exc
         if size == 0:
             return bytes(decoded)
         if len(remaining) < size + 2 or remaining[size : size + 2] != b"\r\n":
             msg = "HTTPS endpoint returned a truncated chunk"
-            raise OSError(msg)
+            raise _ProxyCheckError(msg)
         decoded.extend(remaining[:size])
         remaining = remaining[size + 2 :]
 
@@ -402,6 +415,30 @@ def _optional_payload_str(value: object) -> str | None:
     return text or None
 
 
+def _failed_result(exc: BaseException) -> ProxyCheckResult:
+    """A bounded ``failed`` result, with the exception's full text sent to the log.
+
+    ``last_error`` reaches the ``proxies`` row, ``AccountRead.proxy_last_error`` and
+    the operator's browser (the proxy-pool row title), so it must stay bounded and
+    content-free (non-negotiable #12) — ``str(exc)`` is arbitrary third-party prose
+    that names the proxy endpoint. Nothing pattern-matches the value: the UI renders
+    it as a tooltip and every decision is driven by ``status``.
+
+    Stdlib logging on purpose (mirrors ``_profile._mark_account_status``): a
+    ``log_event`` code needs SPA copy in both locales for what is a diagnostic, and
+    ``services.proxies.check_proxy`` already records the check itself under
+    ``proxy_checked``.
+    """
+    logger.warning(
+        "proxy check failed (error_type=%s): %s",
+        type(exc).__name__,
+        exc,
+    )
+    return ProxyCheckResult(status="failed", last_error=_short_error(exc))
+
+
 def _short_error(exc: BaseException) -> str:
-    text = str(exc).strip() or exc.__class__.__name__
-    return text[:_MAX_ERROR_LENGTH]
+    """This module's own diagnostics keep their prose; anything else is a class name."""
+    if isinstance(exc, _ProxyCheckError):
+        return (str(exc).strip() or type(exc).__name__)[:_MAX_ERROR_LENGTH]
+    return type(exc).__name__

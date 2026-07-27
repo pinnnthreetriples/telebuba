@@ -30,6 +30,7 @@ from schemas.telegram_profile_snapshot import (
     TelegramProfileSnapshot,
     TelegramStoryThumb,
 )
+from services.accounts import profile_read
 from services.accounts.profile_read import (
     account_avatar_image,
     account_profile_image,
@@ -229,6 +230,38 @@ async def test_fetch_live_profile_ttl_expiry(
     await fetch_live_account_profile("acc-1")
 
     assert len(calls) == 2, "Calls past TTL must re-fetch"
+
+
+@pytest.mark.asyncio
+async def test_fetch_live_profile_evicts_the_stale_entry(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``_is_fresh`` gated USE, not retention — a stale snapshot was never dropped.
+
+    Every account the operator opened kept one, holding up to
+    ``set_main_history_limit`` photo + story thumbnails for the process lifetime,
+    none of which could ever be served again. Proven through a FAILING refetch:
+    errors are deliberately not cached, so the dict is empty afterwards only if the
+    stale entry was really evicted.
+    """
+    monkeypatch.setattr(settings.profile_media, "read_snapshot_ttl_seconds", 1)
+    _stub_execute_read_many(monkeypatch, [])
+    times = iter([1_000.0, 1_500.0, 1_500.0])
+    monkeypatch.setattr("services.accounts.profile_read.time.time", lambda: next(times))
+
+    await fetch_live_account_profile("acc-1")
+    assert "acc-1" in profile_read._CACHE
+
+    async def refused(_account_id: str, _actions: list[object]) -> list[object]:
+        reason = "FloodWaitError: wait of 30s"
+        raise TelegramReadError(reason)
+
+    monkeypatch.setattr("services.accounts.profile_read.execute_read_many", refused)
+    snapshot = await fetch_live_account_profile("acc-1")
+
+    assert snapshot.error is not None
+    assert "acc-1" not in profile_read._CACHE
+    assert "acc-1" not in profile_read._CACHE_GEN
 
 
 @pytest.mark.asyncio

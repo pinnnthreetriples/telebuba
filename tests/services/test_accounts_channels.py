@@ -581,10 +581,28 @@ async def test_list_posts_full_page_builds_next_cursor(
 
 
 @pytest.mark.asyncio
-async def test_list_posts_short_page_ends_pagination(
+async def test_list_posts_short_page_still_pages(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    """A short page is not the end: the gateway drops id-less entries.
+
+    ``_read_channels.dispatch_list_channel_posts`` filters out service-message
+    placeholders before the service sees them, so a full Telegram page of 20 with
+    one dropped arrived as 19. Ending pagination on that hid "load more" and made
+    the rest of the channel's history unreachable.
+    """
     _patch_read(monkeypatch, "channel_posts", _posts(2))
+
+    page = await list_account_channel_posts("acc-1", 42, limit=3)
+
+    assert page.next_cursor == "99"
+
+
+@pytest.mark.asyncio
+async def test_list_posts_empty_page_ends_pagination(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _patch_read(monkeypatch, "channel_posts", _posts(0))
 
     page = await list_account_channel_posts("acc-1", 42, limit=3)
 

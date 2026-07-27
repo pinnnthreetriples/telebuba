@@ -12,6 +12,29 @@ from schemas.telegram_profile_snapshot import TelegramProfileSnapshot
 from services.accounts import AccountActionError, add_account, update_account_profile
 
 
+def _patch_read(
+    monkeypatch: pytest.MonkeyPatch,
+    snapshot: TelegramProfileSnapshot | None = None,
+) -> list[object]:
+    """Stub the confirmation read and record its actions.
+
+    ``snapshot=None`` makes the read fail, which is the pre-P3 behaviour of the
+    happy path: the service falls back to persisting the request. Autouse-free on
+    purpose — every test states what Telegram confirms.
+    """
+    calls: list[object] = []
+
+    async def fake_read(_account_id: str, action: object) -> TelegramProfileSnapshot:
+        calls.append(action)
+        if snapshot is None:
+            reason = "FloodWaitError: wait of 30s"
+            raise TelegramReadError(reason)
+        return snapshot
+
+    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+    return calls
+
+
 @pytest.mark.asyncio
 async def test_update_account_profile_executes_action_and_persists_snapshot(
     monkeypatch: pytest.MonkeyPatch,
@@ -24,6 +47,10 @@ async def test_update_account_profile_executes_action_and_persists_snapshot(
         return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", last_name="L", username="alice", bio="Bio"),
+    )
 
     account = await update_account_profile(
         AccountProfileUpdateRequest(
@@ -54,6 +81,10 @@ async def test_update_account_profile_can_clear_optional_fields(
         return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", last_name="L", username="alice", bio="Bio"),
+    )
     await update_account_profile(
         AccountProfileUpdateRequest(
             account_id="account-profile-clear",
@@ -64,6 +95,8 @@ async def test_update_account_profile_can_clear_optional_fields(
         ),
     )
 
+    # Telegram now confirms every optional as unset.
+    _patch_read(monkeypatch, TelegramProfileSnapshot(first_name="Alice"))
     account = await update_account_profile(
         AccountProfileUpdateRequest(
             account_id="account-profile-clear",
@@ -97,6 +130,7 @@ async def test_update_account_profile_surfaces_action_failure(
         )
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(monkeypatch)
 
     # An unmapped exception's prose is not a code: the bounded status surfaces.
     with pytest.raises(ValueError, match="failed"):
@@ -109,10 +143,11 @@ async def test_update_account_profile_surfaces_action_failure(
 async def test_update_account_profile_none_fields_leave_db_untouched(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """Contract: ``None`` means "leave unchanged" — in the DB row and the action.
+    """Contract: ``None`` means "leave unchanged" — in the action and on Telegram.
 
     The SPA sends ``""`` to clear; a ``None`` payload must neither clear the
-    stored snapshot nor claim it did.
+    stored snapshot nor claim it did. The confirmation read reports the unchanged
+    live values, so the row keeps them.
     """
     captured: list[object] = []
     await add_account(AccountCreate(account_id="account-profile-none"))
@@ -122,6 +157,10 @@ async def test_update_account_profile_none_fields_leave_db_untouched(
         return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", last_name="L", username="alice", bio="Bio"),
+    )
     await update_account_profile(
         AccountProfileUpdateRequest(
             account_id="account-profile-none",
@@ -132,6 +171,10 @@ async def test_update_account_profile_none_fields_leave_db_untouched(
         ),
     )
 
+    _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alicia", last_name="L", username="alice", bio="Bio"),
+    )
     account = await update_account_profile(
         AccountProfileUpdateRequest(account_id="account-profile-none", first_name="Alicia"),
     )
@@ -163,6 +206,7 @@ async def test_update_account_profile_flood_wait_carries_retry_seconds(
         )
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(monkeypatch)
 
     with pytest.raises(AccountActionError, match="flood_wait") as excinfo:
         await update_account_profile(
@@ -234,6 +278,7 @@ async def test_update_account_profile_invalidates_cache_when_db_write_fails(
         raise RuntimeError(msg)
 
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(monkeypatch)
     monkeypatch.setattr(
         "services.accounts.profile.update_account_profile_snapshot",
         failing_snapshot_update,
@@ -266,6 +311,21 @@ def _patch_failed_execute(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
 
 
+def _patch_refused_execute(monkeypatch: pytest.MonkeyPatch, code: str) -> None:
+    """A gateway refusal carrying one of the stable profile codes."""
+
+    async def fake_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="failed",
+            action_type="update_profile",
+            account_id=account_id,
+            error_type="ProfileGatewayError",
+            error_message=code,
+        )
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+
+
 async def _seed_profile(account_id: str, monkeypatch: pytest.MonkeyPatch) -> None:
     """Create the account and store a known pre-edit snapshot in the DB."""
     await add_account(AccountCreate(account_id=account_id))
@@ -274,6 +334,10 @@ async def _seed_profile(account_id: str, monkeypatch: pytest.MonkeyPatch) -> Non
         return ActionResult(status="ok", action_type="update_profile", account_id=acc_id)
 
     monkeypatch.setattr("services.accounts.profile.execute", ok_execute)
+    _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", last_name="L", username="oldname", bio="Bio"),
+    )
     await update_account_profile(
         AccountProfileUpdateRequest(
             account_id=account_id,
@@ -286,6 +350,141 @@ async def _seed_profile(account_id: str, monkeypatch: pytest.MonkeyPatch) -> Non
 
 
 @pytest.mark.asyncio
+async def test_unchanged_username_is_not_sent_to_telegram(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The SPA re-submits the current handle on every save; that must not be an RPC.
+
+    The gateway fires ``UpdateUsernameRequest`` whenever ``action.username`` is
+    not ``None``, and it is the flood-sensitive call of the pair — a FloodWait from
+    it writes the sticky ``flood_wait`` status, which blocks ``start_warming``. A
+    bio-only edit therefore must leave the username out of the action entirely.
+    """
+    await _seed_profile("account-profile-samename", monkeypatch)
+    captured: list[object] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", last_name="L", username="oldname", bio="New"),
+    )
+
+    await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile-samename",
+            first_name="Alice",
+            last_name="L",
+            # Exactly what the DB row already holds.
+            username="oldname",
+            bio="New",
+        ),
+    )
+
+    action = captured[-1]
+    assert isinstance(action, UpdateProfile)
+    assert action.username is None, "an unchanged handle must not reach updateUsername"
+    assert action.bio == "New"
+
+
+@pytest.mark.asyncio
+async def test_changed_username_is_still_sent(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The skip is an equality check, not a blanket suppression."""
+    await _seed_profile("account-profile-newname", monkeypatch)
+    captured: list[object] = []
+
+    async def fake_execute(account_id: str, action: object) -> ActionResult:
+        captured.append(action)
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.profile.execute", fake_execute)
+    _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", last_name="L", username="newname", bio="Bio"),
+    )
+
+    await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile-newname",
+            first_name="Alice",
+            username="newname",
+        ),
+    )
+
+    action = captured[-1]
+    assert isinstance(action, UpdateProfile)
+    assert action.username == "newname"
+
+
+@pytest.mark.asyncio
+async def test_success_persists_the_bio_telegram_confirms(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Telegram can accept ``updateProfile`` and silently ignore ``about``.
+
+    ``accounts.bio`` had exactly one writer — the operator's request — so a
+    dropped bio was stored as truth and then served from the row forever whenever
+    a later live pull failed. The success path now persists what the confirmation
+    read reports instead.
+    """
+    await _seed_profile("account-profile-drop", monkeypatch)
+
+    async def ok_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.profile.execute", ok_execute)
+    # Telegram kept the old bio: the young-account ``about`` drop.
+    reads = _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", last_name="L", username="oldname", bio="Bio"),
+    )
+
+    account = await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile-drop",
+            first_name="Alice",
+            last_name="L",
+            username="oldname",
+            bio="Fresh bio",
+        ),
+    )
+
+    assert len(reads) == 1
+    assert isinstance(reads[0], GetUserProfile)
+    assert account.bio == "Bio", "the confirmed bio wins over the requested one"
+    stored = await fetch_account("account-profile-drop")
+    assert stored is not None
+    assert stored.bio == "Bio"
+
+
+@pytest.mark.asyncio
+async def test_success_falls_back_to_the_request_when_the_read_is_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A refused confirmation read must not lose the operator's edit."""
+    await _seed_profile("account-profile-readgone", monkeypatch)
+
+    async def ok_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(status="ok", action_type="update_profile", account_id=account_id)
+
+    monkeypatch.setattr("services.accounts.profile.execute", ok_execute)
+    _patch_read(monkeypatch)
+
+    account = await update_account_profile(
+        AccountProfileUpdateRequest(
+            account_id="account-profile-readgone",
+            first_name="Alice",
+            bio="Fresh bio",
+        ),
+    )
+
+    assert account.bio == "Fresh bio"
+
+
+@pytest.mark.asyncio
 async def test_partial_username_apply_resyncs_db_from_telegram(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -295,14 +494,12 @@ async def test_partial_username_apply_resyncs_db_from_telegram(
     changed the live username; the DB row must not keep the old one.
     """
     await _seed_profile("account-profile-partial", monkeypatch)
-    read_actions: list[object] = []
-
-    async def fake_read(_account_id: str, action: object) -> TelegramProfileSnapshot:
-        read_actions.append(action)
-        return TelegramProfileSnapshot(first_name="Alice", username="newname")
 
     _patch_failed_execute(monkeypatch)
-    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+    read_actions = _patch_read(
+        monkeypatch,
+        TelegramProfileSnapshot(first_name="Alice", username="newname"),
+    )
 
     with pytest.raises(AccountActionError):
         await update_account_profile(
@@ -323,24 +520,64 @@ async def test_partial_username_apply_resyncs_db_from_telegram(
     assert account.bio in (None, "")
 
 
+@pytest.mark.parametrize(
+    "code",
+    ["username_occupied", "username_invalid", "session_dead", "account_deactivated"],
+)
 @pytest.mark.asyncio
-async def test_failed_edit_without_username_skips_resync(
+async def test_stable_refusals_skip_the_confirmation_read(
+    monkeypatch: pytest.MonkeyPatch,
+    code: str,
+) -> None:
+    """These refusals leave nothing to reconcile, so the read is pure waste.
+
+    The two username codes come from the FIRST RPC of the dispatch — before
+    anything changed — and a dead or deactivated session cannot serve a read at
+    all. It used to fire for every failed save that carried a username, which is
+    every save the SPA makes.
+    """
+    account_id = f"account-profile-{code.replace('_', '-')}"
+    await _seed_profile(account_id, monkeypatch)
+
+    _patch_refused_execute(monkeypatch, code)
+    read_actions = _patch_read(monkeypatch, TelegramProfileSnapshot(first_name="Alice"))
+
+    with pytest.raises(AccountActionError, match=code):
+        await update_account_profile(
+            AccountProfileUpdateRequest(
+                account_id=account_id,
+                first_name="Alice",
+                username="newname",
+            ),
+        )
+
+    assert read_actions == []
+
+
+@pytest.mark.asyncio
+async def test_unavailable_result_skips_the_confirmation_read(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No username in the payload → no partial-apply window → no extra read."""
-    await _seed_profile("account-profile-noresync", monkeypatch)
-    read_actions: list[object] = []
+    """The pool already failed to connect; a second connect is guaranteed to fail too."""
+    await _seed_profile("account-profile-unavail", monkeypatch)
 
-    async def fake_read(_account_id: str, action: object) -> TelegramProfileSnapshot:
-        read_actions.append(action)
-        return TelegramProfileSnapshot(first_name="Alice")
+    async def unavailable_execute(account_id: str, _action: object) -> ActionResult:
+        return ActionResult(
+            status="unavailable",
+            action_type="update_profile",
+            account_id=account_id,
+        )
 
-    _patch_failed_execute(monkeypatch)
-    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+    monkeypatch.setattr("services.accounts.profile.execute", unavailable_execute)
+    read_actions = _patch_read(monkeypatch, TelegramProfileSnapshot(first_name="Alice"))
 
-    with pytest.raises(AccountActionError):
+    with pytest.raises(AccountActionError, match="unavailable"):
         await update_account_profile(
-            AccountProfileUpdateRequest(account_id="account-profile-noresync", first_name="Bob"),
+            AccountProfileUpdateRequest(
+                account_id="account-profile-unavail",
+                first_name="Alice",
+                username="newname",
+            ),
         )
 
     assert read_actions == []
@@ -353,12 +590,8 @@ async def test_refused_resync_read_still_surfaces_the_refusal(
     """A flood-blocked confirmation read is skipped silently; DB stays as-is."""
     await _seed_profile("account-profile-readfail", monkeypatch)
 
-    async def failing_read(_account_id: str, _action: object) -> TelegramProfileSnapshot:
-        reason = "FloodWaitError: wait of 30s"
-        raise TelegramReadError(reason)
-
     _patch_failed_execute(monkeypatch)
-    monkeypatch.setattr("services.accounts.profile.execute_read", failing_read)
+    _patch_read(monkeypatch)
 
     with pytest.raises(AccountActionError, match=r"^failed$"):
         await update_account_profile(
@@ -387,11 +620,8 @@ async def test_resync_with_unstorable_live_username_keeps_original_error(
     """
     await _seed_profile("account-profile-nft", monkeypatch)
 
-    async def fake_read(_account_id: str, _action: object) -> TelegramProfileSnapshot:
-        return TelegramProfileSnapshot(first_name="Alice", username="nft1")
-
     _patch_failed_execute(monkeypatch)
-    monkeypatch.setattr("services.accounts.profile.execute_read", fake_read)
+    _patch_read(monkeypatch, TelegramProfileSnapshot(first_name="Alice", username="nft1"))
 
     with pytest.raises(AccountActionError, match=r"^failed$"):
         await update_account_profile(

@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { invalidateAccountViews } from '@/entities/account';
 import {
   checkProxyMutation,
   deleteProxyMutation,
@@ -35,8 +36,10 @@ export function ProxyPool({ onAdd }: { onAdd: () => void }) {
 
   const proxies = data?.proxies ?? [];
   const empty = proxies.length === 0;
+  // Deleting or re-checking a pool proxy changes the pool AND the accounts
+  // riding it (proxy column, status), but nothing beyond that.
   const invalidate = () => {
-    void queryClient.invalidateQueries();
+    invalidateAccountViews(queryClient);
   };
   const onDelete = (id: string) => {
     setBusyId(id);

@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { invalidateAccountViews } from '@/entities/account';
 import {
   assignProxyMutation,
   checkProxyMutation,
@@ -53,10 +54,19 @@ export function ProxySection({ account }: { account: AccountRead }) {
   const assignProxy = useMutation(assignProxyMutation());
   const unassignProxy = useMutation(unassignProxyMutation());
   const pool = useQuery(proxyPoolQueryOptions());
-  const freeProxies = (pool.data?.proxies ?? []).filter((proxy) => proxy.free > 0);
+  // Free proxies PLUS the one this account already holds: filtering on `free`
+  // alone dropped a proxy at capacity — including when THIS account holds its
+  // last slot — so the select fell back to "choose from pool" while the state
+  // row above said "connected".
+  const poolChoices = (pool.data?.proxies ?? []).filter(
+    (proxy) => proxy.free > 0 || proxy.id === account.proxy_id,
+  );
   const invalidate = () => {
-    void queryClient.invalidateQueries();
+    invalidateAccountViews(queryClient);
   };
+  // Every write path here is create → assign → check; without one gate a
+  // double click fires two chains that resolve out of order.
+  const proxyBusy = createProxy.isPending || assignProxy.isPending || proxyMutation.isPending;
 
   // Record the real fields a proxy check returns (country + exit IP), so the UI
   // renders live data instead of a fabricated flag/latency.
@@ -331,13 +341,14 @@ export function ProxySection({ account }: { account: AccountRead }) {
           <span className={LABEL}>{t('accounts.proxyPool.title')}</span>
           <select
             value={account.proxy_id ?? ''}
+            disabled={proxyBusy}
             onChange={(event) => {
               assignFromPool(event.target.value);
             }}
             className={FIELD}
           >
             <option value="">{t('accounts.edit.choosePoolProxy')}</option>
-            {freeProxies.map((proxy) => (
+            {poolChoices.map((proxy) => (
               <option key={proxy.id} value={proxy.id}>
                 {proxy.host}:{proxy.port}
               </option>
@@ -349,7 +360,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
         <button
           type="button"
           onClick={onProxyAction}
-          disabled={proxyMode === 'manual' && !proxyFormCanSubmit}
+          disabled={proxyBusy || (proxyMode === 'manual' && !proxyFormCanSubmit)}
           className="inline-flex items-center gap-[7px] rounded-full border border-line-input bg-white px-4 py-2 text-[13px] font-medium disabled:opacity-50"
         >
           {proxyCheck === 'loading' ? (

@@ -17,6 +17,7 @@ export {
   accountStatsQueryOptions,
   allAccountsQueryOptions,
   fetchLiveProfileSnapshot,
+  invalidateAccountViews,
 } from './api/accounts.queries';
 export {
   addAccountMusicMutation,

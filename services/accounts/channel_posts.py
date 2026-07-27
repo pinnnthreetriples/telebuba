@@ -172,8 +172,14 @@ async def list_account_channel_posts(
         )
         for post in posts.items
     ]
-    # A full page means there may be older posts; a short page is the end.
-    next_cursor = str(items[-1].post_id) if len(items) == page_limit else None
+    # Any non-empty page may have older posts behind it, so it carries a cursor;
+    # only an EMPTY page ends pagination. Comparing ``len(items)`` against the
+    # limit was wrong because the gateway drops id-less entries (service-message
+    # placeholders) before the service sees them, so a full Telegram page of 20
+    # with one dropped arrived as 19 and hid "load more" over the remaining
+    # history. The cost is one extra empty request at the end of a channel — which
+    # a history that is an exact multiple of the page size already paid.
+    next_cursor = str(items[-1].post_id) if items else None
     return Page(items=items, next_cursor=next_cursor)
 
 

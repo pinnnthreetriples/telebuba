@@ -189,8 +189,10 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
     Two verdicts are returned WITHOUT being cached, because neither is a reading
     of the account's actual standing: an unknown account, and a probe that never
     reached @SpamBot. Caching those would serve them as fresh for
-    ``spam_status_ttl_hours`` (36 h by default), and warming's quarantine gate
-    reads any non-``limited`` verdict as "recovered".
+    ``spam_status_ttl_hours`` (36 h by default) — long past the point where a real
+    reading could be had. Warming's quarantine gate now requires a positive
+    ``clean`` verdict to release, so an ``unknown`` holds the quarantine rather
+    than opening it.
     """
     async with _refresh_lock(account_id):
         now = datetime.now(UTC)

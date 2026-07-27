@@ -6,11 +6,13 @@ import {
   accountHealth,
   importAccountSessionMutation,
   importAccountTdataMutation,
+  invalidateAccountViews,
   logoutAccountMutation,
   requestLoginCodeMutation,
   submitLoginCodeMutation,
 } from '@/entities/account';
 import type { AccountRead } from '@/shared/api';
+import { useClearedTimeouts } from '@/shared/lib';
 import { FeedbackMark } from '@/shared/ui';
 
 import { Section, Spinner } from './_shared';
@@ -24,8 +26,11 @@ const HEALTH_DOT: Record<ReturnType<typeof accountHealth>, string> = {
   fail: '#c0473f',
 };
 
-// One queued/finished import in the dropzone's file list.
+// One queued/finished import in the dropzone's file list. `id` is per enqueue,
+// not the filename: two imports of the same file share a name, and settling by
+// name flipped both entries to "готово" when the first one finished.
 interface Upload {
+  id: number;
   name: string;
   archive: boolean;
   status: 'uploading' | 'done' | 'error';
@@ -38,22 +43,27 @@ export function SessionSection({ account }: { account: AccountRead }) {
   const [importTab, setImportTab] = useState<'session' | 'tdata'>('session');
   const [uploads, setUploads] = useState<Upload[]>([]);
   const uploadInput = useRef<HTMLInputElement>(null);
+  const nextUploadId = useRef(0);
   const [logoutCheck, setLogoutCheck] = useState<CheckState>('idle');
   const [smsCode, setSmsCode] = useState('');
   const [twoFa, setTwoFa] = useState('');
   const [loginNote, setLoginNote] = useState<string | null>(null);
 
   const queryClient = useQueryClient();
+  const later = useClearedTimeouts();
   const importTdata = useMutation(importAccountTdataMutation());
   const importSession = useMutation(importAccountSessionMutation());
   const requestCode = useMutation(requestLoginCodeMutation());
   const submitCode = useMutation(submitLoginCodeMutation());
   const logout = useMutation(logoutAccountMutation());
   const invalidate = () => {
-    void queryClient.invalidateQueries();
+    invalidateAccountViews(queryClient);
   };
 
   const path = { path: { account_id: account.account_id } } as const;
+  // The field's "1 2 3 4 5" placeholder and letter-spacing invite a
+  // space-separated code, which Telegram rejects verbatim.
+  const code = smsCode.trim();
   const onRequestCode = () => {
     setLoginNote(null);
     requestCode.mutate(path, {
@@ -68,7 +78,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
   const onConfirmLogin = () => {
     setLoginNote(null);
     submitCode.mutate(
-      { ...path, body: { code: smsCode, password: twoFa || null } },
+      { ...path, body: { code, password: twoFa || null } },
       {
         onSuccess: () => {
           setSmsCode('');
@@ -93,7 +103,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
         setLogoutCheck('err');
       },
       onSettled: () => {
-        window.setTimeout(() => {
+        later(() => {
           setLogoutCheck('idle');
         }, 1600);
       },
@@ -107,9 +117,10 @@ export function SessionSection({ account }: { account: AccountRead }) {
     if (!file) return;
     const { name } = file;
     const archive = importTab === 'tdata';
-    setUploads((list) => [{ name, archive, status: 'uploading' }, ...list]);
+    const id = (nextUploadId.current += 1);
+    setUploads((list) => [{ id, name, archive, status: 'uploading' }, ...list]);
     const settle = (status: Upload['status']) => {
-      setUploads((list) => list.map((item) => (item.name === name ? { ...item, status } : item)));
+      setUploads((list) => list.map((item) => (item.id === id ? { ...item, status } : item)));
       if (status === 'done') invalidate();
     };
     const handlers = {
@@ -199,7 +210,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
       <button
         type="button"
         onClick={onConfirmLogin}
-        disabled={submitCode.isPending || !smsCode}
+        disabled={submitCode.isPending || !code}
         className="w-full rounded-[10px] border border-line-input bg-white py-[9px] text-[13px] font-medium disabled:opacity-50"
       >
         {submitCode.isPending ? <Spinner size={14} /> : t('accounts.edit.confirmLogin')}
@@ -253,9 +264,9 @@ export function SessionSection({ account }: { account: AccountRead }) {
         onChange={onUploadFile}
       />
       <div className="mt-[9px] flex flex-col gap-2">
-        {uploads.map((file, index) => (
+        {uploads.map((file) => (
           <div
-            key={`${file.name}-${String(index)}`}
+            key={file.id}
             className="tb-fadeup rounded-[11px] border border-line bg-white px-[11px] py-[10px]"
           >
             <div className="flex items-center gap-[10px]">
@@ -330,7 +341,7 @@ export function SessionSection({ account }: { account: AccountRead }) {
                       type="button"
                       aria-label={t('accounts.edit.removeFile')}
                       onClick={() => {
-                        setUploads((list) => list.filter((_, position) => position !== index));
+                        setUploads((list) => list.filter((item) => item.id !== file.id));
                       }}
                       className="inline-flex h-[25px] w-[25px] items-center justify-center rounded-full text-ink-subtle"
                     >

@@ -5,6 +5,9 @@ import { useTranslation } from 'react-i18next';
 import { postAccountStoryMutation } from '@/entities/account';
 import { Modal } from '@/shared/ui';
 
+import { envelopeMessage, POST_CAPTION_MAX, type Translate } from './_channelsShared';
+import { retryAfterSeconds } from './_profileShared';
+import { FIELD, seg } from './_styles';
 import {
   type CollageCell,
   MAX_COLLAGE_IMAGES,
@@ -30,9 +33,6 @@ const PRIVACY: Record<Audience, 'contacts' | 'close_friends' | 'public'> = {
   public: 'public',
 };
 
-const FIELD =
-  'tb-time w-full rounded-[10px] border border-line-input bg-white px-3 py-[9px] text-[13px] outline-none';
-
 function fileSize(
   file: File | null,
   t: (key: string, opts: Record<string, unknown>) => string,
@@ -45,16 +45,26 @@ function fileSize(
 
 // Pull the reason out of the /api/v1 error envelope ({error:{code,message}}) the
 // failed publish rejects with, so the hover tooltip shows *why* it failed.
-// Known locale-neutral failure codes (story_image_invalid / story_video_invalid)
-// translate via accounts.addStory.code.*; anything else shows as-is.
-function errorText(
-  err: unknown,
-  t: (key: string, opts?: Record<string, unknown>) => string,
-  fallback: string,
-): string {
-  const message = (err as { error?: { message?: unknown } } | null)?.error?.message;
-  if (typeof message !== 'string' || !message.trim()) return fallback;
-  return t(`accounts.addStory.code.${message}`, { defaultValue: message });
+//
+// The same three code tables the global mutation toast walks
+// (shared/lib/query-client.ts), story table FIRST so `failed` keeps its
+// story-specific wording. The other two carry what a story publish can also be
+// refused with and this namespace has no copy for: the rate-limit family
+// (flood_wait, peer_flood, slow_mode_wait, premium_wait) and `unavailable`, all
+// reachable through raise_for_result. A chain rather than five new keys — two
+// copies of one string in two namespaces are two strings that drift. Anything
+// unknown still shows as-is.
+function errorText(err: unknown, t: Translate, fallback: string): string {
+  const message = envelopeMessage(err);
+  if (!message) return fallback;
+  return t(
+    [
+      `accounts.addStory.code.${message}`,
+      `accounts.profile.code.${message}`,
+      `accounts.channel.code.${message}`,
+    ],
+    { defaultValue: message, s: retryAfterSeconds(err) ?? '?' },
+  );
 }
 
 // A 9:16 mini-preview of a collage layout: each cell drawn as a rounded rect
@@ -156,9 +166,6 @@ export function AddStoryModal({
   }
   const errorDetail = errorText(post.error, t, t('accounts.addStory.stError'));
 
-  const seg = (on: boolean): string =>
-    `flex-1 rounded-[7px] py-[7px] text-[12.5px] font-medium transition ${on ? 'bg-white text-ink shadow-sm' : 'text-ink-muted'}`;
-
   const onPick = (event: React.ChangeEvent<HTMLInputElement>) => {
     // The add control is disabled while busy/done, but this handler sits on the
     // hidden input rather than the button, so it keeps its own guard: the
@@ -199,6 +206,16 @@ export function AddStoryModal({
     post.reset();
   };
 
+  // The success window's auto-close timer, cleared on unmount: fired after the
+  // tree is gone it calls an onClose whose owner has moved on.
+  const closeTimer = useRef<number | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimer.current !== null) window.clearTimeout(closeTimer.current);
+    },
+    [],
+  );
+
   const publish = () => {
     const files = video !== null ? [video] : images;
     if (files.length === 0) return;
@@ -219,7 +236,7 @@ export function AddStoryModal({
         // animation plays before the profile refresh + close, per the design.
         onSuccess: () => {
           onPosted();
-          window.setTimeout(onClose, 900);
+          closeTimer.current = window.setTimeout(onClose, 900);
         },
       },
     );
@@ -274,6 +291,10 @@ export function AddStoryModal({
             onChange={(event) => {
               setCaption(event.target.value);
             }}
+            // Mirrors the server's own Form(max_length=1024) on the caption: past
+            // it the whole upload is spent to come back a 422 naming a field the
+            // operator can no longer see the end of.
+            maxLength={POST_CAPTION_MAX}
             placeholder={t('accounts.addStory.captionPlaceholder')}
             className={FIELD}
           />

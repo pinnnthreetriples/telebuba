@@ -70,12 +70,36 @@ async def test_spam_check_returns_the_fresh_verdict(
         )
 
     monkeypatch.setattr("services.spam_status.refresh_spam_status", _fake)
+    await add_account(AccountCreate(account_id="acc-1"))
     async with _client(app) as client:
         resp = await client.post("/api/v1/accounts/acc-1/spam-check")
     assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "limited"
     assert body["detail"] == "until 2026-07-01"
+
+
+@pytest.mark.asyncio
+async def test_spam_check_unknown_account_is_404(
+    app: FastAPI,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing row is a 404 like every sibling route, not a 200 ``unknown``.
+
+    ``refresh_spam_status`` deliberately degrades instead of raising (warming and
+    neurocomment onboarding call it too), so the route does its own lookup — and
+    the service must not be reached at all.
+    """
+
+    async def _fake(account_id: str, *, force: bool) -> SpamStatusVerdict:  # noqa: ARG001
+        msg = "service must not be reached for a missing account"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("services.spam_status.refresh_spam_status", _fake)
+    async with _client(app) as client:
+        resp = await client.post("/api/v1/accounts/acc-nope/spam-check")
+    assert resp.status_code == 404
+    assert resp.json()["error"]["code"] == "not_found"
 
 
 @pytest.mark.asyncio
@@ -383,6 +407,28 @@ async def test_import_session_duplicate_is_409(
             files={"file": ("acc.session", b"x", "application/octet-stream")},
         )
     assert resp.status_code == 409
+
+
+@pytest.mark.asyncio
+async def test_import_session_rejected_id_is_422_not_pydantic_prose(app: FastAPI) -> None:
+    """The route's own 400 answered with Pydantic's multi-line English prose.
+
+    The request model is assembled from Form/File params here, so a refused
+    ``account_id`` reaches the route as a ``ValidationError`` — unbounded
+    third-party text on the wire (non-negotiable #12). It now gets the same 422
+    ``validation_error`` envelope every other malformed request gets. The service
+    is NOT patched: this exercises the real refusal.
+    """
+    async with _client(app) as client:
+        resp = await client.post(
+            "/api/v1/accounts/import-session",
+            files={"file": ("..session", b"credential-bytes", "application/octet-stream")},
+        )
+    assert resp.status_code == 422
+    body = resp.json()
+    assert body["error"]["code"] == "validation_error"
+    assert body["error"]["message"] == "validation_error"
+    assert "validation error" not in str(body).lower().replace("validation_error", "")
 
 
 @pytest.mark.asyncio

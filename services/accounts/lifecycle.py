@@ -39,6 +39,22 @@ async def add_account(data: AccountCreate) -> AccountRead:
     return persisted
 
 
+async def require_account(account_id: str) -> AccountRead:
+    """One account's read model, or :class:`AccountNotFoundError`.
+
+    For routes whose service call deliberately degrades on a missing row instead
+    of raising — ``spam_status.refresh_spam_status`` returns an uncached
+    ``unknown`` verdict, because warming and neurocomment onboarding also call it
+    and a hard raise there would change cycle behaviour. The route does the hard
+    lookup so its HTTP surface answers 404 like its siblings while those two
+    internal callers keep the soft path.
+    """
+    account = await fetch_account(account_id)
+    if account is None:
+        raise AccountNotFoundError(account_id)
+    return account
+
+
 async def remove_account(account_id: str) -> None:
     """Public delete: stop warming + purge DB rows under one lifecycle lock.
 

@@ -100,6 +100,38 @@ test('fires the row actions for the clicked account', async () => {
   expect(onDelete).toHaveBeenCalledWith('acc-1');
 });
 
+test('a row opens from the keyboard', async () => {
+  const onOpen = vi.fn();
+  render(
+    <AccountsTable
+      data={ACCOUNTS}
+      onCheck={vi.fn()}
+      onDelete={vi.fn()}
+      onOpen={onOpen}
+      onProfile={vi.fn()}
+      busyId={null}
+    />,
+  );
+  // The row is the ONLY entry point to the account-edit view (the pencil opens
+  // the profile modal), and it had no tabIndex and no key handler at all: with a
+  // keyboard, session/proxy/device/signals/actions were unreachable.
+  const row = screen.getByText('@mainuser').closest('tr')!;
+  expect(row).toHaveAttribute('tabindex', '0');
+  row.focus();
+  await userEvent.keyboard('{Enter}');
+  expect(onOpen).toHaveBeenCalledWith(ACCOUNTS[0]);
+
+  onOpen.mockClear();
+  await userEvent.keyboard(' ');
+  expect(onOpen).toHaveBeenCalledWith(ACCOUNTS[0]);
+
+  // A key press on an action button inside the row must not also open the row.
+  onOpen.mockClear();
+  (screen.getAllByTitle('Проверить')[0] as HTMLElement).focus();
+  await userEvent.keyboard('{Enter}');
+  expect(onOpen).not.toHaveBeenCalled();
+});
+
 test('opens the clicked row and does not bubble action clicks to the row', async () => {
   const onOpen = vi.fn();
   render(

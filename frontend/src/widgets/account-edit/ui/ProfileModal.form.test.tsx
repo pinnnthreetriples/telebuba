@@ -289,6 +289,131 @@ test('the inline server error clears as soon as the field is edited', async () =
   });
 });
 
+test('a programmatic re-seed does NOT clear an unaddressed save error', async () => {
+  // The inverse of the test above, and the one that traps the operator: the save
+  // is refused, the footer/field says why, and pressing «Обновить» — which the
+  // message itself invites, to check the account — re-seeds the text fields.
+  // `seedField` writes through setFieldValue, which builds a new `values` object
+  // even for an identical value, so the store subscription read it as "the
+  // operator addressed this" and erased the verdict with nothing fixed. Worse
+  // here than for flood_wait: the username is re-seeded to Telegram's current
+  // one, so the handle changes under the operator AND the reason disappears.
+  let pull = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      if (url.searchParams.get('refresh') === 'true') {
+        pull += 1;
+        // Unrelated drift (a view count) so react-query hands back a NEW object
+        // and the re-seed effect actually runs — an identical payload is
+        // structurally shared and would not exercise this at all.
+        return Promise.resolve(
+          jsonResponse({
+            ...VIEW,
+            username: 'ivanov_real',
+            stories: VIEW.stories.map((story) => ({ ...story, views: 128 + pull })),
+          }),
+        );
+      }
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (url.pathname === '/api/v1/accounts/profile') {
+      return Promise.resolve(
+        jsonResponse({ error: { code: 'bad_request', message: 'username_occupied' } }, 400),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.type(screen.getByDisplayValue('ivanov'), '2');
+  await userEvent.click(screen.getByText('Сохранить'));
+  expect(await screen.findByText('Юзернейм уже занят')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByText('Обновить'));
+  // The re-seed landed…
+  await waitFor(() => {
+    expect(screen.getByDisplayValue('ivanov_real')).toBeInTheDocument();
+  });
+  // …and the verdict is still on screen.
+  expect(screen.getByText('Юзернейм уже занят')).toBeInTheDocument();
+});
+
+test('a save refused by a gateway outage reads as words, not the bare code', async () => {
+  // `unavailable` is emitted for every pool/socket failure on every editing
+  // action but has copy only under accounts.channel.code — a single-table lookup
+  // printed the raw identifier inline next to a correctly-worded toast.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (pathname === '/api/v1/accounts/profile') {
+      return Promise.resolve(
+        jsonResponse({ error: { code: 'unavailable', message: 'unavailable' } }, 503),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.type(screen.getByDisplayValue('Иван'), 'ов');
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  // …and it is announced: a rejected save was rendered with no live region at
+  // all, while the busy scrim beside it already had one.
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('Telegram временно недоступен — попробуйте ещё раз');
+  expect(screen.queryByText('unavailable')).not.toBeInTheDocument();
+});
+
+test('a 422 points at the field the server rejected, not at the whole form', async () => {
+  // api/errors.py answers validation failures with message="validation_error"
+  // and the per-field reason in fields["body.<name>"]. Reading only the message
+  // put a whole-form sentence beside Save while the offending field looked fine —
+  // reachable whenever zod and Pydantic disagree (bio counted trimmed here,
+  // untrimmed there).
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (pathname === '/api/v1/accounts/profile') {
+      return Promise.resolve(
+        jsonResponse(
+          {
+            error: {
+              code: 'validation_error',
+              message: 'validation_error',
+              fields: { 'body.bio': 'String should have at most 70 characters' },
+            },
+          },
+          422,
+        ),
+      );
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  await userEvent.type(screen.getByTestId('profile-bio'), 'био');
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  const message = await screen.findByText('Запрос отклонён — проверьте выделенные поля');
+  // Under the bio field (its own label), not in the footer.
+  expect(message.closest('label')).toContainElement(screen.getByTestId('profile-bio'));
+});
+
+test('the tab header is a real tablist with the shown tab marked', async () => {
+  // Six bare <button>s: the active tab was conveyed by colour and a border only,
+  // so nothing announced which of them is showing.
+  routeApi();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={vi.fn()} />);
+  expect(screen.getAllByRole('tab')).toHaveLength(6);
+  expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Текст');
+
+  await userEvent.click(screen.getByRole('tab', { name: 'Фото' }));
+  expect(screen.getByRole('tab', { selected: true })).toHaveTextContent('Фото');
+  expect(screen.getByRole('tabpanel')).toHaveAttribute('aria-labelledby', 'profile-tab-photo');
+});
+
 test('an account with no stored first name shows why Save is disabled', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const { pathname } = new URL((input as Request).url);

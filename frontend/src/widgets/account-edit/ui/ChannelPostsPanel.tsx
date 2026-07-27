@@ -139,8 +139,15 @@ export function ChannelPostsPanel({
     );
   };
 
+  // Editing a post that carries media edits its CAPTION, and Telegram caps
+  // captions at 1024 — the composer already respects that split, the edit box
+  // did not, and the backend has no media-aware branch to catch it.
+  const editingMedia = items.find((post) => post.post_id === editingId)?.media_kind ?? 'none';
+  const editMax = editingMedia === 'none' ? POST_TEXT_MAX : POST_CAPTION_MAX;
+  const canSaveEdit = editText.trim() !== '' && editText.length <= editMax;
+
   const saveEdit = () => {
-    if (editingId === null || editPost.isPending || editText.trim() === '') return;
+    if (editingId === null || editPost.isPending || !canSaveEdit) return;
     editPost.mutate(
       {
         path: { account_id: accountId, channel_id: channelId, post_id: editingId },
@@ -351,7 +358,7 @@ export function ChannelPostsPanel({
                   <textarea
                     rows={3}
                     value={editText}
-                    maxLength={POST_TEXT_MAX}
+                    maxLength={editMax}
                     aria-label={t('accounts.channel.postEdit')}
                     onChange={(event) => {
                       setEditText(event.target.value);
@@ -377,7 +384,7 @@ export function ChannelPostsPanel({
                     <button
                       type="button"
                       onClick={saveEdit}
-                      disabled={editPost.isPending || editText.trim() === ''}
+                      disabled={editPost.isPending || !canSaveEdit}
                       className="rounded-full bg-primary px-[16px] py-[6px] text-[12px] font-medium text-white disabled:opacity-50"
                     >
                       {t('accounts.channel.postSave')}

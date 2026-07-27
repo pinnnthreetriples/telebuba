@@ -469,9 +469,12 @@ test('a failed post-action sync surfaces the load-error banner, not a stale grid
   vi.mocked(fetch).mockImplementation((input) => {
     const url = new URL((input as Request).url);
     if (url.pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
-      // The forced re-pull after the mutation fails outright (transport/5xx).
+      // The forced re-pull after the mutation fails outright — a gateway outage,
+      // which the API answers 503 `unavailable` (services/accounts/_result.py).
       if (url.searchParams.get('refresh') === 'true') {
-        return Promise.resolve(jsonResponse({ error: { code: 'internal', message: 'down' } }, 500));
+        return Promise.resolve(
+          jsonResponse({ error: { code: 'unavailable', message: 'unavailable' } }, 503),
+        );
       }
       return Promise.resolve(jsonResponse(TWO_PHOTOS));
     }
@@ -482,13 +485,72 @@ test('a failed post-action sync surfaces the load-error banner, not a stale grid
   await userEvent.click(await screen.findByText('Сделать основным', { selector: 'button' }));
 
   // The overlay clears AND the failure is surfaced — a silently-stale grid
-  // rendered as current is exactly the F2 bug.
+  // rendered as current is exactly the F2 bug. The reason is named, and it is
+  // named from the CHANNEL table: `unavailable` has no copy under
+  // accounts.profile.code, so a single-table lookup printed the bare identifier
+  // next to a correctly-worded toast for the same failure.
   expect(
-    await screen.findByText('Не удалось загрузить данные профиля из Telegram'),
+    await screen.findByText(
+      'Не удалось загрузить данные профиля из Telegram (Telegram временно недоступен — попробуйте ещё раз)',
+    ),
   ).toBeInTheDocument();
   await waitFor(() => {
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
+});
+
+test('the modal cannot be closed mid photo-batch — the uploads would continue', async () => {
+  // `requestClose` consulted only form.isDirty, and neither exit carried a
+  // disabled state. Closing after file #2 hid the progress overlay while #3..#5
+  // kept uploading (a sequential loop with no abort path; react-query keeps the
+  // mutation in its cache after unmount) — each one becoming the account's
+  // avatar, with the post-batch refresh gone. AddStoryModal already locks its
+  // exits mid-publish for exactly this.
+  let releaseSecond!: (response: Response) => void;
+  let uploads = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const { pathname } = new URL((input as Request).url);
+    if (pathname === '/api/v1/accounts/acc-1/profile-snapshot') {
+      return Promise.resolve(jsonResponse(VIEW));
+    }
+    if (pathname === '/api/v1/accounts/photo') {
+      uploads += 1;
+      if (uploads === 2) {
+        return new Promise((resolve) => {
+          releaseSecond = resolve;
+        });
+      }
+      return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  const onClose = vi.fn();
+  renderWithClient(<ProfileModal account={ACCOUNT} onClose={onClose} />);
+  await userEvent.click(screen.getByText('Фото'));
+  fireEvent.change(document.body.querySelector('input[type="file"]') as HTMLInputElement, {
+    target: {
+      files: [
+        new File(['a'], 'a.jpg', { type: 'image/jpeg' }),
+        new File(['b'], 'b.jpg', { type: 'image/jpeg' }),
+        new File(['c'], 'c.jpg', { type: 'image/jpeg' }),
+      ],
+    },
+  });
+
+  await waitFor(() => {
+    expect(screen.getByText('Отмена')).toBeDisabled();
+  });
+  expect(screen.getByLabelText('Закрыть')).toBeDisabled();
+  // Escape and backdrop-click go through Modal's own handlers, not the buttons.
+  fireEvent.keyDown(document, { key: 'Escape' });
+  fireEvent.click(document.body.querySelector('[role="presentation"]') as HTMLElement);
+  expect(onClose).not.toHaveBeenCalled();
+
+  releaseSecond(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  await waitFor(() => {
+    expect(screen.getByText('Отмена')).toBeEnabled();
+  });
+  expect(screen.getByLabelText('Закрыть')).toBeEnabled();
 });
 
 test('the photo prefilter skips files the backend would reject (suffix + size)', async () => {

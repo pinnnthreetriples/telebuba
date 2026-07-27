@@ -14,7 +14,6 @@ from telethon.tl.functions.photos import (
     GetUserPhotosRequest,
     UploadProfilePhotoRequest,
 )
-from telethon.tl.functions.users import GetFullUserRequest
 from telethon.tl.types import (
     DocumentAttributeAudio,
     InputDocument,
@@ -299,13 +298,6 @@ def _find_history_photo(photos: list[object], photo_id: int) -> object | None:
     return None
 
 
-async def _current_avatar_id(client: TelegramClient) -> int | None:
-    """The current avatar's photo id per ``users.getFullUser`` (authoritative)."""
-    full = await client(GetFullUserRequest(InputUserSelf()))
-    photo_id = getattr(getattr(getattr(full, "full_user", None), "profile_photo", None), "id", None)
-    return photo_id if isinstance(photo_id, int) else None
-
-
 async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfilePhoto) -> None:
     """Make a history photo the avatar by RE-UPLOADING its bytes as a new photo.
 
@@ -329,6 +321,10 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
     ``current_avatar_id``.
     """
     photos = await _history_photos(client)
+    # The history read is load-bearing (it re-resolves the target below); the
+    # ``current_avatar_id`` field that used to sit here was not — it cost a
+    # ``users.getFullUser`` per click purely for the debug log, the same reason
+    # the AFTER phase already logs only what this call already knows.
     await log_event(
         "INFO",
         "telegram_set_main_id_flow",
@@ -336,7 +332,6 @@ async def _set_main_profile_photo(client: TelegramClient, action: SetMainProfile
             "phase": "before",
             "target_photo_id": action.photo_id,
             "history_ids": _photo_ids(photos),
-            "current_avatar_id": await _current_avatar_id(client),
         },
     )
     target = _find_history_photo(photos, action.photo_id)
