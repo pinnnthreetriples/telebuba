@@ -50,9 +50,18 @@ export function CollapsibleCard({
   // A collapsed body is only VISUALLY gone (max-height:0 + opacity:0), so
   // without this every control inside it stays in the tab order and the a11y
   // tree — a keyboard operator reached a hidden 2FA password field and a
-  // "delete account" button. `hidden` goes off before the open transition
-  // starts (display:none cannot animate) and back on only when the close
+  // "delete account" button. `hidden` goes back on only when the close
   // transition ends.
+  //
+  // On open, `hidden` comes off in the SAME React commit that adds `.tb-open`,
+  // so the body goes from not-rendered to rendered with the open styles already
+  // applied. An element that was not rendered has no before-change style, so
+  // that step generates no transition on its own — measured in Chrome, the body
+  // snapped straight to the CSS fallback `max-height: 600px` (clientHeight 600
+  // against scrollHeight 976, `overflow: hidden`, no scrollbar) and only the
+  // later `--mh` write animated. `@starting-style` in index.css supplies the
+  // missing before-change style; do not replace it with a rAF that defers
+  // `reachable` by a frame without re-measuring that.
   const [reachable, setReachable] = useState(defaultOpen);
   const toggle = () => {
     setSettled(false);

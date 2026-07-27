@@ -258,6 +258,68 @@ test('shows graduated accounts and wires return-to-warming + handoff', async () 
   });
 });
 
+test('handing off a second account does not swallow the first one s refresh', async () => {
+  // busyId is a single id, so it only disables the card that was clicked — the
+  // other warmed card stays live and fires the SAME handoff mutation. With
+  // mutate()+onSettled the second call took over the observer's one callback
+  // slot, and the first account's feedback mark and board refresh were lost.
+  const warmedAccount = (id: string) => ({
+    account_id: id,
+    label: id,
+    warming_days: 20,
+    target_days: 14,
+    trust_score: 88,
+  });
+  const board: WarmingBoardState = {
+    ...BOARD,
+    warmed: [warmedAccount('grad-1'), warmedAccount('grad-2')],
+  };
+  let releaseFirst!: (response: Response) => void;
+  let handoffs = 0;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/warming/board') return Promise.resolve(jsonResponse(board));
+    if (url.pathname.includes('/warming/handoff')) {
+      handoffs += 1;
+      if (handoffs === 1) {
+        return new Promise((resolve) => {
+          releaseFirst = resolve;
+        });
+      }
+      return Promise.resolve(jsonResponse({}));
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  const boardGets = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(
+        ([input]) => new URL((input as Request).url).pathname === '/api/v1/warming/board',
+      ).length;
+
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getAllByText('В нейрокомментинг')).toHaveLength(2);
+  });
+
+  const beforeClicks = boardGets();
+  await userEvent.click(screen.getAllByText('В нейрокомментинг')[0] as HTMLElement);
+  // Re-query: the first click re-rendered the warmed card.
+  await userEvent.click(screen.getAllByText('В нейрокомментинг')[1] as HTMLElement);
+  await waitFor(() => {
+    expect(handoffs).toBe(2);
+  });
+  await waitFor(() => {
+    expect(boardGets()).toBeGreaterThan(beforeClicks);
+  });
+
+  const beforeFirstSettles = boardGets();
+  releaseFirst(jsonResponse({}));
+  await waitFor(() => {
+    expect(boardGets()).toBeGreaterThan(beforeFirstSettles);
+  });
+});
+
 test('a handed-off account disappears from the warmed card', async () => {
   const board: WarmingBoardState = {
     ...BOARD,

@@ -7,8 +7,8 @@ real:
 - zip security validators reject path traversal, absolute paths, too many files,
   zip bombs, POSIX symlinks, and invalid zips with the right status.
 - happy path returns ``ok`` and writes a session file (opentele2 mocked).
-- failures from opentele2 surface as ``conversion_error`` and include the partial
-  summary built so far.
+- failures from opentele2 surface as ``conversion_error``, carry the partial summary
+  built so far, and report the exception's CLASS NAME — never its text.
 - the private temp directory is cleaned up on every code path.
 """
 
@@ -248,22 +248,64 @@ async def test_conversion_error_keeps_partial_summary(
         result = await convert_tdata_zip(req, sessions_dir, tmp_base=tmp_base)
 
     assert result.status == "conversion_error"
-    assert result.error is not None
-    assert "222" in result.error
+    assert result.error == "RuntimeError"
     assert len(result.accounts) == 1
     assert result.accounts[0].user_id == 111
     assert list(tmp_base.iterdir()) == []
 
 
 @pytest.mark.asyncio
-async def test_tdesktop_load_failure(sessions_dir: Path, tmp_base: Path) -> None:
+async def test_tdesktop_load_failure_reports_only_the_exception_class(
+    sessions_dir: Path,
+    tmp_base: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    r"""``error`` must be the class name — this value reaches the HTTP 400 body.
+
+    opentele2's ``OpenTeleException.__str__`` is assembled from the RAISING FRAME'S
+    PARAMETER VALUES, and the loader is invoked with ``basePath=str(tdata_dir)``, so
+    its text carries the tdata staging path and any proxy the frame held — with
+    credentials. ``services.accounts._tdata`` raises a ``ValueError`` from this
+    result and ``service_errors_to_http`` renders it verbatim as the 400 ``message``
+    (non-negotiable #12).
+
+    The ``log_event`` extra is checked for the same reason and NOT as belt-and-braces:
+    ``core.logging.log_event`` persists ``extra`` to the ``logs`` table, ``GET /logs``
+    serves it as ``LogEntry.extra`` and ``GET /events`` streams it — so an unbounded
+    ``extra`` is an HTTP body by another route. The full text goes to the stdlib
+    logger instead, which no route reads.
+
+    The stand-in below is shaped like the real thing. Pre-fix ``error`` was
+    ``f"TDesktop load failed: {exc}"`` and the log extra carried ``str(exc)``, so
+    both the path and ``bob:hunter2@…`` were in each and every negative assertion
+    below failed.
+    """
     payload = _zip({"tdata/key_data": b"x"})
     req = TdataConvertRequest(filename="good.zip", content=payload)
+    leaky = RuntimeError(
+        "failed to decrypt C:/Users/op/tdata_staging_x9/tdata/key_datas "
+        "via socks5://bob:hunter2@10.20.30.40:1080",
+    )
+    extras: list[object] = []
 
-    with patch("core.tdata_import.TDesktop", side_effect=RuntimeError("bad key")):
+    async def fake_log(
+        _level: str,
+        _event: str,
+        account_id: str | None = None,  # noqa: ARG001
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        extras.append(extra or {})
+
+    monkeypatch.setattr("core.tdata_import.log_event", fake_log)
+
+    with patch("core.tdata_import.TDesktop", side_effect=leaky):
         result = await convert_tdata_zip(req, sessions_dir, tmp_base=tmp_base)
 
     assert result.status == "conversion_error"
-    assert result.error is not None
-    assert "bad key" in result.error
+    assert result.error == "RuntimeError"
+    assert "hunter2" not in (result.error or "")
+    assert "tdata_staging_x9" not in (result.error or "")
+    persisted = repr(extras)
+    assert "hunter2" not in persisted
+    assert "failed to decrypt" not in persisted
     assert list(tmp_base.iterdir()) == []

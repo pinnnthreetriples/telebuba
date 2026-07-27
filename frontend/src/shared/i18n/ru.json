@@ -661,6 +661,7 @@
     "warming_unpromoted_from_neurocomment": "Аккаунт возвращён из нейрокомментинга",
     "warming_quarantine_recovered": "Аккаунт восстановлен после карантина",
     "warming_quarantine_exhausted": "Карантин исчерпан",
+    "warming_quarantine_unreadable": "Карантин прекращён: спам-статус не читается",
     "warming_settings_saved": "Настройки прогрева сохранены",
     "warming_start_blocked": "Запуск прогрева заблокирован",
     "warming_runtime_reconciled": "Прогрев синхронизирован",

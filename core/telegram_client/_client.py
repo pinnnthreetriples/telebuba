@@ -45,8 +45,15 @@ async def _session_path(request: TelegramClientRequest) -> str:
     return _session_dir_child(stored or request.account_id)
 
 
+# Substrings that disqualify a session name outright, checked BEFORE any
+# ``resolve()``: traversal plus either separator. The two literals cover ``os.sep``
+# and ``os.altsep`` on both platforms, so the verdict is the same on each. A
+# leading "." is checked separately in the guard below.
+_FORBIDDEN_NAME_PARTS = ("..", "/", "\\")
+
+
 def _session_dir_child(name: str) -> str:
-    """``str(session_dir / name)``, refusing a name that is not a direct child.
+    r"""``str(session_dir / name)``, refusing a name that is not a direct child.
 
     This is the one sink both the unlink (``_auth._remove_session_file``) and
     every Telethon open reach, which is why the check lives here rather than at
@@ -59,10 +66,35 @@ def _session_dir_child(name: str) -> str:
     database. ``account_id="."`` was reachable: ``Path("..session").stem`` is
     ``"."`` and the session-file import derives the id from that stem, so a
     DELETE unlinked the file above the directory and Telethon's SQLiteSession
-    re-created it on the next probe. Comparing the RESOLVED parent also refuses
-    ``".."``, a separator and an absolute path in one predicate.
+    re-created it on the next probe.
+
+    The verdict is reached LEXICALLY, from the name alone, and the resolved-parent
+    comparison is kept only as the symlink backstop. Deciding on ``resolve()``
+    alone made the guard depend on two things a contract cannot state:
+
+    * **The platform.** Win32 strips trailing dots and reads ``\\`` as a
+      separator, so ``"..."`` and ``"..\\evil"`` resolved to the PARENT there
+      while POSIX — every CI job — treats both as ordinary filenames inside the
+      directory. Neither escapes on POSIX, so this was a portability wart rather
+      than a hole, but the same six names got two different verdicts by OS.
+    * **Filesystem state.** ``resolve()`` on a non-existent path cannot collapse
+      ``".."`` against a real directory, so with the sessions directory ABSENT
+      (the relative ``sessions`` default on first boot, or a directory someone
+      deleted) ``"..."``, ``".. "`` and ``". "`` were ALLOWED where the same
+      names were refused once it existed. ``_auth.remove_account_session`` is the
+      one caller that reaches here without ``_ensure_session_dir()`` first.
+
+    A leading ``"."`` covers ``"."``, ``".."``, ``"..."`` and the trailing-space
+    variants Win32 also trims; ``_FORBIDDEN_NAME_PARTS`` covers traversal and
+    both separators. What survives is a single plain component, so the value
+    returned here and the value the predicate accepted name the same file — no
+    ``sub/../x`` can be validated after resolution and then handed to Telethon
+    verbatim.
     """
     session_dir = settings.telegram.session_dir
+    if not name or name.startswith(".") or any(part in name for part in _FORBIDDEN_NAME_PARTS):
+        msg = f"session name escapes the session directory: {name!r}"
+        raise ValueError(msg)
     candidate = session_dir / name
     if candidate.resolve().parent != session_dir.resolve():
         msg = f"session name escapes the session directory: {name!r}"

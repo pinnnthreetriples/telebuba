@@ -197,6 +197,42 @@ async def test_import_account_tdata_surfaces_conversion_failure(
 
 
 @pytest.mark.asyncio
+async def test_import_account_tdata_failure_message_is_the_status_code_only(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The raised message must carry the stable status code and nothing else.
+
+    ``service_errors_to_http`` renders this ``ValueError`` as the HTTP 400
+    ``message`` verbatim, and the converter's ``error`` is third-party prose:
+    opentele2 stringifies from the raising frame's parameter values, so a real
+    failure arrived with the tdata staging path and the proxy URL — credentials
+    included — in the response body (non-negotiable #12).
+
+    Pre-fix the message was ``f"{msg} — {result.error}"``, so all three negative
+    assertions failed.
+    """
+    leak = (
+        "OpenTeleException: failed to decrypt "
+        "C:/Users/op/tdata_staging_x9/tdata/key_datas "
+        "via socks5://bob:hunter2@10.20.30.40:1080"
+    )
+
+    async def fake_convert(_req: TdataConvertRequest, _dir: object) -> TdataConvertResult:
+        return TdataConvertResult(status="conversion_error", error=leak)
+
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
+
+    with pytest.raises(ValueError) as caught:  # noqa: PT011 - the message IS the assertion.
+        await import_account_tdata(
+            TdataConvertRequest(filename="tdata.zip", content=b"x"),
+        )
+
+    assert str(caught.value) == "tdata import failed: conversion_error"
+    assert "hunter2" not in str(caught.value)
+    assert "tdata_staging_x9" not in str(caught.value)
+
+
+@pytest.mark.asyncio
 async def test_import_account_tdata_rejects_empty_payload(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

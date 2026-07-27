@@ -660,6 +660,7 @@
     "warming_unpromoted_from_neurocomment": "Account returned from neurocommenting",
     "warming_quarantine_recovered": "Account recovered from quarantine",
     "warming_quarantine_exhausted": "Quarantine exhausted",
+    "warming_quarantine_unreadable": "Quarantine given up: spam status unreadable",
     "warming_settings_saved": "Warming settings saved",
     "warming_start_blocked": "Warming start blocked",
     "warming_runtime_reconciled": "Warming reconciled",

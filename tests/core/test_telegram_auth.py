@@ -51,11 +51,13 @@ class FakeAuthClient:
         needs_2fa: bool = False,
         sign_in_error: Exception | None = None,
         send_error: Exception | None = None,
+        log_out_error: Exception | None = None,
         on_connect: Callable[[], None] | None = None,
     ) -> None:
         self.needs_2fa = needs_2fa
         self.sign_in_error = sign_in_error
         self.send_error = send_error
+        self.log_out_error = log_out_error
         self.on_connect = on_connect
         self.disconnected = False
         self.logged_out = False
@@ -89,6 +91,8 @@ class FakeAuthClient:
         return FakeUser()
 
     async def log_out(self) -> bool:
+        if self.log_out_error is not None:
+            raise self.log_out_error
         self.logged_out = True
         # Telethon's own log_out() ends with ``session.delete()`` — an
         # ``os.remove`` whose OSError it swallows (sqlite.py). The fake has to do
@@ -231,6 +235,35 @@ async def test_log_out_session_marks_unauthorized(tmp_path: Path, monkeypatch) -
 
     assert result.status == "unauthorized"
     assert client.logged_out is True
+    assert client.disconnected is True
+
+
+@pytest.mark.asyncio
+async def test_log_out_session_failure_reports_only_the_exception_class(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The last ``str(exc)`` in this module — now the class name, like its sibling.
+
+    ``log_out_session``'s catch-all is a transport arm, so the same threat
+    ``_error_result`` bounds against applies: a ``python_socks`` failure stringifies
+    with the proxy endpoint. Nothing reads this field today
+    (``_end_session`` → ``update_account_from_session_check`` writes only
+    status/identity columns), but the sibling field IS read on the submit path, so
+    the contract has to hold before someone surfaces it.
+
+    Pre-fix ``error_message`` was ``str(exc)``, so both negative assertions failed.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    client = FakeAuthClient(log_out_error=ConnectionError(_PROXY_ERROR_TEXT))
+    _patch_client(monkeypatch, tmp_path, client)
+
+    result = await log_out_session(TelegramClientRequest(account_id="acc", receive_updates=False))
+
+    assert result.status == "unauthorized"
+    assert result.error_message == "ConnectionError"
+    for secret in _PROXY_SECRETS:
+        assert secret not in (result.error_message or "")
     assert client.disconnected is True
 
 

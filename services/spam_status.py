@@ -142,7 +142,8 @@ def classify_spam_probe(probe: SpamStatusProbe) -> tuple[SpamStatusKind, str | N
     """Map a raw probe to a (status, detail) verdict.
 
     Pipeline:
-    1. Probe error → unknown with the exception string in ``detail``.
+    1. Probe error → unknown with the exception's CLASS NAME in ``detail`` (the
+       gateway bounds it; ``detail`` is re-served as ``AccountRead.spam_detail``).
     2. Explicit keyword markers (en/ru/de) → precise verdict if any match.
     3. ``getFullUser.restricted`` flag → limited (Telegram-side hard restriction).
     4. Non-empty reply with no marker match → language-agnostic heuristic

@@ -73,10 +73,11 @@ async def _recover_from_quarantine(
     """Re-check a quarantined account: resume if cleared, escalate otherwise.
 
     Called when a quarantine window has elapsed. Re-probes @SpamBot; only a
-    ``clean`` verdict returns the account to warming, a still-limited one is
-    re-quarantined until the configured repeat cap, after which it is given up on
-    (error + alert). An ``unknown`` verdict read nothing, so it holds the
-    quarantine without spending a repeat.
+    ``clean`` verdict returns the account to warming. Anything else re-quarantines
+    until the configured repeat cap, after which the account is given up on
+    (``error`` + ERROR alert). An ``unknown`` verdict read nothing, so it does not
+    release the hold — but it does spend a repeat, so the hold is BOUNDED, and it
+    exhausts under ``quarantine_unreadable`` rather than claiming a confirmed flood.
 
     ``run_id`` (Round-2 P1 + Round-5 P1): if supplied, every write is
     CAS-guarded against the row's current run_id. A new CAS-write fires
@@ -114,36 +115,62 @@ async def _recover_from_quarantine(
         await log_event("INFO", "warming_quarantine_recovered", account_id=account_id)
         return WarmingCycleResult(account_id=account_id, status="skipped", detail="recovered")
 
-    # Only a CONFIRMED ``limited`` spends the escalation budget. ``unknown`` is not
-    # a reading of the account's standing at all — a refused probe (proxy down, dead
-    # session, @SpamBot silent) — so it neither releases the quarantine (that
-    # fail-open let one proxy outage free every quarantined account, once per cycle
-    # since probe errors stopped being cached) nor counts toward
-    # ``quarantine_max_repeats``, whose exhaustion message asserts the flood WAS
-    # re-checked and is still standing. It simply holds the quarantine one window
-    # longer, unchanged, and the next cycle re-probes.
+    # ``unknown`` is not a reading of the account's standing at all — a refused probe
+    # (proxy down, dead session, @SpamBot silent, row deleted) — so it must NOT
+    # release the quarantine. That fail-open let one proxy outage free every
+    # quarantined account, once per cycle since probe errors stopped being cached.
+    #
+    # But holding it for FREE was the mirror failure, and unbounded.
+    # ``SpamStatusKind`` is only ``clean | limited | unknown``: release needs
+    # ``clean`` and escalation needed ``limited``, so ``unknown`` fell through here
+    # with ``count = quarantine_count + 0`` — forever. ``services.spam_status``
+    # returns an UNCACHED ``unknown`` for every probe that never reached @SpamBot, so
+    # an account with a dead session or a dead proxy re-probed each window, got
+    # ``unknown``, and held with the counter frozen: ``quarantine_exhausted``
+    # unreachable, therefore ``state="error"`` and its ERROR-level alert unreachable
+    # too, and ``quarantine`` on the board indefinitely at one WARNING per window.
+    #
+    # So EVERY window spends one repeat and the escalation REASON records which kind
+    # spent the last one. ``quarantine_exhausted`` still asserts exactly what it
+    # always did — a re-checked, still-standing flood — and ``quarantine_unreadable``
+    # says the standing could not be read at all. Both park the account in ``error``
+    # with an ERROR event, which is what puts it in front of the operator. The two
+    # codes are logged from separate literal calls so
+    # ``tests/test_logevent_i18n_parity`` can see both.
     still_limited = verdict.status == "limited"
-    count = record.quarantine_count + (1 if still_limited else 0)
-    if still_limited and count >= warm.quarantine_max_repeats:
+    count = record.quarantine_count + 1
+    if count >= warm.quarantine_max_repeats:
         await _set_state(
             account_id,
             "error",
-            last_event="quarantine_exhausted",
-            last_error=f"peer-flood not lifted after {count} checks",
+            last_event="quarantine_exhausted" if still_limited else "quarantine_unreadable",
+            last_error=(
+                f"peer-flood not lifted after {count} checks"
+                if still_limited
+                else f"spam status unreadable after {count} checks"
+            ),
             heartbeat_at=now.isoformat(),
             quarantine_count=count,
             expected_run_id=run_id,
         )
-        await log_event(
-            "ERROR",
-            "warming_quarantine_exhausted",
-            account_id=account_id,
-            extra={"checks": count},
-        )
+        if still_limited:
+            await log_event(
+                "ERROR",
+                "warming_quarantine_exhausted",
+                account_id=account_id,
+                extra={"checks": count},
+            )
+        else:
+            await log_event(
+                "ERROR",
+                "warming_quarantine_unreadable",
+                account_id=account_id,
+                extra={"checks": count},
+            )
         return WarmingCycleResult(
             account_id=account_id,
             status="error",
-            detail="quarantine exhausted",
+            detail="quarantine exhausted" if still_limited else "quarantine unreadable",
         )
 
     next_run = (now + timedelta(hours=warm.quarantine_hours)).isoformat()

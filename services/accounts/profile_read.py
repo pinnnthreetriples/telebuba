@@ -289,7 +289,12 @@ async def _fetch_live_or_error(account_id: str) -> AccountProfileSnapshot:
         # (a python_socks failure names the proxy endpoint with credentials, a
         # session fault its file path) and this value is rendered verbatim in
         # the operator's browser — it must stay content-free (non-negotiable
-        # #12). The full message is already in the log event above.
+        # #12). That stands on the response contract alone, NOT on "the full
+        # message is already in the log event above": ``log_event`` persists
+        # ``extra`` to the ``logs`` table and ``GET /logs`` serves it back as
+        # ``LogEntry.extra`` (``GET /events`` streams it), so the event above is
+        # an HTTP body by another route rather than a safe sink. The ``str(exc)``
+        # in it is pre-existing ``GET /logs`` exposure, tracked separately.
         return _error_snapshot(account_id, type(exc).__name__)
 
     # The gateway returns the snapshot types matching each action's position.

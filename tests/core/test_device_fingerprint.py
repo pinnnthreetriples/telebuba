@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import pathlib
 from types import SimpleNamespace
 from typing import TYPE_CHECKING
 
@@ -21,8 +22,10 @@ from core.telegram_client import (
     check_telegram_session,
     create_telegram_client,
     prepare_telegram_client_profile,
+    remove_account_session,
     telegram_client,
 )
+from core.telegram_client._client import _session_dir_child
 from schemas.device_fingerprint import (
     DeviceFingerprint,
     TelegramClientProfile,
@@ -130,6 +133,89 @@ async def test_telegram_client_profile_prefers_an_explicit_session_name(
     )
 
     assert profile.session_path == str(tmp_path / "sessions" / "explicit")
+
+
+# The guard's contract as data: a session name must be one plain child component.
+# Every name here is refused on EVERY platform and whether or not the sessions
+# directory exists, because the refusal is now reached lexically. The trailing-space
+# and repeated-dot forms are in the list because they are exactly where a
+# ``resolve()``-only verdict diverged (see the two tests below).
+_NON_CHILD_NAMES = (
+    ".",
+    "..",
+    "...",
+    "....",
+    ".. ",
+    ". ",
+    "../evil",
+    "..\\evil",
+    "/abs",
+    "sub/x",
+)
+
+
+def test_session_name_refusal_never_reaches_the_filesystem(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    r"""Property: the verdict is a pure function of the NAME — no OS, no filesystem.
+
+    Deciding by comparing ``candidate.resolve().parent`` to the session dir made the
+    answer platform-specific. Win32 strips trailing dots and reads ``\`` as a
+    separator; POSIX does neither, so ``"..."`` resolved to ``sessions/...`` and
+    ``"..\evil"`` to ``sessions/..\evil`` there — ordinary filenames INSIDE the
+    directory, hence ALLOWED. Both are refused on Windows. Nothing escaped on POSIX,
+    but the same name got two verdicts, and every CI job runs ``ubuntu-latest``.
+
+    Asserting that ``resolve()`` is never even called is what makes that
+    platform-independent: a predicate that reads only the string cannot diverge.
+    The second half checks the resolved-parent comparison is still there as the
+    symlink backstop for a name the lexical rules accept.
+
+    Pre-fix this fails on the FIRST name on both platforms: the old guard called
+    ``resolve()`` before deciding anything, so the exploding patch below fired.
+    """
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+
+    def _explode(_self: pathlib.Path) -> pathlib.Path:
+        msg = "the guard must decide lexically, before any resolve()"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr(pathlib.Path, "resolve", _explode)
+
+    for name in _NON_CHILD_NAMES:
+        with pytest.raises(ValueError, match="escapes the session directory"):
+            _session_dir_child(name)
+    with pytest.raises(AssertionError, match="before any resolve"):
+        _session_dir_child("acc-1")
+
+
+@pytest.mark.parametrize("name", _NON_CHILD_NAMES)
+@pytest.mark.asyncio
+async def test_session_name_refusal_survives_a_missing_sessions_dir(
+    tmp_path: Path,
+    monkeypatch,
+    name: str,
+) -> None:
+    r"""The same verdict with the sessions directory ABSENT — the guard was fs-stateful.
+
+    ``resolve()`` cannot collapse a ``".."`` component against a directory that is
+    not there, so with the dir missing (the relative ``sessions`` default on first
+    boot, or one someone deleted) ``"..."``, ``".. "`` and ``". "`` were ALLOWED
+    where the very same names were refused once it existed.
+
+    ``remove_account_session`` is the reacher that makes this concrete: it is the one
+    caller that gets to the sink without ``_ensure_session_dir()`` running first —
+    and it UNLINKS. Pre-fix this fails on Windows for ``"..."``/``".. "``/``". "``
+    and on POSIX for those plus ``"...."`` and ``"..\\evil"``.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    missing = tmp_path / "never-created" / "sessions"
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", missing)
+    assert not missing.exists()
+
+    with pytest.raises(ValueError, match="escapes the session directory"):
+        await remove_account_session("acc-1", name)
 
 
 @pytest.mark.parametrize("name", [".", "..", "...", "../evil", "..\\evil", "/abs"])

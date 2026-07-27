@@ -427,7 +427,7 @@ def _optional_payload_str(value: object) -> str | None:
 
 
 def _failed_result(exc: BaseException) -> ProxyCheckResult:
-    """A bounded ``failed`` result, with the exception's full text sent to the log.
+    """A bounded ``failed`` result, with the full text sent to the STDLIB logger.
 
     ``last_error`` reaches the ``proxies`` row, ``AccountRead.proxy_last_error`` and
     the operator's browser (the proxy-pool row title), so it must stay bounded and
@@ -438,7 +438,14 @@ def _failed_result(exc: BaseException) -> ProxyCheckResult:
     Stdlib logging on purpose (mirrors ``_profile._mark_account_status``): a
     ``log_event`` code needs SPA copy in both locales for what is a diagnostic, and
     ``services.proxies.check_proxy`` already records the check itself under
-    ``proxy_checked``.
+    ``proxy_checked``. It is also the only destination here that is genuinely not
+    operator-visible as prose — ``log_event`` persists ``extra`` to the ``logs``
+    table and ``GET /logs`` serves it back as ``LogEntry.extra`` (``GET /events``
+    streams it), so routing an unbounded ``str(exc)`` through ``extra`` would put
+    it in an HTTP body just the same. Nothing configures stdlib logging here, so
+    this lands on the process's stderr (the uvicorn console) via
+    ``logging.lastResort`` — not in ``logs``, not in loguru's ``debug.log``, and on
+    no route.
     """
     logger.warning(
         "proxy check failed (error_type=%s): %s",

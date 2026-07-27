@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-26
+last_updated: 2026-07-27
 ---
 
 # Telegram Runtimes
@@ -29,6 +29,7 @@ last_updated: 2026-07-26
 - `pacing.py`/`_fleet.py` own scheduling and de-correlation; cycle modules own one testable session; runtime modules own state, sleep, cancellation, and recovery. The cycle is `_cycle` (session orchestration) + `_steps` (per-channel reads/reactions/joins and the shared step helpers), split by a plain one-way import — no test patches a `_cycle.<name>` attribute, so no re-export shim is needed; `services.warming._human_delay` now points at `_steps`. Inter-account chat splits the same way: `_chat` owns the dialogue turn (partner choice, send, inbox/tally bookkeeping) and `_chat_text` owns what to say (prompts, transcript context, sanitisation, acceptability/near-duplicate gate, Gemini retry) — patch `recent_pair_messages` and `generate_text` on `_chat_text`.
 - Inter-account DMs need the partner's PHONE, not just their `user_id` (#289). A session that never interacted with the peer has no cached `access_hash`, so a raw int raises `ValueError` and every warming DM silently failed. `core/telegram_client/_dm.py` resolves via `contacts.resolvePhone` — deliberately NOT `contacts.importContacts`, which saves a permanent contact nobody deletes and would build each account a saved list of nothing but fleet accounts (the correlated-graph tell `_fleet.py` channel slicing exists to avoid). Both sit behind the same `inputPrivacyKeyAddedByPhone` gate, so reach is identical. Telethon files the `access_hash` from the response, so a cold pair pays `users.GetUsers` + `contacts.resolvePhone` once.
 - A peer we can never address (no usable phone, or phone-lookup privacy) raises `DmPeerUnresolvedError`; `_chat.py` matches it BY CLASS NAME (`_PEER_UNRESOLVED`, pinned by a test — `services/` must not import a `core/` private) and skips the turn with `failures=0, attempted_actions=1`: no cycle failure (which would park a healthy sender in terminal `error` over someone else's privacy setting), but the RPCs still bill against the daily cap. Only PERMANENT conditions may map to it — Telethon turns exhausted retries into a bare `ValueError`, and swallowing that consumed live partner messages via `mark_message_replied`.
+- Quarantine recovery releases on `clean` only, and EVERY window spends one `quarantine_max_repeats` repeat. `unknown` (a probe that never reached @SpamBot — dead proxy/session — returned uncached by `refresh_spam_status`) must not release the hold, but must not hold it for free either: with the counter frozen an account sat in `quarantine` forever at one WARNING per window and `quarantine_exhausted`, the only route to `error` and the only ERROR alert, was unreachable. The exhausting window picks the reason: `quarantine_exhausted` still asserts a re-checked, still-standing flood; `quarantine_unreadable` says the standing could not be read.
 - Board reads stay bulk-loaded. Loop failures must be logged and persisted. Known counter defect: `#208`.
 
 ## Neurocomment
@@ -95,15 +96,48 @@ SQL so it cannot demote a pair the index would have accepted. `LinkChannelReques
 the handle, which is why `_deactivate_channel` fold-matches too — otherwise removing a legacy
 `@news` row would 204 while leaving it active.
 
-Removing an account (and `log_out_session(wipe_session=True)`) tombstones it in the client pool
-(`removing_client`, reference-counted) for the whole evict → unlink → delete sequence. Pool
-borrowers do not take `account_lock`, so without the tombstone one could rebuild a client
-mid-removal, reopen the session file and make the unlink fail on Windows — aborting before the DB
-row was deleted — or re-create the file afterwards. `get_client` checks the mark in THREE places
-and all three are load-bearing: before the lock (cached fast path), inside it (a borrower that
-queued before the mark, which FIFO puts ahead of the removal), and after the build (a borrower
-already inside the lock when the mark went up — that one otherwise publishes a live client). Probe
-and login paths build clients outside the pool, so they are NOT covered; the safety net there is
-that a failed unlink still skips `delete_account`, leaving the removal retryable.
+Removing an account tombstones it in the client pool (`removing_client`, reference-counted) for the
+whole evict → unlink → delete sequence. Pool borrowers do not take `account_lock`, so without the
+tombstone one could rebuild a client mid-removal, reopen the session file and make the unlink fail
+on Windows — aborting before the DB row was deleted — or re-create the file afterwards.
+`get_client` checks the mark in THREE places and all three are load-bearing: before the lock
+(cached fast path), inside it (a borrower that queued before the mark, which FIFO puts ahead of the
+removal), and after the build (a borrower already inside the lock when the mark went up — that one
+otherwise publishes a live client).
+
+Everything is now inside that fence. `log_out_session` tombstones REGARDLESS of `wipe_session`:
+Telethon's own `log_out()` ends in `session.delete()`, and the flag only decides whether the
+removal is *guaranteed*, not whether the file is touched. Both probes borrow FROM the pool
+(`_session._probe_client`, `_spam.check_spam_status`), so they are covered by the mark like any
+other borrower. `_auth`'s three flows — request-code, submit-code, logout — still build their own
+client, so on top of `removing_client` they run under `_auth_lock` (`_AUTH_LOCKS`, one
+lazily-created `asyncio.Lock` per account, taken OUTSIDE `removing_client`, which holds no lock
+across its `yield`, so the two cannot deadlock in either order). The tombstone alone refuses POOL
+rebuilds and therefore did not fence those three against EACH OTHER: measured, a logout started
+while a request-code was in flight put two Telethon clients on one `.session` file. A failed unlink
+still skips `delete_account`, keeping the removal retryable.
+
+`_client._session_dir_child` is the single sink every Telethon open and `_auth`'s unlink pass
+through, and it refuses a name that is not one plain child of the session dir. The verdict is
+reached LEXICALLY — empty, leading `.`, `..` anywhere, or either separator — with the
+resolved-parent comparison kept only as the symlink backstop. Deciding on `resolve()` alone was
+both platform-dependent (Win32 strips trailing dots and reads `\` as a separator, POSIX does
+neither, so `...` and `..\evil` got opposite verdicts by OS) and filesystem-state dependent
+(`resolve()` cannot collapse `..` against a directory that is absent, so `...`/`.. `/`. ` were
+allowed on first boot — reachable, because `remove_account_session` is the one caller that skips
+`_ensure_session_dir()`). `_ACCOUNT_ID_PATTERN` (`^[A-Za-z0-9_-][A-Za-z0-9._-]*$`) is the second
+line of defence, not the guard: its first character class excludes `.` on purpose, because
+`Path("..session").stem` is `"."` and the session-file import derives the id from that stem, so
+`account_id="."` used to name `<parent>/sessions.session` — one level ABOVE the directory, beside
+the database.
+
+`create_telegram_client` sets `parse_mode = None` on BOTH build branches. Telethon defaults to
+markdown, which silently eats `**bold**`, `__italic__`, `~~strike~~`, `` `code` `` and
+`[text](url)` out of every send — and a channel post read back → prefilled → re-saved persists the
+degraded text. It is not every Telethon client in the process (`core.tdata_import` gets one from
+opentele2's `ToTelethon`), but it is every SENDING one. The consequence lands in
+`services.content.strip_markdown_delimiters`, which puts back what the parser used to do — for
+GENERATED text only — by removing PAIRED delimiters and the `[text](url)` form, and deliberately
+leaving unpaired markers alone (Telethon left `snake_case__name` alone too).
 
 API/frontend contain no runtime policy. Telegram/provider access uses gateway seams; durability comes from persisted domain state and restart reconciliation, not an outbox.

@@ -188,8 +188,20 @@ async def log_out_session(
         try:
             await client.connect()
             await client.log_out()
-        except Exception as exc:  # noqa: BLE001 - best-effort logout; surface the reason.
-            error_message = str(exc)
+        except Exception as exc:  # noqa: BLE001 - best-effort logout; record the class only.
+            # Class name, not ``str(exc)`` — the same contract ``_error_result``
+            # states two functions down, and for the same reason: this arm catches
+            # transport failures, and a ``python_socks`` error stringifies with the
+            # proxy ``user:pass@host:port`` (non-negotiable #12).
+            #
+            # Nothing reads it today. ``services.accounts.login._end_session`` hands
+            # the result to ``update_account_from_session_check``, which writes only
+            # ``status`` / ``last_checked_at`` / ``updated_at`` — the ``error_message``
+            # a previous comment claimed to "surface" goes nowhere. It stays on the
+            # returned model because its sibling field IS read (``login`` raises
+            # ``PhoneLoginError(result.error_message)`` off the submit path), so the
+            # value a future reader picks up must already be bounded.
+            error_message = type(exc).__name__
         finally:
             await client.disconnect()
         if wipe_session:

@@ -19,10 +19,30 @@ _LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/)", re.IGNORECASE)
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 _WS_RE = re.compile(r"\s+")
 
-# Exactly Telethon's ``markdown.DEFAULT_DELIMITERS`` (1.44): ``**`` bold, ``__``
-# italic, ``~~`` strike, backtick code — ``` collapses because each backtick
-# matches. A lone ``*`` was never a delimiter, so it stays literal.
-_MARKDOWN_DELIMITER_RE = re.compile(r"\*\*|__|~~|`")
+# Telethon's ``markdown.DEFAULT_DELIMITERS`` (verified against the installed
+# 1.44.0), longest first exactly as its own ``sorted(key=len, reverse=True)`` does,
+# so ``` is not read as a single backtick. Each alternative captures the ENCLOSED
+# span, because Telethon only consumes a delimiter that has a PARTNER:
+# ``message.find(delim, i + len(delim) + 1)``, and leaves it literal when there is
+# none. ``.+?`` reproduces both halves of that rule — pairing, and the ≥1-character
+# span the ``+ 1`` offset requires. DOTALL because Telethon's ``find`` spans lines.
+# The single-backtick arm additionally refuses a backtick as its first content
+# character. Telethon tries only the delimiters that match AT the position it is
+# on and never falls back to a shorter one there, so an unclosed ``` fence stays
+# literal; a plain ``` `(.+?)` ``` would instead pair the first and third backtick
+# across the second and turn ```` ```py ```` into ```` `py ````.
+_MARKDOWN_PAIR_RE = re.compile(
+    r"```(.+?)```|\*\*(.+?)\*\*|__(.+?)__|~~(.+?)~~|`([^`].*?)`",
+    re.DOTALL,
+)
+# Telethon's ``markdown.DEFAULT_URL_RE``, verbatim. The parser consumed this form
+# too — ``[text](url)`` went out as ``text`` plus a MessageEntityTextUrl.
+_MARKDOWN_LINK_RE = re.compile(r"\[([^]]*?)\]\(([\s\S]*?)\)")
+
+
+def _enclosed_span(match: re.Match[str]) -> str:
+    """The one group that participated — the text between a matched delimiter pair."""
+    return next(group for group in match.groups() if group is not None)
 
 
 def strip_markdown_delimiters(text: str) -> str:
@@ -38,10 +58,31 @@ def strip_markdown_delimiters(text: str) -> str:
     neurocomment candidate), never to operator-authored text. Deterministic rather
     than a "no markdown" prompt instruction: the neurocomment instruction is
     prefixed by the operator's own ``campaign.prompt``, which is free to ask for
-    formatting, so an appended request is not something we can rely on. Links are
-    a separate concern — :func:`has_link` already rejects them.
+    formatting, so an appended request is not something we can rely on.
+
+    PAIRED delimiters only, and the link form as well — both because the target is
+    "what Telethon would have consumed", not "every delimiter character". A blind
+    substitution got that wrong in both directions: it deleted UNPAIRED markers
+    Telethon leaves alone, corrupting ``snake_case__name`` into ``snake_casename``,
+    eating a stray backtick and mangling a URL containing ``__``; and it left
+    ``[тут](tg://user?id=1)`` to post literally, since ``__`` and friends are not
+    the only syntax the parser ate. (``has_link`` rejects ``https?://`` and ``t.me``
+    but not ``tg://``, so that one really did reach a comment.) The label is kept
+    and the target dropped, which is what a reader used to see.
+
+    The loop re-runs until stable so a nested pair (``**a `b` c**``) comes out fully
+    bare — matching Telethon, which leaves ``i`` where it was and re-examines the
+    span it just unwrapped. It terminates because every pass that matches removes at
+    least two characters. One deliberate divergence: Telethon skips PAST a code span
+    ("no nested entities inside code blocks"), so it renders ```` ``py`` ```` as
+    `` `py` `` where this returns ``py``. Stripping the extra pair only removes a
+    visible marker, never a word, which is the direction this function exists to err
+    in — pinned in the tests so it stays a decision.
     """
-    return _MARKDOWN_DELIMITER_RE.sub("", text)
+    stripped = _MARKDOWN_LINK_RE.sub(r"\1", text)
+    while (unwrapped := _MARKDOWN_PAIR_RE.sub(_enclosed_span, stripped)) != stripped:
+        stripped = unwrapped
+    return stripped
 
 
 def normalize_text(text: str) -> str:

@@ -47,8 +47,17 @@ async def check_spam_status(account_id: str) -> SpamStatusProbe:
         # ``AccountRead.spam_detail`` — rendered verbatim in the operator's
         # browser. A pooled-client failure stringifies with the proxy endpoint and
         # a session fault with the ``.session`` path (non-negotiable #12, the same
-        # call ``_read``, ``_auth`` and ``services.accounts.privacy`` make). The
-        # full text is already in the WARNING above.
+        # call ``_read``, ``_auth`` and ``services.accounts.privacy`` make).
+        #
+        # NOT because "the full text is safely in the WARNING above": ``log_event``
+        # is not log-only. It inserts a ``logs`` row with ``extra`` as JSON, and
+        # ``GET /logs`` serves that back as ``LogEntry.extra`` while ``GET /events``
+        # streams it — so the WARNING is an HTTP body too, by a different route
+        # (verified: the probe's ``message`` came back verbatim in
+        # ``GET /api/v1/logs``). Bounding this field removed the DUPLICATE; the
+        # ``str(exc)`` in the extra above is pre-existing ``GET /logs`` exposure and
+        # is tracked separately. What justifies the class name here is the response
+        # contract on its own — a locale-neutral code the SPA can translate.
         return SpamStatusProbe(account_id=account_id, error=type(exc).__name__)
     return SpamStatusProbe(
         account_id=account_id,

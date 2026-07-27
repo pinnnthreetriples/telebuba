@@ -315,6 +315,48 @@ test('the publish button is locked while a publish is in flight (no double post)
   });
 });
 
+test('clicking Edit on another row mid-save still re-reads the history', async () => {
+  let resolveEdit!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === POSTS_PATH && request.method === 'GET') {
+      return Promise.resolve(jsonResponse(PAGE_ONE));
+    }
+    if (url.pathname.endsWith('/posts/10/edit')) {
+      return new Promise((resolve) => {
+        resolveEdit = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  });
+  renderWithClient(<ChannelPostsPanel accountId="acc-1" channelId="123" />);
+  await screen.findByText('Второй пост');
+  const getsBefore = requests(POSTS_PATH, 'GET').length;
+
+  // Save post 10, then reach for post 9's Edit while that save is still in
+  // flight. That button calls editPost.reset(), which drops the mutation
+  // observer — with mutate+callbacks the settle handler went with it, so
+  // Telegram edited the post and the panel never re-read the history.
+  await userEvent.click(screen.getAllByLabelText('Редактировать пост')[0] as HTMLElement);
+  await userEvent.click(screen.getByText('Сохранить'));
+  await waitFor(() => {
+    expect(requests('/posts/10/edit')).toHaveLength(1);
+  });
+  // byRole, not byLabelText: the open edit box carries the same aria-label.
+  await userEvent.click(
+    screen.getAllByRole('button', { name: 'Редактировать пост' })[1] as HTMLElement,
+  );
+
+  resolveEdit(jsonResponse({ status: 'ok', action_type: 'x', account_id: 'acc-1' }));
+  await waitFor(() => {
+    expect(requests(POSTS_PATH, 'GET').length).toBeGreaterThan(getsBefore);
+  });
+  // The row the operator moved to stays open — the resolved save must not close
+  // post 9's box just because it was post 10's that settled.
+  expect(screen.getByDisplayValue('Первый пост')).toBeInTheDocument();
+});
+
 test('a failed history load shows a retryable error', async () => {
   let failing = true;
   vi.mocked(fetch).mockImplementation((input) => {

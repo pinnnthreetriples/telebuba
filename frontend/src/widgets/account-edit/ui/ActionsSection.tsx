@@ -106,6 +106,11 @@ export function ActionsSection({ account, onBack }: { account: AccountRead; onBa
           <button
             type="button"
             onClick={runAliveCheck}
+            // Same guard the reset button carries: a second click before the
+            // first check settles takes over the mutation's one callback slot,
+            // so the first result's verdict and invalidate() are dropped — on
+            // top of a wasted Telegram round-trip.
+            disabled={aliveMutation.isPending}
             title={t('accounts.edit.aliveBtnTitle')}
             aria-label={t('accounts.edit.aliveBtnTitle')}
             className="flex h-[30px] w-[30px] shrink-0 items-center justify-center rounded-full border transition-[background-color,border-color,color] duration-300"
