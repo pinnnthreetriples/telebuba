@@ -92,12 +92,12 @@ async def test_clear_logs_by_comma_separated_prefixes_deletes_the_union(app: Fas
     await log_event("INFO", "neurocomment_posted")
     async with _client(app) as client:
         resp = await client.request(
-            "DELETE", "/api/v1/logs", params={"event_prefix": "warming_,telegram_"}
+            "DELETE", "/api/v1/logs", params={"event_prefix": "warming_,spam_status"}
         )
         assert resp.json() == {"deleted": 2}
         left = await client.get("/api/v1/logs")
     events = {row["event"] for row in left.json()["items"]}
-    assert events == {"spam_status_refreshed", "neurocomment_posted"}
+    assert events == {"telegram_action_unavailable", "neurocomment_posted"}
 
 
 @pytest.mark.asyncio

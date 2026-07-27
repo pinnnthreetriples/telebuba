@@ -58,7 +58,8 @@ function lineDetail(t: TFunction, line: LogEntry): string {
     (line.event === 'warming_reaction_skipped' ? extraStr(line.extra, 'reason') : undefined);
   if (skip) return t(`logEventReason.${skip}`, { defaultValue: '' });
   const seen = line.extra?.stories_seen;
-  if (line.event === 'telegram_watch_peer_stories' && typeof seen === 'number') {
+  // Gateway rows carry the calling domain as a prefix (`warming_telegram_*`).
+  if (line.event.endsWith('telegram_watch_peer_stories') && typeof seen === 'number') {
     return seen > 0
       ? t('warming.card.storiesSeen', { count: seen })
       : t('warming.card.storiesNone');
@@ -151,17 +152,30 @@ function WarmingCard({
   const [stopOpen, setStopOpen] = useState(false);
   const [cfgOpen, setCfgOpen] = useState(false);
   // Real per-account activity log, fetched only while the terminal is expanded.
-  // The prefixes keep the neurocomment engine's own events out. `telegram_*` and
-  // `spam_status_*` are NOT warming-exclusive — the gateway stamps `telegram_*` for
-  // every execute() caller (profile/channel actions too) and spam status is probed
-  // from several pages — but they are account-scoped, and warming both drives them
-  // (actions, quarantine re-probe) and needs their outcomes here, so they stay.
+  // `warming_` alone now covers the engine's own gateway calls too: the gateway
+  // stamps the calling domain onto its event names, so warming's actions arrive as
+  // `warming_telegram_*` while a profile/channel action's bare `telegram_*` row —
+  // same account, nothing to do with warming — no longer leaks in. `spam_status_*`
+  // is NOT warming-exclusive (several pages probe it) but it is account-scoped and
+  // warming drives it on quarantine re-probe, so it stays.
+  //
+  // Accepted loss, exactly two rows: `telegram_pool_connect_retry` and
+  // `telegram_pool_rebuild_hook_failed` (core/telegram_client/_pool.py) no longer reach this
+  // card — the "this account's connection is flaky" breadcrumb now lives only on the Logs
+  // page. Do NOT bring them back with a `telegram_pool` prefix: the pool is shared, so those
+  // rows are exactly as cross-domain as bare `telegram_*` was.
+  // Everything else that the old `telegram_` prefix used to surface here still arrives:
+  // `telegram_pool_connect_failed` makes the action raise, so the gateway writes
+  // `warming_telegram_action_unavailable`; `telegram_spam_status_probe_failed` is folded into
+  // `spam_status_refreshed`'s `detail` by `classify_spam_probe`. And
+  // `telegram_pool_disconnect_failed` is not a loss at all — it is logged without an
+  // `account_id`, so this account-scoped query never returned it in the first place.
   const logQuery = useQuery({
     ...logsQueryOptions({
       query: {
         account_id: account.account_id,
         limit: logLimit,
-        event_prefix: 'warming_,telegram_,spam_status',
+        event_prefix: 'warming_,spam_status',
       },
     }),
     enabled: open,

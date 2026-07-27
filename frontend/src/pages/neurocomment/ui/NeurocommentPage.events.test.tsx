@@ -88,6 +88,138 @@ test('the neuro log localizes a known event code and falls back for an unknown o
   expect(screen.getByText('some_unmapped_code')).toBeInTheDocument();
 });
 
+test('the neuro log shows the domain-prefixed gateway rows the engine triggered', async () => {
+  // The `neurocomment` prefix filter now reaches the gateway's own rows because the
+  // gateway stamps the calling domain onto them (`neurocomment_telegram_*`) — the
+  // actual comment post and its flood wait, previously visible only to warming's card.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: 'now',
+              level: 'INFO',
+              status: 'success',
+              event: 'neurocomment_telegram_comment_on_post',
+            },
+            {
+              id: 2,
+              created_at: 'now',
+              level: 'WARNING',
+              status: 'warning',
+              event: 'neurocomment_telegram_comment_on_post_slow_mode_wait',
+              extra: { seconds: 30 },
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(screen.getByText('Комментарий к посту')).toBeInTheDocument();
+  });
+  expect(screen.getByText('Комментарий к посту — медленный режим')).toBeInTheDocument();
+});
+
+// The Odometer rolls a 0–9 digit column into place, so a tile's value is readable only
+// as its settled offset: value N sits at translateY(-N*1.1em).
+function errorsTileOffset(): string {
+  const cell = screen.getByText('ошибок').parentElement;
+  return cell?.querySelector<HTMLElement>('[style*="translateY"]')?.style.transform ?? '';
+}
+
+test('the errors tile counts the service verdict once, while the gateway twin stays red in the list', async () => {
+  // Four rows, one intended error. The gateway rows reach this feed now that they carry the
+  // domain prefix, and `_generate.py` writes its own classified row for the same outcome —
+  // so counting both would double it, and `neurocomment_post_access_lost` is deliberately
+  // amber even though it comes from `status == "failed"`. Expected tile value: 1.
+  //   neurocomment_post_failed                            red,   counted  ← the verdict
+  //   neurocomment_telegram_comment_on_post_failed        red,   twin, not counted
+  //   neurocomment_post_access_lost                       amber, not counted
+  //   neurocomment_telegram_join_discussion_group_failed  red,   UNTWINNED, not counted
+  // Without the `_telegram_` exclusion the tile would read 3.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    const url = new URL(request.url);
+    if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
+      return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
+    }
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname === '/api/v1/neurocomment/runtime') {
+      return Promise.resolve(
+        jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),
+      );
+    }
+    if (url.pathname === '/api/v1/logs') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            {
+              id: 1,
+              created_at: 'now',
+              // WARNING, not ERROR: `_generate.py` writes every verdict row at WARNING.
+              // The FAILURE suffix rule is what makes this count, not the log level.
+              level: 'WARNING',
+              status: 'warning',
+              event: 'neurocomment_post_failed',
+            },
+            {
+              id: 2,
+              created_at: 'now',
+              level: 'ERROR',
+              status: 'error',
+              event: 'neurocomment_telegram_comment_on_post_failed',
+            },
+            {
+              id: 3,
+              created_at: 'now',
+              level: 'WARNING',
+              status: 'warning',
+              event: 'neurocomment_post_access_lost',
+            },
+            {
+              id: 4,
+              created_at: 'now',
+              level: 'ERROR',
+              status: 'error',
+              event: 'neurocomment_telegram_join_discussion_group_failed',
+            },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(jsonResponse({ items: [], next_cursor: null }));
+  });
+  renderWithClient(<NeurocommentPage />);
+  await waitFor(() => {
+    expect(errorsTileOffset()).toBe('translateY(-1.10em)');
+  });
+  // The twin is excluded from the count but still reads as a transport error in the list…
+  expect(screen.getByText('Комментарий к посту — ошибка')).toHaveStyle({ color: '#e5736b' });
+  // …and so does the UNTWINNED gateway failure, for which this row is the only evidence
+  // there is (`_classify.py` logs nothing on that branch, `challenge.py` logs nothing at all).
+  expect(screen.getByText('Вступление в чат канала — ошибка')).toHaveStyle({ color: '#e5736b' });
+  // The deliberately-amber service verdict keeps its own colour.
+  expect(screen.getByText('Потерян доступ к чату канала')).toHaveStyle({ color: '#ffd27f' });
+});
+
 test('the clear-log trash confirms, then DELETEs only the neurocomment logs', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

@@ -15,6 +15,15 @@ const TG_STATUS_SUFFIXES = [
   'already_participant',
 ] as const;
 
+// The gateway also stamps the calling domain onto those names
+// (`warming_telegram_join_channel`, `neurocomment_telegram_comment_on_post`) so each
+// feed's `event_prefix` filter sees its own gateway rows — see `event_name` in
+// core/telegram_client/_util.py. The label is domain-independent: the feed you are
+// reading already tells you the domain, so strip the prefix and label the bare form.
+// Lazy + `_`-tolerant so a multi-word domain (`spam_status_telegram_*`) strips too — the
+// convention in .mex/patterns/add-log-event.md puts no shape constraint on a domain name.
+const TG_DOMAIN_PREFIX = /^[a-z0-9_]+?_(?=telegram_)/;
+
 function telegramLabel(t: TFunction, code: string): string {
   const body = code.slice('telegram_'.length);
   for (const status of TG_STATUS_SUFFIXES) {
@@ -33,19 +42,27 @@ function telegramLabel(t: TFunction, code: string): string {
  * snake_case codes and the SPA owns the labels. Resolution order:
  *
  * 1. An exact `logEvent.<code>` entry (the curated, single-source dictionary).
- * 2. For `telegram_*` action codes, a compositional label built from the action
+ * 2. An exact entry for the same code with its `<domain>_` gateway prefix stripped —
+ *    the normal path for a gateway row, and after (1) so a domain-specific override key
+ *    can win when someone adds one.
+ * 3. For `telegram_*` action codes, a compositional label built from the action
  *    stem + status suffix (covers the whole dynamic action×status family).
- * 3. Otherwise the raw code — never a blank cell or a `logEvent.foo` placeholder.
+ * 4. Otherwise the raw code — never a blank cell or a `logEvent.foo` placeholder.
  *
  * A CI parity test (`tests/test_logevent_i18n_parity.py`) fails the build when a
  * backend `log_event` code (literal or composed) lacks a translation, so the raw
  * fallback is a safety net rather than the normal path.
  */
 export function eventLabel(t: TFunction, code: string): string {
-  const exact = t(`logEvent.${code}`, { defaultValue: '' });
+  // A code that is already bare is never stripped: without this guard the lazy prefix
+  // match would eat the first half of a hypothetical `telegram_relay_telegram_join_channel`
+  // and mislabel it as a plain `telegram_join_channel`.
+  const bare = code.startsWith('telegram_') ? code : code.replace(TG_DOMAIN_PREFIX, '');
+  const exact =
+    t(`logEvent.${code}`, { defaultValue: '' }) || t(`logEvent.${bare}`, { defaultValue: '' });
   if (exact) return exact;
-  if (code.startsWith('telegram_')) {
-    const composed = telegramLabel(t, code);
+  if (bare.startsWith('telegram_')) {
+    const composed = telegramLabel(t, bare);
     if (composed) return composed;
   }
   return code;

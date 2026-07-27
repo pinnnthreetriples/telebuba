@@ -141,7 +141,11 @@ async def test_event_prefix_keeps_only_matching_events() -> None:
 
 @pytest.mark.asyncio
 async def test_event_prefix_accepts_several_comma_separated_prefixes() -> None:
-    """The warming terminal asks for ``warming_,telegram_`` and must get both, only both."""
+    """A multi-prefix filter must return every named prefix and nothing else.
+
+    The prefixes here are illustrative — the warming terminal now asks for
+    ``warming_,spam_status``; this exercises the comma-splitting, not that view.
+    """
     await log_event("INFO", "warming_cycle_completed", account_id="acc-1")
     await log_event("WARNING", "telegram_action_unavailable", account_id="acc-1")
     await log_event("INFO", "neurocomment_posted", account_id="acc-1")

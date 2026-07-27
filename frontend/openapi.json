@@ -7346,7 +7346,7 @@
           "logs"
         ],
         "summary": "List Logs",
-        "description": "List log rows, newest first.\n\n``event_prefix`` accepts a comma-separated list of prefixes and keeps rows whose\nevent starts with any of them (e.g. ``warming_,telegram_``). Omitting it, or passing\nthe empty string, applies no filter; a value that yields no usable prefix (``\" \"``,\n``\",\"``) is still a filter and matches nothing.",
+        "description": "List log rows, newest first.\n\n``event_prefix`` accepts a comma-separated list of prefixes and keeps rows whose\nevent starts with any of them (e.g. ``warming_,spam_status``). Omitting it, or passing\nthe empty string, applies no filter; a value that yields no usable prefix (``\" \"``,\n``\",\"``) is still a filter and matches nothing.",
         "operationId": "listLogs",
         "parameters": [
           {

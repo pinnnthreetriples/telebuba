@@ -42,9 +42,10 @@ def _module_event_codes(source: str, path: Path) -> set[str]:
     second positional argument cannot be defeated by the next formatting variation.
 
     A code that is itself not a literal (an f-string in the Telegram gateway, a
-    caller-supplied event name) is skipped: the composed ones are covered by
+    caller-supplied event name, the local variable ``services.neurocomment._generate``
+    assigns before logging) is skipped: the composed ones are covered by
     :func:`test_every_telegram_action_and_status_has_a_compositional_label`, and the
-    rest cannot be resolved statically at all.
+    rest cannot be resolved statically at all. One wrapper IS unwrapped — see below.
     """
     codes: set[str] = set()
     for node in ast.walk(ast.parse(source, filename=str(path))):
@@ -60,6 +61,17 @@ def _module_event_codes(source: str, path: Path) -> set[str]:
             (kw.value for kw in node.keywords if kw.arg == "event"),
             node.args[_CODE_ARG_INDEX] if len(node.args) > _CODE_ARG_INDEX else None,
         )
+        # ``event_name(domain, "literal")``: the Telegram gateway runs its names through
+        # that wrapper to prefix the calling domain, which would otherwise hide the
+        # literal behind a Call node. The SPA strips the prefix and looks the bare name
+        # up, so unwrap one level and keep the literal inside. Its f-string siblings stay
+        # skipped, exactly as above — this widens discovery by one call shape, no more.
+        if (
+            isinstance(code, ast.Call)
+            and getattr(code.func, "id", "") == "event_name"
+            and len(code.args) > _CODE_ARG_INDEX
+        ):
+            code = code.args[_CODE_ARG_INDEX]
         if isinstance(code, ast.Constant) and isinstance(code.value, str):
             codes.add(code.value)
     return codes

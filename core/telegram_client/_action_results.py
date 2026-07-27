@@ -11,6 +11,7 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
 from core.logging import log_event
+from core.telegram_client._util import event_name
 from schemas.telegram_actions import ActionResult
 
 if TYPE_CHECKING:
@@ -36,13 +37,14 @@ class _DispatchResult:
     recent_message_ids: list[int] | None = None
 
 
-async def _flood_action_result(
+async def _flood_action_result(  # noqa: PLR0913 - four keyword-only outcome facets, no bag
     account_id: str,
     action: TelegramAction,
     *,
     status: ActionStatus,
     seconds: int | None,
     applied_privacy_keys: list[str] | None = None,
+    domain: str | None = None,
 ) -> ActionResult:
     """Log a Telegram rate-limit event and build the matching ``ActionResult``.
 
@@ -56,7 +58,7 @@ async def _flood_action_result(
     """
     await log_event(
         "WARNING",
-        f"telegram_{action.action_type}_{status}",
+        event_name(domain, f"telegram_{action.action_type}_{status}"),
         account_id=account_id,
         extra={"seconds": seconds},
     )
@@ -73,6 +75,8 @@ async def _unavailable_result(
     account_id: str,
     action: TelegramAction,
     exc: Exception,
+    *,
+    domain: str | None = None,
 ) -> ActionResult:
     """Infrastructure failure (pool connect / socket / timeout) — not the caller's fault.
 
@@ -81,7 +85,10 @@ async def _unavailable_result(
     """
     await log_event(
         "WARNING",
-        "telegram_action_unavailable",
+        # A fixed name, but still an action outcome, so it carries the domain
+        # prefix like the composed ones; the SPA strips the prefix and resolves
+        # the bare ``logEvent.telegram_action_unavailable`` label.
+        event_name(domain, "telegram_action_unavailable"),
         account_id=account_id,
         extra={
             "action_type": action.action_type,
@@ -116,7 +123,13 @@ def _applied_privacy_keys(exc: BaseException) -> list[str] | None:
     return None
 
 
-async def _generic_error(account_id: str, action: TelegramAction, exc: Exception) -> ActionResult:
+async def _generic_error(
+    account_id: str,
+    action: TelegramAction,
+    exc: Exception,
+    *,
+    domain: str | None = None,
+) -> ActionResult:
     # Stable-code wrappers chain the real reason (Pillow error + magic bytes) as __cause__.
     cause = str(exc.__cause__) if exc.__cause__ is not None else None
     # A partially-completed channel_create carries the already-created id
@@ -125,7 +138,7 @@ async def _generic_error(account_id: str, action: TelegramAction, exc: Exception
     created_id = getattr(exc, "channel_id", None)
     await log_event(
         "ERROR",
-        f"telegram_{action.action_type}_failed",
+        event_name(domain, f"telegram_{action.action_type}_failed"),
         account_id=account_id,
         extra={"error_type": type(exc).__name__, "message": str(exc), "cause": cause},
     )
