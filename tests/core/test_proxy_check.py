@@ -7,6 +7,7 @@ import httpx
 import pytest
 import respx
 
+from core import _proxy_http as proxy_http_module
 from core import proxy_check as proxy_check_module
 from core.config import settings
 from core.proxy_check import (
@@ -144,7 +145,8 @@ async def test_fetch_exit_ip_uses_authenticated_tls_tunnel(
         captured["open_kwargs"] = kwargs
         return reader, writer
 
-    monkeypatch.setattr(proxy_check_module, "Proxy", FakeProxy)
+    # ``Proxy`` is resolved from ``core._proxy_http``, which owns the tunnel.
+    monkeypatch.setattr(proxy_http_module, "Proxy", FakeProxy)
     monkeypatch.setattr(proxy_check_module.asyncio, "open_connection", fake_open_connection)
     monkeypatch.setattr(settings.proxy, "exit_ip_host", "example.test")
     monkeypatch.setattr(settings.proxy, "exit_ip_path", "/ip")

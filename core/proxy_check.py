@@ -2,46 +2,31 @@ from __future__ import annotations
 
 import asyncio
 import ipaddress
-import json
 import logging
-import ssl
-from contextlib import suppress
 from dataclasses import dataclass
-from typing import Any, Protocol
 from urllib.parse import quote
 
 import httpx
-from python_socks import ProxyType as SocksProxyType
-from python_socks.async_.asyncio import Proxy
 
+# The raw HTTPS-over-SOCKS transport lives in ``_proxy_http`` (file-size budget).
+# Re-exported so ``core.proxy_check.<name>`` keeps resolving for call sites and
+# tests. ``_ProxyCheckError`` is defined there but belongs to both modules — it is
+# the marker :func:`_short_error` below matches on.
+from core._proxy_http import (  # noqa: F401 - re-export; only some names are used here.
+    _decode_chunked,
+    _fetch_https_through_proxy,
+    _http_request,
+    _parse_http_json,
+    _ProxyCheckError,
+    _read_limited,
+)
 from core.config import settings
-from schemas.proxy import GeoStatus, ProxyCheckResult, ProxySettings, ProxyType
+from schemas.proxy import GeoStatus, ProxyCheckResult, ProxySettings
 
-_PROXY_TYPE_BY_NAME: dict[ProxyType, SocksProxyType] = {
-    "socks5": SocksProxyType.SOCKS5,
-    "https": SocksProxyType.HTTP,
-}
-_HTTP_STATUS_INDEX = 1
-_HTTP_STATUS_CODE_LENGTH = 3
 _MAX_ERROR_LENGTH = 240
-_MAX_RESPONSE_BYTES = 64 * 1024
 _COUNTRY_CODE_LENGTH = 2
 
 logger = logging.getLogger(__name__)
-
-
-class _ProxyCheckError(OSError):
-    """A failure THIS module diagnosed, so its message is our own bounded prose.
-
-    An ``OSError`` subclass so the probe's existing ``except OSError`` arm keeps
-    catching it. It is what lets :func:`_short_error` tell a useful diagnostic
-    ("Proxy returned a non-public exit IP address") apart from a third-party
-    exception whose text is not a contract and must not reach the wire.
-    """
-
-
-class _AsyncReader(Protocol):
-    async def read(self, n: int = -1) -> bytes: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -117,142 +102,6 @@ async def _fetch_exit_ip(proxy: ProxySettings) -> str:
         msg = "Proxy returned a non-public exit IP address"
         raise _ProxyCheckError(msg)
     return address.compressed
-
-
-async def _fetch_https_through_proxy(
-    proxy: ProxySettings,
-    *,
-    host: str,
-    port: int,
-    path: str,
-) -> bytes:
-    socks_proxy = Proxy(
-        proxy_type=_PROXY_TYPE_BY_NAME[proxy.proxy_type],
-        host=proxy.host,
-        port=proxy.port,
-        username=proxy.username,
-        password=proxy.password,
-    )
-    timeout = settings.proxy.check_timeout_seconds
-    sock = await asyncio.wait_for(
-        socks_proxy.connect(dest_host=host, dest_port=port, timeout=timeout),
-        timeout=timeout,
-    )
-    reader, writer = await asyncio.wait_for(
-        asyncio.open_connection(
-            sock=sock,
-            ssl=ssl.create_default_context(),
-            server_hostname=host,
-            ssl_handshake_timeout=timeout,
-        ),
-        timeout=timeout,
-    )
-    try:
-        writer.write(_http_request(host, path))
-        await asyncio.wait_for(writer.drain(), timeout=timeout)
-        return await _read_limited(reader, timeout_seconds=timeout)
-    finally:
-        writer.close()
-        with suppress(OSError, TimeoutError):
-            await asyncio.wait_for(writer.wait_closed(), timeout=timeout)
-
-
-async def _read_limited(
-    reader: _AsyncReader,
-    *,
-    timeout_seconds: float,
-) -> bytes:
-    chunks: list[bytes] = []
-    total = 0
-    while True:
-        remaining = _MAX_RESPONSE_BYTES + 1 - total
-        chunk = await asyncio.wait_for(
-            reader.read(min(16_384, remaining)),
-            timeout=timeout_seconds,
-        )
-        if not chunk:
-            return b"".join(chunks)
-        chunks.append(chunk)
-        total += len(chunk)
-        if total > _MAX_RESPONSE_BYTES:
-            msg = "Exit-IP endpoint response is too large"
-            raise _ProxyCheckError(msg)
-
-
-def _http_request(host: str, path: str) -> bytes:
-    normalized_path = path if path.startswith("/") else f"/{path}"
-    return (
-        f"GET {normalized_path} HTTP/1.1\r\n"
-        f"Host: {host}\r\n"
-        "Accept: application/json\r\n"
-        "User-Agent: Telebuba/0.1\r\n"
-        "Connection: close\r\n"
-        "\r\n"
-    ).encode()
-
-
-def _parse_http_json(raw: bytes) -> dict[str, Any]:
-    head, separator, body = raw.partition(b"\r\n\r\n")
-    if not separator:
-        msg = "HTTPS endpoint returned an incomplete response"
-        raise _ProxyCheckError(msg)
-    lines = head.split(b"\r\n")
-    parts = lines[0].decode(errors="replace").split()
-    status_code = parts[_HTTP_STATUS_INDEX] if len(parts) > _HTTP_STATUS_INDEX else ""
-    if status_code != "200":
-        # The status CODE is actionable and ours to report; the rest of the status
-        # LINE is a reason phrase the remote server chose, and this message ends up
-        # in ``proxy_last_error`` (see ``_failed_result``) — bounded is not enough,
-        # remote-controlled text has no business in our own diagnostic.
-        msg = (
-            f"HTTPS endpoint returned HTTP {status_code}"
-            if len(status_code) == _HTTP_STATUS_CODE_LENGTH
-            and status_code.isascii()
-            and status_code.isdigit()
-            else "HTTPS endpoint returned an unparsable status line"
-        )
-        raise _ProxyCheckError(msg)
-
-    headers: dict[str, str] = {}
-    for raw_header in lines[1:]:
-        name, delimiter, value = raw_header.partition(b":")
-        if delimiter:
-            headers[name.decode(errors="replace").strip().lower()] = (
-                value.decode(errors="replace").strip().lower()
-            )
-    if headers.get("transfer-encoding") == "chunked":
-        body = _decode_chunked(body)
-    try:
-        parsed = json.loads(body.decode())
-    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
-        msg = "HTTPS endpoint returned invalid JSON"
-        raise _ProxyCheckError(msg) from exc
-    if not isinstance(parsed, dict):
-        msg = "HTTPS endpoint returned non-object JSON"
-        raise _ProxyCheckError(msg)
-    return parsed
-
-
-def _decode_chunked(body: bytes) -> bytes:
-    decoded = bytearray()
-    remaining = body
-    while True:
-        size_line, separator, remaining = remaining.partition(b"\r\n")
-        if not separator:
-            msg = "HTTPS endpoint returned invalid chunked data"
-            raise _ProxyCheckError(msg)
-        try:
-            size = int(size_line.split(b";", 1)[0], 16)
-        except ValueError as exc:
-            msg = "HTTPS endpoint returned invalid chunk size"
-            raise _ProxyCheckError(msg) from exc
-        if size == 0:
-            return bytes(decoded)
-        if len(remaining) < size + 2 or remaining[size : size + 2] != b"\r\n":
-            msg = "HTTPS endpoint returned a truncated chunk"
-            raise _ProxyCheckError(msg)
-        decoded.extend(remaining[:size])
-        remaining = remaining[size + 2 :]
 
 
 async def _lookup_geolocation(exit_ip: str) -> _GeoOutcome:

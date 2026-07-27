@@ -145,14 +145,13 @@ async def _run_tdata_import(
 ) -> list[AccountRead]:
     result = await convert(data, staging_dir)
     if result.status != "ok":
-        # ``result.status`` only — the stable ``TdataConvertStatus`` code. This ``msg``
-        # becomes the HTTP 400 ``message`` via ``service_errors_to_http``, and
-        # ``result.error`` used to be interpolated into it: opentele2 stringifies from
-        # the raising frame's parameters, so that put the staging path — and any proxy
-        # URL with credentials the frame held — straight into the response body
-        # (non-negotiable #12). ``error`` is now a bounded class name
-        # (``core.tdata_import._bounded_conversion_error``) and rides the log event
-        # below; the full text is in the stdlib log at the gateway.
+        # ``result.status`` only — the stable ``TdataConvertStatus`` code, because this
+        # ``msg`` becomes the HTTP 400 ``message`` via ``service_errors_to_http``.
+        # ``result.error`` must never join it: opentele2 stringifies from the raising
+        # frame's parameters, so it can carry the staging path and any proxy URL with
+        # credentials that frame held (non-negotiable #12). It is a bounded class name
+        # (``core.tdata_import._bounded_conversion_error``); the full text stays in the
+        # stdlib log at the gateway.
         msg = f"tdata import failed: {result.status}"
         await log_event(
             "ERROR",
