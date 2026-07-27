@@ -60,8 +60,11 @@ test('shows the Telegram name instead of the phone when the account has one', ()
       ]}
     />,
   );
-  expect(screen.getByText('Polina')).toBeInTheDocument();
-  expect(screen.getByText('Alisa K')).toBeInTheDocument();
+  // Order-aware on purpose: getByText alone is blind to the two sides being
+  // swapped, so it would stay green on a from/to mix-up. Assert the sender is
+  // the FIRST name in the row, ahead of the recipient.
+  const names = screen.getAllByText(/Polina|Alisa K/).map((el) => el.textContent);
+  expect(names).toEqual(['Polina', 'Alisa K']);
   expect(screen.queryByText('527717224137')).not.toBeInTheDocument();
   expect(screen.queryByText('528671176536')).not.toBeInTheDocument();
 });

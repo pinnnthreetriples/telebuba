@@ -183,16 +183,18 @@ async def test_load_overview_carries_name_parts_for_both_sides() -> None:
 
 
 @pytest.mark.asyncio
-async def test_load_overview_leaves_name_parts_none_when_unknown() -> None:
+async def test_load_overview_forwards_unknown_names_verbatim() -> None:
     # A logged-in account that never reported a name, and a peer that was never
-    # registered at all: both must yield None rather than an empty string, so
-    # the SPA's fallback to the label is the only thing that can fire.
-    await _seed_account("a", "+15550001111")
+    # registered at all. The service does NOT normalise: whatever the row holds
+    # is forwarded as-is, so ``""`` stays ``""`` and only NULL becomes None.
+    # Both are falsy, which is what the SPA's fallback to the label keys off —
+    # the emptiness is never repaired here, so don't assert an invariant on it.
+    await _seed_account("a", "+15550001111", first_name="")
     await record_dialogue_message("a", "ghost", "orphan")
 
     msg = (await load_dialogue_overview()).messages[0]
 
-    assert (msg.from_first_name, msg.from_last_name) == (None, None)
+    assert (msg.from_first_name, msg.from_last_name) == ("", None)
     assert (msg.to_first_name, msg.to_last_name) == (None, None)
     assert (msg.from_label, msg.to_label) == ("+15550001111", "ghost")
 
