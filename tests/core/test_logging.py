@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 from typing import TYPE_CHECKING
 from unittest.mock import MagicMock, patch
 
@@ -85,6 +86,63 @@ async def test_writes_to_loguru_file() -> None:
     contents = settings.logging.path.read_text(encoding="utf-8")
     assert "first_event" in contents
     assert "acc-x" in contents
+
+
+@pytest.mark.asyncio
+async def test_stdlib_logger_text_is_retained_in_the_loguru_file() -> None:
+    """The stdlib sink is durable again — and still reaches no route.
+
+    Bounding ``extra`` moved full third-party exception text onto each module's stdlib
+    logger. uvicorn's ``LOGGING_CONFIG`` has no ``root`` key, so those records fell to
+    ``logging.lastResort``: nothing was dropped, but the text existed only in the
+    process's stderr stream, so an operator could no longer recover why a proxy failed
+    six hours ago. ``_StdlibToLoguru`` puts it back on disk — and only on disk.
+    """
+    secret = "socks5://leakuser:LEAKPASS123@10.9.8.7:1080"
+    exc = OSError(f"proxy {secret} refused")
+    # ``exc_info=`` rather than a live ``raise``: the same call shape ``api.errors`` and
+    # ``_action_results`` use, and it keeps this a test about the sink, not the raise.
+    logging.getLogger("core.telegram_client._pool").error("pool connect failed", exc_info=exc)
+
+    await logging_module.logger.complete()
+    contents = settings.logging.path.read_text(encoding="utf-8")
+    assert "LEAKPASS123" in contents
+    assert "pool connect failed" in contents
+    # The retention fix must not have opened a second route: nothing was persisted to
+    # the ``logs`` table, which is what ``GET /logs`` and ``GET /events`` serve.
+    assert await list_recent_logs(limit=5) == []
+
+
+def test_stdlib_bridge_keeps_the_console_and_prints_once(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    """Console output is unchanged, and the bridge does not duplicate it.
+
+    Adding *any* handler to root silences ``logging.lastResort`` (it only fires when a
+    record finds none), so it is re-added explicitly instead of being replaced by a
+    fresh ``StreamHandler`` — reusing the handler that already fires is what makes the
+    console byte-identical rather than merely similar.
+    """
+    root = logging.getLogger()
+    assert logging.lastResort in root.handlers
+    assert any(isinstance(handler, logging_module._StdlibToLoguru) for handler in root.handlers)
+
+    logging.getLogger("core.proxy_check").warning("proxy check failed: sentinel-9f3a")
+
+    assert capsys.readouterr().err.count("sentinel-9f3a") == 1
+
+
+def test_reset_removes_the_bridge_so_fixtures_do_not_stack_handlers() -> None:
+    """Every test fixture in the suite resets then re-runs ``setup_logging``.
+
+    Without the paired removal in ``reset_logging_for_tests`` each pair would leave
+    another ``(lastResort, bridge)`` on root, and every line would print N times.
+    """
+    root = logging.getLogger()
+    before = len(root.handlers)
+    reset_logging_for_tests()
+    setup_logging()
+    assert len(root.handlers) == before
 
 
 @pytest.mark.asyncio

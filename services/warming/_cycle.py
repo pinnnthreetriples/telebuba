@@ -12,6 +12,7 @@ file-size budget; the dependency runs one way (this module imports from
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -42,6 +43,9 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingChannel
     from services.warming._steps import _OnStep
 
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
+
 
 async def _watch_stories_step(
     account_id: str,
@@ -60,12 +64,13 @@ async def _set_offline(account_id: str) -> None:
     """SetOnline(False), swallowing errors — cleanup must never raise."""
     try:
         await _seams.execute(account_id, SetOnline(online=False))
-    except Exception as exc:  # noqa: BLE001 - cleanup must never raise.
+    except Exception as exc:  # cleanup must never raise.
+        logger.exception("set_offline failed for %s", account_id)
         await log_event(
             "WARNING",
             "warming_set_offline_failed",
             account_id=account_id,
-            extra={"error_type": type(exc).__name__, "message": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
 
 

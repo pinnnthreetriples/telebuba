@@ -39,6 +39,7 @@ twin and refuses rebuilds for the duration.
 from __future__ import annotations
 
 import asyncio
+import logging
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
@@ -52,6 +53,15 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
     _RebuildHook = Callable[[str, TelegramClient], Awaitable[None]]
+
+# Stdlib logging on purpose (mirrors ``core.proxy_check._failed_result``): a connect
+# failure stringifies with the proxy endpoint — ``user:pass@host:port`` — and a session
+# fault with the absolute ``.session`` path, so the full text must not ride ``extra``.
+# ``log_event`` is not log-only: it persists ``extra`` as JSON in ``logs``, ``GET /logs``
+# serves it back as ``LogEntry.extra`` and ``GET /events`` streams it. This lands on the
+# uvicorn console and in loguru's ``debug.log`` via ``core.logging._StdlibToLoguru``, and
+# on no route.
+logger = logging.getLogger(__name__)
 
 __all__ = [
     "TelegramClientPoolError",
@@ -187,23 +197,25 @@ async def get_client(account_id: str) -> TelegramClient:
 
         try:
             client = await _build_and_connect(account_id)
-        except Exception as exc:  # noqa: BLE001 — second-attempt classifier sits below
+        except Exception as exc:  # second-attempt classifier sits below
             # One retry: fresh attempt, in case the first failed on a stale
             # session handle that build_and_connect's disconnect cleared up.
+            logger.exception("pool connect failed for %s, retrying once", account_id)
             await log_event(
                 "WARNING",
                 "telegram_pool_connect_retry",
                 account_id=account_id,
-                extra={"first_error": type(exc).__name__, "message": str(exc)},
+                extra={"first_error": type(exc).__name__},
             )
             try:
                 client = await _build_and_connect(account_id)
             except Exception as second_exc:
+                logger.exception("pool connect retry failed for %s", account_id)
                 await log_event(
                     "ERROR",
                     "telegram_pool_connect_failed",
                     account_id=account_id,
-                    extra={"error_type": type(second_exc).__name__, "message": str(second_exc)},
+                    extra={"error_type": type(second_exc).__name__},
                 )
                 raise TelegramClientPoolError(account_id, second_exc) from second_exc
 
@@ -229,12 +241,13 @@ async def _fire_rebuild_hooks(account_id: str, client: TelegramClient) -> None:
     for hook in _REBUILD_HOOKS:
         try:
             await hook(account_id, client)
-        except Exception as exc:  # noqa: BLE001 — a hook fault must not break get_client.
+        except Exception as exc:  # a hook fault must not break get_client.
+            logger.exception("pool rebuild hook failed for %s", account_id)
             await log_event(
                 "WARNING",
                 "telegram_pool_rebuild_hook_failed",
                 account_id=account_id,
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
+                extra={"error_type": type(exc).__name__},
             )
 
 
@@ -316,12 +329,13 @@ async def _safe_disconnect(client: TelegramClient) -> None:
         result = client.disconnect()
         if asyncio.iscoroutine(result):
             await result
-    except Exception as exc:  # noqa: BLE001 — disconnect-on-error path
+    except Exception as exc:  # disconnect-on-error path
         # Don't crash shutdown on a half-dead client; just record it.
+        logger.exception("pool disconnect failed")
         await log_event(
             "WARNING",
             "telegram_pool_disconnect_failed",
-            extra={"error_type": type(exc).__name__, "message": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
 
 

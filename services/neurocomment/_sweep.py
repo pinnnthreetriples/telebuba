@@ -10,6 +10,7 @@ callers and tests.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
@@ -28,6 +29,9 @@ from services.neurocomment import _seams, _state
 
 if TYPE_CHECKING:
     from schemas.neurocomment import CommentRecord
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 # When the retention prune last ran. The sweep ticks every ~5 minutes, but a delete
 # scan over the append-only tables is far too expensive at that cadence, so the prune
@@ -55,11 +59,12 @@ async def _sweep_loop() -> None:
         await asyncio.sleep(interval)
         try:
             await _sweep_once()
-        except Exception as exc:  # noqa: BLE001 - a sweep fault must never kill the loop.
+        except Exception as exc:  # a sweep fault must never kill the loop.
+            logger.exception("neurocomment sweep failed")
             await log_event(
                 "WARNING",
                 "neurocomment_sweep_failed",
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
+                extra={"error_type": type(exc).__name__},
             )
         await _prune_history_if_due(datetime.now(UTC))
 
@@ -90,11 +95,15 @@ async def _prune_history_if_due(now: datetime) -> None:
     cutoff = (now - timedelta(days=max(nc.retention_days, 1.0))).isoformat()
     try:
         removed = await purge_neurocomment_history_older_than(cutoff)
-    except Exception as exc:  # noqa: BLE001 - retention must never abort the deletion sweep.
+    except Exception as exc:  # retention must never abort the deletion sweep.
+        logger.exception("neurocomment retention purge failed")
         await log_event(
             "WARNING",
             "neurocomment_retention_purge_failed",
-            extra={"event": "neurocomment_retention_purged", "error": str(exc)},
+            extra={
+                "event": "neurocomment_retention_purged",
+                "error_type": type(exc).__name__,
+            },
         )
         return
     if removed:

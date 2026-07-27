@@ -14,12 +14,16 @@ keeps the ``_runtime.subscribe_posts`` / ``stop_post_listener`` /
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from core.db import list_active_watch_channels
 
 if TYPE_CHECKING:
     from collections.abc import Iterable
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 
 def _publish_unwatched(channels: Iterable[str] = ()) -> None:
@@ -141,10 +145,11 @@ async def _resubscribe_unwatched(listener_account_id: str) -> None:
             _runtime.on_post,
         )
         _publish_unwatched(set(channels) - set(subscribed))
-    except Exception as exc:  # noqa: BLE001 - the join task must survive a failed heal.
+    except Exception as exc:  # the join task must survive a failed heal.
+        logger.exception("resubscribe failed for %s", listener_account_id)
         await _runtime.log_event(
             "WARNING",
             "neurocomment_resubscribe_failed",
             account_id=listener_account_id,
-            extra={"error_type": type(exc).__name__, "message": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )

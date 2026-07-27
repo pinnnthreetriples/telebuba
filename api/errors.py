@@ -8,6 +8,7 @@ exception are mapped too, so the wire contract has exactly one error shape.
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING, Any
 
 from fastapi import HTTPException
@@ -20,6 +21,9 @@ from services.accounts import AccountActionError
 
 if TYPE_CHECKING:
     from fastapi import FastAPI, Request
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 # Stable error codes per HTTP status (the locale-neutral contract: the SPA maps
 # codes to text). Anything unmapped falls back to a generic "http_error".
@@ -120,10 +124,17 @@ async def _handle_validation_error(
 async def _handle_unexpected(request: Request, exc: Exception) -> JSONResponse:
     # Last line of defense: never leak a stack trace to the client. Log it
     # (best-effort) and return the generic envelope.
+    #
+    # The broadest ``extra`` in the project: this fires on ANY unexpected exception,
+    # so ``repr(exc)`` could be a proxy URL with credentials or a ``.session`` path —
+    # and ``extra`` is served back by ``GET /logs`` and streamed by ``GET /events``,
+    # so the "never leak to the client" rule above was defeated by a second route.
+    # Class name in ``extra``, whole traceback to stderr.
+    logger.error("unhandled exception on %s", request.url.path, exc_info=exc)
     await log_event(
         "ERROR",
         "api_unhandled_exception",
-        extra={"path": request.url.path, "error": repr(exc)},
+        extra={"path": request.url.path, "error_type": type(exc).__name__},
     )
     return _envelope(code="internal_error", message="Internal server error", status_code=500)
 

@@ -8,6 +8,7 @@ are reached via :mod:`services.warming._seams`.
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -42,6 +43,9 @@ if TYPE_CHECKING:
     from schemas.warming import WarmingState
 
     _Schedule = tuple[int, datetime, WarmingState]
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 
 # A cycle always spends one action on the SetOnline presence flip; require room
@@ -307,12 +311,13 @@ async def run_loop_iteration(  # noqa: PLR0911, C901 - sequential pre-cycle gate
                 heartbeat_at=_now_iso(),
                 expected_run_id=run_id,
             )
-        except Exception as exc:  # noqa: BLE001 - cosmetic progress, never abort the cycle.
+        except Exception as exc:  # cosmetic progress, never abort the cycle.
+            logger.exception("progress write failed for %s at step %s", account_id, step)
             await log_event(
                 "WARNING",
                 "warming_progress_write_failed",
                 account_id=account_id,
-                extra={"step": step, "error_type": type(exc).__name__, "message": str(exc)},
+                extra={"step": step, "error_type": type(exc).__name__},
             )
 
     persona = record.activity_persona if record is not None else "normal"

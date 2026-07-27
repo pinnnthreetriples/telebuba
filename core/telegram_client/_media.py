@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import mimetypes
 from contextlib import suppress
 from typing import TYPE_CHECKING, Literal
@@ -49,6 +50,9 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
     from schemas.telegram_actions import TelegramAction
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 
 class ProfileGatewayError(ValueError):
@@ -384,12 +388,13 @@ async def refresh_account_avatar(account_id: str) -> None:
         photo = getattr(me, "photo", None)
         has_photo = photo is not None and not isinstance(photo, UserProfilePhotoEmpty)
         thumb = await _download_avatar_thumb(client, me) if has_photo else None
-    except Exception as exc:  # noqa: BLE001 - the avatar is cosmetic; the mutation already succeeded.
+    except Exception as exc:  # the avatar is cosmetic; the mutation already succeeded.
+        logger.exception("avatar refresh failed for %s", account_id)
         await log_event(
             "WARNING",
             "account_avatar_refresh_failed",
             account_id=account_id,
-            extra={"error_type": type(exc).__name__, "message": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
         return
     if has_photo and thumb is None:

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 from core.db import (
@@ -20,6 +21,9 @@ from services.accounts._result import AccountNotFoundError
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountCreate, AccountRead
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 
 async def add_account(data: AccountCreate) -> AccountRead:
@@ -80,12 +84,13 @@ async def remove_account(account_id: str) -> None:
     async with account_lock(account_id):
         try:
             await _stop_warming_locked(account_id)
-        except Exception as exc:  # noqa: BLE001 - delete must not fail because the stop did.
+        except Exception as exc:  # delete must not fail because the stop did.
+            logger.exception("stop warming failed while removing %s", account_id)
             await log_event(
                 "WARNING",
                 "account_remove_stop_warming_failed",
                 account_id=account_id,
-                extra={"error_type": type(exc).__name__, "message": str(exc)},
+                extra={"error_type": type(exc).__name__},
             )
         # Disconnect the pooled client so it stops holding the account's
         # ``.session`` handle open (Windows can't unlink a live handle), then

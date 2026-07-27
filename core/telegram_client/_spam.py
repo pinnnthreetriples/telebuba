@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from typing import TYPE_CHECKING
 
 from telethon import events
@@ -15,6 +16,9 @@ from schemas.spam_status import SpamStatusProbe
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
+
+# Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
+logger = logging.getLogger(__name__)
 
 _SPAMBOT_USERNAME = "SpamBot"
 
@@ -34,12 +38,13 @@ async def check_spam_status(account_id: str) -> SpamStatusProbe:
         client = await get_client(account_id)
         reply_text = await _probe_spambot(client)
         restricted, reason = await _probe_self_restriction(client)
-    except Exception as exc:  # noqa: BLE001 - any probe failure classifies as unknown.
+    except Exception as exc:  # any probe failure classifies as unknown.
+        logger.exception("spam status probe failed for %s", account_id)
         await log_event(
             "WARNING",
             "telegram_spam_status_probe_failed",
             account_id=account_id,
-            extra={"error_type": type(exc).__name__, "message": str(exc)},
+            extra={"error_type": type(exc).__name__},
         )
         # Class name only, never ``str(exc)``. ``services.spam_status`` copies this
         # into ``SpamStatusVerdict.detail``, which is the response model of
@@ -55,9 +60,9 @@ async def check_spam_status(account_id: str) -> SpamStatusProbe:
         # streams it — so the WARNING is an HTTP body too, by a different route
         # (verified: the probe's ``message`` came back verbatim in
         # ``GET /api/v1/logs``). Bounding this field removed the DUPLICATE; the
-        # ``str(exc)`` in the extra above is pre-existing ``GET /logs`` exposure and
-        # is tracked separately. What justifies the class name here is the response
-        # contract on its own — a locale-neutral code the SPA can translate.
+        # ``extra`` above is now bounded too and the full text goes to the stdlib
+        # logger, which reaches no route. What justifies the class name here is the
+        # response contract on its own — a locale-neutral code the SPA can translate.
         return SpamStatusProbe(account_id=account_id, error=type(exc).__name__)
     return SpamStatusProbe(
         account_id=account_id,
