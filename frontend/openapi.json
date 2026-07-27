@@ -530,7 +530,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^[A-Za-z0-9._-]+$",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
               "title": "Account Id"
             }
           },
@@ -761,7 +761,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^[A-Za-z0-9._-]+$",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
               "title": "Account Id"
             }
           },
@@ -872,7 +872,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^[A-Za-z0-9._-]+$",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
               "title": "Account Id"
             }
           },
@@ -993,7 +993,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^[A-Za-z0-9._-]+$",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
               "title": "Account Id"
             }
           },
@@ -1104,7 +1104,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^[A-Za-z0-9._-]+$",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
               "title": "Account Id"
             }
           },
@@ -1323,7 +1323,7 @@
             "schema": {
               "type": "string",
               "minLength": 1,
-              "pattern": "^[A-Za-z0-9._-]+$",
+              "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
               "title": "Account Id"
             }
           },
@@ -7494,7 +7494,7 @@
           "account_id": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[A-Za-z0-9._-]+$",
+            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
             "title": "Account Id"
           }
         },
@@ -7636,7 +7636,7 @@
           "account_id": {
             "type": "string",
             "minLength": 1,
-            "pattern": "^[A-Za-z0-9._-]+$",
+            "pattern": "^[A-Za-z0-9_-][A-Za-z0-9._-]*$",
             "title": "Account Id"
           },
           "first_name": {

@@ -34,12 +34,40 @@ async def _session_path(request: TelegramClientRequest) -> str:
     is silent: a divergent name would make every pooled action open a file that
     does not exist and mint an empty, unauthorized session next to a perfectly
     good credential.
+
+    Both branches go through :func:`_session_dir_child`, which is the sink that
+    keeps a name from escaping the sessions directory.
     """
     if request.session_name:
-        return str(settings.telegram.session_dir / request.session_name)
+        return _session_dir_child(request.session_name)
     account = await fetch_account(request.account_id)
     stored = account.session_name if account is not None else None
-    return str(settings.telegram.session_dir / (stored or request.account_id))
+    return _session_dir_child(stored or request.account_id)
+
+
+def _session_dir_child(name: str) -> str:
+    """``str(session_dir / name)``, refusing a name that is not a direct child.
+
+    This is the one sink both the unlink (``_auth._remove_session_file``) and
+    every Telethon open reach, which is why the check lives here rather than at
+    each entry point — the ``account_id`` charset is a second line of defence,
+    not the guard.
+
+    ``Path`` DROPS a ``"."`` component, so ``session_dir / "."`` collapses to
+    ``session_dir`` itself and ``Path(f"{session_path}.session")`` then names
+    ``<parent>/sessions.session`` — one level ABOVE the directory, beside the
+    database. ``account_id="."`` was reachable: ``Path("..session").stem`` is
+    ``"."`` and the session-file import derives the id from that stem, so a
+    DELETE unlinked the file above the directory and Telethon's SQLiteSession
+    re-created it on the next probe. Comparing the RESOLVED parent also refuses
+    ``".."``, a separator and an absolute path in one predicate.
+    """
+    session_dir = settings.telegram.session_dir
+    candidate = session_dir / name
+    if candidate.resolve().parent != session_dir.resolve():
+        msg = f"session name escapes the session directory: {name!r}"
+        raise ValueError(msg)
+    return str(candidate)
 
 
 async def prepare_telegram_client_profile(
@@ -120,8 +148,12 @@ def create_telegram_client(profile: TelegramClientProfile) -> TelegramClient:
     # ``~~strike~~``, ``**stars**`` and ``[text](url)`` come out stripped, and a
     # channel post read back → prefilled → re-saved persists the degraded text.
     # No send/edit site relies on markdown being interpreted (operator free text
-    # and LLM prose), so parsing is off for every client built here — the pool,
-    # the login flow and the ``telegram_client`` context manager alike.
+    # and LLM prose), so parsing is off for every client this function builds —
+    # the pool, the login flow and the ``telegram_client`` context manager alike.
+    # It is NOT every Telethon client in the process: ``core.tdata_import`` gets
+    # one back from opentele2's ``ToTelethon``, outside this function. That one
+    # only converts credentials and never sends, so it needs no parse mode; the
+    # sending surfaces all come through here.
     # ``None`` disables parsing; Telethon's setter is annotated ``str``.
     client.parse_mode = None  # ty: ignore[invalid-assignment]
     return client

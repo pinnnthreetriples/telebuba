@@ -237,7 +237,17 @@ async def test_get_own_channel_picks_the_requested_chat_not_the_first(
 async def test_get_own_channel_blank_when_no_chat_matches(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No id match → blank title/username, never another chat's identity."""
+    """No id match → blank title/username, never another chat's identity.
+
+    Documenting the invariant this branch is defensive against, because nothing
+    else records it: ``messages.chatFull`` always carries the channel that was
+    requested, and the id spaces line up because ``_input_channel`` resolves
+    ``PeerChannel(channel_id)`` — the same bare id we then compare. So the
+    fallback cannot fire in production. It stays because the alternative that
+    once shipped, ``chats[0]``, silently paired this channel's id with the linked
+    discussion group's title, and the edit modal wrote that title back onto the
+    channel. This test pins the safe shape of the branch, not a reachable path.
+    """
 
     class FakeClient:
         async def connect(self) -> None:

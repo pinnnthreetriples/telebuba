@@ -11,7 +11,7 @@ from python_socks import ProxyConnectionError
 from core.config import settings
 from core.db import configure_database
 from core.telegram_client import check_telegram_session
-from core.telegram_client._pool import TelegramClientPoolError
+from core.telegram_client._pool import TelegramClientPoolError, removing_client
 from core.telegram_client._session import _download_avatar_thumb
 from schemas.telegram_session import TelegramSessionCheckRequest
 
@@ -140,6 +140,27 @@ async def test_pool_connect_failure_is_classified_by_its_cause(
     # proxy_error, not the unknown_error a naked TelegramClientPoolError would give.
     assert result.status == "proxy_error"
     assert result.is_temporary is True
+
+
+@pytest.mark.asyncio
+async def test_a_live_tombstone_does_not_become_an_unknown_error_verdict(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A login / logout / removal in flight is not a verdict about the session.
+
+    ``removing_client`` refuses the borrow, and that refusal used to arrive as a
+    bare ``RuntimeError`` cause matching no arm in the ladder — so the catch-all
+    said ``unknown_error``, which ``services.accounts.sessions`` then PERSISTED on
+    a row whose session was perfectly fine, until the next manual check.
+    """
+    _with_credentials(monkeypatch)
+
+    async with removing_client("acc-1"):
+        result = await check_telegram_session(TelegramSessionCheckRequest(account_id="acc-1"))
+
+    assert result.status == "network_error"
+    assert result.is_temporary is True
+    assert result.error_type == "TelegramClientUnavailableError"
 
 
 @pytest.mark.asyncio

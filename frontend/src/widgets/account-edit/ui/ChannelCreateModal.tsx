@@ -14,6 +14,7 @@ import {
   CHANNEL_TITLE_MAX,
   CHANNEL_USERNAME_RE,
   channelErrorText,
+  envelopeMessage,
   errorChannelId,
   FIELD,
   LABEL,
@@ -24,6 +25,20 @@ import {
 // On success the caller gets the created channel's id (ActionResult.channel_id)
 // so it can jump straight into the editor.
 const CHECK_DEBOUNCE_MS = 500;
+
+// The ONLY create refusals that can arrive with the channel already made and no
+// id to hand off, read off `_create_channel` (core/telegram_client/_channels.py):
+// FloodWaitError/PeerFloodError are re-raised bare from the post-create username
+// assignment and surface as the ActionStatus itself, and `channel_create_failed`
+// means CreateChannelRequest returned but its chat id was unreadable. Retrying
+// either would make a SECOND real channel — there is no idempotency key (no
+// random_id, nothing keys on the title) and the username pre-check still reports
+// the handle free. Everything else — the occupied-handle pre-check,
+// channels_too_much, user_restricted, a 503 pool outage, a 422, a dead socket —
+// is refused BEFORE CreateChannelRequest runs, so Create must stay armed: those
+// are the common failures, and locking them costs the operator the title, the
+// about and the username they typed.
+const POST_CREATE_CODES = new Set(['flood_wait', 'peer_flood', 'channel_create_failed']);
 
 export function ChannelCreateModal({
   accountId,
@@ -66,17 +81,18 @@ export function ChannelCreateModal({
   // `done` keeps the button locked after success while the caller closes the
   // dialog — a second click would create the SAME channel twice.
   const done = create.isSuccess;
-  // A create that FAILED can have made the channel too: the backend raises
-  // FloodWaitError/PeerFloodError bare, after CreateChannelRequest already
-  // succeeded, so those carry no channel_id to hand off. There is no
-  // idempotency key (no random_id, nothing keys on the title) and the username
-  // pre-check still reports the handle free, so a retry silently makes a SECOND
-  // real channel. One create attempt per dialog.
+  // A create that FAILED with one of POST_CREATE_CODES can have made the channel
+  // too, and nothing tells that apart from a create that never happened — so
+  // that dialog gets one attempt only.
   const [blocked, setBlocked] = useState(false);
+  // Set when a refusal carried the created channel's id: the create SUCCEEDED
+  // and only the public-username step failed, so the channel exists as private.
+  const [createdId, setCreatedId] = useState<string | null>(null);
   const canSubmit =
     !busy &&
     !done &&
     !blocked &&
+    createdId === null &&
     title.trim().length >= 1 &&
     title.trim().length <= CHANNEL_TITLE_MAX &&
     about.trim().length <= CHANNEL_ABOUT_MAX &&
@@ -110,15 +126,18 @@ export function ChannelCreateModal({
           void invalidateList();
           const channelId = errorChannelId(err);
           // An id in the envelope's fields means the create itself SUCCEEDED and
-          // only the public-username step failed. That is a completed create:
-          // hand it off like the success path so the operator lands in the
-          // editor for the real channel (where the handle is fixable) instead of
-          // facing a re-armed Create that would make a second one.
+          // only the public-username step failed. Create must not re-arm (a
+          // second click makes a second real channel), but the hand-off is NOT
+          // automatic: unmounting here would take the reason with it, and the
+          // editor cannot fix a handle — EditChannel carries only title/about and
+          // UpdateUsernameRequest exists nowhere outside _create_channel, so an
+          // operator dropped straight into it reads "private" with no idea why.
+          // The reason stays on screen and the operator opens the channel itself.
           if (channelId !== null) {
-            onCreated(channelId);
+            setCreatedId(channelId);
             return;
           }
-          setBlocked(true);
+          if (POST_CREATE_CODES.has(envelopeMessage(err) ?? '')) setBlocked(true);
         },
       },
     );
@@ -258,13 +277,23 @@ export function ChannelCreateModal({
           >
             {t('accounts.channel.cancel')}
           </button>
+          {/* Once the channel exists (id-bearing refusal) the primary action is
+              the hand-off into its editor, not another create. */}
           <button
             type="button"
-            onClick={submit}
-            disabled={!canSubmit}
+            onClick={
+              createdId === null
+                ? submit
+                : () => {
+                    onCreated(createdId);
+                  }
+            }
+            disabled={createdId === null && !canSubmit}
             className="rounded-full bg-primary px-5 py-[9px] text-[13px] font-medium text-white disabled:opacity-50"
           >
-            {busy ? (
+            {createdId !== null ? (
+              t('accounts.channel.edit')
+            ) : busy ? (
               <span className="inline-flex items-center gap-[6px]">
                 <span className="tb-spin inline-block h-[14px] w-[14px] rounded-full border-2 border-white/40 border-t-white" />
                 {t('accounts.channel.creating')}

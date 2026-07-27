@@ -17,7 +17,16 @@ from schemas.trust import TrustBand  # noqa: TC001
 # account_id is later joined into dialogue pair_keys via "|". Restricting the
 # charset here is cheaper than escaping every join site downstream. Allows
 # digit-only Telegram user_ids and the session-name stems we actually use.
-_ACCOUNT_ID_PATTERN = r"^[A-Za-z0-9._-]+$"
+#
+# The first character may not be "." — ".", ".." and "..." all matched the
+# earlier ``^[A-Za-z0-9._-]+$``, and ``Path`` DROPS a "." component, so
+# ``session_dir / "."`` collapsed to the directory itself and the ".session"
+# suffix then landed one level UP (see ``_client._session_dir_child``, which is
+# the actual guard). ``Path("..session").stem`` is ".", so the session-file
+# import really could mint that id. Expressed as first-char + tail rather than a
+# lookahead on purpose: pydantic 2.13 compiles patterns with rust-regex, which
+# has no lookaround and fails at schema-build time.
+_ACCOUNT_ID_PATTERN = r"^[A-Za-z0-9_-][A-Za-z0-9._-]*$"
 
 # Telegram protocol limits for account.updateProfile / account.updateUsername:
 # first/last name ≤ 64 chars, about (bio) ≤ 70 chars; usernames are 5-32 chars,
@@ -44,7 +53,11 @@ AccountStatus = Literal[
 class AccountCreate(BaseModel):
     account_id: str = Field(min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     label: str | None = Field(default=None, min_length=1)
-    session_name: str | None = Field(default=None, min_length=1)
+    # Same charset as ``account_id``: ``_client._session_path`` gives a stored
+    # ``session_name`` PRIORITY over the id when composing the ``.session`` path,
+    # so leaving this unconstrained rested the traversal guard on the unenforced
+    # invariant that every generator derives one from the other.
+    session_name: str | None = Field(default=None, min_length=1, pattern=_ACCOUNT_ID_PATTERN)
     phone: str | None = Field(default=None, min_length=1)
 
 

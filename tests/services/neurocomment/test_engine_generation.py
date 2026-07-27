@@ -108,6 +108,30 @@ async def test_distinct_comment_is_accepted_without_regeneration(
 
 
 @pytest.mark.asyncio
+async def test_markdown_markers_are_stripped_from_the_generated_comment(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``parse_mode`` is off on every client, so Gemini's markers would POST visibly.
+
+    Nothing forbids them: the instruction is prefixed by the operator's own
+    ``campaign.prompt``, which is free to ask for formatting, so the strip has to be
+    deterministic rather than a request in the prompt.
+    """
+    await _make_campaign("@chan", "acc-1")
+    gen = _GenStub("**Отличный пост!** Спасибо")
+    comment = _CommentStub(status="ok", message_id=7)
+    _patch_io(monkeypatch, comment=comment, gen=gen)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=11, text="hi"))
+
+    sent = [getattr(action, "text", None) for _account, action in comment.calls]
+    assert sent == ["Отличный пост! Спасибо"]
+    record = await fetch_comment("@chan", 11)
+    assert record is not None
+    assert record.comment_text == "Отличный пост! Спасибо"
+
+
+@pytest.mark.asyncio
 async def test_semantic_dedup_threshold_zero_disables_check(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

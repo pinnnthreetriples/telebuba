@@ -55,7 +55,11 @@ export function ChannelEditModal({
     detail.data != null && about !== null && about.trim() !== (detail.data.about ?? '');
   const dirty = titleChanged || aboutChanged;
   const busy = update.isPending || setPhoto.isPending;
-  const canSave = dirty && !busy && shownTitle.trim() !== '';
+  // The blank-title guard belongs to the title alone: the title is only sent
+  // when it changed, so an about-only edit must stay saveable whatever the title
+  // prefill holds — otherwise a detail read that returned a blank title makes
+  // Save dead forever, with the "enter a title" hint gated off too.
+  const canSave = dirty && !busy && (!titleChanged || shownTitle.trim() !== '');
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: detailOpts.queryKey });

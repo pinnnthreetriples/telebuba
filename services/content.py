@@ -19,6 +19,30 @@ _LINK_RE = re.compile(r"(https?://|www\.|t\.me/|telegram\.me/)", re.IGNORECASE)
 _PUNCT_RE = re.compile(r"[^\w\s]", re.UNICODE)
 _WS_RE = re.compile(r"\s+")
 
+# Exactly Telethon's ``markdown.DEFAULT_DELIMITERS`` (1.44): ``**`` bold, ``__``
+# italic, ``~~`` strike, backtick code — ``` collapses because each backtick
+# matches. A lone ``*`` was never a delimiter, so it stays literal.
+_MARKDOWN_DELIMITER_RE = re.compile(r"\*\*|__|~~|`")
+
+
+def strip_markdown_delimiters(text: str) -> str:
+    """Drop the markdown markers Telethon's parser used to consume.
+
+    ``parse_mode`` is disabled on every client (``core.telegram_client._client``),
+    which is the point: an operator's channel post must go out exactly as typed.
+    But the same change made an LLM's ``**Отличный пост!**`` arrive as a channel
+    comment with the asterisks visible — a machine tell on the two surfaces whose
+    whole job is to look human, where it used to render as bold.
+
+    So this is applied to GENERATED text only (the warming chat line and the
+    neurocomment candidate), never to operator-authored text. Deterministic rather
+    than a "no markdown" prompt instruction: the neurocomment instruction is
+    prefixed by the operator's own ``campaign.prompt``, which is free to ask for
+    formatting, so an appended request is not something we can rely on. Links are
+    a separate concern — :func:`has_link` already rejects them.
+    """
+    return _MARKDOWN_DELIMITER_RE.sub("", text)
+
 
 def normalize_text(text: str) -> str:
     """Lowercase, strip punctuation and collapse whitespace for hashing."""

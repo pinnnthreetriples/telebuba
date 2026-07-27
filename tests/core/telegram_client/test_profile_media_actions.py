@@ -211,7 +211,10 @@ async def test_execute_add_profile_music_errors_when_server_says_false(
     """A false ``saveMusic`` add is a server-side no-op, not a success.
 
     Discarding the answer reported "music added" while the next refresh silently
-    dropped the row (already saved, or the saved-music cap reached).
+    dropped the row. The code must be the ADD path's own: this call uploaded fresh
+    bytes seconds earlier, so its document id cannot be stale, and the remove
+    path's ``profile_music_stale_reference`` renders as "refresh the list" — which
+    does nothing about the saved-music cap that actually caused it.
     """
     deleted: list[int] = []
 
@@ -227,7 +230,7 @@ async def test_execute_add_profile_music_errors_when_server_says_false(
     )
 
     assert result.status != "ok"
-    assert result.error_message == "profile_music_stale_reference"
+    assert result.error_message == "profile_music_add_refused"
     assert deleted == [77]
 
 

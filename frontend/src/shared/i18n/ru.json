@@ -312,6 +312,7 @@
         "profile_photo_not_found": "Фото не найдено в профиле — обновите список",
         "profile_photo_download_failed": "Не удалось скачать фото из Telegram",
         "profile_music_invalid": "Аудиофайл не удалось обработать — выберите другой",
+        "profile_music_add_refused": "Telegram не сохранил трек — список сохранённой музыки заполнен или трек уже в профиле",
         "profile_music_stale_reference": "Трек изменился на Telegram — обновите список",
         "session_dead": "Сессия аккаунта в Telegram недействительна — войдите заново",
         "account_deactivated": "Telegram удалил или заблокировал аккаунт — восстановить его нельзя",

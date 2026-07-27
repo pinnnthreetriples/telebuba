@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import mimetypes
 from contextlib import suppress
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from telethon import errors, utils
 from telethon.tl.functions.account import SaveMusicRequest
@@ -82,6 +82,18 @@ _MEDIA_ERROR_CODES: tuple[tuple[type[Exception], str], ...] = (
     (errors.ImageProcessFailedError, "media_invalid"),
     (errors.MediaEmptyError, "media_invalid"),
 )
+
+# The saved-music codes this module raises DIRECTLY, not through the ladder above.
+# A Literal because the i18n parity gate can only enumerate what it can import:
+# it walks the four error ladders plus ``StoryVideoErrorCode``, so a hand-raised
+# code was invisible to it and could ship with no copy in either locale.
+MusicSaveErrorCode = Literal[
+    "profile_music_invalid",
+    # ``saveMusic`` returned False on an ADD — the cap, or already saved.
+    "profile_music_add_refused",
+    # ``saveMusic(unsave=True)`` returned False — the reference really is stale.
+    "profile_music_stale_reference",
+]
 
 
 async def _dispatch_profile_media_action(
@@ -168,7 +180,7 @@ async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) ->
     try:
         document = getattr(message, "document", None)
         if document is None:
-            code = "profile_music_invalid"
+            code: MusicSaveErrorCode = "profile_music_invalid"
             raise ProfileGatewayError(code) from ValueError(
                 "Telegram did not return an audio document",
             )
@@ -178,7 +190,12 @@ async def _add_profile_music(client: TelegramClient, action: AddProfileMusic) ->
         # drops the row (mirrors the unsave branch below).
         saved = await client(SaveMusicRequest(id=utils.get_input_document(document)))
         if not saved:
-            code = "profile_music_stale_reference"
+            # NOT the remove path's ``profile_music_stale_reference``: this add
+            # uploaded fresh bytes seconds ago, so its document id cannot be
+            # stale and there is no list to refresh. What ``False`` means here is
+            # the saved-music cap (or the track already being on the profile),
+            # which is what the operator has to act on.
+            code = "profile_music_add_refused"
             raise ProfileGatewayError(code) from ValueError(
                 "Telegram did not save the track (already saved or the saved-music limit)",
             )
@@ -214,7 +231,7 @@ async def _remove_profile_music(client: TelegramClient, action: RemoveProfileMus
         ),
     )
     if not removed:
-        code = "profile_music_stale_reference"
+        code: MusicSaveErrorCode = "profile_music_stale_reference"
         raise ProfileGatewayError(code) from ValueError(
             "Telegram did not remove the track (unknown or expired reference)",
         )

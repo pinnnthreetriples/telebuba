@@ -49,6 +49,13 @@ export function AddAccountModal({
   const [proxyValid, setProxyValid] = useState(false);
   // The id of the account created in step 1, so later steps can act on it.
   const [createdAccountId, setCreatedAccountId] = useState<string | null>(null);
+  // The committed method, readable from a mutate-level callback that resolves
+  // after the operator has moved on: those closures are never cancelled, so an
+  // import/start-login that lands late must not re-provision the wizard for a
+  // method it no longer holds — "Next" would unlock while afterProxy branches on
+  // the NEW method, POSTing a phone login at an already-authorised .session
+  // account. `selectMethod` owns both this and the state.
+  const methodRef = useRef<Method>(null);
 
   const importTdata = useMutation(importAccountTdataMutation());
   const importSession = useMutation(importAccountSessionMutation());
@@ -65,15 +72,32 @@ export function AddAccountModal({
 
   const totalSteps = method === 'phone' ? 3 : 2;
 
+  // Picking a method un-provisions the wizard, because an account created by an
+  // earlier method would keep "Next" unlocked with nothing to show for it and
+  // afterProxy would branch on the NEW method. Re-clicking the method ALREADY
+  // selected must be a no-op: the account it provisioned really exists, and the
+  // only in-wizard recovery is re-importing the same file, which the backend
+  // refuses ("already exists. Delete it before importing.").
+  const selectMethod = (next: Method) => {
+    methodRef.current = next;
+    if (method === next) return;
+    setFileName(null);
+    setCreatedAccountId(null);
+    startLogin.reset();
+    setMethod(next);
+  };
+
   // Phone method, step 1: create the account from a bare number; success unlocks
   // "Next" exactly like a file import does.
   const onStartPhone = () => {
     startLogin.reset();
     setCreatedAccountId(null);
+    const forMethod = method;
     startLogin.mutate(
       { body: { phone: phone.trim() } },
       {
         onSuccess: (account) => {
+          if (methodRef.current !== forMethod) return;
           setCreatedAccountId(account.account_id);
         },
         onSettled: onImported,
@@ -112,13 +136,18 @@ export function AddAccountModal({
     if (!file) return;
     setFileName(file.name);
     setCreatedAccountId(null);
+    const forMethod = method;
+    const adopt = (accountId: string | null) => {
+      if (methodRef.current !== forMethod) return;
+      setCreatedAccountId(accountId);
+    };
     if (method === 'tdata') {
       importSession.reset();
       importTdata.mutate(
         { body: { file } },
         {
           onSuccess: (result) => {
-            setCreatedAccountId(result.accounts?.[0]?.account_id ?? null);
+            adopt(result.accounts?.[0]?.account_id ?? null);
           },
           onSettled: onImported,
         },
@@ -129,7 +158,7 @@ export function AddAccountModal({
         { body: { file } },
         {
           onSuccess: (account) => {
-            setCreatedAccountId(account.account_id);
+            adopt(account.account_id);
           },
           onSettled: onImported,
         },
@@ -229,14 +258,7 @@ export function AddAccountModal({
               <button
                 type="button"
                 onClick={() => {
-                  setMethod('session');
-                  setFileName(null);
-                  // Switching method un-provisions the wizard, exactly like the
-                  // phone card below. Without this, an account created by an
-                  // earlier method keeps "Next" unlocked with no file card to
-                  // show for it, and afterProxy then branches on the NEW method
-                  // — a phone account would skip step 3 and never sign in.
-                  setCreatedAccountId(null);
+                  selectMethod('session');
                 }}
                 className={`${choiceCard} ${method === 'session' ? 'border-primary bg-primary-tint' : ''}`}
               >
@@ -265,9 +287,7 @@ export function AddAccountModal({
               <button
                 type="button"
                 onClick={() => {
-                  setMethod('tdata');
-                  setFileName(null);
-                  setCreatedAccountId(null);
+                  selectMethod('tdata');
                 }}
                 className={`${choiceCard} ${method === 'tdata' ? 'border-primary bg-primary-tint' : ''}`}
               >
@@ -296,10 +316,7 @@ export function AddAccountModal({
               <button
                 type="button"
                 onClick={() => {
-                  setMethod('phone');
-                  setFileName(null);
-                  startLogin.reset();
-                  setCreatedAccountId(null);
+                  selectMethod('phone');
                 }}
                 className={`${choiceCard} ${method === 'phone' ? 'border-primary bg-primary-tint' : ''}`}
               >

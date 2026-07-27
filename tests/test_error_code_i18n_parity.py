@@ -31,7 +31,7 @@ from pathlib import Path
 from typing import get_args
 
 from core.telegram_client._channels import _TELETHON_ERROR_CODES
-from core.telegram_client._media import _MEDIA_ERROR_CODES
+from core.telegram_client._media import _MEDIA_ERROR_CODES, MusicSaveErrorCode
 from core.telegram_client._profile import _DEAD_SESSION_ERROR_CODES, _PROFILE_ERROR_CODES
 from core.telegram_client._video import StoryVideoErrorCode
 from schemas.telegram_actions import ActionStatus
@@ -68,8 +68,14 @@ def _mapped_codes() -> set[str]:
 
 
 def _expected_codes() -> set[str]:
+    # ``MusicSaveErrorCode`` covers the codes ``_media`` raises by hand rather than
+    # through a ladder. The ladders were the only media source enumerated, so a
+    # hand-raised code could ship untranslated — and one did: the add path's
+    # refusal was reusing the remove path's ``profile_music_stale_reference``,
+    # which was translated, so nothing here noticed the wrong copy either.
     return (
         set(get_args(StoryVideoErrorCode))
+        | set(get_args(MusicSaveErrorCode))
         | (set(get_args(ActionStatus)) - _NON_FAILURE_STATUSES)
         | _mapped_codes()
     )

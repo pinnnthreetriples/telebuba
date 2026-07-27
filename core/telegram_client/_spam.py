@@ -41,7 +41,15 @@ async def check_spam_status(account_id: str) -> SpamStatusProbe:
             account_id=account_id,
             extra={"error_type": type(exc).__name__, "message": str(exc)},
         )
-        return SpamStatusProbe(account_id=account_id, error=f"{type(exc).__name__}: {exc}")
+        # Class name only, never ``str(exc)``. ``services.spam_status`` copies this
+        # into ``SpamStatusVerdict.detail``, which is the response model of
+        # ``POST /accounts/{id}/spam-check`` and is re-served as
+        # ``AccountRead.spam_detail`` — rendered verbatim in the operator's
+        # browser. A pooled-client failure stringifies with the proxy endpoint and
+        # a session fault with the ``.session`` path (non-negotiable #12, the same
+        # call ``_read``, ``_auth`` and ``services.accounts.privacy`` make). The
+        # full text is already in the WARNING above.
+        return SpamStatusProbe(account_id=account_id, error=type(exc).__name__)
     return SpamStatusProbe(
         account_id=account_id,
         reply_text=reply_text,

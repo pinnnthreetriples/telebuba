@@ -35,6 +35,7 @@ from services.content import (
     is_acceptable,
     release_sent_text,
     similarity,
+    strip_markdown_delimiters,
     try_reserve_sent,
 )
 from services.neurocomment import _seams, _state
@@ -179,7 +180,11 @@ async def _generate_acceptable(
         if generated.status != "ok" or not generated.text:
             reason = _gemini_reason(generated)
             continue
-        candidate = generated.text.strip()
+        # Markdown markers come off before the word count and the dedup hash: with
+        # ``parse_mode`` disabled a ``**Отличный пост!**`` would post with the
+        # asterisks visible, and the operator's own ``campaign.prompt`` is free to
+        # ask for formatting, so no prompt instruction can be relied on here.
+        candidate = strip_markdown_delimiters(generated.text).strip()
         if len(candidate.split()) > nc.comment_max_words:
             reason = "too_long"
             continue

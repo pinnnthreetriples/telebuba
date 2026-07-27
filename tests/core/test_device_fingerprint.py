@@ -132,6 +132,48 @@ async def test_telegram_client_profile_prefers_an_explicit_session_name(
     assert profile.session_path == str(tmp_path / "sessions" / "explicit")
 
 
+@pytest.mark.parametrize("name", [".", "..", "...", "../evil", "..\\evil", "/abs"])
+@pytest.mark.asyncio
+async def test_session_path_refuses_a_name_outside_the_session_dir(
+    tmp_path: Path,
+    monkeypatch,
+    name: str,
+) -> None:
+    r"""The shared sink, not the charset, is what closes the traversal.
+
+    ``Path`` DROPS a "." component, so ``session_dir / "."`` collapses to the
+    directory itself and ``_auth``'s ``Path(f"{session_path}.session")`` then names
+    ``<parent>/sessions.session`` — one level UP, beside the database. Every
+    Telethon open and the DELETE unlink both come through here, so a name that
+    does not resolve to a direct child is refused here rather than at each entry.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+
+    with pytest.raises(ValueError, match="escapes the session directory"):
+        await prepare_telegram_client_profile(
+            TelegramClientRequest(account_id="acc-1", session_name=name),
+        )
+
+
+@pytest.mark.asyncio
+async def test_session_path_refuses_a_dot_account_id_with_no_row(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """The missing-row fallback is the other way an unvalidated id reached disk.
+
+    With no account row ``_session_path`` composes ``session_dir / account_id``,
+    and Telethon's ``SQLiteSession`` CREATES the file it is handed — which is how
+    a spam-check on ``account_id="."`` minted ``<parent>/sessions.session``.
+    """
+    configure_database(tmp_path / "telebuba.db")
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+
+    with pytest.raises(ValueError, match="escapes the session directory"):
+        await prepare_telegram_client_profile(TelegramClientRequest(account_id="."))
+
+
 @pytest.mark.asyncio
 async def test_telegram_client_profile_includes_saved_proxy(
     tmp_path: Path,
@@ -265,6 +307,12 @@ def test_create_telegram_client_disables_markdown_parsing(
     `` `code` ``, ``~~strike~~``, ``**stars**`` and ``[text](url)`` out of every
     operator-authored send — and a channel post read back, prefilled and
     re-saved persists the degraded text.
+
+    Scope: ``create_telegram_client`` is the only client builder on the SENDING
+    paths (pool, login, ``telegram_client``), which is what this pins. It is not
+    every Telethon client in the process — ``core.tdata_import`` gets one back
+    from opentele2's ``ToTelethon`` — but that one only converts credentials and
+    never sends, so its parse mode is irrelevant.
     """
     monkeypatch.setattr("core.config.settings.telegram.api_id", 12345)
     monkeypatch.setattr("core.config.settings.telegram.api_hash", "hash")

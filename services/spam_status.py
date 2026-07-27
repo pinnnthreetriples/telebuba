@@ -12,7 +12,7 @@ import re
 from datetime import UTC, datetime
 
 from core.config import settings
-from core.db import get_spam_status, upsert_spam_status
+from core.db import fetch_account, get_spam_status, upsert_spam_status
 from core.logging import log_event
 from core.telegram_client import check_spam_status
 from schemas.spam_status import SpamStatusKind, SpamStatusProbe, SpamStatusVerdict
@@ -185,15 +185,32 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
     probes, the rest wait, and on wake they see the freshly-cached verdict
     instead of all hitting @SpamBot. Without this, several warming cycles
     waking together can all decide the cache is stale and probe in parallel.
+
+    Two verdicts are returned WITHOUT being cached, because neither is a reading
+    of the account's actual standing: an unknown account, and a probe that never
+    reached @SpamBot. Caching those would serve them as fresh for
+    ``spam_status_ttl_hours`` (36 h by default), and warming's quarantine gate
+    reads any non-``limited`` verdict as "recovered".
     """
     async with _refresh_lock(account_id):
         now = datetime.now(UTC)
+        if await fetch_account(account_id) is None:
+            # Guard, don't probe: with no row there is no stored session name, so
+            # ``_session_path`` falls back to ``session_dir / account_id`` and
+            # Telethon's SQLiteSession CREATES that file on construction. A
+            # spam-check must never mint a credential for an account that does
+            # not exist — that was the second way an unvalidated id reached disk.
+            return _uncached_unknown(account_id, "account not found", now)
         cached = await get_spam_status(account_id)
         if not force and cached is not None and _is_fresh(cached.checked_at, now):
             return cached
 
         probe = await check_spam_status(account_id)
         status, detail = classify_spam_probe(probe)
+        if probe.error:
+            # No second log line: the gateway already recorded the refusal with the
+            # full exception text under ``telegram_spam_status_probe_failed``.
+            return _uncached_unknown(account_id, detail, now)
         saved = await upsert_spam_status(
             SpamStatusVerdict(
                 account_id=account_id,
@@ -209,6 +226,16 @@ async def refresh_spam_status(account_id: str, *, force: bool = False) -> SpamSt
             extra={"status": status, "detail": detail},
         )
         return saved
+
+
+def _uncached_unknown(account_id: str, detail: str | None, now: datetime) -> SpamStatusVerdict:
+    """An ``unknown`` verdict for the caller only — deliberately never persisted."""
+    return SpamStatusVerdict(
+        account_id=account_id,
+        status="unknown",
+        detail=detail,
+        checked_at=now.isoformat(),
+    )
 
 
 _REFRESH_LOCKS: dict[str, asyncio.Lock] = {}

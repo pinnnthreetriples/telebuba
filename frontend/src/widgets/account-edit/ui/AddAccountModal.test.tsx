@@ -88,6 +88,19 @@ function fileInput(): HTMLInputElement {
   return document.body.querySelector('input[type="file"]') as HTMLInputElement;
 }
 
+function calls(fragment: string): Request[] {
+  return vi
+    .mocked(fetch)
+    .mock.calls.map(([input]) => input as Request)
+    .filter((request) => request.url.includes(fragment));
+}
+
+function pickSession(): void {
+  fireEvent.change(fileInput(), {
+    target: { files: [new File(['x'], 'acc.session', { type: 'application/octet-stream' })] },
+  });
+}
+
 test('stepper navigates method → choice → manual/pool → back to step 1', async () => {
   routeApi();
   renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
@@ -305,6 +318,62 @@ test('switching method after an account was created re-locks Next', async () => 
   expect(
     screen.queryByText('Аккаунт добавлен. Назначьте прокси для работы.'),
   ).not.toBeInTheDocument();
+});
+
+test('re-clicking the ALREADY selected method keeps the imported account', async () => {
+  routeApi();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={vi.fn()} />);
+
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSession();
+  await waitFor(() => {
+    expect(screen.getByText('Далее')).toBeEnabled();
+  });
+
+  // The account really exists now, and the only in-wizard recovery would be
+  // re-importing the same file — which the backend refuses ("already exists.
+  // Delete it before importing."). So an identity re-click that un-provisioned
+  // the wizard left step 2 unreachable with nothing to do but × and delete the
+  // account by hand.
+  await userEvent.click(screen.getByText('Файл .session'));
+  expect(screen.getByText('Далее')).toBeEnabled();
+  expect(screen.getByText('acc.session')).toBeInTheDocument();
+  expect(screen.getByText('Аккаунт импортирован')).toBeInTheDocument();
+  expect(calls('/accounts/import-session')).toHaveLength(1);
+});
+
+test('an import landing after a method switch does not provision the wizard', async () => {
+  let resolveImport!: (response: Response) => void;
+  vi.mocked(fetch).mockImplementation((input) => {
+    const request = input as Request;
+    if (new URL(request.url).pathname === '/api/v1/accounts/import-session') {
+      return new Promise((resolve) => {
+        resolveImport = resolve;
+      });
+    }
+    return Promise.resolve(jsonResponse({}));
+  });
+  const onImported = vi.fn();
+  renderWithClient(<AddAccountModal onClose={vi.fn()} onImported={onImported} />);
+
+  await userEvent.click(screen.getByText('Файл .session'));
+  pickSession();
+  // Switch method while the import is still in flight.
+  await userEvent.click(screen.getByText('Номер телефона'));
+  resolveImport(
+    jsonResponse({ account_id: 'imp', status: 'new', created_at: 'n', updated_at: 'n' }),
+  );
+  // onSettled runs after onSuccess, so this proves the callbacks have run.
+  await waitFor(() => {
+    expect(onImported).toHaveBeenCalled();
+  });
+
+  // The mutate-level onSuccess is never cancelled. Adopting its id here would
+  // unlock "Next" for the PHONE method, and afterProxy would then fire
+  // request-code at the already-authorised .session account.
+  expect(screen.getByText('Далее')).toBeDisabled();
+  expect(screen.getByText('Продолжить')).toBeInTheDocument();
+  expect(screen.queryByText('Аккаунт создан')).not.toBeInTheDocument();
 });
 
 test('cancel on step 1 closes', async () => {

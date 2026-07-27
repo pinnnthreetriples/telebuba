@@ -18,10 +18,19 @@ so the ``.session`` file is very likely already open elsewhere. Two
 writer, and worse, the second reader sees a stale ``auth_key`` until the first
 commits — it can act on the credential the other handle just replaced. The
 tombstone disconnects the pooled twin and refuses rebuilds until the flow ends.
+
+The tombstone is not enough on its own: it refuses POOL rebuilds, so it does not
+fence these three flows against EACH OTHER, and each of them builds its own
+client. Measured: a logout started while a request-code was in flight put two
+Telethon clients on one ``.session`` file at once — the exact hazard above. The
+SPA can produce that (logout during a code submit, two browser tabs, request-code
+followed straight by reset-session), so all three also run under
+:func:`_auth_lock`, one lock per account.
 """
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 from anyio import Path
@@ -43,6 +52,27 @@ if TYPE_CHECKING:
     from schemas.telegram_session import SessionCheckStatus
 
 
+# One lock per account, created lazily and never freed — bounded by the number of
+# accounts that have ever logged in or out, the same shape as
+# ``_pool._CONNECT_LOCKS`` and ``services.accounts._import_locks``. That module is
+# not reused because ``core`` may not import ``services`` (layer isolation,
+# non-negotiable #5).
+_AUTH_LOCKS: dict[str, asyncio.Lock] = {}
+
+
+def _auth_lock(account_id: str) -> asyncio.Lock:
+    """Serialise this module's three flows for one account.
+
+    Always taken OUTSIDE ``removing_client``, which holds no lock across its
+    ``yield``, so the two cannot deadlock in either order.
+    """
+    lock = _AUTH_LOCKS.get(account_id)
+    if lock is None:
+        lock = asyncio.Lock()
+        _AUTH_LOCKS[account_id] = lock
+    return lock
+
+
 def _login_request(account_id: str, session_name: str | None) -> TelegramClientRequest:
     return TelegramClientRequest(
         account_id=account_id,
@@ -56,7 +86,7 @@ async def request_phone_code(request: PhoneCodeRequest) -> PhoneCodeChallenge:
     profile = await prepare_telegram_client_profile(
         _login_request(request.account_id, request.session_name),
     )
-    async with removing_client(request.account_id):
+    async with _auth_lock(request.account_id), removing_client(request.account_id):
         client = create_telegram_client(profile)
         try:
             await client.connect()
@@ -88,7 +118,7 @@ async def submit_phone_code(request: PhoneCodeSubmit) -> TelegramSessionCheckRes
     profile = await prepare_telegram_client_profile(
         _login_request(request.account_id, request.session_name),
     )
-    async with removing_client(request.account_id):
+    async with _auth_lock(request.account_id), removing_client(request.account_id):
         client = create_telegram_client(profile)
         try:
             await client.connect()
@@ -147,11 +177,13 @@ async def log_out_session(
     pooled client so the ``.session`` file is not held open (on Windows that
     handle is what makes Telethon's own delete — and ours — fail), and it drops
     the cached client whose ``auth_key`` this logout is about to revoke, instead
-    of leaving a borrower holding a dead credential.
+    of leaving a borrower holding a dead credential. The ``_auth`` lock on top is
+    what keeps a code submit from holding a second handle on the same file while
+    this logout revokes the key.
     """
     profile = await prepare_telegram_client_profile(request)
     error_message: str | None = None
-    async with removing_client(request.account_id):
+    async with _auth_lock(request.account_id), removing_client(request.account_id):
         client = create_telegram_client(profile)
         try:
             await client.connect()

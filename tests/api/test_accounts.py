@@ -268,22 +268,34 @@ async def test_delete_account_removes_it(app: FastAPI) -> None:
     assert [a["account_id"] for a in listed.json()["items"]] == []
 
 
+@pytest.mark.parametrize(
+    ("encoded", "victim"),
+    [
+        # A percent-encoded separator: Starlette decodes ``%5C`` before matching, so
+        # the route used to receive ``..\evil`` as a plain ``str``.
+        ("..%5Cevil", "evil.session"),
+        # A bare dot needs no separator at all. ``Path`` DROPS a "." component, so
+        # ``session_dir / "."`` collapses to the directory and the ".session" suffix
+        # names the file NEXT TO it. This one survived the charset added by a825edc
+        # and was live: ``DELETE /accounts/%2E`` answered 204 and unlinked it.
+        ("%2E", "sessions.session"),
+        ("%2E%2E", "sessions.session"),
+        ("%2E%2E%2E", "sessions.session"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_delete_account_rejects_a_traversal_id(app: FastAPI) -> None:
-    r"""A percent-encoded separator must never reach the ``.session`` unlink.
-
-    Starlette decodes ``%5C`` before matching, so the route used to receive
-    ``..\evil`` as a plain ``str``, and ``_session_path`` resolved it to
-    ``session_dir/../evil.session`` — the file seeded below. The path param now
-    carries the same charset the request bodies enforce, so a separator is
-    refused as validation rather than sanitised away.
-    """
-    outside = settings.telegram.session_dir.parent / "evil.session"
+async def test_delete_account_rejects_a_traversal_id(
+    app: FastAPI,
+    encoded: str,
+    victim: str,
+) -> None:
+    """No id that resolves outside the sessions directory may reach the unlink."""
+    outside = settings.telegram.session_dir.parent / victim
     outside.parent.mkdir(parents=True, exist_ok=True)
     outside.write_bytes(b"a credential that lives elsewhere")
 
     async with _client(app) as client:
-        resp = await client.delete("/api/v1/accounts/..%5Cevil")
+        resp = await client.delete(f"/api/v1/accounts/{encoded}")
 
     assert resp.status_code == 422
     assert resp.json()["error"]["code"] == "validation_error"

@@ -44,6 +44,22 @@ def test_similarity_token_set_jaccard() -> None:
     assert content.similarity("hello", "") == 0.0
 
 
+def test_strip_markdown_delimiters() -> None:
+    """``parse_mode`` is off on every client, so an LLM's markers would SHOW.
+
+    ``**Отличный пост!** Спасибо`` reached a channel comment with the asterisks
+    visible — a machine tell on the surfaces built to look human. Only Telethon's
+    own delimiter set comes off; a lone ``*`` was never a delimiter.
+    """
+    assert content.strip_markdown_delimiters("**Отличный пост!** Спасибо") == (
+        "Отличный пост! Спасибо"
+    )
+    assert content.strip_markdown_delimiters("__bold__ `code` ~~gone~~") == "bold code gone"
+    assert content.strip_markdown_delimiters("```py\nx\n```") == "py\nx\n"
+    assert content.strip_markdown_delimiters("2 * 3 = 6") == "2 * 3 = 6"
+    assert content.strip_markdown_delimiters("plain text") == "plain text"
+
+
 def test_has_link() -> None:
     assert content.has_link("see https://example.com")
     assert content.has_link("join t.me/foo")

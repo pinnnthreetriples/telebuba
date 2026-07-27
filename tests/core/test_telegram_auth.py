@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from contextlib import suppress
 from typing import TYPE_CHECKING
 
@@ -18,9 +19,17 @@ if TYPE_CHECKING:
     from collections.abc import Callable
     from pathlib import Path
 
-# A proxy transport error stringifies with the credentials; no response field may
-# carry it (non-negotiable #12 / rule 7).
-_PROXY_ERROR_TEXT = "Cannot connect to proxy bubauser:sup3rs3cr3t@203.0.113.9:1080"
+# The message ``python_socks`` 2.8.1 can really emit — its ONE format string,
+# ``'Could not connect to proxy {}:{} [{}]'`` (async_/asyncio/_proxy.py:97). It
+# carries no credentials: the SOCKS5 auth failure is the fixed string "Username
+# and password authentication failure", and nothing in ``_errors.py`` formats a
+# URL. What leaks is the proxy ENDPOINT, plus the ``.session`` path on a session
+# fault — an operator's proxy inventory and a server path, on a response body any
+# reader of the HTTP 400 sees. So the contract is class-name-only, and these
+# fixtures state the real threat rather than an invented credential in a message
+# the library cannot produce.
+_PROXY_ERROR_TEXT = "Could not connect to proxy 203.0.113.9:1080 [Connection refused]"
+_PROXY_SECRETS = ("203.0.113.9", "1080")
 
 
 class FakeUser:
@@ -282,10 +291,11 @@ async def test_log_out_session_no_wipe_still_evicts_the_pool(tmp_path: Path, mon
     session_file.parent.mkdir(parents=True, exist_ok=True)
     session_file.write_bytes(b"sqlite session bytes")
 
-    evicted: list[str] = []
+    evicted: list[tuple[str, bool]] = []
 
     async def fake_evict(account_id: str) -> None:
-        evicted.append(account_id)
+        # Record whether the logout RPC had already run when the eviction landed.
+        evicted.append((account_id, client.logged_out))
 
     monkeypatch.setattr("core.telegram_client._pool.evict_client", fake_evict)
 
@@ -294,9 +304,15 @@ async def test_log_out_session_no_wipe_still_evicts_the_pool(tmp_path: Path, mon
         wipe_session=False,
     )
 
-    assert evicted == ["acc"], "a revoked auth key must not stay in the pool"
     assert marks == [True], "the logout RPC itself must run under the tombstone"
-    assert not session_file.exists(), "Telethon's log_out() deletes the session file"
+    # ``session_file`` is gone after this call, but only because
+    # ``FakeAuthClient.log_out`` unlinks it, mirroring Telethon's own
+    # ``session.delete()`` — asserting its absence would test the fake. The
+    # production facts are the eviction and its ORDER: Telethon deletes the file
+    # inside ``log_out()``, and on Windows a live pooled handle is what makes that
+    # delete (and ours) fail, so the eviction has to come first.
+    assert evicted == [("acc", False)], "evict before the logout revokes the key"
+    assert client.logged_out is True
 
 
 @pytest.mark.asyncio
@@ -358,15 +374,15 @@ async def test_submit_phone_code_runs_under_the_pool_tombstone(
 
 
 @pytest.mark.asyncio
-async def test_request_phone_code_error_hides_the_proxy_credentials(
+async def test_request_phone_code_error_hides_the_proxy_endpoint(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
     """``challenge.error`` is the HTTP 400 detail — it must be a bounded class name.
 
-    ``python_socks`` transport errors stringify with the proxy
-    ``user:pass@host:port``, so ``str(exc)`` here handed the operator's browser
-    (and anyone reading the response) a live proxy credential.
+    A ``python_socks`` transport failure stringifies with the proxy host and port,
+    so ``str(exc)`` here handed the operator's browser (and anyone reading the
+    response) a live entry from their proxy inventory.
     """
     configure_database(tmp_path / "telebuba.db")
     client = FakeAuthClient(send_error=OSError(_PROXY_ERROR_TEXT))
@@ -375,11 +391,12 @@ async def test_request_phone_code_error_hides_the_proxy_credentials(
     challenge = await request_phone_code(PhoneCodeRequest(account_id="acc", phone="79990001122"))
 
     assert challenge.error == "OSError"
-    assert "sup3rs3cr3t" not in (challenge.error or "")
+    for secret in _PROXY_SECRETS:
+        assert secret not in (challenge.error or "")
 
 
 @pytest.mark.asyncio
-async def test_submit_phone_code_error_hides_the_proxy_credentials(
+async def test_submit_phone_code_error_hides_the_proxy_endpoint(
     tmp_path: Path,
     monkeypatch,
 ) -> None:
@@ -395,4 +412,57 @@ async def test_submit_phone_code_error_hides_the_proxy_credentials(
     assert result.status == "unknown_error"
     assert result.error_type == "OSError"
     assert result.error_message == "OSError"
-    assert "sup3rs3cr3t" not in (result.error_message or "")
+    for secret in _PROXY_SECRETS:
+        assert secret not in (result.error_message or "")
+
+
+@pytest.mark.asyncio
+async def test_two_auth_flows_never_hold_two_clients_on_one_session(
+    tmp_path: Path,
+    monkeypatch,
+) -> None:
+    """``removing_client`` fences POOL rebuilds; it does not fence ``_auth`` vs ``_auth``.
+
+    Measured before the per-account ``_auth`` lock: a logout fired while a
+    request-code was in flight reached ``refcount=2, live_clients=2`` — two
+    ``SQLiteSession`` handles on one file, which is the ``database is locked`` /
+    stale-``auth_key`` hazard the tombstone was added for. The SPA can produce it
+    (logout during a code submit, two tabs, request-code then reset-session).
+    """
+    configure_database(tmp_path / "telebuba.db")
+    live: list[object] = []
+    peak = 0
+    entered = asyncio.Event()
+    gate = asyncio.Event()
+
+    class Blocking(FakeAuthClient):
+        async def connect(self) -> None:
+            nonlocal peak
+            live.append(self)
+            peak = max(peak, len(live))
+            entered.set()
+            if len(live) == 1:
+                await gate.wait()
+
+        async def disconnect(self) -> None:
+            if self in live:
+                live.remove(self)
+
+    monkeypatch.setattr("core.config.settings.telegram.session_dir", tmp_path / "sessions")
+    monkeypatch.setattr("core.telegram_client._auth.create_telegram_client", lambda _: Blocking())
+
+    first = asyncio.create_task(
+        request_phone_code(PhoneCodeRequest(account_id="acc", phone="79990001122")),
+    )
+    await entered.wait()
+    second = asyncio.create_task(
+        log_out_session(TelegramClientRequest(account_id="acc", receive_updates=False)),
+    )
+    # Long enough for the logout to get through its own profile prep and reach the
+    # client build — pre-fix it did, and connected: peak was 2.
+    await asyncio.sleep(0.2)
+
+    assert peak == 1, "the second flow must wait for the first, not open a rival handle"
+    gate.set()
+    await asyncio.gather(first, second)
+    assert peak == 1

@@ -11,6 +11,7 @@ from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
 from core.telegram_client import check_spam_status
+from core.telegram_client._pool import TelegramClientPoolError
 
 if TYPE_CHECKING:
     from collections.abc import Iterator
@@ -170,3 +171,29 @@ async def test_check_spam_status_reports_a_pool_connect_failure(
 
     assert probe.error is not None
     assert "ConnectionError" in probe.error
+
+
+@pytest.mark.asyncio
+async def test_probe_error_is_the_class_name_only(monkeypatch: pytest.MonkeyPatch) -> None:
+    """``probe.error`` becomes ``SpamStatusVerdict.detail`` — a response body field.
+
+    ``services.spam_status.classify_spam_probe`` copies it verbatim into ``detail``,
+    which is the response model of ``POST /accounts/{id}/spam-check`` and is
+    re-served as ``AccountRead.spam_detail``, rendered in the operator's browser.
+    ``f"{type(exc).__name__}: {exc}"`` therefore published the proxy endpoint from a
+    pooled-client failure (and a ``.session`` path from a session fault).
+    """
+    endpoint = "203.0.113.9:1080"
+
+    async def failing_get_client(account_id: str) -> object:
+        raise TelegramClientPoolError(
+            account_id,
+            OSError(f"Could not connect to proxy {endpoint} [Connection refused]"),
+        )
+
+    monkeypatch.setattr("core.telegram_client._spam.get_client", failing_get_client)
+
+    probe = await check_spam_status("acc-1")
+
+    assert probe.error == "TelegramClientPoolError"
+    assert endpoint not in (probe.error or "")
