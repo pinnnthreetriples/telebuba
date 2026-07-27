@@ -317,7 +317,7 @@ async def test_prune_failure_is_logged_and_does_not_propagate(
     await _sweep._prune_history_if_due(datetime.now(UTC))  # must not raise
 
     logs = await list_recent_logs(limit=50)
-    assert [e for e in logs if e.event == "retention_purge_failed"]
+    assert [e for e in logs if e.event == "neurocomment_retention_purge_failed"]
     assert await _retention_log_entries() == []
 
 

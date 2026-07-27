@@ -22,7 +22,12 @@ function LogLine({ line, t }: { line: LogEntry; t: TFunction }) {
   const channel = extraStr(line.extra, 'channel');
   // Most negative outcomes carry a `reason`; a failed post carries the Telegram `status`.
   const reasonCode = extraStr(line.extra, 'reason') ?? extraStr(line.extra, 'status');
-  const detail = reasonCode ? t(`logEventReason.${reasonCode}`, { defaultValue: '' }) : '';
+  const reason = reasonCode ? t(`logEventReason.${reasonCode}`, { defaultValue: '' }) : '';
+  // The Telegram exception class, shown NEXT TO the reason rather than as a fallback
+  // behind it: `status: "failed"` always translates, so a fallback would never fire and
+  // the line would keep saying a post failed without saying why. Deliberately raw — a
+  // technical code, like eventLabel's raw-event-code fallback.
+  const detail = [reason, extraStr(line.extra, 'error_type')].filter(Boolean).join(' · ');
   const hint = t(`logEventHint.${line.event}`, { defaultValue: '' });
   return (
     <div className="flex gap-[10px]" title={hint || undefined}>

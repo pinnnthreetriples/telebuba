@@ -305,6 +305,32 @@ test('refetches the board on a live SSE event', async () => {
   });
 });
 
+test('a live SSE event refetches an expanded card activity log', async () => {
+  // Pins 'listLogs' in WARMING_QUERY_IDS: without it the terminal keeps showing the
+  // rows it loaded on expand, and the "new events still show" promise is a lie.
+  routeApi();
+  renderWithClient(<WarmingPage />);
+  await waitFor(() => {
+    expect(screen.getByText('warm-1')).toBeInTheDocument();
+  });
+  await userEvent.click(screen.getAllByText('Лог активности')[0]!);
+  const logCalls = () =>
+    vi
+      .mocked(fetch)
+      .mock.calls.filter(([input]) => new URL((input as Request).url).pathname === '/api/v1/logs')
+      .length;
+  await waitFor(() => {
+    expect(logCalls()).toBeGreaterThan(0);
+  });
+  const before = logCalls();
+  act(() => {
+    lastEventSource()?.emit({ id: 1, event: 'warming_subscribe' });
+  });
+  await waitFor(() => {
+    expect(logCalls()).toBeGreaterThan(before);
+  });
+});
+
 test('starts an idle account', async () => {
   routeApi();
   renderWithClient(<WarmingPage />);

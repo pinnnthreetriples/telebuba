@@ -245,6 +245,31 @@ test('the per-card log request uses the served card_log_limit', async () => {
   });
 });
 
+test('the per-card log request scopes itself to warming, gateway and spam-status events', async () => {
+  vi.mocked(fetch).mockImplementation(() =>
+    Promise.resolve(jsonResponse({ items: [], next_cursor: null })),
+  );
+  renderWithClient(
+    <WarmingBoard
+      warming={[account('79051184490', 'active')]}
+      onStop={vi.fn()}
+      onPromote={vi.fn()}
+      busyId={null}
+    />,
+  );
+  await userEvent.click(screen.getByText('Лог активности'));
+  await waitFor(() => {
+    const scoped = vi.mocked(fetch).mock.calls.some(([input]) => {
+      const url = new URL((input as Request).url);
+      return (
+        url.pathname === '/api/v1/logs' &&
+        url.searchParams.get('event_prefix') === 'warming_,telegram_,spam_status'
+      );
+    });
+    expect(scoped).toBe(true);
+  });
+});
+
 test('expanding a card fetches that account real activity log', async () => {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;

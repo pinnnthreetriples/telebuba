@@ -1732,7 +1732,10 @@ export const updateNeurocommentSettings = <ThrowOnError extends boolean = false>
 /**
  * Delete Logs
  *
- * Clear log rows whose event starts with ``event_prefix`` (all rows when empty).
+ * Clear log rows whose event starts with any of the comma-separated ``event_prefix`` values.
+ *
+ * Only omitting ``event_prefix``, or passing the empty string, clears every row; a value
+ * that yields no usable prefix (``" "``, ``","``) clears nothing.
  */
 export const clearLogs = <ThrowOnError extends boolean = false>(
   options?: Options<ClearLogsData, ThrowOnError>,
@@ -1744,6 +1747,13 @@ export const clearLogs = <ThrowOnError extends boolean = false>(
 
 /**
  * List Logs
+ *
+ * List log rows, newest first.
+ *
+ * ``event_prefix`` accepts a comma-separated list of prefixes and keeps rows whose
+ * event starts with any of them (e.g. ``warming_,telegram_``). Omitting it, or passing
+ * the empty string, applies no filter; a value that yields no usable prefix (``" "``,
+ * ``","``) is still a filter and matches nothing.
  */
 export const listLogs = <ThrowOnError extends boolean = false>(
   options?: Options<ListLogsData, ThrowOnError>,

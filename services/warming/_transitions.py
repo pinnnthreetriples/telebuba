@@ -45,7 +45,7 @@ if TYPE_CHECKING:
 
 
 class _PhaseEvent(NamedTuple):
-    """A pending ``phase_advanced`` log entry, emitted only if the write lands."""
+    """A pending ``warming_phase_advanced`` log entry, emitted only if the write lands."""
 
     level: LogLevel
     extra: dict[str, object]
@@ -254,12 +254,12 @@ async def _resolve_phase_after_cycle(
     age_hours: float,
     latest: WarmingStateRecord | None,
 ) -> tuple[WarmingPhase, str, _PhaseEvent | None]:
-    """Compute the post-cycle phase and the ``phase_advanced`` event to emit.
+    """Compute the post-cycle phase and the ``warming_phase_advanced`` event to emit.
 
     Returns ``(new_phase, phase_entered_iso, phase_event)``. The event is
     returned rather than logged here so the caller can withhold it when the
     final CAS write is rejected (a newer generation took the row) — a phantom
-    ``phase_advanced`` for a state change that never landed would mislead
+    ``warming_phase_advanced`` for a state change that never landed would mislead
     diagnosis. We recompute trust on purpose: the cycle may have just shifted
     spam/quarantine/flood signals, and the phase should react in the same write.
     Seed-only semantics for the first ever cycle (``prev is None`` → no event,

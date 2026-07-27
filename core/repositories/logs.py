@@ -11,7 +11,7 @@ import asyncio
 import json
 from typing import cast
 
-from sqlalchemy import delete, insert, select
+from sqlalchemy import ColumnElement, delete, false, insert, or_, select
 
 from core.db import _get_engine, _logs, _now_iso, _optional_str
 from schemas.logs import LogEntry, LogEventInput, LogFilter, LogLevel, LogStatus
@@ -21,6 +21,30 @@ _STATUS_BY_LEVEL: dict[LogLevel, LogStatus] = {
     "WARNING": "warning",
     "ERROR": "error",
 }
+
+
+def _event_prefix_clause(event_prefix: str) -> ColumnElement[bool] | None:
+    """OR of ``event LIKE 'prefix%'`` over the comma-separated prefixes.
+
+    Returns ``None`` only for the empty string — the "no filter requested" case, which
+    means *all* rows. A non-empty value whose parts are all blank (``" "``, ``","``)
+    is a filter that matches nothing, so it returns ``false()``: collapsing it to
+    ``None`` would turn a scoped purge into a whole-table wipe.
+
+    Each prefix is escaped: an unescaped ``_`` or ``%`` would turn a literal prefix
+    into a wildcard, so ``event_prefix="_"`` matched (and purged) every row.
+    """
+    if not event_prefix:
+        return None
+    clauses = [
+        _logs.c.event.like(
+            part.strip().replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_") + "%",
+            escape="\\",
+        )
+        for part in event_prefix.split(",")
+        if part.strip()
+    ]
+    return or_(*clauses) if clauses else false()
 
 
 def _insert_log_row(event: LogEventInput) -> LogEntry:
@@ -90,8 +114,9 @@ def _list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[LogEntry
         statement = statement.where(_logs.c.status != "success")
     if log_filter.account_id:
         statement = statement.where(_logs.c.account_id == log_filter.account_id)
-    if log_filter.event_prefix:
-        statement = statement.where(_logs.c.event.like(f"{log_filter.event_prefix}%"))
+    prefix_clause = _event_prefix_clause(log_filter.event_prefix)
+    if prefix_clause is not None:
+        statement = statement.where(prefix_clause)
     with _get_engine().connect() as connection:
         rows = connection.execute(statement).mappings().all()
     entries: list[LogEntry] = []
@@ -119,14 +144,15 @@ async def list_filtered_logs(log_filter: LogFilter, offset: int = 0) -> list[Log
 
 def _purge_logs(event_prefix: str) -> int:
     statement = delete(_logs)
-    if event_prefix:
-        statement = statement.where(_logs.c.event.like(f"{event_prefix}%"))
+    prefix_clause = _event_prefix_clause(event_prefix)
+    if prefix_clause is not None:
+        statement = statement.where(prefix_clause)
     with _get_engine().begin() as connection:
         return connection.execute(statement).rowcount
 
 
 async def purge_logs(event_prefix: str = "") -> int:
-    """Delete log rows whose event starts with ``event_prefix`` (all rows when empty).
+    """Delete log rows matching ``event_prefix`` (see ``_event_prefix_clause``).
 
     Powers the operator "clear logs" action; scoped by prefix so the neurocomment
     panel can wipe only its own feed without touching warming/account history.
