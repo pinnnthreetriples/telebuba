@@ -8,6 +8,10 @@ import type { NeurocommentBoard as NeurocommentBoardData } from '@/shared/api';
 
 import { NeurocommentBoard } from './NeurocommentBoard';
 
+// Default resolver = the old behaviour (show the label), so every existing
+// assertion below still describes what the board renders.
+const LABEL = (_accountId: string, fallback: string): string => fallback;
+
 const BOARD: NeurocommentBoardData = {
   campaign_id: 'c1',
   campaign_name: 'Promo',
@@ -36,7 +40,14 @@ const BOARD: NeurocommentBoardData = {
 };
 
 test('renders the 4-column work table with channel and dot-pill status', () => {
-  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={() => undefined} />);
+  render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
   expect(screen.getByText('+79261112233')).toBeInTheDocument();
   expect(screen.getByText('@news')).toBeInTheDocument();
   expect(screen.getByText('Готов')).toBeInTheDocument();
@@ -57,12 +68,26 @@ test('shows a deleted-count chip on a channel with recent deletions', () => {
       },
     ],
   };
-  render(<NeurocommentBoard board={board} accountsCount={1} onOpenAccounts={() => undefined} />);
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
   expect(screen.getByText('3 удалено')).toBeInTheDocument();
 });
 
 test('an account with no readiness rows shows the no-data badge, not comments-off', () => {
-  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={() => undefined} />);
+  render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
   // acc-2 has readiness: [] — no channel to look up, so the frontend-only
   // 'no_data' status renders instead of colliding with the real backend state.
   expect(screen.getByText('Нет данных')).toBeInTheDocument();
@@ -87,7 +112,14 @@ test('a pinned account shows its pinned channel, not the first joined one', () =
       },
     ],
   };
-  render(<NeurocommentBoard board={board} accountsCount={1} onOpenAccounts={() => undefined} />);
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
   expect(screen.getByText('@second')).toBeInTheDocument();
   expect(screen.queryByText('@news')).not.toBeInTheDocument();
 });
@@ -99,6 +131,7 @@ test('during onboarding, a not-yet-armed account animates progress instead of "n
       accountsCount={1}
       onboarding
       onOpenAccounts={() => undefined}
+      displayName={LABEL}
     />,
   );
   // header carries the live onboarding indicator (was a static "updated" label)
@@ -111,7 +144,14 @@ test('during onboarding, a not-yet-armed account animates progress instead of "n
 });
 
 test('with onboarding off, the static status shows (no progress badge)', () => {
-  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={() => undefined} />);
+  render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
   expect(screen.queryByText('Онбординг идёт')).not.toBeInTheDocument();
   expect(screen.queryByText('Онбординг 0/1')).not.toBeInTheDocument();
   expect(screen.getByText('Нет данных')).toBeInTheDocument();
@@ -119,7 +159,14 @@ test('with onboarding off, the static status shows (no progress badge)', () => {
 
 test('the gear button opens the accounts modal', async () => {
   const onOpenAccounts = vi.fn();
-  render(<NeurocommentBoard board={BOARD} accountsCount={1} onOpenAccounts={onOpenAccounts} />);
+  render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onOpenAccounts={onOpenAccounts}
+      displayName={LABEL}
+    />,
+  );
   await userEvent.click(screen.getByLabelText('Аккаунты в нейрокомментинге'));
   expect(onOpenAccounts).toHaveBeenCalledOnce();
 });
@@ -157,6 +204,7 @@ test('expanding an account row reveals only that account’s published comments'
       accountsCount={1}
       onOpenAccounts={() => undefined}
       onOpenHistory={onOpenHistory}
+      displayName={LABEL}
     />,
   );
   // collapsed by default — neither comment is visible yet
@@ -170,4 +218,48 @@ test('expanding an account row reveals only that account’s published comments'
   // and the history button reaches the modal opener
   await userEvent.click(screen.getByRole('button', { name: 'Вся история' }));
   expect(onOpenHistory).toHaveBeenCalledOnce();
+});
+
+test('shows the Telegram name, not the raw session id, in the account column', () => {
+  // Reproduces the live data: an imported session has an empty operator label, so
+  // the backend board sends the session-stem id and the column read "5_telethon".
+  const board: NeurocommentBoardData = {
+    ...BOARD,
+    accounts: [
+      {
+        account_id: '5_telethon',
+        label: '5_telethon',
+        comments_last_hour: 0,
+        max_comments_per_hour: 10,
+        comments_today: 0,
+        readiness: [{ channel: '@news', ready: true, joined: true, captcha_passed: true }],
+      },
+    ],
+  };
+  const names: Record<string, string> = { '5_telethon': 'Alisa' };
+
+  render(
+    <NeurocommentBoard
+      board={board}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={(id, fallback) => names[id] ?? fallback}
+    />,
+  );
+
+  expect(screen.getByText('Alisa')).toBeInTheDocument();
+  expect(screen.queryByText('5_telethon')).not.toBeInTheDocument();
+});
+
+test('falls back to the label when the account is not in the full list', () => {
+  render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={(_id, fallback) => fallback}
+    />,
+  );
+
+  expect(screen.getByText('+79261112233')).toBeInTheDocument();
 });

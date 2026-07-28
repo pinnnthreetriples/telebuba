@@ -444,6 +444,7 @@ export function NeurocommentPage() {
             <NeurocommentBoard
               board={board.data}
               accountsCount={boardAccounts.length}
+              displayName={displayNameById}
               onboarding={onboarding}
               onOpenAccounts={() => {
                 setShowAccounts(true);
@@ -736,15 +737,21 @@ export function NeurocommentPage() {
           // this settles after the board refetch.
           accounts={
             promptFor.campaign_id === campaignId
-              ? boardAccounts.map((a) => ({
-                  account_id: a.account_id,
-                  phone: a.label,
-                  // An account with a channel subset shows it; an empty subset
-                  // serves the whole campaign, so show the campaign — not an
-                  // arbitrary first-readiness channel (that misrepresented its scope).
-                  channel: (a.pinned_channels ?? []).join(', ') || promptFor.name,
-                  initials: initials(a.label),
-                }))
+              ? boardAccounts.map((a) => {
+                  // Rendered as the row's primary bold label, so it must be the
+                  // Telegram name — ``label`` is the operator field and falls back to
+                  // the session stem, which showed "5_telethon" where "Alisa" belongs.
+                  const name = displayNameById(a.account_id, a.label);
+                  return {
+                    account_id: a.account_id,
+                    phone: name,
+                    // An account with a channel subset shows it; an empty subset
+                    // serves the whole campaign, so show the campaign — not an
+                    // arbitrary first-readiness channel (that misrepresented its scope).
+                    channel: (a.pinned_channels ?? []).join(', ') || promptFor.name,
+                    initials: initials(name),
+                  };
+                })
               : []
           }
           onClose={() => {
