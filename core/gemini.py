@@ -86,6 +86,10 @@ def _payload(request: GeminiRequest) -> dict[str, object]:
     generation_config: dict[str, object] = {
         "temperature": request.temperature,
         "maxOutputTokens": request.max_output_tokens,
+        # Always explicit: a 2.5 model thinks by default and charges the thoughts to
+        # maxOutputTokens, so omitting this let reasoning eat the whole budget and
+        # truncate the reply. 0 = off (short-text callers); the solver raises it.
+        "thinkingConfig": {"thinkingBudget": request.thinking_budget},
     }
     if request.response_schema_json is not None:
         # Server-side structured output: Gemini validates against the schema and
@@ -149,6 +153,13 @@ def _classify_response(response: httpx.Response) -> GeminiResult:
         body = response.json()
     except ValueError as exc:
         return GeminiResult(status="error", error=f"Invalid JSON: {exc}")
+    candidates = body.get("candidates") if isinstance(body, dict) else None
+    first = candidates[0] if isinstance(candidates, list) and candidates else None
+    if isinstance(first, dict) and first.get("finishReason") == "MAX_TOKENS":
+        # A capped generation hands back a mid-word stump (and invalid JSON under
+        # responseSchema). Callers want to retry or give up cleanly — never to post
+        # half a sentence — so truncation is an error, not a short success.
+        return GeminiResult(status="error", error="Truncated: hit maxOutputTokens")
     text = _extract_text(body) if isinstance(body, dict) else None
     if text is None:
         return GeminiResult(status="error", error="No text in Gemini response")

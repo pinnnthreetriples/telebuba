@@ -333,3 +333,97 @@ async def test_zero_interval_never_sleeps(monkeypatch: pytest.MonkeyPatch) -> No
 
     assert slept == []
     assert _throttle.last_call == 999.0  # opted-out call left the shared clock alone
+
+
+@pytest.mark.asyncio
+async def test_thinking_disabled_by_default_in_generation_config() -> None:
+    """Short-text callers must pin thinkingBudget to 0.
+
+    Omitting it let a 2.5 model spend the whole maxOutputTokens on thoughts and
+    return a mid-word stump.
+    """
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "ok"}]}}]},
+            ),
+        )
+        await generate_text(_request())
+
+    generation = json.loads(route.calls.last.request.content)["generationConfig"]
+    assert generation["thinkingConfig"] == {"thinkingBudget": 0}
+
+
+@pytest.mark.asyncio
+async def test_thinking_budget_forwarded_when_set() -> None:
+    """The captcha solver opts into reasoning; the budget must reach the API."""
+    with respx.mock:
+        route = respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={"candidates": [{"content": {"parts": [{"text": "{}"}]}}]},
+            ),
+        )
+        request = GeminiRequest(
+            api_key="k",
+            prompt="solve",
+            model="gemini-2.5-flash",
+            temperature=0.0,
+            max_output_tokens=1024,
+            thinking_budget=512,
+        )
+        await generate_text(request)
+
+    generation = json.loads(route.calls.last.request.content)["generationConfig"]
+    assert generation["thinkingConfig"] == {"thinkingBudget": 512}
+
+
+@pytest.mark.asyncio
+async def test_max_tokens_finish_reason_is_error_not_partial_text() -> None:
+    """A capped generation is a failure, never a short success.
+
+    The fragment it returns is cut mid-word (and invalid JSON under responseSchema).
+    """
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "candidates": [
+                        {
+                            "content": {"parts": [{"text": "Ого, прям"}]},
+                            "finishReason": "MAX_TOKENS",
+                        },
+                    ],
+                },
+            ),
+        )
+        result = await generate_text(_request())
+
+    assert result.status == "error"
+    assert result.text is None
+    assert "maxOutputTokens" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_normal_finish_reason_still_returns_text() -> None:
+    """Only MAX_TOKENS is rejected — a STOP finish is the ordinary success path."""
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "candidates": [
+                        {
+                            "content": {"parts": [{"text": "Ого, вот это игра!"}]},
+                            "finishReason": "STOP",
+                        },
+                    ],
+                },
+            ),
+        )
+        result = await generate_text(_request())
+
+    assert result.status == "ok"
+    assert result.text == "Ого, вот это игра!"

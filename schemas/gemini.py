@@ -18,7 +18,15 @@ class GeminiRequest(BaseModel):
     prompt: str = Field(min_length=1)
     model: str = Field(min_length=1)
     temperature: float = Field(ge=0.0, le=2.0)
+    # Ceiling for thoughts + answer combined: on a thinking model (the 2.5 family)
+    # Gemini bills reasoning tokens against ``maxOutputTokens``, so a request that
+    # enables ``thinking_budget`` needs room for both halves, not just the reply.
     max_output_tokens: int = Field(ge=1, le=2048)
+    # Reasoning-token allowance. ``0`` disables thinking, which is what short-text
+    # callers want: it makes ``max_output_tokens`` mean what they assume (a budget
+    # for the reply). Left at 0, a 2.5 model silently spent the whole budget on
+    # thoughts and returned a mid-word stump. Only the captcha solver opts in.
+    thinking_budget: int = Field(default=0, ge=0, le=2048)
     # Optional JSON-Schema for server-side structured output (Gemini
     # ``responseSchema``); an opaque schema dict, not inter-layer domain data.
     response_schema_json: dict[str, object] | None = None
