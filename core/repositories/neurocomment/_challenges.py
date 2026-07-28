@@ -15,7 +15,10 @@ from typing import TYPE_CHECKING
 from sqlalchemy import delete, func, select, update
 
 from core.db import _get_engine, _now_iso
-from core.repositories.neurocomment._tables import _neurocomment_challenges
+from core.repositories.neurocomment._tables import (
+    _neurocomment_challenges,
+    _neurocomment_readiness,
+)
 from schemas.challenge import (
     ChallengedChannels,
     ChallengeDecision,
@@ -27,10 +30,35 @@ from schemas.challenge import (
 
 if TYPE_CHECKING:
     from sqlalchemy import RowMapping
+    from sqlalchemy.sql.elements import ColumnElement
 
 # Non-solved outcomes the drill-down surfaces ("what broke the solver"); a
 # resolved/pending row is not a failure to show.
 _FAILED_OUTCOMES = ("give_up", "failed")
+
+
+def _still_blocked() -> ColumnElement[bool]:
+    """Exclude a failure whose pair has since passed its captcha.
+
+    The table is append-only: a solve inserts a new row and never rewrites the old
+    ``give_up``, and retention keeps failures for 90 days. So without this the queue
+    counted long-resolved failures forever — after the thinking-budget fix it still
+    claimed six pairs needed a human while five of them were already ``ready``, which
+    is exactly the false alarm that sent an operator looking for a bug that was fixed.
+    Readiness is the live answer to "is this pair still captcha-blocked"; a pair with
+    no readiness row at all (a retry erased it) stays listed, since nothing yet proves
+    it passed.
+    """
+    passed = (
+        select(_neurocomment_readiness.c.account_id)
+        .where(
+            (_neurocomment_readiness.c.account_id == _neurocomment_challenges.c.account_id)
+            & (_neurocomment_readiness.c.channel == _neurocomment_challenges.c.channel)
+            & (_neurocomment_readiness.c.captcha_passed == 1),
+        )
+        .exists()
+    )
+    return ~passed
 
 
 def _insert_challenge(row: ChallengeInsert) -> None:
@@ -84,7 +112,8 @@ def _list_failed_for_channel(channel: str, limit: int) -> ChallengeRowList:
         select(_neurocomment_challenges)
         .where(
             (_neurocomment_challenges.c.channel == channel)
-            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES),
+            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES)
+            & _still_blocked(),
         )
         .order_by(
             _neurocomment_challenges.c.decided_at.desc(),
@@ -109,7 +138,8 @@ def _list_failed_for_channels(channels: list[str], limit: int) -> ChallengeRowLi
         select(_neurocomment_challenges)
         .where(
             _neurocomment_challenges.c.channel.in_(channels)
-            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES),
+            & _neurocomment_challenges.c.outcome.in_(_FAILED_OUTCOMES)
+            & _still_blocked(),
         )
         .order_by(
             _neurocomment_challenges.c.decided_at.desc(),

@@ -9,13 +9,16 @@ import pytest
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     count_by_outcome,
+    create_account,
     evict_cached_decision,
     insert_challenge,
     list_failed_for_channel,
     list_failed_for_channels,
     lookup_cached_decision,
     resolve_pending_outcome,
+    upsert_readiness,
 )
+from schemas.accounts import AccountCreate
 from schemas.challenge import ChallengeDecision, ChallengeInsert
 
 
@@ -285,3 +288,57 @@ async def test_list_failed_for_channel_surfaces_reasoning() -> None:
 
     rows = (await list_failed_for_channel("@chan", limit=10)).rows
     assert rows[0].reasoning == "image captcha"
+
+
+@pytest.mark.asyncio
+async def test_queue_drops_a_failure_whose_pair_has_since_passed() -> None:
+    """The table is append-only, so a solve never rewrites the old ``give_up`` row.
+
+    Readiness is the live answer to "is this pair still captcha-blocked". Without
+    this filter the queue counted resolved failures for the whole 90-day retention
+    window — after the thinking-budget fix it still claimed six pairs needed a human
+    while five were already ready.
+    """
+    for account_id in ("stuck", "passed"):
+        await create_account(
+            AccountCreate(account_id=account_id, label=account_id, session_name=account_id),
+        )
+        await insert_challenge(
+            ChallengeInsert(
+                challenge_hash=f"h-{account_id}",
+                account_id=account_id,
+                channel="@chan",
+                raw_text="press the button",
+                button_labels=["ok"],
+                outcome="give_up",
+            ),
+        )
+    # Only "passed" got through its captcha on a later attempt.
+    await upsert_readiness("passed", "@chan", joined=True, captcha_passed=True, ready=True)
+    await upsert_readiness("stuck", "@chan", joined=True, captcha_passed=False, ready=False)
+
+    per_channel = await list_failed_for_channel("@chan", limit=10)
+    campaign = await list_failed_for_channels(["@chan"], limit=10)
+
+    assert [r.account_id for r in per_channel.rows] == ["stuck"]
+    assert [r.account_id for r in campaign.rows] == ["stuck"]
+
+
+@pytest.mark.asyncio
+async def test_queue_keeps_a_failure_with_no_readiness_row() -> None:
+    """An operator retry erases readiness; nothing yet proves that pair passed."""
+    await create_account(AccountCreate(account_id="reset", label="R", session_name="reset"))
+    await insert_challenge(
+        ChallengeInsert(
+            challenge_hash="h-reset",
+            account_id="reset",
+            channel="@chan",
+            raw_text="press the button",
+            button_labels=["ok"],
+            outcome="give_up",
+        ),
+    )
+
+    result = await list_failed_for_channels(["@chan"], limit=10)
+
+    assert [r.account_id for r in result.rows] == ["reset"]
