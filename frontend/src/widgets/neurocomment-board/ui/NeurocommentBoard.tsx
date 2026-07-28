@@ -39,6 +39,7 @@ function deriveRows(
   board: NeurocommentBoardData,
   placeholder: string,
   totalChannels: number,
+  displayName: (accountId: string, fallback: string) => string,
 ): BoardRow[] {
   const channelStatus = new Map((board.channels ?? []).map((c) => [c.channel, c.status]));
   const channelDeleted = new Map((board.channels ?? []).map((c) => [c.channel, c.deleted_recent]));
@@ -55,7 +56,11 @@ function deriveRows(
     const armedTarget = pins.length || Math.max(1, totalChannels);
     const armedReady = Math.min(readiness.filter((r) => r.ready).length, armedTarget);
     return {
-      account: account.label,
+      // The board payload carries only ``label`` — the operator-set field, which is
+      // empty for an imported session and equal to the id for a phone-named one, so
+      // the column read "5_telethon" instead of "Alisa". The Telegram first/last name
+      // lives on the full account list, which only the page has, hence the resolver.
+      account: displayName(account.account_id, account.label),
       accountId: account.account_id,
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
@@ -154,9 +159,13 @@ export function NeurocommentBoard({
   onboarding = false,
   onOpenAccounts,
   onOpenHistory,
+  displayName,
 }: {
   board: NeurocommentBoardData;
   accountsCount: number;
+  // Resolves an account's Telegram display name (first + last) from the full
+  // account list; falls back to the passed label when the account is unknown.
+  displayName: (accountId: string, fallback: string) => string;
   // True while the runtime is actively onboarding (joining channels): the board
   // animates a live indicator instead of reading as an idle "no data" state.
   onboarding?: boolean;
@@ -170,6 +179,7 @@ export function NeurocommentBoard({
     board,
     t('neurocomment.board.commentPlaceholder'),
     (board.channels ?? []).length,
+    displayName,
   );
 
   const columns = useMemo<ColumnDef<BoardRow>[]>(
