@@ -55,6 +55,14 @@
     opacity: 1;
   }
 }
+@keyframes drawerin {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(0);
+  }
+}
 @keyframes spin {
   to {
     transform: rotate(360deg);
@@ -180,16 +188,20 @@
 .tb-upbar {
   animation: upbar 1.7s ease-out forwards;
 }
+.tb-drawerin {
+  animation: drawerin 0.24s cubic-bezier(0.22, 1, 0.36, 1);
+}
 /* Dialogue-feed "typing…" indicator: three dots pulsing on the shared dotspin
    opacity keyframe, staggered so the wave reads as ongoing chatter. */
 .tb-typing-dot {
   animation: dotspin 1.2s ease-in-out infinite;
 }
 /* Motion is decorative here; honour the user's reduced-motion preference for
-   the dialogue feed's enter animation and typing dots. */
+   the dialogue feed's enter animation, typing dots and the nav drawer's slide. */
 @media (prefers-reduced-motion: reduce) {
   .tb-swapin,
-  .tb-typing-dot {
+  .tb-typing-dot,
+  .tb-drawerin {
     animation: none;
   }
 }

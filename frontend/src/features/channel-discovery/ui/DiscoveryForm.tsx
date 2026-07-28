@@ -72,7 +72,7 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
         </span>
       </label>
 
-      <div className="grid grid-cols-2 gap-[13px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[13px]">
         <label className="block">
           <span className={LABEL}>{t('neurocomment.modal.discovery.form.language')}</span>
           <select

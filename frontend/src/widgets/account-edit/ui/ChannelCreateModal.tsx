@@ -193,7 +193,7 @@ export function ChannelCreateModal({
     // create is in flight (unmounting mid-flight drops the onSuccess and loses
     // both the list refresh and the editor hand-off).
     <Modal onClose={busy ? () => undefined : onClose} z={75} backdrop={0.45} className="w-[460px]">
-      <div className="tb-scroll max-h-[88vh] overflow-y-auto px-6 py-[22px]">
+      <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
         <div className="mb-4 flex items-center justify-between">
           <span className="text-[16px] font-bold">{t('accounts.channel.createTitle')}</span>
           <button

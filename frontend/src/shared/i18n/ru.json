@@ -499,6 +499,8 @@
     "systemActive": "Система активна",
     "systemOffline": "Нет соединения",
     "notifications": "Уведомления",
+    "menu": "Меню",
+    "closeMenu": "Закрыть меню",
     "account": "Аккаунт",
     "logout": "Выйти",
     "avatarFallback": "ОП",

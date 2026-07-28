@@ -80,7 +80,7 @@ export function ProxyForm({
 
   return (
     <div className="flex flex-col gap-3">
-      <div className="grid grid-cols-[2fr_1fr] gap-[10px]">
+      <div className="grid grid-cols-1 md:grid-cols-[2fr_1fr] gap-[10px]">
         <form.Field name="host">
           {(field) => (
             <FormField
@@ -103,7 +103,7 @@ export function ProxyForm({
           )}
         </form.Field>
       </div>
-      <div className="grid grid-cols-2 gap-[10px]">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-[10px]">
         <form.Field name="username">
           {(field) => (
             <FormField

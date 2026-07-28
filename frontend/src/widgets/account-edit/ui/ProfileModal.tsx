@@ -602,7 +602,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   };
 
   const tabBtn = (value: Tab): string =>
-    `border-b-2 py-[14px] text-[13px] font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
+    `shrink-0 whitespace-nowrap border-b-2 py-[14px] text-[13px] font-medium transition-colors ${tab === value ? 'border-primary text-ink' : 'border-transparent text-ink-muted'}`;
 
   // The other half of the ARIA tabs pattern (the roles landed with the tablist):
   // the tablist is ONE tab stop via roving tabindex, and Left/Right/Home/End move
@@ -628,7 +628,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
   return (
     <>
       <Modal onClose={requestClose} z={70} className="w-[580px]">
-        <div className="flex max-h-[88vh] flex-col overflow-hidden">
+        <div className="flex max-h-[88dvh] flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-[14px] border-b border-[#f0eeeb] px-5 py-[18px]">
             <div
@@ -699,7 +699,12 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
           {/* tabs — a real tablist: the active tab was conveyed by colour and a
               bottom border only, so a screen reader announced six plain buttons
               with no way to tell which one is showing. */}
-          <div role="tablist" className="flex gap-5 border-b border-[#f0eeeb] px-5">
+          {/* Six labels overflow a phone-width modal; scroll them rather than wrap,
+              so the roving-tabindex row stays a single line. */}
+          <div
+            role="tablist"
+            className="tb-scroll flex gap-5 overflow-x-auto border-b border-[#f0eeeb] px-5"
+          >
             {TABS.map((value) => (
               <button
                 key={value}
@@ -766,7 +771,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
             )}
             {tab === 'text' && (
               <div className="flex flex-col gap-[14px]">
-                <div className="grid grid-cols-2 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   <form.Field name="first_name">
                     {(field) => <FormField field={field} label={t('accounts.profile.firstName')} />}
                   </form.Field>

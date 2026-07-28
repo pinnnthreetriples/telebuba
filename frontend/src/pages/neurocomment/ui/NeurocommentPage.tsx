@@ -427,9 +427,12 @@ export function NeurocommentPage() {
         {t('neurocomment.title')}
       </h1>
 
-      <div className="grid grid-cols-[340px_1fr] items-start gap-4">
+      {/* The col-start pinning must stay `lg:`-scoped: unprefixed it would make the
+          one-column grid sprout an implicit second column and sit both children side
+          by side. Below `lg`, DOM order puts the board before the config rail. */}
+      <div className="grid items-start gap-4 lg:grid-cols-[340px_1fr]">
         {/* RIGHT column */}
-        <div className="col-start-2 row-start-1 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:col-start-2 lg:row-start-1">
           <PipelineCard
             running={running}
             canStart={Boolean(listenerId)}
@@ -460,7 +463,7 @@ export function NeurocommentPage() {
         </div>
 
         {/* LEFT column */}
-        <div className="col-start-1 row-start-1 flex flex-col gap-4">
+        <div className="flex flex-col gap-4 lg:col-start-1 lg:row-start-1">
           {idleCount > 0 ? (
             <IdleBanner
               count={idleCount}

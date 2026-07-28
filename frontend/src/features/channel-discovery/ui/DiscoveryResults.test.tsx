@@ -273,6 +273,29 @@ describe('DiscoveryResults', () => {
     expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).not.toBeChecked();
   });
 
+  // Below 1024 DataTable renders cards, which have no column headers — and the
+  // select-all lives in one, so it moves into the toolbar there.
+  // This covers the narrow side only. What catches a *duplicate* select-all is the
+  // wide-viewport tests above (and in ChannelDiscoveryModal.test.tsx), which query it
+  // by accessible name at the default 1024px and throw on two matches.
+  it('keeps select-all reachable on a narrow viewport', async () => {
+    (
+      window as unknown as { happyDOM: { setViewport: (v: { width: number }) => void } }
+    ).happyDOM.setViewport({ width: 375 });
+    try {
+      render(<Harness data={board([candidate({ channel: 'good' })])} />);
+      expect(screen.queryByRole('table')).toBeNull();
+
+      const all = () => screen.getByRole('checkbox', { name: 'Выбрать все подходящие' });
+      await userEvent.click(all());
+      expect(screen.getByRole('checkbox', { name: 'Выбрать канал good' })).toBeChecked();
+    } finally {
+      (
+        window as unknown as { happyDOM: { setViewport: (v: { width: number }) => void } }
+      ).happyDOM.setViewport({ width: 1024 });
+    }
+  });
+
   it('shows qualification progress while the pass runs', () => {
     render(
       <Harness

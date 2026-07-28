@@ -64,12 +64,12 @@ export function AccountEdit({ account, onBack }: { account: AccountRead; onBack:
         </div>
       </div>
 
-      <div className="mb-[14px] grid grid-cols-2 gap-[14px]">
+      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-[14px]">
         <SessionSection account={account} />
         <ProxySection account={account} />
       </div>
 
-      <div className="mb-[14px] grid grid-cols-2 gap-[14px]">
+      <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-[14px]">
         <DeviceSection account={account} />
         <SignalsSection account={account} />
       </div>

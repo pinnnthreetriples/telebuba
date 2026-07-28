@@ -162,7 +162,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   }, [submitted]);
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[920px] max-h-[88vh] overflow-y-auto">
+    <Modal onClose={onClose} z={72} className="max-h-[88dvh] w-[920px] overflow-y-auto">
       <div className="p-[18px]">
         <h2 className="text-[15px] font-semibold">{t('neurocomment.modal.discovery.title')}</h2>
         <p className="mt-[3px] text-[12px] text-ink-subtle">

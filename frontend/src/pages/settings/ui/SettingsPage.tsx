@@ -251,7 +251,7 @@ function SettingsForm({
             }}
           />
           <p className="text-[11.5px] text-ink-subtle">{t('settings.api.telemetrHint')}</p>
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <label className="block">
               <span className={`${FIELD_LABEL} flex items-center gap-[6px]`}>
                 {t('settings.api.geminiRetries')}
@@ -328,7 +328,7 @@ function SettingsForm({
       </Card>
 
       <Card title={t('settings.neuroLimits.title')} subtitle={t('settings.neuroLimits.subtitle')}>
-        <div className="grid grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
           <form.Field name="cpd">
             {(field) => (
               <FormField field={field} label={t('settings.neuroLimits.cpd')} inputMode="numeric" />

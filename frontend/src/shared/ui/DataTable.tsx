@@ -8,6 +8,8 @@ import {
 } from '@tanstack/react-table';
 import { Fragment, type HTMLAttributes, type ReactNode } from 'react';
 
+import { useWideViewport } from './useWideViewport';
+
 // A thin, headless-table wrapper over @tanstack/react-table: one consistent
 // `<table>` shell (uppercase header on the surface tint, hover rows) that later
 // clusters (logs, neurocomment board, captcha queue) reuse. Layout-agnostic —
@@ -17,12 +19,21 @@ import { Fragment, type HTMLAttributes, type ReactNode } from 'react';
 export interface DataTableColumnMeta {
   className?: string;
   cellClassName?: string;
+  // Card layout only: put this column in the card's header row ('title' grows and
+  // wraps, 'control' never shrinks and keeps column order so a leading checkbox
+  // stays leading) instead of the labelled label/value list beneath it.
+  // meta.cellClassName is deliberately NOT applied on the card path: it encodes
+  // table-cell geometry — w-px would squeeze a chevron to 1px, and a nowrap ellipsis
+  // would truncate a comment inside a card where wrapping is the whole point.
+  cardSlot?: 'title' | 'control';
 }
 
 interface DataTableProps<TData> {
   data: TData[];
   columns: ColumnDef<TData>[];
-  getRowProps?: (row: Row<TData>) => HTMLAttributes<HTMLTableRowElement>;
+  // HTMLElement, not HTMLTableRowElement: the same object is spread on a <tr> on a
+  // wide viewport and on the card <div> on a narrow one.
+  getRowProps?: (row: Row<TData>) => HTMLAttributes<HTMLElement>;
   // When set, a row whose TanStack expanded-state is on renders this full-width
   // beneath it (drive the toggle from a column cell via row.toggleExpanded()).
   renderSubRow?: (row: Row<TData>) => ReactNode;
@@ -33,6 +44,12 @@ interface DataTableProps<TData> {
 const TH =
   'px-4 py-[11px] text-left text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
 const ROW = 'tb-row border-t border-[#f0eeeb] transition-colors';
+
+// Card layout. `tb-row` is reused as-is — its rule is `.tb-row:hover`, which is
+// element-agnostic, so cards get the same hover tint for free.
+const CARD = 'tb-row overflow-hidden border-t border-[#f0eeeb] px-4 py-[13px] first:border-t-0';
+const CARD_LABEL = 'shrink-0 text-[11px] font-medium uppercase tracking-[0.04em] text-ink-subtle';
+const CARD_VALUE = 'min-w-0 break-words text-right text-[12.5px] text-[#3a3a3a]';
 
 // Local, dependency-free class join (avoids a shared/ui → shared/lib → query
 // barrel cycle). No tailwind-merge dedupe is needed — callers pass disjoint
@@ -54,6 +71,79 @@ export function DataTable<TData>({
     getExpandedRowModel: getExpandedRowModel(),
     getRowCanExpand: () => renderSubRow !== undefined,
   });
+
+  const wide = useWideViewport();
+
+  if (!wide) {
+    // Column id → header, so a card label renders with a real HeaderContext — not
+    // cell.getContext(), which today's headers ignore but a future `({ table }) => …`
+    // header would choke on. A Map, not getFlatHeaders().find(): the lookup runs once
+    // per cell per row, and the logs table is long.
+    const headerById = new Map(
+      table.getHeaderGroups().flatMap((group) => group.headers.map((h) => [h.column.id, h])),
+    );
+    // role=list/listitem: the cards are anonymous divs, so without this a screen
+    // reader gets one flat run of text with nothing marking where a record ends —
+    // the boundary that <tr> used to provide.
+    return (
+      <div role="list">
+        {table.getRowModel().rows.map((row) => {
+          const rowProps = getRowProps?.(row);
+          const cells = row.getVisibleCells();
+          const slotOf = (cell: (typeof cells)[number]) =>
+            (cell.column.columnDef.meta as DataTableColumnMeta | undefined)?.cardSlot;
+          const head = cells.filter((cell) => slotOf(cell) !== undefined);
+          const body = cells.filter((cell) => slotOf(cell) === undefined);
+          return (
+            // role after the spread, like className: it is part of the role="list"
+            // parent's structure, so a caller must not be able to clobber it.
+            <div
+              key={row.id}
+              {...rowProps}
+              role="listitem"
+              className={join(CARD, rowProps?.className)}
+            >
+              {head.length > 0 ? (
+                <div className="flex items-center gap-[10px]">
+                  {head.map((cell) => (
+                    <div
+                      key={cell.id}
+                      className={slotOf(cell) === 'title' ? 'min-w-0 flex-1' : 'shrink-0'}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </div>
+                  ))}
+                </div>
+              ) : null}
+              {body.map((cell) => {
+                const header = headerById.get(cell.column.id);
+                return (
+                  <div
+                    key={cell.id}
+                    className="mt-[9px] flex items-baseline justify-between gap-3 first:mt-0"
+                  >
+                    <span className={CARD_LABEL}>
+                      {header
+                        ? flexRender(header.column.columnDef.header, header.getContext())
+                        : null}
+                    </span>
+                    <span className={CARD_VALUE}>
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </span>
+                  </div>
+                );
+              })}
+              {/* Bled out of the card's padding: sub-row content already carries its
+                  own border-t/tint designed to sit flush under a table row. */}
+              {renderSubRow && row.getIsExpanded() ? (
+                <div className="-mx-4 -mb-[13px] mt-[11px]">{renderSubRow(row)}</div>
+              ) : null}
+            </div>
+          );
+        })}
+      </div>
+    );
+  }
 
   return (
     <table className="w-full min-w-[880px] border-collapse">

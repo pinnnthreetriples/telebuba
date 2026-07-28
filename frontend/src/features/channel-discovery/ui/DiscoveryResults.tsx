@@ -2,7 +2,7 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryBoard, DiscoveryCandidate } from '@/shared/api';
-import { DataTable, StatusIcon, type DataTableColumnMeta } from '@/shared/ui';
+import { DataTable, StatusIcon, useWideViewport, type DataTableColumnMeta } from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
@@ -63,6 +63,7 @@ export function DiscoveryResults({
   onToggleAll,
 }: Props) {
   const { t, i18n } = useTranslation();
+  const wide = useWideViewport();
   const candidates = board?.candidates ?? [];
   const eligible = selectableChannels(candidates);
   const checkedCount = eligible.filter((channel) => selected.has(channel)).length;
@@ -110,12 +111,20 @@ export function DiscoveryResults({
           className={CHECKBOX}
         />
       ),
-      meta: { className: 'w-[38px]', cellClassName: 'w-[38px]' } satisfies DataTableColumnMeta,
+      // cardSlot 'control' is load-bearing here, not cosmetic: this column's header
+      // is the select-all checkbox, so as a card *label* it would render one
+      // select-all per card, each toggling the whole result set.
+      meta: {
+        className: 'w-[38px]',
+        cellClassName: 'w-[38px]',
+        cardSlot: 'control',
+      } satisfies DataTableColumnMeta,
     },
     {
       id: 'channel',
       header: () => t('neurocomment.modal.discovery.results.colChannel'),
       cell: ({ row }) => <span className="font-medium">@{row.original.channel}</span>,
+      meta: { cardSlot: 'title' } satisfies DataTableColumnMeta,
     },
     {
       id: 'title',
@@ -170,6 +179,9 @@ export function DiscoveryResults({
         }
         return null;
       },
+      // 'control' rather than a labelled row: the cell is null for most rows, which
+      // as a labelled row would leave an empty "state" stub in every card.
+      meta: { cardSlot: 'control' } satisfies DataTableColumnMeta,
     },
   ];
 
@@ -214,6 +226,28 @@ export function DiscoveryResults({
   return (
     <div className="flex flex-col gap-[9px]">
       <div className="flex items-center justify-between gap-2 text-[11.5px] text-ink-subtle">
+        {/* The card layout has no column headers, and select-all lives in one — so on
+            a phone the operator could otherwise only tap candidates one at a time.
+            Branch on the same JS query DataTable uses, not `lg:hidden`: two
+            select-alls in the DOM would both answer every query by accessible name. */}
+        {wide ? null : (
+          <label className="flex items-center gap-[7px]">
+            <input
+              type="checkbox"
+              checked={allChecked}
+              disabled={eligible.length === 0}
+              ref={(element) => {
+                if (element) element.indeterminate = someChecked;
+              }}
+              onChange={() => {
+                onToggleAll(eligible, !allChecked);
+              }}
+              aria-label={t('neurocomment.modal.discovery.results.selectAll')}
+              className={CHECKBOX}
+            />
+            {t('neurocomment.modal.discovery.results.selectAll')}
+          </label>
+        )}
         <span>{t('neurocomment.modal.discovery.results.count', { count: candidates.length })}</span>
         {/* Also the only trace of how far an aborted run got ("40/300"), so it has to
             outlive the qualifying phase. */}

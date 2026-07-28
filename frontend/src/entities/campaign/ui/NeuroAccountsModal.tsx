@@ -79,7 +79,7 @@ function AccountRow({
 
   return (
     <div className="border-b border-[#f4f2ef] py-[11px]">
-      <div className="flex items-center gap-[10px]">
+      <div className="flex flex-wrap items-center gap-[10px]">
         <FeedbackMark result={result} />
         <span className="min-w-0 flex-1 truncate text-[13px] font-semibold text-ink">
           {account.name}
@@ -102,7 +102,7 @@ function AccountRow({
             // A single pinned channel is the one label that can still be truncated here,
             // so keep the full link reachable without opening the list.
             title={selected.length === 1 ? selected[0] : undefined}
-            className="tb-time flex w-[180px] shrink-0 items-center justify-between gap-2 rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink"
+            className="tb-time flex w-full shrink-0 items-center justify-between gap-2 rounded-[10px] border border-line-input bg-white px-[11px] py-[8px] text-[12.5px] text-ink sm:w-[180px]"
           >
             <span className={`min-w-0 truncate ${selected.length ? '' : 'text-ink-subtle'}`}>
               {triggerLabel}
@@ -126,7 +126,7 @@ function AccountRow({
             onClick={() => {
               onPick(account.account_id);
             }}
-            className="w-[180px] shrink-0 rounded-[9px] border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary"
+            className="w-full shrink-0 rounded-[9px] border border-dashed border-line-strong bg-white px-[11px] py-[8px] text-[12.5px] font-medium text-primary hover:border-primary sm:w-[180px]"
           >
             {t('neurocomment.modal.neuroAccounts.assign')}
           </button>
@@ -241,7 +241,7 @@ export function NeuroAccountsModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} z={72} className="max-h-[88vh] w-[560px] overflow-y-auto">
+    <Modal onClose={onClose} z={72} className="w-[560px]">
       <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary-tint text-primary">
           <svg

@@ -240,7 +240,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-[10px] grid grid-cols-2 gap-[10px]">
+          <div className="mb-[10px] grid grid-cols-1 md:grid-cols-2 gap-[10px]">
             <proxyForm.Field name="port">
               {(field) => (
                 <FormField
@@ -269,7 +269,7 @@ export function ProxySection({ account }: { account: AccountRead }) {
               )}
             </proxyForm.Field>
           </div>
-          <div className="mb-[14px] grid grid-cols-2 gap-[10px]">
+          <div className="mb-[14px] grid grid-cols-1 md:grid-cols-2 gap-[10px]">
             <proxyForm.Field name="username">
               {/* FormField emits name="username" — next to a password input that
                   is the formless login shape Chrome's password parser matches,
