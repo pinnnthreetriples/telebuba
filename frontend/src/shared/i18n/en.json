@@ -751,7 +751,9 @@
     "neurocomment_discovery_started": "Channel search started",
     "neurocomment_discovery_finished": "Channel search finished",
     "neurocomment_discovery_failed": "Channel search failed",
-    "neurocomment_discovery_adopted": "Channels added from search"
+    "neurocomment_discovery_adopted": "Channels added from search",
+    "neurocomment_channel_comments_off": "Channel comments are disabled",
+    "neurocomment_onboard_join_by_request": "Join request sent"
   },
   "logEventReason": {
     "chance": "chance didn't hit",
@@ -840,7 +842,8 @@
       "slow_mode_wait": "slow mode",
       "premium_wait": "premium limit",
       "peer_flood": "spam limit",
-      "already_participant": "already a member"
+      "already_participant": "already a member",
+      "by_request": "join request sent, awaiting approval"
     }
   },
   "neurocomment": {

@@ -137,6 +137,18 @@ async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussi
         linked.linked_chat_id,
         comments_enabled=linked.comments_enabled,
     )
+    if not linked.comments_enabled or linked.linked_chat_id is None:
+        # A channel with no discussion group can never be commented on, and this was
+        # the one dead end with NO log trace at all: the state lands in
+        # ``neurocomment_linked_groups`` and no readiness row is written, so the
+        # channel looked un-onboarded rather than impossible. Logged here (the single
+        # live-resolve site) so both the campaign loop and the single-pair path report it.
+        await log_event(
+            "INFO",
+            "neurocomment_channel_comments_off",
+            account_id=account_id,
+            extra={"channel": channel},
+        )
     return linked
 
 

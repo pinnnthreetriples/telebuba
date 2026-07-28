@@ -12,6 +12,7 @@ from telethon.tl.functions.channels import (
     LeaveChannelRequest,
 )
 
+from core.db import list_recent_logs
 from core.telegram_client import execute
 from schemas.telegram_actions import (
     JoinChannel,
@@ -233,3 +234,32 @@ async def test_join_discussion_group_no_linked_group_classified_failed(
 
     assert result.status == "failed"
     assert result.error_type == "ValueError"
+
+
+@pytest.mark.asyncio
+async def test_join_by_request_is_logged_at_info_not_error(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A queued join request is an expected outcome, so it must not log as an ERROR.
+
+    28 of these in one afternoon buried the real errors in the operator's log, while
+    the ``join_by_request`` state they map to stayed invisible.
+    """
+
+    class FakeClient:
+        async def connect(self) -> None:
+            return None
+
+        async def __call__(self, _request: object) -> None:
+            raise errors.InviteRequestSentError(request=None)
+
+    _patch_client(monkeypatch, FakeClient())
+
+    result = await execute("acc-gated", JoinDiscussionGroup(channel="@gated"))
+
+    # error_type is preserved: the domain keys its join_by_request state off it.
+    assert result.status == "failed"
+    assert result.error_type == "InviteRequestSentError"
+    logged = [e for e in await list_recent_logs(limit=50) if "by_request" in e.event]
+    assert [e.level for e in logged] == ["INFO"]
+    assert [e.extra.get("channel") for e in logged] == ["@gated"]

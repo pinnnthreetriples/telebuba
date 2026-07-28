@@ -130,11 +130,15 @@ async def _llm_decision(
         api_key, model = secret.openai_api_key, secret.openai_model
         temperature = settings.openai.temperature
         max_output_tokens = settings.openai.max_output_tokens
+        thinking_budget = 0  # not a Gemini model; core.openai ignores the field
         generate = _seams.generate_text_openai
     else:
         api_key, model = secret.gemini_api_key, secret.gemini_model
         temperature = settings.gemini.temperature
-        max_output_tokens = settings.gemini.max_output_tokens
+        # Solver-specific budgets, not the short-text ones: this is the only caller that
+        # wants the model to reason, so it needs room for thoughts AND the decision JSON.
+        max_output_tokens = nc.challenge_max_output_tokens
+        thinking_budget = nc.challenge_thinking_budget
         generate = _seams.generate_text
     try:
         # GeminiRequest is the provider-neutral LLM contract; a build ValidationError
@@ -145,6 +149,7 @@ async def _llm_decision(
             model=model,
             temperature=temperature,
             max_output_tokens=max_output_tokens,
+            thinking_budget=thinking_budget,
             response_schema_json=_DECISION_SCHEMA,
             image_b64=message.image_b64 if use_image else None,
             image_mime=message.image_mime,

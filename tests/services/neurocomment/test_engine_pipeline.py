@@ -401,20 +401,30 @@ async def test_generation_exhausted_reason_rate_limited(monkeypatch: pytest.Monk
     assert await _latest_reason("neurocomment_generation_exhausted") == "gemini_rate_limited"
 
 
+@pytest.mark.parametrize(
+    ("setting", "text", "expected"),
+    [
+        ("comment_max_words", "one two three four", "too_long"),
+        ("comment_min_words", "Wow", "too_short"),
+    ],
+)
 @pytest.mark.asyncio
-async def test_generation_exhausted_reason_too_long(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_generation_exhausted_reason_word_count(
+    monkeypatch: pytest.MonkeyPatch, setting: str, text: str, expected: str
+) -> None:
+    """Both length bounds reject and regenerate rather than post the candidate."""
     await _make_campaign("@chan", "acc-1")
     monkeypatch.setattr(settings.neurocomment, "max_retries", 0)
-    monkeypatch.setattr(settings.neurocomment, "comment_max_words", 2)
+    monkeypatch.setattr(settings.neurocomment, setting, 2)
     monkeypatch.setattr(_seams, "execute", _CommentStub().execute)
     monkeypatch.setattr(_seams, "rng", _FixedRng())
     monkeypatch.setattr(
-        _seams, "generate_text", _async_return(GeminiResult(status="ok", text="one two three four"))
+        _seams, "generate_text", _async_return(GeminiResult(status="ok", text=text))
     )
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
-    assert await _latest_reason("neurocomment_generation_exhausted") == "too_long"
+    assert await _latest_reason("neurocomment_generation_exhausted") == expected
 
 
 @pytest.mark.asyncio

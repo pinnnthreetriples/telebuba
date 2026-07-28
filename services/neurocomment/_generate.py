@@ -185,8 +185,12 @@ async def _generate_acceptable(
         # asterisks visible, and the operator's own ``campaign.prompt`` is free to
         # ask for formatting, so no prompt instruction can be relied on here.
         candidate = strip_markdown_delimiters(generated.text).strip()
-        if len(candidate.split()) > nc.comment_max_words:
+        words = len(candidate.split())
+        if words > nc.comment_max_words:
             reason = "too_long"
+            continue
+        if words < nc.comment_min_words:
+            reason = "too_short"
             continue
         if not is_acceptable(candidate):
             reason = "not_acceptable"

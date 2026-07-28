@@ -116,3 +116,51 @@ async def test_transport_error_is_error() -> None:
         respx.post(url__regex=_ENDPOINT).mock(side_effect=httpx.ConnectError("boom"))
         result = await generate_text(_request())
     assert result.status == "error"
+
+
+@pytest.mark.asyncio
+async def test_length_finish_reason_is_error_not_partial_text() -> None:
+    """A max_tokens cut is a failure, never a short success.
+
+    Mirrors the Gemini gateway: the solver runs here whenever the operator picks the
+    openai provider, and truncated JSON must not read as an undecidable captcha.
+    """
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {
+                            "message": {"content": '{"action":"click_button","reason'},
+                            "finish_reason": "length",
+                        },
+                    ],
+                },
+            ),
+        )
+        result = await generate_text(_request())
+
+    assert result.status == "error"
+    assert result.text is None
+    assert "max_tokens" in (result.error or "")
+
+
+@pytest.mark.asyncio
+async def test_stop_finish_reason_still_returns_text() -> None:
+    """Only ``length`` is rejected — a ``stop`` finish is the ordinary success path."""
+    with respx.mock:
+        respx.post(url__regex=_ENDPOINT).mock(
+            return_value=httpx.Response(
+                200,
+                json={
+                    "choices": [
+                        {"message": {"content": "decided"}, "finish_reason": "stop"},
+                    ],
+                },
+            ),
+        )
+        result = await generate_text(_request())
+
+    assert result.status == "ok"
+    assert result.text == "decided"

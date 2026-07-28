@@ -14,6 +14,7 @@ from core.db import (
     fetch_readiness,
     link_channel_to_campaign,
     list_failed_for_channel,
+    list_recent_logs,
     update_solver_enabled,
 )
 from schemas.accounts import AccountCreate
@@ -72,6 +73,14 @@ async def test_comments_off_skips_join(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cached.comments_enabled is False
     # no readiness row for comments_off
     assert await fetch_readiness("acc-1", "@silent") is None
+    # ...which is why the dead end needs a log line of its own: without it the channel
+    # looks un-onboarded rather than impossible to comment on.
+    logged = [
+        e
+        for e in await list_recent_logs(limit=50)
+        if e.event == "neurocomment_channel_comments_off"
+    ]
+    assert [e.extra.get("channel") for e in logged] == ["@silent"]
 
 
 @pytest.mark.asyncio
@@ -90,6 +99,14 @@ async def test_join_by_request_does_not_get_stuck(monkeypatch: pytest.MonkeyPatc
     assert readiness is not None
     assert readiness.joined is False
     assert readiness.ready is False
+    # Waiting on admin approval must be distinguishable from a broken join.
+    logged = [
+        e
+        for e in await list_recent_logs(limit=50)
+        if e.event == "neurocomment_onboard_join_by_request"
+    ]
+    assert [e.extra.get("channel") for e in logged] == ["@gated"]
+    assert [e.level for e in logged] == ["INFO"]
 
 
 @pytest.mark.asyncio

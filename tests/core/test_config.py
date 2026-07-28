@@ -27,6 +27,16 @@ def test_max_joins_per_account_per_day_rejects_negative() -> None:
         NeurocommentSettings(max_joins_per_account_per_day=-1)
 
 
+def test_challenge_thinking_budget_must_leave_room_for_the_decision_json() -> None:
+    """Thoughts are billed against the output cap.
+
+    A budget that fills it truncates every decision and turns solvable captchas
+    into give_up.
+    """
+    with pytest.raises(ValidationError):
+        NeurocommentSettings(challenge_thinking_budget=1024, challenge_max_output_tokens=1024)
+
+
 def test_auth_secret_must_be_at_least_32_bytes_when_set() -> None:
     with pytest.raises(ValidationError):
         AuthSettings(secret="too-short")

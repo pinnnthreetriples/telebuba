@@ -104,6 +104,15 @@ def _classify_response(response: httpx.Response) -> GeminiResult:
         body = response.json()
     except ValueError as exc:
         return GeminiResult(status="error", error=f"Invalid JSON: {exc}")
+    choices = body.get("choices") if isinstance(body, dict) else None
+    first = choices[0] if isinstance(choices, list) and choices else None
+    if isinstance(first, dict) and first.get("finish_reason") == "length":
+        # Same contract as the Gemini gateway: a max_tokens cut yields a mid-word
+        # fragment — invalid JSON under response_format — so it is an error, not a
+        # short success. The solver runs on this path whenever the operator picks
+        # the openai provider, and a truncated decision reads as an undecidable
+        # captcha rather than a budget that needs raising.
+        return GeminiResult(status="error", error="Truncated: hit max_tokens")
     text = _extract_text(body) if isinstance(body, dict) else None
     if text is None:
         return GeminiResult(status="error", error="No text in OpenAI response")

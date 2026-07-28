@@ -59,6 +59,15 @@ async def _classify_join(
         )
     if result.error_type == "InviteRequestSentError":
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
+        # The state itself was invisible in the log: only the gateway's join line was
+        # written, so an operator could not tell "waiting for admin approval" from a
+        # broken join, and the channel just silently produced no comments.
+        await log_event(
+            "INFO",
+            "neurocomment_onboard_join_by_request",
+            account_id=account_id,
+            extra={"channel": channel},
+        )
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,

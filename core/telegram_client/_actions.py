@@ -22,6 +22,7 @@ from core.telegram_client._action_results import (
     _DispatchResult,
     _flood_action_result,
     _generic_error,
+    _join_by_request_result,
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
@@ -172,6 +173,8 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
                 account_id=account_id,
             )
         return await _generic_error(account_id, action, exc, domain=domain)
+    except errors.InviteRequestSentError as exc:
+        return await _join_by_request_result(account_id, action, exc, domain=domain)
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
         return await _unavailable_result(account_id, action, exc, domain=domain)
     except Exception as exc:  # noqa: BLE001

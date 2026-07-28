@@ -22,7 +22,11 @@ class GeminiSettings(BaseSettings):
     base_url: str = Field(default="https://generativelanguage.googleapis.com/v1beta")
     timeout_seconds: float = Field(default=30.0, ge=1.0)
     temperature: float = Field(default=0.9, ge=0.0, le=2.0)
-    max_output_tokens: int = Field(default=120, ge=1, le=2048)
+    # Reply budget for the short-text callers (comments, warming chat), which run with
+    # thinking off. 30 words of Cyrillic or Arabic tokenizes far heavier than of
+    # English, so this sits well above the worst case: hitting the cap is now a
+    # failed generation, and a retry cannot widen the budget.
+    max_output_tokens: int = Field(default=256, ge=1, le=2048)
     # Retry a transient failure (429 / 5xx / transport error) this many times
     # before surfacing it; the shared client is reused across calls so a hot-path
     # generate_text does not pay a fresh TLS handshake each time.
@@ -132,6 +136,11 @@ class NeurocommentSettings(BaseSettings):
     min_trust_score: int = Field(default=0, ge=0, le=100)
     # Comment length guardrail (words).
     comment_max_words: int = Field(default=30, ge=1)
+    # Floor on the same guardrail (1 = off). Defence in depth behind the gateway's
+    # truncation check: a bare one-word interjection is the most bot-looking thing an
+    # account can post, and the outbound filter only screens links/words, so 18 stumps
+    # reached live channels before the thinking-budget fix. Raise for more substance.
+    comment_min_words: int = Field(default=2, ge=1)
     # Per-(account, channel) daily comment cap (0 = no cap).
     max_comments_per_channel_per_day: int = Field(default=3, ge=0)
     # Retries for a failed comment attempt before giving up.
@@ -216,6 +225,17 @@ class NeurocommentSettings(BaseSettings):
     challenge_recheck_timeout_seconds: float = Field(default=8.0, gt=0.0)
     # M4: min Gemini confidence for the solver to act; below → give_up.
     challenge_min_confidence: float = Field(default=0.7, ge=0.0, le=1.0)
+    # Reasoning tokens the solver may spend before answering (Gemini path only; 0 = off).
+    # Unlike a comment, a captcha decision genuinely benefits from thinking — the vision
+    # prompt asks the model to describe the image before choosing — so this path opts in
+    # where the short-text callers stay at 0. Measured ~200 thoughts on a one-button text
+    # captcha in ~2.6s, comfortably inside challenge_gemini_timeout_seconds.
+    challenge_thinking_budget: int = Field(default=512, ge=0, le=2048)
+    # Combined thoughts + decision-JSON budget for the solver. Must exceed
+    # challenge_thinking_budget with room for the JSON, or the schema-shaped answer is cut
+    # mid-string and fails validation — which is exactly how a solvable one-button captcha
+    # used to come back as give_up.
+    challenge_max_output_tokens: int = Field(default=1024, ge=1, le=2048)
     # C1: case-insensitive REGEX fragments; the solver refuses to click a button whose label
     # matches any.
     challenge_button_denylist_patterns: list[str] = Field(
@@ -296,5 +316,10 @@ class NeurocommentSettings(BaseSettings):
             raise ValueError(msg)
         if self.discovery_qualify_delay_min_seconds > self.discovery_qualify_delay_max_seconds:
             msg = "discovery_qualify_delay_min_seconds must not exceed _max_seconds"
+            raise ValueError(msg)
+        if self.challenge_thinking_budget >= self.challenge_max_output_tokens:
+            # Thoughts are billed against the output cap: leave none for the JSON and
+            # every decision comes back truncated → give_up on solvable captchas.
+            msg = "challenge_thinking_budget must be below challenge_max_output_tokens"
             raise ValueError(msg)
         return self
