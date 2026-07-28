@@ -171,3 +171,34 @@ async def _generic_error(
         error_type=type(exc).__name__,
         error_message=str(exc),
     )
+
+
+async def _join_by_request_result(
+    account_id: str,
+    action: TelegramAction,
+    exc: Exception,
+    *,
+    domain: str | None = None,
+) -> ActionResult:
+    """A join request queued for admin approval — an expected outcome, logged at INFO.
+
+    Not a failure: the group gates entry and our request is now pending. Only the log
+    level differs from ``_generic_error`` — ERROR plus a stderr traceback for a normal
+    outcome buried the real errors in the operator's log (28 in one afternoon), while
+    the ``join_by_request`` state the domain derives was never logged at all. The
+    ``failed`` status and ``error_type`` are preserved because that is what the domain
+    keys its state off.
+    """
+    await log_event(
+        "INFO",
+        event_name(domain, f"telegram_{action.action_type}_by_request"),
+        account_id=account_id,
+        extra={"channel": getattr(action, "channel", None)},
+    )
+    return ActionResult(
+        status="failed",
+        action_type=action.action_type,
+        account_id=account_id,
+        error_type=type(exc).__name__,
+        error_message=str(exc),
+    )

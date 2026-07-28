@@ -22,6 +22,7 @@ from core.telegram_client._action_results import (
     _DispatchResult,
     _flood_action_result,
     _generic_error,
+    _join_by_request_result,
     _unavailable_result,
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
@@ -173,25 +174,7 @@ async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram err
             )
         return await _generic_error(account_id, action, exc, domain=domain)
     except errors.InviteRequestSentError as exc:
-        # Not a failure: the group gates entry on admin approval and our join request
-        # is now queued. The domain maps it to the ``join_by_request`` state off
-        # ``error_type``, so that is preserved — only the log level changes, because
-        # ERROR + a stderr traceback for a normal outcome buried the real errors in
-        # the operator's log (28 of these in one afternoon). Mirrors the
-        # ``UserAlreadyParticipantError`` arm above: an expected join outcome, at INFO.
-        await log_event(
-            "INFO",
-            event_name(domain, f"telegram_{action.action_type}_by_request"),
-            account_id=account_id,
-            extra={"channel": getattr(action, "channel", None)},
-        )
-        return ActionResult(
-            status="failed",
-            action_type=action.action_type,
-            account_id=account_id,
-            error_type=type(exc).__name__,
-            error_message=str(exc),
-        )
+        return await _join_by_request_result(account_id, action, exc, domain=domain)
     except (TelegramClientPoolError, ConnectionError, TimeoutError) as exc:
         return await _unavailable_result(account_id, action, exc, domain=domain)
     except Exception as exc:  # noqa: BLE001
