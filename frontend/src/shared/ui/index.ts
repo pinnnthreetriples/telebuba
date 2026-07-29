@@ -9,4 +9,4 @@ export { Modal } from './Modal';
 export { StatusIcon } from './StatusIcon';
 export { Toaster } from './Toaster';
 export { toastError } from './toast';
-export { useWideViewport } from './useWideViewport';
+export { useWideContainer } from './useWideViewport';

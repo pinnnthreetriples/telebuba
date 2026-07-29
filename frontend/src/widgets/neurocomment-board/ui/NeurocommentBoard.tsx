@@ -1,5 +1,5 @@
 import { type ColumnDef, type Row } from '@tanstack/react-table';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ChannelStatusBadge } from '@/entities/campaign';
@@ -9,7 +9,7 @@ import type {
   NeurocommentChannelRow,
 } from '@/shared/api';
 import { formatLocalTime } from '@/shared/lib';
-import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
+import { CollapsibleCard, DataTable, type DataTableColumnMeta } from '@/shared/ui';
 
 interface BoardRow {
   account: string;
@@ -127,12 +127,17 @@ function AccountComments({
             return (
               <div
                 key={`${c.channel}:${String(c.post_id)}`}
-                className="flex items-baseline gap-[10px] border-b border-[#f4f2ef] py-[7px] text-[12.5px] last:border-b-0"
+                className="flex flex-wrap items-baseline gap-x-[10px] gap-y-[2px] border-b border-[#f4f2ef] py-[7px] text-[12.5px] last:border-b-0"
               >
                 <span className="shrink-0 text-ink-subtle">{formatLocalTime(c.created_at)}</span>
-                <span className="shrink-0 text-primary">{c.channel}</span>
+                {/* Was shrink-0, which let a long channel (a t.me invite link) push the
+                    comment past the card and get clipped by its overflow-hidden. */}
+                <span className="min-w-0 truncate text-primary">{c.channel}</span>
                 <span
-                  className={`min-w-0 flex-1 truncate ${deleted ? 'text-ink-subtle line-through' : 'text-[#5c5c5c]'}`}
+                  // Own line, wrapped, on a phone: sharing one line with the time and
+                  // the channel left the comment about a dozen characters of ellipsis,
+                  // and the comment is what the operator expanded the row to read.
+                  className={`w-full min-w-0 sm:w-auto sm:flex-1 sm:truncate ${deleted ? 'text-ink-subtle line-through' : 'text-[#5c5c5c]'}`}
                 >
                   {c.comment_text ?? '—'}
                 </span>
@@ -174,7 +179,6 @@ export function NeurocommentBoard({
   onOpenHistory?: () => void;
 }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(true);
   const rows = deriveRows(
     board,
     t('neurocomment.board.commentPlaceholder'),
@@ -242,7 +246,10 @@ export function NeurocommentBoard({
             aria-label={t('neurocomment.feed.title')}
             aria-expanded={row.getIsExpanded()}
             onClick={row.getToggleExpandedHandler()}
-            className={`flex text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${row.getIsExpanded() ? 'rotate-180' : ''}`}
+            // The row's only control, and a 16px glyph is not a thumb target — the
+            // padding/negative-margin pair grows the hit box to 40px without moving the
+            // chevron or widening the column it is sized to.
+            className={`-m-3 flex p-3 text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${row.getIsExpanded() ? 'rotate-180' : ''}`}
           >
             <svg
               width="16"
@@ -268,35 +275,44 @@ export function NeurocommentBoard({
   );
 
   return (
-    <div className="overflow-hidden rounded-2xl border border-line bg-white">
-      <div className="flex items-center justify-between border-b border-[#f0eeeb] px-4 py-[14px]">
-        <button
-          type="button"
-          onClick={() => {
-            setOpen((v) => !v);
-          }}
-          className="flex items-center gap-2 text-left"
-        >
+    // CollapsibleCard rather than a hand-rolled `.tb-collapse`: that CSS caps an open
+    // body at `var(--mh, 600px)` and clips the rest, which is what swallowed the last
+    // account's expanded comments on a phone — six cards are already past 600px before
+    // anything expands. The shared card measures its content and then drops the cap.
+    <CollapsibleCard
+      defaultOpen
+      label={t('neurocomment.board.title')}
+      headerClassName="border-b border-[#f0eeeb] px-4 py-[14px]"
+      bodyClassName="tb-scroll overflow-x-auto"
+      header={
+        <>
           <span className="text-[13px] font-semibold">{t('neurocomment.board.title')}</span>
           <span className="rounded-full bg-primary-tint px-2 py-[2px] text-[11px] font-semibold text-primary">
             {t('neurocomment.board.accounts', { count: accountsCount })}
           </span>
-        </button>
-        <div className="flex items-center gap-[10px]">
+        </>
+      }
+      trailing={
+        <div className="flex shrink-0 items-center gap-[10px]">
           {onboarding ? (
             <span className="inline-flex animate-pulse items-center gap-[5px] rounded-full bg-primary-tint px-[9px] py-[3px] text-[11px] font-semibold text-primary">
               <span className="h-[5px] w-[5px] rounded-full bg-primary" />
               {t('neurocomment.board.onboardingLive')}
             </span>
           ) : (
-            <span className="text-[11px] text-ink-muted">{t('neurocomment.board.updated')}</span>
+            // Hidden on a phone: the header already carries a title, a count pill, the
+            // gear and the chevron, and this static label is the one part of it that
+            // says nothing actionable — keeping it forced the row to wrap.
+            <span className="hidden text-[11px] text-ink-muted sm:inline">
+              {t('neurocomment.board.updated')}
+            </span>
           )}
           <button
             type="button"
             title={t('neurocomment.modal.neuroAccounts.title')}
             aria-label={t('neurocomment.modal.neuroAccounts.title')}
             onClick={onOpenAccounts}
-            className="flex h-7 w-7 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary"
+            className="flex h-9 w-9 items-center justify-center rounded-lg border border-line bg-white text-ink-muted transition-colors hover:border-[#cbd7ec] hover:bg-[#f2f6ff] hover:text-primary lg:h-7 lg:w-7"
           >
             <svg
               width="15"
@@ -310,49 +326,27 @@ export function NeurocommentBoard({
               <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
             </svg>
           </button>
-          <button
-            type="button"
-            aria-label={t('neurocomment.board.title')}
-            onClick={() => {
-              setOpen((v) => !v);
-            }}
-            className={`flex text-ink-subtle transition-transform duration-[420ms] [transition-timing-function:cubic-bezier(.34,1.45,.6,1)] ${open ? 'rotate-180' : ''}`}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
         </div>
-      </div>
-      <div className={`tb-collapse ${open ? 'tb-open' : ''}`}>
-        <div className="tb-scroll overflow-x-auto">
-          {rows.length > 0 ? (
-            <DataTable
-              data={rows}
-              columns={columns}
-              renderSubRow={(row: Row<BoardRow>) => (
-                <AccountComments
-                  comments={(board.comments ?? []).filter(
-                    (c) => c.account_id === row.original.accountId,
-                  )}
-                  onOpenHistory={onOpenHistory}
-                />
+      }
+    >
+      {rows.length > 0 ? (
+        <DataTable
+          data={rows}
+          columns={columns}
+          renderSubRow={(row: Row<BoardRow>) => (
+            <AccountComments
+              comments={(board.comments ?? []).filter(
+                (c) => c.account_id === row.original.accountId,
               )}
+              onOpenHistory={onOpenHistory}
             />
-          ) : (
-            <div className="px-4 py-8 text-center text-[12.5px] text-ink-subtle">
-              {t('neurocomment.board.empty')}
-            </div>
           )}
+        />
+      ) : (
+        <div className="px-4 py-8 text-center text-[12.5px] text-ink-subtle">
+          {t('neurocomment.board.empty')}
         </div>
-      </div>
-    </div>
+      )}
+    </CollapsibleCard>
   );
 }

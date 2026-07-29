@@ -6,9 +6,9 @@ import {
   type Row,
   useReactTable,
 } from '@tanstack/react-table';
-import { Fragment, type HTMLAttributes, type ReactNode } from 'react';
+import { Fragment, type HTMLAttributes, type ReactNode, useRef } from 'react';
 
-import { useWideViewport } from './useWideViewport';
+import { useWideContainer } from './useWideViewport';
 
 // A thin, headless-table wrapper over @tanstack/react-table: one consistent
 // `<table>` shell (uppercase header on the surface tint, hover rows) that later
@@ -31,8 +31,8 @@ export interface DataTableColumnMeta {
 interface DataTableProps<TData> {
   data: TData[];
   columns: ColumnDef<TData>[];
-  // HTMLElement, not HTMLTableRowElement: the same object is spread on a <tr> on a
-  // wide viewport and on the card <div> on a narrow one.
+  // HTMLElement, not HTMLTableRowElement: the same object is spread on a <tr> in a
+  // wide container and on the card <div> in a narrow one.
   getRowProps?: (row: Row<TData>) => HTMLAttributes<HTMLElement>;
   // When set, a row whose TanStack expanded-state is on renders this full-width
   // beneath it (drive the toggle from a column cell via row.toggleExpanded()).
@@ -72,7 +72,12 @@ export function DataTable<TData>({
     getRowCanExpand: () => renderSubRow !== undefined,
   });
 
-  const wide = useWideViewport();
+  // Measured on the wrapper below rather than on the <table>: the table carries
+  // `min-w-[880px]`, so measuring it would always read "it fits" and never switch
+  // back to cards. Both branches return the same wrapper element in the same
+  // position, so React keeps the node — and the ref — across a layout switch.
+  const box = useRef<HTMLDivElement>(null);
+  const wide = useWideContainer(box);
 
   if (!wide) {
     // Column id → header, so a card label renders with a real HeaderContext — not
@@ -86,7 +91,7 @@ export function DataTable<TData>({
     // reader gets one flat run of text with nothing marking where a record ends —
     // the boundary that <tr> used to provide.
     return (
-      <div role="list">
+      <div ref={box} role="list">
         {table.getRowModel().rows.map((row) => {
           const rowProps = getRowProps?.(row);
           const cells = row.getVisibleCells();
@@ -146,53 +151,55 @@ export function DataTable<TData>({
   }
 
   return (
-    <table className="w-full min-w-[880px] border-collapse">
-      <thead>
-        {table.getHeaderGroups().map((headerGroup) => (
-          <tr key={headerGroup.id} className="bg-surface">
-            {headerGroup.headers.map((header) => (
-              <th
-                key={header.id}
-                className={join(
-                  TH,
-                  (header.column.columnDef.meta as DataTableColumnMeta)?.className,
-                )}
-              >
-                {flexRender(header.column.columnDef.header, header.getContext())}
-              </th>
-            ))}
-          </tr>
-        ))}
-      </thead>
-      <tbody>
-        {table.getRowModel().rows.map((row) => {
-          const rowProps = getRowProps?.(row);
-          return (
-            <Fragment key={row.id}>
-              <tr {...rowProps} className={join(ROW, rowProps?.className)}>
-                {row.getVisibleCells().map((cell) => (
-                  <td
-                    key={cell.id}
-                    className={join(
-                      'px-4 py-3',
-                      (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
-                    )}
-                  >
-                    {flexRender(cell.column.columnDef.cell, cell.getContext())}
-                  </td>
-                ))}
-              </tr>
-              {renderSubRow && row.getIsExpanded() ? (
-                <tr>
-                  <td colSpan={row.getVisibleCells().length} className="p-0">
-                    {renderSubRow(row)}
-                  </td>
+    <div ref={box}>
+      <table className="w-full min-w-[880px] border-collapse">
+        <thead>
+          {table.getHeaderGroups().map((headerGroup) => (
+            <tr key={headerGroup.id} className="bg-surface">
+              {headerGroup.headers.map((header) => (
+                <th
+                  key={header.id}
+                  className={join(
+                    TH,
+                    (header.column.columnDef.meta as DataTableColumnMeta)?.className,
+                  )}
+                >
+                  {flexRender(header.column.columnDef.header, header.getContext())}
+                </th>
+              ))}
+            </tr>
+          ))}
+        </thead>
+        <tbody>
+          {table.getRowModel().rows.map((row) => {
+            const rowProps = getRowProps?.(row);
+            return (
+              <Fragment key={row.id}>
+                <tr {...rowProps} className={join(ROW, rowProps?.className)}>
+                  {row.getVisibleCells().map((cell) => (
+                    <td
+                      key={cell.id}
+                      className={join(
+                        'px-4 py-3',
+                        (cell.column.columnDef.meta as DataTableColumnMeta)?.cellClassName,
+                      )}
+                    >
+                      {flexRender(cell.column.columnDef.cell, cell.getContext())}
+                    </td>
+                  ))}
                 </tr>
-              ) : null}
-            </Fragment>
-          );
-        })}
-      </tbody>
-    </table>
+                {renderSubRow && row.getIsExpanded() ? (
+                  <tr>
+                    <td colSpan={row.getVisibleCells().length} className="p-0">
+                      {renderSubRow(row)}
+                    </td>
+                  </tr>
+                ) : null}
+              </Fragment>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
   );
 }
