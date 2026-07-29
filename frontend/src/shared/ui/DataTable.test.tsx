@@ -1,7 +1,7 @@
 import type { ColumnDef } from '@tanstack/react-table';
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { afterEach, expect, test } from 'vitest';
+import { afterEach, expect, test, vi } from 'vitest';
 
 import { DataTable, type DataTableColumnMeta } from './DataTable';
 
@@ -62,10 +62,17 @@ function setViewport(width: number): void {
   ).happyDOM.setViewport({ width });
 }
 
+// happy-dom reports every box as 0×0, which is why the layout switch falls back to the
+// viewport query there — so the container path needs the measurement stubbed.
+function setContainerWidth(width: number): void {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(width);
+}
+
 afterEach(() => {
   // Back to happy-dom's default so a later test added to this file gets the table
   // branch unless it opts out. (Vitest isolates per file, so no other suite cares.)
   setViewport(1024);
+  vi.restoreAllMocks();
 });
 
 function renderTable(extra?: Partial<Parameters<typeof DataTable<Item>>[0]>) {
@@ -90,6 +97,25 @@ test('a wide viewport renders the table, and each cell exactly once', () => {
   expect(screen.getAllByLabelText('Выбрать first-row')).toHaveLength(1);
   // A labelled column's header appears once (as a <th>), not once per row.
   expect(screen.getAllByText('ЗАМЕТКА')).toHaveLength(1);
+});
+
+// The reported bug: on the neurocomment screen a tablet-width viewport passes the
+// viewport query while the board's own column is 620px and the config rail 340px, so
+// the table rendered and scrolled sideways over its 880px floor inside the card.
+test('a narrow container renders cards even when the viewport is wide', () => {
+  setViewport(1440);
+  setContainerWidth(620);
+  renderTable();
+
+  expect(screen.queryByRole('table')).toBeNull();
+  expect(screen.getAllByRole('listitem')).toHaveLength(DATA.length);
+});
+
+test('a container as wide as the table renders the table', () => {
+  setContainerWidth(900);
+  renderTable();
+
+  expect(screen.getByRole('table')).toBeInTheDocument();
 });
 
 test('a narrow viewport replaces the table with one card per row', () => {

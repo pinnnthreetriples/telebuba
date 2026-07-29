@@ -1,8 +1,9 @@
 import { type ColumnDef } from '@tanstack/react-table';
+import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { DiscoveryBoard, DiscoveryCandidate } from '@/shared/api';
-import { DataTable, StatusIcon, useWideViewport, type DataTableColumnMeta } from '@/shared/ui';
+import { DataTable, StatusIcon, useWideContainer, type DataTableColumnMeta } from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
@@ -63,7 +64,11 @@ export function DiscoveryResults({
   onToggleAll,
 }: Props) {
   const { t, i18n } = useTranslation();
-  const wide = useWideViewport();
+  // Must be the container query DataTable itself uses, not the viewport one: this
+  // table lives in a 760px modal, so a wide viewport says "table" while the table
+  // renders as cards — and the select-all below would go missing.
+  const results = useRef<HTMLDivElement>(null);
+  const wide = useWideContainer(results);
   const candidates = board?.candidates ?? [];
   const eligible = selectableChannels(candidates);
   const checkedCount = eligible.filter((channel) => selected.has(channel)).length;
@@ -266,7 +271,7 @@ export function DiscoveryResults({
           </span>
         ) : null}
       </div>
-      <div className="tb-scroll overflow-x-auto">
+      <div ref={results} className="tb-scroll overflow-x-auto">
         <DataTable
           data={candidates}
           columns={columns}

@@ -220,6 +220,24 @@ test('expanding an account row reveals only that account’s published comments'
   expect(onOpenHistory).toHaveBeenCalledOnce();
 });
 
+test('the open board body carries no max-height cap to clip an expanded account', () => {
+  // `.tb-collapse.tb-open` caps the body at `var(--mh, 600px)` with overflow:hidden.
+  // The board used to hand-roll that class and never lift the cap, so on a phone —
+  // where six account cards are already past 600px — expanding the last account
+  // revealed a sub-row nobody could see. `.tb-settled` is what drops the cap.
+  const { container } = render(
+    <NeurocommentBoard
+      board={BOARD}
+      accountsCount={1}
+      onOpenAccounts={() => undefined}
+      displayName={LABEL}
+    />,
+  );
+
+  const body = container.querySelector('.tb-collapse');
+  expect(body).toHaveClass('tb-open', 'tb-settled');
+});
+
 test('shows the Telegram name, not the raw session id, in the account column', () => {
   // Reproduces the live data: an imported session has an empty operator label, so
   // the backend board sends the session-stem id and the column read "5_telethon".
