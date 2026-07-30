@@ -273,6 +273,14 @@ export function DiscoveryResults({
   }
 
   if (failed && candidates.length === 0) {
+    // A catalogue that is terminally down (revoked key, lapsed plan, spent quota) blocks
+    // EVERY run while a locale filter is set, because storing unfiltered rows over a
+    // filtered set is a downgrade. Nothing said so, and nothing named the way out.
+    const catalogueDown =
+      localeFiltered &&
+      (board?.progress.sources ?? []).some(
+        (report) => report.source === 'telemetr' && report.state === 'failed',
+      );
     return (
       <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
@@ -283,6 +291,11 @@ export function DiscoveryResults({
                   defaultValue: board.progress.last_error,
                 }),
         })}
+        {catalogueDown ? (
+          <span className="mt-[6px] block text-ink-subtle">
+            {t('neurocomment.modal.discovery.results.catalogueDown')}
+          </span>
+        ) : null}
       </p>
     );
   }

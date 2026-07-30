@@ -9706,6 +9706,11 @@
             "type": "boolean",
             "title": "Use Telemetr",
             "default": false
+          },
+          "catalogue_only": {
+            "type": "boolean",
+            "title": "Catalogue Only",
+            "default": false
           }
         },
         "additionalProperties": false,

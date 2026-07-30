@@ -8,13 +8,15 @@ dictionary id, and telling "top up your plan" apart from "your key is wrong".
 from __future__ import annotations
 
 import asyncio
+from typing import get_args
 
 import httpx
 import pytest
 import respx
 
 from core.config import settings
-from core.telemetr import search_catalog
+from core.telemetr import _COUNTRY_NAME_BY_ALPHA2, search_catalog
+from schemas.neurocomment_discovery import DiscoveryCountry
 from tests.core.telemetr_fixtures import (
     BATCH,
     COUNTRIES,
@@ -31,6 +33,17 @@ from tests.core.telemetr_fixtures import (
 )
 
 pytestmark = pytest.mark.usefixtures("isolated_telemetr_client")
+
+
+def test_every_offered_country_has_an_alpha2_bridge() -> None:
+    """The country list and the bridge that translates it must not drift apart.
+
+    ``schemas/`` may not import ``core``, so the two lists are duplicated on purpose and
+    only a test can hold them together — and this is the exact drift that shipped: the
+    form offered an alpha-2 code the catalogue's dictionary has never heard of, and the
+    only symptom was an empty page. ``tests/`` may import both sides.
+    """
+    assert set(get_args(DiscoveryCountry)) == set(_COUNTRY_NAME_BY_ALPHA2)
 
 
 @pytest.mark.asyncio
@@ -363,6 +376,24 @@ async def test_illegal_header_value_error_never_quotes_the_key() -> None:
     assert result.status == "error"
     assert result.error is not None
     assert "tm-secret" not in result.error
+
+
+@pytest.mark.asyncio
+async def test_a_batch_that_resolves_nothing_is_a_failure_not_an_empty_ok() -> None:
+    """The original bug was a parser dropping every row while the source said "ok".
+
+    One renamed field or changed enum spelling upstream reproduces it exactly, and the
+    operator's only symptom would again be a board full of unfiltered channels.
+    """
+    with respx.mock:
+        mock_search(catalog_item())
+        mock_batch(chat_info(peer="Group"))
+
+        result = await search_catalog(request())
+
+    assert result.status == "error"
+    assert result.error is not None
+    assert "No handle resolved" in result.error
 
 
 @pytest.mark.parametrize("status_code", [401, 426], ids=["auth_failed", "quota_exhausted"])

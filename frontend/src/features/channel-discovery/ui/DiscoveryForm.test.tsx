@@ -100,6 +100,33 @@ describe('DiscoveryForm', () => {
     expect(country).toHaveValue('AE');
   });
 
+  it('gates "catalogue only" on the catalogue itself', async () => {
+    // It removes every other source, so without the catalogue it would remove them all.
+    render(<Harness telemetrConfigured />);
+    const catalogueOnly = screen.getByRole('checkbox', { name: /[Тт]олько каталог/ });
+    expect(catalogueOnly).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Telemetr\.io/ }));
+
+    expect(catalogueOnly).toBeEnabled();
+  });
+
+  it('clears the locale filters and "catalogue only" when the catalogue is switched off', async () => {
+    // A disabled select still DISPLAYS "Turkey" while the request omits it — the same
+    // "filter shown, not applied" the feature was fixed for.
+    render(
+      <Harness
+        telemetrConfigured
+        initial={{ ...EMPTY_FORM, useTelemetr: true, country: 'TR', catalogueOnly: true }}
+      />,
+    );
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Telemetr\.io/ }));
+
+    expect(screen.getAllByRole('combobox')[1]).toHaveValue('');
+    expect(screen.getByRole('checkbox', { name: /[Тт]олько каталог/ })).not.toBeChecked();
+  });
+
   it('disables language and country until the Telemetr source is in play', async () => {
     // Only the catalogue filters by locale, so with that source off the two selects
     // would silently narrow nothing.

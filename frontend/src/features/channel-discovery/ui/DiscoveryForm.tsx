@@ -243,7 +243,14 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
               onChange(
                 useTelemetr
                   ? { ...form, useTelemetr }
-                  : { ...form, useTelemetr, language: '', country: '' },
+                  : {
+                      ...form,
+                      useTelemetr,
+                      language: '',
+                      country: '',
+                      // The catalogue is the only source it leaves, so it cannot outlive it.
+                      catalogueOnly: false,
+                    },
               );
             }}
             aria-label={t('neurocomment.modal.discovery.form.useTelemetr')}
@@ -258,6 +265,23 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
               : 'neurocomment.modal.discovery.form.useTelemetrMissing',
           )}
         />
+      </div>
+
+      <div className="flex items-center gap-[8px]">
+        <label className="flex items-center gap-[8px] text-[12.5px] text-ink-muted">
+          <input
+            type="checkbox"
+            checked={form.catalogueOnly}
+            disabled={!localeFilters}
+            onChange={(event) => {
+              set('catalogueOnly', event.target.checked);
+            }}
+            aria-label={t('neurocomment.modal.discovery.form.catalogueOnly')}
+            className={CHECKBOX}
+          />
+          {t('neurocomment.modal.discovery.form.catalogueOnly')}
+        </label>
+        <HelpHint text={t('neurocomment.modal.discovery.form.catalogueOnlyHint')} />
       </div>
 
       <div className="flex items-center justify-end gap-[9px] pt-[3px]">

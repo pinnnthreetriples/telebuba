@@ -451,7 +451,15 @@ async def _fetch_catalog(
 
 
 async def _resolve_handles(api_key: str, rows: list[_CatalogRow]) -> list[TelemetrChannel]:
-    """Attach the handle each catalogue row lacks, dropping rows that have none."""
+    """Attach the handle each catalogue row lacks, dropping rows that have none.
+
+    A batch that resolves NOTHING is reported as a failure, not as an empty success. The
+    bug this whole module was rewritten for was precisely a parser that dropped every row
+    while the source still answered "ok" — one changed field name or enum spelling
+    upstream reproduces it exactly, and the operator's only symptom would again be an
+    unfiltered board. Individual unresolvable rows stay a silent drop: a private channel
+    genuinely has no public handle.
+    """
     if not rows:
         return []
     ids = [row.internal_id for row in rows]
@@ -460,6 +468,11 @@ async def _resolve_handles(api_key: str, rows: list[_CatalogRow]) -> list[Teleme
         chunk = ids[start : start + _INFO_BATCH_MAX_IDS]
         body = await _get_json(api_key, "/channels/info-batch", {"ids": ",".join(chunk)})
         handles.update(_handles_from_batch(body))
+    if not handles:
+        raise _TelemetrError(
+            status="error",
+            error=f"No handle resolved for any of {len(ids)} catalogue rows",
+        )
     return [
         TelemetrChannel(
             username=handles[row.internal_id],

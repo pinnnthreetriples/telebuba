@@ -26,6 +26,7 @@ export type DiscoveryFormState = {
   minSubscribers: string;
   maxSubscribers: string;
   useTelemetr: boolean;
+  catalogueOnly: boolean;
 };
 
 export const EMPTY_FORM: DiscoveryFormState = {
@@ -36,6 +37,7 @@ export const EMPTY_FORM: DiscoveryFormState = {
   minSubscribers: '',
   maxSubscribers: '',
   useTelemetr: false,
+  catalogueOnly: false,
 };
 
 /** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap. */
@@ -99,6 +101,8 @@ export function buildSearchRequest(form: DiscoveryFormState): DiscoverySearchReq
   if (form.useTelemetr) {
     if (form.language !== '') request.language = form.language;
     if (form.country !== '') request.country = form.country;
+    // Only meaningful alongside the catalogue, and the API refuses it without.
+    if (form.catalogueOnly) request.catalogue_only = true;
   }
   const min = positiveInt(form.minSubscribers);
   const max = positiveInt(form.maxSubscribers);

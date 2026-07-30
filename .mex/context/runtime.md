@@ -85,6 +85,15 @@ applying `discovery_max_candidates`. `_SOURCE_PRIORITY` governs dedup spelling o
 whole union by it and then capping put the sole filter-aware source permanently at the tail, so
 a native sweep that filled the cap dropped every catalogue row and the operator's country and
 language influenced nothing at all.
+``catalogue_only`` drops the Telegram arm entirely, leaving the one source that honours the
+locale filters (and is refused without ``use_telemetr``, which would leave no source at all).
+Measured on the real cap (100, catalogue 30/keyword): at four or more keywords this costs ZERO
+rows and takes the locale-verified share from ~50% to 100%; at one keyword, or on a filter the
+catalogue barely matches, it is 3 rows against 23. Hence off by default — and both Telegram
+arms still report ``skipped``, because a source that vanished without saying so is the original
+bug. A terminally failing catalogue (revoked key, lapsed plan, spent quota) blocks EVERY run
+while a locale filter is set, since storing unfiltered rows over a filtered set is a downgrade;
+the board names the way out rather than looping the operator through their daily search slots.
 Telemetr.io is optional: no key means a skipped source — but a REPORTED one, because silence let
 the run reach `done` as if the filter had applied. Every source's outcome (`ran`/`failed`/
 `skipped`, hits, kept, reason, gateway detail) rides `DiscoveryProgress.sources` to the board and

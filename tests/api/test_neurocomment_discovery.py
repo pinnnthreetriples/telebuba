@@ -197,6 +197,9 @@ async def test_duplicate_keywords_collapse_to_one(
     [
         {"keywords": ["crypto"], "language": "tr"},
         {"keywords": ["crypto"], "country": "TR"},
+        # Same shape: it removes every other source, so without the catalogue it removes
+        # them all and the run would report an empty success.
+        {"keywords": ["crypto"], "catalogue_only": True},
     ],
 )
 @pytest.mark.asyncio

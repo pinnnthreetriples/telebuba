@@ -209,6 +209,16 @@ def _merge(
 
 async def _native_pass(account_id: str, request: DiscoverySearchRequest) -> _NativePass:
     """The paced Telegram reads: one search per keyword, then the optional seed pass."""
+    if request.catalogue_only:
+        # Reported, not merely absent: "Telegram search: not queried" is what tells the
+        # operator why the table is shorter and entirely locale-verified.
+        return _NativePass(
+            [
+                SourceOutcome(source="telegram_search", state="skipped"),
+                SourceOutcome(source="telegram_similar", state="skipped"),
+            ],
+            flooded=False,
+        )
     outcomes: list[SourceOutcome] = []
     flooded = False
     for index, keyword in enumerate(request.keywords):

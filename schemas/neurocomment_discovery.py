@@ -98,6 +98,12 @@ class DiscoverySearchRequest(BaseModel):
     members_max: int | None = Field(default=None, ge=0)
     # Off by default: the external catalogue costs quota and needs an operator key.
     use_telemetr: bool = False
+    # Drop Telegram's own search and keep only the source that honours the locale
+    # filters. Measured on the real cap: with four or more keywords and a productive
+    # catalogue this costs ZERO rows and takes the locale-verified share from ~50% to
+    # 100%. Off by default because a thin catalogue is the opposite case — a niche
+    # filter on one keyword is 3 rows this way against 23 with Telegram alongside.
+    catalogue_only: bool = False
 
     @model_validator(mode="after")
     def _check_bounds(self) -> DiscoverySearchRequest:
@@ -124,6 +130,10 @@ class DiscoverySearchRequest(BaseModel):
             raise ValueError(msg)
         if (self.language is not None or self.country is not None) and not self.use_telemetr:
             msg = "language/country need use_telemetr: only the catalogue can apply them"
+            raise ValueError(msg)
+        if self.catalogue_only and not self.use_telemetr:
+            # Otherwise the run has no source at all and would report an empty success.
+            msg = "catalogue_only needs use_telemetr: it is the only source left"
             raise ValueError(msg)
         if (
             self.members_min is not None

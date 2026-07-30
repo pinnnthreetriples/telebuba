@@ -127,6 +127,18 @@ describe('buildSearchRequest', () => {
     expect(request.country).toBeUndefined();
   });
 
+  it('sends catalogue_only only alongside the catalogue', () => {
+    // It leaves the catalogue as the only source, and the API refuses it without one.
+    expect(
+      buildSearchRequest(form({ keywords: 'crypto', useTelemetr: true, catalogueOnly: true }))
+        .catalogue_only,
+    ).toBe(true);
+    expect(
+      buildSearchRequest(form({ keywords: 'crypto', useTelemetr: false, catalogueOnly: true }))
+        .catalogue_only,
+    ).toBeUndefined();
+  });
+
   it('strips a pasted t.me link down to the username', () => {
     // The API caps seed_channel at 32 chars, so a full URL 422s instead of resolving.
     expect(

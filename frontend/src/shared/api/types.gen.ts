@@ -1254,6 +1254,10 @@ export type DiscoverySearchRequest = {
    * Use Telemetr
    */
   use_telemetr?: boolean;
+  /**
+   * Catalogue Only
+   */
+  catalogue_only?: boolean;
 };
 
 /**

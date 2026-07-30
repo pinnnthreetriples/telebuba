@@ -166,6 +166,40 @@ async def test_telemetr_is_not_called_when_disabled(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
+async def test_catalogue_only_drops_the_telegram_arm_and_says_so(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every stored row is then locale-verified, and the board names the missing sources.
+
+    Measured on the real cap: with several keywords this costs no rows at all and takes
+    the verified share from about half to all of them. A skipped source that reported
+    nothing is what made the original bug invisible, so both Telegram arms still report.
+    """
+    reader = ReadRecorder(search=matches(("nativerow", "N", 500)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(telemetr_ok(("turkishnews", "TR", 900), language="tr", country="TR")),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(use_telemetr=True, catalogue_only=True, language="tr", country="TR"),
+    )
+
+    assert reader.search_actions() == []
+    assert [row.channel for row in (await list_discovery_candidates(campaign_id)).rows] == [
+        "turkishnews",
+    ]
+    assert _report_of(stage, "telegram_search").state == "skipped"
+    assert _report_of(stage, "telegram_similar").state == "skipped"
+    assert _report_of(stage, "telemetr").kept == 1
+
+
+@pytest.mark.asyncio
 async def test_telemetr_filters_reach_the_stored_set(monkeypatch: pytest.MonkeyPatch) -> None:
     """The filters must change the *result*, not just the DTO handed to the gateway.
 

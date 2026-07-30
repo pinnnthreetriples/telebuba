@@ -1059,7 +1059,9 @@
           "useTelemetrMissing": "Add a Telemetr.io key in Settings to enable this.",
           "reset": "Reset",
           "submit": "Search",
-          "searching": "Starting…"
+          "searching": "Starting…",
+          "catalogueOnly": "Catalogue only",
+          "catalogueOnlyHint": "Drop Telegram's own search and keep only the source that honours the language and country filters. With several keywords this usually returns just as many channels, all of them locale-verified; on a narrow filter it returns far fewer."
         },
         "results": {
           "back": "← Change parameters",
@@ -1097,7 +1099,8 @@
             "seed_unusable": "the seed channel is not a usable handle",
             "unexpected_result": "Telegram returned an unexpected reply"
           },
-          "unfiltered": "filter not applied"
+          "unfiltered": "filter not applied",
+          "catalogueDown": "While a language or country is set, only the catalogue can answer — clear both filters to search Telegram alone."
         },
         "comments": {
           "pending": "checking",
