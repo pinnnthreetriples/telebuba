@@ -185,6 +185,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               board={board.data}
               loading={board.isPending || (running && phase === 'searching')}
               errored={board.isError}
+              localeFiltered={form.useTelemetr && (form.language !== '' || form.country !== '')}
               selected={selected}
               onToggle={toggle}
               onToggleAll={toggleAll}

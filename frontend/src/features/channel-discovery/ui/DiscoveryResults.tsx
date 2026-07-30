@@ -90,6 +90,8 @@ type Props = {
   board: DiscoveryBoard | undefined;
   loading: boolean;
   errored: boolean;
+  /** Did this run ask for a language or country? Only then is a missing geo a finding. */
+  localeFiltered: boolean;
   selected: ReadonlySet<string>;
   onToggle: (channel: string) => void;
   onToggleAll: (channels: string[], next: boolean) => void;
@@ -99,6 +101,7 @@ export function DiscoveryResults({
   board,
   loading,
   errored,
+  localeFiltered,
   selected,
   onToggle,
   onToggleAll,
@@ -196,11 +199,24 @@ export function DiscoveryResults({
     {
       id: 'source',
       header: () => t('neurocomment.modal.discovery.results.colSource'),
-      cell: ({ row }) => (
-        <span className="text-[11.5px] text-ink-subtle">
-          {t(`neurocomment.modal.discovery.source.${row.original.source}`)}
-        </span>
-      ),
+      cell: ({ row }) => {
+        // The catalogue is the only source that files a channel under a country and a
+        // language, so its geo is the per-row proof that the filter reached THIS row.
+        // Its absence, when a locale filter was asked for, is the proof that it did not:
+        // Telegram's own search has no such filter and its rows are simply unvouched.
+        const geo = [row.original.country, row.original.language].filter(Boolean).join(' · ');
+        return (
+          <span className="text-[11.5px] text-ink-subtle">
+            {t(`neurocomment.modal.discovery.source.${row.original.source}`)}
+            {geo !== '' ? <span className="ml-[5px] text-ink-muted">{geo}</span> : null}
+            {geo === '' && localeFiltered ? (
+              <span className="ml-[5px] text-warning">
+                {t('neurocomment.modal.discovery.results.unfiltered')}
+              </span>
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       id: 'comments',

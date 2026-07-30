@@ -44,11 +44,13 @@ from schemas.telemetr import (
 
 _HTTP_OK = 200
 _HTTP_SERVER_ERROR_MIN = 500
-# Every one of these is terminal: a second attempt cannot change the answer, and for
-# the two quota-shaped ones it would spend another billable unit against a limit that
-# is already gone. Documented for /catalog/search; 429 is kept as belt and braces even
-# though the API does not document it.
-_TERMINAL_STATUS_BY_CODE: dict[int, TelemetrStatus] = {
+# A second attempt cannot change any of these answers — except 429, the one code a
+# backoff genuinely fixes, so it is retried (see ``_retryable``) while still reporting
+# its own status. For the two quota-shaped ones a retry would spend another billable
+# unit against a limit that is already gone. Documented for /catalog/search; 429 is kept
+# as belt and braces even though the API does not document it.
+_HTTP_TOO_MANY_REQUESTS = 429
+_STATUS_BY_CODE: dict[int, TelemetrStatus] = {
     400: "bad_request",
     401: "auth_failed",
     403: "forbidden",
@@ -59,6 +61,8 @@ _TERMINAL_STATUS_BY_CODE: dict[int, TelemetrStatus] = {
 }
 # /channels/info-batch accepts at most 100 comma-separated ids per request.
 _INFO_BATCH_MAX_IDS = 100
+# Enough of an upstream error body to diagnose one, short enough to persist in a log.
+_BODY_EXCERPT_MAX = 200
 _DICTIONARY_PATHS = {"country": "/dictionaries/countries", "language": "/dictionaries/languages"}
 # The dropdown values the UI offers (``COUNTRIES`` in DiscoveryForm.tsx) bridged to the
 # english names the dictionary files them under. A language ``id`` already *is* an
@@ -96,6 +100,11 @@ _DETERMINISTIC_FAILURES = (
 # The countries/languages dictionaries are static reference data, so one fetch per
 # process is enough — no TTL, no invalidation.
 _dictionary_cache: dict[str, dict[str, str]] = {}
+# One lock per dictionary, because a run fires every keyword's catalogue query at once and
+# they all miss the cache together: 10 keywords with both filters cost 20 dictionary GETs
+# instead of 2, against a 1000/month tier. Created lazily inside the running loop — a
+# module-level Lock() would bind whichever loop imported this module first.
+_dictionary_locks: dict[str, asyncio.Lock] = {}
 
 
 class _ClientHolder:
@@ -140,6 +149,8 @@ async def close_telemetr_client() -> None:
         await _holder.client.aclose()
         _holder.client = None
     _dictionary_cache.clear()
+    # The locks are bound to the loop that created them, so they must not outlive it.
+    _dictionary_locks.clear()
 
 
 def _url(path: str) -> str:
@@ -162,7 +173,12 @@ def _error_text(exc: BaseException) -> str:
 
 
 def _status_for(status_code: int) -> TelemetrStatus:
-    return _TERMINAL_STATUS_BY_CODE.get(status_code, "error")
+    return _STATUS_BY_CODE.get(status_code, "error")
+
+
+def _retryable(status_code: int) -> bool:
+    """A 5xx or a rate limit — the only replies a second attempt can turn into a 200."""
+    return status_code >= _HTTP_SERVER_ERROR_MIN or status_code == _HTTP_TOO_MANY_REQUESTS
 
 
 def _params(request: TelemetrSearchRequest, filters: dict[str, str]) -> dict[str, str | int]:
@@ -311,9 +327,20 @@ async def _get_json(api_key: str, path: str, params: dict[str, str] | None = Non
     if response.status_code != _HTTP_OK:
         raise _TelemetrError(
             status=_status_for(response.status_code),
-            error=f"HTTP {response.status_code} on {path}: {response.text[:200]}",
+            error=f"HTTP {response.status_code} on {path}: {_body_excerpt(response, api_key)}",
         )
     return _parse_body(response)
+
+
+def _body_excerpt(response: httpx.Response, api_key: str) -> str:
+    """An upstream error body, safe to show the operator and to persist.
+
+    The statuses that carry a body here are the credential ones (401/403/412/426), and
+    gateways routinely quote the presented key back in them. Scrub BEFORE truncating:
+    cutting to 200 characters first can split the key and leave a fragment that no
+    later replace would match.
+    """
+    return response.text.replace(api_key, "***")[:_BODY_EXCERPT_MAX] if api_key else ""
 
 
 def _parse_body(response: httpx.Response) -> object:
@@ -324,10 +351,22 @@ def _parse_body(response: httpx.Response) -> object:
 
 
 async def _dictionary(api_key: str, kind: str) -> dict[str, str]:
-    """Return a casefolded ``{id or name -> id}`` lookup for one dictionary endpoint."""
+    """Return a casefolded ``{id or name -> id}`` lookup for one dictionary endpoint.
+
+    Fetched at most once per process: the concurrent callers queue on the lock and the
+    re-check inside it serves them from the cache.
+    """
     cached = _dictionary_cache.get(kind)
     if cached is not None:
         return cached
+    async with _dictionary_locks.setdefault(kind, asyncio.Lock()):
+        cached = _dictionary_cache.get(kind)
+        if cached is not None:
+            return cached
+        return await _load_dictionary(api_key, kind)
+
+
+async def _load_dictionary(api_key: str, kind: str) -> dict[str, str]:
     body = await _get_json(api_key, _DICTIONARY_PATHS[kind])
     # Documented shape is a bare array of {id, name, channels_count, participants_count}.
     if not isinstance(body, list):
@@ -403,9 +442,9 @@ async def _fetch_catalog(
                 return _extract_items(_parse_body(response), request.limit)
             failure = _TelemetrError(
                 status=_status_for(response.status_code),
-                error=f"HTTP {response.status_code}: {response.text[:200]}",
+                error=f"HTTP {response.status_code}: {_body_excerpt(response, api_key)}",
             )
-            if last_attempt or response.status_code < _HTTP_SERVER_ERROR_MIN:
+            if last_attempt or not _retryable(response.status_code):
                 raise failure
         await asyncio.sleep(settings.telemetr.retry_backoff_seconds)
     raise _TelemetrError(status="error", error="No attempt made")

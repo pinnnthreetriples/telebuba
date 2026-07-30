@@ -1096,7 +1096,8 @@
             "telemetr_error": "Telemetr.io is unreachable",
             "seed_unusable": "the seed channel is not a usable handle",
             "unexpected_result": "Telegram returned an unexpected reply"
-          }
+          },
+          "unfiltered": "filter not applied"
         },
         "comments": {
           "pending": "checking",

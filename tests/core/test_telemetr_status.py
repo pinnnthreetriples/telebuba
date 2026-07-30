@@ -7,6 +7,8 @@ dictionary id, and telling "top up your plan" apart from "your key is wrong".
 
 from __future__ import annotations
 
+import asyncio
+
 import httpx
 import pytest
 import respx
@@ -16,6 +18,7 @@ from core.telemetr import search_catalog
 from tests.core.telemetr_fixtures import (
     BATCH,
     COUNTRIES,
+    COUNTRY_DICTIONARY,
     SEARCH,
     AttemptCounter,
     catalog_item,
@@ -72,6 +75,31 @@ async def test_dictionaries_are_fetched_once_per_process() -> None:
         await search_catalog(request(country="TR"))
         await search_catalog(request(country="UA"))
 
+    assert countries.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_concurrent_searches_share_one_dictionary_fetch() -> None:
+    """A run fires every keyword's query at once, so they all miss the cache together.
+
+    The sequential test above passes without any locking; only a real suspension point
+    between the cache read and the fetch exposes it. Ten keywords with both filters cost
+    twenty dictionary requests instead of two against a 1000/month tier.
+    """
+
+    async def slow(_request: httpx.Request) -> httpx.Response:
+        await asyncio.sleep(0)
+        return httpx.Response(200, json=COUNTRY_DICTIONARY)
+
+    with respx.mock:
+        mock_search()
+        countries = respx.get(url__regex=COUNTRIES).mock(side_effect=slow)
+
+        results = await asyncio.gather(
+            *(search_catalog(request(country="TR")) for _ in range(5)),
+        )
+
+    assert [result.status for result in results] == ["ok"] * 5
     assert countries.call_count == 1
 
 
@@ -153,7 +181,6 @@ async def test_whitespace_only_key_is_not_configured_not_an_auth_error() -> None
     [
         (426, "quota_exhausted"),
         (412, "subscription_inactive"),
-        (429, "rate_limited"),
         (400, "bad_request"),
         (401, "auth_failed"),
         (403, "forbidden"),
@@ -180,6 +207,50 @@ async def test_terminal_codes_map_to_their_own_status_and_are_not_retried(
     assert result.error is not None
     assert str(status_code) in result.error
     assert search.call_count == 1
+
+
+@pytest.mark.asyncio
+async def test_a_rate_limit_is_retried_but_keeps_its_own_status(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """429 is the one code in the table a backoff genuinely fixes.
+
+    A run fires every keyword's query at once, so a free-tier rate limit is the expected
+    reply rather than an exceptional one — and treating it as terminal made the whole run
+    fail (and, with locale filters set, refuse to store anything) over a wait.
+    """
+    monkeypatch.setattr(settings.telemetr, "max_retries", 2)
+    monkeypatch.setattr(settings.telemetr, "retry_backoff_seconds", 0.0)
+    with respx.mock:
+        search = respx.get(url__regex=SEARCH).mock(
+            return_value=httpx.Response(429, text="slow down"),
+        )
+
+        result = await search_catalog(request())
+
+    assert result.status == "rate_limited"
+    assert search.call_count == 3
+
+
+@pytest.mark.asyncio
+async def test_a_rate_limit_that_clears_on_a_retry_succeeds(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(settings.telemetr, "max_retries", 1)
+    monkeypatch.setattr(settings.telemetr, "retry_backoff_seconds", 0.0)
+    with respx.mock:
+        mock_batch(chat_info())
+        respx.get(url__regex=SEARCH).mock(
+            side_effect=[
+                httpx.Response(429, text="slow down"),
+                httpx.Response(200, json=search_body(catalog_item())),
+            ],
+        )
+
+        result = await search_catalog(request())
+
+    assert result.status == "ok"
+    assert [item.username for item in result.items] == ["cryptonews"]
 
 
 @pytest.mark.asyncio
@@ -271,8 +342,10 @@ async def test_non_ascii_api_key_errors_after_one_attempt(monkeypatch: pytest.Mo
     assert result.status == "error"
     assert result.error is not None
     assert "UnicodeEncodeError" in result.error
-    # The exception text quotes the offending character; the reported error must not.
-    assert "\xa0" not in result.error
+    # Asserting the raw code point is absent proves nothing: UnicodeEncodeError renders it
+    # ESCAPED ("\\xa0"), so that assertion passes with or without a scrub. What the scrub
+    # actually guarantees is that no part of the key survives.
+    assert "secret" not in result.error
     assert counter.count == 1
     assert search.call_count == 0
 
@@ -290,6 +363,43 @@ async def test_illegal_header_value_error_never_quotes_the_key() -> None:
     assert result.status == "error"
     assert result.error is not None
     assert "tm-secret" not in result.error
+
+
+@pytest.mark.parametrize("status_code", [401, 426], ids=["auth_failed", "quota_exhausted"])
+@pytest.mark.asyncio
+async def test_an_upstream_body_never_carries_the_key_onward(status_code: int) -> None:
+    """The body is now shown to the operator and persisted, so it has to be scrubbed.
+
+    Pre-fix the caller discarded this text, which is the only reason it was safe; the
+    credential statuses are exactly the ones a gateway quotes the presented key back in.
+    """
+    with respx.mock:
+        respx.get(url__regex=SEARCH).mock(
+            return_value=httpx.Response(
+                status_code,
+                text="No API key found for key 'tm-key': rejected",
+            ),
+        )
+
+        result = await search_catalog(request())
+
+    assert result.error is not None
+    assert "tm-key" not in result.error
+
+
+@pytest.mark.asyncio
+async def test_a_key_split_by_truncation_still_does_not_leak() -> None:
+    """Scrub before truncating: cutting first can slice the key and leave a fragment."""
+    key = "tm-abcdefghijklmnop"
+    with respx.mock:
+        respx.get(url__regex=SEARCH).mock(
+            return_value=httpx.Response(401, text=f"{'x' * 190}{key} rejected"),
+        )
+
+        result = await search_catalog(request(api_key=key))
+
+    assert result.error is not None
+    assert "tm-abcdefgh" not in result.error
 
 
 @pytest.mark.asyncio

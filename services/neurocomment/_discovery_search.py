@@ -87,16 +87,22 @@ def _within_member_bounds(subscribers: int | None, request: DiscoverySearchReque
 
 
 def _normalized(
-    ranked: list[RawCandidate],
-) -> list[tuple[str, str, RawCandidate]]:
-    """Ranked hits paired with their dedup key and canonical handle, unusable dropped."""
-    entries: list[tuple[str, str, RawCandidate]] = []
-    for candidate in ranked:
+    ranked: list[tuple[int, RawCandidate]],
+) -> list[tuple[str, str, int, RawCandidate]]:
+    """Ranked hits paired with their dedup key, canonical handle and outcome, unusable dropped.
+
+    The outcome index rides along because the interleave below shares the cap between
+    outcomes, not between sources: one counter per source made rank a position in the
+    concatenation of every keyword's hits, so keyword 0 filled the cap and the rest of
+    the sweep was paid for and thrown away.
+    """
+    entries: list[tuple[str, str, int, RawCandidate]] = []
+    for group, candidate in ranked:
         handle = normalize_channel(candidate.username, max_length=CHANNEL_HANDLE_MAX_LENGTH)
         if handle is None or handle.startswith("+"):
             # Invite-only links have no public handle to search or comment under.
             continue
-        entries.append((dedup_key(handle), handle, candidate))
+        entries.append((dedup_key(handle), handle, group, candidate))
     return entries
 
 
@@ -136,34 +142,32 @@ def _merge(
     request: DiscoverySearchRequest,
 ) -> tuple[list[DiscoveryCandidateRow], str | None, DiscoveryRunReport]:
     """Normalize, dedup, interleave and cap the union of every source's hits."""
-    ranked: list[RawCandidate] = []
-    for outcome in outcomes:
-        ranked.extend(outcome.candidates)
+    ranked: list[tuple[int, RawCandidate]] = []
+    for group, outcome in enumerate(outcomes):
+        ranked.extend((group, candidate) for candidate in outcome.candidates)
     # Stable sort by source priority so the dedup below keeps the preferred spelling.
-    ranked.sort(key=lambda candidate: _SOURCE_PRIORITY.get(candidate.source, 99))
+    ranked.sort(key=lambda pair: _SOURCE_PRIORITY.get(pair[1].source, 99))
     entries = _normalized(ranked)
 
     # Pool the subscriber counts before deduping. A native hit carries no count and
     # outranks Telemetr, so otherwise it would shadow the very count that decides
     # whether the channel passes the member filter at all.
     counts: dict[str, int] = {}
-    for key, _handle, candidate in entries:
+    for key, _handle, _group, candidate in entries:
         if candidate.subscribers is not None:
             counts.setdefault(key, candidate.subscribers)
 
     accepted: dict[str, DiscoveryCandidateRow] = {}
     origins: dict[str, DiscoveryCandidateOrigin] = {}
-    rejected: set[str] = set()
-    # Each channel's best position within any one source's own result list.
+    # Each channel's best position within any one outcome's own result list.
     rank: dict[str, int] = {}
-    seen_per_source: dict[str, int] = dict.fromkeys(_SOURCE_PRIORITY, 0)
-    for key, handle, candidate in entries:
-        if key in rejected:
-            continue
+    seen_per_group: dict[int, int] = {}
+    for key, handle, group, candidate in entries:
         if key not in accepted:
             subscribers = counts.get(key)
+            # A pure function of the pooled count, which is complete before this loop, so
+            # a revisited key recomputes the same verdict — no need to memoise a rejection.
             if not _within_member_bounds(subscribers, request):
-                rejected.add(key)
                 continue
             accepted[key] = DiscoveryCandidateRow(
                 channel=handle,
@@ -178,14 +182,15 @@ def _merge(
         origin.sources.append(candidate.source)
         origin.country = origin.country or candidate.country
         origin.language = origin.language or candidate.language
-        within = seen_per_source[candidate.source]
-        seen_per_source[candidate.source] = within + 1
+        within = seen_per_group.get(group, 0)
+        seen_per_group[group] = within + 1
         rank[key] = min(rank.get(key, within), within)
 
-    # Interleave: each source's Nth hit, THEN the priority tiebreak. Priority governs the
+    # Interleave: each outcome's Nth hit, THEN the priority tiebreak. Priority governs the
     # dedup above (canonical spelling), and letting it govern truncation too put telemetr
     # permanently at the tail — a native sweep that filled the cap dropped every catalogue
-    # row, so country and language influenced nothing at all.
+    # row, so country and language influenced nothing at all. Per OUTCOME, not per source,
+    # so the cap is shared across keywords as well as sources.
     selected = sorted(
         accepted,
         key=lambda key: (rank[key], _SOURCE_PRIORITY.get(accepted[key].source, 99)),
@@ -232,8 +237,12 @@ async def _native_pass(account_id: str, request: DiscoverySearchRequest) -> _Nat
                 source="telegram_similar",
                 state="skipped",
                 # A seed the operator typed but which is not a usable handle spent a pace
-                # sleep and a peer resolution for nothing, and said so nowhere.
-                error=None if request.seed_channel is None else "seed_unusable",
+                # sleep and a peer resolution for nothing, and said so nowhere. Keyed off
+                # the seed, not off the flood: reporting "seed_unusable" for a flood sent
+                # the operator to edit a seed that was perfectly fine.
+                error=(
+                    "seed_unusable" if request.seed_channel is not None and seed is None else None
+                ),
             ),
         )
         return _NativePass(outcomes, flooded)
@@ -289,12 +298,18 @@ async def run_search(
     value to the operator. The two halves run concurrently so that a Telegram FloodWait
     stops only the Telegram arm — the operator has already spent one of their daily
     search slots, and the catalogue is the only source their filters reach.
+
+    A TaskGroup, not ``gather``: gather propagates the first exception WITHOUT cancelling
+    its sibling, so an unexpected failure in either half would let the run be reported
+    failed and its account released while the other half kept issuing paced Telegram reads
+    on it — the operator's retry would then pass the busy check and start a second stream
+    on one account, which is the exact mutual exclusion this whole module is built around.
     """
-    native, catalogue = await asyncio.gather(
-        _native_pass(account_id, request),
-        _catalogue_pass(request),
-    )
-    outcomes = [*native.outcomes, *catalogue]
+    async with asyncio.TaskGroup() as group:
+        native_task = group.create_task(_native_pass(account_id, request))
+        catalogue_task = group.create_task(_catalogue_pass(request))
+    native = native_task.result()
+    outcomes = [*native.outcomes, *catalogue_task.result()]
 
     rows, error, report = _merge(outcomes, request)
     # Nobody answered, so an empty merge is not a finding; or the filter-aware source did

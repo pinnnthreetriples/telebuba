@@ -42,10 +42,12 @@ function Harness({
   data,
   loading = false,
   errored = false,
+  localeFiltered = false,
 }: {
   data: DiscoveryBoard | undefined;
   loading?: boolean;
   errored?: boolean;
+  localeFiltered?: boolean;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   return (
@@ -53,6 +55,7 @@ function Harness({
       board={data}
       loading={loading}
       errored={errored}
+      localeFiltered={localeFiltered}
       selected={selected}
       onToggle={(channel) => {
         setSelected((current) => {
@@ -430,6 +433,29 @@ describe('DiscoveryResults', () => {
     expect(screen.getByText('Telemetr.io')).toBeInTheDocument();
   });
 
+  it('marks per row whether the locale filter reached it', () => {
+    // The operator's original complaint, answered row by row: only the catalogue files a
+    // channel under a country, so its geo is the proof, and its absence under an active
+    // filter is the proof of the opposite. Telegram's own search has no locale filter.
+    render(
+      <Harness
+        localeFiltered
+        data={board([
+          candidate({ channel: 'turkish', source: 'telemetr', country: 'TR', language: 'tr' }),
+          candidate({ channel: 'russian', source: 'telegram_search' }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText('TR · tr')).toBeInTheDocument();
+    expect(screen.getByText('фильтр не применялся')).toBeInTheDocument();
+  });
+
+  it('does not flag an unvouched row when no locale filter was asked for', () => {
+    render(<Harness data={board([candidate({ source: 'telegram_search' })])} />);
+    expect(screen.queryByText('фильтр не применялся')).not.toBeInTheDocument();
+  });
+
   it('does not call back when a disabled checkbox is clicked', async () => {
     const onToggle = vi.fn();
     render(
@@ -437,6 +463,7 @@ describe('DiscoveryResults', () => {
         board={board([candidate({ channel: 'closed', qualification: 'comments_off' })])}
         loading={false}
         errored={false}
+        localeFiltered={false}
         selected={new Set()}
         onToggle={onToggle}
         onToggleAll={vi.fn()}

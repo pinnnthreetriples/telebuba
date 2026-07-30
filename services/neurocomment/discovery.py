@@ -100,7 +100,12 @@ async def _run(
     try:
         stage = await run_search(campaign_id, account.account_id, request)
         _discovery_state.set_last_error(campaign_id, stage.error)
-        _discovery_state.set_run_report(campaign_id, stage.report)
+        if stage.replaced:
+            # Only for a run whose rows were actually stored. The report's hits/kept and
+            # its per-row geo describe the candidate set this run built; publishing it for
+            # a run that kept the PREVIOUS set would staple this run's geo onto the old
+            # rows by handle and credit sources for candidates nobody can see.
+            _discovery_state.set_run_report(campaign_id, stage.report)
         qualify_error = None
         if not stage.replaced or stage.flooded:
             # Not replaced: no source answered (or the filter-aware one did not), so the

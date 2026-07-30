@@ -1097,7 +1097,8 @@
             "telemetr_error": "Telemetr.io недоступен",
             "seed_unusable": "канал-образец не похож на корректный хэндл",
             "unexpected_result": "Telegram вернул неожиданный ответ"
-          }
+          },
+          "unfiltered": "фильтр не применялся"
         },
         "comments": {
           "pending": "проверяется",

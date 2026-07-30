@@ -236,7 +236,15 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
             checked={form.useTelemetr}
             disabled={!telemetrConfigured}
             onChange={(event) => {
-              set('useTelemetr', event.target.checked);
+              const useTelemetr = event.target.checked;
+              // Clear the locale filters rather than only grey them out: a disabled select
+              // still DISPLAYS "Turkey", and the request omits it — which is the same
+              // "filter shown, not applied" the whole feature just got fixed for.
+              onChange(
+                useTelemetr
+                  ? { ...form, useTelemetr }
+                  : { ...form, useTelemetr, language: '', country: '' },
+              );
             }}
             aria-label={t('neurocomment.modal.discovery.form.useTelemetr')}
             className={CHECKBOX}

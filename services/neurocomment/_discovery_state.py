@@ -172,6 +172,8 @@ async def shutdown_discovery_runs() -> None:
     # answering ``already_running`` for the life of the process.
     _RESERVED.clear()
     _RUN_ACCOUNTS.clear()
+    # The reports pin one origin model per stored candidate; nothing outlives the loop.
+    _REPORTS.clear()
     for task in tasks:
         task.cancel()
     for task in tasks:
