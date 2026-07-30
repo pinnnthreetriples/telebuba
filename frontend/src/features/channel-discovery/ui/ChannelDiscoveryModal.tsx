@@ -85,6 +85,13 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
       { path: { campaign_id: campaignId }, body: buildSearchRequest(form) },
       {
         onSuccess: (outcome) => {
+          // already_running is the one refusal with something to show: the run the
+          // operator collided with is the run they wanted. Reopening the modal starts
+          // over on the form, so without this there is no path back to a live board.
+          if (outcome.status === 'already_running') {
+            setSubmitted(true);
+            return;
+          }
           if (outcome.status !== 'started') return;
           setSubmitted(true);
           // reset, not invalidate: invalidate keeps the previous run's frame while it
@@ -161,8 +168,11 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
     opened.current = true;
   }, [submitted]);
 
+  // Width only, no max-h/overflow-y: per Modal's contract a tall card scrolls via the
+  // OVERLAY, because overflow-y on the card computes overflow-x to auto and clips the
+  // HelpHint tooltips — including the only place the filter scope is documented.
   return (
-    <Modal onClose={onClose} z={72} className="max-h-[88dvh] w-[920px] overflow-y-auto">
+    <Modal onClose={onClose} z={72} className="w-[920px]">
       <div className="p-[18px]">
         <h2 className="text-[15px] font-semibold">{t('neurocomment.modal.discovery.title')}</h2>
         <p className="mt-[3px] text-[12px] text-ink-subtle">
@@ -193,6 +203,15 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
         {refused ? (
           <p className="mt-[11px] text-[12px] text-danger">
             {t(`neurocomment.modal.discovery.refused.${startStatus}`)}
+          </p>
+        ) : null}
+
+        {/* The request never landed, so there is no status to translate — the global
+            toast fires outside the modal with a raw error code, and the form alone
+            would just re-enable its button. */}
+        {startSearch.isError ? (
+          <p role="status" className="mt-[11px] text-[12px] text-danger">
+            {t('neurocomment.modal.discovery.startFailed')}
           </p>
         ) : null}
 

@@ -1,5 +1,5 @@
 ---
-last_updated: 2026-07-27
+last_updated: 2026-07-30
 ---
 
 # Telegram Runtimes
@@ -63,19 +63,54 @@ also what removes any window where a failure could strand a claim.
 Discovery refuses an account that is warming (`list_warming_account_ids`) — warming's freeze
 avoidance assumes it owns its accounts' traffic — and it now RECORDS its own FloodWait as a
 cooldown, so the retry and the post-adopt reconcile stay off that account.
-Both stages are paced: the search fans out over keywords with the same jitter as the
-qualification loop. Comments-enabled is `channelFull.linked_chat_id`, resolved through the
+Both stages are paced, but only the Telegram arm: the keyword sweep fans out with the same
+jitter as the qualification loop, while the catalogue queries run concurrently alongside it
+because HTTP to a third party spends no Telegram flood budget. Awaited serially inside the
+paced loop they were the stage's real cost (~7 min worst case against the ~20s the pacing
+implies), and a Telegram FloodWait used to cancel them too — it now stops the Telegram arm
+alone. The operator's key is read once per run, not once per keyword (each read decrypts a
+secret), and each keyword signals progress so the modal does not look frozen. Comments-enabled is `channelFull.linked_chat_id`, resolved through the
 existing `GetLinkedDiscussionGroup` action; the shared `neurocomment_linked_groups` cache is
 read in ONE bulk query and freshness (`discovery_linked_group_ttl_hours`, default 168h) is
 applied in the SERVICE, not the repository — onboarding and the board still want the raw cache.
 A FloodWait aborts a qualification pass and leaves the tail `pending` (`qualified_at` makes it
 resumable); the run never takes `account_lock`, because holding it for minutes would block
-warming/neurocomment start-stop for that account. Telemetr.io is optional: no key means a
-skipped source, a 429 degrades the run to native results with `last_error` set. Writing
-candidates is delete-then-insert, so the set is replaced only when at least one source actually
-answered (`SourceOutcome.answered`); if none did, the previous set survives and the run ends
-`failed`. A source answering with zero hits — or a filter removing every hit — IS an empty
-result and does replace it. A FloodWait aborts the search sweep as well as qualification. A pass
+warming/neurocomment start-stop for that account. Filter coverage is the feature's sharpest edge and it is not symmetric: `language`/`country`
+reach Telemetr.io ALONE — Telegram's own search and its similar-channels feed have no locale
+filters, by API design — while `members_min`/`members_max` are filtered server-side by Telemetr
+and re-applied to native hits once a count is known. So the request refuses locale filters
+without `use_telemetr` (accepting them answered 202 for a run in which they reached nothing),
+the form disables the selects, and `_merge` INTERLEAVES by each source's own rank before
+applying `discovery_max_candidates`. `_SOURCE_PRIORITY` governs dedup spelling only: sorting the
+whole union by it and then capping put the sole filter-aware source permanently at the tail, so
+a native sweep that filled the cap dropped every catalogue row and the operator's country and
+language influenced nothing at all.
+Telemetr.io is optional: no key means a skipped source — but a REPORTED one, because silence let
+the run reach `done` as if the filter had applied. Every source's outcome (`ran`/`failed`/
+`skipped`, hits, kept, reason, gateway detail) rides `DiscoveryProgress.sources` to the board and
+into the finish event; the per-row catalogue geo rides the board too, but is deliberately NOT
+persisted (no column, and a migration against the live database needs operator approval), so a
+board read after a restart falls back to the row's single stored source.
+Writing candidates is delete-then-insert, so the set is replaced only when at least one source
+actually answered (`SourceOutcome.answered`); if none did, the previous set survives and the run
+ends `failed`. A source answering with zero hits — or a filter removing every hit — IS an empty
+result and does replace it. One exception, and it is the point: when locale filters were asked
+for and the catalogue did not answer, the run does NOT replace the stored set, because
+overwriting a filtered, already-qualified set with unfiltered native rows is a silent downgrade.
+A FloodWait aborts the search sweep as well as qualification, and it now also SKIPS qualification
+outright — the search stage has already written the cooldown, nothing between the two re-checks
+it, and probing inside a live window is how Telegram turns a soft limit into a hard one.
+Telemetr.io's wire contract, verified against its live OpenAPI document, because getting it wrong
+cost this feature every catalogue result it ever returned: `peer` is NOT a handle, it is a
+`["Group","Channel"]` chat-type enum, and `/catalog/search` items carry no handle at all (no
+`peer`, no `link`, no `username` — the API has no `username` property anywhere). A `CatalogItem`
+gives `internal_id`, and the handle comes from a second call, `/channels/info-batch` (`ids`
+comma-separated, max 100), whose `ChatInfo.link` is a `https://t.me/<handle>` URL — so one
+catalogue page costs one extra request against a 1000/month free tier. `country` is NOT an ISO
+alpha-2 code but a `/dictionaries/countries` id (slug, e.g. `turkey`), resolved in `core.telemetr`
+from the codes the UI offers; an unresolvable value is a reported terminal status, never a silent
+empty page. Quota exhaustion is 426 and an inactive subscription is 412; 429 is not documented for
+this endpoint at all, and 4xx is never retried because a retry spends another billable unit. A pass
 also stops when failures reach HALF of at least 20 probes: the consecutive counter catches a dead
 session but not a half-dead one, and the bound has to be a RATE, not a count — a re-search
 re-inserts every candidate with `qualified_at = NULL`, so a fixed count aborts at the same handle

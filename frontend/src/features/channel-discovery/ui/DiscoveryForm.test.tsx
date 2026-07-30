@@ -90,7 +90,7 @@ describe('DiscoveryForm', () => {
   });
 
   it('offers the targeted regions in both selects', async () => {
-    render(<Harness />);
+    render(<Harness telemetrConfigured initial={{ ...EMPTY_FORM, useTelemetr: true }} />);
     const [language, country] = screen.getAllByRole<HTMLSelectElement>('combobox');
 
     await userEvent.selectOptions(language!, 'ar');
@@ -98,6 +98,69 @@ describe('DiscoveryForm', () => {
 
     expect(language).toHaveValue('ar');
     expect(country).toHaveValue('AE');
+  });
+
+  it('disables language and country until the Telemetr source is in play', async () => {
+    // Only the catalogue filters by locale, so with that source off the two selects
+    // would silently narrow nothing.
+    render(<Harness telemetrConfigured />);
+    expect(screen.getAllByRole('combobox')[0]).toBeDisabled();
+    expect(screen.getAllByRole('combobox')[1]).toBeDisabled();
+
+    await userEvent.click(screen.getByRole('checkbox', { name: /Telemetr\.io/ }));
+
+    expect(screen.getAllByRole('combobox')[0]).toBeEnabled();
+    expect(screen.getAllByRole('combobox')[1]).toBeEnabled();
+  });
+
+  it('says the two selects only reach the catalogue', () => {
+    render(<Harness />);
+    // The scope has to be stated where the fields are, not only on the checkbox — and
+    // it must not claim the subscriber bounds behave the same way.
+    const hints = screen.getAllByRole('note', { name: /только каталог Telemetr\.io/ });
+    expect(hints).toHaveLength(2);
+    expect(hints[0]).toHaveAccessibleName(/С подписчиками иначе/);
+  });
+
+  it('explains the Telemetr source without switching it on', async () => {
+    // On a phone a tap is the only way to open a hover hint; nested in the label it
+    // activated the checkbox instead.
+    render(<Harness telemetrConfigured />);
+    const checkbox = screen.getByRole('checkbox', { name: /Telemetr\.io/ });
+
+    await userEvent.click(screen.getByRole('note', { name: /Расходует квоту/ }));
+
+    expect(checkbox).not.toBeChecked();
+  });
+
+  it('keeps the hint prose out of the seed field name', () => {
+    render(<Harness />);
+    // Nested in the label, the tooltip text joined the input's accessible name.
+    expect(screen.getByRole('textbox', { name: 'Похожие на канал' })).toBeInTheDocument();
+  });
+
+  it('names the tokens it dropped', async () => {
+    render(<Harness />);
+
+    await userEvent.type(screen.getByPlaceholderText('крипта, трейдинг, новости'), 'crypto ab');
+
+    expect(screen.getByText(/Пропущено: ab/)).toBeInTheDocument();
+  });
+
+  it('explains subscriber bounds the wrong way round instead of going dead', () => {
+    render(
+      <Harness
+        initial={{
+          ...EMPTY_FORM,
+          keywords: 'crypto',
+          minSubscribers: '900',
+          maxSubscribers: '100',
+        }}
+      />,
+    );
+
+    expect(screen.getByText(/«Подписчиков от» больше/)).toBeInTheDocument();
+    expect(submitButton()).toBeDisabled();
   });
 
   it('resets every field', async () => {

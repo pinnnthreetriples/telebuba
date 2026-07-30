@@ -108,11 +108,22 @@ def matches(*rows: tuple[str, str, int | None]) -> TelegramChannelMatches:
     )
 
 
-def telemetr_ok(*rows: tuple[str, str, int | None]) -> TelemetrSearchResult:
+def telemetr_ok(
+    *rows: tuple[str, str, int | None],
+    country: str | None = None,
+    language: str | None = None,
+) -> TelemetrSearchResult:
+    """A catalogue page. ``country``/``language`` are what Telemetr filed every row under."""
     return TelemetrSearchResult(
         status="ok",
         items=[
-            TelemetrChannel(username=username, title=title, members_count=count)
+            TelemetrChannel(
+                username=username,
+                title=title,
+                members_count=count,
+                country=country,
+                language=language,
+            )
             for username, title, count in rows
         ],
     )

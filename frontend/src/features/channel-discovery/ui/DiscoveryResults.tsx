@@ -2,12 +2,52 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DiscoveryBoard, DiscoveryCandidate } from '@/shared/api';
+import type { DiscoveryBoard, DiscoveryCandidate, DiscoverySourceReport } from '@/shared/api';
 import { DataTable, StatusIcon, useWideContainer, type DataTableColumnMeta } from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
 const CHECKBOX = 'h-[14px] w-[14px] shrink-0 accent-primary disabled:opacity-40';
+
+const SOURCE_STATE = {
+  ran: 'sourceRan',
+  failed: 'sourceFailed',
+  skipped: 'sourceSkipped',
+} as const;
+
+// Reasons are deliberately locale-neutral codes, and printing them raw put strings like
+// "telemetr_quota_exhausted" in front of the operator. Unmapped codes fall back to the
+// code itself, so a new one degrades to the old behaviour rather than to nothing.
+const reasonKey = (reason: string) => `neurocomment.modal.discovery.results.reason.${reason}`;
+
+/** One line per source: what it returned, and what survived into the table.
+ *
+ * The operator could set a language and a country, watch a run reach "done", and never
+ * learn that the only source those two filters reach had contributed nothing — because
+ * the board carried a single error string and a skipped source carried none at all. A
+ * source crediting `0` here is that missing signal.
+ */
+function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
+  const { t } = useTranslation();
+  if (sources.length === 0) return null;
+  return (
+    <span className="text-ink-subtle">
+      {sources
+        .map((report) => {
+          const name = t(`neurocomment.modal.discovery.source.${report.source}`);
+          const line = t(`neurocomment.modal.discovery.results.${SOURCE_STATE[report.state]}`, {
+            source: name,
+            kept: report.kept ?? 0,
+            hits: report.hits ?? 0,
+          });
+          // A skipped or failed source is the whole point of this strip, so it says why.
+          if (report.reason == null) return line;
+          return `${line} — ${t(reasonKey(report.reason), { defaultValue: report.reason })}`;
+        })
+        .join(' · ')}
+    </span>
+  );
+}
 
 function CommentsCell({ candidate, settled }: { candidate: DiscoveryCandidate; settled: boolean }) {
   const { t } = useTranslation();
@@ -64,9 +104,10 @@ export function DiscoveryResults({
   onToggleAll,
 }: Props) {
   const { t, i18n } = useTranslation();
-  // Must be the container query DataTable itself uses, not the viewport one: this
-  // table lives in a 760px modal, so a wide viewport says "table" while the table
-  // renders as cards — and the select-all below would go missing.
+  // Must be the container query DataTable itself uses, not the viewport one: this table
+  // lives in a 920px modal whose padding leaves it 884px, 4px over the 880px table/card
+  // floor — so on a narrower viewport the table renders as cards while a viewport query
+  // would still say "table", and the select-all below would go missing.
   const results = useRef<HTMLDivElement>(null);
   const wide = useWideContainer(results);
   const candidates = board?.candidates ?? [];
@@ -135,7 +176,9 @@ export function DiscoveryResults({
       id: 'title',
       header: () => t('neurocomment.modal.discovery.results.colTitle'),
       cell: ({ row }) => (
-        <span className="block max-w-[240px] truncate text-ink-muted">
+        // Capped only where there is room for it: 240px plus the card's own padding
+        // overflows the dialog box at a 320px viewport.
+        <span className="block truncate text-ink-muted md:max-w-[240px]">
           {row.original.title ?? ''}
         </span>
       ),
@@ -202,7 +245,10 @@ export function DiscoveryResults({
     );
   }
 
-  if (errored) {
+  // Only with nothing to fall back on: a failed refetch leaves status 'error' with the
+  // cached frame intact, and blanking the table would take N rows and every tick the
+  // operator has made with it.
+  if (errored && candidates.length === 0) {
     return (
       <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.error')}
@@ -214,7 +260,12 @@ export function DiscoveryResults({
     return (
       <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
-          reason: board?.progress.last_error ?? '',
+          reason:
+            board?.progress.last_error == null
+              ? ''
+              : t(reasonKey(board.progress.last_error), {
+                  defaultValue: board.progress.last_error,
+                }),
         })}
       </p>
     );
@@ -261,15 +312,19 @@ export function DiscoveryResults({
             {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
           </span>
         ) : null}
-        {board?.progress.last_error != null && phase !== 'qualifying' ? (
+        {board?.progress.last_error != null ? (
           <span role="status" className="text-danger">
             {/* An aborted run keeps whatever it collected, so the reason has to ride
-                along with the rows instead of replacing them. */}
+                along with the rows instead of replacing them — and through the
+                qualifying phase too, the longest one a run has. */}
             {t(`neurocomment.modal.discovery.results.${failed ? 'failed' : 'degraded'}`, {
-              reason: board.progress.last_error,
+              reason: t(reasonKey(board.progress.last_error), {
+                defaultValue: board.progress.last_error,
+              }),
             })}
           </span>
         ) : null}
+        <SourceStrip sources={board?.progress.sources ?? []} />
       </div>
       <div ref={results} className="tb-scroll overflow-x-auto">
         <DataTable

@@ -1,4 +1,8 @@
-"""Discovery stage 1 — source fan-out, merge/dedup, and start-refusal statuses."""
+"""Discovery stage 1 — source fan-out, merge/dedup and the candidate cap.
+
+Account resolution and the start refusals live in ``test_discovery_account.py``
+(700-line test cap).
+"""
 
 from __future__ import annotations
 
@@ -7,25 +11,24 @@ from datetime import UTC, datetime
 import pytest
 
 from core.config import settings
-from core.db import create_account, create_campaign, upsert_warming_state
+from core.db import create_campaign
 from core.repositories.neurocomment import list_discovery_candidates
-from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
-from schemas.neurocomment_discovery import DiscoverySearchRequest
-from schemas.telemetr import TelemetrSearchResult
-from schemas.warming import WarmingStateWrite
-from services.neurocomment import _discovery_state, _seams
+from schemas.neurocomment_discovery import (
+    DiscoverySearchRequest,
+    DiscoverySearchStageResult,
+    DiscoverySourceReport,
+)
+from schemas.telemetr import TelemetrSearchRequest, TelemetrSearchResult
+from services.neurocomment import _seams
 from services.neurocomment._discovery_search import run_search
 from services.neurocomment._state import in_cooldown
 from tests.services.neurocomment.discovery_support import (
     LISTENER_ID,
     ReadRecorder,
     TelemetrRecorder,
-    drain_discovery,
     matches,
     read_error,
-    seed_listener,
-    start_run,
     telemetr_ok,
 )
 
@@ -43,22 +46,43 @@ async def _new_campaign() -> str:
     return campaign.campaign_id
 
 
+def _report_of(stage: DiscoverySearchStageResult, source: str) -> DiscoverySourceReport:
+    reports = [report for report in stage.report.sources if report.source == source]
+    assert len(reports) == 1
+    return reports[0]
+
+
 @pytest.mark.asyncio
 async def test_native_search_runs_once_per_keyword(monkeypatch: pytest.MonkeyPatch) -> None:
     reader = ReadRecorder(search=matches(("alpha", "Alpha", 100)))
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, error, _ = await run_search(
-        campaign_id,
-        LISTENER_ID,
-        _request(keywords=["crypto", "trading"]),
-    )
+    stage = await run_search(campaign_id, LISTENER_ID, _request(keywords=["crypto", "trading"]))
 
-    assert error is None
-    assert found == 1  # both keywords returned the same channel -> deduped
+    assert stage.error is None
+    assert stage.found == 1  # both keywords returned the same channel -> deduped
     queries = [action.query for action in reader.search_actions()]
     assert queries == ["crypto", "trading"]
+
+
+@pytest.mark.asyncio
+async def test_duplicate_keywords_are_searched_once(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Only the SPA deduped, so a direct caller spent ten RPCs on one keyword."""
+    reader = ReadRecorder(search=matches(("alpha", "Alpha", 100)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    telemetr = TelemetrRecorder(telemetr_ok())
+    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
+    campaign_id = await _new_campaign()
+
+    await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(keywords=[" Crypto ", "crypto", "CRYPTO"], use_telemetr=True),
+    )
+
+    assert [action.query for action in reader.search_actions()] == ["Crypto"]
+    assert len(telemetr.requests) == 1
 
 
 @pytest.mark.asyncio
@@ -72,10 +96,27 @@ async def test_seed_channel_adds_a_similar_channels_pass(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, _, _ = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="@durov"))
 
-    assert found == 2
-    assert [action.seed for action in reader.similar_actions()] == ["@durov"]
+    assert stage.found == 2
+    # Normalized before it reaches the gateway, the same way every other channel is.
+    assert [action.seed for action in reader.similar_actions()] == ["durov"]
+
+
+@pytest.mark.asyncio
+async def test_an_unusable_seed_is_reported_instead_of_probed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A seed that survives validation but not normalization cost an RPC and said nothing."""
+    reader = ReadRecorder(search=matches(("alpha", "A", None)))
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="t.me/c/12345/1"))
+
+    assert reader.actions_of("get_similar_channels") == []
+    assert _report_of(stage, "telegram_similar").state == "skipped"
+    assert stage.error == "seed_unusable"
 
 
 @pytest.mark.asyncio
@@ -84,9 +125,10 @@ async def test_no_seed_means_no_recommendations_call(monkeypatch: pytest.MonkeyP
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, LISTENER_ID, _request())
 
     assert reader.actions_of("get_similar_channels") == []
+    assert stage.error is None
 
 
 @pytest.mark.asyncio
@@ -98,12 +140,16 @@ async def test_native_wins_a_cross_source_tie(monkeypatch: pytest.MonkeyPatch) -
     monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
 
     rows = (await list_discovery_candidates(campaign_id)).rows
     assert [row.channel for row in rows] == ["CryptoNews"]
     assert rows[0].source == "telegram_search"
     assert rows[0].title == "Native"
+    # Both sources are credited for it: crediting only the dedup winner under-reported
+    # the catalogue, which is the very signal that made its starvation invisible.
+    assert stage.report.origins["CryptoNews"].sources == ["telegram_search", "telemetr"]
+    assert _report_of(stage, "telemetr").kept == 1
 
 
 @pytest.mark.asyncio
@@ -113,45 +159,136 @@ async def test_telemetr_is_not_called_when_disabled(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
-    await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=False))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=False))
 
     assert telemetr.requests == []
+    assert _report_of(stage, "telemetr").state == "skipped"
 
 
 @pytest.mark.asyncio
-async def test_telemetr_filters_ride_the_request(monkeypatch: pytest.MonkeyPatch) -> None:
-    telemetr = TelemetrRecorder(telemetr_ok())
+async def test_telemetr_filters_reach_the_stored_set(monkeypatch: pytest.MonkeyPatch) -> None:
+    """The filters must change the *result*, not just the DTO handed to the gateway.
+
+    Asserting the request object alone passed identically whether the catalogue rows
+    reached the candidate table or were dropped on the floor.
+    """
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
-    campaign_id = await _new_campaign()
+
+    async def _by_language(request: TelemetrSearchRequest) -> TelemetrSearchResult:
+        if request.language == "tr":
+            return telemetr_ok(("turkishnews", "TR", 900), language="tr", country="TR")
+        return telemetr_ok(("russiannews", "RU", 900), language="ru", country="RU")
+
+    monkeypatch.setattr(_seams, "search_telemetr", _by_language)
+    filtered = await _new_campaign()
+    unfiltered = await _new_campaign()
 
     await run_search(
-        campaign_id,
+        filtered,
         LISTENER_ID,
-        _request(use_telemetr=True, country="ae", language="ar", members_min=100),
+        _request(use_telemetr=True, language="tr", country="TR"),
     )
+    await run_search(unfiltered, LISTENER_ID, _request(use_telemetr=True))
 
-    sent = telemetr.requests[0]
-    assert sent.term == "crypto"
-    assert sent.country == "ae"
-    assert sent.language == "ar"
-    assert sent.members_min == 100
+    assert [row.channel for row in (await list_discovery_candidates(filtered)).rows] == [
+        "turkishnews",
+    ]
+    assert [row.channel for row in (await list_discovery_candidates(unfiltered)).rows] == [
+        "russiannews",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_missing_telemetr_key_skips_the_source_without_an_error(
+async def test_the_catalogue_geo_rides_onto_the_run_report(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """An unconfigured catalogue is a skipped source, not a degraded run."""
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(telemetr_ok(("turkishnews", "TR", 900), language="tr", country="TR")),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(use_telemetr=True, language="tr", country="TR"),
+    )
+
+    origin = stage.report.origins["turkishnews"]
+    assert (origin.country, origin.language) == ("TR", "tr")
+
+
+@pytest.mark.asyncio
+async def test_catalogue_rows_survive_a_native_sweep_that_fills_the_cap(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Sorting the union by source priority made the cap a native-only cut.
+
+    Telemetr sits last, so with 200 native rows against a cap of 100 it contributed
+    exactly zero and language/country influenced nothing at all.
+    """
+    monkeypatch.setattr(settings.neurocomment, "discovery_max_candidates", 4)
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=matches(*((f"native{index}", "N", None) for index in range(10)))),
+    )
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(telemetr_ok(("catalogue1", "C", 900), ("catalogue2", "C", 900))),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+
+    stored = {row.channel for row in (await list_discovery_candidates(campaign_id)).rows}
+    assert len(stored) == 4
+    assert stored & {"catalogue1", "catalogue2"}
+    assert _report_of(stage, "telemetr").kept
+
+
+@pytest.mark.asyncio
+async def test_missing_telemetr_key_is_a_skip_the_operator_is_told_about(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """An unconfigured catalogue is a skipped source, not a failure.
+
+    But a *silent* skip let the run reach "done" while the operator believed the filter
+    they ticked had applied, against a catalogue that was never queried.
+    """
     telemetr = TelemetrRecorder(TelemetrSearchResult(status="not_configured"))
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("alpha1", "A", None))))
     monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
-    found, error, _ = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
 
-    assert error is None
-    assert found == 1
+    assert stage.found == 1
+    assert stage.error == "telemetr_not_configured"
+    assert _report_of(stage, "telemetr").state == "skipped"
+
+
+@pytest.mark.asyncio
+async def test_a_catalogue_failure_keeps_its_diagnostic_text(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``telemetr_auth_failed`` alone cannot tell a revoked key from a dead network."""
+    telemetr = TelemetrRecorder(
+        TelemetrSearchResult(status="auth_failed", error="HTTP 401: invalid api key"),
+    )
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("native", "N", 10))))
+    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+
+    report = _report_of(stage, "telemetr")
+    assert report.state == "failed"
+    assert report.reason == "telemetr_auth_failed"
+    assert report.detail == "HTTP 401: invalid api key"
 
 
 @pytest.mark.asyncio
@@ -163,10 +300,10 @@ async def test_telemetr_rate_limit_keeps_native_results_and_reports_the_reason(
     monkeypatch.setattr(_seams, "search_telemetr", telemetr)
     campaign_id = await _new_campaign()
 
-    found, error, _ = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
 
-    assert found == 1
-    assert error == "telemetr_rate_limited"
+    assert stage.found == 1
+    assert stage.error == "telemetr_rate_limited"
 
 
 @pytest.mark.asyncio
@@ -180,10 +317,29 @@ async def test_native_read_failure_does_not_abort_the_run(
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, error, _ = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="seed"))
+    stage = await run_search(campaign_id, LISTENER_ID, _request(seed_channel="seed"))
 
-    assert found == 1
-    assert error == "RPC: ChannelPrivateError"
+    assert stage.found == 1
+    assert stage.error == "RPC: ChannelPrivateError"
+    assert _report_of(stage, "telegram_search").state == "failed"
+
+
+@pytest.mark.asyncio
+async def test_an_unexpected_gateway_shape_is_not_an_answer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Otherwise a Telethon-layer change wipes the stored set through the empty replace."""
+    monkeypatch.setattr(
+        _seams,
+        "execute_read",
+        ReadRecorder(search=TelemetrSearchResult(status="ok")),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request())
+
+    assert stage.replaced is False
+    assert stage.error == "unexpected_result"
 
 
 @pytest.mark.asyncio
@@ -193,7 +349,7 @@ async def test_a_flood_wait_stops_the_keyword_sweep(monkeypatch: pytest.MonkeyPa
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    await run_search(
+    stage = await run_search(
         campaign_id,
         LISTENER_ID,
         _request(keywords=["alpha", "bravo", "charlie"], seed_channel="@durov"),
@@ -202,6 +358,29 @@ async def test_a_flood_wait_stops_the_keyword_sweep(monkeypatch: pytest.MonkeyPa
     # One attempt, then stop — not one per keyword, and the seed pass is skipped too.
     assert len(reader.search_actions()) == 1
     assert reader.actions_of("get_similar_channels") == []
+    assert stage.flooded is True
+
+
+@pytest.mark.asyncio
+async def test_a_flood_wait_still_queries_the_catalogue(monkeypatch: pytest.MonkeyPatch) -> None:
+    """HTTP to a third party spends no Telegram flood budget, and the slot is already spent.
+
+    Breaking out of the keyword loop cancelled every remaining catalogue query too, so a
+    single FloodWait removed the only filter-aware source from the run.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=read_error("FloodWait(600s)")))
+    telemetr = TelemetrRecorder(telemetr_ok(("fromcatalogue", "C", 900)))
+    monkeypatch.setattr(_seams, "search_telemetr", telemetr)
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(keywords=["alpha", "bravo"], use_telemetr=True),
+    )
+
+    assert [request.term for request in telemetr.requests] == ["alpha", "bravo"]
+    assert stage.found == 1
 
 
 @pytest.mark.asyncio
@@ -215,19 +394,6 @@ async def test_a_flood_wait_puts_the_account_on_cooldown(
     await run_search(campaign_id, LISTENER_ID, _request())
 
     assert in_cooldown(LISTENER_ID, datetime.now(UTC)) is True
-
-
-@pytest.mark.asyncio
-async def test_a_warming_account_is_refused(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Warming's freeze avoidance assumes it owns its accounts' traffic."""
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    await seed_listener()
-    campaign_id = await _new_campaign()
-    await upsert_warming_state(WarmingStateWrite(account_id=LISTENER_ID, state="active"))
-
-    refused = await start_run(campaign_id, _request())
-
-    assert refused.status == "account_cooling"
 
 
 @pytest.mark.asyncio
@@ -370,9 +536,9 @@ async def test_candidate_cap_truncates(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(_seams, "execute_read", reader)
     campaign_id = await _new_campaign()
 
-    found, _, _ = await run_search(campaign_id, LISTENER_ID, _request())
+    stage = await run_search(campaign_id, LISTENER_ID, _request())
 
-    assert found == 2
+    assert stage.found == 2
 
 
 @pytest.mark.asyncio
@@ -411,160 +577,26 @@ async def test_pacing_sleeps_between_keywords_only(monkeypatch: pytest.MonkeyPat
 
 
 @pytest.mark.asyncio
-async def test_start_discovery_spawns_and_reports_started(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("alpha1", "A", None))))
-    await seed_listener()
-    campaign_id = await _new_campaign()
+async def test_the_catalogue_key_is_read_once_per_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """It was read per keyword: ten DB reads with secret decryption for one static key."""
+    from services.neurocomment import _discovery_search  # noqa: PLC0415
 
-    outcome = await start_run(campaign_id, _request())
+    reads: list[int] = []
+    original = _discovery_search.load_warming_settings
 
-    assert outcome.status == "started"
+    async def _count() -> object:
+        reads.append(1)
+        return await original()
 
-
-@pytest.mark.asyncio
-async def test_start_discovery_is_single_flighted(monkeypatch: pytest.MonkeyPatch) -> None:
-    import asyncio  # noqa: PLC0415
-
-    async def _slow(_account_id: str, _action: object) -> object:
-        await asyncio.sleep(5)
-        return matches()
-
-    monkeypatch.setattr(_seams, "execute_read", _slow)
-    await seed_listener()
-    campaign_id = await _new_campaign()
-
-    first = await start_run(campaign_id, _request())
-    second = await start_run(campaign_id, _request())
-
-    assert first.status == "started"
-    assert second.status == "already_running"
-
-
-@pytest.mark.asyncio
-async def test_start_discovery_without_any_account_refuses() -> None:
-    campaign_id = await _new_campaign()
-
-    outcome = await start_run(campaign_id, _request())
-
-    assert outcome.status == "no_account"
-
-
-@pytest.mark.asyncio
-async def test_start_discovery_falls_back_to_a_campaign_account(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from core.db import assign_account_to_campaign  # noqa: PLC0415
-
+    monkeypatch.setattr(_discovery_search, "load_warming_settings", _count)
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    await create_account(
-        AccountCreate(account_id="acc-serving", label="server", session_name="acc-serving")
+    monkeypatch.setattr(_seams, "search_telemetr", TelemetrRecorder(telemetr_ok()))
+    campaign_id = await _new_campaign()
+
+    await run_search(
+        campaign_id,
+        LISTENER_ID,
+        _request(keywords=["alpha", "beta", "gamma"], use_telemetr=True),
     )
-    campaign_id = await _new_campaign()
-    await assign_account_to_campaign(campaign_id, "acc-serving")
 
-    outcome = await start_run(campaign_id, _request())
-
-    assert outcome.status == "started"
-
-
-@pytest.mark.asyncio
-async def test_start_discovery_refuses_a_cooling_account(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Searching on a rate-limited account would deepen the very limit it is serving."""
-    from datetime import UTC, datetime, timedelta  # noqa: PLC0415
-
-    from services.neurocomment import _state  # noqa: PLC0415
-
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    await seed_listener()
-    campaign_id = await _new_campaign()
-    await _state.set_cooldown(LISTENER_ID, datetime.now(UTC) + timedelta(hours=1))
-
-    outcome = await start_run(campaign_id, _request())
-
-    assert outcome.status == "account_cooling"
-
-
-@pytest.mark.asyncio
-async def test_start_discovery_refuses_an_account_in_warming_flood_wait(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    from datetime import UTC, datetime, timedelta  # noqa: PLC0415
-
-    from services.warming._state import _set_state  # noqa: PLC0415
-
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    await seed_listener()
-    campaign_id = await _new_campaign()
-    until = (datetime.now(UTC) + timedelta(hours=2)).isoformat()
-    await _set_state(LISTENER_ID, "flood_wait", flood_wait_until=until)
-
-    outcome = await start_run(campaign_id, _request())
-
-    assert outcome.status == "account_cooling"
-
-
-@pytest.mark.asyncio
-async def test_start_discovery_honours_the_daily_search_cap(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_searches_per_day", 1)
-    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
-    await seed_listener()
-    first_campaign = await _new_campaign()
-    second_campaign = await _new_campaign()
-
-    first = await start_run(first_campaign, _request())
-    # Let it finish first: both campaigns resolve to the same listener, so an
-    # overlapping start is refused for holding the account before the cap is consulted.
-    await drain_discovery(first_campaign)
-    second = await start_run(second_campaign, _request())
-
-    assert first.status == "started"
-    assert second.status == "daily_limit_reached"
-
-
-@pytest.mark.asyncio
-async def test_daily_cap_does_not_count_a_refused_start(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A refusal must not consume the operator's allowance."""
-    monkeypatch.setattr(settings.neurocomment, "discovery_max_searches_per_day", 1)
-    campaign_id = await _new_campaign()
-
-    refused = await start_run(campaign_id, _request())
-
-    assert refused.status == "no_account"
-    assert _discovery_state.at_daily_search_cap() is False
-
-
-@pytest.mark.asyncio
-async def test_listener_is_preferred_over_a_campaign_account(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """Discovery traffic must stay off the commenting accounts."""
-    from core.db import assign_account_to_campaign  # noqa: PLC0415
-
-    seen: list[str] = []
-
-    async def _record(account_id: str, _action: object) -> object:
-        seen.append(account_id)
-        return matches()
-
-    monkeypatch.setattr(_seams, "execute_read", _record)
-    await create_account(
-        AccountCreate(account_id="acc-serving", label="server", session_name="acc-serving")
-    )
-    campaign_id = await _new_campaign()
-    await assign_account_to_campaign(campaign_id, "acc-serving")
-    await seed_listener()
-
-    # Through start_discovery, not run_search: handing the account in as a literal
-    # would assert nothing about which one the policy actually picks.
-    await start_run(campaign_id, _request())
-    await drain_discovery(campaign_id)
-
-    assert seen == [LISTENER_ID]
+    assert reads == [1]

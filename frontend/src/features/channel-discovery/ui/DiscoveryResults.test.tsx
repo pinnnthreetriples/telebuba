@@ -93,6 +93,15 @@ describe('DiscoveryResults', () => {
     expect(screen.queryByText(/Ничего не нашлось/)).not.toBeInTheDocument();
   });
 
+  it('keeps the rows a failed refetch left in the cache', () => {
+    // TanStack v5 sets status 'error' on a failed refetch while the cached frame
+    // survives, so blanking the table would drop N rows and every tick on them.
+    render(<Harness data={board([candidate({ channel: 'good' })])} errored />);
+
+    expect(screen.getByText('@good')).toBeInTheDocument();
+    expect(screen.queryByText(/Не удалось получить результаты/)).not.toBeInTheDocument();
+  });
+
   it('shows an empty state when the search found nothing', () => {
     render(<Harness data={board([])} />);
     expect(screen.getByText(/Ничего не нашлось/)).toBeInTheDocument();
@@ -344,7 +353,51 @@ describe('DiscoveryResults', () => {
       />,
     );
 
-    expect(screen.getByText(/telemetr_rate_limited/)).toBeInTheDocument();
+    // The code is translated, not printed: the operator used to read the literal string
+    // "telemetr_rate_limited" off the board.
+    expect(screen.getByText(/ограничил частоту запросов/)).toBeInTheDocument();
+    expect(screen.queryByText(/telemetr_rate_limited/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a degraded source visible through the qualifying phase', () => {
+    // Qualifying is the longest phase of a run: suppressing the banner there made a
+    // known source failure vanish for tens of seconds and then come back.
+    render(
+      <Harness
+        data={board([candidate()], {
+          phase: 'qualifying',
+          running: true,
+          last_error: 'telemetr_rate_limited',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/ограничил частоту запросов/)).toBeInTheDocument();
+  });
+
+  it('credits every source, so a filter that reached nothing is visible', () => {
+    // The reported bug: language and country were set, the run reached "done", and
+    // nothing said that the only source those filters reach had contributed zero rows.
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [
+            { source: 'telegram_search', state: 'ran', hits: 20, kept: 20 },
+            {
+              source: 'telemetr',
+              state: 'skipped',
+              hits: 0,
+              kept: 0,
+              reason: 'telemetr_not_configured',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/поиск Telegram: 20 из 20/)).toBeInTheDocument();
+    expect(screen.getByText(/Telemetr\.io: не запрашивался/)).toBeInTheDocument();
+    expect(screen.getByText(/нет ключа Telemetr\.io/)).toBeInTheDocument();
   });
 
   it('renders subscribers compactly and an em dash when unknown', () => {

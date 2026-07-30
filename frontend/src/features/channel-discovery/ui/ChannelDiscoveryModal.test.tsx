@@ -54,6 +54,7 @@ type Routes = {
   board?: DiscoveryBoard;
   boards?: DiscoveryBoard[];
   startStatus?: string;
+  startFails?: boolean;
   hasTelemetrKey?: boolean;
   // One status per requested channel, defaulting to all-linked. The server reports
   // per-channel outcomes, so a spec has to be able to mix them.
@@ -90,6 +91,13 @@ function route(routes: Routes = {}) {
       });
     }
     if (url.pathname.endsWith('/discovery/search')) {
+      if (routes.startFails === true) {
+        // What an inverted subscriber range actually returns.
+        return new Response(
+          JSON.stringify({ error: { code: 'validation_error', message: 'members_min' } }),
+          { status: 422, headers: { 'Content-Type': 'application/json' } },
+        );
+      }
       return jsonResponse({ status: routes.startStatus ?? 'started' });
     }
     if (url.pathname.endsWith('/discovery/adopt')) {
@@ -173,6 +181,43 @@ describe('ChannelDiscoveryModal', () => {
       expect(screen.getByText('Суточный лимит поисков исчерпан.')).toBeInTheDocument();
     });
     expect(screen.getByRole('button', { name: 'Найти' })).toBeInTheDocument();
+  });
+
+  it('opens the live board when a search is already running', async () => {
+    // The board query is enabled on a flag that starts false on every mount and has no
+    // inverse, so the refusal alone left the running search unreachable.
+    route({
+      startStatus: 'already_running',
+      board: boardPayload([candidate({ channel: 'good' })], {
+        phase: 'qualifying',
+        running: true,
+        qualified: 1,
+        total: 4,
+      }),
+    });
+    renderModal();
+
+    await startSearch();
+
+    await waitFor(() => {
+      expect(screen.getByText('@good')).toBeInTheDocument();
+    });
+    // Still says whose run it is: these rows are not the parameters just submitted.
+    expect(screen.getByText(/Поиск для этой кампании уже идёт/)).toBeInTheDocument();
+  });
+
+  it('reports a rejected start inside the modal', async () => {
+    // The global toast fires outside the dialog with a raw error code; the form alone
+    // just re-enables its button, which reads as "nothing happened".
+    route({ startFails: true });
+    renderModal();
+
+    await startSearch();
+
+    await waitFor(() => {
+      expect(screen.getByText(/Не удалось запустить поиск/)).toBeInTheDocument();
+    });
+    expect(screen.getByRole('button', { name: 'Найти' })).toBeEnabled();
   });
 
   it('disables the Telemetr toggle when no key is configured', async () => {

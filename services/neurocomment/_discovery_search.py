@@ -2,35 +2,64 @@
 
 Pacing note: the keyword RPCs are jittered exactly like the qualification pass.
 Even a modest sweep is ~11 reads, and firing them as one burst is the freeze
-vector the whole discovery design is built to avoid.
+vector the whole discovery design is built to avoid. That pacing is what sets the
+stage's duration (~20s for a full sweep); the catalogue queries run alongside it
+and concurrently with each other, because HTTP to a third party costs no Telegram
+flood budget and serially they were minutes, not seconds.
 """
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+import asyncio
+from typing import TYPE_CHECKING, NamedTuple
 
 from core.channel_tokens import dedup_key, normalize_channel
 from core.config import settings
+from core.db import load_warming_settings
 from core.repositories.neurocomment import replace_discovery_candidates
 from schemas.neurocomment_discovery import (
     CHANNEL_HANDLE_MAX_LENGTH,
+    DiscoveryCandidateOrigin,
     DiscoveryCandidateRow,
+    DiscoveryRunReport,
+    DiscoverySearchStageResult,
+    DiscoverySourceReport,
 )
 from services.neurocomment import _seams
 from services.neurocomment._discovery_providers import (
+    SourceOutcome,
     record_flood,
     search_native,
     search_similar,
     search_telemetr,
 )
+from services.neurocomment._signals import signal_discovery_progress
 
 if TYPE_CHECKING:
-    from schemas.neurocomment_discovery import DiscoverySearchRequest
-    from services.neurocomment._discovery_providers import RawCandidate, SourceOutcome
+    from schemas.neurocomment_discovery import (
+        DiscoverySearchRequest,
+        DiscoverySource,
+        DiscoverySourceState,
+    )
+    from services.neurocomment._discovery_providers import RawCandidate
 
 # Native hits win a cross-source tie: their handles come straight from Telegram in
-# canonical case, which is what adopt writes into the campaign verbatim.
-_SOURCE_PRIORITY = {"telegram_search": 0, "telegram_similar": 1, "telemetr": 2}
+# canonical case, which is what adopt writes into the campaign verbatim. This governs
+# the DEDUP order only — see ``_merge`` for why it must not govern truncation.
+# Annotated because the keys are also iterated as the report's source list, where a
+# widened ``str`` would not satisfy ``DiscoverySourceReport``.
+_SOURCE_PRIORITY: dict[DiscoverySource, int] = {
+    "telegram_search": 0,
+    "telegram_similar": 1,
+    "telemetr": 2,
+}
+
+
+class _NativePass(NamedTuple):
+    """The Telegram half of a run: its outcomes, and whether it hit a FloodWait."""
+
+    outcomes: list[SourceOutcome]
+    flooded: bool
 
 
 async def _pace() -> None:
@@ -71,11 +100,42 @@ def _normalized(
     return entries
 
 
+def _source_reports(
+    outcomes: list[SourceOutcome],
+    origins: dict[str, DiscoveryCandidateOrigin],
+) -> list[DiscoverySourceReport]:
+    """One report per source considered, in priority order."""
+    reports: list[DiscoverySourceReport] = []
+    for source in _SOURCE_PRIORITY:
+        own = [outcome for outcome in outcomes if outcome.source == source]
+        if not own:
+            continue
+        state: DiscoverySourceState = "skipped"
+        if any(outcome.answered for outcome in own):
+            # Partial: one keyword failing while another answered is a degraded run, not
+            # a dead source, and the reason below still names it.
+            state = "ran"
+        elif any(outcome.state == "failed" for outcome in own):
+            state = "failed"
+        degraded = next((outcome for outcome in own if outcome.error), None)
+        reports.append(
+            DiscoverySourceReport(
+                source=source,
+                state=state,
+                hits=sum(len(outcome.candidates) for outcome in own),
+                kept=sum(1 for origin in origins.values() if source in origin.sources),
+                reason=None if degraded is None else degraded.error,
+                detail=None if degraded is None else degraded.detail,
+            ),
+        )
+    return reports
+
+
 def _merge(
     outcomes: list[SourceOutcome],
     request: DiscoverySearchRequest,
-) -> tuple[list[DiscoveryCandidateRow], str | None]:
-    """Normalize, dedup and cap the union of every source's hits."""
+) -> tuple[list[DiscoveryCandidateRow], str | None, DiscoveryRunReport]:
+    """Normalize, dedup, interleave and cap the union of every source's hits."""
     ranked: list[RawCandidate] = []
     for outcome in outcomes:
         ranked.extend(outcome.candidates)
@@ -91,69 +151,168 @@ def _merge(
         if candidate.subscribers is not None:
             counts.setdefault(key, candidate.subscribers)
 
-    rows: list[DiscoveryCandidateRow] = []
-    seen: set[str] = set()
+    accepted: dict[str, DiscoveryCandidateRow] = {}
+    origins: dict[str, DiscoveryCandidateOrigin] = {}
+    rejected: set[str] = set()
+    # Each channel's best position within any one source's own result list.
+    rank: dict[str, int] = {}
+    seen_per_source: dict[str, int] = dict.fromkeys(_SOURCE_PRIORITY, 0)
     for key, handle, candidate in entries:
-        if key in seen:
+        if key in rejected:
             continue
-        subscribers = counts.get(key)
-        if not _within_member_bounds(subscribers, request):
-            continue
-        seen.add(key)
-        rows.append(
-            DiscoveryCandidateRow(
+        if key not in accepted:
+            subscribers = counts.get(key)
+            if not _within_member_bounds(subscribers, request):
+                rejected.add(key)
+                continue
+            accepted[key] = DiscoveryCandidateRow(
                 channel=handle,
                 title=candidate.title,
                 subscribers=subscribers,
                 source=candidate.source,
-            ),
-        )
-    # First error wins: the board shows one short reason, not a concatenation.
+            )
+            origins[key] = DiscoveryCandidateOrigin()
+        origin = origins[key]
+        if candidate.source in origin.sources:
+            continue
+        origin.sources.append(candidate.source)
+        origin.country = origin.country or candidate.country
+        origin.language = origin.language or candidate.language
+        within = seen_per_source[candidate.source]
+        seen_per_source[candidate.source] = within + 1
+        rank[key] = min(rank.get(key, within), within)
+
+    # Interleave: each source's Nth hit, THEN the priority tiebreak. Priority governs the
+    # dedup above (canonical spelling), and letting it govern truncation too put telemetr
+    # permanently at the tail — a native sweep that filled the cap dropped every catalogue
+    # row, so country and language influenced nothing at all.
+    selected = sorted(
+        accepted,
+        key=lambda key: (rank[key], _SOURCE_PRIORITY.get(accepted[key].source, 99)),
+    )[: settings.neurocomment.discovery_max_candidates]
+    kept_origins = {accepted[key].channel: origins[key] for key in selected}
+
+    # First error wins: the board shows one short reason, not a concatenation. The
+    # per-source report carries the rest.
     error = next((outcome.error for outcome in outcomes if outcome.error), None)
-    return rows[: settings.neurocomment.discovery_max_candidates], error
+    report = DiscoveryRunReport(
+        sources=_source_reports(outcomes, kept_origins),
+        origins=kept_origins,
+    )
+    return [accepted[key] for key in selected], error, report
 
 
-async def run_search(
-    campaign_id: str,
-    account_id: str,
-    request: DiscoverySearchRequest,
-) -> tuple[int, str | None, bool]:
-    """Collect candidates from every enabled source and persist the merged set.
-
-    Returns the candidate count, the first degraded-source reason (if any), and
-    whether the stored set was actually replaced. A source that fails is recorded,
-    never raised: the other source's results still have value to the operator.
-    """
+async def _native_pass(account_id: str, request: DiscoverySearchRequest) -> _NativePass:
+    """The paced Telegram reads: one search per keyword, then the optional seed pass."""
     outcomes: list[SourceOutcome] = []
-    keywords = [keyword.strip() for keyword in request.keywords]
-
     flooded = False
-    for index, keyword in enumerate(keywords):
+    for index, keyword in enumerate(request.keywords):
         if index:
             await _pace()
         native = await search_native(account_id, keyword)
         outcomes.append(native)
+        # A full sweep is minutes of paced reads; without a nudge per keyword the
+        # operator watches a frozen modal and clicks the button again.
+        signal_discovery_progress()
         if await record_flood(account_id, native.error):
             # Every remaining read would land inside the live window, and Telegram
             # escalates the wait on repeat violations. Same rule the qualification
             # loop follows; recording it also keeps the retry off this account.
             flooded = True
             break
-        if request.use_telemetr:
-            # HTTP to a third party costs no Telegram flood budget, so it needs no pause.
-            outcomes.append(await search_telemetr(keyword, request))
 
-    if request.seed_channel and not flooded:
-        await _pace()
-        similar = await search_similar(account_id, request.seed_channel)
-        outcomes.append(similar)
-        await record_flood(account_id, similar.error)
+    seed = (
+        None
+        if request.seed_channel is None
+        else normalize_channel(request.seed_channel, max_length=CHANNEL_HANDLE_MAX_LENGTH)
+    )
+    if flooded or seed is None:
+        outcomes.append(
+            SourceOutcome(
+                source="telegram_similar",
+                state="skipped",
+                # A seed the operator typed but which is not a usable handle spent a pace
+                # sleep and a peer resolution for nothing, and said so nowhere.
+                error=None if request.seed_channel is None else "seed_unusable",
+            ),
+        )
+        return _NativePass(outcomes, flooded)
 
-    rows, error = _merge(outcomes, request)
-    if not any(outcome.answered for outcome in outcomes):
-        # Not one source returned a result, so an empty merge is not a finding. The
-        # write is delete-then-insert, and writing nothing here would destroy the
-        # previous run's already-qualified candidates over one transient timeout.
-        return 0, error, False
-    await replace_discovery_candidates(campaign_id, rows)
-    return len(rows), error, True
+    await _pace()
+    similar = await search_similar(account_id, seed)
+    outcomes.append(similar)
+    return _NativePass(outcomes, await record_flood(account_id, similar.error))
+
+
+async def _catalogue_pass(request: DiscoverySearchRequest) -> list[SourceOutcome]:
+    """Every keyword's catalogue query, all at once.
+
+    Concurrent and unpaced: these cost no Telegram flood budget, and awaited serially
+    inside the keyword loop the worst case was ~7 minutes (20s timeout x 2 attempts x 10
+    keywords) for a stage that advertises ~20s. The key is read once for the whole run
+    because every read decrypts a secret.
+    """
+    if not request.use_telemetr:
+        return [SourceOutcome(source="telemetr", state="skipped")]
+    secret = await load_warming_settings()
+    return list(
+        await asyncio.gather(
+            *(
+                search_telemetr(keyword, request, secret.telemetr_api_key)
+                for keyword in request.keywords
+            ),
+        ),
+    )
+
+
+def _filters_unapplied(request: DiscoverySearchRequest, outcomes: list[SourceOutcome]) -> bool:
+    """Were country/language asked for while the only source that applies them stayed mute?
+
+    The catalogue is the sole filter-aware source, so replacing a filtered set with
+    unfiltered native rows silently downgrades the operator's data: the previous run's
+    Turkish, already-qualified candidates would be deleted and replaced by whatever
+    native search returned for the same keyword.
+    """
+    if request.country is None and request.language is None:
+        return False
+    return not any(outcome.answered for outcome in outcomes if outcome.source == "telemetr")
+
+
+async def run_search(
+    campaign_id: str,
+    account_id: str,
+    request: DiscoverySearchRequest,
+) -> DiscoverySearchStageResult:
+    """Collect candidates from every enabled source and persist the merged set.
+
+    A source that fails is recorded, never raised: the other source's results still have
+    value to the operator. The two halves run concurrently so that a Telegram FloodWait
+    stops only the Telegram arm — the operator has already spent one of their daily
+    search slots, and the catalogue is the only source their filters reach.
+    """
+    native, catalogue = await asyncio.gather(
+        _native_pass(account_id, request),
+        _catalogue_pass(request),
+    )
+    outcomes = [*native.outcomes, *catalogue]
+
+    rows, error, report = _merge(outcomes, request)
+    # Nobody answered, so an empty merge is not a finding; or the filter-aware source did
+    # not, so these rows are a worse answer than the ones already stored. The write is
+    # delete-then-insert, so either would destroy the previous run's already-qualified
+    # candidates over one transient failure.
+    replaced = any(outcome.answered for outcome in outcomes) and not _filters_unapplied(
+        request,
+        outcomes,
+    )
+    if replaced:
+        await replace_discovery_candidates(campaign_id, rows)
+    return DiscoverySearchStageResult(
+        # The stored count, so a run that kept the previous set does not report rows the
+        # operator cannot see.
+        found=len(rows) if replaced else 0,
+        error=error,
+        replaced=replaced,
+        flooded=native.flooded,
+        report=report,
+    )

@@ -1137,6 +1137,18 @@ export type DiscoveryCandidate = {
    */
   source: 'telegram_search' | 'telegram_similar' | 'telemetr';
   /**
+   * Sources
+   */
+  sources?: Array<'telegram_search' | 'telegram_similar' | 'telemetr'>;
+  /**
+   * Country
+   */
+  country?: string | null;
+  /**
+   * Language
+   */
+  language?: string | null;
+  /**
    * Qualification
    */
   qualification: 'pending' | 'comments_on' | 'comments_off' | 'unknown';
@@ -1178,6 +1190,10 @@ export type DiscoveryProgress = {
    * Last Error
    */
   last_error?: string | null;
+  /**
+   * Sources
+   */
+  sources?: Array<DiscoverySourceReport>;
 };
 
 /**
@@ -1198,9 +1214,14 @@ export type DiscoverySearchOutcome = {
  * Operator-supplied search parameters.
  *
  * ``language``/``country`` only reach Telemetr.io — Telegram's native search has
- * no such filters. ``members_min``/``members_max`` are applied by Telemetr
- * server-side and re-applied client-side to native hits once the subscriber count
- * is known.
+ * no such filters, so they are refused without ``use_telemetr``: accepting them
+ * answered 202 for a run in which the filters reached nothing at all.
+ * ``members_min``/``members_max`` are applied by Telemetr server-side and re-applied
+ * client-side to native hits once the subscriber count is known.
+ *
+ * ``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped
+ * before, so a direct caller posting one keyword ten times spent ten identical Telegram
+ * RPCs against the flood budget and ten identical requests against a 1000/month quota.
  */
 export type DiscoverySearchRequest = {
   /**
@@ -1214,11 +1235,13 @@ export type DiscoverySearchRequest = {
   /**
    * Language
    */
-  language?: string | null;
+  language?:
+    'ru' | 'en' | 'ar' | 'de' | 'fr' | 'es' | 'tr' | 'uk' | 'kk' | 'uz' | 'fa' | 'hi' | null;
   /**
    * Country
    */
-  country?: string | null;
+  country?:
+    'RU' | 'KZ' | 'UZ' | 'UA' | 'BY' | 'DE' | 'FR' | 'ES' | 'GB' | 'TR' | 'AE' | 'SA' | 'EG' | null;
   /**
    * Members Min
    */
@@ -1231,6 +1254,41 @@ export type DiscoverySearchRequest = {
    * Use Telemetr
    */
   use_telemetr?: boolean;
+};
+
+/**
+ * DiscoverySourceReport
+ *
+ * What one source contributed to the last run, as the board shows it.
+ *
+ * Without this nothing told the operator that a filter had not applied: the board
+ * carried one ``last_error`` and a source that was skipped carried none at all.
+ */
+export type DiscoverySourceReport = {
+  /**
+   * Source
+   */
+  source: 'telegram_search' | 'telegram_similar' | 'telemetr';
+  /**
+   * State
+   */
+  state: 'ran' | 'failed' | 'skipped';
+  /**
+   * Hits
+   */
+  hits?: number;
+  /**
+   * Kept
+   */
+  kept?: number;
+  /**
+   * Reason
+   */
+  reason?: string | null;
+  /**
+   * Detail
+   */
+  detail?: string | null;
 };
 
 /**

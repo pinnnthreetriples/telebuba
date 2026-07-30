@@ -19,6 +19,21 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 # adapter in services (see .mex/patterns/add-discovery-source.md).
 DiscoverySource = Literal["telegram_search", "telegram_similar", "telemetr"]
 
+# What one source did on a run. ``ran`` = it answered at least once, ``failed`` = every
+# attempt errored, ``skipped`` = it was never asked (disabled, no key, no seed). Nothing
+# else is producible: a source either answers, refuses or is not consulted.
+DiscoverySourceState = Literal["ran", "failed", "skipped"]
+
+# The filter values the UI offers (``LANGUAGES``/``COUNTRIES`` in DiscoveryForm.tsx),
+# which are also the ones ``core.telemetr`` can bridge to Telemetr.io's dictionaries.
+# Literals rather than a shared constant because ``schemas/`` may not import ``core``;
+# adding a region means editing all three lists. Accepting anything else was worse than
+# useless: the catalogue answered with an empty page and the operator was told nothing.
+DiscoveryLanguage = Literal["ru", "en", "ar", "de", "fr", "es", "tr", "uk", "kk", "uz", "fa", "hi"]
+DiscoveryCountry = Literal[
+    "RU", "KZ", "UZ", "UA", "BY", "DE", "FR", "ES", "GB", "TR", "AE", "SA", "EG"
+]
+
 # Whether the channel accepts comments. ``pending`` = not probed yet, ``unknown`` =
 # the probe failed (Telegram unreachable / channel gone), so the operator sees the
 # difference between "wait" and "we could not tell".
@@ -49,23 +64,36 @@ MAX_ADOPT_CHANNELS = 500
 CHANNEL_HANDLE_MAX_LENGTH = 32
 
 AdoptHandle = Annotated[str, Field(min_length=1, max_length=CHANNEL_HANDLE_MAX_LENGTH)]
+# Bounded per item like ``AdoptHandle``: the validator below measures the *stripped*
+# form, so without this a single 10 MB keyword passed validation and rode into a
+# Telegram RPC.
+Keyword = Annotated[str, Field(min_length=1, max_length=KEYWORD_MAX_LENGTH)]
 
 
 class DiscoverySearchRequest(BaseModel):
     """Operator-supplied search parameters.
 
     ``language``/``country`` only reach Telemetr.io — Telegram's native search has
-    no such filters. ``members_min``/``members_max`` are applied by Telemetr
-    server-side and re-applied client-side to native hits once the subscriber count
-    is known.
+    no such filters, so they are refused without ``use_telemetr``: accepting them
+    answered 202 for a run in which the filters reached nothing at all.
+    ``members_min``/``members_max`` are applied by Telemetr server-side and re-applied
+    client-side to native hits once the subscriber count is known.
+
+    ``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped
+    before, so a direct caller posting one keyword ten times spent ten identical Telegram
+    RPCs against the flood budget and ten identical requests against a 1000/month quota.
     """
 
     model_config = ConfigDict(extra="forbid")
 
-    keywords: list[str] = Field(min_length=1, max_length=MAX_KEYWORDS)
-    seed_channel: str | None = Field(default=None, max_length=CHANNEL_HANDLE_MAX_LENGTH)
-    language: str | None = Field(default=None, max_length=32)
-    country: str | None = Field(default=None, max_length=32)
+    keywords: list[Keyword] = Field(min_length=1, max_length=MAX_KEYWORDS)
+    seed_channel: str | None = Field(
+        default=None,
+        min_length=1,
+        max_length=CHANNEL_HANDLE_MAX_LENGTH,
+    )
+    language: DiscoveryLanguage | None = None
+    country: DiscoveryCountry | None = None
     members_min: int | None = Field(default=None, ge=0)
     members_max: int | None = Field(default=None, ge=0)
     # Off by default: the external catalogue costs quota and needs an operator key.
@@ -73,6 +101,8 @@ class DiscoverySearchRequest(BaseModel):
 
     @model_validator(mode="after")
     def _check_bounds(self) -> DiscoverySearchRequest:
+        deduped: list[str] = []
+        seen: set[str] = set()
         for keyword in self.keywords:
             stripped = keyword.strip()
             if not (KEYWORD_MIN_LENGTH <= len(stripped) <= KEYWORD_MAX_LENGTH):
@@ -81,6 +111,20 @@ class DiscoverySearchRequest(BaseModel):
                     "characters (Telegram rejects shorter global searches)"
                 )
                 raise ValueError(msg)
+            if stripped.casefold() in seen:
+                continue
+            seen.add(stripped.casefold())
+            deduped.append(stripped)
+        self.keywords = deduped
+        if self.seed_channel is not None and not self.seed_channel.strip():
+            # A blank seed is truthy, so it survived into a pace sleep and a peer
+            # resolution and yielded nothing. The rest of the normalization is the
+            # service's (``core.channel_tokens`` is off limits to ``schemas/``).
+            msg = "seed_channel must not be blank"
+            raise ValueError(msg)
+        if (self.language is not None or self.country is not None) and not self.use_telemetr:
+            msg = "language/country need use_telemetr: only the catalogue can apply them"
+            raise ValueError(msg)
         if (
             self.members_min is not None
             and self.members_max is not None
@@ -97,6 +141,63 @@ class DiscoverySearchOutcome(BaseModel):
     status: DiscoveryStartStatus
 
 
+class DiscoverySourceReport(BaseModel):
+    """What one source contributed to the last run, as the board shows it.
+
+    Without this nothing told the operator that a filter had not applied: the board
+    carried one ``last_error`` and a source that was skipped carried none at all.
+    """
+
+    source: DiscoverySource
+    state: DiscoverySourceState
+    # Rows the source returned, before dedup, the member filter and the candidate cap.
+    hits: int = Field(default=0, ge=0)
+    # Rows of the stored set this source produced. A channel two sources both returned
+    # counts for both — crediting only the dedup winner is what hid the starvation.
+    kept: int = Field(default=0, ge=0)
+    # Short locale-neutral code (``telemetr_auth_failed``, ``FloodWait(120s)``), plus the
+    # gateway's own diagnostic text when it gave one: a revoked key, an expired
+    # subscription and a dead network are not the same problem to fix.
+    reason: str | None = None
+    detail: str | None = None
+
+
+class DiscoveryCandidateOrigin(BaseModel):
+    """Per-row provenance and catalogue geo for the run in flight.
+
+    Deliberately NOT persisted: the candidate table has no column for either, and a
+    migration against the operator's live database needs their approval. So this rides
+    the board payload while the run's in-memory state lives, and a candidate read after
+    a restart falls back to the stored single ``source``.
+    """
+
+    sources: list[DiscoverySource] = Field(default_factory=list)
+    country: str | None = None
+    language: str | None = None
+
+
+class DiscoveryRunReport(BaseModel):
+    """Everything the search stage knows beyond the rows it stored."""
+
+    sources: list[DiscoverySourceReport] = Field(default_factory=list)
+    # Keyed by candidate handle exactly as stored.
+    origins: dict[str, DiscoveryCandidateOrigin] = Field(default_factory=dict)
+
+
+class DiscoverySearchStageResult(BaseModel):
+    """What ``run_search`` hands back to the run coordinator."""
+
+    found: int = Field(default=0, ge=0)
+    error: str | None = None
+    # Was the stored candidate set actually replaced? A run that answered with nothing
+    # usable leaves the previous, already-qualified set alone.
+    replaced: bool = False
+    # Did a Telegram FloodWait land? Qualification must not read on this account until
+    # the window closes — the search stage has already written the cooldown.
+    flooded: bool = False
+    report: DiscoveryRunReport = Field(default_factory=DiscoveryRunReport)
+
+
 class DiscoveryCandidate(BaseModel):
     """One found channel as the operator sees it."""
 
@@ -104,6 +205,12 @@ class DiscoveryCandidate(BaseModel):
     title: str = ""
     subscribers: int | None = None
     source: DiscoverySource
+    # Every source that returned this channel, not just the one whose spelling won.
+    sources: list[DiscoverySource] = Field(default_factory=list)
+    # What the catalogue filed the channel under, so a filter can be verified rather
+    # than trusted. Only Telemetr.io supplies these, and only for the run in flight.
+    country: str | None = None
+    language: str | None = None
     qualification: DiscoveryQualification
     # Already an active link on THIS campaign.
     in_campaign: bool = False
@@ -120,6 +227,9 @@ class DiscoveryProgress(BaseModel):
     comments_on: int = Field(default=0, ge=0)
     # Locale-neutral short code (e.g. ``FloodWait(120s)``, ``telemetr_rate_limited``).
     last_error: str | None = None
+    # One entry per source the last run considered. Empty for a campaign that never
+    # searched, or whose run predates this process.
+    sources: list[DiscoverySourceReport] = Field(default_factory=list)
 
 
 class DiscoveryBoard(BaseModel):

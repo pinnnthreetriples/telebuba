@@ -1041,17 +1041,21 @@
         "form": {
           "keywords": "Keywords",
           "keywordsPlaceholder": "crypto, trading, news",
-          "keywordsHint": "At least {{min}} characters, up to {{max}} words. Parsed: {{count}}",
+          "keywordsHint": "At least {{min}} characters, up to {{max}} words. Parsed: {{parsed}}",
+          "keywordsDropped": "Ignored: {{tokens}} — shorter than {{min}} characters or past the {{max}}-word limit",
           "language": "Language",
           "country": "Country",
           "anyLanguage": "Any",
           "anyCountry": "Any",
+          "localeScopeHint": "Only the Telemetr.io catalogue filters by these — Telegram's own search has no language or country filter, so switch that source on or leave both on \"Any\". The subscriber bounds are different: those are re-applied to Telegram results too.",
           "minSubscribers": "Subscribers from",
           "maxSubscribers": "Subscribers up to",
+          "boundsInverted": "\"Subscribers from\" is above \"Subscribers up to\" — the search would match nothing.",
           "seedChannel": "Similar to channel",
           "seedChannelHint": "Telegram suggests channels similar to this one based on overlapping audiences. It is the cheapest way to widen the sweep.",
+          "seedChannelPlaceholder": "@channel",
           "useTelemetr": "Also search the Telemetr.io catalogue",
-          "useTelemetrHint": "External catalogue: country, language and subscriber filters. Consumes your plan's quota.",
+          "useTelemetrHint": "The only source that can filter by language and country: Telegram's own search has no such filters, so those two fields do nothing without this. Consumes your plan's quota.",
           "useTelemetrMissing": "Add a Telemetr.io key in Settings to enable this.",
           "reset": "Reset",
           "submit": "Search",
@@ -1075,7 +1079,24 @@
           "colComments": "Comments",
           "colState": "State",
           "inCampaign": "already in campaign",
-          "takenElsewhere": "taken by another campaign"
+          "takenElsewhere": "taken by another campaign",
+          "sourceRan": "{{source}}: {{kept}} of {{hits}}",
+          "sourceFailed": "{{source}}: failed",
+          "sourceSkipped": "{{source}}: not queried",
+          "reason": {
+            "telemetr_not_configured": "no Telemetr.io key — add one in Settings",
+            "telemetr_auth_failed": "Telemetr.io rejected the key — check it in Settings",
+            "telemetr_quota_exhausted": "Telemetr.io monthly quota used up",
+            "telemetr_subscription_inactive": "Telemetr.io subscription is inactive",
+            "telemetr_rate_limited": "Telemetr.io rate limit — try again later",
+            "telemetr_unresolved_filter": "Telemetr.io does not know that language or country",
+            "telemetr_bad_request": "Telemetr.io refused the query",
+            "telemetr_forbidden": "Telemetr.io denied access",
+            "telemetr_not_found": "Telemetr.io endpoint not found",
+            "telemetr_error": "Telemetr.io is unreachable",
+            "seed_unusable": "the seed channel is not a usable handle",
+            "unexpected_result": "Telegram returned an unexpected reply"
+          }
         },
         "comments": {
           "pending": "checking",
@@ -1090,11 +1111,12 @@
           "telemetr": "Telemetr.io"
         },
         "refused": {
-          "already_running": "A search for this campaign is already running.",
+          "already_running": "A search for this campaign is already running — its results are below.",
           "no_account": "No account available for searching: assign a listener or a campaign account.",
           "account_cooling": "The search account is waiting out a Telegram limit. Try again later.",
           "daily_limit_reached": "The daily search allowance is spent."
         },
+        "startFailed": "Couldn't start the search. Check the parameters and try again.",
         "add": "Add selected ({{count}})",
         "added": "Added: {{count}}",
         "addedNone": "Nothing added",

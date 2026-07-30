@@ -9455,6 +9455,40 @@
             ],
             "title": "Source"
           },
+          "sources": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "telegram_search",
+                "telegram_similar",
+                "telemetr"
+              ]
+            },
+            "type": "array",
+            "title": "Sources"
+          },
+          "country": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Country"
+          },
+          "language": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Language"
+          },
           "qualification": {
             "type": "string",
             "enum": [
@@ -9531,6 +9565,13 @@
               }
             ],
             "title": "Last Error"
+          },
+          "sources": {
+            "items": {
+              "$ref": "#/components/schemas/DiscoverySourceReport"
+            },
+            "type": "array",
+            "title": "Sources"
           }
         },
         "type": "object",
@@ -9564,7 +9605,9 @@
         "properties": {
           "keywords": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "maxLength": 64,
+              "minLength": 1
             },
             "type": "array",
             "maxItems": 10,
@@ -9575,7 +9618,8 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 32
+                "maxLength": 32,
+                "minLength": 1
               },
               {
                 "type": "null"
@@ -9587,7 +9631,20 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 32
+                "enum": [
+                  "ru",
+                  "en",
+                  "ar",
+                  "de",
+                  "fr",
+                  "es",
+                  "tr",
+                  "uk",
+                  "kk",
+                  "uz",
+                  "fa",
+                  "hi"
+                ]
               },
               {
                 "type": "null"
@@ -9599,7 +9656,21 @@
             "anyOf": [
               {
                 "type": "string",
-                "maxLength": 32
+                "enum": [
+                  "RU",
+                  "KZ",
+                  "UZ",
+                  "UA",
+                  "BY",
+                  "DE",
+                  "FR",
+                  "ES",
+                  "GB",
+                  "TR",
+                  "AE",
+                  "SA",
+                  "EG"
+                ]
               },
               {
                 "type": "null"
@@ -9643,7 +9714,70 @@
           "keywords"
         ],
         "title": "DiscoverySearchRequest",
-        "description": "Operator-supplied search parameters.\n\n``language``/``country`` only reach Telemetr.io \u2014 Telegram's native search has\nno such filters. ``members_min``/``members_max`` are applied by Telemetr\nserver-side and re-applied client-side to native hits once the subscriber count\nis known."
+        "description": "Operator-supplied search parameters.\n\n``language``/``country`` only reach Telemetr.io \u2014 Telegram's native search has\nno such filters, so they are refused without ``use_telemetr``: accepting them\nanswered 202 for a run in which the filters reached nothing at all.\n``members_min``/``members_max`` are applied by Telemetr server-side and re-applied\nclient-side to native hits once the subscriber count is known.\n\n``keywords`` come out stripped and deduped case-insensitively. Only the SPA deduped\nbefore, so a direct caller posting one keyword ten times spent ten identical Telegram\nRPCs against the flood budget and ten identical requests against a 1000/month quota."
+      },
+      "DiscoverySourceReport": {
+        "properties": {
+          "source": {
+            "type": "string",
+            "enum": [
+              "telegram_search",
+              "telegram_similar",
+              "telemetr"
+            ],
+            "title": "Source"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "ran",
+              "failed",
+              "skipped"
+            ],
+            "title": "State"
+          },
+          "hits": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Hits",
+            "default": 0
+          },
+          "kept": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Kept",
+            "default": 0
+          },
+          "reason": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Reason"
+          },
+          "detail": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Detail"
+          }
+        },
+        "type": "object",
+        "required": [
+          "source",
+          "state"
+        ],
+        "title": "DiscoverySourceReport",
+        "description": "What one source contributed to the last run, as the board shows it.\n\nWithout this nothing told the operator that a filter had not applied: the board\ncarried one ``last_error`` and a source that was skipped carried none at all."
       },
       "ErrorDetail": {
         "properties": {
