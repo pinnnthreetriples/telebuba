@@ -4,9 +4,10 @@ Test policy: see ``.mex/context/conventions.md``.
 All knobs that affect pass/fail live in ``pyproject.toml [tool.pytest.ini_options]``.
 This file is for fixtures and Hypothesis profile registration only.
 
-Profile selection: set ``HYPOTHESIS_PROFILE`` to ``dev`` | ``strict`` | ``extended``.
-Defaults to ``strict`` (CI on main, local runs). CI on PR sets ``dev``; nightly
-sets ``extended``.
+Profile selection: set ``HYPOTHESIS_PROFILE`` to ``dev`` | ``strict`` |
+``extended`` | ``mutation``. Defaults to ``strict`` (CI on main, local runs).
+CI on PR sets ``dev``; nightly uses ``extended`` for the property suite and the
+deterministic ``mutation`` profile for mutmut.
 """
 
 from __future__ import annotations
@@ -40,8 +41,20 @@ settings.register_profile(
     max_examples=2000,
 )
 
+# Mutation profile — stable examples are part of the measurement contract.
+# ``mutate_only_covered_lines`` turns Hypothesis coverage into the mutant
+# catalogue, so a random example set would make both the denominator and score
+# drift between otherwise identical Nightly runs.
+settings.register_profile(
+    "mutation",
+    parent=settings.get_profile("strict"),
+    database=None,
+    derandomize=True,
+    max_examples=200,
+)
+
 _profile = os.environ.get("HYPOTHESIS_PROFILE", "strict")
-if _profile not in {"strict", "dev", "extended"}:
-    msg = f"Unknown HYPOTHESIS_PROFILE: {_profile!r} (expected: strict | dev | extended)"
+if _profile not in {"strict", "dev", "extended", "mutation"}:
+    msg = f"Unknown HYPOTHESIS_PROFILE: {_profile!r} (expected: strict | dev | extended | mutation)"
     raise RuntimeError(msg)
 settings.load_profile(_profile)

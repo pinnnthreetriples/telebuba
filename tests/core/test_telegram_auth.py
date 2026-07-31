@@ -10,13 +10,14 @@ import pytest
 from telethon import errors
 
 from core.db import configure_database
+from core.telegram_client import _auth as auth_module
 from core.telegram_client import log_out_session, request_phone_code, submit_phone_code
 from core.telegram_client._pool import _is_removing
 from schemas.device_fingerprint import TelegramClientRequest
 from schemas.phone_login import PhoneCodeRequest, PhoneCodeSubmit
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Iterator
     from pathlib import Path
 
 # The message ``python_socks`` 2.8.1 can really emit — its ONE format string,
@@ -30,6 +31,14 @@ if TYPE_CHECKING:
 # the library cannot produce.
 _PROXY_ERROR_TEXT = "Could not connect to proxy 203.0.113.9:1080 [Connection refused]"
 _PROXY_SECRETS = ("203.0.113.9", "1080")
+
+
+@pytest.fixture(autouse=True)
+def _isolate_auth_locks() -> Iterator[None]:
+    """Give every function-scoped asyncio test locks from its own event loop."""
+    auth_module._AUTH_LOCKS.clear()
+    yield
+    auth_module._AUTH_LOCKS.clear()
 
 
 class FakeUser:

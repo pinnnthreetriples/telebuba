@@ -1,0 +1,170 @@
+"""Deletion sweep invariants and partial-failure contracts."""
+
+from __future__ import annotations
+
+import asyncio
+from datetime import UTC, datetime
+from types import SimpleNamespace
+from unittest.mock import AsyncMock, Mock
+
+import pytest
+
+from core.config import settings
+from schemas.neurocomment import CommentRecord
+from schemas.telegram_actions import CheckMessagesAliveResult
+from services.neurocomment import _state, _sweep
+
+pytestmark = pytest.mark.usefixtures("isolate_runtime")
+
+
+def _comment(message_id: int | None, *, account: str = "reader") -> CommentRecord:
+    return CommentRecord(
+        channel="@channel",
+        post_id=message_id or 0,
+        campaign_id="campaign",
+        account_id=account,
+        status="posted",
+        comment_msg_id=message_id,
+        created_at="2026-01-01T00:00:00+00:00",
+        updated_at="2026-01-01T00:00:00+00:00",
+    )
+
+
+@pytest.mark.asyncio
+async def test_sweep_loop_waits_for_configured_interval(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    interval = 17.5
+    waits: list[float | None] = []
+    sweep = AsyncMock()
+
+    async def cancel_after_first_wait(seconds: float | None) -> None:
+        waits.append(seconds)
+        raise asyncio.CancelledError
+
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", interval)
+    monkeypatch.setattr(_sweep.asyncio, "sleep", cancel_after_first_wait)
+    monkeypatch.setattr(_sweep, "_sweep_once", sweep)
+
+    with pytest.raises(asyncio.CancelledError):
+        await _sweep._sweep_loop()
+
+    assert waits == [interval]
+    sweep.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_backoff_skips_gateway_and_persistence(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(_state, "channel_in_backoff", lambda *_a: True)
+    read = AsyncMock()
+    mark = AsyncMock()
+    monkeypatch.setattr(_sweep._seams, "execute_read", read)
+    monkeypatch.setattr(_sweep, "mark_comments_deleted", mark)
+
+    await _sweep._sweep_channel("@channel", [_comment(1)], datetime.now(UTC))
+
+    read.assert_not_awaited()
+    mark.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_null_message_ids_do_not_trigger_empty_gateway_read(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_state, "channel_in_backoff", lambda *_a: False)
+    read = AsyncMock()
+    monkeypatch.setattr(_sweep._seams, "execute_read", read)
+
+    await _sweep._sweep_channel("@channel", [_comment(None)], datetime.now(UTC))
+
+    read.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_read_exception_isolated_before_delete_write(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(_state, "channel_in_backoff", lambda *_a: False)
+    monkeypatch.setattr(
+        _sweep._seams, "execute_read", AsyncMock(side_effect=RuntimeError("gateway"))
+    )
+    mark = AsyncMock()
+    log = AsyncMock()
+    monkeypatch.setattr(_sweep, "mark_comments_deleted", mark)
+    monkeypatch.setattr(_sweep, "log_event", log)
+
+    await _sweep._sweep_channel("@channel", [_comment(1)], datetime.now(UTC))
+
+    mark.assert_not_awaited()
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_sweep_read_failed",
+        account_id="reader",
+        extra={"channel": "@channel", "error_type": "RuntimeError"},
+    )
+
+
+@pytest.mark.asyncio
+async def test_only_gateway_missing_ids_are_persisted_and_scanned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    now = datetime.now(UTC)
+    monkeypatch.setattr(_state, "channel_in_backoff", lambda *_a: False)
+    monkeypatch.setattr(
+        _sweep._seams,
+        "execute_read",
+        AsyncMock(return_value=CheckMessagesAliveResult(missing_ids=[2])),
+    )
+    mark = AsyncMock(return_value=SimpleNamespace(comments=[_comment(2)]))
+    register = Mock(return_value=None)
+    monkeypatch.setattr(_sweep, "mark_comments_deleted", mark)
+    monkeypatch.setattr(_state, "register_channel_deletions", register)
+    log = AsyncMock()
+    monkeypatch.setattr(_sweep, "log_event", log)
+
+    await _sweep._sweep_channel("@channel", [_comment(1), _comment(2)], now)
+
+    mark.assert_awaited_once_with("@channel", [2])
+    scan = register.call_args.args[2]
+    assert scan.window_ids == {1, 2}
+    assert scan.missing_ids == {2}
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_comment_deleted",
+        extra={"channel": "@channel", "count": 1},
+    )
+
+
+@pytest.mark.asyncio
+async def test_sweep_once_groups_campaign_read_once_and_isolates_channels(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        _sweep,
+        "list_active_watch_channels",
+        AsyncMock(return_value=SimpleNamespace(channels=["@a", "@b"])),
+    )
+    campaigns = AsyncMock(
+        return_value={
+            "@a": SimpleNamespace(campaign_id="campaign"),
+            "@b": SimpleNamespace(campaign_id="campaign"),
+        }
+    )
+    monkeypatch.setattr(_sweep, "fetch_active_campaigns_for_channels", campaigns)
+    listed = AsyncMock(return_value=SimpleNamespace(comments=[]))
+    channel = AsyncMock(side_effect=[RuntimeError("a"), None])
+    monkeypatch.setattr(_sweep, "list_posted_comments_since", listed)
+    monkeypatch.setattr(_sweep, "_sweep_channel", channel)
+    log = AsyncMock()
+    monkeypatch.setattr(_sweep, "log_event", log)
+
+    await _sweep._sweep_once()
+
+    campaigns.assert_awaited_once_with(["@a", "@b"])
+    assert listed.await_count == 1
+    assert [call.args[0] for call in channel.await_args_list] == ["@a", "@b"]
+    log.assert_awaited_once_with(
+        "WARNING",
+        "neurocomment_sweep_channel_failed",
+        extra={"channel": "@a", "error_type": "RuntimeError"},
+    )

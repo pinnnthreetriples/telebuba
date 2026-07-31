@@ -135,7 +135,13 @@ async def test_dispatch_timeout_records_failed(monkeypatch: pytest.MonkeyPatch) 
     monkeypatch.setattr(_seams, "execute", _hang)
     monkeypatch.setattr(_seams.rng, "lognormvariate", lambda _mu, _sigma: 0.0)
 
-    assert await challenge.solve_if_present("acc-1", "@chan", 99) == "failed"
+    # Bound the public operation too: a regression that removes the internal
+    # deadline must fail this test promptly instead of consuming mutmut's much
+    # larger process timeout.
+    async with asyncio.timeout(0.2):
+        outcome = await challenge.solve_if_present("acc-1", "@chan", 99)
+
+    assert outcome == "failed"
     assert [r["outcome"] for r in _challenge_rows()] == ["failed"]
 
 
@@ -431,6 +437,35 @@ async def test_gemini_timeout_gives_up(monkeypatch: pytest.MonkeyPatch) -> None:
 
     assert await challenge.solve_if_present("acc-1", "@chan", 99) == "give_up"
     assert [r["outcome"] for r in _challenge_rows()] == ["give_up"]
+
+
+@pytest.mark.asyncio
+async def test_gemini_call_is_bounded_by_configured_timeout(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A provider that never responds cannot stall onboarding indefinitely."""
+    cancelled = asyncio.Event()
+
+    async def never_returns(_request: GeminiRequest) -> GeminiResult:
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            cancelled.set()
+            raise
+        raise AssertionError
+
+    monkeypatch.setattr(settings.neurocomment, "challenge_gemini_timeout_seconds", 0.01)
+    monkeypatch.setattr(_seams, "execute_read", _wait(_msg()))
+    monkeypatch.setattr(_seams, "generate_text", never_returns)
+
+    outcome = await asyncio.wait_for(
+        challenge.solve_if_present("acc-1", "@chan", 99),
+        timeout=2.0,
+    )
+
+    assert outcome == "give_up"
+    assert cancelled.is_set()
+    assert [row["outcome"] for row in _challenge_rows()] == ["give_up"]
 
 
 @pytest.mark.asyncio

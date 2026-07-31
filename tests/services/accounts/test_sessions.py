@@ -13,6 +13,7 @@ from core.config import settings
 from schemas.accounts import (
     AccountCheckRequest,
     AccountCreate,
+    AccountRead,
     AccountSessionFileImport,
     health_for_status,
 )
@@ -173,12 +174,82 @@ async def test_import_account_tdata_registers_each_account_and_checks(
     monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
     monkeypatch.setattr("services.accounts.sessions.check_telegram_session", fake_check)
 
-    result = await import_account_tdata(
-        TdataConvertRequest(filename="tdata.zip", content=b"x", label="My pool"),
+    result = await asyncio.wait_for(
+        import_account_tdata(
+            TdataConvertRequest(filename="tdata.zip", content=b"x", label="My pool"),
+        ),
+        timeout=2.0,
     )
 
     assert [a.account_id for a in result.accounts] == ["111", "222"]
     assert all(a.status == "alive" for a in result.accounts)
+
+
+@pytest.mark.asyncio
+async def test_distinct_tdata_imports_make_progress_independently(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    """An import for one account must not block an unrelated account.
+
+    The lock protects a credential/account identity, not the whole tdata
+    subsystem. Both imports pause at the first externally visible write until
+    the other reaches the same point. A global lock would deadlock this
+    rendezvous; correctly partitioned locks let both operations complete.
+    """
+    entered = {"111": asyncio.Event(), "222": asyncio.Event()}
+
+    async def fake_convert(
+        request: TdataConvertRequest,
+        _staging_dir: object,
+    ) -> TdataConvertResult:
+        account_id = request.filename.removesuffix(".zip")
+        session_path = tmp_path / f"{account_id}.session"
+        session_path.write_bytes(f"session-{account_id}".encode())
+        return TdataConvertResult(
+            status="ok",
+            accounts=[
+                TdataAccountSummary(
+                    user_id=int(account_id),
+                    session_path=str(session_path),
+                ),
+            ],
+        )
+
+    async def rendezvous_add(account: AccountCreate) -> None:
+        entered[account.account_id].set()
+        other_id = "222" if account.account_id == "111" else "111"
+        await entered[other_id].wait()
+
+    async def fake_check(request: AccountCheckRequest) -> AccountRead:
+        return AccountRead(
+            account_id=request.account_id,
+            session_name=request.account_id,
+            status="alive",
+            user_id=int(request.account_id),
+            created_at="2026-01-01T00:00:00+00:00",
+            updated_at="2026-01-01T00:00:00+00:00",
+        )
+
+    async def missing_account(_account_id: str) -> None:
+        return None
+
+    monkeypatch.setattr("services.accounts.sessions.convert_tdata_zip", fake_convert)
+    monkeypatch.setattr("services.accounts.sessions.add_account", rendezvous_add)
+    monkeypatch.setattr("services.accounts.sessions.check_account_session", fake_check)
+    monkeypatch.setattr("services.accounts._tdata.fetch_account", missing_account)
+
+    first, second = await asyncio.wait_for(
+        asyncio.gather(
+            import_account_tdata(TdataConvertRequest(filename="111.zip", content=b"x")),
+            import_account_tdata(TdataConvertRequest(filename="222.zip", content=b"x")),
+        ),
+        timeout=2.0,
+    )
+
+    assert [account.account_id for account in first.accounts] == ["111"]
+    assert [account.account_id for account in second.accounts] == ["222"]
+    assert all(event.is_set() for event in entered.values())
 
 
 @pytest.mark.asyncio
@@ -380,15 +451,15 @@ async def test_tdata_rollback_logs_an_unlink_it_could_not_perform(
     """
     _stage_failing_import(monkeypatch, tmp_path)
 
-    events: list[str] = []
+    events: list[tuple[str, str, str | None, dict[str, object] | None]] = []
 
     async def fake_log(
-        level: str,  # noqa: ARG001
+        level: str,
         event: str,
-        account_id: str | None = None,  # noqa: ARG001
-        extra: dict[str, object] | None = None,  # noqa: ARG001
+        account_id: str | None = None,
+        extra: dict[str, object] | None = None,
     ) -> None:
-        events.append(event)
+        events.append((level, event, account_id, extra))
 
     def refuse_unlink(_self: object, *, missing_ok: bool = False) -> None:  # noqa: ARG001
         # What Windows does when the pooled client still holds the handle.
@@ -401,8 +472,33 @@ async def test_tdata_rollback_logs_an_unlink_it_could_not_perform(
     with pytest.raises(RuntimeError, match=r"boom"):
         await import_account_tdata(TdataConvertRequest(filename="tdata.zip", content=b"x"))
 
-    assert "tdata_rollback_unlink_failed" in events
-    assert "tdata_import_rolled_back" in events
+    final_dir = settings.telegram.session_dir
+    assert events == [
+        (
+            "ERROR",
+            "tdata_rollback_unlink_failed",
+            "111",
+            {"file": "111.session", "error_type": "OSError"},
+        ),
+        (
+            "ERROR",
+            "tdata_rollback_unlink_failed",
+            "222",
+            {"file": "222.session", "error_type": "OSError"},
+        ),
+        (
+            "WARNING",
+            "tdata_import_rolled_back",
+            None,
+            {
+                "accounts": ["111", "222"],
+                "files": [
+                    str(final_dir / "111.session"),
+                    str(final_dir / "222.session"),
+                ],
+            },
+        ),
+    ]
 
 
 @pytest.mark.asyncio
