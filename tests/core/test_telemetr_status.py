@@ -14,8 +14,9 @@ import httpx
 import pytest
 import respx
 
+from core._telemetr_parse import _COUNTRY_NAME_BY_ALPHA2
 from core.config import settings
-from core.telemetr import _COUNTRY_NAME_BY_ALPHA2, search_catalog
+from core.telemetr import search_catalog
 from schemas.neurocomment_discovery import DiscoveryCountry
 from tests.core.telemetr_fixtures import (
     BATCH,
