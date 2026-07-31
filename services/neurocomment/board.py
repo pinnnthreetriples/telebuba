@@ -146,6 +146,7 @@ def _build_card(
         comments_last_hour=last_hour,
         max_comments_per_hour=max_comments_per_hour,
         comments_today=len(posted),
+        deleted_today=sum(1 for c in posted if c.deleted_at),
         last_comment_at=latest.created_at if latest else None,
         last_comment_text=latest.comment_text if latest else None,
         pinned_channels=pinned_channels,

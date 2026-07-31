@@ -45,14 +45,14 @@ export const BOARD = {
   ],
 };
 
-export function routeApi() {
+export function routeApi(board: unknown = BOARD) {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     const url = new URL(request.url);
     if (url.pathname === '/api/v1/neurocomment/campaigns' && request.method === 'GET') {
       return Promise.resolve(jsonResponse({ campaigns: [CAMPAIGN] }));
     }
-    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(BOARD));
+    if (url.pathname.endsWith('/board')) return Promise.resolve(jsonResponse(board));
     if (url.pathname === '/api/v1/neurocomment/runtime') {
       return Promise.resolve(
         jsonResponse({ running: false, active_channels: 0, listener_account_id: null }),

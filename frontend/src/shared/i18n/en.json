@@ -872,6 +872,7 @@
       "channels": "Channels",
       "accounts": "Accounts",
       "comments": "Comments",
+      "deleted": "Deleted",
       "errors": "errors"
     },
     "log": {

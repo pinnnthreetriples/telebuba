@@ -298,6 +298,11 @@ class NeurocommentAccountCard(BaseModel):
     # the config default, or the card would render a denominator nobody honours.
     max_comments_per_hour: int
     comments_today: int
+    # How many of those ``comments_today`` the sweep later found gone. Counted off the
+    # same rows, so the board's "deleted" total can never exceed its "comments" total —
+    # a per-channel sum could, because a channel row disappears when the operator
+    # unlinks it while the comments it hosted stay on the account.
+    deleted_today: int = 0
     last_comment_at: str | None = None
     # Text of the most recent posted comment (None until the account comments, or
     # when the stored row has no text). Surfaces the real comment in the board.
