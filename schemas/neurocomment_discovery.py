@@ -169,9 +169,10 @@ class DiscoverySourceReport(BaseModel):
     # of the same starvation: a catalogue whose rows were mostly duplicates of native
     # hits reported "50 of 60" while every one of its five own discoveries was cut.
     exclusive: int = Field(default=0, ge=0)
-    # What the source says it matched in total, when it knows. Only the catalogue does,
-    # and without it a capped page reads as the whole answer.
-    total: int | None = Field(default=None, ge=0)
+    # Did the source have more than it gave us? A flag, not a count: only the catalogue
+    # advertises a total, per keyword, and summing those double-counts every channel two
+    # keywords share — so the honest signal is that the page was capped, not a figure.
+    truncated: bool = False
     # Short locale-neutral code (``telemetr_auth_failed``, ``FloodWait(120s)``), plus the
     # gateway's own diagnostic text when it gave one: a revoked key, an expired
     # subscription and a dead network are not the same problem to fix.

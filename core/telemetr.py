@@ -106,8 +106,8 @@ _DETERMINISTIC_FAILURES = (
 class _ClientHolder:
     client: httpx.AsyncClient | None = None
     # The countries dictionary is static reference data, so one fetch per process is
-    # enough — no TTL, no invalidation. Empty means "not loaded yet".
-    countries: dict[str, str] = {}  # noqa: RUF012 - a process-wide cache, deliberately shared
+    # enough — no TTL, no invalidation. ``None`` is "not loaded yet".
+    countries: dict[str, str] | None = None
     # A run fires every keyword's catalogue query at once, so they all miss the cache
     # together: 10 keywords cost 10 dictionary GETs instead of 1, against a 1000/month
     # tier. Created lazily inside the running loop — a Lock() built at import time would
@@ -152,7 +152,7 @@ async def close_telemetr_client() -> None:
     if _holder.client is not None:
         await _holder.client.aclose()
         _holder.client = None
-    _holder.countries = {}
+    _holder.countries = None
     # The lock is bound to the loop that created it, so it must not outlive it.
     _holder.lock = None
 
@@ -274,9 +274,8 @@ def _handle_from_link(link: object) -> str | None:
     """Derive the public @handle from ``ChatInfo.link``, the API's only handle field.
 
     Delegated to ``core.channel_tokens`` — same layer, and it already owns every accepted
-    spelling (both schemes, ``t.me/``, ``telegram.me/``, a query string, a trailing slash,
-    invite hashes). The hand-rolled version here also took the first path segment of a
-    post link, which turned the private ``t.me/c/12345/1`` form into the handle ``c``.
+    spelling: both schemes, ``t.me/``, ``telegram.me/``, a query string, a trailing slash,
+    invite hashes.
     """
     if not isinstance(link, str):
         return None
@@ -287,17 +286,20 @@ def _handle_from_link(link: object) -> str | None:
     return handle
 
 
-def _handles_from_batch(body: object) -> dict[str, str]:
+def _handles_from_batch(body: object) -> dict[str, str] | None:
     """Map ``internal_id`` to public handle for the rows that have one.
 
     Drops what a campaign cannot comment under: a group, a row without a link, and a
     private invite. An id the API omits from ``channels`` is absent here too.
+
+    ``None`` means the reply had no ``channels`` list at all — a contract change, which is
+    a different thing from a page whose every row was legitimately dropped.
     """
     channels: object = body
     if isinstance(body, dict):
         channels = cast("dict[str, object]", body).get("channels")
     if not isinstance(channels, list):
-        return {}
+        return None
     handles: dict[str, str] = {}
     for entry in channels:
         if not isinstance(entry, dict):
@@ -359,17 +361,20 @@ async def _countries(api_key: str) -> dict[str, str]:
     Fetched at most once per process: the concurrent callers queue on the lock and the
     re-check inside it serves them from the cache.
     """
-    if _holder.countries:
+    if _holder.countries is not None:
         return _holder.countries
     if _holder.lock is None:
+        # No await between the check and the assignment, so a concurrent caller cannot
+        # observe the gap and build a second lock.
         _holder.lock = asyncio.Lock()
     async with _holder.lock:
-        if _holder.countries:
+        if _holder.countries is not None:
             return _holder.countries
         return await _load_countries(api_key)
 
 
 async def _load_countries(api_key: str) -> dict[str, str]:
+    """Fetch and index the dictionary. Called with the lock held, once per process."""
     body = await _get_json(api_key, _COUNTRIES_PATH)
     # Documented shape is a bare array of {id, name, channels_count, participants_count}.
     if not isinstance(body, list):
@@ -387,6 +392,11 @@ async def _load_countries(api_key: str) -> dict[str, str]:
     # Ids are applied last so a name can never shadow another entry's id.
     lookup = {label.casefold(): identifier for identifier, label in entries if label}
     lookup.update({identifier.casefold(): identifier for identifier, _ in entries})
+    if not lookup:
+        # Not cached, and NOT reported as the operator's problem: an unusable dictionary
+        # is upstream's. Caching it would answer every later filter with
+        # ``unresolved_filter``, blaming a country code that is perfectly valid.
+        raise _TelemetrError(status="error", error="Empty country dictionary")
     _holder.countries = lookup
     return lookup
 
@@ -459,12 +469,11 @@ async def _fetch_catalog(
 async def _resolve_handles(api_key: str, rows: list[_CatalogRow]) -> list[TelemetrChannel]:
     """Attach the handle each catalogue row lacks, dropping rows that have none.
 
-    A batch that resolves NOTHING is reported as a failure, not as an empty success. The
-    bug this whole module was rewritten for was precisely a parser that dropped every row
-    while the source still answered "ok" — one changed field name or enum spelling
-    upstream reproduces it exactly, and the operator's only symptom would again be an
-    unfiltered board. Individual unresolvable rows stay a silent drop: a private channel
-    genuinely has no public handle.
+    A reply with no ``channels`` list is a failure, not an empty success: every row
+    dropped while the source answers "ok" is the bug this module was rewritten for. A page
+    whose rows were all legitimately dropped — groups, private invites — is NOT that: it
+    is an ordinary empty result, and failing it would mark the catalogue degraded over a
+    keyword that simply matched nothing usable.
     """
     if not rows:
         return []
@@ -473,12 +482,13 @@ async def _resolve_handles(api_key: str, rows: list[_CatalogRow]) -> list[Teleme
     for start in range(0, len(ids), _INFO_BATCH_MAX_IDS):
         chunk = ids[start : start + _INFO_BATCH_MAX_IDS]
         body = await _get_json(api_key, "/channels/info-batch", {"ids": ",".join(chunk)})
-        handles.update(_handles_from_batch(body))
-    if not handles:
-        raise _TelemetrError(
-            status="error",
-            error=f"No handle resolved for any of {len(ids)} catalogue rows",
-        )
+        batch = _handles_from_batch(body)
+        if batch is None:
+            raise _TelemetrError(
+                status="error",
+                error=f"No channels list in the info-batch reply for {len(chunk)} ids",
+            )
+        handles.update(batch)
     return [
         TelemetrChannel(
             username=handles[row.internal_id],

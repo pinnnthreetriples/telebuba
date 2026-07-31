@@ -20,6 +20,18 @@ const SOURCE_STATE = {
 // code itself, so a new one degrades to the old behaviour rather than to nothing.
 const reasonKey = (reason: string) => `neurocomment.modal.discovery.results.reason.${reason}`;
 
+// Catalogue failures a retry cannot clear. While a locale filter is set the catalogue is
+// the only source allowed to answer, so these block every run until the operator acts —
+// and nothing used to name the way out.
+const TERMINAL_CATALOGUE_REASONS = new Set([
+  'telemetr_not_configured',
+  'telemetr_auth_failed',
+  'telemetr_subscription_inactive',
+  'telemetr_quota_exhausted',
+  'telemetr_forbidden',
+  'telemetr_unresolved_filter',
+]);
+
 /** One line per source: what it returned, and what survived into the table.
  *
  * The operator could set a language and a country, watch a run reach "done", and never
@@ -48,10 +60,8 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
             line += ` ${t('neurocomment.modal.discovery.results.sourceExclusive', { exclusive })}`;
           }
           // A capped page otherwise reads as the whole answer.
-          if (report.total != null && report.total > (report.hits ?? 0)) {
-            line += ` ${t('neurocomment.modal.discovery.results.sourceTruncated', {
-              total: report.total,
-            })}`;
+          if (report.truncated === true) {
+            line += `, ${t('neurocomment.modal.discovery.results.sourceTruncated')}`;
           }
           // A skipped or failed source is the whole point of this strip, so it says why.
           if (report.reason == null) return line;
@@ -289,11 +299,13 @@ export function DiscoveryResults({
     // A catalogue that is terminally down (revoked key, lapsed plan, spent quota) blocks
     // EVERY run while a locale filter is set, because storing unfiltered rows over a
     // filtered set is a downgrade. Nothing said so, and nothing named the way out.
-    const catalogueDown =
-      localeFiltered &&
-      (board?.progress.sources ?? []).some(
-        (report) => report.source === 'telemetr' && report.state === 'failed',
-      );
+    // Only the reasons a retry cannot fix. A rate limit or a network blip is also
+    // `state: 'failed'`, but there the advice is "try again", not "drop your filters" —
+    // and a missing key is `skipped`, the same dead end with a different way out.
+    const catalogue = (board?.progress.sources ?? []).find(
+      (report) => report.source === 'telemetr',
+    );
+    const stuck = catalogue?.reason != null && TERMINAL_CATALOGUE_REASONS.has(catalogue.reason);
     return (
       <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
@@ -304,7 +316,7 @@ export function DiscoveryResults({
                   defaultValue: board.progress.last_error,
                 }),
         })}
-        {catalogueDown ? (
+        {stuck && localeFiltered ? (
           <span className="mt-[6px] block text-ink-subtle">
             {t('neurocomment.modal.discovery.results.catalogueDown')}
           </span>

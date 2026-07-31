@@ -9759,17 +9759,10 @@
             "title": "Exclusive",
             "default": 0
           },
-          "total": {
-            "anyOf": [
-              {
-                "type": "integer",
-                "minimum": 0.0
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Total"
+          "truncated": {
+            "type": "boolean",
+            "title": "Truncated",
+            "default": false
           },
           "reason": {
             "anyOf": [

@@ -38,6 +38,8 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
   const queryClient = useQueryClient();
   const [form, setForm] = useState<DiscoveryFormState>(EMPTY_FORM);
   const [submitted, setSubmitted] = useState(false);
+  // Whether the run ON SCREEN asked for a locale filter, captured at submit.
+  const [ranLocaleFiltered, setRanLocaleFiltered] = useState(false);
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [adopted, setAdopted] = useState<{
     linked: number;
@@ -94,6 +96,10 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
           }
           if (outcome.status !== 'started') return;
           setSubmitted(true);
+          // Snapshot, not live form state: the operator can go back and edit the form
+          // while this run's board is still on screen, and then every row would be judged
+          // against filters this run never asked for.
+          setRanLocaleFiltered(form.useTelemetr && (form.language !== '' || form.country !== ''));
           // reset, not invalidate: invalidate keeps the previous run's frame while it
           // refetches, and the cache would then hand this run the finished rows of the
           // last one — adoptable, and with a running:false that stops the poll.
@@ -185,7 +191,7 @@ export function ChannelDiscoveryModal({ campaignId, campaignName, onClose }: Pro
               board={board.data}
               loading={board.isPending || (running && phase === 'searching')}
               errored={board.isError}
-              localeFiltered={form.useTelemetr && (form.language !== '' || form.country !== '')}
+              localeFiltered={ranLocaleFiltered}
               selected={selected}
               onToggle={toggle}
               onToggleAll={toggleAll}

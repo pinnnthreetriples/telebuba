@@ -1097,12 +1097,13 @@
             "telemetr_not_found": "Telemetr.io endpoint not found",
             "telemetr_error": "Telemetr.io is unreachable",
             "seed_unusable": "the seed channel is not a usable handle",
-            "unexpected_result": "Telegram returned an unexpected reply"
+            "unexpected_result": "Telegram returned an unexpected reply",
+            "seed_needs_telegram": "the seed channel needs Telegram's own search, which \"Catalogue only\" switches off"
           },
           "unfiltered": "filter not applied",
-          "catalogueDown": "While a language or country is set, only the catalogue can answer — clear both filters to search Telegram alone.",
+          "catalogueDown": "Only the catalogue can answer while a language or country is set — clear both filters, and untick \"Catalogue only\", to search Telegram alone.",
           "sourceExclusive": "({{exclusive}} found only here)",
-          "sourceTruncated": "of {{total}} matched"
+          "sourceTruncated": "page capped"
         },
         "comments": {
           "pending": "checking",

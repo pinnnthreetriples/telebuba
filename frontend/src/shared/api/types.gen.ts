@@ -1290,9 +1290,9 @@ export type DiscoverySourceReport = {
    */
   exclusive?: number;
   /**
-   * Total
+   * Truncated
    */
-  total?: number | null;
+  truncated?: boolean;
   /**
    * Reason
    */

@@ -86,6 +86,8 @@ async def start_discovery(
             "account_id": account.account_id,
             "keywords": len(request.keywords),
             "use_telemetr": request.use_telemetr,
+            # Two very different run shapes — one spends Telegram RPCs, one spends none.
+            "catalogue_only": request.catalogue_only,
         },
     )
     return DiscoverySearchOutcome(status="started")
@@ -100,12 +102,15 @@ async def _run(
     try:
         stage = await run_search(campaign_id, account.account_id, request)
         _discovery_state.set_last_error(campaign_id, stage.error)
-        if stage.replaced:
-            # Only for a run whose rows were actually stored. The report's hits/kept and
-            # its per-row geo describe the candidate set this run built; publishing it for
-            # a run that kept the PREVIOUS set would staple this run's geo onto the old
-            # rows by handle and credit sources for candidates nobody can see.
-            _discovery_state.set_run_report(campaign_id, stage.report)
+        # Per-source outcomes ALWAYS: they describe what the sources did, which is true
+        # whether or not the rows were stored — and a run that stored nothing is exactly
+        # when the operator needs to see which source refused. The per-row origins are
+        # different: keyed by handle, they would staple this run's geo onto the previous
+        # run's rows, so they are dropped unless this run's set was actually written.
+        _discovery_state.set_run_report(
+            campaign_id,
+            stage.report if stage.replaced else stage.report.model_copy(update={"origins": {}}),
+        )
         qualify_error = None
         if not stage.replaced or stage.flooded:
             # Not replaced: no source answered (or the filter-aware one did not), so the

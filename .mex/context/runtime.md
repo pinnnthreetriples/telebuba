@@ -91,13 +91,17 @@ Measured on the real cap (100, catalogue 30/keyword): at four or more keywords t
 rows and takes the locale-verified share from ~50% to 100%; at one keyword, or on a filter the
 catalogue barely matches, it is 3 rows against 23. Hence off by default — and both Telegram
 arms still report ``skipped``, because a source that vanished without saying so is the original
-bug. A terminally failing catalogue (revoked key, lapsed plan, spent quota) blocks EVERY run
-while a locale filter is set, since storing unfiltered rows over a filtered set is a downgrade;
-the board names the way out rather than looping the operator through their daily search slots.
+bug. A terminally failing catalogue (revoked key, lapsed plan, spent quota, unknown filter value)
+blocks EVERY run while a locale filter is set, since storing unfiltered rows over a filtered set
+is a downgrade; the board names the way out rather than looping the operator through their daily
+search slots. Only those reasons — a rate limit or a network blip is also `failed`, but there the
+answer is to retry, not to drop the filters. Note a catalogue-only run still spends one of the
+twenty daily search slots while making zero Telegram reads.
 Telemetr.io is optional: no key means a skipped source — but a REPORTED one, because silence let
 the run reach `done` as if the filter had applied. Every source's outcome (`ran`/`failed`/
-`skipped`, hits, kept, reason, gateway detail) rides `DiscoveryProgress.sources` to the board and
-into the finish event; the per-row catalogue geo rides the board too, but is deliberately NOT
+`skipped`, hits, kept, exclusive, truncated, reason, gateway detail) rides
+`DiscoveryProgress.sources` to the board and into the finish event — ALWAYS, including a run
+that stored nothing, which is exactly when the operator needs to see which source refused; the per-row catalogue geo rides the board too, but is deliberately NOT
 persisted (no column, and a migration against the live database needs operator approval), so a
 board read after a restart falls back to the row's single stored source.
 Writing candidates is delete-then-insert, so the set is replaced only when at least one source

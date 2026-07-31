@@ -422,13 +422,73 @@ describe('DiscoveryResults', () => {
       <Harness
         data={board([candidate()], {
           sources: [
-            { source: 'telemetr', state: 'ran', hits: 30, kept: 30, exclusive: 30, total: 1523 },
+            {
+              source: 'telemetr',
+              state: 'ran',
+              hits: 30,
+              kept: 30,
+              exclusive: 30,
+              truncated: true,
+            },
           ],
         })}
       />,
     );
 
-    expect(screen.getByText(/из 1523 совпадений/)).toBeInTheDocument();
+    // A flag, not a count: the per-keyword totals cannot be summed without double
+    // counting, and the earlier wording read "30 из 30 из 1523 совпадений".
+    expect(screen.getByText(/30 из 30, страница обрезана/)).toBeInTheDocument();
+  });
+
+  it('names the way out when the catalogue is terminally down and a filter is set', () => {
+    // The dead end: a locale filter makes the catalogue the only source allowed to
+    // answer, so a spent quota blocks every run until the operator changes something.
+    render(
+      <Harness
+        localeFiltered
+        data={board([], {
+          phase: 'failed',
+          last_error: 'telemetr_quota_exhausted',
+          sources: [
+            {
+              source: 'telemetr',
+              state: 'failed',
+              hits: 0,
+              kept: 0,
+              exclusive: 0,
+              reason: 'telemetr_quota_exhausted',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/снимите оба фильтра/)).toBeInTheDocument();
+  });
+
+  it('does not tell the operator to drop filters over a rate limit', () => {
+    // A retry fixes that one, so the advice would be wrong.
+    render(
+      <Harness
+        localeFiltered
+        data={board([], {
+          phase: 'failed',
+          last_error: 'telemetr_rate_limited',
+          sources: [
+            {
+              source: 'telemetr',
+              state: 'failed',
+              hits: 0,
+              kept: 0,
+              exclusive: 0,
+              reason: 'telemetr_rate_limited',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/снимите оба фильтра/)).not.toBeInTheDocument();
   });
 
   it('renders subscribers compactly and an em dash when unknown', () => {

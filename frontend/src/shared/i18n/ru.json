@@ -1098,12 +1098,13 @@
             "telemetr_not_found": "эндпоинт Telemetr.io не найден",
             "telemetr_error": "Telemetr.io недоступен",
             "seed_unusable": "канал-образец не похож на корректный хэндл",
-            "unexpected_result": "Telegram вернул неожиданный ответ"
+            "unexpected_result": "Telegram вернул неожиданный ответ",
+            "seed_needs_telegram": "канал-образец работает через поиск Telegram, а его отключает «Только каталог»"
           },
           "unfiltered": "фильтр не применялся",
-          "catalogueDown": "Пока задан язык или страна, ответить может только каталог — снимите оба фильтра, чтобы искать одним Telegram.",
+          "catalogueDown": "Пока задан язык или страна, ответить может только каталог — снимите оба фильтра и галочку «Только каталог», чтобы искать одним Telegram.",
           "sourceExclusive": "(уникальных {{exclusive}})",
-          "sourceTruncated": "из {{total}} совпадений"
+          "sourceTruncated": "страница обрезана"
         },
         "comments": {
           "pending": "проверяется",

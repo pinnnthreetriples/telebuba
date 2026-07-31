@@ -36,14 +36,31 @@ pytestmark = pytest.mark.usefixtures("isolated_telemetr_client")
 
 
 def test_every_offered_country_has_an_alpha2_bridge() -> None:
-    """The country list and the bridge that translates it must not drift apart.
+    """The offered country list and the bridge that translates it must not drift apart.
 
-    ``schemas/`` may not import ``core``, so the two lists are duplicated on purpose and
-    only a test can hold them together — and this is the exact drift that shipped: the
-    form offered an alpha-2 code the catalogue's dictionary has never heard of, and the
-    only symptom was an empty page. ``tests/`` may import both sides.
+    A forward guard, not a reproduction: the two agree today. ``schemas/`` may not import
+    ``core``, so they are duplicated on purpose and only a test can hold them together —
+    add a country to one side and the symptom is a filter that resolves to nothing
+    against the live API only. ``tests/`` may import both sides.
     """
     assert set(get_args(DiscoveryCountry)) == set(_COUNTRY_NAME_BY_ALPHA2)
+
+
+@pytest.mark.asyncio
+async def test_an_unusable_country_dictionary_is_upstreams_fault_not_the_operators() -> None:
+    """And it must not be cached: every later filter would be blamed for it.
+
+    Caching an empty lookup answers a perfectly valid ``TR`` with ``unresolved_filter``
+    for the life of the process.
+    """
+    with respx.mock:
+        search = mock_search()
+        respx.get(url__regex=COUNTRIES).mock(return_value=httpx.Response(200, json=[]))
+
+        result = await search_catalog(request(country="TR"))
+
+    assert result.status == "error"
+    assert search.call_count == 0
 
 
 @pytest.mark.asyncio
@@ -377,11 +394,29 @@ async def test_illegal_header_value_error_never_quotes_the_key() -> None:
 
 
 @pytest.mark.asyncio
-async def test_a_batch_that_resolves_nothing_is_a_failure_not_an_empty_ok() -> None:
+async def test_a_batch_reply_without_a_channels_list_is_a_failure() -> None:
     """The original bug was a parser dropping every row while the source said "ok".
 
-    One renamed field or changed enum spelling upstream reproduces it exactly, and the
-    operator's only symptom would again be a board full of unfiltered channels.
+    One renamed field upstream reproduces it exactly, and the operator's only symptom
+    would again be a board full of unfiltered channels.
+    """
+    with respx.mock:
+        mock_search(catalog_item())
+        respx.get(url__regex=BATCH).mock(return_value=httpx.Response(200, json={"items": []}))
+
+        result = await search_catalog(request())
+
+    assert result.status == "error"
+    assert result.error is not None
+    assert "No channels list" in result.error
+
+
+@pytest.mark.asyncio
+async def test_a_page_of_only_groups_is_an_ordinary_empty_result() -> None:
+    """Not a failure: the filter did its job.
+
+    Marking the source degraded over a keyword that simply matched nothing usable would
+    block a filtered run for no reason.
     """
     with respx.mock:
         mock_search(catalog_item())
@@ -389,9 +424,8 @@ async def test_a_batch_that_resolves_nothing_is_a_failure_not_an_empty_ok() -> N
 
         result = await search_catalog(request())
 
-    assert result.status == "error"
-    assert result.error is not None
-    assert "No handle resolved" in result.error
+    assert result.status == "ok"
+    assert result.items == []
 
 
 @pytest.mark.parametrize("status_code", [401, 426], ids=["auth_failed", "quota_exhausted"])

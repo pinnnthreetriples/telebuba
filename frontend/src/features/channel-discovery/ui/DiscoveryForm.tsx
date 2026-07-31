@@ -270,7 +270,7 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
           <input
             type="checkbox"
             checked={form.catalogueOnly}
-            disabled={!localeFilters}
+            disabled={!form.useTelemetr}
             onChange={(event) => {
               set('catalogueOnly', event.target.checked);
             }}
