@@ -166,6 +166,31 @@ async def test_telemetr_is_not_called_when_disabled(monkeypatch: pytest.MonkeyPa
 
 
 @pytest.mark.asyncio
+async def test_a_source_reports_what_it_alone_contributed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``kept`` credits every source that returned a row, which hid a starvation variant.
+
+    A catalogue whose rows were mostly duplicates of native hits reported a healthy
+    ``kept`` while every channel it found alone was cut by the cap.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("shared", "S", 10))))
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(telemetr_ok(("shared", "S", 10), ("mineonly", "M", 20))),
+    )
+    campaign_id = await _new_campaign()
+
+    stage = await run_search(campaign_id, LISTENER_ID, _request(use_telemetr=True))
+
+    catalogue = _report_of(stage, "telemetr")
+    assert catalogue.kept == 2
+    assert catalogue.exclusive == 1
+    assert _report_of(stage, "telegram_search").exclusive == 0
+
+
+@pytest.mark.asyncio
 async def test_catalogue_only_drops_the_telegram_arm_and_says_so(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

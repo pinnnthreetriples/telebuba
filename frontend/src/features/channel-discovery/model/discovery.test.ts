@@ -6,7 +6,7 @@ import {
   boundsInverted,
   buildSearchRequest,
   canSubmit,
-  droppedKeywords,
+  splitKeywords,
   EMPTY_FORM,
   formatSubscribers,
   isSelectable,
@@ -70,22 +70,22 @@ describe('parseKeywords', () => {
   });
 });
 
-describe('droppedKeywords', () => {
+describe('splitKeywords dropped tokens', () => {
   it('names the tokens below the minimum length', () => {
-    expect(droppedKeywords('crypto ab news')).toEqual(['ab']);
+    expect(splitKeywords('crypto ab news').dropped).toEqual(['ab']);
   });
 
   it('names the tokens past the cap', () => {
     const many = Array.from({ length: 12 }, (_, index) => `keyword${index}`).join(' ');
-    expect(droppedKeywords(many)).toEqual(['keyword10', 'keyword11']);
+    expect(splitKeywords(many).dropped).toEqual(['keyword10', 'keyword11']);
   });
 
   it('does not count a duplicate as dropped', () => {
-    expect(droppedKeywords('crypto CRYPTO')).toEqual([]);
+    expect(splitKeywords('crypto CRYPTO').dropped).toEqual([]);
   });
 
   it('ignores the blank tokens a separator run leaves behind', () => {
-    expect(droppedKeywords('crypto,,  \n')).toEqual([]);
+    expect(splitKeywords('crypto,,  \n').dropped).toEqual([]);
   });
 });
 

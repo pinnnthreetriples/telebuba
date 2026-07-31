@@ -403,6 +403,34 @@ describe('DiscoveryResults', () => {
     expect(screen.getByText(/нет ключа Telemetr\.io/)).toBeInTheDocument();
   });
 
+  it('names a source whose kept rows were all another source’s too', () => {
+    // "50 of 60" hid the variant: every row this source found ALONE was cut by the cap,
+    // so it looks like a major contributor while contributing nothing unique.
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [{ source: 'telemetr', state: 'ran', hits: 60, kept: 50, exclusive: 0 }],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/уникальных 0/)).toBeInTheDocument();
+  });
+
+  it('says a source was truncated instead of passing a capped page off as the answer', () => {
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [
+            { source: 'telemetr', state: 'ran', hits: 30, kept: 30, exclusive: 30, total: 1523 },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/из 1523 совпадений/)).toBeInTheDocument();
+  });
+
   it('renders subscribers compactly and an em dash when unknown', () => {
     render(
       <Harness

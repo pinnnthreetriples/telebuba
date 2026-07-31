@@ -106,6 +106,12 @@ def _normalized(
     return entries
 
 
+def _summed_totals(outcomes: list[SourceOutcome]) -> int | None:
+    """One source's advertised match count across its keywords, or None if it gave none."""
+    known = [outcome.total for outcome in outcomes if outcome.total is not None]
+    return sum(known) if known else None
+
+
 def _source_reports(
     outcomes: list[SourceOutcome],
     origins: dict[str, DiscoveryCandidateOrigin],
@@ -130,6 +136,10 @@ def _source_reports(
                 state=state,
                 hits=sum(len(outcome.candidates) for outcome in own),
                 kept=sum(1 for origin in origins.values() if source in origin.sources),
+                exclusive=sum(1 for origin in origins.values() if origin.sources == [source]),
+                # Summed across keywords, so an overlap is double-counted — the number is
+                # here to show that the page was TRUNCATED, not to be an exact census.
+                total=_summed_totals(own),
                 reason=None if degraded is None else degraded.error,
                 detail=None if degraded is None else degraded.detail,
             ),

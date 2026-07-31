@@ -35,11 +35,24 @@ function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
       {sources
         .map((report) => {
           const name = t(`neurocomment.modal.discovery.source.${report.source}`);
-          const line = t(`neurocomment.modal.discovery.results.${SOURCE_STATE[report.state]}`, {
+          const kept = report.kept ?? 0;
+          const exclusive = report.exclusive ?? 0;
+          let line = t(`neurocomment.modal.discovery.results.${SOURCE_STATE[report.state]}`, {
             source: name,
-            kept: report.kept ?? 0,
+            kept,
             hits: report.hits ?? 0,
           });
+          // "50 of 60" hid the case where all 50 were duplicates of another source and
+          // every row this one found alone was cut by the cap.
+          if (exclusive !== kept) {
+            line += ` ${t('neurocomment.modal.discovery.results.sourceExclusive', { exclusive })}`;
+          }
+          // A capped page otherwise reads as the whole answer.
+          if (report.total != null && report.total > (report.hits ?? 0)) {
+            line += ` ${t('neurocomment.modal.discovery.results.sourceTruncated', {
+              total: report.total,
+            })}`;
+          }
           // A skipped or failed source is the whole point of this strip, so it says why.
           if (report.reason == null) return line;
           return `${line} — ${t(reasonKey(report.reason), { defaultValue: report.reason })}`;

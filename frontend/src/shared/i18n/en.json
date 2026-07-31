@@ -1100,7 +1100,9 @@
             "unexpected_result": "Telegram returned an unexpected reply"
           },
           "unfiltered": "filter not applied",
-          "catalogueDown": "While a language or country is set, only the catalogue can answer — clear both filters to search Telegram alone."
+          "catalogueDown": "While a language or country is set, only the catalogue can answer — clear both filters to search Telegram alone.",
+          "sourceExclusive": "({{exclusive}} found only here)",
+          "sourceTruncated": "of {{total}} matched"
         },
         "comments": {
           "pending": "checking",

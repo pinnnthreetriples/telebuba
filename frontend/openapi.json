@@ -9753,6 +9753,24 @@
             "title": "Kept",
             "default": 0
           },
+          "exclusive": {
+            "type": "integer",
+            "minimum": 0.0,
+            "title": "Exclusive",
+            "default": 0
+          },
+          "total": {
+            "anyOf": [
+              {
+                "type": "integer",
+                "minimum": 0.0
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total"
+          },
           "reason": {
             "anyOf": [
               {

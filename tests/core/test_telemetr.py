@@ -167,10 +167,12 @@ async def test_junk_rows_are_dropped_without_failing_the_source() -> None:
 @pytest.mark.asyncio
 async def test_unusable_counts_become_unknown_without_losing_their_row() -> None:
     """One absurd count must not cost the run: the write happens after every source merges."""
-    names = ("ok", "huge", "negative", "boolean")
+    # Handles, so >=3 characters: ``normalize_channel`` is the shared token parser and
+    # Telegram usernames are five characters at minimum anyway.
+    names = ("okchan", "huge", "negative", "boolean")
     with respx.mock:
         mock_search(
-            catalog_item(internal_id="ok", members_count=12345),
+            catalog_item(internal_id="okchan", members_count=12345),
             # Beyond what SQLite can store: OverflowError on the write.
             catalog_item(internal_id="huge", members_count=2**70),
             catalog_item(internal_id="negative", members_count=-5),

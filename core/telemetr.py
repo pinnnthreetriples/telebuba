@@ -7,10 +7,11 @@ external source can never abort a discovery run.
 
 One :func:`search_catalog` call spends up to three requests:
 
-* ``GET /dictionaries/{countries,languages}`` — only when the operator set that
-  filter, and only once per process: the reference data is static, so it is
-  cached. A country ``id`` is a slug ("turkey"), not an ISO-3166 code, so the
-  operator's value has to be resolved against the dictionary before it is sent.
+* ``GET /dictionaries/countries`` — only when the operator set that filter, and
+  only once per process: the reference data is static, so it is cached. A country
+  ``id`` is a slug ("turkey"), not an ISO-3166 code, so the operator's value has
+  to be resolved against the dictionary before it is sent. A language needs no
+  such round trip — its ``id`` already IS the ISO-639-1 code the form sends.
 * ``GET /catalog/search`` with ``search_in_about`` pinned on: matching the
   description as well as the title roughly doubles recall for a topical keyword,
   which is exactly what discovery wants.
@@ -32,6 +33,7 @@ from typing import NamedTuple, cast
 
 import httpx
 
+from core.channel_tokens import normalize_channel
 from core.config import settings
 from schemas.telemetr import (
     TELEMETR_MAX_MEMBERS,
@@ -63,11 +65,14 @@ _STATUS_BY_CODE: dict[int, TelemetrStatus] = {
 _INFO_BATCH_MAX_IDS = 100
 # Enough of an upstream error body to diagnose one, short enough to persist in a log.
 _BODY_EXCERPT_MAX = 200
-_DICTIONARY_PATHS = {"country": "/dictionaries/countries", "language": "/dictionaries/languages"}
+_COUNTRIES_PATH = "/dictionaries/countries"
+# Telegram's own username ceiling, which is what a resolved handle must fit.
+_HANDLE_MAX_LENGTH = 32
 # The dropdown values the UI offers (``COUNTRIES`` in DiscoveryForm.tsx) bridged to the
-# english names the dictionary files them under. A language ``id`` already *is* an
-# ISO-639-1 code, so only countries need the bridge. A name Telemetr spells differently
+# english names the dictionary files them under. A name Telemetr spells differently
 # surfaces as ``unresolved_filter``, which is loud — never a silently empty result.
+# Only countries need this: a language ``id`` already IS the ISO-639-1 code the form
+# sends, so fetching that dictionary would spend a billable request to map "tr" to "tr".
 _COUNTRY_NAME_BY_ALPHA2 = {
     "RU": "Russia",
     "KZ": "Kazakhstan",
@@ -97,18 +102,17 @@ _DETERMINISTIC_FAILURES = (
     UnicodeError,
 )
 
-# The countries/languages dictionaries are static reference data, so one fetch per
-# process is enough — no TTL, no invalidation.
-_dictionary_cache: dict[str, dict[str, str]] = {}
-# One lock per dictionary, because a run fires every keyword's catalogue query at once and
-# they all miss the cache together: 10 keywords with both filters cost 20 dictionary GETs
-# instead of 2, against a 1000/month tier. Created lazily inside the running loop — a
-# module-level Lock() would bind whichever loop imported this module first.
-_dictionary_locks: dict[str, asyncio.Lock] = {}
-
 
 class _ClientHolder:
     client: httpx.AsyncClient | None = None
+    # The countries dictionary is static reference data, so one fetch per process is
+    # enough — no TTL, no invalidation. Empty means "not loaded yet".
+    countries: dict[str, str] = {}  # noqa: RUF012 - a process-wide cache, deliberately shared
+    # A run fires every keyword's catalogue query at once, so they all miss the cache
+    # together: 10 keywords cost 10 dictionary GETs instead of 1, against a 1000/month
+    # tier. Created lazily inside the running loop — a Lock() built at import time would
+    # bind whichever loop imported this module first.
+    lock: asyncio.Lock | None = None
 
 
 _holder = _ClientHolder()
@@ -148,9 +152,9 @@ async def close_telemetr_client() -> None:
     if _holder.client is not None:
         await _holder.client.aclose()
         _holder.client = None
-    _dictionary_cache.clear()
-    # The locks are bound to the loop that created them, so they must not outlive it.
-    _dictionary_locks.clear()
+    _holder.countries = {}
+    # The lock is bound to the loop that created it, so it must not outlive it.
+    _holder.lock = None
 
 
 def _url(path: str) -> str:
@@ -267,19 +271,18 @@ def _extract_items(body: object, limit: int) -> tuple[list[_CatalogRow], int | N
 
 
 def _handle_from_link(link: object) -> str | None:
-    """Derive the public @handle from ``ChatInfo.link``, the API's only handle field."""
+    """Derive the public @handle from ``ChatInfo.link``, the API's only handle field.
+
+    Delegated to ``core.channel_tokens`` — same layer, and it already owns every accepted
+    spelling (both schemes, ``t.me/``, ``telegram.me/``, a query string, a trailing slash,
+    invite hashes). The hand-rolled version here also took the first path segment of a
+    post link, which turned the private ``t.me/c/12345/1`` form into the handle ``c``.
+    """
     if not isinstance(link, str):
         return None
-    handle = link.strip()
-    for scheme in ("https://", "http://"):
-        if handle.lower().startswith(scheme):
-            handle = handle[len(scheme) :]
-    if handle.lower().startswith("t.me/"):
-        handle = handle[len("t.me/") :]
-    # A post link ("t.me/chan/42") still names the channel in its first segment.
-    handle = handle.split("/", 1)[0].lstrip("@").strip()
-    # A "+…" link is a private invite: there is no public handle to comment under.
-    if not handle or handle.startswith("+"):
+    handle = normalize_channel(link, max_length=_HANDLE_MAX_LENGTH)
+    # A "+…" key is a private invite: there is no public handle to comment under.
+    if handle is None or handle.startswith("+"):
         return None
     return handle
 
@@ -350,27 +353,27 @@ def _parse_body(response: httpx.Response) -> object:
         raise _TelemetrError(status="error", error=f"Invalid JSON: {exc}") from exc
 
 
-async def _dictionary(api_key: str, kind: str) -> dict[str, str]:
-    """Return a casefolded ``{id or name -> id}`` lookup for one dictionary endpoint.
+async def _countries(api_key: str) -> dict[str, str]:
+    """A casefolded ``{id or name -> id}`` lookup of Telemetr's country dictionary.
 
     Fetched at most once per process: the concurrent callers queue on the lock and the
     re-check inside it serves them from the cache.
     """
-    cached = _dictionary_cache.get(kind)
-    if cached is not None:
-        return cached
-    async with _dictionary_locks.setdefault(kind, asyncio.Lock()):
-        cached = _dictionary_cache.get(kind)
-        if cached is not None:
-            return cached
-        return await _load_dictionary(api_key, kind)
+    if _holder.countries:
+        return _holder.countries
+    if _holder.lock is None:
+        _holder.lock = asyncio.Lock()
+    async with _holder.lock:
+        if _holder.countries:
+            return _holder.countries
+        return await _load_countries(api_key)
 
 
-async def _load_dictionary(api_key: str, kind: str) -> dict[str, str]:
-    body = await _get_json(api_key, _DICTIONARY_PATHS[kind])
+async def _load_countries(api_key: str) -> dict[str, str]:
+    body = await _get_json(api_key, _COUNTRIES_PATH)
     # Documented shape is a bare array of {id, name, channels_count, participants_count}.
     if not isinstance(body, list):
-        raise _TelemetrError(status="error", error=f"Unreadable {kind} dictionary")
+        raise _TelemetrError(status="error", error="Unreadable country dictionary")
     entries: list[tuple[str, str | None]] = []
     for item in cast("list[object]", body):
         if not isinstance(item, dict):
@@ -384,15 +387,13 @@ async def _load_dictionary(api_key: str, kind: str) -> dict[str, str]:
     # Ids are applied last so a name can never shadow another entry's id.
     lookup = {label.casefold(): identifier for identifier, label in entries if label}
     lookup.update({identifier.casefold(): identifier for identifier, _ in entries})
-    if not lookup:
-        raise _TelemetrError(status="error", error=f"Empty {kind} dictionary")
-    _dictionary_cache[kind] = lookup
+    _holder.countries = lookup
     return lookup
 
 
-def _resolved_value(value: str, kind: str, lookup: dict[str, str]) -> str:
+def _resolved_country(value: str, lookup: dict[str, str]) -> str:
     identifier = lookup.get(value.casefold())
-    if identifier is None and kind == "country":
+    if identifier is None:
         # The operator picks an ISO-3166 alpha-2 code, which matches neither an id
         # ("turkey") nor a name ("Turkey"); bridge it through the english name.
         english = _COUNTRY_NAME_BY_ALPHA2.get(value.upper())
@@ -400,19 +401,24 @@ def _resolved_value(value: str, kind: str, lookup: dict[str, str]) -> str:
     if identifier is None:
         raise _TelemetrError(
             status="unresolved_filter",
-            error=f"Unknown {kind} filter: {value!r}",
+            error=f"Unknown country filter: {value!r}",
         )
     return identifier
 
 
 async def _resolve_filters(api_key: str, request: TelemetrSearchRequest) -> dict[str, str]:
-    """Map the operator's filter values onto the ids the catalogue actually accepts."""
+    """Map the operator's filter values onto the ids the catalogue actually accepts.
+
+    Only the country needs a dictionary: a language ``id`` already is the ISO-639-1 code
+    the form sends, so it rides through verbatim.
+    """
     resolved: dict[str, str] = {}
-    for kind, value in (("country", request.country), ("language", request.language)):
-        wanted = (value or "").strip()
-        if not wanted:
-            continue
-        resolved[kind] = _resolved_value(wanted, kind, await _dictionary(api_key, kind))
+    language = (request.language or "").strip()
+    if language:
+        resolved["language"] = language
+    country = (request.country or "").strip()
+    if country:
+        resolved["country"] = _resolved_country(country, await _countries(api_key))
     return resolved
 
 

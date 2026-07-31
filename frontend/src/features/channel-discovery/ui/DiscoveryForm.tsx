@@ -6,11 +6,10 @@ import { HelpHint } from '@/shared/ui';
 import {
   boundsInverted,
   canSubmit,
-  droppedKeywords,
   EMPTY_FORM,
   KEYWORD_MIN_LENGTH,
   MAX_KEYWORDS,
-  parseKeywords,
+  splitKeywords,
   type DiscoveryCountry,
   type DiscoveryFormState,
   type DiscoveryLanguage,
@@ -76,8 +75,7 @@ export function DiscoveryForm({ form, telemetrConfigured, submitting, onChange, 
   const locale = i18n.language || 'ru';
   const languageNames = new Intl.DisplayNames([locale], { type: 'language' });
   const regionNames = new Intl.DisplayNames([locale], { type: 'region' });
-  const parsed = parseKeywords(form.keywords);
-  const dropped = droppedKeywords(form.keywords);
+  const { keywords: parsed, dropped } = splitKeywords(form.keywords);
   const inverted = boundsInverted(form);
   // Language and country reach only the Telemetr.io catalogue, so with that source off
   // they are inert — greyed out rather than quietly ignored.

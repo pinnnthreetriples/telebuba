@@ -27,7 +27,6 @@ if TYPE_CHECKING:
 SEARCH = r".*/catalog/search.*"
 BATCH = r".*/channels/info-batch.*"
 COUNTRIES = r".*/dictionaries/countries.*"
-LANGUAGES = r".*/dictionaries/languages.*"
 
 # Documented dictionary items: an ``id`` is a slug, not an ISO-3166 code.
 COUNTRY_DICTIONARY = [
@@ -39,10 +38,6 @@ COUNTRY_DICTIONARY = [
         "channels_count": 1902,
         "participants_count": 9100000,
     },
-]
-LANGUAGE_DICTIONARY = [
-    {"id": "uk", "name": "Ukrainian", "channels_count": 30122, "participants_count": 190000000},
-    {"id": "tr", "name": "Turkish", "channels_count": 3980, "participants_count": 44000000},
 ]
 
 
@@ -121,15 +116,15 @@ def mock_batch(*channels: object) -> respx.Route:
     )
 
 
-def mock_dictionaries() -> tuple[respx.Route, respx.Route]:
-    """Route both dictionary endpoints to their documented bare arrays."""
-    countries = respx.get(url__regex=COUNTRIES).mock(
+def mock_countries() -> respx.Route:
+    """Route the country dictionary to its documented bare array.
+
+    Only countries have one: a language ``id`` already is the ISO-639-1 code the form
+    sends, so the adapter never fetches that dictionary.
+    """
+    return respx.get(url__regex=COUNTRIES).mock(
         return_value=httpx.Response(200, json=COUNTRY_DICTIONARY),
     )
-    languages = respx.get(url__regex=LANGUAGES).mock(
-        return_value=httpx.Response(200, json=LANGUAGE_DICTIONARY),
-    )
-    return countries, languages
 
 
 class AttemptCounter:

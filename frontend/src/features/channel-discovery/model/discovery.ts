@@ -40,8 +40,12 @@ export const EMPTY_FORM: DiscoveryFormState = {
   catalogueOnly: false,
 };
 
-/** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap. */
-function splitKeywords(raw: string): { keywords: string[]; dropped: string[] } {
+/** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap.
+ *
+ * Exported so the form gets the kept and the dropped tokens from ONE pass: asking for
+ * them separately re-split the whole blob on every keystroke.
+ */
+export function splitKeywords(raw: string): { keywords: string[]; dropped: string[] } {
   const seen = new Set<string>();
   const keywords: string[] = [];
   // A set, so the same rejected word typed twice is named once.
@@ -71,11 +75,6 @@ function splitKeywords(raw: string): { keywords: string[]; dropped: string[] } {
 
 export function parseKeywords(raw: string): string[] {
   return splitKeywords(raw).keywords;
-}
-
-/** The tokens the parser threw away, so the form can name them instead of only counting. */
-export function droppedKeywords(raw: string): string[] {
-  return splitKeywords(raw).dropped;
 }
 
 function positiveInt(raw: string): number | undefined {

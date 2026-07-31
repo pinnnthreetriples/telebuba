@@ -1286,6 +1286,14 @@ export type DiscoverySourceReport = {
    */
   kept?: number;
   /**
+   * Exclusive
+   */
+  exclusive?: number;
+  /**
+   * Total
+   */
+  total?: number | null;
+  /**
    * Reason
    */
   reason?: string | null;

@@ -73,6 +73,9 @@ class SourceOutcome:
     # The gateway's own diagnostic text, kept apart from the short code above so the
     # board can show one and the operator can act on the other.
     detail: str | None = None
+    # What the source says it matched, when it knows. Only the catalogue does; without it
+    # a page capped at ``search_limit`` reads as the whole answer.
+    total: int | None = None
 
     @property
     def answered(self) -> bool:
@@ -232,6 +235,7 @@ async def search_telemetr(
         )
     return SourceOutcome(
         source="telemetr",
+        total=result.total_count,
         candidates=tuple(
             RawCandidate(
                 username=item.username,

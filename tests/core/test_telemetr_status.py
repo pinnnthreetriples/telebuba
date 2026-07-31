@@ -26,7 +26,7 @@ from tests.core.telemetr_fixtures import (
     catalog_item,
     chat_info,
     mock_batch,
-    mock_dictionaries,
+    mock_countries,
     mock_search,
     request,
     search_body,
@@ -51,7 +51,7 @@ async def test_iso_country_code_is_resolved_to_a_dictionary_id() -> None:
     """An alpha-2 code matches neither an id ("turkey") nor a name ("Turkey")."""
     with respx.mock:
         search = mock_search()
-        mock_dictionaries()
+        mock_countries()
 
         result = await search_catalog(request(country="TR", language="tr"))
 
@@ -71,7 +71,7 @@ async def test_iso_country_code_is_resolved_to_a_dictionary_id() -> None:
 async def test_country_filter_accepts_code_slug_or_name(value: str, expected: str) -> None:
     with respx.mock:
         search = mock_search()
-        mock_dictionaries()
+        mock_countries()
 
         await search_catalog(request(country=value))
 
@@ -83,7 +83,7 @@ async def test_dictionaries_are_fetched_once_per_process() -> None:
     """Static reference data: caching it keeps the extra quota cost to one request."""
     with respx.mock:
         mock_search()
-        countries, _languages = mock_dictionaries()
+        countries = mock_countries()
 
         await search_catalog(request(country="TR"))
         await search_catalog(request(country="UA"))
@@ -96,8 +96,8 @@ async def test_concurrent_searches_share_one_dictionary_fetch() -> None:
     """A run fires every keyword's query at once, so they all miss the cache together.
 
     The sequential test above passes without any locking; only a real suspension point
-    between the cache read and the fetch exposes it. Ten keywords with both filters cost
-    twenty dictionary requests instead of two against a 1000/month tier.
+    between the cache read and the fetch exposes it. Ten keywords with a country filter
+    cost ten dictionary requests instead of one, against a 1000/month tier.
     """
 
     async def slow(_request: httpx.Request) -> httpx.Response:
@@ -116,23 +116,22 @@ async def test_concurrent_searches_share_one_dictionary_fetch() -> None:
     assert countries.call_count == 1
 
 
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [("country", "ZZ"), ("language", "xx")],
-    ids=["country", "language"],
-)
 @pytest.mark.asyncio
-async def test_unresolvable_filter_is_terminal_not_an_empty_ok(field: str, value: str) -> None:
-    """A silent empty result set is exactly what hides this class of bug."""
+async def test_unresolvable_country_is_terminal_not_an_empty_ok() -> None:
+    """A silent empty result set is exactly what hides this class of bug.
+
+    Languages need no equivalent: their id IS the code the form sends, and the form's
+    values are an allowlisted Literal, so a wrong one is a 422 long before this layer.
+    """
     with respx.mock:
         search = mock_search()
-        mock_dictionaries()
+        mock_countries()
 
-        result = await search_catalog(request(**{field: value}))
+        result = await search_catalog(request(country="ZZ"))
 
     assert result.status == "unresolved_filter"
     assert result.error is not None
-    assert value in result.error
+    assert "ZZ" in result.error
     assert search.call_count == 0
 
 
@@ -153,7 +152,7 @@ async def test_dictionary_failure_degrades_to_a_reported_error() -> None:
 async def test_unset_filters_cost_no_dictionary_request() -> None:
     with respx.mock:
         search = mock_search()
-        countries, languages = mock_dictionaries()
+        countries = mock_countries()
 
         await search_catalog(request())
 
@@ -161,7 +160,6 @@ async def test_unset_filters_cost_no_dictionary_request() -> None:
     assert "country" not in params
     assert "language" not in params
     assert countries.call_count == 0
-    assert languages.call_count == 0
 
 
 @pytest.mark.asyncio
