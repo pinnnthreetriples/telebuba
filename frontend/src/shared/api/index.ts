@@ -248,6 +248,7 @@ export type {
   DiscoveryProgress,
   DiscoverySearchOutcome,
   DiscoverySearchRequest,
+  DiscoverySourceReport,
   EditAccountChannelPostData,
   EditAccountChannelPostError,
   EditAccountChannelPostErrors,

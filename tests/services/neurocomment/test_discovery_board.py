@@ -15,7 +15,12 @@ from core.repositories.neurocomment import (
     upsert_linked_group,
 )
 from schemas.neurocomment import CampaignCreate
-from schemas.neurocomment_discovery import DiscoveryCandidateRow
+from schemas.neurocomment_discovery import (
+    DiscoveryCandidateOrigin,
+    DiscoveryCandidateRow,
+    DiscoveryRunReport,
+    DiscoverySourceReport,
+)
 from services.neurocomment import _discovery_state, _runtime
 from services.neurocomment.discovery import adopt_candidates, load_discovery
 
@@ -149,6 +154,59 @@ async def test_board_reports_phase_and_error_from_run_state() -> None:
     assert board is not None
     assert board.progress.phase == "failed"
     assert board.progress.last_error == "FloodWait(120s)"
+
+
+@pytest.mark.asyncio
+async def test_board_reports_per_source_outcomes_and_the_catalogue_geo() -> None:
+    """The one addition that turns a filter which never applied from silent into obvious."""
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("shared", source="telegram_search")])
+    _discovery_state.set_run_report(
+        campaign_id,
+        DiscoveryRunReport(
+            sources=[
+                DiscoverySourceReport(source="telegram_search", state="ran", hits=3, kept=1),
+                DiscoverySourceReport(
+                    source="telemetr",
+                    state="failed",
+                    reason="telemetr_quota_exhausted",
+                    detail="HTTP 426",
+                ),
+            ],
+            origins={
+                "shared": DiscoveryCandidateOrigin(
+                    sources=["telegram_search", "telemetr"],
+                    country="TR",
+                    language="tr",
+                ),
+            },
+        ),
+    )
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    assert [(item.source, item.state) for item in board.progress.sources] == [
+        ("telegram_search", "ran"),
+        ("telemetr", "failed"),
+    ]
+    candidate = board.candidates[0]
+    assert candidate.sources == ["telegram_search", "telemetr"]
+    assert (candidate.country, candidate.language) == ("TR", "tr")
+
+
+@pytest.mark.asyncio
+async def test_a_candidate_with_no_run_state_falls_back_to_its_stored_source() -> None:
+    """Geo and multi-source provenance are not persisted, so a restart loses them only."""
+    campaign_id = await _campaign()
+    await replace_discovery_candidates(campaign_id, [_row("orphan", source="telemetr")])
+
+    board = await load_discovery(campaign_id)
+
+    assert board is not None
+    assert board.candidates[0].sources == ["telemetr"]
+    assert board.candidates[0].country is None
+    assert board.progress.sources == []
 
 
 @pytest.mark.asyncio

@@ -86,6 +86,8 @@ async def start_discovery(
             "account_id": account.account_id,
             "keywords": len(request.keywords),
             "use_telemetr": request.use_telemetr,
+            # Two very different run shapes — one spends Telegram RPCs, one spends none.
+            "catalogue_only": request.catalogue_only,
         },
     )
     return DiscoverySearchOutcome(status="started")
@@ -98,18 +100,28 @@ async def _run(
 ) -> None:
     """The background run: search, then qualify. Never lets an error escape."""
     try:
-        found, search_error, replaced = await run_search(
+        stage = await run_search(campaign_id, account.account_id, request)
+        _discovery_state.set_last_error(campaign_id, stage.error)
+        # Per-source outcomes ALWAYS: they describe what the sources did, which is true
+        # whether or not the rows were stored — and a run that stored nothing is exactly
+        # when the operator needs to see which source refused. The per-row origins are
+        # different: keyed by handle, they would staple this run's geo onto the previous
+        # run's rows, so they are dropped unless this run's set was actually written.
+        _discovery_state.set_run_report(
             campaign_id,
-            account.account_id,
-            request,
+            stage.report if stage.replaced else stage.report.model_copy(update={"origins": {}}),
         )
-        _discovery_state.set_last_error(campaign_id, search_error)
         qualify_error = None
-        if not replaced:
-            # No source answered, so the stored candidates are still the previous run's
-            # and this is not a run the operator should read as done. Keyed off the
-            # write, not off ``(found, error)``: a source that answered with zero hits,
-            # or a filter that removed every hit, is an empty result — not a failure.
+        if not stage.replaced or stage.flooded:
+            # Not replaced: no source answered (or the filter-aware one did not), so the
+            # stored candidates are still the previous run's and this is not a run the
+            # operator should read as done. Keyed off the write, not off ``(found,
+            # error)``: a source that answered with zero hits, or a filter that removed
+            # every hit, is an empty result — not a failure.
+            # Flooded: the search stage just wrote this account's cooldown and nothing
+            # between here and the first probe re-checks it, so qualifying would fire
+            # getFullChannel straight into the live window — which is how Telegram turns
+            # a soft limit into a hard one.
             _discovery_state.set_phase(campaign_id, "failed")
         else:
             _discovery_state.set_phase(campaign_id, "qualifying")
@@ -126,8 +138,14 @@ async def _run(
             "neurocomment_discovery_finished",
             extra={
                 "campaign_id": campaign_id,
-                "found": found,
-                "reason": qualify_error or search_error,
+                "found": stage.found,
+                "reason": qualify_error or stage.error,
+                # Per source, so a run that reached "done" with a filter that never
+                # applied is visible in the log too, not only on the board — including
+                # the gateway's diagnostic text, which the short reason cannot carry.
+                "sources": [
+                    report.model_dump(exclude_none=True) for report in stage.report.sources
+                ],
             },
         )
     except Exception as exc:  # noqa: BLE001 - a background task must not die silently
@@ -175,6 +193,7 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
     # channel active elsewhere cannot be adopted here.
     owners = await fetch_active_campaigns_for_channels(channels)
 
+    report = _discovery_state.run_report(campaign_id)
     candidates: list[DiscoveryCandidate] = []
     comments_on = 0
     qualified = 0
@@ -184,12 +203,18 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
         comments_on += qualification == "comments_on"
         owner = owners.get(row.channel)
         owner_id = None if owner is None else owner.campaign_id
+        # Provenance and geo are only known while the run's state lives; a board read
+        # after a restart falls back to the one source the row itself stores.
+        origin = report.origins.get(row.channel)
         candidates.append(
             DiscoveryCandidate(
                 channel=row.channel,
                 title=row.title,
                 subscribers=row.subscribers,
                 source=row.source,
+                sources=[row.source] if origin is None else origin.sources,
+                country=None if origin is None else origin.country,
+                language=None if origin is None else origin.language,
                 qualification=qualification,
                 in_campaign=owner_id == campaign_id,
                 taken_by_other_campaign=owner_id is not None and owner_id != campaign_id,
@@ -205,6 +230,7 @@ async def load_discovery(campaign_id: str) -> DiscoveryBoard | None:
             qualified=qualified,
             comments_on=comments_on,
             last_error=_discovery_state.last_error(campaign_id),
+            sources=report.sources,
         ),
         candidates=candidates,
     )

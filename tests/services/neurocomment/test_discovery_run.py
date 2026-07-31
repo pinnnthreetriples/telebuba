@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 from datetime import UTC, datetime, timedelta
+from typing import TYPE_CHECKING
 
 import pytest
 
@@ -17,7 +18,8 @@ from core.repositories.neurocomment import (
     list_discovery_candidates,
     replace_discovery_candidates,
 )
-from schemas.neurocomment_discovery import DiscoveryCandidateRow
+from core.telegram_client import TelegramReadError
+from schemas.neurocomment_discovery import DiscoveryCandidateRow, DiscoverySearchStageResult
 from schemas.telemetr import TelemetrSearchResult
 from services.neurocomment import _discovery_state, _seams
 from services.neurocomment import discovery as discovery_module
@@ -33,9 +35,17 @@ from tests.services.neurocomment.discovery_support import (
     seed_listener,
 )
 
+if TYPE_CHECKING:
+    from collections.abc import Callable
+
+    from pydantic import BaseModel
+
+    from schemas.telegram_actions import TelegramReadAction
+
 pytestmark = pytest.mark.usefixtures("isolate_discovery")
 
 _CONCURRENT_STARTS = 2
+_FLOOD_REASON = "FloodWait(900s)"
 
 
 async def _seed_candidates(campaign_id: str, *channels: str) -> None:
@@ -50,6 +60,19 @@ async def _seed_candidates(campaign_id: str, *channels: str) -> None:
 
 async def _channels_of(campaign_id: str) -> list[str]:
     return [row.channel for row in (await list_discovery_candidates(campaign_id)).rows]
+
+
+def _hit_then_flood() -> Callable[[TelegramReadAction], BaseModel]:
+    """A keyword search that answers once, then floods — a partly-successful sweep."""
+    answered: list[str] = []
+
+    def _search(_action: TelegramReadAction) -> BaseModel:
+        if answered:
+            raise TelegramReadError(_FLOOD_REASON)
+        answered.append("done")
+        return matches(("found", "F", None))
+
+    return _search
 
 
 @pytest.mark.asyncio
@@ -111,10 +134,10 @@ async def test_a_second_campaign_cannot_open_a_parallel_stream_on_one_account(
     """
     running = asyncio.Event()
 
-    async def _hang(*_args: object, **_kwargs: object) -> tuple[int, str | None, bool]:
+    async def _hang(*_args: object, **_kwargs: object) -> DiscoverySearchStageResult:
         running.set()
         await asyncio.Event().wait()
-        return 0, None, True
+        return DiscoverySearchStageResult()
 
     monkeypatch.setattr(discovery_module, "run_search", _hang)
     await seed_listener()
@@ -238,6 +261,9 @@ async def test_a_degraded_source_with_no_native_hits_still_replaces_the_set(
     Native answering honestly with zero hits while the catalogue is rate-limited is an
     empty *result*: serving the previous run's rows here would present channels from a
     different keyword set as this run's findings, ticked and adoptable.
+
+    This holds only for an UNFILTERED request — see the test below, which is the case
+    that used to be swept in here and cost the operator their filtered set.
     """
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
     monkeypatch.setattr(
@@ -256,6 +282,61 @@ async def test_a_degraded_source_with_no_native_hits_still_replaces_the_set(
     assert _discovery_state.phase_of(campaign_id) == "done"
     # The degraded source is still reported, just not as a failed run.
     assert _discovery_state.last_error(campaign_id) == "telemetr_rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_a_failed_catalogue_with_filters_set_keeps_the_previous_set(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One answering source must not authorise the replace when the filters never applied.
+
+    Run 1 leaves the operator a filtered, already-qualified Turkish set. On run 2 the
+    catalogue 429s while native answers with 20 unfiltered Russian channels — and the
+    all-or-nothing guard let those delete and replace the good set.
+    """
+    monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches(("russian", "R", 10))))
+    monkeypatch.setattr(
+        _seams,
+        "search_telemetr",
+        TelemetrRecorder(TelemetrSearchResult(status="rate_limited", error="HTTP 429")),
+    )
+    await seed_listener()
+    campaign_id = await new_campaign()
+    await _seed_candidates(campaign_id, "turkish_one", "turkish_two")
+
+    await start_discovery(
+        campaign_id,
+        search_request(use_telemetr=True, language="tr", country="TR"),
+    )
+    await drain_discovery(campaign_id)
+
+    assert await _channels_of(campaign_id) == ["turkish_one", "turkish_two"]
+    assert _discovery_state.phase_of(campaign_id) == "failed"
+    assert _discovery_state.last_error(campaign_id) == "telemetr_rate_limited"
+
+
+@pytest.mark.asyncio
+async def test_a_flood_wait_does_not_enter_qualification(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The search stage just wrote this account's cooldown; nothing else re-checks it.
+
+    ``_seams.execute_read`` is the raw gateway with no gate, so qualifying would fire
+    getFullChannel straight into the live window — which is how Telegram escalates.
+    """
+    reader = ReadRecorder(search=_hit_then_flood())
+    monkeypatch.setattr(_seams, "execute_read", reader)
+    await seed_listener()
+    campaign_id = await new_campaign()
+
+    await start_discovery(campaign_id, search_request(keywords=["alpha", "bravo"]))
+    await drain_discovery(campaign_id)
+
+    # The hit from the first keyword is stored — it is the probing that must not happen.
+    assert await _channels_of(campaign_id) == ["found"]
+    assert reader.actions_of("get_linked_discussion_group") == []
+    assert _discovery_state.phase_of(campaign_id) == "failed"
+    assert _discovery_state.last_error(campaign_id) == _FLOOD_REASON
 
 
 @pytest.mark.asyncio
@@ -306,10 +387,10 @@ async def test_deleting_a_campaign_cancels_its_run(monkeypatch: pytest.MonkeyPat
 
     running = asyncio.Event()
 
-    async def _hang(*_args: object, **_kwargs: object) -> tuple[int, str | None, bool]:
+    async def _hang(*_args: object, **_kwargs: object) -> DiscoverySearchStageResult:
         running.set()
         await asyncio.Event().wait()
-        return 0, None, True
+        return DiscoverySearchStageResult()
 
     monkeypatch.setattr(discovery_module, "run_search", _hang)
     await seed_listener()
@@ -343,7 +424,7 @@ async def test_an_unexpected_error_fails_the_run_without_escaping(
 ) -> None:
     """A background task that raised into the void would leave phase stuck forever."""
 
-    async def _boom(*_args: object, **_kwargs: object) -> tuple[int, str | None]:
+    async def _boom(*_args: object, **_kwargs: object) -> DiscoverySearchStageResult:
         raise RuntimeError
 
     monkeypatch.setattr(_seams, "execute_read", ReadRecorder(search=matches()))
@@ -362,10 +443,10 @@ async def test_an_unexpected_error_fails_the_run_without_escaping(
 async def test_shutdown_cancels_an_in_flight_run(monkeypatch: pytest.MonkeyPatch) -> None:
     started = asyncio.Event()
 
-    async def _hang(*_args: object, **_kwargs: object) -> tuple[int, str | None]:
+    async def _hang(*_args: object, **_kwargs: object) -> DiscoverySearchStageResult:
         started.set()
         await asyncio.Event().wait()
-        return 0, None
+        return DiscoverySearchStageResult()
 
     monkeypatch.setattr(discovery_module, "run_search", _hang)
     await seed_listener()

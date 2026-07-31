@@ -42,10 +42,12 @@ function Harness({
   data,
   loading = false,
   errored = false,
+  localeFiltered = false,
 }: {
   data: DiscoveryBoard | undefined;
   loading?: boolean;
   errored?: boolean;
+  localeFiltered?: boolean;
 }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   return (
@@ -53,6 +55,7 @@ function Harness({
       board={data}
       loading={loading}
       errored={errored}
+      localeFiltered={localeFiltered}
       selected={selected}
       onToggle={(channel) => {
         setSelected((current) => {
@@ -91,6 +94,15 @@ describe('DiscoveryResults', () => {
     render(<Harness data={undefined} errored />);
     expect(screen.getByText(/Не удалось получить результаты/)).toBeInTheDocument();
     expect(screen.queryByText(/Ничего не нашлось/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the rows a failed refetch left in the cache', () => {
+    // TanStack v5 sets status 'error' on a failed refetch while the cached frame
+    // survives, so blanking the table would drop N rows and every tick on them.
+    render(<Harness data={board([candidate({ channel: 'good' })])} errored />);
+
+    expect(screen.getByText('@good')).toBeInTheDocument();
+    expect(screen.queryByText(/Не удалось получить результаты/)).not.toBeInTheDocument();
   });
 
   it('shows an empty state when the search found nothing', () => {
@@ -344,7 +356,139 @@ describe('DiscoveryResults', () => {
       />,
     );
 
-    expect(screen.getByText(/telemetr_rate_limited/)).toBeInTheDocument();
+    // The code is translated, not printed: the operator used to read the literal string
+    // "telemetr_rate_limited" off the board.
+    expect(screen.getByText(/ограничил частоту запросов/)).toBeInTheDocument();
+    expect(screen.queryByText(/telemetr_rate_limited/)).not.toBeInTheDocument();
+  });
+
+  it('keeps a degraded source visible through the qualifying phase', () => {
+    // Qualifying is the longest phase of a run: suppressing the banner there made a
+    // known source failure vanish for tens of seconds and then come back.
+    render(
+      <Harness
+        data={board([candidate()], {
+          phase: 'qualifying',
+          running: true,
+          last_error: 'telemetr_rate_limited',
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/ограничил частоту запросов/)).toBeInTheDocument();
+  });
+
+  it('credits every source, so a filter that reached nothing is visible', () => {
+    // The reported bug: language and country were set, the run reached "done", and
+    // nothing said that the only source those filters reach had contributed zero rows.
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [
+            { source: 'telegram_search', state: 'ran', hits: 20, kept: 20 },
+            {
+              source: 'telemetr',
+              state: 'skipped',
+              hits: 0,
+              kept: 0,
+              reason: 'telemetr_not_configured',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/поиск Telegram: 20 из 20/)).toBeInTheDocument();
+    expect(screen.getByText(/Telemetr\.io: не запрашивался/)).toBeInTheDocument();
+    expect(screen.getByText(/нет ключа Telemetr\.io/)).toBeInTheDocument();
+  });
+
+  it('names a source whose kept rows were all another source’s too', () => {
+    // "50 of 60" hid the variant: every row this source found ALONE was cut by the cap,
+    // so it looks like a major contributor while contributing nothing unique.
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [{ source: 'telemetr', state: 'ran', hits: 60, kept: 50, exclusive: 0 }],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/уникальных 0/)).toBeInTheDocument();
+  });
+
+  it('says a source was truncated instead of passing a capped page off as the answer', () => {
+    render(
+      <Harness
+        data={board([candidate()], {
+          sources: [
+            {
+              source: 'telemetr',
+              state: 'ran',
+              hits: 30,
+              kept: 30,
+              exclusive: 30,
+              truncated: true,
+            },
+          ],
+        })}
+      />,
+    );
+
+    // A flag, not a count: the per-keyword totals cannot be summed without double
+    // counting, and the earlier wording read "30 из 30 из 1523 совпадений".
+    expect(screen.getByText(/30 из 30, страница обрезана/)).toBeInTheDocument();
+  });
+
+  it('names the way out when the catalogue is terminally down and a filter is set', () => {
+    // The dead end: a locale filter makes the catalogue the only source allowed to
+    // answer, so a spent quota blocks every run until the operator changes something.
+    render(
+      <Harness
+        localeFiltered
+        data={board([], {
+          phase: 'failed',
+          last_error: 'telemetr_quota_exhausted',
+          sources: [
+            {
+              source: 'telemetr',
+              state: 'failed',
+              hits: 0,
+              kept: 0,
+              exclusive: 0,
+              reason: 'telemetr_quota_exhausted',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.getByText(/снимите оба фильтра/)).toBeInTheDocument();
+  });
+
+  it('does not tell the operator to drop filters over a rate limit', () => {
+    // A retry fixes that one, so the advice would be wrong.
+    render(
+      <Harness
+        localeFiltered
+        data={board([], {
+          phase: 'failed',
+          last_error: 'telemetr_rate_limited',
+          sources: [
+            {
+              source: 'telemetr',
+              state: 'failed',
+              hits: 0,
+              kept: 0,
+              exclusive: 0,
+              reason: 'telemetr_rate_limited',
+            },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.queryByText(/снимите оба фильтра/)).not.toBeInTheDocument();
   });
 
   it('renders subscribers compactly and an em dash when unknown', () => {
@@ -377,6 +521,29 @@ describe('DiscoveryResults', () => {
     expect(screen.getByText('Telemetr.io')).toBeInTheDocument();
   });
 
+  it('marks per row whether the locale filter reached it', () => {
+    // The operator's original complaint, answered row by row: only the catalogue files a
+    // channel under a country, so its geo is the proof, and its absence under an active
+    // filter is the proof of the opposite. Telegram's own search has no locale filter.
+    render(
+      <Harness
+        localeFiltered
+        data={board([
+          candidate({ channel: 'turkish', source: 'telemetr', country: 'TR', language: 'tr' }),
+          candidate({ channel: 'russian', source: 'telegram_search' }),
+        ])}
+      />,
+    );
+
+    expect(screen.getByText('TR · tr')).toBeInTheDocument();
+    expect(screen.getByText('фильтр не применялся')).toBeInTheDocument();
+  });
+
+  it('does not flag an unvouched row when no locale filter was asked for', () => {
+    render(<Harness data={board([candidate({ source: 'telegram_search' })])} />);
+    expect(screen.queryByText('фильтр не применялся')).not.toBeInTheDocument();
+  });
+
   it('does not call back when a disabled checkbox is clicked', async () => {
     const onToggle = vi.fn();
     render(
@@ -384,6 +551,7 @@ describe('DiscoveryResults', () => {
         board={board([candidate({ channel: 'closed', qualification: 'comments_off' })])}
         loading={false}
         errored={false}
+        localeFiltered={false}
         selected={new Set()}
         onToggle={onToggle}
         onToggleAll={vi.fn()}

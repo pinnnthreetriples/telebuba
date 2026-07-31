@@ -2,12 +2,75 @@ import { type ColumnDef } from '@tanstack/react-table';
 import { useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import type { DiscoveryBoard, DiscoveryCandidate } from '@/shared/api';
+import type { DiscoveryBoard, DiscoveryCandidate, DiscoverySourceReport } from '@/shared/api';
 import { DataTable, StatusIcon, useWideContainer, type DataTableColumnMeta } from '@/shared/ui';
 
 import { formatSubscribers, isSelectable, selectableChannels } from '../model/discovery';
 
 const CHECKBOX = 'h-[14px] w-[14px] shrink-0 accent-primary disabled:opacity-40';
+
+const SOURCE_STATE = {
+  ran: 'sourceRan',
+  failed: 'sourceFailed',
+  skipped: 'sourceSkipped',
+} as const;
+
+// Reasons are deliberately locale-neutral codes, and printing them raw put strings like
+// "telemetr_quota_exhausted" in front of the operator. Unmapped codes fall back to the
+// code itself, so a new one degrades to the old behaviour rather than to nothing.
+const reasonKey = (reason: string) => `neurocomment.modal.discovery.results.reason.${reason}`;
+
+// Catalogue failures a retry cannot clear. While a locale filter is set the catalogue is
+// the only source allowed to answer, so these block every run until the operator acts —
+// and nothing used to name the way out.
+const TERMINAL_CATALOGUE_REASONS = new Set([
+  'telemetr_not_configured',
+  'telemetr_auth_failed',
+  'telemetr_subscription_inactive',
+  'telemetr_quota_exhausted',
+  'telemetr_forbidden',
+  'telemetr_unresolved_filter',
+]);
+
+/** One line per source: what it returned, and what survived into the table.
+ *
+ * The operator could set a language and a country, watch a run reach "done", and never
+ * learn that the only source those two filters reach had contributed nothing — because
+ * the board carried a single error string and a skipped source carried none at all. A
+ * source crediting `0` here is that missing signal.
+ */
+function SourceStrip({ sources }: { sources: DiscoverySourceReport[] }) {
+  const { t } = useTranslation();
+  if (sources.length === 0) return null;
+  return (
+    <span className="text-ink-subtle">
+      {sources
+        .map((report) => {
+          const name = t(`neurocomment.modal.discovery.source.${report.source}`);
+          const kept = report.kept ?? 0;
+          const exclusive = report.exclusive ?? 0;
+          let line = t(`neurocomment.modal.discovery.results.${SOURCE_STATE[report.state]}`, {
+            source: name,
+            kept,
+            hits: report.hits ?? 0,
+          });
+          // "50 of 60" hid the case where all 50 were duplicates of another source and
+          // every row this one found alone was cut by the cap.
+          if (exclusive !== kept) {
+            line += ` ${t('neurocomment.modal.discovery.results.sourceExclusive', { exclusive })}`;
+          }
+          // A capped page otherwise reads as the whole answer.
+          if (report.truncated === true) {
+            line += `, ${t('neurocomment.modal.discovery.results.sourceTruncated')}`;
+          }
+          // A skipped or failed source is the whole point of this strip, so it says why.
+          if (report.reason == null) return line;
+          return `${line} — ${t(reasonKey(report.reason), { defaultValue: report.reason })}`;
+        })
+        .join(' · ')}
+    </span>
+  );
+}
 
 function CommentsCell({ candidate, settled }: { candidate: DiscoveryCandidate; settled: boolean }) {
   const { t } = useTranslation();
@@ -50,6 +113,8 @@ type Props = {
   board: DiscoveryBoard | undefined;
   loading: boolean;
   errored: boolean;
+  /** Did this run ask for a language or country? Only then is a missing geo a finding. */
+  localeFiltered: boolean;
   selected: ReadonlySet<string>;
   onToggle: (channel: string) => void;
   onToggleAll: (channels: string[], next: boolean) => void;
@@ -59,14 +124,16 @@ export function DiscoveryResults({
   board,
   loading,
   errored,
+  localeFiltered,
   selected,
   onToggle,
   onToggleAll,
 }: Props) {
   const { t, i18n } = useTranslation();
-  // Must be the container query DataTable itself uses, not the viewport one: this
-  // table lives in a 760px modal, so a wide viewport says "table" while the table
-  // renders as cards — and the select-all below would go missing.
+  // Must be the container query DataTable itself uses, not the viewport one: this table
+  // lives in a 920px modal whose padding leaves it 884px, 4px over the 880px table/card
+  // floor — so on a narrower viewport the table renders as cards while a viewport query
+  // would still say "table", and the select-all below would go missing.
   const results = useRef<HTMLDivElement>(null);
   const wide = useWideContainer(results);
   const candidates = board?.candidates ?? [];
@@ -135,7 +202,9 @@ export function DiscoveryResults({
       id: 'title',
       header: () => t('neurocomment.modal.discovery.results.colTitle'),
       cell: ({ row }) => (
-        <span className="block max-w-[240px] truncate text-ink-muted">
+        // Capped only where there is room for it: 240px plus the card's own padding
+        // overflows the dialog box at a 320px viewport.
+        <span className="block truncate text-ink-muted md:max-w-[240px]">
           {row.original.title ?? ''}
         </span>
       ),
@@ -153,11 +222,24 @@ export function DiscoveryResults({
     {
       id: 'source',
       header: () => t('neurocomment.modal.discovery.results.colSource'),
-      cell: ({ row }) => (
-        <span className="text-[11.5px] text-ink-subtle">
-          {t(`neurocomment.modal.discovery.source.${row.original.source}`)}
-        </span>
-      ),
+      cell: ({ row }) => {
+        // The catalogue is the only source that files a channel under a country and a
+        // language, so its geo is the per-row proof that the filter reached THIS row.
+        // Its absence, when a locale filter was asked for, is the proof that it did not:
+        // Telegram's own search has no such filter and its rows are simply unvouched.
+        const geo = [row.original.country, row.original.language].filter(Boolean).join(' · ');
+        return (
+          <span className="text-[11.5px] text-ink-subtle">
+            {t(`neurocomment.modal.discovery.source.${row.original.source}`)}
+            {geo !== '' ? <span className="ml-[5px] text-ink-muted">{geo}</span> : null}
+            {geo === '' && localeFiltered ? (
+              <span className="ml-[5px] text-warning">
+                {t('neurocomment.modal.discovery.results.unfiltered')}
+              </span>
+            ) : null}
+          </span>
+        );
+      },
     },
     {
       id: 'comments',
@@ -202,7 +284,10 @@ export function DiscoveryResults({
     );
   }
 
-  if (errored) {
+  // Only with nothing to fall back on: a failed refetch leaves status 'error' with the
+  // cached frame intact, and blanking the table would take N rows and every tick the
+  // operator has made with it.
+  if (errored && candidates.length === 0) {
     return (
       <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.error')}
@@ -211,11 +296,31 @@ export function DiscoveryResults({
   }
 
   if (failed && candidates.length === 0) {
+    // A catalogue that is terminally down (revoked key, lapsed plan, spent quota) blocks
+    // EVERY run while a locale filter is set, because storing unfiltered rows over a
+    // filtered set is a downgrade. Nothing said so, and nothing named the way out.
+    // Only the reasons a retry cannot fix. A rate limit or a network blip is also
+    // `state: 'failed'`, but there the advice is "try again", not "drop your filters" —
+    // and a missing key is `skipped`, the same dead end with a different way out.
+    const catalogue = (board?.progress.sources ?? []).find(
+      (report) => report.source === 'telemetr',
+    );
+    const stuck = catalogue?.reason != null && TERMINAL_CATALOGUE_REASONS.has(catalogue.reason);
     return (
       <p role="status" className="py-[26px] text-center text-[12.5px] text-danger">
         {t('neurocomment.modal.discovery.results.failed', {
-          reason: board?.progress.last_error ?? '',
+          reason:
+            board?.progress.last_error == null
+              ? ''
+              : t(reasonKey(board.progress.last_error), {
+                  defaultValue: board.progress.last_error,
+                }),
         })}
+        {stuck && localeFiltered ? (
+          <span className="mt-[6px] block text-ink-subtle">
+            {t('neurocomment.modal.discovery.results.catalogueDown')}
+          </span>
+        ) : null}
       </p>
     );
   }
@@ -261,15 +366,19 @@ export function DiscoveryResults({
             {t('neurocomment.modal.discovery.results.qualifying', { done: qualified, total })}
           </span>
         ) : null}
-        {board?.progress.last_error != null && phase !== 'qualifying' ? (
+        {board?.progress.last_error != null ? (
           <span role="status" className="text-danger">
             {/* An aborted run keeps whatever it collected, so the reason has to ride
-                along with the rows instead of replacing them. */}
+                along with the rows instead of replacing them — and through the
+                qualifying phase too, the longest one a run has. */}
             {t(`neurocomment.modal.discovery.results.${failed ? 'failed' : 'degraded'}`, {
-              reason: board.progress.last_error,
+              reason: t(reasonKey(board.progress.last_error), {
+                defaultValue: board.progress.last_error,
+              }),
             })}
           </span>
         ) : null}
+        <SourceStrip sources={board?.progress.sources ?? []} />
       </div>
       <div ref={results} className="tb-scroll overflow-x-auto">
         <DataTable

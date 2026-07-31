@@ -11,14 +11,22 @@ export const MAX_KEYWORDS = 10;
 // everything a run can show must be adoptable in one go.
 export const MAX_ADOPT = 500;
 
+// Straight off the generated request type, so the option lists the form renders cannot
+// drift from the codes the API accepts — that drift is what sent country=TR to a
+// catalogue whose dictionary calls it "turkey", and it answered with an empty page.
+export type DiscoveryLanguage = NonNullable<DiscoverySearchRequest['language']>;
+export type DiscoveryCountry = NonNullable<DiscoverySearchRequest['country']>;
+
 export type DiscoveryFormState = {
   keywords: string;
   seedChannel: string;
-  language: string;
-  country: string;
+  // '' is the "any" option, which omits the filter entirely.
+  language: DiscoveryLanguage | '';
+  country: DiscoveryCountry | '';
   minSubscribers: string;
   maxSubscribers: string;
   useTelemetr: boolean;
+  catalogueOnly: boolean;
 };
 
 export const EMPTY_FORM: DiscoveryFormState = {
@@ -29,21 +37,44 @@ export const EMPTY_FORM: DiscoveryFormState = {
   minSubscribers: '',
   maxSubscribers: '',
   useTelemetr: false,
+  catalogueOnly: false,
 };
 
-/** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap. */
-export function parseKeywords(raw: string): string[] {
+/** Split a free-form blob on commas/whitespace, drop @-noise, dedupe, cap.
+ *
+ * Exported so the form gets the kept and the dropped tokens from ONE pass: asking for
+ * them separately re-split the whole blob on every keystroke.
+ */
+export function splitKeywords(raw: string): { keywords: string[]; dropped: string[] } {
   const seen = new Set<string>();
   const keywords: string[] = [];
+  // A set, so the same rejected word typed twice is named once.
+  const dropped = new Set<string>();
   for (const token of raw.split(/[,\s]+/)) {
     const cleaned = token.trim().replace(/^@+/, '');
-    if (cleaned.length < KEYWORD_MIN_LENGTH || cleaned.length > KEYWORD_MAX_LENGTH) continue;
+    if (cleaned === '') continue;
+    // Code points, not UTF-16 units: the backend's length bounds are Python's, so
+    // two emoji counted as four here passed the form and 422'd on the server.
+    const length = [...cleaned].length;
+    if (length < KEYWORD_MIN_LENGTH || length > KEYWORD_MAX_LENGTH) {
+      dropped.add(cleaned);
+      continue;
+    }
     const key = cleaned.toLowerCase();
+    // A duplicate is not worth naming — the operator typed the word they meant.
     if (seen.has(key)) continue;
+    if (keywords.length === MAX_KEYWORDS) {
+      dropped.add(cleaned);
+      continue;
+    }
     seen.add(key);
     keywords.push(cleaned);
   }
-  return keywords.slice(0, MAX_KEYWORDS);
+  return { keywords, dropped: [...dropped] };
+}
+
+export function parseKeywords(raw: string): string[] {
+  return splitKeywords(raw).keywords;
 }
 
 function positiveInt(raw: string): number | undefined {
@@ -60,10 +91,18 @@ export function buildSearchRequest(form: DiscoveryFormState): DiscoverySearchReq
     keywords: parseKeywords(form.keywords),
     use_telemetr: form.useTelemetr,
   };
-  const seed = form.seedChannel.trim().replace(/^@+/, '');
+  // The placeholder invites a t.me link and the API caps this field at 32 chars, so a
+  // pasted URL either 422s or resolves to nothing — strip the prefix instead.
+  const seed = form.seedChannel.trim().replace(/^(?:https?:\/\/)?(?:t\.me\/)?@*/i, '');
   if (seed !== '') request.seed_channel = seed;
-  if (form.language !== '') request.language = form.language;
-  if (form.country !== '') request.country = form.country;
+  // Only the Telemetr.io catalogue filters by locale; Telegram's own search and its
+  // similar-channels feed have none, so without that source these reach nothing.
+  if (form.useTelemetr) {
+    if (form.language !== '') request.language = form.language;
+    if (form.country !== '') request.country = form.country;
+    // Only meaningful alongside the catalogue, and the API refuses it without.
+    if (form.catalogueOnly) request.catalogue_only = true;
+  }
   const min = positiveInt(form.minSubscribers);
   const max = positiveInt(form.maxSubscribers);
   if (min !== undefined) request.members_min = min;
@@ -71,12 +110,19 @@ export function buildSearchRequest(form: DiscoveryFormState): DiscoverySearchReq
   return request;
 }
 
+/** Are the subscriber bounds the wrong way round? The API refuses members_min > members_max. */
+export function boundsInverted(form: DiscoveryFormState): boolean {
+  const min = positiveInt(form.minSubscribers);
+  const max = positiveInt(form.maxSubscribers);
+  return min !== undefined && max !== undefined && min > max;
+}
+
 /**
  * Can the form be submitted? The API requires at least one keyword even when a seed
  * channel is given, so surface that here instead of letting the request 422.
  */
 export function canSubmit(form: DiscoveryFormState): boolean {
-  return parseKeywords(form.keywords).length > 0;
+  return parseKeywords(form.keywords).length > 0 && !boundsInverted(form);
 }
 
 /**

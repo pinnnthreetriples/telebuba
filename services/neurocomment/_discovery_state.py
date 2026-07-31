@@ -20,6 +20,7 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
+from schemas.neurocomment_discovery import DiscoveryRunReport
 
 if TYPE_CHECKING:
     from collections.abc import Coroutine
@@ -43,6 +44,10 @@ _RESERVED: dict[str, datetime] = {}
 _RUN_ACCOUNTS: dict[str, str] = {}
 _PHASES: dict[str, DiscoveryPhase] = {}
 _LAST_ERRORS: dict[str, str] = {}
+# Per-source outcome plus per-row provenance/geo of the last run. Not persisted, for the
+# same reason nothing else here is — and because the candidate table has no column for
+# the geo, which a migration against the live database would need operator approval for.
+_REPORTS: dict[str, DiscoveryRunReport] = {}
 # Rolling-24h timestamps of started runs, fleet-wide.
 _SEARCH_TIMES: deque[datetime] = deque()
 
@@ -74,6 +79,15 @@ def set_last_error(campaign_id: str, reason: str | None) -> None:
         _LAST_ERRORS.pop(campaign_id, None)
     else:
         _LAST_ERRORS[campaign_id] = reason
+
+
+def run_report(campaign_id: str) -> DiscoveryRunReport:
+    """The last run's per-source report, empty for a campaign that never searched."""
+    return _REPORTS.get(campaign_id, DiscoveryRunReport())
+
+
+def set_run_report(campaign_id: str, report: DiscoveryRunReport) -> None:
+    _REPORTS[campaign_id] = report
 
 
 def _prune_search_times(now: datetime) -> None:
@@ -147,6 +161,7 @@ def cancel_campaign_run(campaign_id: str) -> None:
     _RUN_ACCOUNTS.pop(campaign_id, None)
     _PHASES.pop(campaign_id, None)
     _LAST_ERRORS.pop(campaign_id, None)
+    _REPORTS.pop(campaign_id, None)
 
 
 async def shutdown_discovery_runs() -> None:
@@ -157,6 +172,8 @@ async def shutdown_discovery_runs() -> None:
     # answering ``already_running`` for the life of the process.
     _RESERVED.clear()
     _RUN_ACCOUNTS.clear()
+    # The reports pin one origin model per stored candidate; nothing outlives the loop.
+    _REPORTS.clear()
     for task in tasks:
         task.cancel()
     for task in tasks:
@@ -172,4 +189,5 @@ def reset_for_tests() -> None:
     _RUN_ACCOUNTS.clear()
     _PHASES.clear()
     _LAST_ERRORS.clear()
+    _REPORTS.clear()
     _SEARCH_TIMES.clear()

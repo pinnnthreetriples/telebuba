@@ -3,8 +3,10 @@ import { describe, expect, it } from 'vitest';
 import type { DiscoveryCandidate } from '@/shared/api';
 
 import {
+  boundsInverted,
   buildSearchRequest,
   canSubmit,
+  splitKeywords,
   EMPTY_FORM,
   formatSubscribers,
   isSelectable,
@@ -58,6 +60,33 @@ describe('parseKeywords', () => {
     expect(parseKeywords('')).toEqual([]);
     expect(parseKeywords('   ,  \n ')).toEqual([]);
   });
+
+  it('measures keywords in code points, like the backend does', () => {
+    // Four UTF-16 units, two code points: the server counts two and 422s.
+    expect(parseKeywords('🚀🚀')).toEqual([]);
+    // Eight code points inside the 64 limit, sixteen UTF-16 units — dropping it here
+    // would refuse a keyword the API accepts.
+    expect(parseKeywords('🚀🚀🚀🚀🚀🚀🚀🚀')).toEqual(['🚀🚀🚀🚀🚀🚀🚀🚀']);
+  });
+});
+
+describe('splitKeywords dropped tokens', () => {
+  it('names the tokens below the minimum length', () => {
+    expect(splitKeywords('crypto ab news').dropped).toEqual(['ab']);
+  });
+
+  it('names the tokens past the cap', () => {
+    const many = Array.from({ length: 12 }, (_, index) => `keyword${index}`).join(' ');
+    expect(splitKeywords(many).dropped).toEqual(['keyword10', 'keyword11']);
+  });
+
+  it('does not count a duplicate as dropped', () => {
+    expect(splitKeywords('crypto CRYPTO').dropped).toEqual([]);
+  });
+
+  it('ignores the blank tokens a separator run leaves behind', () => {
+    expect(splitKeywords('crypto,,  \n').dropped).toEqual([]);
+  });
 });
 
 describe('buildSearchRequest', () => {
@@ -89,6 +118,38 @@ describe('buildSearchRequest', () => {
     });
   });
 
+  it('omits language and country when the catalogue is off', () => {
+    // They reach only Telemetr.io; on the native sources they would filter nothing.
+    const request = buildSearchRequest(
+      form({ keywords: 'crypto', language: 'tr', country: 'TR', useTelemetr: false }),
+    );
+    expect(request.language).toBeUndefined();
+    expect(request.country).toBeUndefined();
+  });
+
+  it('sends catalogue_only only alongside the catalogue', () => {
+    // It leaves the catalogue as the only source, and the API refuses it without one.
+    expect(
+      buildSearchRequest(form({ keywords: 'crypto', useTelemetr: true, catalogueOnly: true }))
+        .catalogue_only,
+    ).toBe(true);
+    expect(
+      buildSearchRequest(form({ keywords: 'crypto', useTelemetr: false, catalogueOnly: true }))
+        .catalogue_only,
+    ).toBeUndefined();
+  });
+
+  it('strips a pasted t.me link down to the username', () => {
+    // The API caps seed_channel at 32 chars, so a full URL 422s instead of resolving.
+    expect(
+      buildSearchRequest(form({ keywords: 'crypto', seedChannel: 'https://t.me/durov' }))
+        .seed_channel,
+    ).toBe('durov');
+    expect(
+      buildSearchRequest(form({ keywords: 'crypto', seedChannel: 't.me/durov' })).seed_channel,
+    ).toBe('durov');
+  });
+
   it('drops unparseable or negative bounds instead of sending NaN', () => {
     const request = buildSearchRequest(
       form({ keywords: 'crypto', minSubscribers: 'abc', maxSubscribers: '-5' }),
@@ -113,6 +174,21 @@ describe('canSubmit', () => {
 
   it('rejects keywords that are all too short', () => {
     expect(canSubmit(form({ keywords: 'ab cd' }))).toBe(false);
+  });
+
+  it('rejects subscriber bounds the wrong way round (the API refuses them)', () => {
+    const inverted = form({ keywords: 'crypto', minSubscribers: '900', maxSubscribers: '100' });
+    expect(boundsInverted(inverted)).toBe(true);
+    expect(canSubmit(inverted)).toBe(false);
+    // Equal bounds are a legitimate exact match.
+    expect(
+      canSubmit(form({ keywords: 'crypto', minSubscribers: '100', maxSubscribers: '100' })),
+    ).toBe(true);
+  });
+
+  it('accepts a single bound', () => {
+    expect(boundsInverted(form({ keywords: 'crypto', minSubscribers: '900' }))).toBe(false);
+    expect(boundsInverted(form({ keywords: 'crypto', maxSubscribers: '100' }))).toBe(false);
   });
 });
 

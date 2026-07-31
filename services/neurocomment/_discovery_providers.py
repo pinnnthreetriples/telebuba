@@ -17,8 +17,12 @@ from datetime import UTC, datetime, timedelta
 from typing import TYPE_CHECKING
 
 from core.config import settings
-from core.db import fetch_warming_state, list_warming_account_ids, load_warming_settings
-from core.repositories.neurocomment import get_listener_account_id, list_campaign_accounts
+from core.db import fetch_warming_state, list_warming_account_ids
+from core.repositories.neurocomment import (
+    get_listener_account_id,
+    get_listener_running,
+    list_campaign_accounts,
+)
 from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import GetSimilarChannels, SearchChannels
 from schemas.telegram_actions_discovery import TelegramChannelMatches
@@ -28,7 +32,11 @@ from services.neurocomment._state import in_cooldown, set_cooldown
 from services.trust import flood_active
 
 if TYPE_CHECKING:
-    from schemas.neurocomment_discovery import DiscoverySearchRequest, DiscoverySource
+    from schemas.neurocomment_discovery import (
+        DiscoverySearchRequest,
+        DiscoverySource,
+        DiscoverySourceState,
+    )
 
 # The gateway renders a flood wait as ``FloodWait(<seconds>s)`` (core.telegram_client).
 _FLOOD_SECONDS = re.compile(r"FloodWait\((\d+)s\)")
@@ -42,6 +50,10 @@ class RawCandidate:
     title: str
     subscribers: int | None
     source: DiscoverySource
+    # Only the catalogue knows these; they ride through to the board so a filter can be
+    # verified rather than trusted.
+    country: str | None = None
+    language: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -49,16 +61,31 @@ class SourceOutcome:
     """What one provider produced, plus a short reason when it degraded.
 
     A failing source must never abort the run — the other source's results still
-    have value — so the reason is data, not an exception.
+    have value — so the reason is data, not an exception. ``source`` is carried even
+    when there are no candidates: a failed source has none, and the board has to be
+    able to name which one it was.
     """
 
+    source: DiscoverySource
+    state: DiscoverySourceState = "ran"
     candidates: tuple[RawCandidate, ...] = ()
     error: str | None = None
-    # Did this source actually return a result? False for a source that was skipped
-    # (no key configured) and for one that failed. It separates "nobody answered" from
-    # "the answers came back empty", which is what decides whether an empty merge may
-    # replace the stored candidate set.
-    answered: bool = True
+    # The gateway's own diagnostic text, kept apart from the short code above so the
+    # board can show one and the operator can act on the other.
+    detail: str | None = None
+    # What the source says it matched, when it knows. Only the catalogue does; without it
+    # a page capped at ``search_limit`` reads as the whole answer.
+    total: int | None = None
+
+    @property
+    def answered(self) -> bool:
+        """Did this source actually return a result?
+
+        False for a skipped source (disabled, no key, no seed) and for a failed one. It
+        separates "nobody answered" from "the answers came back empty", which is what
+        decides whether an empty merge may replace the stored candidate set.
+        """
+        return self.state == "ran"
 
 
 @dataclass(frozen=True, slots=True)
@@ -78,12 +105,20 @@ async def resolve_search_account(campaign_id: str) -> SearchAccount | str:
     Returns the status string ``"no_account"`` / ``"account_cooling"`` instead of
     raising, so the API layer can report it without catching service internals.
     """
-    account_id = await get_listener_account_id()
+    listener_id = await get_listener_account_id()
+    account_id = listener_id
     if account_id is None:
         links = await list_campaign_accounts(campaign_id)
         account_id = links.links[0].account_id if links.links else None
     if account_id is None:
         return "no_account"
+
+    # The listener is preferred precisely because it is read-only, but a *running* one
+    # holds the session and reads continuously. Layering a multi-minute paced keyword
+    # stream plus up to 100 probes on top of it is the same mutual-exclusion violation
+    # the warming check below prevents, and the listener is routinely running.
+    if account_id == listener_id and await get_listener_running():
+        return "account_cooling"
 
     # Warming assumes it owns its accounts' traffic — that assumption is the whole
     # basis of its freeze avoidance. Every other listener consumer enforces the same
@@ -119,20 +154,25 @@ async def record_flood(account_id: str, reason: str | None) -> bool:
     return True
 
 
-def _matches_to_candidates(
-    result: object,
-    source: DiscoverySource,
-) -> tuple[RawCandidate, ...]:
-    if not isinstance(result, TelegramChannelMatches):  # pragma: no cover - typed gateway
-        return ()
-    return tuple(
-        RawCandidate(
-            username=item.username,
-            title=item.title,
-            subscribers=item.participants_count,
-            source=source,
-        )
-        for item in result.items
+def _matches_outcome(result: object, source: DiscoverySource) -> SourceOutcome:
+    """Narrow the gateway's reply, treating an unknown shape as a failure.
+
+    Counting it as an answer with zero candidates would let a Telethon-layer change
+    authorise the wholesale replace and wipe the stored candidate set.
+    """
+    if not isinstance(result, TelegramChannelMatches):
+        return SourceOutcome(source=source, state="failed", error="unexpected_result")
+    return SourceOutcome(
+        source=source,
+        candidates=tuple(
+            RawCandidate(
+                username=item.username,
+                title=item.title,
+                subscribers=item.participants_count,
+                source=source,
+            )
+            for item in result.items
+        ),
     )
 
 
@@ -144,29 +184,36 @@ async def search_native(account_id: str, keyword: str) -> SourceOutcome:
             SearchChannels(query=keyword),
         )
     except TelegramReadError as exc:
-        return SourceOutcome(error=exc.reason, answered=False)
-    return SourceOutcome(candidates=_matches_to_candidates(result, "telegram_search"))
+        return SourceOutcome(source="telegram_search", state="failed", error=exc.reason)
+    return _matches_outcome(result, "telegram_search")
 
 
-async def search_similar(account_id: str, seed: str | None) -> SourceOutcome:
+async def search_similar(account_id: str, seed: str) -> SourceOutcome:
     """Channels similar to a seed — the cheapest way to widen a sweep."""
     try:
         result = await _seams.execute_read(account_id, GetSimilarChannels(seed=seed))
     except TelegramReadError as exc:
-        return SourceOutcome(error=exc.reason, answered=False)
-    return SourceOutcome(candidates=_matches_to_candidates(result, "telegram_similar"))
+        return SourceOutcome(source="telegram_similar", state="failed", error=exc.reason)
+    return _matches_outcome(result, "telegram_similar")
 
 
-async def search_telemetr(keyword: str, request: DiscoverySearchRequest) -> SourceOutcome:
+async def search_telemetr(
+    keyword: str,
+    request: DiscoverySearchRequest,
+    api_key: str,
+) -> SourceOutcome:
     """The external catalogue: country/language filters plus subscriber counts.
 
-    A missing key is a *skipped* source, not an error — the operator simply has not
-    configured it, and the native source still ran.
+    A missing key is a *skipped* source rather than a failure — but it is still
+    reported: the operator ticked the box and the catalogue was never queried, and
+    saying nothing let the run reach "done" as if the filter had applied.
+
+    ``api_key`` is passed in, not read here: the read decrypts a secret and this runs
+    once per keyword.
     """
-    secret = await load_warming_settings()
     result = await _seams.search_telemetr(
         TelemetrSearchRequest(
-            api_key=secret.telemetr_api_key,
+            api_key=api_key,
             term=keyword,
             country=request.country,
             language=request.language,
@@ -175,17 +222,28 @@ async def search_telemetr(keyword: str, request: DiscoverySearchRequest) -> Sour
             limit=settings.telemetr.search_limit,
         ),
     )
-    if result.status == "not_configured":
-        return SourceOutcome(answered=False)
     if result.status != "ok":
-        return SourceOutcome(error=f"telemetr_{result.status}", answered=False)
+        # ``detail`` is the gateway's own text, which distinguishes a revoked key from an
+        # expired subscription from a rejected filter value from a dead network — the
+        # short code cannot. It carries no part of the API key (core.telemetr scrubs it),
+        # so it is safe to show and to log, and the run's finish event logs it.
+        return SourceOutcome(
+            source="telemetr",
+            state="skipped" if result.status == "not_configured" else "failed",
+            error=f"telemetr_{result.status}",
+            detail=result.error,
+        )
     return SourceOutcome(
+        source="telemetr",
+        total=result.total_count,
         candidates=tuple(
             RawCandidate(
                 username=item.username,
                 title=item.title,
                 subscribers=item.members_count,
                 source="telemetr",
+                country=item.country,
+                language=item.language,
             )
             for item in result.items
         ),

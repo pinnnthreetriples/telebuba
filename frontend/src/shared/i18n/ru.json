@@ -1042,21 +1042,27 @@
         "form": {
           "keywords": "Ключевые слова",
           "keywordsPlaceholder": "крипта, трейдинг, новости",
-          "keywordsHint": "От {{min}} символов, до {{max}} слов. Распознано: {{count}}",
+          "keywordsHint": "От {{min}} символов, до {{max}} слов. Распознано: {{parsed}}",
+          "keywordsDropped": "Пропущено: {{tokens}} — короче {{min}} символов или сверх лимита в {{max}} слов",
           "language": "Язык",
           "country": "Страна",
           "anyLanguage": "Любой",
           "anyCountry": "Любая",
+          "localeScopeHint": "По ним фильтрует только каталог Telemetr.io — в поиске самого Telegram нет фильтров по языку и стране, поэтому включите этот источник или оставьте оба поля на «Любой». С подписчиками иначе: их границы применяются и к результатам Telegram.",
           "minSubscribers": "Подписчиков от",
           "maxSubscribers": "Подписчиков до",
+          "boundsInverted": "«Подписчиков от» больше «Подписчиков до» — под такой фильтр ничего не подойдёт.",
           "seedChannel": "Похожие на канал",
           "seedChannelHint": "Telegram подберёт каналы, похожие на указанный, по пересечению аудитории. Это самый дешёвый способ расширить выдачу.",
+          "seedChannelPlaceholder": "@канал",
           "useTelemetr": "Искать ещё и в каталоге Telemetr.io",
-          "useTelemetrHint": "Внешний каталог: фильтры по стране, языку и числу подписчиков. Расходует квоту вашего тарифа.",
+          "useTelemetrHint": "Единственный источник, который умеет фильтровать по языку и стране: в поиске самого Telegram таких фильтров нет, поэтому без него эти два поля ни на что не влияют. Расходует квоту вашего тарифа.",
           "useTelemetrMissing": "Чтобы включить, добавьте ключ Telemetr.io в Настройках.",
           "reset": "Сбросить",
           "submit": "Найти",
-          "searching": "Запускаем…"
+          "searching": "Запускаем…",
+          "catalogueOnly": "Только каталог",
+          "catalogueOnlyHint": "Убрать собственный поиск Telegram и оставить единственный источник, который учитывает язык и страну. На нескольких ключевых словах каналов обычно столько же, но все с проверенной локалью; на узком фильтре — заметно меньше."
         },
         "results": {
           "back": "← Изменить параметры",
@@ -1076,7 +1082,29 @@
           "colComments": "Комментарии",
           "colState": "Статус",
           "inCampaign": "уже в кампании",
-          "takenElsewhere": "занят другой кампанией"
+          "takenElsewhere": "занят другой кампанией",
+          "sourceRan": "{{source}}: {{kept}} из {{hits}}",
+          "sourceFailed": "{{source}}: ошибка",
+          "sourceSkipped": "{{source}}: не запрашивался",
+          "reason": {
+            "telemetr_not_configured": "нет ключа Telemetr.io — добавьте его в настройках",
+            "telemetr_auth_failed": "Telemetr.io отклонил ключ — проверьте его в настройках",
+            "telemetr_quota_exhausted": "месячная квота Telemetr.io израсходована",
+            "telemetr_subscription_inactive": "подписка Telemetr.io неактивна",
+            "telemetr_rate_limited": "Telemetr.io ограничил частоту запросов — попробуйте позже",
+            "telemetr_unresolved_filter": "Telemetr.io не знает такой язык или страну",
+            "telemetr_bad_request": "Telemetr.io отклонил запрос",
+            "telemetr_forbidden": "Telemetr.io отказал в доступе",
+            "telemetr_not_found": "эндпоинт Telemetr.io не найден",
+            "telemetr_error": "Telemetr.io недоступен",
+            "seed_unusable": "канал-образец не похож на корректный хэндл",
+            "unexpected_result": "Telegram вернул неожиданный ответ",
+            "seed_needs_telegram": "канал-образец работает через поиск Telegram, а его отключает «Только каталог»"
+          },
+          "unfiltered": "фильтр не применялся",
+          "catalogueDown": "Пока задан язык или страна, ответить может только каталог — снимите оба фильтра и галочку «Только каталог», чтобы искать одним Telegram.",
+          "sourceExclusive": "(уникальных {{exclusive}})",
+          "sourceTruncated": "страница обрезана"
         },
         "comments": {
           "pending": "проверяется",
@@ -1091,11 +1119,12 @@
           "telemetr": "Telemetr.io"
         },
         "refused": {
-          "already_running": "Поиск для этой кампании уже идёт.",
+          "already_running": "Поиск для этой кампании уже идёт — его результаты ниже.",
           "no_account": "Нет аккаунта для поиска: назначьте слушателя или аккаунт в кампанию.",
           "account_cooling": "Аккаунт поиска пережидает лимит Telegram. Попробуйте позже.",
           "daily_limit_reached": "Суточный лимит поисков исчерпан."
         },
+        "startFailed": "Не удалось запустить поиск. Проверьте параметры и повторите.",
         "add": "Добавить выбранные ({{count}})",
         "added": "Добавлено: {{count}}",
         "addedNone": "Ничего не добавлено",
