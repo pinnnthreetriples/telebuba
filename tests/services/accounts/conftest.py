@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -9,6 +10,7 @@ import pytest
 from core.config import settings
 from core.db import configure_database
 from core.logging import reset_logging_for_tests, setup_logging
+from services.accounts import privacy as privacy_module
 from services.accounts._import_locks import _IMPORT_LOCKS
 
 if TYPE_CHECKING:
@@ -29,6 +31,10 @@ def _isolate_runtime(
     # awaited; clear them so each function-scoped test gets fresh locks (mirrors
     # warming's _ACCOUNT_LOCKS reset).
     _IMPORT_LOCKS.clear()
+    # The fleet-wide cap is deliberately process-global in production. Pytest's
+    # function-scoped asyncio loops still require a fresh semaphore per test,
+    # especially when mutmut executes coverage and stats in the same process.
+    monkeypatch.setattr(privacy_module, "_APPLY_SEMAPHORE", asyncio.Semaphore(4))
     reset_logging_for_tests()
     setup_logging()
     yield

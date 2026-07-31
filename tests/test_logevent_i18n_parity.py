@@ -16,7 +16,14 @@ import json
 import re
 from pathlib import Path
 
-_ROOT = Path(__file__).resolve().parents[1]
+_TEST_TREE_ROOT = Path(__file__).resolve().parents[1]
+# mutmut 3.6 runs the copied suite from ``<project>/mutants`` after expanding
+# every function into its original plus all mutant implementations. This test is
+# a source-tree drift guard, so parsing that expanded implementation would treat
+# deliberately mutated event strings (for example ``ACCOUNT_ADDED``) as real
+# production codes. Read the pristine parent tree in that one generated layout;
+# regular pytest continues to inspect its own repository root.
+_ROOT = _TEST_TREE_ROOT.parent if _TEST_TREE_ROOT.name == "mutants" else _TEST_TREE_ROOT
 _CODE_ROOTS = ("api", "services", "core")
 # ``log_event(level, code, ...)`` — the code is the second positional argument.
 _CODE_ARG_INDEX = 1

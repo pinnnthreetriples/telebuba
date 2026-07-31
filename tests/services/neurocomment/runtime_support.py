@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import TYPE_CHECKING
 
 import pytest
@@ -103,4 +104,4 @@ async def _drain_joins() -> None:
     """
     task = _runtime._JOIN_TASK
     if task is not None:
-        await task
+        await asyncio.wait_for(task, timeout=2.0)

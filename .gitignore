@@ -48,6 +48,8 @@ frontend/.cov-tmp/
 .mypy_cache/
 .coverage
 htmlcov/
+mutants/
+mutation-report/
 
 # AI agent caches / per-machine config
 .serena/
