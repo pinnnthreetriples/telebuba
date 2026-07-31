@@ -20,6 +20,7 @@ from core.db import (
     configure_database,
     create_account,
     create_campaign,
+    deactivate_channel,
     insert_challenge,
     link_channel_to_campaign,
     mark_comment_posted,
@@ -83,6 +84,36 @@ async def test_channel_row_counts_recently_deleted_comments() -> None:
 
     assert board is not None
     assert board.channels[0].deleted_recent == 1
+
+
+@pytest.mark.asyncio
+async def test_card_deleted_today_outlives_the_channel_row() -> None:
+    """The card's count survives unlinking the channel; the channel row's cannot.
+
+    Why the board carries both: the header's "deleted" total sums the cards, so it stays
+    a subset of the "comments" total. Summing the channel rows instead would drop to zero
+    here while ``comments_today`` still reports 2 — and unlinking a channel that sweeps
+    our comments is exactly what an operator does.
+    """
+    campaign = await create_campaign(CampaignCreate(name="C1", prompt="p"))
+    await create_account(AccountCreate(account_id="acc-1"))
+    await assign_account_to_campaign(campaign.campaign_id, "acc-1")
+    await link_channel_to_campaign(campaign.campaign_id, "@chan")
+    await _post_comment("@chan", 1, campaign.campaign_id, "acc-1")
+    await _post_comment("@chan", 2, campaign.campaign_id, "acc-1")
+    await mark_comments_deleted("@chan", [1, 2])
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+    assert board is not None
+    assert board.accounts[0].deleted_today == 2
+
+    await deactivate_channel(campaign.campaign_id, "@chan")
+
+    board = await load_neurocomment_board(campaign.campaign_id)
+    assert board is not None
+    assert board.channels == []  # no row left to hang a per-channel count on
+    assert board.accounts[0].comments_today == 2
+    assert board.accounts[0].deleted_today == 2
 
 
 @pytest.mark.asyncio

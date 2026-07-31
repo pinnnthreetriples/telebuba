@@ -103,6 +103,31 @@ test('the add-channel pill reveals an input and adds the channel', async () => {
   });
 });
 
+test('the deleted tile sums the account cards, never the channel rows', async () => {
+  // Accounts carry 3 + 2 deleted of 4 + 3 posted; the channel rows carry a deliberately
+  // different 9. Reading the channels would total 9 and could outrun the comments tile —
+  // a channel row vanishes when the operator unlinks it, its comments do not.
+  routeApi({
+    ...BOARD,
+    channels: [{ ...BOARD.channels[0], deleted_recent: 9 }],
+    accounts: [
+      { ...BOARD.accounts[0], comments_today: 4, deleted_today: 3 },
+      { ...BOARD.accounts[0], account_id: 'acc-2', comments_today: 3, deleted_today: 2 },
+    ],
+  });
+
+  renderWithClient(<NeurocommentPage />);
+  // The Odometer rolls a 0–9 column into place, so a tile's value is readable only as
+  // its settled offset: value N sits at translateY(-N*1.1em).
+  const tileValue = (label: string): string | undefined =>
+    screen.getByText(label).parentElement?.querySelector<HTMLElement>('[style*="translateY"]')
+      ?.style.transform;
+  await waitFor(() => {
+    expect(tileValue('Удалено')).toBe('translateY(-5.50em)');
+  });
+  expect(tileValue('Комментариев')).toBe('translateY(-7.70em)');
+});
+
 test('checking channels colours banned chips red and healthy chips green', async () => {
   const board2 = {
     ...BOARD,

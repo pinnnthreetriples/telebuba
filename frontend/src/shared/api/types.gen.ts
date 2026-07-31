@@ -1474,6 +1474,10 @@ export type NeurocommentAccountCard = {
    */
   comments_today: number;
   /**
+   * Deleted Today
+   */
+  deleted_today?: number;
+  /**
    * Last Comment At
    */
   last_comment_at?: string | null;

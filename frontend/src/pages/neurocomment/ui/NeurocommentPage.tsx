@@ -309,6 +309,16 @@ export function NeurocommentPage() {
       value: boardAccounts.reduce((sum, a) => sum + a.comments_today, 0),
       color: '#12a150',
     },
+    // Deleted is a subset of comments, so it sums the SAME rows over the SAME cards —
+    // both tiles read the account's 24h window. Summing the channels' `deleted_recent`
+    // instead (the number the per-channel badge shows) would drift both ways: an
+    // unlinked channel takes its deletions off the board while its comments stay on
+    // the account, and an unlinked account does the reverse.
+    {
+      label: t('neurocomment.stat.deleted'),
+      value: boardAccounts.reduce((sum, a) => sum + (a.deleted_today ?? 0), 0),
+      color: '#c0473f',
+    },
     // The design's red "ошибок" odometer (#E5372A): today's error-level events.
     { label: t('neurocomment.stat.errors'), value: errorCount, color: '#e5372a' },
   ];
