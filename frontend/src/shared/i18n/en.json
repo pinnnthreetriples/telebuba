@@ -753,7 +753,10 @@
     "neurocomment_discovery_failed": "Channel search failed",
     "neurocomment_discovery_adopted": "Channels added from search",
     "neurocomment_channel_comments_off": "Channel comments are disabled",
-    "neurocomment_onboard_join_by_request": "Join request sent"
+    "neurocomment_onboard_join_by_request": "Join request sent",
+    "neurocomment_onboard_join_request_pending": "Join request still awaiting approval",
+    "neurocomment_join_request_expired": "Channel dropped: join request never approved",
+    "neurocomment_join_request_review_failed": "Join-request review failed"
   },
   "logEventReason": {
     "chance": "chance didn't hit",
@@ -800,6 +803,7 @@
       "join_channel": "Join channel",
       "join_discussion_group": "Join channel chat",
       "leave_channel": "Leave channel",
+      "leave_discussion_group": "Leave channel chat",
       "post_comment": "Post comment",
       "comment_on_post": "Comment on post",
       "click_button": "Click button",

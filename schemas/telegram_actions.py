@@ -90,6 +90,19 @@ class LeaveChannel(BaseModel):
     channel: str = Field(min_length=1)
 
 
+class LeaveDiscussionGroup(BaseModel):
+    """Leave the discussion group linked to ``channel`` — mirror of ``JoinDiscussionGroup``.
+
+    ``LeaveChannel`` cannot do this: it issues ``LeaveChannelRequest`` against the
+    broadcast channel named by the handle, while the commenting membership lives in
+    the linked group, which usually has no username of its own. The gateway resolves
+    that group from the parent channel and leaves the resolved entity.
+    """
+
+    action_type: Literal["leave_discussion_group"] = "leave_discussion_group"
+    channel: str = Field(min_length=1)
+
+
 class PostComment(BaseModel):
     action_type: Literal["post_comment"] = "post_comment"
     chat_id: int
@@ -253,6 +266,7 @@ TelegramAction = Annotated[
     JoinChannel
     | JoinDiscussionGroup
     | LeaveChannel
+    | LeaveDiscussionGroup
     | PostComment
     | CommentOnPost
     | ClickButton

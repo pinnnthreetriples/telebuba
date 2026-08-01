@@ -94,6 +94,74 @@ async def upsert_readiness(
     )
 
 
+def _stamp_join_request(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel),
+            )
+            .values(
+                join_requested_at=_now_iso(),
+                join_request_attempts=_neurocomment_readiness.c.join_request_attempts + 1,
+            ),
+        )
+
+
+async def stamp_join_request(account_id: str, channel: str) -> None:
+    """Record that an approval-gated join request just went out for this pair.
+
+    Deliberately NOT part of ``upsert_readiness``: the join-request branch upserts the
+    readiness row first and stamps here, so a plain re-onboard (which re-upserts) cannot
+    reset the counter — that reset is exactly what let the same pair re-request forever.
+    """
+    await asyncio.to_thread(_stamp_join_request, account_id, channel)
+
+
+def _clear_join_request(account_id: str, channel: str) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            update(_neurocomment_readiness)
+            .where(
+                # Only rows that actually hold a stamp — a normal join must not pay an
+                # UPDATE on every onboarding pass just to write the values already there.
+                (_neurocomment_readiness.c.account_id == account_id)
+                & (_neurocomment_readiness.c.channel == channel)
+                & _neurocomment_readiness.c.join_requested_at.is_not(None),
+            )
+            .values(join_requested_at=None, join_request_attempts=0),
+        )
+
+
+async def clear_join_request(account_id: str, channel: str) -> None:
+    """Forget a pending join request once the pair is in the group (approval landed)."""
+    await asyncio.to_thread(_clear_join_request, account_id, channel)
+
+
+def _list_pending_join_readiness() -> ReadinessList:
+    # Every readiness row of every channel that has at least one outstanding request —
+    # not just the pending rows. The sweep's give-up rule needs BOTH halves in one read:
+    # the pending stamps to age, and the sibling rows to prove no account is ready there
+    # (one stubborn account must never kill a channel the others comment in fine).
+    channels = select(_neurocomment_readiness.c.channel).where(
+        _neurocomment_readiness.c.join_requested_at.is_not(None),
+    )
+    statement = select(_neurocomment_readiness).where(
+        _neurocomment_readiness.c.channel.in_(channels),
+    )
+    with _get_engine().connect() as connection:
+        rows = connection.execute(statement).mappings().all()
+    return ReadinessList(
+        readiness=[NeurocommentReadiness.model_validate(dict(row)) for row in rows],
+    )
+
+
+async def list_pending_join_readiness() -> ReadinessList:
+    """Readiness rows for every channel holding at least one pending join request."""
+    return await asyncio.to_thread(_list_pending_join_readiness)
+
+
 def _mark_human_skipped(account_id: str, channel: str) -> None:
     with _get_engine().begin() as connection:
         connection.execute(

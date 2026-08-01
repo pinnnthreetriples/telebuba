@@ -19,6 +19,7 @@ from core.config import settings
 from core.db import (
     fetch_active_campaigns_for_channels,
     list_active_watch_channels,
+    list_pending_join_readiness,
     list_posted_comments_since,
     mark_comments_deleted,
     purge_neurocomment_history_older_than,
@@ -29,7 +30,7 @@ from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResul
 from services.neurocomment import _seams, _state
 
 if TYPE_CHECKING:
-    from schemas.neurocomment import CommentRecord
+    from schemas.neurocomment import CommentRecord, NeurocommentReadiness
 
 # Stdlib sink for full third-party text — see ``core.proxy_check._failed_result``.
 logger = logging.getLogger(__name__)
@@ -52,8 +53,8 @@ async def _sweep_loop() -> None:
 
     The lone non-event loop in the runtime. A sweep fault is logged and the loop
     keeps going — it must never die (mirrors the listener-safe on-post pipeline).
-    The retention prune piggybacks on the same tick behind its own guard, so neither
-    half of the pass can abort the other.
+    The retention prune and the join-request review piggyback on the same tick behind
+    their own guards, so no part of the pass can abort another.
     """
     interval = settings.neurocomment.deletion_sweep_interval_seconds
     while True:
@@ -68,6 +69,7 @@ async def _sweep_loop() -> None:
                 extra={"error_type": type(exc).__name__},
             )
         await _prune_history_if_due(datetime.now(UTC))
+        await _review_join_requests(datetime.now(UTC))
 
 
 async def _prune_history_if_due(now: datetime) -> None:
@@ -115,6 +117,80 @@ async def _prune_history_if_due(now: datetime) -> None:
             "neurocomment_retention_purged",
             extra={"removed": removed, "cutoff": cutoff},
         )
+
+
+async def _review_join_requests(now: datetime) -> None:
+    """Age the outstanding admin-approval join requests: retry the due ones, drop the dead.
+
+    Rides this loop because onboarding has NO timer of its own — it runs on operator
+    Start, on boot, and on campaign reconciles only — so a 24h/48h rule placed in the
+    onboarding pass would simply never fire. Never raises: a failure here must not
+    abort the deletion sweep that owns this tick.
+    """
+    nc = settings.neurocomment
+    retry_after = timedelta(hours=nc.join_request_retry_hours)
+    # The whole patience budget: every attempt gets its own retry window before we
+    # accept that nobody is going to press Approve.
+    give_up_after = retry_after * nc.join_request_max_attempts
+    try:
+        rows = (await list_pending_join_readiness()).readiness
+    except Exception as exc:  # noqa: BLE001 - the review must never abort the sweep loop.
+        await log_event(
+            "WARNING",
+            "neurocomment_join_request_review_failed",
+            extra={"error_type": type(exc).__name__},
+        )
+        return
+    by_channel: dict[str, list[NeurocommentReadiness]] = defaultdict(list)
+    for row in rows:
+        by_channel[row.channel].append(row)
+    # Only channels still linked to an ACTIVE campaign can be dropped; the bulk read
+    # also hands us the campaign id ``deactivate_channel`` needs.
+    campaigns = await fetch_active_campaigns_for_channels(list(by_channel))
+    retry_due = False
+    for channel, channel_rows in by_channel.items():
+        campaign = campaigns.get(channel)
+        if campaign is None:
+            continue
+        if any(row.ready for row in channel_rows):
+            # One stubborn account must never kill a channel the other accounts comment
+            # in fine — a ready pair is proof the channel works.
+            continue
+        ages = [
+            (row, now - datetime.fromisoformat(row.join_requested_at))
+            for row in channel_rows
+            if row.join_requested_at is not None
+        ]
+        if all(age >= give_up_after for _row, age in ages):
+            await _drop_unapproved_channel(campaign.campaign_id, channel, len(ages))
+            continue
+        retry_due = retry_due or any(
+            age >= retry_after and row.join_request_attempts < nc.join_request_max_attempts
+            for row, age in ages
+        )
+    if retry_due:
+        # Late import: ``_runtime`` imports this module, so a top-level import cycles.
+        from services.neurocomment import _runtime, _signals  # noqa: PLC0415
+
+        _runtime._ensure_onboarding_running(_signals.signal_onboarding_progress)  # noqa: SLF001
+
+
+async def _drop_unapproved_channel(campaign_id: str, channel: str, pending: int) -> None:
+    """Unlink a channel nobody approved us into, via the service (so the listener reconciles)."""
+    # Late import for the same cycle as above (campaigns -> _runtime -> _sweep).
+    from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
+
+    await campaigns_service.deactivate_channel(campaign_id, channel)
+    await log_event(
+        "WARNING",
+        "neurocomment_join_request_expired",
+        extra={
+            "channel": channel,
+            "campaign_id": campaign_id,
+            "pending_accounts": pending,
+            "reason": "no_admin_approval",
+        },
+    )
 
 
 async def _sweep_once() -> None:

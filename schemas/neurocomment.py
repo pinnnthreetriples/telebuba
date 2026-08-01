@@ -166,6 +166,10 @@ class NeurocommentReadiness(BaseModel):
     # Operator skip (#148); auto-ban (#30). Both make the engine never select the pair.
     human_skipped: bool = False
     banned: bool = False
+    # Approval-gated join request: when the most recent one was sent (None = none
+    # outstanding) and how many have gone out. Drives the 24h retry / 48h channel drop.
+    join_requested_at: str | None = None
+    join_request_attempts: int = 0
 
 
 class ReadinessList(BaseModel):

@@ -209,6 +209,26 @@ def _add_readiness_banned(connection: Connection) -> None:
         )
 
 
+def _add_readiness_join_request(connection: Connection) -> None:
+    # A discussion group behind admin approval wrote the very same
+    # (joined=0, captcha_passed=0, ready=0) row the challenge back-off writes, so
+    # "waiting for approval" was indistinguishable from "cooled down" and every later
+    # onboarding pass re-sent the join RPC — 32 live pairs re-requested ~6 times in
+    # three days. These two columns make the request visible: when the most recent one
+    # went out, and how many have. NULL / 0 on existing rows = nothing outstanding, so
+    # the first pass after the upgrade stamps them as if the request were new.
+    columns = _sqlite_columns(connection, "neurocomment_readiness")
+    if "join_requested_at" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_readiness ADD COLUMN join_requested_at VARCHAR",
+        )
+    if "join_request_attempts" not in columns:
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_readiness "
+            "ADD COLUMN join_request_attempts INTEGER NOT NULL DEFAULT 0",
+        )
+
+
 def _add_neurocomment_comment_deleted_at(connection: Connection) -> None:
     # #27: mark a posted comment that later vanished from the channel. NULL = still
     # live; an ISO timestamp = when we noticed it was deleted. The comments table is

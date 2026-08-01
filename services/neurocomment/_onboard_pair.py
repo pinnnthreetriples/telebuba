@@ -26,7 +26,7 @@ from core.db import (
     upsert_readiness,
 )
 from core.logging import log_event
-from schemas.neurocomment import AccountChannelOnboarding
+from schemas.neurocomment import AccountChannelOnboarding, NeurocommentReadiness
 from schemas.telegram_actions import (
     GetLinkedDiscussionGroup,
     JoinDiscussionGroup,
@@ -102,11 +102,29 @@ async def _join_and_classify(
     An operator-skipped pair (#148) or an auto-banned pair (#30) is left alone:
     re-joining would run the solver and flip readiness back to ready, undoing the
     skip / reviving the ban. Cleared via ``retry_pair`` (skip) or a can_send probe (ban).
+
+    A pair with an approval request still in flight is left alone the same way, and sits
+    next to those guards for the same reason: both must cost zero join RPCs. An admin
+    reads a re-request as spam, and every pass used to send one.
     """
     existing = await fetch_readiness(account_id, channel)
     if existing is not None and (existing.human_skipped or existing.banned):
         state = "human_skipped" if existing.human_skipped else "banned"
         return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
+    if existing is not None and _join_request_in_flight(existing, datetime.now(UTC)):
+        # One line per pair per pass, and only for pairs actually held back — the old
+        # behaviour logged a fresh join_by_request every pass *and* paid the RPC for it.
+        await log_event(
+            "INFO",
+            "neurocomment_onboard_join_request_pending",
+            account_id=account_id,
+            extra={"channel": channel, "attempts": existing.join_request_attempts},
+        )
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="join_by_request",
+        )
     if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
@@ -124,6 +142,22 @@ async def _join_and_classify(
     return await _classify_join(
         account_id, channel, result, group_id, solver_enabled=solver_enabled
     )
+
+
+def _join_request_in_flight(readiness: NeurocommentReadiness, now: datetime) -> bool:
+    """True while an approval request must NOT be re-sent for this pair.
+
+    Two ways to be in flight: the last request is younger than the retry window, or the
+    pair has already used all its attempts (it then stays in flight forever — the sweep
+    is what ends it, by dropping the channel).
+    """
+    if readiness.join_requested_at is None:
+        return False
+    nc = settings.neurocomment
+    if readiness.join_request_attempts >= nc.join_request_max_attempts:
+        return True
+    requested = datetime.fromisoformat(readiness.join_requested_at)
+    return now - requested < timedelta(hours=nc.join_request_retry_hours)
 
 
 async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussionGroupResult:

@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import mark_pair_banned, upsert_readiness
+from core.db import clear_join_request, mark_pair_banned, stamp_join_request, upsert_readiness
 from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
 from services.neurocomment import challenge
@@ -59,6 +59,11 @@ async def _classify_join(
         )
     if result.error_type == "InviteRequestSentError":
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
+        # Stamp the request AFTER the upsert (which cannot carry these columns without
+        # a re-onboard resetting them). The stamp is what stops the next pass re-sending
+        # the same request: it is the only thing distinguishing this row from the
+        # challenge-backoff row, which is identical field for field.
+        await stamp_join_request(account_id, channel)
         # The state itself was invisible in the log: only the gateway's join line was
         # written, so an operator could not tell "waiting for admin approval" from a
         # broken join, and the channel just silently produced no comments.
@@ -124,6 +129,10 @@ async def _solve_and_record(
     def _result(state: OnboardingState) -> AccountChannelOnboarding:
         return AccountChannelOnboarding(account_id=account_id, channel=channel, state=state)
 
+    # We are a member, so any earlier approval request landed — drop its stamp here
+    # rather than in the ready branch alone: a joined-but-challenged pair is approved
+    # too, and leaving the counter at max would make the sweep drop a live channel.
+    await clear_join_request(account_id, channel)
     if solver_enabled:
         outcome = await challenge.solve_if_present(account_id, channel, group_id)
         if outcome == "rate_limited":

@@ -126,6 +126,14 @@ class NeurocommentSettings(BaseSettings):
     # hits this; skipped joins resume as the window rolls / on the next reconcile.
     # 20 is a conservative safe default.
     max_joins_per_account_per_day: int = Field(default=20, ge=0)
+    # Approval-gated discussion groups ("join by request"): a request is re-sent at most
+    # once, this long after the previous one, and never more than max_attempts times.
+    # Onboarding used to re-request on every pass — 32 live pairs re-requested ~6 times
+    # in three days, which is what an admin sees as spam. Their product is also the
+    # patience budget: after retry_hours x max_attempts (48h) with nobody approving, the
+    # sweep drops the channel from its campaign.
+    join_request_retry_hours: float = Field(default=24.0, gt=0.0)
+    join_request_max_attempts: int = Field(default=2, ge=1)
     # Per-account throughput ceiling.
     max_comments_per_hour: int = Field(default=10, ge=1)
     # Cap on how many recent posted comments the board's published-comments feed

@@ -193,6 +193,12 @@ _neurocomment_readiness = Table(
     # Sticky (survives re-onboarding); migration #30 backfills 0. Cleared by a
     # successful "Проверить каналы" probe (can_send) or an operator retry.
     Column("banned", Integer, nullable=False, server_default="0"),
+    # Approval-gated group ("join by request"): when the MOST RECENT request was sent
+    # and how many have been sent. NULL / 0 = nothing outstanding; migration #41
+    # backfills that. Never touched by upsert_readiness — a re-onboard must not reset
+    # the counter, or the pair would re-request forever.
+    Column("join_requested_at", String, nullable=True),
+    Column("join_request_attempts", Integer, nullable=False, server_default="0"),
 )
 _neurocomment_comments = Table(
     "neurocomment_comments",

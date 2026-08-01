@@ -1,8 +1,7 @@
-"""Reaction-emoji selection helpers for the warming react action.
+"""The warming react action: emoji selection plus the dispatch that places one.
 
 Split out of :mod:`core.telegram_client._actions` to keep that module under the
-file-size cap. ``_dispatch_react_to_post`` (which stays in ``_actions``) calls
-these to read a channel's allowed reaction set and pick a landable emoji.
+file-size cap; ``_actions`` keeps the ``match`` arm and delegates the body here.
 """
 
 from __future__ import annotations
@@ -12,12 +11,16 @@ import time
 from typing import TYPE_CHECKING
 
 from telethon.tl.functions.channels import GetFullChannelRequest
+from telethon.tl.functions.messages import SendReactionRequest
 from telethon.tl.types import ChatReactionsNone, ChatReactionsSome, ReactionEmoji
 
 from core.config import settings
+from core.telegram_client._action_results import _DispatchResult
 
 if TYPE_CHECKING:
     from telethon import TelegramClient
+
+    from schemas.telegram_actions import ReactToPost
 
 # SystemRandom: non-cryptographic selection, but avoids the module-level
 # `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
@@ -87,3 +90,41 @@ def _pick_reaction(preferred: list[str], allowed: set[str] | None) -> str | None
     negatives = {_bare_emoji(e) for e in settings.warming.reaction_negative_emoji}
     fallback = [e for e in allowed_bare if e not in negatives]
     return _rng.choice(fallback) if fallback else None
+
+
+async def dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> _DispatchResult:
+    """React to a random recent post with an emoji the channel actually permits.
+
+    Picking blindly from the configured set trips ``ReactionInvalidError`` on
+    channels that restrict reactions (e.g. @durov). We first read the channel's
+    allowed set and prefer one of our emoji from it; if none overlap we still
+    react with one of the channel's own (non-negative) emoji so a reaction lands.
+    The outcome always rides back in ``log_extra`` so the activity log can show
+    it: the placed emoji on success, or a ``reaction_skip`` reason (no recent
+    posts / no usable emoji) when nothing landed.
+    """
+    if action.message_ids is None:
+        messages = await client.get_messages(action.channel, limit=action.message_limit)
+        candidates = [
+            int(getattr(m, "id", 0))
+            for m in messages  # ty: ignore[not-iterable]
+            if getattr(m, "id", None)
+        ]
+    else:
+        candidates = action.message_ids
+    if not candidates:
+        return _DispatchResult(log_extra={"reaction_skip": "no_posts"})
+    allowed = await _channel_reaction_whitelist(client, action.channel)
+    emoji = _pick_reaction(action.reactions, allowed)
+    if emoji is None:
+        return _DispatchResult(log_extra={"reaction_skip": "no_emoji"})
+    message_id = _rng.choice(candidates)
+    peer = await client.get_input_entity(action.channel)
+    await client(
+        SendReactionRequest(
+            peer=peer,
+            msg_id=message_id,
+            reaction=[ReactionEmoji(emoticon=emoji)],
+        ),
+    )
+    return _DispatchResult(message_id=message_id, log_extra={"reaction": emoji})

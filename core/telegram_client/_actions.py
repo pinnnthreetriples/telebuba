@@ -2,18 +2,11 @@
 
 from __future__ import annotations
 
-import random
 from typing import TYPE_CHECKING
 
 from telethon import errors
 from telethon.tl.functions.account import UpdateStatusRequest
-from telethon.tl.functions.channels import (
-    GetFullChannelRequest,
-    JoinChannelRequest,
-    LeaveChannelRequest,
-)
-from telethon.tl.functions.messages import ImportChatInviteRequest, SendReactionRequest
-from telethon.tl.types import ReactionEmoji
+from telethon.tl.functions.channels import LeaveChannelRequest
 
 from core.db import fetch_account
 from core.logging import log_event
@@ -27,6 +20,11 @@ from core.telegram_client._action_results import (
 )
 from core.telegram_client._channels import _channel_log_extra, _dispatch_channel_action
 from core.telegram_client._dm import _resolve_dm_peer, _send_dm_with_typing
+from core.telegram_client._groups import (
+    dispatch_join_channel,
+    dispatch_join_discussion_group,
+    dispatch_leave_discussion_group,
+)
 from core.telegram_client._media import ProfileGatewayError, _dispatch_profile_media_action
 from core.telegram_client._pool import TelegramClientPoolError, get_client
 from core.telegram_client._privacy import dispatch_set_privacy_settings
@@ -37,9 +35,9 @@ from core.telegram_client._profile import (
     _dispatch_update_profile,
     _mark_account_status,
 )
-from core.telegram_client._react import _channel_reaction_whitelist, _pick_reaction
+from core.telegram_client._react import dispatch_react_to_post
 from core.telegram_client._read_stories import dispatch_watch_peer_stories
-from core.telegram_client._util import event_name, extract_invite_hash
+from core.telegram_client._util import event_name
 from schemas.telegram_actions import (
     ActionResult,
     AddProfileMusic,
@@ -48,6 +46,7 @@ from schemas.telegram_actions import (
     JoinChannel,
     JoinDiscussionGroup,
     LeaveChannel,
+    LeaveDiscussionGroup,
     MarkDirectMessageRead,
     PostComment,
     PostStory,
@@ -70,10 +69,6 @@ if TYPE_CHECKING:
     from telethon import TelegramClient
 
     from schemas.telegram_actions import TelegramAction
-
-# SystemRandom: non-cryptographic jitter/selection, but avoids the module-level
-# `random.*` calls that ruff S311 flags. Behaviour is identical for our needs.
-_rng = random.SystemRandom()
 
 
 async def execute(  # noqa: C901, PLR0911, PLR0912 - one except per Telegram error family
@@ -219,15 +214,13 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
     log_extra: dict[str, object] | None = None
     match action:
         case JoinChannel():
-            hash_str = extract_invite_hash(action.channel)
-            if hash_str:
-                await client(ImportChatInviteRequest(hash=hash_str))
-            else:
-                await client(JoinChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+            await dispatch_join_channel(client, action)
         case JoinDiscussionGroup():
-            await _dispatch_join_discussion_group(client, action)
+            await dispatch_join_discussion_group(client, action)
         case LeaveChannel():
             await client(LeaveChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
+        case LeaveDiscussionGroup():
+            return await dispatch_leave_discussion_group(client, action)
         case PostComment():
             message = await client.send_message(action.chat_id, action.text)
             message_id = int(getattr(message, "id", 0)) or None
@@ -251,9 +244,7 @@ async def _dispatch_action(client: TelegramClient, action: TelegramAction) -> _D
         case WatchPeerStories():
             log_extra = {"stories_seen": await dispatch_watch_peer_stories(client, action)}
         case ReactToPost():
-            react = await _dispatch_react_to_post(client, action)
-            message_id = react.message_id
-            log_extra = react.log_extra
+            return await dispatch_react_to_post(client, action)
         case SendDirectMessage():
             message_id = await _send_dm_with_typing(client, action)
         case MarkDirectMessageRead():
@@ -290,73 +281,6 @@ async def _dispatch_read_channel(client: TelegramClient, action: ReadChannel) ->
     return _DispatchResult(recent_message_ids=ids)
 
 
-async def _dispatch_react_to_post(client: TelegramClient, action: ReactToPost) -> _DispatchResult:
-    """React to a random recent post with an emoji the channel actually permits.
-
-    Picking blindly from the configured set trips ``ReactionInvalidError`` on
-    channels that restrict reactions (e.g. @durov). We first read the channel's
-    allowed set and prefer one of our emoji from it; if none overlap we still
-    react with one of the channel's own (non-negative) emoji so a reaction lands.
-    The outcome always rides back in ``log_extra`` so the activity log can show
-    it: the placed emoji on success, or a ``reaction_skip`` reason (no recent
-    posts / no usable emoji) when nothing landed.
-    """
-    if action.message_ids is None:
-        messages = await client.get_messages(action.channel, limit=action.message_limit)
-        candidates = [
-            int(getattr(m, "id", 0))
-            for m in messages  # ty: ignore[not-iterable]
-            if getattr(m, "id", None)
-        ]
-    else:
-        candidates = action.message_ids
-    if not candidates:
-        return _DispatchResult(log_extra={"reaction_skip": "no_posts"})
-    allowed = await _channel_reaction_whitelist(client, action.channel)
-    emoji = _pick_reaction(action.reactions, allowed)
-    if emoji is None:
-        return _DispatchResult(log_extra={"reaction_skip": "no_emoji"})
-    message_id = _rng.choice(candidates)
-    peer = await client.get_input_entity(action.channel)
-    await client(
-        SendReactionRequest(
-            peer=peer,
-            msg_id=message_id,
-            reaction=[ReactionEmoji(emoticon=emoji)],
-        ),
-    )
-    return _DispatchResult(message_id=message_id, log_extra={"reaction": emoji})
-
-
-async def _dispatch_join_discussion_group(
-    client: TelegramClient,
-    action: JoinDiscussionGroup,
-) -> None:
-    """Resolve ``channel``'s linked discussion group and join it.
-
-    ``GetFullChannelRequest`` returns a ``messages.ChatFull`` whose ``full_chat``
-    carries ``linked_chat_id`` and whose ``chats`` list holds the resolved
-    ``Channel`` entities (with ``access_hash``). We join that entity directly —
-    the linked group has no username, so it can't be joined by handle. A
-    ``None`` ``linked_chat_id`` (comments disabled) raises ``ValueError`` so the
-    executor classifies it as a generic failure rather than silently no-op.
-    """
-    full = await client(GetFullChannelRequest(channel=action.channel))  # ty: ignore[invalid-argument-type]
-    linked = getattr(getattr(full, "full_chat", None), "linked_chat_id", None)
-    if linked is None:
-        msg = f"No linked discussion group for {action.channel!r}"
-        raise ValueError(msg)
-    linked_id = int(linked)
-    entity = next(
-        (chat for chat in getattr(full, "chats", []) if int(getattr(chat, "id", 0)) == linked_id),
-        None,
-    )
-    if entity is None:
-        msg = f"Linked group {linked_id} not in ChatFull.chats for {action.channel!r}"
-        raise ValueError(msg)
-    await client(JoinChannelRequest(channel=entity))
-
-
 async def _dispatch_click_button(client: TelegramClient, action: ClickButton) -> None:
     """Click an inline button on a stored message; no-op if the message is gone.
 
@@ -377,7 +301,14 @@ def _action_log_extra(action: TelegramAction) -> dict[str, object]:  # noqa: C90
     """Compact summary of an action for log extras — no payload secrets."""
     extra: dict[str, object]
     match action:
-        case JoinChannel() | JoinDiscussionGroup() | LeaveChannel() | ReadChannel() | ReactToPost():
+        case (
+            JoinChannel()
+            | JoinDiscussionGroup()
+            | LeaveChannel()
+            | LeaveDiscussionGroup()
+            | ReadChannel()
+            | ReactToPost()
+        ):
             extra = {"channel": action.channel}
         case WatchPeerStories():
             extra = {"peer": action.peer}

@@ -754,7 +754,10 @@
     "neurocomment_discovery_failed": "Поиск каналов не удался",
     "neurocomment_discovery_adopted": "Каналы добавлены из поиска",
     "neurocomment_channel_comments_off": "Комментарии в канале отключены",
-    "neurocomment_onboard_join_by_request": "Заявка на вступление отправлена"
+    "neurocomment_onboard_join_by_request": "Заявка на вступление отправлена",
+    "neurocomment_onboard_join_request_pending": "Заявка на вступление ещё ждёт одобрения",
+    "neurocomment_join_request_expired": "Канал отключён: заявку так и не одобрили",
+    "neurocomment_join_request_review_failed": "Не удалось проверить заявки на вступление"
   },
   "logEventReason": {
     "chance": "не выпал шанс",
@@ -801,6 +804,7 @@
       "join_channel": "Подписка на канал",
       "join_discussion_group": "Вступление в чат канала",
       "leave_channel": "Отписка от канала",
+      "leave_discussion_group": "Выход из чата канала",
       "post_comment": "Публикация комментария",
       "comment_on_post": "Комментарий к посту",
       "click_button": "Нажатие кнопки",
