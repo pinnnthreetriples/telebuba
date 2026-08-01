@@ -14,6 +14,7 @@ from core.db import (
     count_account_joins_since,
     create_campaign,
     link_channel_to_campaign,
+    record_join,
 )
 from schemas.neurocomment import CampaignCreate
 from services.neurocomment import _runtime
@@ -51,4 +52,28 @@ async def test_restart_does_not_rejoin_channels_from_the_join_log(
 
     assert exec_spy.joined == [("listener-1", "@a"), ("listener-1", "@b")]
     assert await count_account_joins_since("listener-1", "1970-01-01") == 2
+    await _runtime.shutdown_neurocomment_runtime("listener-1")
+
+
+@pytest.mark.asyncio
+async def test_discussion_group_joins_never_seed_the_listener_cache(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A group join must not stand in for the broadcast channel it belongs to.
+
+    Onboarding records its joins without a channel, so they cannot enter the cache.
+    If one ever did, the listener would skip joining that channel and silently receive
+    no posts from it — no error, no log, the campaign just goes quiet.
+    """
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    _patch_listener(monkeypatch, _ListenerSpy())
+    exec_spy = _ExecuteSpy()
+    _patch_execute(monkeypatch, exec_spy)
+    await record_join("listener-1")  # onboarding joined @a's discussion group
+
+    await _runtime.reconcile_neurocomment_runtime("listener-1")
+    await _drain_joins()
+
+    assert exec_spy.joined == [("listener-1", "@a")]
     await _runtime.shutdown_neurocomment_runtime("listener-1")

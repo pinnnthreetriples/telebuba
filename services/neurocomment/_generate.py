@@ -278,11 +278,15 @@ async def _classify_post(
                 comment_text=text,
                 comment_msg_id=result.message_id,
             )
-            # First comment confirms a solver click worked (no-op if no pending row). A
-            # solved outcome resets the channel's challenge-failure window (#147) so
-            # sporadic failures across many successes never accumulate to the trip count.
-            if await resolve_pending_outcome(account_id, event.channel, "solved"):
-                _state.reset_challenge_failures(event.channel)
+            # First comment confirms a solver click worked (no-op if no pending row).
+            await resolve_pending_outcome(account_id, event.channel, "solved")
+            # A delivered comment proves the channel is writable, so it resets the
+            # failure window (#147) — sporadic failures across many successes never
+            # accumulate to the trip count. Keyed on a *solved challenge* this never
+            # fired on a channel that issues none, and since gates now feed the same
+            # counter, isolated per-account gates would accumulate with no decay and
+            # eventually park a channel the other accounts post to fine.
+            _state.reset_challenge_failures(event.channel)
             await log_event(
                 "INFO",
                 "neurocomment_posted",
