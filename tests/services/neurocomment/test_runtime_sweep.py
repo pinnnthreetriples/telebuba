@@ -22,6 +22,7 @@ from core.db import (  # type: ignore[attr-defined]
     mark_comment_posted,
     record_join,
 )
+from core.telegram_client import TelegramReadError
 from schemas.accounts import AccountCreate
 from schemas.neurocomment import CampaignCreate
 from schemas.telegram_actions import (
@@ -195,6 +196,30 @@ async def test_sweep_read_failure_does_not_trip_or_crash(
     await _runtime._sweep_once()  # one channel's read failure must not abort the sweep
 
     assert _state.channel_in_backoff("@a", datetime.now(UTC)) is False
+
+
+@pytest.mark.asyncio
+async def test_sweep_read_failure_logs_the_wrapped_reason(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every gateway failure arrives as TelegramReadError, so the class name is useless."""
+    await _campaign_with_posted_comments("@a", [101])
+
+    async def flooded(_account_id: str, _action: CheckMessagesAlive) -> CheckMessagesAliveResult:
+        reason = "FloodWait(42s)"
+        raise TelegramReadError(reason, kind="flood_wait", seconds=42)
+
+    monkeypatch.setattr("services.neurocomment._seams.execute_read", flooded)
+
+    await _runtime._sweep_once()
+
+    logged = next(
+        entry
+        for entry in await list_recent_logs(limit=50)
+        if entry.event == "neurocomment_sweep_read_failed"
+    )
+    assert logged.extra["reason"] == "FloodWait(42s)"
+    assert logged.extra["kind"] == "flood_wait"
 
 
 @pytest.mark.asyncio

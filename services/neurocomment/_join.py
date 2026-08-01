@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import asyncio
 
-from core.db import list_active_watch_channels, record_join
+from core.db import list_active_watch_channels, list_joined_watch_channels, record_join
 from core.logging import log_event
 from schemas.telegram_actions import JoinChannel
 from services.neurocomment import _seams
@@ -35,6 +35,15 @@ async def run_join_pass(listener_account_id: str) -> None:
     from services.neurocomment import _runtime  # noqa: PLC0415 - avoid a load-time import cycle.
 
     channels = (await list_active_watch_channels()).channels
+    # Seed the cache from the join log: Telegram answers "ok" (never already_participant)
+    # when a public channel is re-joined, so before this every restart re-sent the whole
+    # watch set as real joins and pinned the account at its rolling-24h cap.
+    # ponytail: never invalidated — a channel the account was kicked from is not
+    # re-joined; delete its join-log rows if that shows up.
+    _runtime._JOINED_CHANNELS.update(  # noqa: SLF001 - peer module
+        (listener_account_id, channel)
+        for channel in await list_joined_watch_channels(listener_account_id)
+    )
     first_join = True
     for channel in channels:
         if (listener_account_id, channel) in _runtime._JOINED_CHANNELS:  # noqa: SLF001 - peer module
@@ -60,7 +69,7 @@ async def run_join_pass(listener_account_id: str) -> None:
             # the cap and starves genuine joins.
             _runtime._JOINED_CHANNELS.add((listener_account_id, channel))  # noqa: SLF001 - peer module
             if result.status == "ok":
-                await record_join(listener_account_id)
+                await record_join(listener_account_id, watch_channel=channel)
             continue
         # ``error_type`` (the Telegram exception class) is what turns a bare status="failed"
         # into an actionable line; absent rather than null when the gateway set none, which

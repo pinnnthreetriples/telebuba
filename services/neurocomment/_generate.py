@@ -352,8 +352,12 @@ async def _classify_post(
             captcha_passed=False,
             ready=False,
         )
-        if await resolve_pending_outcome(account_id, event.channel, "failed"):
-            await _register_challenge_failure(event.channel)
+        await resolve_pending_outcome(account_id, event.channel, "failed")
+        # A gate is a property of the CHANNEL, not the pair. Counting it only when a
+        # pending challenge resolved left a channel that issues none unparked: live DB
+        # had one forbid writes to all six accounts, 16 times, re-onboarded and re-gated
+        # forever, paying for a generation each round. Onboarding honours this back-off.
+        await _register_challenge_failure(event.channel, cause="gate")
         event_name = "neurocomment_post_gated"
     else:
         # A class fix, not a per-error fix: ``core.telegram_client._actions`` funnels every
@@ -391,8 +395,13 @@ async def _apply_cooldown(
     await _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds), channel)
 
 
-async def _register_challenge_failure(channel: str) -> None:
-    """Count a solver click-failure on ``channel``; WARN once when it trips the back-off (#147)."""
+async def _register_challenge_failure(channel: str, *, cause: str = "challenge") -> None:
+    """Count a write failure on ``channel``; WARN once when it trips the back-off (#147).
+
+    ``cause`` names what fed the counter — a solver click-failure or a write gate —
+    so the operator can tell a captcha the solver lost from a channel that forbids
+    comments outright.
+    """
     nc = settings.neurocomment
     cooldown = _state.register_challenge_failure(
         channel,
@@ -405,5 +414,5 @@ async def _register_challenge_failure(channel: str) -> None:
         await log_event(
             "WARNING",
             "neurocomment_challenge_backoff",
-            extra={"channel": channel, "cooldown_seconds": cooldown},
+            extra={"channel": channel, "cooldown_seconds": cooldown, "cause": cause},
         )

@@ -317,6 +317,19 @@ def _add_neurocomment_join_log(connection: Connection) -> None:
     )
 
 
+def _add_neurocomment_join_log_watch_channel(connection: Connection) -> None:
+    # #40: which watch channel a listener join subscribed to. The listener kept its
+    # joined set in memory only, so every restart re-sent JoinChannel for channels it
+    # was already in — Telegram answers "ok" (not already_participant) for a public
+    # channel, so each no-op counted against the rolling-24h cap and starved the real
+    # joins. Persisting the channel lets the pass seed its cache from the log.
+    rows = connection.exec_driver_sql("PRAGMA table_info(neurocomment_join_log)").mappings().all()
+    if "watch_channel" not in {str(row["name"]) for row in rows}:
+        connection.exec_driver_sql(
+            "ALTER TABLE neurocomment_join_log ADD COLUMN watch_channel VARCHAR",
+        )
+
+
 def _add_neurocomment_channel_case_fold_index(connection: Connection) -> None:
     """#39: make "one active campaign per channel" case- and ``@``-insensitive.
 

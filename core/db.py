@@ -300,6 +300,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     list_channel_readiness,
     list_failed_for_channel,
     list_failed_for_channels,
+    list_joined_watch_channels,
     list_linked_groups,
     list_posted_comments_for_channel_since,
     list_posted_comments_page,
