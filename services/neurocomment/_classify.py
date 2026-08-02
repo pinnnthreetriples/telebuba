@@ -12,7 +12,12 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import clear_join_request, stamp_join_request, upsert_readiness
+from core.db import (
+    clear_join_request,
+    clear_rejoin_attempts,
+    stamp_join_request,
+    upsert_readiness,
+)
 from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
 from services.neurocomment import bans, challenge
@@ -140,6 +145,11 @@ async def _solve_and_record(
     # rather than in the ready branch alone: a joined-but-challenged pair is approved
     # too, and leaving the counter at max would make the sweep drop a live channel.
     await clear_join_request(account_id, channel)
+    # Same idea for the re-join counter (#43): we are in the group, so whatever kicked us
+    # out is over and the next access loss must start from attempt one. Cleared here
+    # rather than in the ready branch alone — a joined-but-challenged pair is back in too,
+    # and leaving it at its cap would make the sweep drop a channel we just re-entered.
+    await clear_rejoin_attempts(account_id, channel)
     if solver_enabled:
         outcome = await challenge.solve_if_present(account_id, channel, group_id)
         if outcome == "rate_limited":

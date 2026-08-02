@@ -762,7 +762,9 @@
     "neurocomment_onboard_join_by_request": "Join request sent",
     "neurocomment_onboard_join_request_pending": "Join request still awaiting approval",
     "neurocomment_join_request_expired": "Channel dropped: join request never approved",
-    "neurocomment_join_request_review_failed": "Join-request review failed"
+    "neurocomment_join_request_review_failed": "Join-request review failed",
+    "neurocomment_channel_rejoin_exhausted": "Channel dropped: could not get back into the chat",
+    "neurocomment_rejoin_review_failed": "Re-join review failed"
   },
   "logEventReason": {
     "chance": "chance didn't hit",
@@ -802,7 +804,8 @@
     "neurocomment_account_banned": "The channel banned this account personally — the bot left the chat and stops posting there. \"Check channels\" can no longer clear it: we are not a member any more. Only the per-pair retry brings it back.",
     "neurocomment_group_ban_account_limited": "Telegram blocked the write, but @SpamBot reports the account limited across all groups — this channel did not ban it. Fix the account; the channel is fine.",
     "neurocomment_channel_all_accounts_banned": "Every account serving this channel is now banned in its chat, so the channel was unlinked from the campaign and the listener stopped watching it. Link it again after adding an account that can post there.",
-    "neurocomment_post_access_lost": "The account can no longer reach this channel's discussion chat — kicked, or the group went private. The pair is parked and the next onboarding pass re-joins the chat.",
+    "neurocomment_post_access_lost": "The account can no longer reach this channel's discussion chat — kicked, or the group went private. The pair is parked and re-joins itself: one attempt within minutes, then one a day, four in total.",
+    "neurocomment_channel_rejoin_exhausted": "Every account serving this channel used up its re-join attempts (one a day, four in total) and none of them can post there, so the channel was unlinked from the campaign and the listener stopped watching it. Link it again once an account can get into its chat.",
     "neurocomment_channel_cooled": "Channel paused after errors or mass deletions.",
     "neurocomment_no_campaign": "No active campaign for this channel."
   },

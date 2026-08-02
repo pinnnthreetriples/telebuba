@@ -209,6 +209,12 @@ _neurocomment_readiness = Table(
     # the counter, or the pair would re-request forever.
     Column("join_requested_at", String, nullable=True),
     Column("join_request_attempts", Integer, nullable=False, server_default="0"),
+    # Automatic recovery from a lost discussion chat (#43): when the MOST RECENT re-join
+    # went out and how many have. NULL / 0 = never retried. Never touched by
+    # upsert_readiness, for the same reason as the join-request pair above — every failed
+    # re-join re-writes the row, and a reset there would retry forever.
+    Column("rejoin_attempted_at", String, nullable=True),
+    Column("rejoin_attempts", Integer, nullable=False, server_default="0"),
 )
 _neurocomment_comments = Table(
     "neurocomment_comments",

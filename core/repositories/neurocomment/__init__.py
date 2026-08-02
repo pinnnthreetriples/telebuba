@@ -84,13 +84,16 @@ from core.repositories.neurocomment._quota import (
 )
 from core.repositories.neurocomment._readiness import (
     clear_join_request,
+    clear_rejoin_attempts,
     delete_readiness,
     fetch_readiness,
+    list_access_lost_readiness,
     list_campaign_readiness,
     list_channel_readiness,
     list_pending_join_readiness,
     mark_human_skipped,
     stamp_join_request,
+    stamp_rejoin_attempt,
     upsert_readiness,
 )
 from core.repositories.neurocomment._retention import purge_neurocomment_history_older_than
@@ -114,6 +117,7 @@ __all__ = [
     "clear_channel_pause",
     "clear_join_request",
     "clear_pair_banned",
+    "clear_rejoin_attempts",
     "count_account_channel_comments_since",
     "count_account_comments_since",
     "count_account_joins_since",
@@ -136,6 +140,7 @@ __all__ = [
     "get_listener_running",
     "insert_challenge",
     "link_channel_to_campaign",
+    "list_access_lost_readiness",
     "list_active_watch_channels",
     "list_campaign_accounts",
     "list_campaign_channels",
@@ -175,6 +180,7 @@ __all__ = [
     "set_listener_account_id",
     "set_listener_running",
     "stamp_join_request",
+    "stamp_rejoin_attempt",
     "update_campaign_prompt",
     "update_solver_enabled",
     "upsert_linked_group",

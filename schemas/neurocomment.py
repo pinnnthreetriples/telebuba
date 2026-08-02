@@ -188,6 +188,11 @@ class NeurocommentReadiness(BaseModel):
     # outstanding) and how many have gone out. Drives the 24h retry / 48h channel drop.
     join_requested_at: str | None = None
     join_request_attempts: int = 0
+    # Automatic re-join after the pair lost access to the chat: when the most recent
+    # attempt went out (None = none yet) and how many have. Drives the daily retry /
+    # the channel drop once every account has used its attempts.
+    rejoin_attempted_at: str | None = None
+    rejoin_attempts: int = 0
 
 
 class ReadinessList(BaseModel):

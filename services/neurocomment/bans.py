@@ -15,7 +15,7 @@ sticky auto-ban (#30) and the group leave — see its docstring for why
 from __future__ import annotations
 
 import asyncio
-from typing import TYPE_CHECKING, Literal
+from typing import Literal
 
 from core.config import settings
 from core.db import (
@@ -32,9 +32,7 @@ from core.logging import log_event
 from schemas.neurocomment_bans import ChannelBanCheck, ChannelBanCheckList
 from schemas.telegram_actions import BanCheckResult, CheckBannedInChannel, LeaveDiscussionGroup
 from services.neurocomment import _seams
-
-if TYPE_CHECKING:
-    from schemas.neurocomment import CampaignAccountLink
+from services.neurocomment._pins import serving_accounts
 
 _ChannelStatus = Literal["ok", "banned", "unknown"]
 
@@ -70,7 +68,7 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
 
     async def _check_channel(channel: str) -> ChannelBanCheck:
         # Pin rule: unpinned accounts serve every channel; pinned only their own.
-        serving = _serving_accounts(account_links, channel)
+        serving = serving_accounts(account_links, channel)
         if not serving:
             return ChannelBanCheck(channel=channel, status="unknown")
         states = await asyncio.gather(*(_probe(acc, channel) for acc in serving))
@@ -88,10 +86,6 @@ async def check_campaign_channel_bans(campaign_id: str) -> ChannelBanCheckList |
 
     items = await asyncio.gather(*(_check_channel(channel) for channel in channels))
     return ChannelBanCheckList(items=list(items))
-
-
-def _serving_accounts(links: list[CampaignAccountLink], channel: str) -> list[str]:
-    return [link.account_id for link in links if not link.channels or channel in link.channels]
 
 
 async def confirm_group_ban_and_leave(
@@ -197,7 +191,7 @@ async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> N
     if campaign is None:
         return
     links = (await list_campaign_accounts(campaign.campaign_id)).links
-    serving = _serving_accounts(links, channel)
+    serving = serving_accounts(links, channel)
     rows = (await list_channel_readiness(campaign.campaign_id, channel, serving)).readiness
     if len(rows) != len(serving) or any(not row.banned for row in rows):
         return

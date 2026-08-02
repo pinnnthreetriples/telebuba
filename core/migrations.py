@@ -61,6 +61,7 @@ from core.migration_steps_pool import (
     _add_proxy_pool,
     _add_warming_state_activity_persona,
 )
+from core.migration_steps_rejoin import _add_readiness_rejoin
 
 if TYPE_CHECKING:
     from collections.abc import Callable
@@ -131,6 +132,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
     ),
     (41, "add_readiness_join_request", _add_readiness_join_request),
     (42, "add_campaign_channel_pause", _add_campaign_channel_pause),
+    (43, "add_readiness_rejoin", _add_readiness_rejoin),
 )
 
 

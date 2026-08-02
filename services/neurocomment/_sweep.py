@@ -19,6 +19,8 @@ from core.config import settings
 from core.db import (
     fetch_active_campaigns_for_channels,
     list_active_watch_channels,
+    list_campaign_accounts,
+    list_channel_readiness,
     list_pending_join_readiness,
     list_posted_comments_since,
     mark_comments_deleted,
@@ -27,7 +29,8 @@ from core.db import (
 from core.logging import log_event
 from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult
-from services.neurocomment import _seams, _state
+from services.neurocomment import _rejoin, _seams, _state
+from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
     from schemas.neurocomment import CommentRecord, NeurocommentReadiness
@@ -53,8 +56,8 @@ async def _sweep_loop() -> None:
 
     The lone non-event loop in the runtime. A sweep fault is logged and the loop
     keeps going — it must never die (mirrors the listener-safe on-post pipeline).
-    The retention prune and the join-request review piggyback on the same tick behind
-    their own guards, so no part of the pass can abort another.
+    The retention prune, the join-request review and the access-loss review piggyback on
+    the same tick behind their own guards, so no part of the pass can abort another.
     """
     interval = settings.neurocomment.deletion_sweep_interval_seconds
     while True:
@@ -70,6 +73,7 @@ async def _sweep_loop() -> None:
             )
         await _prune_history_if_due(datetime.now(UTC))
         await _review_join_requests(datetime.now(UTC))
+        await _rejoin.review_access_lost(datetime.now(UTC))
 
 
 async def _prune_history_if_due(now: datetime) -> None:
@@ -176,7 +180,22 @@ async def _review_join_requests(now: datetime) -> None:
 
 
 async def _drop_unapproved_channel(campaign_id: str, channel: str, pending: int) -> None:
-    """Unlink a channel nobody approved us into, via the service (so the listener reconciles)."""
+    """Unlink a channel nobody approved us into, via the service (so the listener reconciles).
+
+    Gated on the same coverage rule as ``bans._unlink_channel_if_no_account_left`` and
+    ``_rejoin._drop_channel_if_nothing_works``, because it had the defect both of those
+    fixed: the rows above are every readiness row on the channel, whoever they belong to,
+    so one expired request could drop a channel the campaign's other accounts had simply
+    never been onboarded to. Serving accounts are resolved pin-aware, every one of them
+    must have a row before the channel can go (a missing row means "never tried here", not
+    "failed here"), and any ready serving row keeps it. Two extra reads per candidate
+    channel, once per channel — this loop ticks every five minutes and is no hot path.
+    """
+    links = (await list_campaign_accounts(campaign_id)).links
+    serving = serving_accounts(links, channel)
+    rows = (await list_channel_readiness(campaign_id, channel, serving)).readiness
+    if len(rows) != len(serving) or any(row.ready for row in rows):
+        return
     # Late import for the same cycle as above (campaigns -> _runtime -> _sweep).
     from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
 

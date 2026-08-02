@@ -459,6 +459,37 @@ def test_campaign_channel_pause_migration_skips_missing_table(
         _add_campaign_channel_pause(connection)  # no table → returns, no raise.
 
 
+def test_readiness_rejoin_columns_added_and_default_to_never_retried(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#43: a legacy readiness table gains the re-join counter + its last attempt.
+
+    Existing rows must read as "never retried", so the first sweep after the upgrade gives
+    every parked pair its four attempts rather than inheriting somebody else's counter.
+    """
+    from core.migration_steps_rejoin import _add_readiness_rejoin  # noqa: PLC0415
+
+    engine = legacy_engine("legacy-rejoin.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_readiness ("
+            "account_id VARCHAR NOT NULL, channel VARCHAR NOT NULL, joined INTEGER NOT NULL, "
+            "captcha_passed INTEGER NOT NULL, ready INTEGER NOT NULL, "
+            "checked_at VARCHAR NOT NULL, PRIMARY KEY (account_id, channel))",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_readiness VALUES ('a1', '@news', 0, 1, 0, '2026-01-01')",
+        )
+        _add_readiness_rejoin(connection)
+        _add_readiness_rejoin(connection)  # idempotent — must not raise.
+
+    with engine.connect() as connection:
+        attempts, attempted_at = connection.exec_driver_sql(
+            "SELECT rejoin_attempts, rejoin_attempted_at FROM neurocomment_readiness",
+        ).one()
+    assert (int(attempts), attempted_at) == (0, None)
+
+
 def test_append_only_versions_are_unique() -> None:
     """Two migrations sharing the same version would silently mask each other."""
     versions = [v for v, _name, _fn in MIGRATIONS]

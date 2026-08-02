@@ -12,6 +12,7 @@ import pytest
 from core.config import settings
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
+    assign_account_to_campaign,
     claim_comment,
     count_account_joins_since,
     create_account,
@@ -458,6 +459,8 @@ async def _pending_campaign(*accounts: str, ready: str | None = None) -> str:
     await link_channel_to_campaign(campaign.campaign_id, "@gated")
     for account_id in accounts:
         await create_account(AccountCreate(account_id=account_id, session_name=account_id))
+        # Assigned, so the give-up rule can see who actually serves the channel.
+        await assign_account_to_campaign(campaign.campaign_id, account_id)
         is_ready = account_id == ready
         await upsert_readiness(
             account_id, "@gated", joined=is_ready, captcha_passed=is_ready, ready=is_ready
@@ -493,6 +496,23 @@ async def test_review_drops_a_channel_nobody_approved_within_the_budget() -> Non
 async def test_review_keeps_a_channel_that_has_a_ready_pair() -> None:
     """One stubborn account must not kill a channel the others comment in fine."""
     campaign_id = await _pending_campaign("acc-1", "acc-2", ready="acc-2")
+
+    await _sweep._review_join_requests(datetime.now(UTC) + timedelta(hours=200))
+
+    assert await _gated_is_active(campaign_id) is True
+
+
+@pytest.mark.asyncio
+async def test_review_keeps_a_channel_whose_fleet_has_not_all_tried_it_yet() -> None:
+    """A serving account with NO readiness row was never tried here, not tried and failed.
+
+    Onboarding reaches a fleet slowly, so counting only the rows that exist let one expired
+    request drop a channel the campaign's other accounts had never touched. Same coverage
+    rule as ``bans._unlink_channel_if_no_account_left`` and the access-loss review.
+    """
+    campaign_id = await _pending_campaign("acc-1")
+    await create_account(AccountCreate(account_id="acc-2", session_name="acc-2"))
+    await assign_account_to_campaign(campaign_id, "acc-2")  # serving, never onboarded
 
     await _sweep._review_join_requests(datetime.now(UTC) + timedelta(hours=200))
 

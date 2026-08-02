@@ -23,6 +23,7 @@ from core.db import (
     fetch_channel_paused_until,
     fetch_readiness,
     record_join,
+    stamp_rejoin_attempt,
     upsert_linked_group,
     upsert_readiness,
 )
@@ -33,7 +34,7 @@ from schemas.telegram_actions import (
     JoinDiscussionGroup,
     LinkedDiscussionGroupResult,
 )
-from services.neurocomment import _seams, _state
+from services.neurocomment import _rejoin, _seams, _state
 
 # The join ActionResult → OnboardingState mapping + solver recording live in
 # ``_classify`` (file-size cap); ``_join_and_classify`` below delegates to it.
@@ -134,6 +135,23 @@ async def _join_and_classify(
             channel=channel,
             state="channel_paused",
         )
+    if existing is not None and _rejoin.access_lost(existing):
+        if not _rejoin.retry_due(existing, datetime.now(UTC)):
+            # A pair that lost chat access gets one re-join a day, four in total (#43).
+            # Held back here and not only in the sweep, because every operator Start and
+            # every campaign reconcile starts a pass too — without this guard a busy day
+            # would spend all four attempts in an hour. ``retry_pair`` (which deletes the
+            # row) is the way past it, exactly as for a pending join request.
+            return AccountChannelOnboarding(
+                account_id=account_id,
+                channel=channel,
+                state="joining",
+                reason="rejoin_backoff",
+            )
+        # Stamped BEFORE the RPC: a re-join that fails hard re-writes the same sentinel
+        # row, so a stamp written on the success path only would let the pair retry every
+        # pass forever — the very loop this rule exists to bound.
+        await stamp_rejoin_attempt(account_id, channel)
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
     if result.status == "ok":
         # A real join RPC landed → count it against the account's rolling-24h cap.
