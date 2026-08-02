@@ -23,9 +23,7 @@ from core.db import (
     fetch_channel_paused_until,
     fetch_readiness,
     record_join,
-    stamp_rejoin_attempt,
     upsert_linked_group,
-    upsert_readiness,
 )
 from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, NeurocommentReadiness
@@ -129,29 +127,32 @@ async def _join_and_classify(
             state="join_by_request",
         )
     if _state.channel_paused(await fetch_channel_paused_until(channel), datetime.now(UTC)):
-        await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
+        # Readiness is deliberately NOT written: a pause is a verdict on the channel, not
+        # on this pair, and the row we would overwrite may be the access-lost sentinel —
+        # erasing it drops the pair out of the re-join rule for good and makes the board
+        # render "awaiting admin approval" for a request nobody ever sent.
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,
             state="channel_paused",
         )
-    if existing is not None and _rejoin.access_lost(existing):
-        if not _rejoin.retry_due(existing, datetime.now(UTC)):
-            # A pair that lost chat access gets one re-join a day, four in total (#43).
-            # Held back here and not only in the sweep, because every operator Start and
-            # every campaign reconcile starts a pass too — without this guard a busy day
-            # would spend all four attempts in an hour. ``retry_pair`` (which deletes the
-            # row) is the way past it, exactly as for a pending join request.
-            return AccountChannelOnboarding(
-                account_id=account_id,
-                channel=channel,
-                state="joining",
-                reason="rejoin_backoff",
-            )
-        # Stamped BEFORE the RPC: a re-join that fails hard re-writes the same sentinel
-        # row, so a stamp written on the success path only would let the pair retry every
-        # pass forever — the very loop this rule exists to bound.
-        await stamp_rejoin_attempt(account_id, channel)
+    if (
+        existing is not None
+        and _rejoin.access_lost(existing)
+        and not _rejoin.attempt_owed(existing)
+    ):
+        # A pair that lost chat access gets one re-join a day, four in total (#43), and
+        # the sweep review is what stamps them. Held back here because every operator
+        # Start, every campaign reconcile and every other channel's poke starts a pass
+        # too: without this guard each of them would re-join every parked pair in the
+        # fleet and pin accounts at their 20/day join cap. ``retry_pair`` (which deletes
+        # the row) is the way past it, exactly as for a pending join request.
+        return AccountChannelOnboarding(
+            account_id=account_id,
+            channel=channel,
+            state="joining",
+            reason="rejoin_backoff",
+        )
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
     if result.status == "ok":
         # A real join RPC landed → count it against the account's rolling-24h cap.
