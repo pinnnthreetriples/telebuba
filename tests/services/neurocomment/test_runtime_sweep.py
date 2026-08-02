@@ -14,6 +14,7 @@ from core.db import (  # type: ignore[attr-defined]
     _get_engine,
     assign_account_to_campaign,
     claim_comment,
+    count_account_channel_comments_since,
     count_account_joins_since,
     create_account,
     create_campaign,
@@ -621,3 +622,79 @@ async def test_review_failure_is_logged_and_does_not_propagate(
 
     logs = await list_recent_logs(limit=50)
     assert [e for e in logs if e.event == "neurocomment_join_request_review_failed"]
+
+
+# --------------------------------------------------------------------------- #
+# Stale-claim reclaim: rides this tick because startup was its only trigger. A dead
+# worker's row stays 'claimed', which ``_quota`` spends as a day slot until a restart.
+# --------------------------------------------------------------------------- #
+
+
+async def _claim_aged(minutes: float) -> None:
+    """Claim @a post 1 for acc-1, then age the row ``minutes`` into the past."""
+    campaign = await create_campaign(CampaignCreate(name="A", prompt="p", status="active"))
+    await link_channel_to_campaign(campaign.campaign_id, "@a")
+    await create_account(AccountCreate(account_id="acc-1", session_name="acc-1"))
+    assert await claim_comment("@a", 1, campaign.campaign_id, "acc-1") is True
+    with _get_engine().begin() as connection:
+        connection.exec_driver_sql(
+            "UPDATE neurocomment_comments SET created_at = ? WHERE post_id = 1",
+            ((datetime.now(UTC) - timedelta(minutes=minutes)).isoformat(),),
+        )
+
+
+async def _spent_day_slots() -> int:
+    since = (datetime.now(UTC) - timedelta(days=1)).isoformat()
+    return await count_account_channel_comments_since("acc-1", "@a", since)
+
+
+async def _run_until_second_tick(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drive the real loop until tick two begins — so every pass of tick one has run."""
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", 0.01)
+    second = asyncio.Event()
+    ticks: list[int] = []
+
+    async def counted() -> None:
+        ticks.append(1)
+        if len(ticks) == 2:
+            second.set()
+
+    monkeypatch.setattr(_sweep, "_sweep_once", counted)
+    task = asyncio.create_task(_sweep._sweep_loop())
+    try:
+        await asyncio.wait_for(second.wait(), timeout=5.0)
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+
+@pytest.mark.asyncio
+async def test_sweep_tick_reclaims_a_stranded_claim_and_frees_its_slot(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A claim its worker died holding is failed on the tick, not only on the next boot."""
+    await _claim_aged(60)  # well past the 900s cutoff
+    assert await _spent_day_slots() == 1
+
+    await _run_until_second_tick(monkeypatch)
+
+    row = await fetch_comment("@a", 1)
+    assert row is not None
+    assert row.status == "failed"  # terminal, so the idempotency gate survives the reclaim
+    assert await _spent_day_slots() == 0  # quota counts only claimed/posted
+
+
+@pytest.mark.asyncio
+async def test_sweep_tick_leaves_a_claim_that_is_still_in_flight(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Never reclaim out from under a live worker: ~4 min of generate + delay + send."""
+    await _claim_aged(0)
+
+    await _run_until_second_tick(monkeypatch)
+
+    row = await fetch_comment("@a", 1)
+    assert row is not None
+    assert row.status == "claimed"
+    assert await _spent_day_slots() == 1

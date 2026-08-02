@@ -2,8 +2,10 @@
 
 A pair that loses chat access is parked with onboarding's hard-join-failure sentinel
 ``(joined=False, captcha_passed=True, ready=False)`` — by the post path on
-``ChannelPrivateError`` and by ``_classify`` on a hard join failure. Both mean the same
-thing: this pair needs a fresh join. Nothing retried it, because onboarding has NO timer
+``ChannelPrivateError`` and by ``_classify`` on a hard join failure. Both mean this pair
+needs a fresh join, and since #44 each writes the Telegram verdict beside the sentinel, so
+the two are no longer the same claim: a kick can come good, a handle nobody owns cannot,
+and only the first is worth a budget. Nothing retried it, because onboarding has NO timer
 (operator Start, boot, and campaign reconciles only), so a kicked account waited for a
 human — and a channel whose every account was kicked produced nothing at all, silently.
 
@@ -47,6 +49,25 @@ from services.neurocomment._pins import serving_accounts
 if TYPE_CHECKING:
     from schemas.neurocomment import NeurocommentReadiness
 
+# The verdicts that put a re-join out of reach for good (#44). Both families say the
+# ADDRESS we hold is dead, not that this chat refused this account: a username nobody owns
+# and a revoked invite key resolve to nothing tomorrow either, and the only thing that
+# changes them is an operator linking the channel again under a working one — which clears
+# the column anyway. Everything else stays retryable, NULL included. A kick
+# (ChannelPrivateError / UserNotParticipantError) is the case this whole rule exists for; a
+# full group, an account at its channel ceiling and every error Telethon leaves unmapped
+# can all come good on their own. A false "hopeless" costs a live channel, where a wasted
+# retry costs one join RPC — so anything not provably dead is retried.
+_TERMINAL_REASONS = frozenset(
+    {
+        "UsernameNotOccupiedError",
+        "UsernameInvalidError",
+        "InviteHashExpiredError",
+        "InviteHashInvalidError",
+        "InviteHashEmptyError",
+    },
+)
+
 
 def access_lost(readiness: NeurocommentReadiness) -> bool:
     """True for the hard-join-failure sentinel — the pair is out and wants back in.
@@ -66,15 +87,32 @@ def access_lost(readiness: NeurocommentReadiness) -> bool:
     )
 
 
+def terminal(readiness: NeurocommentReadiness) -> bool:
+    """True when the verdict that parked this pair rules a re-join out entirely.
+
+    An unknown verdict (NULL — every row from before #44, and any gateway failure that
+    carried no error type) is NOT terminal: it reads exactly as it did before the column
+    existed, which is what keeps the upgrade behaviour-preserving.
+    """
+    return readiness.access_lost_reason in _TERMINAL_REASONS
+
+
 def exhausted(readiness: NeurocommentReadiness) -> bool:
     """True once this pair has used every re-join it will ever get.
+
+    A terminal verdict is exhausted from the first tick: the budget buys evidence, and
+    Telegram has already given it. That is one predicate, not two, because everything that
+    reads the budget wants the same answer — the board badges ``join_failed`` instead of
+    promising a return that cannot happen, and the sweep spends no attempt on it.
 
     Public alongside :func:`access_lost` because ``board`` badges the two together — a
     parked pair still inside its budget is ``rejoining``, one past it is ``join_failed``
     — and reading the budget off this rule is what keeps the badge from claiming a pair
     is finished while the sweep is still retrying it.
     """
-    return readiness.rejoin_attempts >= settings.neurocomment.channel_max_rounds
+    return terminal(readiness) or (
+        readiness.rejoin_attempts >= settings.neurocomment.channel_max_rounds
+    )
 
 
 def _window_elapsed(readiness: NeurocommentReadiness, now: datetime) -> bool:
@@ -206,7 +244,10 @@ async def _review_channel(
     # otherwise dead: a kicked account must get back into a chat the other five comment in
     # fine. Only the DROP is, and that check lives one call down — the single place that
     # decides whether anything still works here.
-    if not all(exhausted(row) and _window_elapsed(row, now) for row in parked):
+    # A terminal pair has no window to wait out — it never spent an attempt, so there is
+    # no re-join in flight to give a day to. Written as the exception it is, so the
+    # four-attempts-over-four-DAYS promise below keeps reading off one condition.
+    if not all(exhausted(row) and (terminal(row) or _window_elapsed(row, now)) for row in parked):
         # Nothing due, but somebody is still mid-timeline — either they have attempts left,
         # or they have just spent the last one. That second half is why the window check is
         # here and not folded into ``exhausted``: the fourth attempt is stamped at t=72h
@@ -215,7 +256,7 @@ async def _review_channel(
         # channel with a re-join still in flight. The budget is four attempts over four
         # DAYS: the last window counts like the other three.
         return False
-    await _drop_channel_if_nothing_works(campaign_id, channel, serving, len(parked))
+    await _drop_channel_if_nothing_works(campaign_id, channel, serving, parked)
     return False
 
 
@@ -223,7 +264,7 @@ async def _drop_channel_if_nothing_works(
     campaign_id: str,
     channel: str,
     serving: list[str],
-    parked: int,
+    parked: list[NeurocommentReadiness],
 ) -> None:
     """Unlink a channel every serving account has run out of re-joins for.
 
@@ -240,13 +281,33 @@ async def _drop_channel_if_nothing_works(
     from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
 
     await campaigns_service.deactivate_channel(campaign_id, channel)
+    # Two verdicts, two lines: "every account spent its four re-joins here" is a claim
+    # about the chat, and reporting it for a channel whose address Telegram says does not
+    # exist told the operator to wait for a recovery nobody was working on. Both codes are
+    # written out in full — the i18n drift guard reads the literal at the call site, and a
+    # single call picking its code from a variable would hide both from it.
+    if all(terminal(row) for row in parked):
+        await log_event(
+            "WARNING",
+            "neurocomment_channel_join_impossible",
+            extra={
+                "channel": channel,
+                "campaign_id": campaign_id,
+                "parked_accounts": len(parked),
+                "reason": "join_impossible",
+                # Telegram's own words, deduped: the only thing that tells an operator
+                # whether linking the channel again under a corrected handle would help.
+                "error_types": sorted({row.access_lost_reason for row in parked if terminal(row)}),
+            },
+        )
+        return
     await log_event(
         "WARNING",
         "neurocomment_channel_rejoin_exhausted",
         extra={
             "channel": channel,
             "campaign_id": campaign_id,
-            "parked_accounts": parked,
+            "parked_accounts": len(parked),
             "attempts": settings.neurocomment.channel_max_rounds,
             "reason": "rejoin_exhausted",
         },

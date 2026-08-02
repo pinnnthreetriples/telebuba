@@ -19,6 +19,7 @@ import logging
 from typing import TYPE_CHECKING
 
 from telethon import events
+from telethon.tl.types import MessageMediaPhoto
 
 from core.logging import log_event
 from core.telegram_client._pool import _CLIENTS, get_client, register_rebuild_hook
@@ -28,6 +29,8 @@ if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable
 
     from telethon import TelegramClient
+
+    from schemas.telegram_actions import PostMediaKind
 
     _EventHandler = Callable[[events.NewMessage.Event], Awaitable[None]]
 
@@ -165,6 +168,25 @@ async def stop_post_listener(account_id: str) -> None:
     client.remove_event_handler(handler, events.NewMessage)  # ty: ignore[invalid-argument-type]
 
 
+def _media_kind(message: object) -> PostMediaKind:
+    """Classify the post's media by what a comment could be made OUT of.
+
+    A standalone photo is the only kind the engine can still comment on when the post
+    carries no caption (it downloads it and lets the model look). The album check comes
+    FIRST and deliberately swallows photos: Telegram delivers an album as N separate
+    messages, so each caption-less item would otherwise earn its own comment — all of
+    them landing in the same discussion thread as the one the album's captioned head
+    already got. Everything else (video, document, poll, sticker, link preview) carries
+    nothing readable, and is grouped as ``other`` so the skip log can price it.
+    """
+    media = getattr(message, "media", None)
+    if media is None:
+        return "none"
+    if getattr(message, "grouped_id", None) is not None:
+        return "album"
+    return "photo" if isinstance(media, MessageMediaPhoto) else "other"
+
+
 def _make_handler(
     account_id: str,
     channel_by_peer_id: dict[int, str],
@@ -180,7 +202,7 @@ def _make_handler(
             channel=channel,
             post_id=message.id,
             text=message.message or "",
-            has_media=message.media is not None,
+            media_kind=_media_kind(message),
             is_forward=message.fwd_from is not None,
         )
         try:

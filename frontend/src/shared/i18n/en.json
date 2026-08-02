@@ -767,6 +767,7 @@
     "neurocomment_join_request_expired": "Channel dropped: join request never approved",
     "neurocomment_join_request_review_failed": "Join-request review failed",
     "neurocomment_channel_rejoin_exhausted": "Channel dropped: could not get back into the chat",
+    "neurocomment_channel_join_impossible": "Channel dropped: Telegram does not know this address",
     "neurocomment_rejoin_review_failed": "Re-join review failed"
   },
   "logEventReason": {
@@ -775,6 +776,10 @@
     "no_emoji": "channel rejects our emoji",
     "forward": "repost",
     "media_no_caption": "media without text",
+    "media_no_image": "media with nothing to look at",
+    "media_album_item": "album item, already commented",
+    "media_unavailable": "could not fetch the photo",
+    "media_too_large": "photo too large to look at",
     "empty": "empty post",
     "link_only": "link only",
     "quota": "limit reached",
@@ -811,6 +816,7 @@
     "neurocomment_channel_all_accounts_banned": "Every account serving this channel is now banned in its chat, so the channel was unlinked from the campaign and the listener stopped watching it. Link it again after adding an account that can post there.",
     "neurocomment_post_access_lost": "The account can no longer reach this channel's discussion chat — kicked, or the group went private. The pair is parked and re-joins itself: one attempt within minutes, then one a day, four in total.",
     "neurocomment_channel_rejoin_exhausted": "Every account serving this channel used up its re-join attempts (one a day, four in total) and none of them can post there, so the channel was unlinked from the campaign and the listener stopped watching it. Link it again once an account can get into its chat.",
+    "neurocomment_channel_join_impossible": "Telegram says this channel's address does not exist — a username nobody owns, or an invite link that has been revoked. Nothing can join it, so it was unlinked from the campaign without spending the re-join attempts and the listener stopped watching it. Check the address and link the channel again.",
     "neurocomment_channel_paused": "The channel refused our comments three times in a row, so it is paused for a day: nothing posts there and no account is onboarded to it. Four such rounds and the channel leaves the campaign; one delivered comment clears the count. If it stays paused past the last round, an account serving it has never been tried there — the drop waits until every one of them has.",
     "neurocomment_channel_dropped": "The channel refused our comments through every pause round (one a day, four in total), so it was unlinked from the campaign and the listener stopped watching it. Nobody left its chat — the block is the channel's, not a ban on an account. Link it again if it starts accepting comments.",
     "neurocomment_join_request_expired": "Nobody approved our join requests to this channel's chat (two requests, a day apart), so the channel was unlinked from the campaign and the listener stopped watching it. Link it again once an admin is ready to approve the accounts.",

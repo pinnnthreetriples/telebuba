@@ -26,6 +26,7 @@ from core.db import (
     list_posted_comments_since,
     mark_comments_deleted,
     purge_neurocomment_history_older_than,
+    reclaim_stale_claims,
 )
 from core.logging import log_event
 from core.telegram_client import TelegramReadError
@@ -56,30 +57,31 @@ async def _sweep_loop() -> None:
     """Re-read recent comments on an interval; back off channels with mass deletions.
 
     The lone non-event loop in the runtime, and it must never die (mirrors the
-    listener-safe on-post pipeline). The retention prune, the join-request review and the
-    access-loss review piggyback on the same tick, and every pass is awaited behind the
-    ONE guard below rather than behind the ones inside it: each of those covers only its
-    own first bulk read, so everything after it — a locked SQLite, a malformed timestamp,
-    the live Telegram RPC ``deactivate_channel`` reaches through the listener reconcile —
-    unwound into this loop body and ended the task for the rest of the process lifetime.
-    Silently, too: the handle in ``_runtime`` carries no done-callback, so all four
-    lifecycle rules simply stopped until an operator hit Start again. Guarding here is
+    listener-safe on-post pipeline). The retention prune, the join-request review, the
+    access-loss review and the stale-claim reclaim piggyback on the same tick, and every
+    pass is awaited behind the ONE guard below rather than behind the ones inside it: each
+    of those covers only its own first bulk read, so everything after it — a locked SQLite,
+    a malformed timestamp, the live Telegram RPC ``deactivate_channel`` reaches through the
+    listener reconcile — unwound into this loop body and ended the task for the rest of the
+    process lifetime. Silently, too: the handle in ``_runtime`` carries no done-callback, so
+    every lifecycle rule simply stopped until an operator hit Start again. Guarding here is
     what makes the promise true — no pass can abort the loop or its siblings, and every
     fault leaves a ``neurocomment_sweep_failed`` line naming the pass that raised.
     """
     interval = settings.neurocomment.deletion_sweep_interval_seconds
     while True:
         await asyncio.sleep(interval)
-        # One clock for the whole tick: these passes age the same deadlines, and four
-        # separate reads of ``now`` only let them disagree about where one falls.
+        # One clock for the whole tick: these passes age the same deadlines, and separate
+        # reads of ``now`` only let them disagree about where one falls.
         now = datetime.now(UTC)
-        # Callables, not coroutine objects: shutdown cancels this task mid-tick, and four
+        # Callables, not coroutine objects: shutdown cancels this task mid-tick, and
         # coroutines built up front leave the un-awaited ones to warn on collection.
         for name, run_pass in (
             ("deletion", _sweep_once),
             ("retention", partial(_prune_history_if_due, now)),
             ("join_requests", partial(_review_join_requests, now)),
             ("rejoin", partial(_rejoin.review_access_lost, now)),
+            ("stale_claims", partial(_reclaim_stale_claims, now)),
         ):
             try:
                 await run_pass()
@@ -247,6 +249,40 @@ async def _drop_unapproved_channel(
             "reason": "no_admin_approval",
         },
     )
+
+
+async def _reclaim_stale_claims(now: datetime) -> None:
+    """Fail the claims no live worker can still be holding, so their quota slots come back.
+
+    Rides this loop because the startup hook used to be the ONLY trigger. A worker that
+    dies between winning the claim and resolving it — a crash, a kill, a task cancelled
+    mid-flight — leaves the row ``claimed``, and ``_quota`` counts ``claimed`` alongside
+    ``posted``: the account went on paying a day-cap slot on that channel (a THIRD of its
+    day at the shipped cap of 3) for a comment it never sent, until the app happened to
+    restart. On this tick the slot comes back within one cutoff instead.
+
+    ``failed``, not ``release_claim``'s DELETE, and deliberately: the row is also the
+    idempotency gate ``claim_comment`` wins, and unlike at startup the listener is LIVE
+    while this runs — dropping the row would re-open the double-comment window if the same
+    post were delivered again, or if the cutoff ever misfired against a slow-but-alive
+    worker. ``release_claim`` is for callers that KNOW nothing was generated or sent; age
+    alone cannot know that. ``failed`` frees the slot regardless, since quota counts only
+    ``claimed``/``posted``, and it is the honest record of an attempt that never delivered.
+
+    The cutoff is the startup one (``stale_claim_reclaim_seconds``, 900s), unchanged and
+    unshared with the tick interval on purpose: the longest legitimate in-flight stretch at
+    shipped defaults is ~4 minutes — three generate rounds of two 30s Gemini attempts plus
+    backoff (183s), the reply delay (<=10s), then the send (pool + RPC, ~50s) — so 15
+    minutes still clears it three times over.
+    """
+    cutoff = (
+        now - timedelta(seconds=settings.neurocomment.stale_claim_reclaim_seconds)
+    ).isoformat()
+    reclaimed = await reclaim_stale_claims(cutoff)
+    if reclaimed:
+        # Only when rows actually went (same rule as the prune above): a healthy
+        # deployment must not log a no-op reclaim every five minutes forever.
+        await log_event("INFO", "neurocomment_stale_claims_reclaimed", extra={"count": reclaimed})
 
 
 async def _sweep_once() -> None:

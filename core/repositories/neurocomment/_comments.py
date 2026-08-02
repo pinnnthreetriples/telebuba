@@ -231,9 +231,11 @@ async def release_claim(channel: str, post_id: int) -> None:
     The transient outcomes (``status="unavailable"``, a Gemini 429) are nobody's fault,
     so they must not mark the row ``failed`` — but leaving it ``claimed`` is not free
     either: ``_quota`` counts ``claimed`` alongside ``posted``, and ``reclaim_stale_claims``
-    only runs at process startup, so the slot stayed spent for the whole 24-hour window.
-    Deleting the row frees it at once. A DELETE rather than a new status because the row
-    records nothing worth keeping: nothing was generated or sent.
+    is a backstop that only ages a claim out once it is 15 minutes old, so the slot stayed
+    spent long after the attempt was over. Deleting the row frees it at once. A DELETE
+    rather than a new status because the row records nothing worth keeping: nothing was
+    generated or sent — which is exactly what the periodic reclaim can NOT infer from age,
+    and why it marks ``failed`` instead of deleting.
     """
     return await asyncio.to_thread(_release_claim, channel, post_id)
 

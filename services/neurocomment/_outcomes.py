@@ -66,8 +66,9 @@ _COOLDOWN_STATUSES = frozenset(
 # ``claim_comment`` already refuses to overwrite, so a seconds-long outage would burn the
 # post for every account, forever. The claim is ``release_claim``d instead: leaving it
 # ``claimed`` is not free either, because quota counts ``claimed`` alongside ``posted`` and
-# only startup ages stale claims out, so the account paid a day-cap slot (a THIRD of its
-# day on that channel at the shipped cap of 3) for a comment it never sent.
+# the sweep's reclaim pass only ages a claim out after ``stale_claim_reclaim_seconds``, so
+# the account paid a day-cap slot (a THIRD of its day on that channel at the shipped cap of
+# 3) for a comment it never sent — for a quarter of an hour, over a fault of ours.
 _UNAVAILABLE_STATUS = "unavailable"
 _RATE_LIMITED_REASON = "gemini_rate_limited"
 
@@ -199,12 +200,16 @@ async def _classify_post(
         # stale cached entity, so a *transient* access loss parks the pair until one of
         # those happens (before #279 it recovered on its own, noisily). Not a solver
         # failure: no pending-resolve, no channel pause.
+        # The verdict rides along (#44). Both names in this family mean the same thing —
+        # we were in the chat and are not any more — so both are retryable: a chat we
+        # posted in once can take us back, which is exactly what the re-join rule is for.
         await upsert_readiness(
             account_id,
             event.channel,
             joined=False,
             captcha_passed=True,
             ready=False,
+            access_lost_reason=result.error_type,
         )
         event_name = "neurocomment_post_access_lost"
     elif result.error_type in _GATE_ERRORS:

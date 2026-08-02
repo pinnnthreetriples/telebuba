@@ -12,6 +12,7 @@ from typing import TYPE_CHECKING, Any, ClassVar
 from unittest.mock import MagicMock
 
 import pytest
+from telethon.tl.types import MessageMediaDocument, MessageMediaPhoto
 
 from core.config import settings
 from core.db import configure_database
@@ -108,8 +109,16 @@ def _make_event(  # noqa: PLR0913 - test helper mirrors the Telethon message fie
     media: object,
     post: object,
     fwd_from: object = None,
+    grouped_id: object = None,
 ) -> object:
-    message = MagicMock(id=post_id, message=text, media=media, post=post, fwd_from=fwd_from)
+    message = MagicMock(
+        id=post_id,
+        message=text,
+        media=media,
+        post=post,
+        fwd_from=fwd_from,
+        grouped_id=grouped_id,
+    )
     return MagicMock(message=message, chat_id=chat_id)
 
 
@@ -137,8 +146,45 @@ async def test_subscribe_posts_surfaces_new_broadcast_post(
     )
 
     assert received == [
-        NewPostEvent(channel="@deals", post_id=42, text="big sale", has_media=True),
+        NewPostEvent(channel="@deals", post_id=42, text="big sale", media_kind="other"),
     ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    ("media", "grouped_id", "expected"),
+    [
+        (MagicMock(spec=MessageMediaPhoto), None, "photo"),
+        # Album items each fire their own event; a comment on any of them lands in the
+        # album head's discussion thread, so they are never a separate opportunity.
+        (MagicMock(spec=MessageMediaPhoto), 777, "album"),
+        (MagicMock(spec=MessageMediaDocument), None, "other"),
+        (None, None, "none"),
+    ],
+)
+async def test_media_kind_classifies_what_a_comment_can_be_made_of(
+    monkeypatch: pytest.MonkeyPatch,
+    media: object,
+    grouped_id: object,
+    expected: str,
+) -> None:
+    client = FakeClient()
+    _patch_client(monkeypatch, client)
+    received: list[NewPostEvent] = []
+
+    async def on_post(event: NewPostEvent) -> None:
+        received.append(event)
+
+    await subscribe_posts("listener-media", ["@news"], on_post)
+    callback, _ = client.handlers[0]
+
+    await callback(
+        _make_event(
+            chat_id=-100, post_id=5, text=None, media=media, post=True, grouped_id=grouped_id
+        ),
+    )
+
+    assert [event.media_kind for event in received] == [expected]
 
 
 @pytest.mark.asyncio
@@ -177,7 +223,7 @@ async def test_post_without_text_or_media_normalises(monkeypatch: pytest.MonkeyP
         _make_event(chat_id=-100, post_id=9, text=None, media=None, post=True),
     )
 
-    assert received == [NewPostEvent(channel="@news", post_id=9, text="", has_media=False)]
+    assert received == [NewPostEvent(channel="@news", post_id=9, text="", media_kind="none")]
 
 
 @pytest.mark.asyncio

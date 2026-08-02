@@ -171,6 +171,14 @@ class NeurocommentSettings(BaseSettings):
     # A post whose text, stripped of links, leaves at most this many word chars is
     # treated as link-only / an ad and skipped.
     link_only_max_word_chars: int = Field(default=10, ge=0)
+    # Caption-less PHOTO posts are commented on by showing the image to the model
+    # (vision) instead of skipping — over four days live that was 85 skipped posts
+    # against 39 published comments. This caps the photo we are willing to inline into
+    # the LLM request; a bigger one is skipped without being downloaded. 4 MB clears any
+    # normal Telegram photo (they arrive well under 1 MB) while bounding a pathological
+    # one. 0 turns the whole vision path off — the escape hatch if an operator decides
+    # the extra image tokens per caption-less post are not worth the comments they buy.
+    vision_max_image_bytes: int = Field(default=4_000_000, ge=0)
     # Grace period to await in-flight on-post tasks on shutdown before cancelling.
     stop_cancel_timeout_seconds: float = Field(default=5.0, ge=0.1)
     # L4: cap on concurrently in-flight on-post handler tasks (excess dropped under flood).

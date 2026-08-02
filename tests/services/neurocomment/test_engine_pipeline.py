@@ -132,8 +132,9 @@ async def test_already_claimed_post_does_not_generate_or_post(
     "event",
     [
         NewPostEvent(channel="@chan", post_id=1, text="real text", is_forward=True),
-        NewPostEvent(channel="@chan", post_id=2, text="   ", has_media=True),
-        NewPostEvent(channel="@chan", post_id=3, text="", has_media=False),
+        NewPostEvent(channel="@chan", post_id=2, text="   ", media_kind="other"),
+        NewPostEvent(channel="@chan", post_id=3, text="", media_kind="none"),
+        NewPostEvent(channel="@chan", post_id=5, text="", media_kind="album"),
         NewPostEvent(channel="@chan", post_id=4, text="https://t.me/spam"),
     ],
 )

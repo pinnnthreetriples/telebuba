@@ -232,9 +232,11 @@ def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
     attempt within minutes, then one a day, four in all. So a pair with attempts left is
     ``rejoining`` (the re-join timeline is running), and only a pair that has spent them
     — or one ``_rejoin`` refuses to retry at all, i.e. skipped (#148) — is the terminal
-    ``join_failed``. What the row cannot say is WHY the pair is out: kick and bad invite
-    write the same fields, so the badge reports the timeline, not the cause. Then the
-    approval gate ``join_by_request``; ``throttled`` is the catch-all.
+    ``join_failed``. Since #44 the row also says WHY the pair is out, and ``exhausted``
+    folds that in: a verdict a re-join can never beat (a handle nobody owns, a revoked
+    invite key) is finished on arrival, so the badge stops offering «Возвращаемся в чат»
+    for a chat nothing is walking back into. Then the approval gate ``join_by_request``;
+    ``throttled`` is the catch-all.
     """
     if not rows:
         return "no_data"  # onboarding hasn't produced readiness data for this channel yet

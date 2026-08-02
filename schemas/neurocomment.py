@@ -193,6 +193,10 @@ class NeurocommentReadiness(BaseModel):
     # the channel drop once every account has used its attempts.
     rejoin_attempted_at: str | None = None
     rejoin_attempts: int = 0
+    # The Telegram verdict that took this pair out of the chat — the error class itself,
+    # so the rule can tell a kick (retryable) from a dead address (not). None = unknown,
+    # which every rule reads as retryable.
+    access_lost_reason: str | None = None
 
 
 class ReadinessList(BaseModel):

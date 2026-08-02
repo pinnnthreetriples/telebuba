@@ -11,7 +11,7 @@ from core.config import settings
 from services.content import has_link
 
 if TYPE_CHECKING:
-    from schemas.telegram_actions import NewPostEvent
+    from schemas.telegram_actions import NewPostEvent, PostMediaKind
 
 
 def filter_reason(event: NewPostEvent) -> str | None:
@@ -22,13 +22,30 @@ def filter_reason(event: NewPostEvent) -> str | None:
     if getattr(event, "is_forward", False):
         return "forward"
     text = event.text.strip()
-    if event.has_media and not text:
-        return "media_no_caption"
-    if not text and not event.has_media:
-        return "empty"
+    if not text:
+        return _no_caption_reason(event.media_kind)
     if _is_link_only(event.text):
         return "link_only"
     return None
+
+
+def _no_caption_reason(kind: PostMediaKind) -> str | None:
+    """Why a post with no text is (still) not commentable — ``None`` for a readable photo.
+
+    A caption-less photo is no longer dead weight: ``_generate`` downloads it and the
+    model comments on what it sees. Everything else that arrives without a caption keeps
+    its own reason, so the skip log prices what is genuinely still left on the table
+    (``media_no_image``) apart from what never was (``media_album_item`` — a duplicate of
+    the album head we already commented on) and from the operator's own off-switch
+    (``media_no_caption``, the pre-vision behaviour, when the size cap is set to 0).
+    """
+    if kind == "none":
+        return "empty"
+    if kind == "album":
+        return "media_album_item"
+    if kind != "photo":
+        return "media_no_image"
+    return None if settings.neurocomment.vision_max_image_bytes > 0 else "media_no_caption"
 
 
 def _is_link_only(text: str) -> bool:

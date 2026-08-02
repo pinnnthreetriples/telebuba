@@ -10,6 +10,7 @@ to keep each file small:
 - ``_spam``    — @SpamBot probe + self-restriction read
 - ``_actions`` — typed-action executor + dispatch (uses the pool)
 - ``_read``    — read-action executor + batch dispatch (uses the pool)
+- ``_read_post_image`` — in-memory fetch of a channel post's photo (vision path)
 - ``_listener``— standing NewMessage subscription → typed NewPostEvent callback
 - ``_media``   — profile photo / story / music actions
 - ``_profile`` — profile-field edit dispatch + edit-time status bookkeeping
@@ -53,6 +54,7 @@ from core.telegram_client._read import (
     execute_read,
     execute_read_many,
 )
+from core.telegram_client._read_post_image import download_post_image
 from core.telegram_client._session import check_telegram_session
 from core.telegram_client._spam import check_spam_status
 
@@ -63,6 +65,7 @@ __all__ = [
     "check_spam_status",
     "check_telegram_session",
     "create_telegram_client",
+    "download_post_image",
     "evict_client",
     "execute",
     "execute_read",

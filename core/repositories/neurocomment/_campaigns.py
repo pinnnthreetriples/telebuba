@@ -206,6 +206,10 @@ def _link_channel_to_campaign(campaign_id: str, channel: str) -> CampaignChannel
                     join_request_attempts=0,
                     rejoin_attempted_at=None,
                     rejoin_attempts=0,
+                    # The verdict (#44) too, and for the same reason: a terminal one
+                    # out-lives the counters, and the sweep would unlink the re-linked
+                    # channel again within five minutes on evidence about the old handle.
+                    access_lost_reason=None,
                 ),
             )
             link = _active_channel_link(connection, channel)

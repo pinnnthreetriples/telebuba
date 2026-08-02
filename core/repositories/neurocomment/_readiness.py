@@ -38,19 +38,24 @@ async def fetch_readiness(account_id: str, channel: str) -> NeurocommentReadines
     return await asyncio.to_thread(_fetch_readiness, account_id, channel)
 
 
-def _upsert_readiness(
+def _upsert_readiness(  # noqa: PLR0913 - one keyword per readiness column reads clearer
     account_id: str,
     channel: str,
     *,
     joined: bool,
     captcha_passed: bool,
     ready: bool,
+    access_lost_reason: str | None,
 ) -> NeurocommentReadiness:
     fields = {
         "joined": int(joined),
         "captcha_passed": int(captcha_passed),
         "ready": int(ready),
         "checked_at": _now_iso(),
+        # Always written, default None: the reason describes THIS state of the pair, so a
+        # write that is not an access loss must erase the one that was. Unlike the
+        # re-join counters, which the same write would reset into an endless retry.
+        "access_lost_reason": access_lost_reason,
     }
     statement = (
         sqlite_insert(_neurocomment_readiness)
@@ -72,17 +77,20 @@ def _upsert_readiness(
     return record
 
 
-async def upsert_readiness(
+async def upsert_readiness(  # noqa: PLR0913 - mirrors the explicit column list below.
     account_id: str,
     channel: str,
     *,
     joined: bool,
     captcha_passed: bool,
     ready: bool,
+    access_lost_reason: str | None = None,
 ) -> NeurocommentReadiness:
     """Record per-(account, channel) join/captcha/ready state at onboarding.
 
     Leaves ``human_skipped`` untouched (an operator skip survives a re-onboard).
+    ``access_lost_reason`` is the Telegram verdict behind an access-loss write and is
+    cleared by every other one — only the two writers of the access-lost sentinel pass it.
     """
     return await asyncio.to_thread(
         _upsert_readiness,
@@ -91,6 +99,7 @@ async def upsert_readiness(
         joined=joined,
         captcha_passed=captcha_passed,
         ready=ready,
+        access_lost_reason=access_lost_reason,
     )
 
 

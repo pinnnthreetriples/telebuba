@@ -215,6 +215,12 @@ _neurocomment_readiness = Table(
     # re-join re-writes the row, and a reset there would retry forever.
     Column("rejoin_attempted_at", String, nullable=True),
     Column("rejoin_attempts", Integer, nullable=False, server_default="0"),
+    # WHY the pair is out of the chat (#44): the Telegram error class that parked it, or
+    # NULL when nobody knows — a row from before this column, or a gateway failure that
+    # carried no error type. Written BY upsert_readiness (unlike the two counter pairs
+    # above): it describes the very write that parks the pair, so any other readiness
+    # write means the loss it described is over and the column goes back to NULL.
+    Column("access_lost_reason", String, nullable=True),
 )
 _neurocomment_comments = Table(
     "neurocomment_comments",

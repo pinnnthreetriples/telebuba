@@ -114,7 +114,17 @@ async def _classify_join(
     # (which is also joined=False) so the board renders join_failed, not "awaiting
     # approval": captcha_passed=True on an unjoined row is the sentinel (no other path
     # produces that combination). ready stays False so the pair is never selected.
-    await upsert_readiness(account_id, channel, joined=False, captcha_passed=True, ready=False)
+    # The verdict rides along (#44) so the re-join rule can tell a chat that might let us
+    # in later from an address that will never resolve. The error CLASS only: the message
+    # is free-form text no rule can key on, and a wrong reading here costs four days.
+    await upsert_readiness(
+        account_id,
+        channel,
+        joined=False,
+        captcha_passed=True,
+        ready=False,
+        access_lost_reason=result.error_type,
+    )
     return AccountChannelOnboarding(
         account_id=account_id,
         channel=channel,

@@ -490,6 +490,40 @@ def test_readiness_rejoin_columns_added_and_default_to_never_retried(
     assert (int(attempts), attempted_at) == (0, None)
 
 
+def test_readiness_access_lost_reason_added_and_defaults_to_unknown(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#44: a legacy readiness table gains the verdict that parked each pair.
+
+    NULL on every existing row, and NULL must read as "unknown" — the re-join rule treats
+    it exactly as it treated every row before the column existed. A default that read as a
+    terminal verdict would unlink live channels on the first sweep after the upgrade.
+    """
+    from core.migration_steps_access_reason import (  # noqa: PLC0415
+        _add_readiness_access_lost_reason,
+    )
+
+    engine = legacy_engine("legacy-access-reason.db")
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_readiness ("
+            "account_id VARCHAR NOT NULL, channel VARCHAR NOT NULL, joined INTEGER NOT NULL, "
+            "captcha_passed INTEGER NOT NULL, ready INTEGER NOT NULL, "
+            "checked_at VARCHAR NOT NULL, PRIMARY KEY (account_id, channel))",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_readiness VALUES ('a1', '@news', 0, 1, 0, '2026-01-01')",
+        )
+        _add_readiness_access_lost_reason(connection)
+        _add_readiness_access_lost_reason(connection)  # idempotent — must not raise.
+
+    with engine.connect() as connection:
+        reason = connection.exec_driver_sql(
+            "SELECT access_lost_reason FROM neurocomment_readiness",
+        ).scalar_one()
+    assert reason is None
+
+
 def test_append_only_versions_are_unique() -> None:
     """Two migrations sharing the same version would silently mask each other."""
     versions = [v for v, _name, _fn in MIGRATIONS]
