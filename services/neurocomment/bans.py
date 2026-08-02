@@ -20,9 +20,11 @@ from typing import TYPE_CHECKING, Literal
 from core.config import settings
 from core.db import (
     clear_pair_banned,
+    fetch_active_campaign_for_channel,
     fetch_campaign,
     list_campaign_accounts,
     list_campaign_channels,
+    list_channel_readiness,
     mark_pair_banned,
     upsert_readiness,
 )
@@ -170,4 +172,48 @@ async def confirm_group_ban_and_leave(
         account_id=account_id,
         extra={"channel": channel, "leave": outcome},
     )
+    await _unlink_channel_if_no_account_left(account_id, channel)
     return True
+
+
+async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> None:
+    """Drop ``channel`` from its campaign once every serving account is banned there.
+
+    A channel nobody can write in produces nothing but failed posts, so it is
+    unlinked through the service (not the repository) exactly like the join-request
+    expiry in ``_sweep._drop_unapproved_channel`` — that is what makes the running
+    listener reconcile and stop watching it.
+
+    The verdict is read from persisted readiness, never a live probe: this runs on the
+    post hot path and must not spend Telegram calls. Serving accounts respect the
+    per-account channel subset, and one banned account must never remove a channel the
+    others comment in fine — so any serving account whose row is NOT banned keeps the
+    channel, and so does any serving account with NO row: a missing row means that
+    account was never tried here, not that it failed. Onboarding has no timer, so the
+    fleet reaches a freshly linked channel slowly; counting only the rows that exist
+    would let the first banned account drop a channel the other five never touched.
+    """
+    campaign = await fetch_active_campaign_for_channel(channel)
+    if campaign is None:
+        return
+    links = (await list_campaign_accounts(campaign.campaign_id)).links
+    serving = _serving_accounts(links, channel)
+    rows = (await list_channel_readiness(campaign.campaign_id, channel, serving)).readiness
+    if len(rows) != len(serving) or any(not row.banned for row in rows):
+        return
+    # Late import: ``campaigns`` reaches ``_runtime``, which reaches this module — the
+    # same cycle ``_sweep._drop_unapproved_channel`` dodges the same way.
+    from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
+
+    await campaigns_service.deactivate_channel(campaign.campaign_id, channel)
+    await log_event(
+        "WARNING",
+        "neurocomment_channel_all_accounts_banned",
+        account_id=account_id,
+        extra={
+            "channel": channel,
+            "campaign_id": campaign.campaign_id,
+            "banned_accounts": len(rows),
+            "reason": "all_accounts_banned",
+        },
+    )

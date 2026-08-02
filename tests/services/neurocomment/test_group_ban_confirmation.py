@@ -14,10 +14,12 @@ from typing import TYPE_CHECKING
 
 import pytest
 
+from core.config import settings
 from core.db import (
     assign_account_to_campaign,
     create_account,
     create_campaign,
+    fetch_active_campaign_for_channel,
     fetch_readiness,
     link_channel_to_campaign,
     list_recent_logs,
@@ -269,3 +271,120 @@ async def test_check_channels_button_leaves_a_confirmed_group(
     assert [item.status for item in result.items] == ["banned"]
     assert await _banned() is True
     assert [action.action_type for _, action in leave.calls] == ["leave_discussion_group"]
+
+
+# --------------------------------------------------------------------------- #
+# The write-gate branch: where a real per-group admin ban actually lands
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_confirmed_ban_from_the_gate_branch_spares_the_channel_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """ChatWriteForbiddenError is an admin ban here — per-ACCOUNT, so no channel back-off."""
+    monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
+    await _make_campaign("@chan", "acc-1")
+    comment = _CommentStub(status="failed", error_type="ChatWriteForbiddenError")
+    _patch_io(monkeypatch, comment=comment)
+    _patch_ban_confirmation(monkeypatch)
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
+
+    assert await _banned() is True
+    assert [action.action_type for _, action in comment.calls][-1] == "leave_discussion_group"
+    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is False
+    assert await _logged("neurocomment_account_banned")
+    assert await _logged("neurocomment_post_gated") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_unconfirmed_gate_keeps_todays_channel_backoff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No per-group proof → the gate path is untouched; this is what parks a closed channel."""
+    monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
+    await _make_campaign("@chan", "acc-1")
+    _patch_io(
+        monkeypatch, comment=_CommentStub(status="failed", error_type="ChatWriteForbiddenError")
+    )
+    _patch_ban_confirmation(monkeypatch, state="can_send")
+
+    await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
+
+    assert await _banned() is False
+    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is True
+    assert await _logged("neurocomment_post_gated")
+
+
+# --------------------------------------------------------------------------- #
+# A channel no serving account can write in leaves the campaign
+# --------------------------------------------------------------------------- #
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_banning_the_last_usable_account_unlinks_the_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    await _make_campaign("@chan", "acc-1")
+    _patch_ladder(monkeypatch)
+
+    assert await bans.confirm_group_ban_and_leave("acc-1", "@chan") is True
+
+    assert await fetch_active_campaign_for_channel("@chan") is None
+    assert await _logged("neurocomment_channel_all_accounts_banned")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_an_account_never_onboarded_here_keeps_the_channel_linked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A missing readiness row means "never tried here", not "failed here".
+
+    Onboarding has no timer, so the fleet reaches a freshly linked channel slowly. If
+    absent rows did not count, the first account to be banned would drop a channel the
+    rest never touched.
+    """
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    await create_account(AccountCreate(account_id="acc-2", label="B", session_name="acc-2"))
+    await assign_account_to_campaign(campaign_id, "acc-2")  # serving, but never onboarded
+    _patch_ladder(monkeypatch)
+
+    assert await bans.confirm_group_ban_and_leave("acc-1", "@chan") is True
+
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+    assert await _logged("neurocomment_channel_all_accounts_banned") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_a_still_usable_account_keeps_the_channel_linked(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """One banned account must never remove a channel the others comment in fine."""
+    await _make_campaign("@chan", "acc-1", "acc-2")
+    _patch_ladder(monkeypatch)
+
+    assert await bans.confirm_group_ban_and_leave("acc-1", "@chan") is True
+
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+    assert await _logged("neurocomment_channel_all_accounts_banned") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_a_channel_outside_an_active_campaign_is_left_alone(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """No campaign to unlink from — the ban still sticks, nothing else happens."""
+    await _seed_pair()
+    _patch_ladder(monkeypatch)
+
+    assert await bans.confirm_group_ban_and_leave("acc-1", "@chan") is True
+
+    assert await _banned() is True
+    assert await _logged("neurocomment_channel_all_accounts_banned") is False

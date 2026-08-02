@@ -355,21 +355,26 @@ async def _classify_post(
         )
         event_name = "neurocomment_post_access_lost"
     elif result.error_type in _GATE_ERRORS:
-        # Gate: stop selecting this pair until re-onboarded; the click did not work.
-        await upsert_readiness(
-            account_id,
-            event.channel,
-            joined=True,
-            captcha_passed=False,
-            ready=False,
-        )
-        await resolve_pending_outcome(account_id, event.channel, "failed")
-        # A gate is a property of the CHANNEL, not the pair. Counting it only when a
-        # pending challenge resolved left a channel that issues none unparked: live DB
-        # had one forbid writes to all six accounts, 16 times, re-onboarded and re-gated
-        # forever, paying for a generation each round. Onboarding honours this back-off.
-        await _register_challenge_failure(event.channel, account_id, cause="gate")
-        event_name = "neurocomment_post_gated"
+        # A REAL per-group ban lands HERE, not on _BAN_ERROR: an admin mute/ban raises
+        # ChatWriteForbiddenError. Confirm first, fall back to the gate; a confirmed ban is
+        # PER-ACCOUNT, so no channel back-off and — as on _BAN_ERROR — no solver failure.
+        if await bans.confirm_group_ban_and_leave(account_id, event.channel):
+            event_name = "neurocomment_account_banned"
+        else:
+            # Gate: stop selecting this pair until re-onboarded; the click did not work.
+            await upsert_readiness(
+                account_id,
+                event.channel,
+                joined=True,
+                captcha_passed=False,
+                ready=False,
+            )
+            await resolve_pending_outcome(account_id, event.channel, "failed")
+            # A gate is a property of the CHANNEL, not the pair: counting it only on a
+            # resolved pending challenge left a channel that issues none unparked (live DB:
+            # one forbade all six accounts, 16 times, re-gated forever). Onboarding honours it.
+            await _register_challenge_failure(event.channel, account_id, cause="gate")
+            event_name = "neurocomment_post_gated"
     else:
         # A class fix, not a per-error fix: ``core.telegram_client._actions`` funnels every
         # unmapped Telethon exception into one generic ``status="failed"``, so the named

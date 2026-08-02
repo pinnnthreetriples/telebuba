@@ -49,6 +49,11 @@ def isolate_engine(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[
     _generate._INFLIGHT.clear()
     # Generation/post never actually wait.
     monkeypatch.setattr(engine.asyncio, "sleep", _no_sleep)
+    # Every write-gate / ban outcome now asks the ban ladder whether THIS group banned
+    # us. Default the probe to can_send (= not banned here) so a test about the gate
+    # path never reaches the network just to hear "no"; _patch_ban_confirmation
+    # overrides it in the tests that want a confirmed ban.
+    monkeypatch.setattr(_seams, "execute_read", _can_send_read)
     # Default health: the readiness gate is forced open. Trust is scored from bulk
     # signals via the pure account_trust_score_from and ignored here (evaluate_readiness
     # is stubbed); spam comes from the cached bulk read, never a live probe.
@@ -65,6 +70,10 @@ class _Readiness:
 
 async def _no_sleep(_seconds: float) -> None:
     return None
+
+
+async def _can_send_read(_account_id: str, _action: TelegramReadAction) -> BanCheckResult:
+    return BanCheckResult(state="can_send")
 
 
 def _async_return(value: object) -> Callable[..., Awaitable[object]]:

@@ -559,7 +559,10 @@ async def test_banned_pair_is_not_selected_for_the_next_post(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     """After a ban, a fresh post on the same channel finds no eligible account."""
-    await _make_campaign("@chan", "acc-1")
+    await _make_campaign("@chan", "acc-1", "acc-2")
+    # acc-2 is joined but not ready: it never competes for the post, and its un-banned
+    # readiness row keeps the channel linked, so the miss below is the banned pair alone.
+    await upsert_readiness("acc-2", "@chan", joined=True, captcha_passed=False, ready=False)
     comment = _CommentStub(status="failed", error_type="UserBannedInChannelError")
     _patch_io(monkeypatch, comment=comment)
     _patch_ban_confirmation(monkeypatch)
