@@ -24,6 +24,7 @@ from core.db import (
     purge_neurocomment_history_older_than,
 )
 from core.logging import log_event
+from core.telegram_client import TelegramReadError
 from schemas.telegram_actions import CheckMessagesAlive, CheckMessagesAliveResult
 from services.neurocomment import _seams, _state
 
@@ -171,12 +172,13 @@ async def _sweep_channel(channel: str, comments: list[CommentRecord], now: datet
             CheckMessagesAlive(channel=channel, message_ids=msg_ids),
         )
     except Exception as exc:  # noqa: BLE001 - one channel's read must not abort the sweep.
-        await log_event(
-            "WARNING",
-            "neurocomment_sweep_read_failed",
-            account_id=reader,
-            extra={"channel": channel, "error_type": type(exc).__name__},
-        )
+        # The gateway wraps every Telethon failure as TelegramReadError, so the class
+        # name alone said nothing: 544 identical lines in three days and no way to tell
+        # a flood-wait from a lost peer. ``reason`` carries the wrapped cause.
+        extra: dict[str, object] = {"channel": channel, "error_type": type(exc).__name__}
+        if isinstance(exc, TelegramReadError):
+            extra |= {"reason": exc.reason, "kind": exc.kind}
+        await log_event("WARNING", "neurocomment_sweep_read_failed", account_id=reader, extra=extra)
         return
     if not isinstance(result, CheckMessagesAliveResult):  # pragma: no cover - typed gateway
         return

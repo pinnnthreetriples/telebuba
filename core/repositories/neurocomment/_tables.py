@@ -284,4 +284,8 @@ _neurocomment_join_log = Table(
     Column("id", Integer, primary_key=True, autoincrement=True),
     Column("account_id", String, nullable=False),
     Column("joined_at", String, nullable=False),
+    # The watch channel a listener join subscribed to (migration #40), so the join
+    # cache survives a restart; NULL for a discussion-group join, which is keyed by
+    # readiness instead and must never make the listener skip the channel itself.
+    Column("watch_channel", String, nullable=True),
 )

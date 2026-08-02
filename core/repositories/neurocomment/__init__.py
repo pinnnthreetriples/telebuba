@@ -66,7 +66,11 @@ from core.repositories.neurocomment._discovery import (
     mark_discovery_qualified,
     replace_discovery_candidates,
 )
-from core.repositories.neurocomment._joins import count_account_joins_since, record_join
+from core.repositories.neurocomment._joins import (
+    count_account_joins_since,
+    list_joined_watch_channels,
+    record_join,
+)
 from core.repositories.neurocomment._quota import (
     count_account_channel_comments_since,
     count_account_comments_since,
@@ -130,6 +134,7 @@ __all__ = [
     "list_discovery_candidates",
     "list_failed_for_channel",
     "list_failed_for_channels",
+    "list_joined_watch_channels",
     "list_linked_groups",
     "list_pending_discovery_candidates",
     "list_posted_comments_for_channel_since",

@@ -19,18 +19,38 @@ from core.db import _get_engine
 from core.repositories.neurocomment._tables import _neurocomment_join_log
 
 
-def _record_join(account_id: str) -> None:
+def _record_join(account_id: str, watch_channel: str | None) -> None:
     statement = _neurocomment_join_log.insert().values(
         account_id=account_id,
         joined_at=datetime.now(UTC).isoformat(),
+        watch_channel=watch_channel,
     )
     with _get_engine().begin() as connection:
         connection.execute(statement)
 
 
-async def record_join(account_id: str) -> None:
-    """Stamp one successful channel join for ``account_id`` (now, UTC isoformat)."""
-    await asyncio.to_thread(_record_join, account_id)
+async def record_join(account_id: str, watch_channel: str | None = None) -> None:
+    """Stamp one successful channel join for ``account_id`` (now, UTC isoformat).
+
+    ``watch_channel`` is set by the listener pass only; a discussion-group join leaves
+    it ``None`` (readiness tracks that pair) so it can never make the listener skip the
+    broadcast channel it must receive posts from.
+    """
+    await asyncio.to_thread(_record_join, account_id, watch_channel)
+
+
+def _list_joined_watch_channels(account_id: str) -> set[str]:
+    statement = select(_neurocomment_join_log.c.watch_channel).where(
+        (_neurocomment_join_log.c.account_id == account_id)
+        & _neurocomment_join_log.c.watch_channel.is_not(None),
+    )
+    with _get_engine().connect() as connection:
+        return {str(row[0]) for row in connection.execute(statement)}
+
+
+async def list_joined_watch_channels(account_id: str) -> set[str]:
+    """Watch channels ``account_id`` has already joined — the restart-safe join cache."""
+    return await asyncio.to_thread(_list_joined_watch_channels, account_id)
 
 
 def _count_account_joins_since(account_id: str, since_iso: str) -> int:
