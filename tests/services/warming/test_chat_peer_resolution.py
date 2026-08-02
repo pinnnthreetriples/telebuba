@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 import pytest
 
 from core.db import (
-    latest_unreplied_for,
     load_warming_settings,
+    oldest_unreplied_for,
     record_dialogue_message,
 )
 from schemas.gemini import GeminiResult
@@ -64,7 +64,7 @@ async def test_dm_actions_carry_the_recipients_phone(monkeypatch: pytest.MonkeyP
     # acc-a opens (smaller id wins the tiebreak); its DM lands in acc-b's inbox,
     # which acc-b then reads and answers — exercising all three action sites.
     assert (await _open_with_partner("acc-a", ["acc-b"], secret, accounts)).messages_sent == 1
-    incoming = await latest_unreplied_for("acc-b")
+    incoming = await oldest_unreplied_for("acc-b")
     assert incoming is not None
     assert (await _reply_to_partner("acc-b", incoming, secret, accounts)).messages_sent == 1
 
@@ -149,7 +149,7 @@ async def test_unresolvable_partner_stops_the_reply_from_re_arming(
     monkeypatch.setattr(_seams, "execute", record_then_fail)
     monkeypatch.setattr(_seams, "generate_text", gen)
     await record_dialogue_message("acc-2", "acc-1", "are you there")
-    incoming = await latest_unreplied_for("acc-1")
+    incoming = await oldest_unreplied_for("acc-1")
     assert incoming is not None
 
     result = await _reply_to_partner("acc-1", incoming, await load_warming_settings(), _pair())
@@ -157,7 +157,7 @@ async def test_unresolvable_partner_stops_the_reply_from_re_arming(
     assert result.failures == 0
     assert result.attempted_actions == 1
     # Consumed, so the pair stops re-arming this same message next cycle.
-    assert await latest_unreplied_for("acc-1") is None
+    assert await oldest_unreplied_for("acc-1") is None
     # Bailed at the read-ack: no second lookup, no wasted generation.
     assert dispatched == ["mark_dm_read"]
     assert generated == 0

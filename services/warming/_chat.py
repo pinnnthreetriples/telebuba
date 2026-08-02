@@ -14,11 +14,12 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     count_pair_messages_since,
-    latest_unreplied_for,
     list_accounts,
     mark_message_replied,
     mark_message_unreplied,
+    oldest_unreplied_for,
     pair_key,
+    partners_awaiting_our_reply,
     record_dialogue_message,
     try_claim_message_reply,
 )
@@ -68,7 +69,7 @@ async def _maybe_inter_account_chat(
 ) -> ChatResult:
     """Advance one dialogue turn for ``sender_id`` with one of its partners.
 
-    Replies to the most recent unanswered message from a partner; otherwise
+    Replies to the longest-waiting unanswered message from a partner; otherwise
     opens a new conversation with an eligible partner. Returns structured result.
     """
     partners = (await get_partners(sender_id)).partners
@@ -76,14 +77,19 @@ async def _maybe_inter_account_chat(
         return ChatResult()
     accounts = {account.account_id: account for account in (await list_accounts()).accounts}
 
-    incoming = await latest_unreplied_for(sender_id)
-    if incoming is not None and incoming.from_account in partners:
-        return await _reply_to_partner(sender_id, incoming, secret, accounts)
-    if incoming is not None and incoming.from_account not in partners:
-        # Orphan: the newest unreplied message is from a NON-partner (e.g. an
-        # ex-partner after a reshuffle). Left alone it stays newest and shadows
-        # the inbox forever, so mark it replied before opening a fresh thread.
+    incoming = await oldest_unreplied_for(sender_id)
+    while incoming is not None and incoming.from_account not in partners:
+        # Orphan: the head of the queue is from a NON-partner (e.g. an ex-partner
+        # after a reshuffle). Drain the whole run of them in one pass rather than
+        # one per cycle: the inbox is FIFO, so N orphans sitting in front of a
+        # real partner message would otherwise cost N cycles — each one burning
+        # its dialogue turn on bookkeeping — before that partner got an answer.
+        # The loop terminates because every iteration flips a distinct row to
+        # replied=1 and the query only ever returns replied=0 rows.
         await mark_message_replied(incoming.id)
+        incoming = await oldest_unreplied_for(sender_id)
+    if incoming is not None:
+        return await _reply_to_partner(sender_id, incoming, secret, accounts)
     return await _open_with_partner(sender_id, partners, secret, accounts)
 
 
@@ -194,11 +200,11 @@ async def _reply_to_partner(  # noqa: PLR0911
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
     text = gen.text
-    # Atomic claim before send: collapses ``latest_unreplied_for`` + ``mark``
+    # Atomic claim before send: collapses ``oldest_unreplied_for`` + ``mark``
     # into one UPDATE WHERE replied=0 so two parallel cycles cannot both
-    # answer the same incoming message. F6: if the send itself fails (flood
-    # or any non-ok), we release the claim so the inbox keeps the message
-    # for the next cycle instead of losing it forever.
+    # answer the same incoming message. F6: if the send fails *transiently*
+    # (flood / halt), we release the claim so the inbox keeps the message for
+    # the next cycle instead of losing it forever.
     if not await try_claim_message_reply(incoming.id):
         # The text reservation in _generate_chat_text would otherwise lock
         # this exact text out of the dedup window for nothing.
@@ -225,7 +231,14 @@ async def _reply_to_partner(  # noqa: PLR0911
         await release_sent_text(text)
         if result.error_type == _PEER_UNRESOLVED:
             return await _drop_unresolvable_reply(sender_id, incoming)
-        await mark_message_unreplied(incoming.id)
+        # Keep the claim — deliberately narrowing F6's "never lose a message" to
+        # the transient failures above. A generic send failure is peer-specific
+        # (blocked, privacy-restricted, deactivated) and repeats identically, and
+        # since the inbox went FIFO a re-armed row returns to the head every
+        # cycle: it would pin the queue forever, starving every other partner
+        # while burning a read-ack, a Gemini generation and a doomed send each
+        # time. The cost of consuming it is one unanswered synthetic line — the
+        # pair is not dead, the opener can start a fresh thread next cycle.
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.
@@ -278,14 +291,19 @@ async def _drop_unresolvable_reply(sender_id: str, incoming: DialogueMessage) ->
     return await _skip_unresolvable_peer(sender_id, incoming.from_account)
 
 
+def _conversation_window_start() -> str:
+    """ISO start of the current conversation window (``dialogue_conversation_window_hours``)."""
+    hours = settings.warming.dialogue_conversation_window_hours
+    return (datetime.now(UTC) - timedelta(hours=hours)).isoformat()
+
+
 async def _conversation_faded(account_a: str, account_b: str) -> bool:
     """True once a pair has exchanged ``dialogue_max_turns`` within the window."""
-    warm = settings.warming
-    since = (
-        datetime.now(UTC) - timedelta(hours=warm.dialogue_conversation_window_hours)
-    ).isoformat()
-    count = await count_pair_messages_since(pair_key(account_a, account_b), since)
-    return count >= warm.dialogue_max_turns
+    count = await count_pair_messages_since(
+        pair_key(account_a, account_b),
+        _conversation_window_start(),
+    )
+    return count >= settings.warming.dialogue_max_turns
 
 
 async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure reason
@@ -305,6 +323,19 @@ async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure
         and accounts[partner].user_id is not None
         and sender_id < partner
     ]
+    # Partners who have not answered our last DM yet. Without this the opener
+    # re-picks the same partner every cycle — our own sent row carries
+    # to_account=partner so it never shows up in our own inbox lookup — and the
+    # only brake is the 12-message fade below: up to a dozen consecutive
+    # one-sided DMs, the exact spam signature warming exists to avoid.
+    # Deliberately bounded by the conversation window: a pending message older
+    # than that is a dead thread, and a permanent block would silence the pair
+    # forever and, fleet-wide, eventually stop the opener firing at all.
+    awaiting = await partners_awaiting_our_reply(
+        sender_id,
+        [account.account_id for account in candidates],
+        _conversation_window_start(),
+    )
     # Skip partners this pair has already exhausted within the window. The reply
     # path fades (sends nothing) once dialogue_max_turns is hit; an opener that
     # ignored the fade would keep sending fresh one-sided DMs the partner never
@@ -313,7 +344,8 @@ async def _open_with_partner(  # noqa: PLR0911 - one early exit per skip/failure
     eligible = [
         account
         for account in candidates
-        if not await _conversation_faded(sender_id, account.account_id)
+        if account.account_id not in awaiting
+        and not await _conversation_faded(sender_id, account.account_id)
     ]
     if not eligible:
         return ChatResult()

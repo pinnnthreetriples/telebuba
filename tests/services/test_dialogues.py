@@ -13,8 +13,8 @@ from core.config import settings
 from core.db import (
     configure_database,
     create_account,
-    latest_unreplied_for,
     list_dialogue_pairs,
+    oldest_unreplied_for,
     record_dialogue_message,
     replace_dialogue_pairs,
     try_claim_message_reply,
@@ -236,14 +236,35 @@ async def test_concurrent_assign_pairs_leaves_consistent_state() -> None:
 
 
 @pytest.mark.asyncio
+async def test_inbox_serves_the_oldest_unreplied_message_first() -> None:
+    """FIFO, not LIFO: a newer arrival must not shadow one that has waited longer.
+
+    One dialogue turn per cycle answers one message, so under LIFO the older
+    message sat unanswered until the retention purge deleted it.
+    """
+    await create_account(AccountCreate(account_id="target"))
+    await record_dialogue_message("sender-a", "target", "первое")
+    await record_dialogue_message("sender-b", "target", "второе")
+
+    first = await oldest_unreplied_for("target")
+    assert first is not None
+    assert first.text == "первое"
+
+    assert await try_claim_message_reply(first.id) is True
+    second = await oldest_unreplied_for("target")
+    assert second is not None
+    assert second.text == "второе"
+
+
+@pytest.mark.asyncio
 async def test_try_claim_message_reply_atomic() -> None:
     """First claim wins; the second one (race) returns False without sending."""
     await create_account(AccountCreate(account_id="a"))
     await create_account(AccountCreate(account_id="b"))
     await record_dialogue_message("a", "b", "hi")
-    incoming = await latest_unreplied_for("b")
+    incoming = await oldest_unreplied_for("b")
     assert incoming is not None
 
     assert await try_claim_message_reply(incoming.id) is True
     assert await try_claim_message_reply(incoming.id) is False
-    assert await latest_unreplied_for("b") is None
+    assert await oldest_unreplied_for("b") is None

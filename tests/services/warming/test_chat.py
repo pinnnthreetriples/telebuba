@@ -10,8 +10,8 @@ import pytest
 from core.config import settings
 from core.db import (
     create_account,
-    latest_unreplied_for,
     load_warming_settings,
+    oldest_unreplied_for,
     purge_sent_hashes_older_than,
     record_dialogue_message,
     update_account_from_session_check,
@@ -229,7 +229,7 @@ async def test_cycle_replies_to_pending_partner_message(monkeypatch: pytest.Monk
     assert dms
     assert dms[0].user_id == 999
     # the incoming message is now answered → not replied again
-    assert await latest_unreplied_for("acc-1") is None
+    assert await oldest_unreplied_for("acc-1") is None
 
 
 @pytest.mark.asyncio
@@ -251,7 +251,7 @@ async def test_dialogue_reply_chains_for_multi_turn(monkeypatch: pytest.MonkeyPa
 
     assert result.messages_sent == 1
     # acc-1's reply is now pending for acc-2 → the conversation can continue
-    pending = await latest_unreplied_for("acc-2")
+    pending = await oldest_unreplied_for("acc-2")
     assert pending is not None
     assert pending.from_account == "acc-1"
 
@@ -273,7 +273,7 @@ async def test_conversation_fades_after_max_turns(monkeypatch: pytest.MonkeyPatc
     assert result.messages_sent == 0
     assert "send_dm" not in recorder.types()
     # the thread is ended (incoming marked replied), no new pending message
-    assert await latest_unreplied_for("acc-1") is None
+    assert await oldest_unreplied_for("acc-1") is None
 
 
 @pytest.mark.asyncio
@@ -330,7 +330,7 @@ async def test_cycle_diagnostics_chat_failure(monkeypatch: pytest.MonkeyPatch) -
 async def test_reply_flood_releases_claim(monkeypatch: pytest.MonkeyPatch) -> None:
     """F6: send flood on reply leaves the incoming message claimable next cycle."""
     from core.db import (  # noqa: PLC0415
-        latest_unreplied_for,
+        oldest_unreplied_for,
         record_dialogue_message,
         replace_dialogue_pairs,
     )
@@ -370,7 +370,7 @@ async def test_reply_flood_releases_claim(monkeypatch: pytest.MonkeyPatch) -> No
         lambda req: _resolve(GeminiResult(status="ok", text="ok-reply")),  # noqa: ARG005
     )
 
-    incoming = await latest_unreplied_for("acc-a")
+    incoming = await oldest_unreplied_for("acc-a")
     assert incoming is not None
     secret = await load_warming_settings()
     accounts_map = {
@@ -382,7 +382,7 @@ async def test_reply_flood_releases_claim(monkeypatch: pytest.MonkeyPatch) -> No
     result = await _reply_to_partner("acc-a", incoming, secret, accounts_map)
     assert result.flood_result is not None
     # The incoming row should still be claimable.
-    still_pending = await latest_unreplied_for("acc-a")
+    still_pending = await oldest_unreplied_for("acc-a")
     assert still_pending is not None
     assert still_pending.id == incoming.id
 
@@ -482,7 +482,7 @@ async def test_reply_flood_does_not_block_same_text_retry_as_duplicate(
     reservation on every non-ok send branch.
     """
     from core.db import (  # noqa: PLC0415
-        latest_unreplied_for,
+        oldest_unreplied_for,
         record_dialogue_message,
         replace_dialogue_pairs,
     )
@@ -523,7 +523,7 @@ async def test_reply_flood_does_not_block_same_text_retry_as_duplicate(
 
     from services.warming._chat import _reply_to_partner  # noqa: PLC0415
 
-    incoming = await latest_unreplied_for("acc-a")
+    incoming = await oldest_unreplied_for("acc-a")
     assert incoming is not None
     secret = await load_warming_settings()
     accounts_map = {
@@ -536,7 +536,7 @@ async def test_reply_flood_does_not_block_same_text_retry_as_duplicate(
 
     # The hash reservation must have been released — running Gemini -> same text
     # path again would see ``chat_duplicate`` if it weren't.
-    again_incoming = await latest_unreplied_for("acc-a")
+    again_incoming = await oldest_unreplied_for("acc-a")
     assert again_incoming is not None
     second = await _reply_to_partner("acc-a", again_incoming, secret, accounts_map)
     # Still flood (we did not change the execute seam), but the failure_reason
@@ -553,8 +553,10 @@ async def test_open_with_partner_rests_on_a_faded_pair(monkeypatch: pytest.Monke
     monkeypatch.setattr(settings.warming, "dialogue_max_turns", 1)
     await create_account(AccountCreate(account_id="acc-1"))
     await create_account(AccountCreate(account_id="acc-2"))
-    # The pair has already hit the turn cap within the window -> faded.
-    await record_dialogue_message("acc-1", "acc-2", "привет!", replied=False)
+    # The pair has already hit the turn cap within the window -> faded. Recorded
+    # as replied so the fade is the only gate under test (an unanswered outgoing
+    # message blocks the opener on its own — see test_chat_inbox.py).
+    await record_dialogue_message("acc-1", "acc-2", "привет!", replied=True)
 
     sent: list[tuple[str, TelegramAction]] = []
 
