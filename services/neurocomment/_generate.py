@@ -24,7 +24,6 @@ from core.db import (
     load_warming_settings,
     mark_comment_failed,
     mark_comment_posted,
-    mark_pair_banned,
     resolve_pending_outcome,
     upsert_readiness,
 )
@@ -38,7 +37,7 @@ from services.content import (
     strip_markdown_delimiters,
     try_reserve_sent,
 )
-from services.neurocomment import _seams, _state
+from services.neurocomment import _seams, _state, bans
 
 if TYPE_CHECKING:
     from schemas.gemini import GeminiResult
@@ -57,9 +56,12 @@ class _GenOutcome(NamedTuple):
 # Flip readiness off so the pair is no longer selected, and count a challenge failure —
 # a solver click can clear these, so they can retry after re-onboarding.
 _GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
-# A hard ban: the account can't write here at all — NOT solver-clearable. It parks the
-# (account, channel) pair with a sticky ban (#30) instead of a recoverable gate, and is
-# never a challenge failure (no pending-resolve, no back-off).
+# Telegram's ACCOUNT-WIDE anti-spam write restriction (what @SpamBot reports as
+# limited) — NOT a per-chat moderator action, which arrives as ChatWriteForbiddenError
+# (mute) or ChannelPrivateError / UserNotParticipantError (kick), both handled below.
+# So it is only a *prompt* to check whether this group actually banned us; the sticky
+# ban (#30) and the leave are gated on ``bans.confirm_group_ban_and_leave``. Never a
+# challenge failure either way (no pending-resolve, no back-off).
 _BAN_ERROR = "UserBannedInChannelError"
 # The account is no longer in / can no longer reach the discussion group (kicked, group
 # went private). Neither a ban nor a solver-clearable gate — the only fix is a fresh join,
@@ -318,11 +320,16 @@ async def _classify_post(
         await _apply_cooldown(account_id, result.flood_wait_seconds, scope)
         event_name = "neurocomment_post_cooldown"
     elif result.error_type == _BAN_ERROR:
-        # Hard ban → park this pair with a sticky ban (#30): selection skips it and a
-        # re-onboard won't revive it. Not a solver failure, so no challenge back-off and
-        # the pending challenge is left as-is. Cleared by a can_send probe / operator retry.
-        await mark_pair_banned(account_id, event.channel)
-        event_name = "neurocomment_account_banned"
+        # Confirm THIS group banned us before parking the pair (see _BAN_ERROR). Only a
+        # restricted participant record plus a clean @SpamBot reading marks + leaves;
+        # otherwise the block is account-wide and the group is innocent, so the pair only
+        # gets the duration-less cooldown — bounded and self-expiring, and enough to stop
+        # it re-selecting and looping on the same error until the account recovers.
+        if await bans.confirm_group_ban_and_leave(account_id, event.channel):
+            event_name = "neurocomment_account_banned"
+        else:
+            await _apply_cooldown(account_id, None, event.channel)
+            event_name = "neurocomment_post_ban_unconfirmed"
     elif result.error_type in _LOST_ACCESS_ERRORS:
         # Ordered after the ban, before the gate: all three match disjoint ``error_type``
         # values so order can't change behaviour — it reads terminal → rejoinable →

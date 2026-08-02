@@ -30,6 +30,7 @@ from tests.services.neurocomment.engine_support import (
     _CommentStub,
     _FixedRng,
     _make_campaign,
+    _patch_ban_confirmation,
     _patch_io,
 )
 
@@ -540,6 +541,7 @@ async def test_user_banned_marks_pair_banned_not_a_solver_failure(
     _patch_io(
         monkeypatch, comment=_CommentStub(status="failed", error_type="UserBannedInChannelError")
     )
+    _patch_ban_confirmation(monkeypatch)
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
@@ -560,14 +562,15 @@ async def test_banned_pair_is_not_selected_for_the_next_post(
     await _make_campaign("@chan", "acc-1")
     comment = _CommentStub(status="failed", error_type="UserBannedInChannelError")
     _patch_io(monkeypatch, comment=comment)
+    _patch_ban_confirmation(monkeypatch)
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
-    assert len(comment.calls) == 1  # the ban was hit once
+    assert len(comment.posts) == 1  # the ban was hit once
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=2, text="hi"))
 
     # No second attempt — the banned pair is excluded from selection.
-    assert len(comment.calls) == 1
+    assert len(comment.posts) == 1
     assert await _latest_extra("neurocomment_no_account_available", "reason") == "not_ready"
 
 

@@ -189,7 +189,9 @@ _neurocomment_readiness = Table(
     Column("checked_at", String, nullable=False),
     # Operator "Skip channel for this account" (#148); migration #15 backfills 0.
     Column("human_skipped", Integer, nullable=False, server_default="0"),
-    # Auto-detected hard ban: the account got UserBannedInChannelError posting here.
+    # Auto-detected hard ban: the group's own participant record has this account
+    # restricted from sending (UserBannedInChannelError alone is account-wide, not
+    # per-group, so it never sets this — see services.neurocomment.bans).
     # Sticky (survives re-onboarding); migration #30 backfills 0. Cleared by a
     # successful "Проверить каналы" probe (can_send) or an operator retry.
     Column("banned", Integer, nullable=False, server_default="0"),

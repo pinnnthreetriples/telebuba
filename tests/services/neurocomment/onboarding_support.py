@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import pytest
 
@@ -15,7 +15,9 @@ from schemas.gemini import GeminiResult
 from schemas.spam_status import SpamStatusVerdict
 from schemas.telegram_actions import (
     ActionResult,
+    BanCheckResult,
     BotChallengeWaitResult,
+    CheckBannedInChannel,
     LinkedDiscussionGroupResult,
     WaitForBotChallenge,
 )
@@ -27,6 +29,8 @@ if TYPE_CHECKING:
 
     from schemas.challenge import BotChallengeMessage
     from schemas.telegram_actions import ActionStatus, TelegramAction, TelegramReadAction
+
+_BanState = Literal["can_send", "restricted", "not_member", "comments_disabled"]
 
 
 @pytest.fixture
@@ -65,18 +69,24 @@ class _ReadStub:
         linked_chat_id: int | None,
         comments_enabled: bool,
         challenge: BotChallengeMessage | None = None,
+        ban_state: _BanState = "restricted",
     ) -> None:
         self.result = LinkedDiscussionGroupResult(
             linked_chat_id=linked_chat_id,
             comments_enabled=comments_enabled,
         )
         self.challenge = challenge
+        # Only the join-time ban branch probes this, and it does so to confirm the group
+        # itself banned us — so "restricted" (the confirming verdict) is the useful default.
+        self.ban_state = ban_state
         self.calls: list[tuple[str, TelegramReadAction]] = []
 
     async def execute_read(self, account_id: str, action: TelegramReadAction) -> object:
         self.calls.append((account_id, action))
         if isinstance(action, WaitForBotChallenge):
             return BotChallengeWaitResult(message=self.challenge)
+        if isinstance(action, CheckBannedInChannel):
+            return BanCheckResult(state=self.ban_state)
         return self.result
 
 

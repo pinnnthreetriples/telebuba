@@ -617,6 +617,10 @@
     "neurocomment_post_cooldown": "Пауза между комментариями",
     "neurocomment_post_gated": "Комментарий отложен по лимиту",
     "neurocomment_account_banned": "Аккаунт забанен в канале",
+    "neurocomment_post_ban_unconfirmed": "Блокировка записи не подтверждена как бан канала",
+    "neurocomment_group_ban_confirmed": "Бан в канале подтверждён — вышли из чата",
+    "neurocomment_group_ban_unconfirmed": "Бан в канале не подтверждён",
+    "neurocomment_group_ban_account_limited": "Аккаунт ограничен во всём Telegram",
     "neurocomment_post_access_lost": "Потерян доступ к чату канала",
     "neurocomment_generation_exhausted": "Не удалось сгенерировать текст",
     "neurocomment_no_account_available": "Нет доступного аккаунта",
@@ -795,6 +799,7 @@
     "neurocomment_post_cooldown": "Пауза от Telegram (флуд-контроль) — аккаунт временно не комментирует.",
     "neurocomment_post_gated": "Нужна капча/разблокировка для отправки в этот канал.",
     "neurocomment_account_banned": "Аккаунт забанен в этом канале — бот больше не пытается туда писать. Снимется, когда «Проверить каналы» покажет, что аккаунт снова может писать.",
+    "neurocomment_group_ban_account_limited": "Telegram заблокировал отправку, но @SpamBot сообщает, что аккаунт ограничен во всех группах — этот канал его не банил. Лечите аккаунт, канал ни при чём.",
     "neurocomment_post_access_lost": "Аккаунт больше не может писать в чат обсуждений этого канала — его исключили или группа стала закрытой. Пара снята с работы, следующий проход онбординга вступит в чат заново.",
     "neurocomment_channel_cooled": "Канал на паузе после ошибок или массовых удалений.",
     "neurocomment_no_campaign": "Для этого канала нет активной кампании."

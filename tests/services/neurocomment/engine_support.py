@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 import pytest
 
@@ -19,14 +19,18 @@ from core.logging import reset_logging_for_tests, setup_logging
 from schemas.accounts import AccountCreate
 from schemas.gemini import GeminiResult
 from schemas.neurocomment import CampaignCreate
-from schemas.telegram_actions import ActionResult
+from schemas.spam_status import SpamStatusVerdict
+from schemas.telegram_actions import ActionResult, BanCheckResult
 from services.neurocomment import _generate, _seams, _state, engine
 
 if TYPE_CHECKING:
     from collections.abc import Awaitable, Callable, Iterator
     from pathlib import Path
 
-    from schemas.telegram_actions import ActionStatus, TelegramAction
+    from schemas.spam_status import SpamStatusKind
+    from schemas.telegram_actions import ActionStatus, TelegramAction, TelegramReadAction
+
+_BanState = Literal["can_send", "restricted", "not_member", "comments_disabled"]
 
 
 @pytest.fixture
@@ -87,6 +91,11 @@ class _CommentStub:
         self.flood_wait_seconds = flood_wait_seconds
         self.calls: list[tuple[str, TelegramAction]] = []
 
+    @property
+    def posts(self) -> list[tuple[str, TelegramAction]]:
+        """Only the ``CommentOnPost`` calls — the ban ladder's leave rides the same seam."""
+        return [call for call in self.calls if call[1].action_type == "comment_on_post"]
+
     async def execute(self, account_id: str, action: TelegramAction) -> ActionResult:
         self.calls.append((account_id, action))
         return ActionResult(
@@ -131,6 +140,31 @@ def _patch_io(
     monkeypatch.setattr(_seams, "execute", comment.execute)
     monkeypatch.setattr(_seams, "rng", _FixedRng())
     monkeypatch.setattr(_seams, "generate_text", (gen or _GenStub("a nice comment")).generate_text)
+
+
+def _patch_ban_confirmation(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    state: _BanState = "restricted",
+    spam: SpamStatusKind = "clean",
+) -> None:
+    """Stub the two seams the per-group ban ladder reads: the probe and @SpamBot.
+
+    The defaults are the confirming pair (the group's participant record has us
+    restricted, the account itself is clean), so a test asserting the sticky ban only
+    overrides the arm it is about.
+    """
+
+    async def _read(_account_id: str, _action: TelegramReadAction) -> BanCheckResult:
+        return BanCheckResult(state=state)
+
+    async def _spam(account_id: str, **_kwargs: object) -> SpamStatusVerdict:
+        return SpamStatusVerdict(
+            account_id=account_id, status=spam, checked_at="2026-01-01T00:00:00"
+        )
+
+    monkeypatch.setattr(_seams, "execute_read", _read)
+    monkeypatch.setattr(_seams, "refresh_spam_status", _spam)
 
 
 class _FixedRng:

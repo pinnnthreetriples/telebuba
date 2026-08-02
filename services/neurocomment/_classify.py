@@ -12,17 +12,20 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from core.db import clear_join_request, mark_pair_banned, stamp_join_request, upsert_readiness
+from core.db import clear_join_request, stamp_join_request, upsert_readiness
 from core.logging import log_event
 from schemas.neurocomment import AccountChannelOnboarding, OnboardingState
-from services.neurocomment import challenge
+from services.neurocomment import bans, challenge
 
 if TYPE_CHECKING:
     from schemas.telegram_actions import ActionResult
 
 # Writes Telegram-blocked at join → chat_restricted (Ф2 #120); solver can't clear it.
 _GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
-# A hard ban at join → sticky ban (#30), same as a ban hit while commenting (never retried).
+# Telegram's ACCOUNT-WIDE anti-spam write restriction (what @SpamBot reports as limited),
+# not a per-chat moderator action — those arrive as the _GATE_ERRORS above (mute) or as
+# ChannelPrivateError (kick). So it only prompts the per-group confirmation ladder; the
+# sticky ban (#30) is gated on it, same as a ban hit while commenting.
 _BAN_ERROR = "UserBannedInChannelError"
 # Rate-limit families: never terminal, retry later, must return promptly.
 _RETRY_STATUSES = frozenset({"flood_wait", "slow_mode_wait", "premium_wait", "peer_flood"})
@@ -79,13 +82,17 @@ async def _classify_join(
             state="join_by_request",
         )
     if result.error_type == _BAN_ERROR:
-        # Hard ban at join → sticky ban (#30) so a re-onboard stops re-joining the group.
+        # Readiness first either way: we are in (or reachable from) the group but cannot
+        # write, so the pair must stop being selected. The sticky ban (#30) that also
+        # stops a re-onboard re-joining is gated on THIS group having actually banned us
+        # — otherwise the block is account-wide and the group is innocent, which is
+        # exactly what chat_restricted (a Telegram-level write block) already says.
         await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
-        await mark_pair_banned(account_id, channel)
+        confirmed = await bans.confirm_group_ban_and_leave(account_id, channel)
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,
-            state="banned",
+            state="banned" if confirmed else "chat_restricted",
         )
     if result.error_type in _GATE_ERRORS:
         # Telegram-level write block (mute / restrict) → chat_restricted (Ф2 #120).
