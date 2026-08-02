@@ -200,11 +200,11 @@ async def _reply_to_partner(  # noqa: PLR0911
     if gen.text is None:
         return ChatResult(failures=1, last_failed_action=gen.failure_reason)
     text = gen.text
-    # Atomic claim before send: collapses ``latest_unreplied_for`` + ``mark``
+    # Atomic claim before send: collapses ``oldest_unreplied_for`` + ``mark``
     # into one UPDATE WHERE replied=0 so two parallel cycles cannot both
-    # answer the same incoming message. F6: if the send itself fails (flood
-    # or any non-ok), we release the claim so the inbox keeps the message
-    # for the next cycle instead of losing it forever.
+    # answer the same incoming message. F6: if the send fails *transiently*
+    # (flood / halt), we release the claim so the inbox keeps the message for
+    # the next cycle instead of losing it forever.
     if not await try_claim_message_reply(incoming.id):
         # The text reservation in _generate_chat_text would otherwise lock
         # this exact text out of the dedup window for nothing.
@@ -231,7 +231,14 @@ async def _reply_to_partner(  # noqa: PLR0911
         await release_sent_text(text)
         if result.error_type == _PEER_UNRESOLVED:
             return await _drop_unresolvable_reply(sender_id, incoming)
-        await mark_message_unreplied(incoming.id)
+        # Keep the claim — deliberately narrowing F6's "never lose a message" to
+        # the transient failures above. A generic send failure is peer-specific
+        # (blocked, privacy-restricted, deactivated) and repeats identically, and
+        # since the inbox went FIFO a re-armed row returns to the head every
+        # cycle: it would pin the queue forever, starving every other partner
+        # while burning a read-ack, a Gemini generation and a doomed send each
+        # time. The cost of consuming it is one unanswered synthetic line — the
+        # pair is not dead, the opener can start a fresh thread next cycle.
         return ChatResult(failures=1, attempted_actions=1, last_failed_action="send_dm")
     # Chain: record our reply as a new pending message so the partner can answer
     # next cycle — this is what turns a single round-trip into a conversation.
