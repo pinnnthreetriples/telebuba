@@ -12,8 +12,8 @@ import pytest
 from core.config import settings
 from core.db import (
     create_account,
-    latest_unreplied_for,
     load_warming_settings,
+    oldest_unreplied_for,
     record_dialogue_message,
     replace_dialogue_pairs,
     update_account_from_session_check,
@@ -53,7 +53,7 @@ async def _seed_pair_with_incoming(text: str = "как дела?") -> DialogueMe
     )
     await replace_dialogue_pairs([("acc-a", "acc-b")])
     await record_dialogue_message("acc-b", "acc-a", text)
-    incoming = await latest_unreplied_for("acc-a")
+    incoming = await oldest_unreplied_for("acc-a")
     assert incoming is not None
     return incoming
 
@@ -291,7 +291,7 @@ async def test_orphan_non_partner_message_is_marked_replied_then_opens(
 
     # The orphan is marked replied (no longer pending for acc-1) and the opener
     # path ran against the current partner.
-    assert await latest_unreplied_for("acc-1") is None
+    assert await oldest_unreplied_for("acc-1") is None
     assert result.messages_sent == 1
     dms = [a for a in sent if a.action_type == "send_dm"]
     assert dms

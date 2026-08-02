@@ -12,9 +12,38 @@ import { formatLocalTime } from '@/shared/lib';
 const FEED_LIMIT = 30;
 const FEED_POLL_MS = 4000;
 
+// How recent the newest message must be for the card to claim the accounts are
+// chatting *now*. Warming cycles are hours apart, so this is deliberately
+// narrow: it covers the gap between two lines of one exchange (a reply lands
+// within seconds), not the gap between cycles. Two minutes ≈ 30 poll ticks —
+// wide enough to survive a slow reply, and short enough that an idle feed goes
+// quiet almost immediately. The honest consequence is that the live dot and
+// «печатает…» are off most of the time; that is the point — before this, a feed
+// whose newest line was five days old still advertised itself as live.
+const FEED_LIVE_MS = 120_000;
+
 // No id on the wire — a message is uniquely the two accounts + its timestamp.
 function messageKey(message: DialogueFeedMessage): string {
   return `${message.from_account}→${message.to_account}@${message.created_at}`;
+}
+
+// Liveness from data already on hand: the newest message's age. No extra field
+// and no extra request — the 4s poll refreshes `messages`, and each render
+// re-evaluates the age against the current clock.
+//
+// `created_at` is an ISO-8601 stamp carrying an explicit UTC offset (the backend
+// writes `datetime.now(UTC).isoformat()`), so `Date.parse` — the same parse
+// `formatLocalTime` does via `new Date(iso)` — resolves it to an absolute
+// instant. Subtracting two absolute instants is timezone-free; only the
+// *rendering* in `formatLocalTime` is local. An unparseable stamp reads as not
+// live rather than as `NaN < threshold` noise.
+function isFeedLive(messages: DialogueFeedMessage[]): boolean {
+  // The API is newest-first (same ordering `DialogueTranscript` reverses), so
+  // the head is the freshest line.
+  const newest = messages[0];
+  if (!newest) return false;
+  const createdAt = Date.parse(newest.created_at);
+  return !Number.isNaN(createdAt) && Date.now() - createdAt < FEED_LIVE_MS;
 }
 
 // The Telegram name, falling back to the label the API already resolved for us
@@ -118,31 +147,49 @@ export function DialogueTranscript({ messages }: { messages: DialogueFeedMessage
         const key = messageKey(message);
         return <DialogueRow key={key} message={message} isNew={isNew(key)} />;
       })}
-      <TypingIndicator />
+      {isFeedLive(messages) ? <TypingIndicator /> : null}
       <div ref={endRef} />
     </div>
   );
 }
 
-// The design's card language: white rounded card, a title with a pulsing green
-// live-dot (the «Система активна» pattern) and a count. Polls the dialogue feed
-// so new inter-account messages appear and animate in live.
+// The design's card language: white rounded card, a title with a live-dot (the
+// «Система активна» pattern — pulsing green only while the feed is actually
+// fresh, static and muted otherwise) and a count. Polls the dialogue feed so new
+// inter-account messages appear and animate in live.
 export function DialogueFeed() {
   const { t } = useTranslation();
   const { data } = useQuery({
     ...warmingDialoguesQueryOptions({ query: { limit: FEED_LIMIT } }),
     refetchInterval: FEED_POLL_MS,
+    // Liveness is a function of the clock, so it has to decay without new data.
+    // By default this component would not re-render on an idle feed at all: the
+    // poll returns an identical payload, structural sharing hands back the same
+    // `data` reference, and the tracked-props optimisation only notifies on
+    // properties actually read. `'all'` opts out of that, so every poll settling
+    // re-renders and `isFeedLive` re-reads `Date.now()` — the dot goes quiet
+    // within one poll of the threshold instead of staying green forever after
+    // the last exchange. Cheaper than a second timer, and it reuses the poll we
+    // already pay for rather than shortening it.
+    notifyOnChangeProps: 'all',
   });
   const messages = data?.messages ?? [];
+  const live = isFeedLive(messages);
 
   return (
     <div className="mt-4 rounded-2xl border border-line bg-white p-4">
       <div className="mb-[13px] flex items-center gap-[9px]">
-        <span className="tb-livedot h-[7px] w-[7px] shrink-0 rounded-full bg-success" />
+        {/* Pulsing green only while the feed is genuinely fresh; otherwise the
+            static muted dot the design already uses for an idle listener. */}
+        <span
+          className={`h-[7px] w-[7px] shrink-0 rounded-full ${live ? 'tb-livedot bg-success' : 'bg-ink-subtle'}`}
+        />
         <span className="text-[14px] font-bold">{t('warming.dialogues.title')}</span>
         {messages.length > 0 ? (
           <span className="rounded-full bg-success-tint px-2 py-[2px] text-[10.5px] font-bold text-success">
-            {messages.length}
+            {/* One page, not a total: at the limit there is more history behind
+                it, so say "30+" instead of freezing at a wrong-looking "30". */}
+            {messages.length === FEED_LIMIT ? `${FEED_LIMIT}+` : messages.length}
           </span>
         ) : null}
       </div>

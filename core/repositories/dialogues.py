@@ -113,9 +113,10 @@ dialogue_messages = Table(
     Column("text", String, nullable=False),
     Column("created_at", String, nullable=False),
     Column("replied", Integer, nullable=False),
-    # Hot paths: latest_unreplied_for filters by (to_account, replied) then orders by id;
-    # count_pair_messages_since filters by (pair_key, created_at). Without these indexes
-    # both degrade to full table scans once the table accumulates history.
+    # Hot paths: oldest_unreplied_for filters by (to_account, replied) then orders by id
+    # ascending (the index serves either direction); count_pair_messages_since filters by
+    # (pair_key, created_at). Without these indexes both degrade to full table scans once
+    # the table accumulates history.
     Index("ix_dialogue_messages_inbox", "to_account", "replied", "id"),
     Index("ix_dialogue_messages_pair_time", "pair_key", "created_at"),
 )
@@ -175,13 +176,13 @@ async def record_dialogue_message(
     )
 
 
-def _latest_unreplied_for(account_id: str) -> DialogueMessage | None:
+def _oldest_unreplied_for(account_id: str) -> DialogueMessage | None:
     statement = (
         select(dialogue_messages)
         .where(
             (dialogue_messages.c.to_account == account_id) & (dialogue_messages.c.replied == 0),
         )
-        .order_by(dialogue_messages.c.id.desc())
+        .order_by(dialogue_messages.c.id.asc())
         .limit(1)
     )
     with _get_engine().connect() as connection:
@@ -189,9 +190,14 @@ def _latest_unreplied_for(account_id: str) -> DialogueMessage | None:
     return None if row is None else _row_to_message(cast("Mapping[str, object]", row))
 
 
-async def latest_unreplied_for(account_id: str) -> DialogueMessage | None:
-    """The most recent message awaiting a reply from ``account_id``, if any."""
-    return await asyncio.to_thread(_latest_unreplied_for, account_id)
+async def oldest_unreplied_for(account_id: str) -> DialogueMessage | None:
+    """The longest-waiting message awaiting a reply from ``account_id``, if any.
+
+    FIFO, not LIFO: one dialogue turn per cycle answers exactly one message, so
+    serving the newest first let a steady inflow shadow older messages until the
+    retention purge deleted them unanswered. Oldest-first drains the inbox.
+    """
+    return await asyncio.to_thread(_oldest_unreplied_for, account_id)
 
 
 def _mark_message_replied(message_id: int) -> None:
@@ -223,7 +229,7 @@ async def try_claim_message_reply(message_id: int) -> bool:
     """Atomically mark a message as replied iff no one else has — returns True on success.
 
     Use this before sending a DM so two parallel cycles cannot both answer the
-    same incoming message. The non-atomic ``latest_unreplied_for`` + ``mark``
+    same incoming message. The non-atomic ``oldest_unreplied_for`` + ``mark``
     split could race; this collapses the claim into a single
     ``UPDATE ... WHERE replied=0`` whose ``rowcount`` is the source of truth.
     """
@@ -262,6 +268,39 @@ def _count_pair_messages_since(key: str, since_iso: str) -> int:
 async def count_pair_messages_since(key: str, since_iso: str) -> int:
     """Count messages exchanged in a pair since ``since_iso`` (for fade-out)."""
     return await asyncio.to_thread(_count_pair_messages_since, key, since_iso)
+
+
+def _partners_awaiting_our_reply(
+    from_account: str,
+    partners: list[str],
+    since_iso: str,
+) -> set[str]:
+    statement = select(dialogue_messages.c.to_account).where(
+        (dialogue_messages.c.from_account == from_account)
+        & (dialogue_messages.c.replied == 0)
+        & (dialogue_messages.c.to_account.in_(partners))
+        & (dialogue_messages.c.created_at >= since_iso),
+    )
+    with _get_engine().connect() as connection:
+        return {str(row[0]) for row in connection.execute(statement)}
+
+
+async def partners_awaiting_our_reply(
+    from_account: str,
+    partners: list[str],
+    since_iso: str,
+) -> set[str]:
+    """Which ``partners`` still owe ``from_account`` an answer, ignoring stale threads.
+
+    An outgoing row with ``replied=0`` means exactly "they have not answered yet"
+    (the partner's reply path claims it via ``try_claim_message_reply``). One
+    query for the whole partner set, not one per partner.
+
+    ``since_iso`` bounds the result deliberately: a pending message older than
+    the conversation window is a dead thread, not an ignored one, and must stop
+    counting — otherwise a partner that went silent would be blocked forever.
+    """
+    return await asyncio.to_thread(_partners_awaiting_our_reply, from_account, partners, since_iso)
 
 
 def _list_recent_dialogue_messages(limit: int) -> list[DialogueMessage]:

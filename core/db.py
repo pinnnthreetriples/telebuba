@@ -245,12 +245,13 @@ from core.repositories.device_fingerprint import (  # noqa: E402, F401
 )
 from core.repositories.dialogues import (  # noqa: E402, F401
     count_pair_messages_since,
-    latest_unreplied_for,
     list_dialogue_pairs,
     list_recent_dialogue_messages,
     mark_message_replied,
     mark_message_unreplied,
+    oldest_unreplied_for,
     pair_key,
+    partners_awaiting_our_reply,
     prune_and_add_pairs,
     purge_dialogue_messages_older_than,
     recent_pair_messages,
