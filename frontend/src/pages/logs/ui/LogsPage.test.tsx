@@ -69,6 +69,34 @@ test('renders log rows, localizing the event code and showing the account phone'
   expect(screen.queryByText('acc-1')).not.toBeInTheDocument();
 });
 
+test('prefers the Telegram name, and keeps the operator label when there is no phone', async () => {
+  // Same resolver as the accounts table and the neurocomment feed. Its chain is
+  // name → phone → id with no slot for `label`, so a nameless, phoneless account
+  // would drop to the session-stem id — the label is fed in as the phone stand-in.
+  vi.mocked(fetch).mockImplementation((input) => {
+    const url = new URL((input as Request).url);
+    if (url.pathname === '/api/v1/accounts') {
+      return Promise.resolve(
+        jsonResponse({
+          items: [
+            { ...ACCOUNTS.items[0], first_name: 'Alisa', last_name: 'K' },
+            { account_id: 'acc-2', phone: null, label: 'ops-3', status: 'alive' },
+          ],
+          next_cursor: null,
+        }),
+      );
+    }
+    return Promise.resolve(
+      jsonResponse({ items: [logRow(1, 'warming_started')], next_cursor: null }),
+    );
+  });
+  renderWithClient(<LogsPage />);
+
+  expect(await screen.findByRole('cell', { name: 'Alisa K' })).toBeInTheDocument();
+  expect(screen.getByText('ops-3')).toBeInTheDocument();
+  expect(screen.queryByText('acc-2')).not.toBeInTheDocument();
+});
+
 test('falls back to the raw code for an unknown event', async () => {
   routeLogs({ items: [logRow(1, 'totally_unknown_event')], next_cursor: null });
   renderWithClient(<LogsPage />);

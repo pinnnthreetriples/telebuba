@@ -37,7 +37,11 @@ export function LogsPage() {
   const accountLabels = useMemo(() => {
     const map = new Map<string, string>();
     for (const acc of accountsData.data?.items ?? []) {
-      map.set(acc.account_id, accountDisplayName(acc));
+      // `phone` is nullable, and accountDisplayName's chain is name → phone → id, with
+      // no slot for the operator `label` this column used to fall back to. Feed the
+      // label in as the phone stand-in so a nameless, phoneless account still reads as
+      // something an operator recognises instead of a session-stem id.
+      map.set(acc.account_id, accountDisplayName({ ...acc, phone: acc.phone ?? acc.label }));
     }
     return map;
   }, [accountsData.data]);
