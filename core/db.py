@@ -323,6 +323,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     purge_neurocomment_history_older_than,
     reclaim_stale_claims,
     record_join,
+    release_claim,
     remove_account_from_campaign,
     resolve_pending_outcome,
     save_neurocomment_settings,

@@ -293,6 +293,9 @@ ChannelStatus = Literal[
     "comments_off",
     "join_by_request",
     "join_failed",
+    # Kicked out of the chat and walking itself back in (``_rejoin``): the same row
+    # shape as ``join_failed``, but with re-join attempts still to spend.
+    "rejoining",
     "chat_restricted",
     "banned",  # no account ready here and at least one auto-banned (#30)
     "bot_challenge",
@@ -312,6 +315,10 @@ class AccountChannelReadiness(BaseModel):
     joined: bool
     captcha_passed: bool
     human_skipped: bool = False
+    # Permanent per-pair ban (#30). Carried per (account, channel) because the channel
+    # row hides it: one banned account among five ready ones still reports ``ready``,
+    # and the only remedy — add another account — needs to know WHO is burnt WHERE.
+    banned: bool = False
 
 
 class NeurocommentAccountCard(BaseModel):

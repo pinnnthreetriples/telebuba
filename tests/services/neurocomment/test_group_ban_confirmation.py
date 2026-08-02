@@ -24,6 +24,8 @@ from core.db import (
     fetch_readiness,
     link_channel_to_campaign,
     list_recent_logs,
+    mark_human_skipped,
+    stamp_join_request,
     upsert_readiness,
 )
 from schemas.accounts import AccountCreate
@@ -368,6 +370,49 @@ async def test_a_still_usable_account_keeps_the_channel_linked(
 ) -> None:
     """One banned account must never remove a channel the others comment in fine."""
     await _make_campaign("@chan", "acc-1", "acc-2")
+    _patch_ladder(monkeypatch)
+
+    assert await bans.confirm_group_ban_and_leave("acc-1", "@chan") is True
+
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+    assert await _logged("neurocomment_channel_all_accounts_banned") is False
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_an_operator_skipped_account_does_not_veto_the_drop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A skipped pair carries ``banned=0``, but it will never comment here either.
+
+    Reading it as "still usable" left five banned accounts plus one skip holding a channel
+    that produces nothing — and holding it forever, because a per-pair ban is permanent, so
+    no later event could ever revisit the verdict.
+    """
+    await _make_campaign("@chan", "acc-1", "acc-2")
+    await mark_human_skipped("acc-2", "@chan")
+    _patch_ladder(monkeypatch)
+
+    assert await bans.confirm_group_ban_and_leave("acc-1", "@chan") is True
+
+    assert await fetch_active_campaign_for_channel("@chan") is None
+    assert await _logged("neurocomment_channel_all_accounts_banned")
+
+
+@pytest.mark.asyncio
+@pytest.mark.usefixtures("isolate_engine")
+async def test_an_account_still_waiting_on_admin_approval_keeps_the_channel(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Not-ready is not the test here — only a terminal state releases the channel.
+
+    This rule fires on the post hot path with no clock of its own, unlike its two siblings,
+    which only overrule the other accounts once their own 48h / four days have run out. A
+    pair whose approval request is still in flight is mid-timeline, not finished.
+    """
+    await _make_campaign("@chan", "acc-1", "acc-2")
+    await upsert_readiness("acc-2", "@chan", joined=False, captcha_passed=False, ready=False)
+    await stamp_join_request("acc-2", "@chan")
     _patch_ladder(monkeypatch)
 
     assert await bans.confirm_group_ban_and_leave("acc-1", "@chan") is True

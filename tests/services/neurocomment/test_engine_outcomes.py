@@ -27,7 +27,7 @@ from schemas.challenge import ChallengeDecision, ChallengeInsert
 from schemas.neurocomment import NeurocommentSettings
 from schemas.telegram_actions import NewPostEvent
 from services.content import try_reserve_sent
-from services.neurocomment import _generate, _seams, _state, engine
+from services.neurocomment import _outcomes, _seams, _state, engine
 from tests.services.neurocomment.engine_support import (
     _CommentStub,
     _FixedRng,
@@ -452,7 +452,7 @@ async def test_posted_but_mark_posted_raises_is_not_marked_failed(
         msg = "db down mid-commit"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(_generate, "mark_comment_posted", _boom)
+    monkeypatch.setattr(_outcomes, "mark_comment_posted", _boom)
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
 
@@ -474,7 +474,7 @@ async def test_commit_error_after_posted_keeps_posted(monkeypatch: pytest.Monkey
         msg = "resolve down"
         raise RuntimeError(msg)
 
-    monkeypatch.setattr(_generate, "resolve_pending_outcome", _boom)
+    monkeypatch.setattr(_outcomes, "resolve_pending_outcome", _boom)
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
 

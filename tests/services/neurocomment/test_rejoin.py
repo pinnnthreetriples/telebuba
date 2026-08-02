@@ -330,11 +330,69 @@ async def test_a_paused_channel_leaves_a_parked_pair_alone(
     row = await fetch_readiness("acc-1", _CHANNEL)
     assert row is not None
     assert (row.joined, row.captcha_passed, row.ready) == (False, True, False)
-    # ...and with the deadline behind it the board reports the join failure, not approval.
+    # ...and with the deadline behind it the board reports the re-join in progress (the
+    # pair still has all four attempts), not approval.
     await bump_channel_pause(_CHANNEL, (datetime.now(UTC) - timedelta(seconds=1)).isoformat())
     board = await load_neurocomment_board(campaign_id)
     assert board is not None
-    assert board.channels[0].status == "join_failed"
+    assert board.channels[0].status == "rejoining"
+
+
+@pytest.mark.asyncio
+async def test_a_paused_channel_spends_no_re_join_attempt(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A pause refuses every join, so a poke against it must cost nothing.
+
+    ``_onboard_pair`` turns the pass away with ``channel_paused`` before any
+    ``JoinDiscussionGroup`` RPC, so the stamp bought exactly zero re-join attempts: three
+    pause rounds (72h) burned three of the four against a channel nobody could even try to
+    re-enter, and the give-up log then claimed the accounts had used up their re-joins.
+    The budget is deferred, not skipped — the window lapses and the next tick spends one.
+    """
+    campaign_id = await _campaign("acc-1")
+    await _park("acc-1")
+    triggered = _pokes(monkeypatch)
+    now = datetime.now(UTC)
+    await bump_channel_pause(_CHANNEL, (now + timedelta(hours=24)).isoformat())
+
+    await _rejoin.review_access_lost(now)
+
+    assert triggered == []
+    row = await fetch_readiness("acc-1", _CHANNEL)
+    assert row is not None
+    assert row.rejoin_attempts == 0
+    assert await _channel_is_active(campaign_id) is True
+
+    await _rejoin.review_access_lost(now + timedelta(hours=25))
+
+    assert len(triggered) == 1
+    row = await fetch_readiness("acc-1", _CHANNEL)
+    assert row is not None
+    assert row.rejoin_attempts == 1
+
+
+@pytest.mark.asyncio
+async def test_a_paused_channel_is_not_dropped_by_the_re_join_rule(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """While the pause holds, the channel's fate belongs to the pause rule's round counter.
+
+    Its own verdict is the one earned here — a re-join budget spent against a channel that
+    refused every join is no evidence at all. Deferred, not waived: the pause window is a
+    flat ``channel_pause_hours``, so the give-up lands as soon as it lapses.
+    """
+    campaign_id = await _campaign("acc-1")
+    now = datetime.now(UTC)
+    await _park("acc-1", attempts=settings.neurocomment.channel_max_rounds)
+    _pokes(monkeypatch)
+    await bump_channel_pause(_CHANNEL, (now + timedelta(hours=48)).isoformat())
+
+    await _rejoin.review_access_lost(now + timedelta(hours=25))
+    assert await _channel_is_active(campaign_id) is True
+
+    await _rejoin.review_access_lost(now + timedelta(hours=49))
+    assert await _channel_is_active(campaign_id) is False
 
 
 # --------------------------------------------------------------------------- #
@@ -351,7 +409,8 @@ async def test_the_last_exhausted_account_unlinks_the_channel(
         await _park(account_id, attempts=settings.neurocomment.channel_max_rounds)
     _pokes(monkeypatch)
 
-    await _rejoin.review_access_lost(datetime.now(UTC))
+    # Past the fourth attempt's own window — the drop waits for it (see the test below).
+    await _rejoin.review_access_lost(datetime.now(UTC) + timedelta(hours=25))
 
     assert await _channel_is_active(campaign_id) is False
     dropped = next(
@@ -363,6 +422,29 @@ async def test_the_last_exhausted_account_unlinks_the_channel(
     assert dropped.extra["channel"] == _CHANNEL
     assert dropped.extra["parked_accounts"] == 2
     assert dropped.extra["reason"] == "rejoin_exhausted"
+
+
+@pytest.mark.asyncio
+async def test_the_fourth_attempt_gets_its_whole_window_before_the_channel_goes(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Attempt four is stamped at t=72h and the pass it pokes joins *after* that.
+
+    Dropping as soon as nothing is ``retry_due`` any more gave it about five minutes: at
+    t=72h+5min every pair is exhausted and none is due, so the channel was unlinked with a
+    re-join still in flight — the fourth attempt never got the day the other three did.
+    The budget is four attempts over four DAYS.
+    """
+    campaign_id = await _campaign("acc-1")
+    now = datetime.now(UTC)
+    await _park("acc-1", attempts=settings.neurocomment.channel_max_rounds)
+    _pokes(monkeypatch)
+
+    await _rejoin.review_access_lost(now + timedelta(minutes=5))
+    assert await _channel_is_active(campaign_id) is True  # the last re-join is still live
+
+    await _rejoin.review_access_lost(now + timedelta(hours=25))
+    assert await _channel_is_active(campaign_id) is False
 
 
 @pytest.mark.asyncio

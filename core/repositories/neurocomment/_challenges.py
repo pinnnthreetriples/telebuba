@@ -38,7 +38,7 @@ _FAILED_OUTCOMES = ("give_up", "failed")
 
 
 def _still_blocked() -> ColumnElement[bool]:
-    """Exclude a failure whose pair has since passed its captcha.
+    """Exclude a failure whose pair has since passed its captcha *from inside the chat*.
 
     The table is append-only: a solve inserts a new row and never rewrites the old
     ``give_up``, and retention keeps failures for 90 days. So without this the queue
@@ -48,13 +48,25 @@ def _still_blocked() -> ColumnElement[bool]:
     Readiness is the live answer to "is this pair still captcha-blocked"; a pair with
     no readiness row at all (a retry erased it) stays listed, since nothing yet proves
     it passed.
+
+    ``captcha_passed=1`` alone does NOT mean that, which is the trap this docstring
+    exists to name: ``(joined=0, captcha_passed=1, ready=0)`` is the hard-join-failure /
+    lost-access sentinel that ``_classify`` and ``_outcomes`` write, and the flag is
+    load-bearing there (``_rejoin.access_lost`` and ``_readiness._ACCESS_LOST`` both key
+    on it), so it cannot be spelled any other way. Only a pair still IN the group can
+    have passed anything.
     """
     passed = (
         select(_neurocomment_readiness.c.account_id)
         .where(
             (_neurocomment_readiness.c.account_id == _neurocomment_challenges.c.account_id)
             & (_neurocomment_readiness.c.channel == _neurocomment_challenges.c.channel)
-            & (_neurocomment_readiness.c.captcha_passed == 1),
+            & (_neurocomment_readiness.c.captcha_passed == 1)
+            # Without this a kick — which lands on the pair long AFTER the solver gave up —
+            # silently deleted its ``give_up`` from the operator's drill-down, as if a human
+            # had already dealt with it. Nothing had. ``joined=1`` costs no legitimate
+            # exclusion: the only writer of a joined+passed row is the ``ready`` state.
+            & (_neurocomment_readiness.c.joined == 1),
         )
         .exists()
     )

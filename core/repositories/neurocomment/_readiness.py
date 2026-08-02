@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import asyncio
 
-from sqlalchemy import delete, select, update
+from sqlalchemy import delete, func, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -103,7 +103,16 @@ def _stamp_join_request(account_id: str, channel: str) -> None:
                 & (_neurocomment_readiness.c.channel == channel),
             )
             .values(
-                join_requested_at=_now_iso(),
+                # COALESCE, not a fresh stamp: the column means "FIRST requested at", and
+                # the sweep's 48h give-up clock hangs off it. Overwritten on attempt two,
+                # it handed the channel another full window every time a request went out
+                # again — 48h became 72h. The operator's rule is 48h from the first
+                # request, with both requests paced inside it, so this anchor never moves;
+                # ``join_request_attempts`` is what counts the requests.
+                join_requested_at=func.coalesce(
+                    _neurocomment_readiness.c.join_requested_at,
+                    _now_iso(),
+                ),
                 join_request_attempts=_neurocomment_readiness.c.join_request_attempts + 1,
             ),
         )
@@ -115,6 +124,10 @@ async def stamp_join_request(account_id: str, channel: str) -> None:
     Deliberately NOT part of ``upsert_readiness``: the join-request branch upserts the
     readiness row first and stamps here, so a plain re-onboard (which re-upserts) cannot
     reset the counter — that reset is exactly what let the same pair re-request forever.
+
+    ``join_requested_at`` records the first request only; ``clear_join_request`` (approval
+    landed) and the campaign re-link are the two paths that put it back to NULL, which is
+    what keeps "NULL means never requested" true.
     """
     await asyncio.to_thread(_stamp_join_request, account_id, channel)
 

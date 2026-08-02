@@ -168,9 +168,17 @@ async def _join_and_classify(
 def _join_request_in_flight(readiness: NeurocommentReadiness, now: datetime) -> bool:
     """True while an approval request must NOT be re-sent for this pair.
 
-    Two ways to be in flight: the last request is younger than the retry window, or the
-    pair has already used all its attempts (it then stays in flight forever — the sweep
-    is what ends it, by dropping the channel).
+    Two ways to be in flight: the next request is not due yet, or the pair has already
+    used all its attempts (it then stays in flight forever — the sweep is what ends it,
+    by dropping the channel).
+
+    Due at ``first + attempts x retry_hours``, the exact complement of the sweep's own
+    schedule in ``_sweep._review_join_requests`` — the sweep is what wakes onboarding for
+    a retry, so the two must agree or a pass would undo the pacing the sweep asked for.
+    ``join_requested_at`` is the FIRST request and never moves (the repository coalesces
+    it), so a bare retry window here would authorize the next request the instant the
+    FIRST one lapsed, however many had gone out since; only the shipped
+    ``join_request_max_attempts=2`` and the attempts guard above kept that off the wire.
     """
     if readiness.join_requested_at is None:
         return False
@@ -178,7 +186,8 @@ def _join_request_in_flight(readiness: NeurocommentReadiness, now: datetime) -> 
     if readiness.join_request_attempts >= nc.join_request_max_attempts:
         return True
     requested = datetime.fromisoformat(readiness.join_requested_at)
-    return now - requested < timedelta(hours=nc.join_request_retry_hours)
+    due_after = timedelta(hours=nc.join_request_retry_hours * readiness.join_request_attempts)
+    return now - requested < due_after
 
 
 async def _resolve_linked_group(account_id: str, channel: str) -> LinkedDiscussionGroupResult:

@@ -67,6 +67,10 @@ export type AccountChannelReadiness = {
    * Human Skipped
    */
   human_skipped?: boolean;
+  /**
+   * Banned
+   */
+  banned?: boolean;
 };
 
 /**
@@ -1597,6 +1601,7 @@ export type NeurocommentChannelRow = {
     | 'comments_off'
     | 'join_by_request'
     | 'join_failed'
+    | 'rejoining'
     | 'chat_restricted'
     | 'banned'
     | 'bot_challenge'

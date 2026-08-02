@@ -4,7 +4,8 @@ K consecutive write failures end a round: the channel is paused for a flat
 ``channel_pause_hours`` and its round counter goes up. Counter and deadline live on the
 campaign link, NOT in memory — the live app restarted 7 times in three days, and a
 four-day rule built on module dicts never reached round 4. The final round unlinks the
-channel instead of pausing it again; a delivered comment clears both.
+channel instead of pausing it again — but only once every serving account has actually
+been tried there; a delivered comment clears both.
 """
 
 from __future__ import annotations
@@ -18,14 +19,19 @@ from sqlalchemy import update
 from core.config import settings
 from core.db import (
     _get_engine,
+    assign_account_to_campaign,
+    create_account,
     fetch_active_campaign_for_channel,
     fetch_channel_paused_until,
     fetch_comment,
+    link_channel_to_campaign,
     list_campaign_channels,
     list_recent_logs,
     upsert_readiness,
 )
+from core.repositories.neurocomment import set_campaign_account_channels
 from core.repositories.neurocomment._tables import _neurocomment_campaign_channels
+from schemas.accounts import AccountCreate
 from schemas.telegram_actions import NewPostEvent
 from services.neurocomment import _state, engine
 from tests.services.neurocomment.engine_support import (
@@ -78,6 +84,20 @@ async def _gate_a_post(monkeypatch: pytest.MonkeyPatch, post_id: int) -> None:
 
 async def _logged(event: str) -> bool:
     return any(entry.event == event for entry in await list_recent_logs(limit=100))
+
+
+async def _add_untried_accounts(campaign_id: str, *accounts: str) -> None:
+    """Assign accounts to the campaign but leave them with NO readiness row on ``@chan``.
+
+    The onboarding backlog, reproduced: jitter and the rolling-24h join cap spread a fresh
+    campaign's joins over days, and a paused channel turns the rest away outright — so
+    these accounts have never been joined here, let alone gated.
+    """
+    for account_id in accounts:
+        await create_account(
+            AccountCreate(account_id=account_id, label=account_id, session_name=account_id)
+        )
+        await assign_account_to_campaign(campaign_id, account_id)
 
 
 @pytest.mark.asyncio
@@ -167,6 +187,88 @@ async def test_the_final_round_drops_the_channel_instead_of_pausing_again(
     # No account leaves the chat: this is the channel forbidding comments, not a personal
     # ban, and re-joining later would spend the rolling-24h join cap for nothing.
     assert await _logged("neurocomment_account_banned") is False
+
+
+@pytest.mark.asyncio
+async def test_the_final_round_holds_while_a_serving_account_was_never_tried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Six serving accounts, three ever tried: the round budget must not unlink the channel.
+
+    The coverage rule the three sibling drop rules already carry (``bans``, ``_sweep``,
+    ``_rejoin``): a serving account with no readiness row was never tried here, not tried
+    and failed. Here it bites hardest, because the pause is itself what keeps the other
+    three out — ``_onboard_pair`` answers ``channel_paused`` and writes nothing, so they
+    can never post the comment that would clear the rounds.
+    """
+    _one_failure_per_round(monkeypatch)
+    monkeypatch.setattr(settings.neurocomment, "channel_max_rounds", 4)
+    campaign_id = await _make_campaign("@chan", "acc-1", "acc-2", "acc-3")
+    await _add_untried_accounts(campaign_id, "acc-4", "acc-5", "acc-6")
+
+    for post_id in (1, 2, 3, 4, 5):  # one past the budget
+        await _gate_a_post(monkeypatch, post_id=post_id)
+
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+    assert await _logged("neurocomment_channel_dropped") is False
+    # The counter keeps climbing rather than freezing, so the verdict lands on the first
+    # round that ends with the fleet complete — and the operator is told what is holding it.
+    assert await _rounds(campaign_id) == 5
+    assert any(
+        entry.extra.get("untried_accounts") == 3
+        for entry in await list_recent_logs(limit=100)
+        if entry.event == "neurocomment_channel_paused"
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_held_channel_drops_on_the_next_round_once_every_account_was_tried(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The hold is a delay, not immortality: coverage completes, the next round unlinks."""
+    _one_failure_per_round(monkeypatch)
+    monkeypatch.setattr(settings.neurocomment, "channel_max_rounds", 4)
+    campaign_id = await _make_campaign("@chan", "acc-1", "acc-2", "acc-3")
+    await _add_untried_accounts(campaign_id, "acc-4", "acc-5", "acc-6")
+    for post_id in (1, 2, 3, 4):
+        await _gate_a_post(monkeypatch, post_id=post_id)
+    assert await fetch_active_campaign_for_channel("@chan") is not None
+
+    # A pause window elapsed, an onboarding pass finally reached the other three, and the
+    # channel gated them too — the row ``_generate`` writes on a gate.
+    for account_id in ("acc-4", "acc-5", "acc-6"):
+        await upsert_readiness(account_id, "@chan", joined=True, captcha_passed=False, ready=False)
+    await _gate_a_post(monkeypatch, post_id=5)
+
+    assert await fetch_active_campaign_for_channel("@chan") is None
+    dropped = next(
+        entry
+        for entry in await list_recent_logs(limit=100)
+        if entry.event == "neurocomment_channel_dropped"
+    )
+    assert dropped.extra["rounds"] == 5
+
+
+@pytest.mark.asyncio
+async def test_an_account_pinned_to_another_channel_never_holds_this_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The pin rule, from the same shared definition the three sibling rules resolve.
+
+    A pinned account owes this channel nothing, so its missing row is not a missing try —
+    treating it as one would make a channel with any pinned account undroppable.
+    """
+    _one_failure_per_round(monkeypatch)
+    monkeypatch.setattr(settings.neurocomment, "channel_max_rounds", 4)
+    campaign_id = await _make_campaign("@chan", "acc-1")
+    await link_channel_to_campaign(campaign_id, "@other")
+    await _add_untried_accounts(campaign_id, "acc-2")
+    await set_campaign_account_channels(campaign_id, "acc-2", ["@other"])
+
+    for post_id in (1, 2, 3, 4):
+        await _gate_a_post(monkeypatch, post_id=post_id)
+
+    assert await fetch_active_campaign_for_channel("@chan") is None
 
 
 @pytest.mark.asyncio

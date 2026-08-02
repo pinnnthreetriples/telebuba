@@ -9,12 +9,16 @@ human — and a channel whose every account was kicked produced nothing at all, 
 
 The rule, deliberately shaped like the two already here (``_sweep._review_join_requests``
 for approval-gated joins, ``_channel_pause`` for write-blocked channels): one re-join per
-``channel_pause_hours``, at most ``channel_max_rounds`` of them, then the channel leaves
-its campaign. It rides the 5-minute deletion sweep — the only periodic neurocomment task
-— and pokes onboarding rather than joining itself: the sweep must spend no join RPCs, and
-onboarding already owns the join cap and the jitter. The attempt is spent HERE, as the
-poke goes out: a counter only the pass could move never moved for a pair the pass cannot
-reach (pinned elsewhere, account at its join cap), so the nag had no bound at all.
+``channel_pause_hours``, at most ``channel_max_rounds`` of them, and once the last of
+those windows has run out too, the channel leaves its campaign — four attempts spread
+over four days, the fourth one included. It rides the 5-minute deletion sweep — the only
+periodic neurocomment task — and pokes onboarding rather than joining itself: the sweep
+must spend no join RPCs, and onboarding already owns the join cap and the jitter. The
+attempt is spent HERE, as the poke goes out: a counter only the pass could move never
+moved for a pair the pass cannot reach (pinned elsewhere, account at its join cap), so
+the nag had no bound at all. One case is exempt, and only one — a channel serving out a
+``_channel_pause`` window refuses EVERY join, so the review sits the window out rather
+than burning three of the four attempts on a channel nobody could try to re-enter.
 
 Counter and deadline are persisted per pair (migration #43) rather than kept in memory,
 for the reason ``_channel_pause`` documents: the live app restarts, and a four-day rule
@@ -30,12 +34,14 @@ from typing import TYPE_CHECKING
 from core.config import settings
 from core.db import (
     fetch_active_campaigns_for_channels,
+    fetch_channel_paused_until,
     list_access_lost_readiness,
     list_campaign_accounts,
     list_channel_readiness,
     stamp_rejoin_attempt,
 )
 from core.logging import log_event
+from services.neurocomment import _state
 from services.neurocomment._pins import serving_accounts
 
 if TYPE_CHECKING:
@@ -60,9 +66,26 @@ def access_lost(readiness: NeurocommentReadiness) -> bool:
     )
 
 
-def _exhausted(readiness: NeurocommentReadiness) -> bool:
-    """True once this pair has used every re-join it will ever get."""
+def exhausted(readiness: NeurocommentReadiness) -> bool:
+    """True once this pair has used every re-join it will ever get.
+
+    Public alongside :func:`access_lost` because ``board`` badges the two together — a
+    parked pair still inside its budget is ``rejoining``, one past it is ``join_failed``
+    — and reading the budget off this rule is what keeps the badge from claiming a pair
+    is finished while the sweep is still retrying it.
+    """
     return readiness.rejoin_attempts >= settings.neurocomment.channel_max_rounds
+
+
+def _window_elapsed(readiness: NeurocommentReadiness, now: datetime) -> bool:
+    """True once the last stamped attempt has had its full ``channel_pause_hours``.
+
+    False for a never-stamped pair — no attempt has been made, so no window is running.
+    """
+    if readiness.rejoin_attempted_at is None:
+        return False
+    attempted = datetime.fromisoformat(readiness.rejoin_attempted_at)
+    return now - attempted >= timedelta(hours=settings.neurocomment.channel_pause_hours)
 
 
 def retry_due(readiness: NeurocommentReadiness, now: datetime) -> bool:
@@ -73,12 +96,9 @@ def retry_due(readiness: NeurocommentReadiness, now: datetime) -> bool:
     ``ChannelPrivateError`` on a stale cached entity — cost minutes instead of a day. Each
     later attempt waits the full window, and the fourth one is the last.
     """
-    if _exhausted(readiness):
+    if exhausted(readiness):
         return False
-    if readiness.rejoin_attempted_at is None:
-        return True
-    attempted = datetime.fromisoformat(readiness.rejoin_attempted_at)
-    return now - attempted >= timedelta(hours=settings.neurocomment.channel_pause_hours)
+    return readiness.rejoin_attempted_at is None or _window_elapsed(readiness, now)
 
 
 def attempt_owed(readiness: NeurocommentReadiness) -> bool:
@@ -128,35 +148,8 @@ async def review_access_lost(now: datetime) -> None:
         campaign = campaigns.get(channel)
         if campaign is None:
             continue
-        # Only pairs an onboarding pass can actually reach: it walks the campaign's
-        # serving accounts, pin-aware. A row left behind by an account since removed from
-        # the campaign, or pinned to other channels, is nobody's to retry — reporting it
-        # due would poke onboarding every five minutes for a join that never happens.
-        serving = serving_accounts(
-            (await list_campaign_accounts(campaign.campaign_id)).links, channel
-        )
-        parked = [row for row in channel_rows if row.account_id in serving and access_lost(row)]
-        if not parked:
-            continue
-        due = [row for row in parked if retry_due(row, now)]
-        if due:
+        if await _review_channel(campaign.campaign_id, channel, channel_rows, now):
             retry_due_somewhere = True
-            # The attempt is spent HERE, not by the pass we are about to poke: a pair the
-            # pass never reaches (its account at the join cap, its channel paused, ...)
-            # would otherwise stay due forever, and every sweep tick would run another
-            # full onboarding pass on its behalf.
-            for row in due:
-                await stamp_rejoin_attempt(row.account_id, channel)
-            continue
-        # Unlike the join-request review, the retry above is NOT gated on the channel
-        # being otherwise dead: a kicked account must get back into a chat the other five
-        # comment in fine. Only the DROP is, and that check lives one call down — the
-        # single place that decides whether anything still works here.
-        if not all(_exhausted(row) for row in parked):
-            # Nothing due, but somebody still has attempts left: they are only waiting out
-            # a window, and a channel must never be dropped mid-timeline.
-            continue
-        await _drop_channel_if_nothing_works(campaign.campaign_id, channel, serving, len(parked))
     if retry_due_somewhere:
         # Late import: ``_runtime`` reaches this module through the sweep, so a top-level
         # import cycles. Same poke ``_sweep._review_join_requests`` uses — onboarding, not
@@ -164,6 +157,66 @@ async def review_access_lost(now: datetime) -> None:
         from services.neurocomment import _runtime, _signals  # noqa: PLC0415
 
         _runtime._ensure_onboarding_running(_signals.signal_onboarding_progress)  # noqa: SLF001
+
+
+async def _review_channel(
+    campaign_id: str,
+    channel: str,
+    channel_rows: list[NeurocommentReadiness],
+    now: datetime,
+) -> bool:
+    """Age one channel's parked pairs; True when a re-join was authorized this tick.
+
+    Its own function so the caller stays a flat loop over channels — and because the three
+    outcomes here (spend, wait, drop) are the whole rule.
+    """
+    # Only pairs an onboarding pass can actually reach: it walks the campaign's serving
+    # accounts, pin-aware. A row left behind by an account since removed from the
+    # campaign, or pinned to other channels, is nobody's to retry — reporting it due
+    # would poke onboarding every five minutes for a join that never happens.
+    serving = serving_accounts((await list_campaign_accounts(campaign_id)).links, channel)
+    parked = [row for row in channel_rows if row.account_id in serving and access_lost(row)]
+    if not parked:
+        return False
+    # The one thing the stamp-first design must NOT charge for. "The pass cannot reach this
+    # pair" (pinned elsewhere, account at its join cap) still costs an attempt, or a
+    # permanently unreachable pair would never terminate — but "no pair on this channel can
+    # be tried at all" is a different claim, and a #147 pause is exactly that:
+    # ``_onboard_pair`` returns ``channel_paused`` before any join RPC, so three pause
+    # rounds (72h) burned three of the four attempts against a channel nobody could even
+    # try to re-enter, and the give-up log then said they had used them up. Read off the
+    # same column onboarding refuses on, so the two cannot disagree. The drop waits too:
+    # while the pause holds, the channel's fate belongs to the pause rule's round counter,
+    # and a budget spent against refused joins is no evidence. Deferred, never waived — a
+    # pause window is a flat ``channel_pause_hours``, so the timeline picks up where it
+    # left off on the first tick after it lapses.
+    if _state.channel_paused(await fetch_channel_paused_until(channel), now):
+        return False
+    due = [row for row in parked if retry_due(row, now)]
+    if due:
+        # The attempt is spent HERE, not by the pass we are about to poke: a pair the pass
+        # never reaches (its account at the join cap, its group gone, ...) would otherwise
+        # stay due forever, and every sweep tick would run another full onboarding pass on
+        # its behalf. The channel's own pause is the exception, and it never gets this far
+        # — the guard above sat the window out.
+        for row in due:
+            await stamp_rejoin_attempt(row.account_id, channel)
+        return True
+    # Unlike the join-request review, the retry above is NOT gated on the channel being
+    # otherwise dead: a kicked account must get back into a chat the other five comment in
+    # fine. Only the DROP is, and that check lives one call down — the single place that
+    # decides whether anything still works here.
+    if not all(exhausted(row) and _window_elapsed(row, now) for row in parked):
+        # Nothing due, but somebody is still mid-timeline — either they have attempts left,
+        # or they have just spent the last one. That second half is why the window check is
+        # here and not folded into ``exhausted``: the fourth attempt is stamped at t=72h
+        # and the pass it pokes joins *after* that, so dropping the moment nothing is
+        # ``retry_due`` any more gave attempt four about five minutes and unlinked the
+        # channel with a re-join still in flight. The budget is four attempts over four
+        # DAYS: the last window counts like the other three.
+        return False
+    await _drop_channel_if_nothing_works(campaign_id, channel, serving, len(parked))
+    return False
 
 
 async def _drop_channel_if_nothing_works(

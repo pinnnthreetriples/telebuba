@@ -56,6 +56,7 @@ from core.repositories.neurocomment._comments import (
     mark_comment_failed,
     mark_comment_posted,
     reclaim_stale_claims,
+    release_claim,
     upsert_linked_group,
 )
 from core.repositories.neurocomment._cooldowns import load_active_cooldowns, persist_cooldown
@@ -171,6 +172,7 @@ __all__ = [
     "purge_neurocomment_history_older_than",
     "reclaim_stale_claims",
     "record_join",
+    "release_claim",
     "remove_account_from_campaign",
     "replace_discovery_candidates",
     "resolve_pending_outcome",

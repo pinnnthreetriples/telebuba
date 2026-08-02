@@ -415,6 +415,38 @@ async def test_join_request_stops_at_the_attempt_cap(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
+async def test_a_spent_attempt_waits_out_its_own_window_not_the_first_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The next request is due at ``first + attempts x retry_hours`` — the sweep's schedule.
+
+    ``join_requested_at`` is the FIRST request and never moves, so comparing its age
+    against a bare retry window authorized the next request the instant the FIRST window
+    lapsed, however many had gone out since. At the shipped cap of two the attempts guard
+    above hides it, which is why this raises the cap: nothing else makes it visible.
+    """
+    monkeypatch.setattr(settings.neurocomment, "join_request_max_attempts", 3)
+    join = await _gated_pair(monkeypatch)
+    _backdate_join_request("acc-1", "@gated", hours=25.0)
+    await onboarding.onboard_account_channel("acc-1", "@gated")  # attempt 2, due at +24h
+    assert len(join.calls) == 2
+
+    # Still only 25h past the anchor: attempt 3 is not due until +48h.
+    outcome = await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert outcome.state == "join_by_request"
+    assert len(join.calls) == 2
+    readiness = await fetch_readiness("acc-1", "@gated")
+    assert readiness is not None
+    assert readiness.join_request_attempts == 2
+
+    _backdate_join_request("acc-1", "@gated", hours=49.0)
+    await onboarding.onboard_account_channel("acc-1", "@gated")
+
+    assert len(join.calls) == 3
+
+
+@pytest.mark.asyncio
 async def test_approved_join_clears_the_request_stamp(monkeypatch: pytest.MonkeyPatch) -> None:
     """An approved request must not leave a counter the sweep would later act on."""
     join = await _gated_pair(monkeypatch)

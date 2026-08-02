@@ -7587,6 +7587,11 @@
             "type": "boolean",
             "title": "Human Skipped",
             "default": false
+          },
+          "banned": {
+            "type": "boolean",
+            "title": "Banned",
+            "default": false
           }
         },
         "type": "object",
@@ -10230,6 +10235,7 @@
               "comments_off",
               "join_by_request",
               "join_failed",
+              "rejoining",
               "chat_restricted",
               "banned",
               "bot_challenge",

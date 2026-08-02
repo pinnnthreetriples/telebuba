@@ -13,6 +13,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from datetime import UTC, datetime, timedelta
+from functools import partial
 from typing import TYPE_CHECKING
 
 from core.config import settings
@@ -54,26 +55,41 @@ def reset_prune_clock() -> None:
 async def _sweep_loop() -> None:
     """Re-read recent comments on an interval; back off channels with mass deletions.
 
-    The lone non-event loop in the runtime. A sweep fault is logged and the loop
-    keeps going — it must never die (mirrors the listener-safe on-post pipeline).
-    The retention prune, the join-request review and the access-loss review piggyback on
-    the same tick behind their own guards, so no part of the pass can abort another.
+    The lone non-event loop in the runtime, and it must never die (mirrors the
+    listener-safe on-post pipeline). The retention prune, the join-request review and the
+    access-loss review piggyback on the same tick, and every pass is awaited behind the
+    ONE guard below rather than behind the ones inside it: each of those covers only its
+    own first bulk read, so everything after it — a locked SQLite, a malformed timestamp,
+    the live Telegram RPC ``deactivate_channel`` reaches through the listener reconcile —
+    unwound into this loop body and ended the task for the rest of the process lifetime.
+    Silently, too: the handle in ``_runtime`` carries no done-callback, so all four
+    lifecycle rules simply stopped until an operator hit Start again. Guarding here is
+    what makes the promise true — no pass can abort the loop or its siblings, and every
+    fault leaves a ``neurocomment_sweep_failed`` line naming the pass that raised.
     """
     interval = settings.neurocomment.deletion_sweep_interval_seconds
     while True:
         await asyncio.sleep(interval)
-        try:
-            await _sweep_once()
-        except Exception as exc:  # a sweep fault must never kill the loop.
-            logger.exception("neurocomment sweep failed")
-            await log_event(
-                "WARNING",
-                "neurocomment_sweep_failed",
-                extra={"error_type": type(exc).__name__},
-            )
-        await _prune_history_if_due(datetime.now(UTC))
-        await _review_join_requests(datetime.now(UTC))
-        await _rejoin.review_access_lost(datetime.now(UTC))
+        # One clock for the whole tick: these passes age the same deadlines, and four
+        # separate reads of ``now`` only let them disagree about where one falls.
+        now = datetime.now(UTC)
+        # Callables, not coroutine objects: shutdown cancels this task mid-tick, and four
+        # coroutines built up front leave the un-awaited ones to warn on collection.
+        for name, run_pass in (
+            ("deletion", _sweep_once),
+            ("retention", partial(_prune_history_if_due, now)),
+            ("join_requests", partial(_review_join_requests, now)),
+            ("rejoin", partial(_rejoin.review_access_lost, now)),
+        ):
+            try:
+                await run_pass()
+            except Exception as exc:  # a pass fault must never kill the loop.
+                logger.exception("neurocomment sweep pass %s failed", name)
+                await log_event(
+                    "WARNING",
+                    "neurocomment_sweep_failed",
+                    extra={"pass": name, "error_type": type(exc).__name__},
+                )
 
 
 async def _prune_history_if_due(now: datetime) -> None:
@@ -134,7 +150,11 @@ async def _review_join_requests(now: datetime) -> None:
     nc = settings.neurocomment
     retry_after = timedelta(hours=nc.join_request_retry_hours)
     # The whole patience budget: every attempt gets its own retry window before we
-    # accept that nobody is going to press Approve.
+    # accept that nobody is going to press Approve. It runs from the FIRST request and
+    # never restarts — the operator's rule is "48 часов, если заявка не принимается,
+    # канал удаляем; за эти 48 часов 2 заявки", i.e. two requests paced *inside* one 48h
+    # wall clock. ``join_requested_at`` holds that first stamp (the repository coalesces
+    # it), so re-sending can no longer push the deadline out a window at a time.
     give_up_after = retry_after * nc.join_request_max_attempts
     try:
         rows = (await list_pending_join_readiness()).readiness
@@ -156,9 +176,16 @@ async def _review_join_requests(now: datetime) -> None:
         campaign = campaigns.get(channel)
         if campaign is None:
             continue
-        if any(row.ready for row in channel_rows):
+        # Resolved once and used by both halves of the decision below: the keep-check
+        # read EVERY readiness row on the channel while the drop it guards resolved
+        # serving accounts pin-aware, so a ready row belonging to an account since
+        # removed from the campaign — or pinned to another channel entirely — kept a
+        # channel alive that nobody serving it could reach.
+        links = (await list_campaign_accounts(campaign.campaign_id)).links
+        serving = serving_accounts(links, channel)
+        if any(row.ready for row in channel_rows if row.account_id in serving):
             # One stubborn account must never kill a channel the other accounts comment
-            # in fine — a ready pair is proof the channel works.
+            # in fine — a ready serving pair is proof the channel works.
             continue
         ages = [
             (row, now - datetime.fromisoformat(row.join_requested_at))
@@ -166,10 +193,16 @@ async def _review_join_requests(now: datetime) -> None:
             if row.join_requested_at is not None
         ]
         if all(age >= give_up_after for _row, age in ages):
-            await _drop_unapproved_channel(campaign.campaign_id, channel, len(ages))
+            await _drop_unapproved_channel(campaign.campaign_id, channel, serving, len(ages))
             continue
         retry_due = retry_due or any(
-            age >= retry_after and row.join_request_attempts < nc.join_request_max_attempts
+            # One window per attempt already spent, all measured from the first request:
+            # attempt 1 at t=0, attempt 2 at t=+24h. Comparing the age against a bare
+            # ``retry_after`` was only ever right because the stamp used to move with
+            # each attempt — anchored, it would authorize the next request the instant
+            # the FIRST window lapsed, however many had gone out since.
+            age >= retry_after * row.join_request_attempts
+            and row.join_request_attempts < nc.join_request_max_attempts
             for row, age in ages
         )
     if retry_due:
@@ -179,20 +212,24 @@ async def _review_join_requests(now: datetime) -> None:
         _runtime._ensure_onboarding_running(_signals.signal_onboarding_progress)  # noqa: SLF001
 
 
-async def _drop_unapproved_channel(campaign_id: str, channel: str, pending: int) -> None:
+async def _drop_unapproved_channel(
+    campaign_id: str,
+    channel: str,
+    serving: list[str],
+    pending: int,
+) -> None:
     """Unlink a channel nobody approved us into, via the service (so the listener reconciles).
 
     Gated on the same coverage rule as ``bans._unlink_channel_if_no_account_left`` and
     ``_rejoin._drop_channel_if_nothing_works``, because it had the defect both of those
     fixed: the rows above are every readiness row on the channel, whoever they belong to,
     so one expired request could drop a channel the campaign's other accounts had simply
-    never been onboarded to. Serving accounts are resolved pin-aware, every one of them
-    must have a row before the channel can go (a missing row means "never tried here", not
-    "failed here"), and any ready serving row keeps it. Two extra reads per candidate
-    channel, once per channel — this loop ticks every five minutes and is no hot path.
+    never been onboarded to. Every ``serving`` account must have a row before the channel
+    can go (a missing row means "never tried here", not "failed here"), and any ready one
+    keeps it. The caller resolves the pins, so its keep-check and this drop can no longer
+    disagree about who serves the channel. One extra read per candidate channel, once per
+    channel — this loop ticks every five minutes and is no hot path.
     """
-    links = (await list_campaign_accounts(campaign_id)).links
-    serving = serving_accounts(links, channel)
     rows = (await list_channel_readiness(campaign_id, channel, serving)).readiness
     if len(rows) != len(serving) or any(row.ready for row in rows):
         return

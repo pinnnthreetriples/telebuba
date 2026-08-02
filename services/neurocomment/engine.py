@@ -42,6 +42,7 @@ from core.db import (
 )
 from core.logging import log_event
 from services.neurocomment import _filters, _seams, _state
+from services.neurocomment._pins import serving_accounts
 from services.neurocomment.settings_store import load_settings as load_neuro_settings
 from services.trust import account_trust_score_from
 from services.warming.pacing import evaluate_readiness
@@ -250,13 +251,12 @@ async def _select_account(
     On a miss returns the binding blocker (``_selection_block_reason``) so the
     activity log can tell the operator *why* — busy quota vs cooldown vs not warmed.
     """
-    # An account with a channel subset is eligible only for channels in it; an
-    # account with an empty subset is eligible for every channel of the campaign.
-    account_ids = [
-        link.account_id
-        for link in (await list_campaign_accounts(campaign.campaign_id)).links
-        if not link.channels or channel in link.channels
-    ]
+    # Who serves this channel — the shared ``_pins`` rule the four channel-drop rules
+    # read, not a fifth inline copy of it: selection is the load-bearing consumer, and
+    # an edit there that missed this line would leave the engine working a channel
+    # those rules already consider unserved (or the reverse).
+    links = (await list_campaign_accounts(campaign.campaign_id)).links
+    account_ids = serving_accounts(links, channel)
     if not account_ids:
         return _Selection(None, "no_accounts_linked")
     channel_count = max(1, len((await list_campaign_channels(campaign.campaign_id)).links))

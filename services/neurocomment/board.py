@@ -33,7 +33,7 @@ from schemas.neurocomment import (
     NeurocommentBoard,
     NeurocommentChannelRow,
 )
-from services.neurocomment import _state, settings_store
+from services.neurocomment import _rejoin, _state, settings_store
 
 if TYPE_CHECKING:
     from schemas.accounts import AccountRead
@@ -160,6 +160,12 @@ def _build_card(
                 ready=r.ready,
                 joined=r.joined,
                 captcha_passed=r.captcha_passed,
+                human_skipped=r.human_skipped,
+                # Both of the "this pair is out of service" flags travel to the card:
+                # the channel row aggregates them away (a channel with one ready
+                # account reads ``ready``), so the card is the only surface that can
+                # say which account is banned (#30) or skipped (#148) where.
+                banned=r.banned,
             )
             for r in readiness
         ],
@@ -200,9 +206,8 @@ def _channel_status(
     readiness; otherwise an account that's ready wins; then an auto-ban (#30) when no
     account is ready but one is banned here; then the joined-but-blocked failure modes
     — ``bot_challenge`` when a guardian-bot challenge row exists for the channel
-    (#145), else ``chat_restricted`` (a Telegram-level write block) — then, for a
-    not-joined row, ``join_failed`` (onboarding's hard-failure sentinel) vs
-    ``join_by_request`` (approval gate); ``throttled`` is the catch-all.
+    (#145), else ``chat_restricted`` (a Telegram-level write block) — then the
+    not-joined readings, which :func:`_not_joined_status` splits.
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
@@ -220,12 +225,25 @@ def _channel_status(
 def _not_joined_status(rows: list[NeurocommentReadiness]) -> ChannelStatus:
     """Status for a channel none of whose accounts are joined-and-ready.
 
-    ``join_failed`` is onboarding's hard-failure sentinel (joined=False,
-    captcha_passed=True) — a terminal join failure that never self-resolves, distinct
-    from the approval gate ``join_by_request``; ``throttled`` is the catch-all.
+    The unjoined-but-captcha_passed row is ONE sentinel with two readings, and the badge
+    used to give both the terminal one. It is written by a hard join failure AND by an
+    account kicked out of the chat (``_rejoin``'s module docstring: both mean "this pair
+    needs a fresh join"), and since the re-join rule shipped it does self-resolve — one
+    attempt within minutes, then one a day, four in all. So a pair with attempts left is
+    ``rejoining`` (the re-join timeline is running), and only a pair that has spent them
+    — or one ``_rejoin`` refuses to retry at all, i.e. skipped (#148) — is the terminal
+    ``join_failed``. What the row cannot say is WHY the pair is out: kick and bad invite
+    write the same fields, so the badge reports the timeline, not the cause. Then the
+    approval gate ``join_by_request``; ``throttled`` is the catch-all.
     """
     if not rows:
         return "no_data"  # onboarding hasn't produced readiness data for this channel yet
+    # Both halves read straight off the rule that does the retrying, never a second copy
+    # of its threshold: ``access_lost`` is the retryable half of the sentinel (it excludes
+    # the skipped and banned rows the rule will not touch) and ``exhausted`` is the budget
+    # it spends. A banned row never reaches here — ``banned`` wins one branch up.
+    if any(_rejoin.access_lost(r) and not _rejoin.exhausted(r) for r in rows):
+        return "rejoining"
     if any(not r.joined and r.captcha_passed for r in rows):
         return "join_failed"
     if any(not r.joined for r in rows):

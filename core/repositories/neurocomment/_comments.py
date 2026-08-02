@@ -8,7 +8,7 @@ from __future__ import annotations
 import asyncio
 from typing import TYPE_CHECKING
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 
 from core.db import _get_engine, _now_iso
@@ -209,6 +209,33 @@ async def mark_comment_failed(channel: str, post_id: int) -> CommentRecord | Non
     record is the *current* row — ``None`` only when no row exists.
     """
     return await asyncio.to_thread(_mark_comment, channel, post_id, status="failed")
+
+
+def _release_claim(channel: str, post_id: int) -> None:
+    with _get_engine().begin() as connection:
+        connection.execute(
+            delete(_neurocomment_comments).where(
+                (_neurocomment_comments.c.channel == channel)
+                & (_neurocomment_comments.c.post_id == post_id)
+                # Guarded, not blind: only a still-in-flight claim may be dropped, so a
+                # delivered ('posted') or already-terminal ('failed') row is untouchable
+                # even if a late caller aims this at the wrong post.
+                & (_neurocomment_comments.c.status == "claimed"),
+            ),
+        )
+
+
+async def release_claim(channel: str, post_id: int) -> None:
+    """Drop an in-flight claim the attempt never charged to the account.
+
+    The transient outcomes (``status="unavailable"``, a Gemini 429) are nobody's fault,
+    so they must not mark the row ``failed`` — but leaving it ``claimed`` is not free
+    either: ``_quota`` counts ``claimed`` alongside ``posted``, and ``reclaim_stale_claims``
+    only runs at process startup, so the slot stayed spent for the whole 24-hour window.
+    Deleting the row frees it at once. A DELETE rather than a new status because the row
+    records nothing worth keeping: nothing was generated or sent.
+    """
+    return await asyncio.to_thread(_release_claim, channel, post_id)
 
 
 def _reclaim_stale_claims(cutoff_iso: str) -> int:

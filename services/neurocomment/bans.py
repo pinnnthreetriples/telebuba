@@ -149,11 +149,16 @@ async def confirm_group_ban_and_leave(
     # The field values mirror ``_classify``'s ban branch: we are a participant of the
     # group (that is what the restricted record means) but cannot write there.
     await upsert_readiness(account_id, channel, joined=True, captcha_passed=False, ready=False)
-    # Sticky (#30), and deliberately so. The way back is the operator's per-pair retry
-    # (``services.neurocomment.challenge.retry_pair``), which deletes the readiness row
-    # and re-onboards — NOT the can_send probe that clears an ordinary ban above: once
-    # we leave, this pair can only ever probe as not_member. Marked BEFORE the leave —
-    # the ban is the truth and must persist even if the leave RPC fails.
+    # Sticky (#30), and deliberately so: for this pair the channel is closed for good.
+    # There is no way back. Not the can_send probe that clears an ordinary ban above —
+    # once we leave, this pair can only ever probe as not_member — and not the operator
+    # either: ``challenge.retry_pair`` would delete the readiness row and re-onboard, and
+    # ``POST /api/v1/neurocomment/retry`` still reaches it, but its only caller is the
+    # captcha-queue button, which is fed by ``list_campaign_challenges`` — and a banned
+    # pair has no challenge row, so no button in the UI points here. The operator's
+    # remedy is another account in the campaign; when every serving account is banned the
+    # channel is unlinked below. Marked BEFORE the leave — the ban is the truth and must
+    # persist even if the leave RPC fails.
     await mark_pair_banned(account_id, channel)
     try:
         leave = await _seams.execute(account_id, LeaveDiscussionGroup(channel=channel))
@@ -180,12 +185,21 @@ async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> N
 
     The verdict is read from persisted readiness, never a live probe: this runs on the
     post hot path and must not spend Telegram calls. Serving accounts respect the
-    per-account channel subset, and one banned account must never remove a channel the
-    others comment in fine — so any serving account whose row is NOT banned keeps the
-    channel, and so does any serving account with NO row: a missing row means that
-    account was never tried here, not that it failed. Onboarding has no timer, so the
-    fleet reaches a freshly linked channel slowly; counting only the rows that exist
-    would let the first banned account drop a channel the other five never touched.
+    per-account channel subset, and any serving account with NO row keeps the channel: a
+    missing row means that account was never tried here, not that it failed. Onboarding
+    has no timer, so the fleet reaches a freshly linked channel slowly; counting only the
+    rows that exist would let the first banned account drop a channel the other five
+    never touched.
+
+    Every row present must then be in a TERMINAL state — banned (#30) or operator-skipped
+    (#148). Both are permanent verdicts on the pair, and reading a skip as "still usable"
+    meant five bans plus one skip held a channel that produces nothing, forever: a per-pair
+    ban has no un-ban path, so nothing would ever revisit it. The three sibling rules
+    phrase the same clause as "no serving row is ``ready``", which would also fix this —
+    but this rule is the one with no clock of its own. ``_sweep`` and ``_rejoin`` overrule
+    the other accounts only after their own 48h / four days have run out, whereas one ban
+    lands here mid-post; a pair still inside its approval window is not ready either, and
+    dropping on that would cancel patience those two rules are still counting out.
     """
     campaign = await fetch_active_campaign_for_channel(channel)
     if campaign is None:
@@ -193,7 +207,7 @@ async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> N
     links = (await list_campaign_accounts(campaign.campaign_id)).links
     serving = serving_accounts(links, channel)
     rows = (await list_channel_readiness(campaign.campaign_id, channel, serving)).readiness
-    if len(rows) != len(serving) or any(not row.banned for row in rows):
+    if len(rows) != len(serving) or any(not (row.banned or row.human_skipped) for row in rows):
         return
     # Late import: ``campaigns`` reaches ``_runtime``, which reaches this module — the
     # same cycle ``_sweep._drop_unapproved_channel`` dodges the same way.
@@ -207,7 +221,10 @@ async def _unlink_channel_if_no_account_left(account_id: str, channel: str) -> N
         extra={
             "channel": channel,
             "campaign_id": campaign.campaign_id,
-            "banned_accounts": len(rows),
+            # The rows, not their count: a skipped pair rides along in the drop but was
+            # never banned, and reporting it as one sends the operator hunting a ban that
+            # does not exist.
+            "banned_accounts": sum(1 for row in rows if row.banned),
             "reason": "all_accounts_banned",
         },
     )

@@ -33,7 +33,8 @@ interface BoardRow {
 // One work row per account, joined on the account's OWN channel: its pinned
 // channel when set, else its first joined channel from the readiness list (a
 // real link, not an arbitrary pairing) with that channel's real aggregate
-// status. The comment cell shows the account's real last comment text (falling
+// status — unless the pair itself is banned, which the aggregate hides (see
+// below). The comment cell shows the account's real last comment text (falling
 // back to a generic "posted" hint, then an em dash when it has never commented).
 function deriveRows(
   board: NeurocommentBoardData,
@@ -64,7 +65,12 @@ function deriveRows(
       accountId: account.account_id,
       channel,
       text: account.last_comment_text ?? (account.last_comment_at ? placeholder : '—'),
-      status: channelStatus.get(channel) ?? 'no_data',
+      // The pair's own permanent ban (#30) outranks the channel's aggregate: the
+      // aggregate only turns 'banned' once NO account is ready there, so one burnt
+      // account among five working ones kept reading the channel's green «Готов» —
+      // while the only remedy, adding another account, was being suggested elsewhere.
+      // Terminal by design: unlike 'rejoining' there is no attempt left to spend.
+      status: primary?.banned ? 'banned' : (channelStatus.get(channel) ?? 'no_data'),
       deletedRecent: channelDeleted.get(channel) ?? 0,
       armedReady,
       armedTarget,

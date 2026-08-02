@@ -215,3 +215,23 @@ test('shows a success or error mark from the feedback map', () => {
   );
   expect(document.querySelector('.text-danger svg')).toBeInTheDocument();
 });
+
+test('names the channels an account is banned in for good', () => {
+  // A per-pair ban is permanent and the channel row hides it (a sibling account still
+  // posts there), so this modal is the only place the operator learns WHO is burnt
+  // WHERE — right next to the button that adds a replacement account.
+  render(
+    <NeuroAccountsModal
+      accounts={[
+        { ...ACCOUNTS[0]!, banned_channels: ['https://t.me/news', '@crypto'] },
+        ACCOUNTS[1]!,
+      ]}
+      channels={CHANNELS}
+      onClose={vi.fn()}
+      onPick={vi.fn()}
+      onRemove={vi.fn()}
+      onChannelChange={vi.fn()}
+    />,
+  );
+  expect(screen.getByText('Забанен навсегда: news, @crypto')).toBeInTheDocument();
+});

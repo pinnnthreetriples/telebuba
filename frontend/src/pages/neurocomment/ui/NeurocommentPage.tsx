@@ -259,6 +259,9 @@ export function NeurocommentPage() {
       name: displayNameById(a.account_id, a.label),
       linked: true,
       pinned_channels: a.pinned_channels ?? [],
+      // Per-pair bans (#30) are permanent and invisible on the channel row while a
+      // sibling account still posts there, so the modal names them per account.
+      banned_channels: (a.readiness ?? []).filter((r) => r.banned).map((r) => r.channel),
     })),
     ...warmedAccounts
       .filter((a) => !linkedIds.has(a.account_id))

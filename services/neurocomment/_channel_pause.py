@@ -3,8 +3,10 @@
 K consecutive write failures on a channel end a *round*: it is paused for a flat
 ``channel_pause_hours``, in which nothing posts there and no account is onboarded to it,
 and its round counter goes up. Once the counter reaches ``channel_max_rounds`` the
-channel leaves its campaign instead of pausing again. A delivered comment clears both —
-the channel demonstrably works.
+channel leaves its campaign instead of pausing again — but only once every account that
+serves it has actually been tried there; while any has not, the round buys another pause
+and the counter keeps climbing. A delivered comment clears both — the channel
+demonstrably works.
 
 The escalating 1h→2h→…→24h back-off this replaced only delayed the verdict; four flat
 days actually reach one. Round counter and deadline are persisted on the campaign link
@@ -23,9 +25,15 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 
 from core.config import settings
-from core.db import bump_channel_pause, clear_channel_pause
+from core.db import (
+    bump_channel_pause,
+    clear_channel_pause,
+    list_campaign_accounts,
+    list_channel_readiness,
+)
 from core.logging import log_event
 from services.neurocomment import _state
+from services.neurocomment._pins import serving_accounts
 
 
 async def register_write_failure(channel: str, account_id: str) -> None:
@@ -48,36 +56,72 @@ async def register_write_failure(channel: str, account_id: str) -> None:
     pause = await bump_channel_pause(channel, until.isoformat())
     if pause is None:  # the channel lost its active link meanwhile — nothing to pause.
         return
+    extra: dict[str, object] = {
+        "channel": channel,
+        "rounds": pause.pause_rounds,
+        "max_rounds": nc.channel_max_rounds,
+        "paused_until": pause.paused_until,
+    }
     if pause.pause_rounds >= nc.channel_max_rounds:
-        # Late import: ``campaigns`` reaches back here through _runtime -> engine.
-        from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
+        untried = await _untried_serving_accounts(pause.campaign_id, channel)
+        if not untried:
+            # Late import: ``campaigns`` reaches back here through _runtime -> engine.
+            from services.neurocomment import campaigns as campaigns_service  # noqa: PLC0415
 
-        # Via the service, not the repository, so the listener reconciles and stops
-        # watching the channel (mirrors ``_sweep._drop_unapproved_channel``).
-        await campaigns_service.deactivate_channel(pause.campaign_id, channel)
-        await log_event(
-            "WARNING",
-            "neurocomment_channel_dropped",
-            account_id=account_id,
-            extra={
-                "channel": channel,
-                "campaign_id": pause.campaign_id,
-                "rounds": pause.pause_rounds,
-                "reason": "write_blocked",
-            },
-        )
-        return
+            # Via the service, not the repository, so the listener reconciles and stops
+            # watching the channel (mirrors ``_sweep._drop_unapproved_channel``).
+            await campaigns_service.deactivate_channel(pause.campaign_id, channel)
+            await log_event(
+                "WARNING",
+                "neurocomment_channel_dropped",
+                account_id=account_id,
+                extra={
+                    "channel": channel,
+                    "campaign_id": pause.campaign_id,
+                    "rounds": pause.pause_rounds,
+                    "reason": "write_blocked",
+                },
+            )
+            return
+        # The budget is spent but the verdict is not earned, so the round buys another
+        # pause and the counter keeps climbing: the first round that ends with the fleet
+        # complete drops the channel. The hold cannot outlive the untried accounts. The
+        # gate parks every pair it hits (``ready=False``), so only an onboarding pass can
+        # set up the next round at all, and a pass that runs with the pause off writes a
+        # row for every serving pair it reaches — the one outcome that leaves none is the
+        # rolling-24h join cap, which clears inside a pause window. Meanwhile the channel
+        # is parked and posts nothing, so holding costs the fleet one gated post per
+        # window, exactly as rounds 1..3 do.
+        extra["untried_accounts"] = untried
     await log_event(
         "WARNING",
         "neurocomment_channel_paused",
         account_id=account_id,
-        extra={
-            "channel": channel,
-            "rounds": pause.pause_rounds,
-            "max_rounds": nc.channel_max_rounds,
-            "paused_until": pause.paused_until,
-        },
+        extra=extra,
     )
+
+
+async def _untried_serving_accounts(campaign_id: str, channel: str) -> int:
+    """How many accounts serving ``channel`` have never been tried on it.
+
+    The coverage rule of ``bans._unlink_channel_if_no_account_left`` and its two siblings
+    (``_sweep._drop_unapproved_channel``, ``_rejoin._drop_channel_if_nothing_works``),
+    resolved through the one shared pin definition so the four cannot drift apart: a
+    serving account with NO readiness row was never tried here, not tried and failed.
+    Onboarding reaches a fleet slowly — jitter plus the rolling-24h join cap — and this
+    rule's own pause turns it away meanwhile, so without the check three gated accounts
+    unlinked a channel the campaign's other three had never once opened.
+
+    Their SECOND clause — any still-usable row keeps the channel — is deliberately absent:
+    no row here can carry that meaning. ``ready`` says selectable, which every account is
+    right up to the moment the gate hits it, and the only proof this channel takes comments
+    is a delivered one, which zeroes the rounds through ``clear_write_failures`` anyway.
+    Coverage is the whole test. Two reads, and only on the last round of a bad channel.
+    """
+    links = (await list_campaign_accounts(campaign_id)).links
+    serving = serving_accounts(links, channel)
+    rows = (await list_channel_readiness(campaign_id, channel, serving)).readiness
+    return len(serving) - len(rows)
 
 
 async def clear_write_failures(channel: str) -> None:

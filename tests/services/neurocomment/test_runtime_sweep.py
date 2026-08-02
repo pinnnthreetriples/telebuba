@@ -33,7 +33,7 @@ from schemas.telegram_actions import (
     CheckMessagesAlive,
     CheckMessagesAliveResult,
 )
-from services.neurocomment import _runtime, _state, _sweep
+from services.neurocomment import _rejoin, _runtime, _state, _sweep
 from tests.services.neurocomment.runtime_support import (
     _ExecuteSpy,
     _ListenerSpy,
@@ -438,6 +438,53 @@ async def test_sweep_loop_prunes_even_when_the_deletion_pass_faults(
         task.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await task
+
+
+@pytest.mark.asyncio
+async def test_sweep_loop_survives_a_fault_in_any_piggybacked_pass(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Every pass rides this tick behind the loop's guard, not only the deletion pass.
+
+    Each review guards its own first bulk read and nothing after it, so a locked SQLite, a
+    malformed timestamp or the live Telegram RPC ``deactivate_channel`` reaches unwound
+    into the loop body and ended the task for the rest of the process lifetime — silently,
+    since the handle carries no done-callback — taking all four lifecycle rules with it.
+    """
+    monkeypatch.setattr(settings.neurocomment, "deletion_sweep_interval_seconds", 0.01)
+    reviewed = asyncio.Event()
+
+    async def failing_deletion_pass() -> None:
+        msg = "deletion boom"
+        raise RuntimeError(msg)
+
+    async def failing_join_review(_now: datetime) -> None:
+        msg = "join review boom"
+        raise RuntimeError(msg)
+
+    async def record_rejoin_review(_now: datetime) -> None:
+        reviewed.set()
+
+    monkeypatch.setattr(_sweep, "_sweep_once", failing_deletion_pass)
+    monkeypatch.setattr(_sweep, "_review_join_requests", failing_join_review)
+    monkeypatch.setattr(_rejoin, "review_access_lost", record_rejoin_review)
+
+    task = asyncio.create_task(_sweep._sweep_loop())
+    try:
+        # The last pass of the tick still runs, so neither fault aborted its siblings...
+        await asyncio.wait_for(reviewed.wait(), timeout=5.0)
+    finally:
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await task
+
+    # ...and each fault named itself, so a dead pass can never be silent.
+    failed = {
+        entry.extra.get("pass")
+        for entry in await list_recent_logs(limit=50)
+        if entry.event == "neurocomment_sweep_failed"
+    }
+    assert failed == {"deletion", "join_requests"}
 
 
 async def _retention_log_entries() -> list[LogEntry]:
