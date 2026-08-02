@@ -49,6 +49,9 @@ async def test_gate_without_pending_challenge_trips_channel_backoff(
         if entry.event == "neurocomment_challenge_backoff"
     )
     assert tripped.extra["cause"] == "gate"
+    # The counter is per-channel, but the row names the account that tripped it — the
+    # feed is read one line per account action, and an unattributed row is unactionable.
+    assert tripped.account_id == "acc-1"
 
 
 @pytest.mark.asyncio

@@ -38,6 +38,38 @@ test('shows the channel and the translated reason inline', () => {
   expect(screen.getByText(/лимит исчерпан/)).toBeInTheDocument();
 });
 
+test('names the account behind each line, and stays quiet when the row has none', () => {
+  render(
+    <ActivityLogCard
+      logLines={[
+        entry({ id: 1, event: 'neurocomment_onboard_join_by_request', extra: { channel: '@a' } }),
+        entry({ id: 2, account_id: null, event: 'neurocomment_listener_started' }),
+      ]}
+      accountName={(id) => (id === 'acc-1' ? 'Alisa' : id)}
+    />,
+  );
+  // getByText throws on a second match, so this also pins the account-less row to blank.
+  expect(screen.getByText('Alisa')).toBeInTheDocument();
+});
+
+test('clicking an account narrows the feed to it, and the chip restores everything', async () => {
+  render(
+    <ActivityLogCard
+      logLines={[
+        entry({ id: 1, event: 'neurocomment_posted' }),
+        entry({ id: 2, account_id: 'acc-2', event: 'neurocomment_channel_comments_off' }),
+      ]}
+      accountName={(id) => (id === 'acc-1' ? 'Alisa' : 'Мария')}
+    />,
+  );
+  await userEvent.click(screen.getByRole('button', { name: 'Alisa' }));
+  expect(screen.queryByText('Комментарии в канале отключены')).toBeNull();
+  expect(screen.getByText('Комментарий опубликован')).toBeInTheDocument();
+
+  await userEvent.click(screen.getByTitle('Показать все'));
+  expect(screen.getByText('Комментарии в канале отключены')).toBeInTheDocument();
+});
+
 test('a failed post shows the Telegram error type next to the translated reason', () => {
   // `status: "failed"` always translates, so the error type has to sit ALONGSIDE the
   // reason — behind it as a fallback it would never render, and the line would keep

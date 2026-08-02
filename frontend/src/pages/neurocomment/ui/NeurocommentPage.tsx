@@ -467,6 +467,7 @@ export function NeurocommentPage() {
 
           <ActivityLogCard
             logLines={logLines}
+            accountName={accountLabel}
             onClear={() => {
               setConfirmClearLogs(true);
             }}

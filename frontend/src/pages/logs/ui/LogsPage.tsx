@@ -3,7 +3,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { allAccountsQueryOptions } from '@/entities/account';
+import { accountDisplayName, allAccountsQueryOptions } from '@/entities/account';
 import { LogStatusBadge, logsQueryOptions } from '@/entities/log';
 import type { LogEntry, PageLogEntry } from '@/shared/api';
 import { DataTable, type DataTableColumnMeta } from '@/shared/ui';
@@ -30,13 +30,18 @@ export function LogsPage() {
 
   // Account filter + column labels come from GET /accounts (a fixed id→label
   // list), NOT the loaded log page — so every account is selectable even when it
-  // has no rows on the current page, and the column shows the phone, not the
-  // internal session-stem id.
+  // has no rows on the current page, and the column shows the Telegram name, not
+  // the internal session-stem id. Same resolver as the accounts table and the
+  // neurocomment feed, so one account reads the same everywhere.
   const accountsData = useQuery(allAccountsQueryOptions());
   const accountLabels = useMemo(() => {
     const map = new Map<string, string>();
     for (const acc of accountsData.data?.items ?? []) {
-      map.set(acc.account_id, acc.phone ?? acc.label ?? acc.account_id);
+      // `phone` is nullable, and accountDisplayName's chain is name → phone → id, with
+      // no slot for the operator `label` this column used to fall back to. Feed the
+      // label in as the phone stand-in so a nameless, phoneless account still reads as
+      // something an operator recognises instead of a session-stem id.
+      map.set(acc.account_id, accountDisplayName({ ...acc, phone: acc.phone ?? acc.label }));
     }
     return map;
   }, [accountsData.data]);

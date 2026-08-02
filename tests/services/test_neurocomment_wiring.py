@@ -28,7 +28,7 @@ async def test_listener_forward_flag_is_honored_by_engine_filter() -> None:
     async def on_post(event: NewPostEvent) -> None:
         captured.append(event)
 
-    handler = _make_handler({-100: "@news"}, on_post)
+    handler = _make_handler("acc-1", {-100: "@news"}, on_post)
     message = MagicMock(id=7, message="a real post body", media=None, post=True, fwd_from=object())
     await handler(MagicMock(message=message, chat_id=-100))
 
@@ -43,7 +43,7 @@ async def test_listener_non_forward_is_not_filtered_as_forward() -> None:
     async def on_post(event: NewPostEvent) -> None:
         captured.append(event)
 
-    handler = _make_handler({-100: "@news"}, on_post)
+    handler = _make_handler("acc-1", {-100: "@news"}, on_post)
     message = MagicMock(id=8, message="a real post body", media=None, post=True, fwd_from=None)
     await handler(MagicMock(message=message, chat_id=-100))
 

@@ -878,7 +878,10 @@
     "log": {
       "title": "Event log",
       "empty": "No events yet",
-      "clear": "Clear log"
+      "clear": "Clear log",
+      "filterByAccount": "This account only",
+      "filteredBy": "{{name}} only ×",
+      "showAll": "Show all"
     },
     "feed": {
       "title": "Published comments",
