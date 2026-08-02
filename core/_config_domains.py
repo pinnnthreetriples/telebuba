@@ -279,11 +279,17 @@ class NeurocommentSettings(BaseSettings):
             "authoris",
         ]
     )
-    # Ф2 #147 channel challenge back-off: K consecutive solver failures on a channel
-    # trip an escalating cooldown that stops onboarding new accounts there.
+    # Ф2 #147 "this channel will not let us write": K consecutive write failures on a
+    # channel — a captcha the solver lost or a write gate — end a round, and the channel
+    # is paused for a flat window in which nothing posts there and no account is
+    # onboarded to it. The escalating 1h→24h doubling it replaced only delayed the
+    # verdict; four flat days do decide one. Round counter and deadline are PERSISTED on
+    # the campaign link (migration #42), because the process restarted 7 times in three
+    # days and an in-memory counter never reached round 4.
     channel_challenge_backoff_min_failures: int = Field(default=3, ge=1)
-    channel_challenge_backoff_base_seconds: float = Field(default=3600.0, ge=0.0)
-    channel_challenge_backoff_max_seconds: float = Field(default=86400.0, ge=0.0)
+    channel_pause_hours: float = Field(default=24.0, gt=0.0)
+    # Rounds a channel gets before it leaves its campaign instead of pausing again.
+    channel_max_rounds: int = Field(default=4, ge=1)
     # Minimum warming age (whole days) for an account to count as "warmed" in the
     # neurocomment page's top overview field.
     warmed_min_days: int = Field(default=14, ge=1)
@@ -318,9 +324,6 @@ class NeurocommentSettings(BaseSettings):
             raise ValueError(msg)
         if self.challenge_click_delay_min_seconds > self.challenge_click_delay_max_seconds:
             msg = "challenge_click_delay_min_seconds must not exceed _max_seconds"
-            raise ValueError(msg)
-        if self.channel_challenge_backoff_base_seconds > self.channel_challenge_backoff_max_seconds:
-            msg = "channel_challenge_backoff_base_seconds must not exceed _max_seconds"
             raise ValueError(msg)
         if self.discovery_qualify_delay_min_seconds > self.discovery_qualify_delay_max_seconds:
             msg = "discovery_qualify_delay_min_seconds must not exceed _max_seconds"

@@ -20,6 +20,7 @@ from core.db import (
     create_account,
     create_campaign,
     fetch_active_campaign_for_channel,
+    fetch_channel_paused_until,
     fetch_readiness,
     link_channel_to_campaign,
     list_recent_logs,
@@ -280,10 +281,10 @@ async def test_check_channels_button_leaves_a_confirmed_group(
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("isolate_engine")
-async def test_confirmed_ban_from_the_gate_branch_spares_the_channel_backoff(
+async def test_confirmed_ban_from_the_gate_branch_spares_the_channel_pause(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ChatWriteForbiddenError is an admin ban here — per-ACCOUNT, so no channel back-off."""
+    """ChatWriteForbiddenError is an admin ban here — per-ACCOUNT, so the channel is not paused."""
     monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
     await _make_campaign("@chan", "acc-1")
     comment = _CommentStub(status="failed", error_type="ChatWriteForbiddenError")
@@ -294,17 +295,17 @@ async def test_confirmed_ban_from_the_gate_branch_spares_the_channel_backoff(
 
     assert await _banned() is True
     assert [action.action_type for _, action in comment.calls][-1] == "leave_discussion_group"
-    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is False
+    assert await fetch_channel_paused_until("@chan") is None
     assert await _logged("neurocomment_account_banned")
     assert await _logged("neurocomment_post_gated") is False
 
 
 @pytest.mark.asyncio
 @pytest.mark.usefixtures("isolate_engine")
-async def test_unconfirmed_gate_keeps_todays_channel_backoff(
+async def test_unconfirmed_gate_pauses_the_channel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """No per-group proof → the gate path is untouched; this is what parks a closed channel."""
+    """No per-group proof → the gate path is untouched; this is what pauses a closed channel."""
     monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
     await _make_campaign("@chan", "acc-1")
     _patch_io(
@@ -315,7 +316,7 @@ async def test_unconfirmed_gate_keeps_todays_channel_backoff(
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=1, text="hi"))
 
     assert await _banned() is False
-    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is True
+    assert await fetch_channel_paused_until("@chan") is not None
     assert await _logged("neurocomment_post_gated")
 
 

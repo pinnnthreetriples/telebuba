@@ -56,6 +56,14 @@ _neurocomment_campaign_channels = Table(
     Column("channel", String, nullable=False),
     Column("active", Integer, nullable=False),
     Column("created_at", String, nullable=False),
+    # "This channel will not let us write" (migration #42). Every K consecutive write
+    # failures end a round: ``pause_rounds`` counts them and ``paused_until`` (ISO-8601
+    # UTC, NULL = not paused) parks the channel meanwhile. Persisted rather than kept in
+    # memory because the four rounds span four days and the process restarts far more
+    # often than that. Relinking a channel inserts a FRESH row, so a re-linked channel
+    # starts its rounds over — the operator asked for it again.
+    Column("pause_rounds", Integer, nullable=False, server_default="0"),
+    Column("paused_until", String, nullable=True),
 )
 
 

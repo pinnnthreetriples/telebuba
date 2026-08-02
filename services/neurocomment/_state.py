@@ -7,8 +7,11 @@ just-flooded account stays parked across a process restart. A cooldown is only e
 removed by *expiry* (the lazy eviction in ``in_cooldown`` plus the hydrate prune): there
 is deliberately no early clear, because it cannot delete the persisted row (memory and
 disk would then disagree across a restart) and, with tasks sleeping in their reply delay,
-it can wipe a rival task's still-live cooldown. The channel/challenge back-offs stay
-in-memory only — they are recomputed each sweep and self-heal.
+it can wipe a rival task's still-live cooldown. The deletion back-off stays in-memory
+only — it is recomputed each sweep and self-heals. The "channel will not let us write"
+rule keeps only its failure *window* here; its rounds and pause deadline live on the
+campaign link (``core.repositories.neurocomment._pauses``), because the rule
+spans four days and this process does not.
 """
 
 from __future__ import annotations
@@ -37,12 +40,13 @@ _CHANNEL_COOLDOWN_UNTIL: dict[str, datetime] = {}  # earliest UTC time to commen
 # re-counted across cooldowns — that would walk one deletion episode to the cap.
 _CHANNEL_COUNTED_DELETED: dict[str, set[int]] = {}
 
-# Challenge back-off (#147), keyed by channel — K consecutive solver failures
-# (pending → failed) trip an escalating cooldown that stops onboarding new accounts
-# into the channel. Mirrors the deletion back-off above; in-memory, self-healing.
-_CHALLENGE_FAILED: dict[str, int] = {}  # failures since the last trip (the K counter)
-_CHALLENGE_TRIPS: dict[str, int] = {}  # consecutive trips this process (escalation memory)
-_CHALLENGE_BACKOFF_UNTIL: dict[str, datetime] = {}  # earliest UTC time to onboard again
+# "This channel will not let us write" (#147), keyed by channel — consecutive write
+# failures (a captcha the solver lost, or a write gate) since the last round ended. Only
+# the *window* lives here: losing it on a restart costs at most one round boundary, so it
+# is not worth a DB write per failure. The verdict it feeds — how many rounds the channel
+# has burned and until when it is paused — is persisted on the campaign link, because a
+# four-day rule cannot be built on state a restart clears.
+_WRITE_FAILED: dict[str, int] = {}
 
 
 async def set_cooldown(account_id: str, until: datetime, channel: str | None = None) -> None:
@@ -168,58 +172,39 @@ def register_channel_deletions(  # noqa: PLR0913 - pure state fn; scan + trip kn
     return trip_channel_backoff(channel, now, base_seconds=base_seconds, max_seconds=max_seconds)
 
 
-def register_challenge_failure(
-    channel: str,
-    now: datetime,
-    *,
-    min_failures: int,
-    base_seconds: float,
-    max_seconds: float,
-) -> float | None:
-    """Count a solver failure on ``channel``; trip an escalating back-off after K.
+def channel_paused(paused_until: str | None, now: datetime) -> bool:
+    """True while a persisted pause deadline is still ahead of ``now``.
 
-    Returns the cooldown seconds when *this* failure trips the back-off (so the
-    caller logs the WARNING exactly once), else ``None``. The K counter resets on
-    each trip and each consecutive trip doubles the duration (``base * 2^prior``,
-    capped). In-memory only — a restart clears it (self-healing).
+    Takes the raw ISO-8601 deadline rather than a row, so the three read sites can each
+    feed it from whatever they already hold — the engine and onboarding from the point
+    read, the board from the channel link it lists anyway.
     """
-    count = _CHALLENGE_FAILED.get(channel, 0) + 1
+    return paused_until is not None and datetime.fromisoformat(paused_until) > now
+
+
+def register_write_failure(channel: str, *, min_failures: int) -> bool:
+    """Count a write failure on ``channel``; ``True`` when it closes a round.
+
+    The caller acts on ``True`` exactly once per round: park the channel for the flat
+    pause window, or — once it has burned its last round — drop it from the campaign.
+    The window resets here so the next round starts from zero.
+    """
+    count = _WRITE_FAILED.get(channel, 0) + 1
     if count < min_failures:
-        _CHALLENGE_FAILED[channel] = count
-        return None
-    _CHALLENGE_FAILED[channel] = 0  # reset the window; escalation lives in _CHALLENGE_TRIPS
-    prior = _CHALLENGE_TRIPS.get(channel, 0)
-    seconds = min(base_seconds, max_seconds)  # honour the cap even on the first trip
-    for _ in range(prior):
-        if seconds >= max_seconds:
-            break
-        seconds = min(seconds * 2, max_seconds)
-    _CHALLENGE_TRIPS[channel] = prior + 1
-    _CHALLENGE_BACKOFF_UNTIL[channel] = now + timedelta(seconds=seconds)
-    return seconds
-
-
-def reset_challenge_failures(channel: str) -> None:
-    """Zero ``channel``'s failure window on a solved challenge.
-
-    ``register_challenge_failure`` counts *consecutive* failures, but only clears the
-    counter when it trips. Without this, sporadic failures spread across many
-    successes would accumulate to K and park a mostly-working channel — so a solved
-    outcome resets the window. The escalation memory (``_CHALLENGE_TRIPS``) is left
-    intact so a channel that keeps re-tripping still escalates.
-    """
-    _CHALLENGE_FAILED.pop(channel, None)
-
-
-def is_channel_in_challenge_backoff(channel: str, now: datetime) -> bool:
-    """True while ``channel`` is parked by the challenge back-off (lazily evicts on expiry)."""
-    until = _CHALLENGE_BACKOFF_UNTIL.get(channel)
-    if until is None:
+        _WRITE_FAILED[channel] = count
         return False
-    if until > now:
-        return True
-    del _CHALLENGE_BACKOFF_UNTIL[channel]
-    return False
+    _WRITE_FAILED[channel] = 0
+    return True
+
+
+def reset_write_failures(channel: str) -> None:
+    """Zero ``channel``'s failure window — a comment was delivered, so it does let us write.
+
+    ``register_write_failure`` counts *consecutive* failures but only clears the counter
+    when a round closes. Without this, sporadic failures spread across many successes
+    would accumulate to K and pause a mostly-working channel.
+    """
+    _WRITE_FAILED.pop(channel, None)
 
 
 def reset_for_tests() -> None:
@@ -228,6 +213,4 @@ def reset_for_tests() -> None:
     _CHANNEL_TRIPS.clear()
     _CHANNEL_COOLDOWN_UNTIL.clear()
     _CHANNEL_COUNTED_DELETED.clear()
-    _CHALLENGE_FAILED.clear()
-    _CHALLENGE_TRIPS.clear()
-    _CHALLENGE_BACKOFF_UNTIL.clear()
+    _WRITE_FAILED.clear()

@@ -37,7 +37,7 @@ from services.content import (
     strip_markdown_delimiters,
     try_reserve_sent,
 )
-from services.neurocomment import _seams, _state, bans
+from services.neurocomment import _channel_pause, _seams, _state, bans
 
 if TYPE_CHECKING:
     from schemas.gemini import GeminiResult
@@ -53,7 +53,7 @@ class _GenOutcome(NamedTuple):
 
 
 # Solver-clearable write gates: joined the group but a captcha/gate forbids writing.
-# Flip readiness off so the pair is no longer selected, and count a challenge failure —
+# Flip readiness off so the pair is no longer selected, and count a write failure —
 # a solver click can clear these, so they can retry after re-onboarding.
 _GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenError"})
 # Telegram's ACCOUNT-WIDE anti-spam write restriction (what @SpamBot reports as
@@ -61,7 +61,7 @@ _GATE_ERRORS = frozenset({"ChatGuestSendForbiddenError", "ChatWriteForbiddenErro
 # (mute) or ChannelPrivateError / UserNotParticipantError (kick), both handled below.
 # So it is only a *prompt* to check whether this group actually banned us; the sticky
 # ban (#30) and the leave are gated on ``bans.confirm_group_ban_and_leave``. Never a
-# challenge failure either way (no pending-resolve, no back-off).
+# write failure either way (no pending-resolve, no channel pause).
 _BAN_ERROR = "UserBannedInChannelError"
 # The account is no longer in / can no longer reach the discussion group (kicked, group
 # went private). Neither a ban nor a solver-clearable gate — the only fix is a fresh join,
@@ -282,13 +282,9 @@ async def _classify_post(
             )
             # First comment confirms a solver click worked (no-op if no pending row).
             await resolve_pending_outcome(account_id, event.channel, "solved")
-            # A delivered comment proves the channel is writable, so it resets the
-            # failure window (#147) — sporadic failures across many successes never
-            # accumulate to the trip count. Keyed on a *solved challenge* this never
-            # fired on a channel that issues none, and since gates now feed the same
-            # counter, isolated per-account gates would accumulate with no decay and
-            # eventually park a channel the other accounts post to fine.
-            _state.reset_challenge_failures(event.channel)
+            # A delivered comment proves the channel is writable, so it clears both the
+            # failure window and the persisted round counter (#147).
+            await _channel_pause.clear_write_failures(event.channel)
             await log_event(
                 "INFO",
                 "neurocomment_posted",
@@ -345,7 +341,7 @@ async def _classify_post(
         # set-status reconciles start a pass. Telethon also raises ChannelPrivateError on a
         # stale cached entity, so a *transient* access loss parks the pair until one of
         # those happens (before #279 it recovered on its own, noisily). Not a solver
-        # failure: no pending-resolve, no challenge back-off.
+        # failure: no pending-resolve, no channel pause.
         await upsert_readiness(
             account_id,
             event.channel,
@@ -357,7 +353,7 @@ async def _classify_post(
     elif result.error_type in _GATE_ERRORS:
         # A REAL per-group ban lands HERE, not on _BAN_ERROR: an admin mute/ban raises
         # ChatWriteForbiddenError. Confirm first, fall back to the gate; a confirmed ban is
-        # PER-ACCOUNT, so no channel back-off and — as on _BAN_ERROR — no solver failure.
+        # PER-ACCOUNT, so the channel is not paused and — as on _BAN_ERROR — no write failure.
         if await bans.confirm_group_ban_and_leave(account_id, event.channel):
             event_name = "neurocomment_account_banned"
         else:
@@ -373,7 +369,7 @@ async def _classify_post(
             # A gate is a property of the CHANNEL, not the pair: counting it only on a
             # resolved pending challenge left a channel that issues none unparked (live DB:
             # one forbade all six accounts, 16 times, re-gated forever). Onboarding honours it.
-            await _register_challenge_failure(event.channel, account_id, cause="gate")
+            await _channel_pause.register_write_failure(event.channel, account_id)
             event_name = "neurocomment_post_gated"
     else:
         # A class fix, not a per-error fix: ``core.telegram_client._actions`` funnels every
@@ -409,32 +405,3 @@ async def _apply_cooldown(
         # peer_flood (and any wait without a duration) → config cooldown.
         seconds = int(settings.neurocomment.peer_flood_cooldown_seconds)
     await _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds), channel)
-
-
-async def _register_challenge_failure(channel: str, account_id: str, *, cause: str) -> None:
-    """Count a write failure on ``channel``; WARN once when it trips the back-off (#147).
-
-    ``cause`` names what fed the counter — a solver click-failure or a write gate —
-    so the operator can tell a captcha the solver lost from a channel that forbids
-    comments outright. Required, not defaulted: every caller knows which one it is,
-    and a default would silently mislabel the next path added here.
-
-    The counter is per-CHANNEL, but ``account_id`` is the account whose failure tripped
-    it: the neurocomment feed is read one line per account action, and a row with no
-    account is the one an operator can't act on.
-    """
-    nc = settings.neurocomment
-    cooldown = _state.register_challenge_failure(
-        channel,
-        datetime.now(UTC),
-        min_failures=nc.channel_challenge_backoff_min_failures,
-        base_seconds=nc.channel_challenge_backoff_base_seconds,
-        max_seconds=nc.channel_challenge_backoff_max_seconds,
-    )
-    if cooldown is not None:
-        await log_event(
-            "WARNING",
-            "neurocomment_challenge_backoff",
-            account_id=account_id,
-            extra={"channel": channel, "cooldown_seconds": cooldown, "cause": cause},
-        )

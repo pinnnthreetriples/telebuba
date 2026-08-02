@@ -39,6 +39,7 @@ from core.migration_steps import (
     _add_warming_user_controls,
     _rename_proxy_type_http_to_https,
 )
+from core.migration_steps_channel_pause import _add_campaign_channel_pause
 from core.migration_steps_discovery import (
     _add_neurocomment_discovery_candidates,
     _add_warming_settings_telemetr_key,
@@ -129,6 +130,7 @@ MIGRATIONS: tuple[tuple[int, str, _Migration], ...] = (
         _add_neurocomment_join_log_watch_channel,
     ),
     (41, "add_readiness_join_request", _add_readiness_join_request),
+    (42, "add_campaign_channel_pause", _add_campaign_channel_pause),
 )
 
 

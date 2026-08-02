@@ -269,7 +269,9 @@ from core.repositories.logs import (  # noqa: E402, F401
 from core.repositories.neurocomment import (  # noqa: E402, F401
     ChannelAlreadyAssignedError,
     assign_account_to_campaign,
+    bump_channel_pause,
     claim_comment,
+    clear_channel_pause,
     clear_join_request,
     clear_pair_banned,
     count_account_channel_comments_since,
@@ -286,6 +288,7 @@ from core.repositories.neurocomment import (  # noqa: E402, F401
     fetch_active_campaign_for_channel,
     fetch_active_campaigns_for_channels,
     fetch_campaign,
+    fetch_channel_paused_until,
     fetch_comment,
     fetch_linked_group,
     fetch_readiness,

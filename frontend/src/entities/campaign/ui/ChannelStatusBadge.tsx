@@ -18,7 +18,7 @@ const STATUS_COLOR: Record<ChannelStatus, { color: string; bg: string }> = {
   chat_restricted: { color: '#c0473f', bg: '#fbecec' },
   banned: { color: '#c0473f', bg: '#fbecec' },
   bot_challenge: { color: '#9a7b22', bg: '#fbf3e2' },
-  bot_challenge_backoff: { color: '#9a7b22', bg: '#fbf3e2' },
+  channel_paused: { color: '#9a7b22', bg: '#fbf3e2' },
 };
 
 export function ChannelStatusBadge({ status }: { status: ChannelStatus }) {

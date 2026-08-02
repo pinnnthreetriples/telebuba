@@ -55,7 +55,7 @@ class _ChannelFlags(NamedTuple):
     """Per-channel signals that travel together into a channel row."""
 
     challenged: bool
-    backed_off: bool
+    paused: bool  # serving out a round of the "will not let us write" rule (#147)
     deleted_recent: int  # our comments removed from this channel in the 24h window
 
 
@@ -68,7 +68,11 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
     account_links = (await list_campaign_accounts(campaign_id)).links
     account_ids = [link.account_id for link in account_links]
     pins = {link.account_id: link.channels for link in account_links}
-    channels = [link.channel for link in (await list_campaign_channels(campaign_id)).links]
+    # The links, not just their handles: each one carries its own pause deadline (#147),
+    # so the board reads every channel's pause out of this one query instead of one
+    # lookup per rendered row.
+    channel_links = (await list_campaign_channels(campaign_id)).links
+    channels = [link.channel for link in channel_links]
 
     accounts = {acc.account_id: acc for acc in (await list_accounts_by_ids(account_ids)).accounts}
     readiness = (await list_campaign_readiness(campaign_id)).readiness
@@ -103,16 +107,16 @@ async def load_neurocomment_board(campaign_id: str) -> NeurocommentBoard | None:
             deleted_by_channel[comment.channel] = deleted_by_channel.get(comment.channel, 0) + 1
     rows = [
         _build_channel_row(
-            channel,
+            link.channel,
             readiness,
-            linked.get(channel),
+            linked.get(link.channel),
             _ChannelFlags(
-                challenged=channel in challenged,
-                backed_off=_state.is_channel_in_challenge_backoff(channel, now),
-                deleted_recent=deleted_by_channel.get(channel, 0),
+                challenged=link.channel in challenged,
+                paused=_state.channel_paused(link.paused_until, now),
+                deleted_recent=deleted_by_channel.get(link.channel, 0),
             ),
         )
-        for channel in channels
+        for link in channel_links
     ]
     feed = sorted(posted, key=lambda c: c.created_at, reverse=True)[
         : settings.neurocomment.board_comment_feed_limit
@@ -173,7 +177,7 @@ def _build_channel_row(
     return NeurocommentChannelRow(
         channel=channel,
         status=_channel_status(
-            rows, linked, ready_count, challenged=flags.challenged, backed_off=flags.backed_off
+            rows, linked, ready_count, challenged=flags.challenged, paused=flags.paused
         ),
         ready_accounts=ready_count,
         total_accounts=len(rows),
@@ -187,12 +191,12 @@ def _channel_status(
     ready_count: int,
     *,
     challenged: bool,
-    backed_off: bool,
+    paused: bool,
 ) -> ChannelStatus:
     """Aggregate a channel's status from its readiness rows + linked-group cache.
 
-    Precedence: a comments-off channel can never be commented on; a channel in
-    challenge back-off (Ф2 #147, K solver failures) is paused regardless of
+    Precedence: a comments-off channel can never be commented on; a channel serving out
+    a "will not let us write" round (Ф2 #147) is paused regardless of
     readiness; otherwise an account that's ready wins; then an auto-ban (#30) when no
     account is ready but one is banned here; then the joined-but-blocked failure modes
     — ``bot_challenge`` when a guardian-bot challenge row exists for the channel
@@ -202,8 +206,8 @@ def _channel_status(
     """
     if linked is not None and not linked.comments_enabled:
         return "comments_off"
-    if backed_off:
-        return "bot_challenge_backoff"
+    if paused:
+        return "channel_paused"
     if ready_count > 0:
         return "ready"
     if any(r.banned for r in rows):

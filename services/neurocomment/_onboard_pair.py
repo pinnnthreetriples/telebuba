@@ -20,6 +20,7 @@ from core.config import settings
 from core.db import (
     count_account_joins_since,
     fetch_active_campaign_for_channel,
+    fetch_channel_paused_until,
     fetch_readiness,
     record_join,
     upsert_linked_group,
@@ -95,9 +96,10 @@ async def _join_and_classify(
 ) -> AccountChannelOnboarding:
     """Join the (already-resolved, comment-enabled) group and persist readiness.
 
-    A channel in challenge back-off (#147, K solver failures) is left alone — no
-    join, no solver — until its cooldown expires; the board renders it
-    ``bot_challenge_backoff`` from the in-memory back-off state.
+    A channel serving out a pause (#147, K consecutive write failures) is left alone — no
+    join, no solver — until its deadline passes; the board renders it ``channel_paused``
+    off the same persisted column. One point read per pair, which this loop (jittered
+    sleeps between joins) can afford where the engine's per-post path could not.
 
     An operator-skipped pair (#148) or an auto-banned pair (#30) is left alone:
     re-joining would run the solver and flip readiness back to ready, undoing the
@@ -125,12 +127,12 @@ async def _join_and_classify(
             channel=channel,
             state="join_by_request",
         )
-    if _state.is_channel_in_challenge_backoff(channel, datetime.now(UTC)):
+    if _state.channel_paused(await fetch_channel_paused_until(channel), datetime.now(UTC)):
         await upsert_readiness(account_id, channel, joined=False, captcha_passed=False, ready=False)
         return AccountChannelOnboarding(
             account_id=account_id,
             channel=channel,
-            state="bot_challenge_backoff",
+            state="channel_paused",
         )
     result = await _seams.execute(account_id, JoinDiscussionGroup(channel=channel))
     if result.status == "ok":

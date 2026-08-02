@@ -9,6 +9,7 @@ import pytest
 from core.config import settings
 from core.db import (  # type: ignore[attr-defined]
     _get_engine,
+    bump_channel_pause,
     create_account,
     create_campaign,
     fetch_linked_group,
@@ -21,7 +22,7 @@ from core.db import (  # type: ignore[attr-defined]
 from schemas.accounts import AccountCreate
 from schemas.challenge import BotChallengeMessage
 from schemas.neurocomment import CampaignCreate
-from services.neurocomment import _seams, _state, onboarding
+from services.neurocomment import _seams, onboarding
 from tests.services.neurocomment.onboarding_support import (
     _JoinStub,
     _ReadStub,
@@ -267,12 +268,11 @@ async def test_solver_off_by_default_when_both_unset(monkeypatch: pytest.MonkeyP
 
 
 @pytest.mark.asyncio
-async def test_channel_in_challenge_backoff_skips_join(monkeypatch: pytest.MonkeyPatch) -> None:
-    """Ф2 #147: a backed-off channel is left alone — no join, no solver → bot_challenge_backoff."""
+async def test_paused_channel_skips_join(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Ф2 #147: a paused channel is left alone — no join, no solver → channel_paused."""
     await create_account(AccountCreate(account_id="acc-1", label="A", session_name="acc-1"))
-    _state.register_challenge_failure(
-        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
-    )
+    await _campaign_with_channel("@chan", solver_enabled=None)
+    await bump_channel_pause("@chan", (datetime.now(UTC) + timedelta(hours=24)).isoformat())
     read = _ReadStub(linked_chat_id=77, comments_enabled=True)
     join = _JoinStub()
     monkeypatch.setattr(_seams, "execute_read", read.execute_read)
@@ -280,7 +280,7 @@ async def test_channel_in_challenge_backoff_skips_join(monkeypatch: pytest.Monke
 
     outcome = await onboarding.onboard_account_channel("acc-1", "@chan")
 
-    assert outcome.state == "bot_challenge_backoff"
+    assert outcome.state == "channel_paused"
     assert join.calls == []  # no join attempted
 
 

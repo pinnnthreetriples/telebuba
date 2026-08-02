@@ -11,6 +11,8 @@ import pytest
 from core.config import settings
 from core.db import (
     _get_engine,
+    bump_channel_pause,
+    fetch_channel_paused_until,
     fetch_comment,
     fetch_readiness,
     insert_challenge,
@@ -186,28 +188,23 @@ async def test_successful_comment_resolves_pending_challenge_to_solved(
 
 
 @pytest.mark.asyncio
-async def test_solved_comment_resets_the_challenge_failure_window(
+async def test_solved_comment_resets_the_write_failure_window(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ф2 #147: sporadic solver failures interleaved with successes must not accumulate
+    # Ф2 #147: sporadic write failures interleaved with successes must not accumulate
     # to K. K=2 here: one failure, then a solved comment (resolves pending→solved and
-    # resets the window), then one more failure — the counter is back at 1, no trip.
+    # resets the window), then one more failure — the counter is back at 1, no round ends.
     monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 2)
     await _make_campaign("@chan", "acc-1")
-    now = datetime.now(UTC)
 
-    _state.register_challenge_failure("@chan", now, min_failures=2, base_seconds=1, max_seconds=1)
+    _state.register_write_failure("@chan", min_failures=2)
     await _seed_pending_challenge("acc-1", "@chan")
     _patch_io(monkeypatch, comment=_CommentStub(status="ok"))
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hello world"))
     assert _challenge_outcome("acc-1") == "solved"
 
     # Post-reset, a single fresh failure is the 1st in a new window, not the 2nd.
-    tripped = _state.register_challenge_failure(
-        "@chan", now, min_failures=2, base_seconds=1, max_seconds=1
-    )
-    assert tripped is None
-    assert _state.is_channel_in_challenge_backoff("@chan", now) is False
+    assert _state.register_write_failure("@chan", min_failures=2) is False
 
 
 @pytest.mark.asyncio
@@ -229,10 +226,10 @@ async def test_gate_error_resolves_pending_challenge_to_failed(
 
 
 @pytest.mark.asyncio
-async def test_gate_error_with_pending_trips_challenge_backoff(
+async def test_gate_error_with_pending_pauses_the_channel(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ф2 #147: a resolved pending→failed registers a solver failure; K=1 → backoff.
+    # Ф2 #147: a resolved pending→failed registers a write failure; K=1 → round 1 pause.
     monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
     await _make_campaign("@chan", "acc-1")
     await _seed_pending_challenge("acc-1", "@chan")
@@ -242,18 +239,16 @@ async def test_gate_error_with_pending_trips_challenge_backoff(
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
-    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is True
+    assert await fetch_channel_paused_until("@chan") is not None
 
 
 @pytest.mark.asyncio
-async def test_channel_in_challenge_backoff_skips_commenting(
+async def test_paused_channel_skips_commenting(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    # Ф2 #147: a backed-off channel is left alone — no account selected, no comment.
+    # Ф2 #147: a paused channel is left alone — no account selected, no comment.
     await _make_campaign("@chan", "acc-1")
-    _state.register_challenge_failure(
-        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
-    )
+    await bump_channel_pause("@chan", (datetime.now(UTC) + timedelta(hours=24)).isoformat())
     comment = _CommentStub(status="ok")
     _patch_io(monkeypatch, comment=comment)
 
@@ -489,15 +484,15 @@ async def test_commit_error_after_posted_keeps_posted(monkeypatch: pytest.Monkey
 
 
 # --------------------------------------------------------------------------- #
-# L2 — only captcha-clearable gates count as a challenge failure
+# L2 — only captcha-clearable gates count as a write failure
 # --------------------------------------------------------------------------- #
 
 
 @pytest.mark.asyncio
-async def test_write_forbidden_gate_registers_challenge_failure(
+async def test_write_forbidden_gate_registers_write_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ChatWriteForbiddenError is a solver-clearable gate → resolves failed + trips backoff."""
+    """ChatWriteForbiddenError is a solver-clearable gate → resolves failed + pauses."""
     monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
     await _make_campaign("@chan", "acc-1")
     await _seed_pending_challenge("acc-1", "@chan")
@@ -507,15 +502,15 @@ async def test_write_forbidden_gate_registers_challenge_failure(
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
-    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is True
+    assert await fetch_channel_paused_until("@chan") is not None
     assert _challenge_outcome("acc-1") == "failed"
 
 
 @pytest.mark.asyncio
-async def test_guest_send_forbidden_gate_registers_challenge_failure(
+async def test_guest_send_forbidden_gate_registers_write_failure(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    """ChatGuestSendForbiddenError is also solver-clearable → resolves failed + trips backoff."""
+    """ChatGuestSendForbiddenError is also solver-clearable → resolves failed + pauses."""
     monkeypatch.setattr(settings.neurocomment, "channel_challenge_backoff_min_failures", 1)
     await _make_campaign("@chan", "acc-1")
     await _seed_pending_challenge("acc-1", "@chan")
@@ -526,7 +521,7 @@ async def test_guest_send_forbidden_gate_registers_challenge_failure(
 
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
-    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is True
+    assert await fetch_channel_paused_until("@chan") is not None
     assert _challenge_outcome("acc-1") == "failed"
 
 
@@ -546,7 +541,7 @@ async def test_user_banned_marks_pair_banned_not_a_solver_failure(
     await engine.handle_new_post(NewPostEvent(channel="@chan", post_id=10, text="hi"))
 
     # A ban does not park the channel and does not resolve the pending challenge.
-    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is False
+    assert await fetch_channel_paused_until("@chan") is None
     assert _challenge_outcome("acc-1") == "pending"
     readiness = await fetch_readiness("acc-1", "@chan")
     assert readiness is not None
@@ -599,9 +594,9 @@ async def test_channel_private_parks_pair_with_join_failed_sentinel(
     # (joined=False, captcha_passed=True) is the sentinel the board renders as join_failed.
     assert (readiness.joined, readiness.captcha_passed, readiness.ready) == (False, True, False)
     assert readiness.banned is False  # not a ban → the next onboarding pass may re-join
-    # Not a solver failure: the pending challenge is untouched and no channel back-off.
+    # Not a write failure: the pending challenge is untouched and the channel is unpaused.
     assert _challenge_outcome("acc-1") == "pending"
-    assert _state.is_channel_in_challenge_backoff("@chan", datetime.now(UTC)) is False
+    assert await fetch_channel_paused_until("@chan") is None
     record = await fetch_comment("@chan", 10)
     assert record is not None
     assert record.status == "failed"

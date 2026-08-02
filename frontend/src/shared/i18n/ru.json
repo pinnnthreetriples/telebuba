@@ -628,7 +628,8 @@
     "neurocomment_no_campaign": "Нет подходящей кампании",
     "neurocomment_channel_cooled": "Канал на паузе",
     "neurocomment_channel_backoff": "Пауза по каналу",
-    "neurocomment_challenge_backoff": "Пауза после капчи",
+    "neurocomment_channel_paused": "Канал на паузе: не даёт писать",
+    "neurocomment_channel_dropped": "Канал отключён: так и не дал писать",
     "neurocomment_pipeline_failed": "Сбой конвейера",
     "neurocomment_onboard_resolve_failed": "Не удалось найти канал",
     "neurocomment_onboard_retry_later": "Онбординг отложен",
@@ -926,7 +927,7 @@
       "chat_restricted": "Чат ограничен",
       "banned": "Забанен",
       "bot_challenge": "Капча бота",
-      "bot_challenge_backoff": "Пауза после капчи",
+      "channel_paused": "Пауза: запись закрыта",
       "throttled": "Throttle",
       "no_data": "Нет данных"
     },

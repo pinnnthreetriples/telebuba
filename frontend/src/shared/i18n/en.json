@@ -627,7 +627,8 @@
     "neurocomment_no_campaign": "No matching campaign",
     "neurocomment_channel_cooled": "Channel on cooldown",
     "neurocomment_channel_backoff": "Channel back-off",
-    "neurocomment_challenge_backoff": "Back-off after captcha",
+    "neurocomment_channel_paused": "Channel paused: it will not let us write",
+    "neurocomment_channel_dropped": "Channel dropped: it never let us write",
     "neurocomment_pipeline_failed": "Pipeline failed",
     "neurocomment_onboard_resolve_failed": "Could not resolve channel",
     "neurocomment_onboard_retry_later": "Onboarding deferred",
@@ -925,7 +926,7 @@
       "chat_restricted": "Chat restricted",
       "banned": "Banned",
       "bot_challenge": "Bot challenge",
-      "bot_challenge_backoff": "Challenge back-off",
+      "channel_paused": "Paused: writes blocked",
       "throttled": "Throttled",
       "no_data": "No data yet"
     },

@@ -30,7 +30,7 @@ export type AccountChannelOnboarding = {
     | 'join_by_request'
     | 'chat_restricted'
     | 'bot_challenge'
-    | 'bot_challenge_backoff'
+    | 'channel_paused'
     | 'joining'
     | 'human_skipped'
     | 'banned'
@@ -1600,7 +1600,7 @@ export type NeurocommentChannelRow = {
     | 'chat_restricted'
     | 'banned'
     | 'bot_challenge'
-    | 'bot_challenge_backoff'
+    | 'channel_paused'
     | 'throttled'
     | 'no_data';
   /**

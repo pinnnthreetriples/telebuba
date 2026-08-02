@@ -30,6 +30,7 @@ from core.db import (
     count_channel_comments_per_account_since,
     count_comments_per_account_since,
     fetch_active_campaign_for_channel,
+    fetch_channel_paused_until,
     list_accounts_by_ids,
     list_campaign_accounts,
     list_campaign_channels,
@@ -109,11 +110,14 @@ async def _handle_new_post(event: NewPostEvent) -> None:
         return
 
     now = datetime.now(UTC)
-    if _state.channel_in_backoff(event.channel, now) or _state.is_channel_in_challenge_backoff(
-        event.channel, now
+    if _state.channel_in_backoff(event.channel, now) or _state.channel_paused(
+        await fetch_channel_paused_until(event.channel), now
     ):
-        # Backed off — by the deletion sweep (mass deletions) or K solver failures
-        # (#147). Skip before selection so we leave the channel alone until it expires.
+        # Parked — by the deletion sweep (mass deletions, in-memory) or by a round of the
+        # "this channel will not let us write" rule (#147, persisted on the campaign link).
+        # Skip before selection so we leave the channel alone until the pause expires.
+        # One extra point read per post, on the same partial index the campaign fetch above
+        # just used; the pause has to be persisted, so it cannot be answered from memory.
         await log_event(
             "INFO",
             "neurocomment_channel_cooled",
@@ -399,5 +403,4 @@ from services.neurocomment._generate import (  # noqa: E402, F401 - re-export af
     _generate_acceptable,
     _generate_and_post,
     _recent_channel_comments,
-    _register_challenge_failure,
 )

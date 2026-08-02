@@ -86,10 +86,28 @@ class CampaignChannelLink(BaseModel):
     channel: str = Field(min_length=1)
     active: bool
     created_at: str = Field(min_length=1)
+    # "This channel will not let us write" (#147): completed pause rounds, and the
+    # ISO-8601 UTC instant the current pause ends (``None`` = not paused). Carried on the
+    # link so the board and the onboarding loop get the pause state out of a read they
+    # already make, instead of one query per channel.
+    pause_rounds: int = 0
+    paused_until: str | None = None
 
 
 class CampaignChannelList(BaseModel):
     links: list[CampaignChannelLink] = Field(default_factory=list)
+
+
+class ChannelPauseState(BaseModel):
+    """What one channel link looks like after a round of the pause rule just ended.
+
+    ``campaign_id`` is what ``deactivate_channel`` needs when the last round runs out —
+    the caller holds the channel handle already, so the model does not repeat it.
+    """
+
+    campaign_id: str = Field(min_length=1)
+    pause_rounds: int
+    paused_until: str
 
 
 ChannelLinkStatus = Literal["linked", "already_assigned"]
@@ -227,7 +245,9 @@ OnboardingState = Literal[
     "join_by_request",
     "chat_restricted",
     "bot_challenge",
-    "bot_challenge_backoff",
+    # The CHANNEL is paused because it will not let us write (a lost captcha or a write
+    # gate) — not a property of this account, which is why it is not "bot_challenge_*".
+    "channel_paused",
     "joining",
     "human_skipped",
     "banned",
@@ -271,7 +291,8 @@ ChannelStatus = Literal[
     "chat_restricted",
     "banned",  # no account ready here and at least one auto-banned (#30)
     "bot_challenge",
-    "bot_challenge_backoff",
+    # Paused: the channel refuses our writes and is serving out one of its rounds (#147).
+    "channel_paused",
     "throttled",
     # no readiness rows yet — onboarding hasn't produced data for this channel
     "no_data",

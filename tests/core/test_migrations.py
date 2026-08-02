@@ -414,6 +414,51 @@ def test_neurocomment_cooldowns_migration_is_idempotent(legacy_engine: _EngineFa
     assert {"account_id", "channel", "until"} == columns
 
 
+def test_campaign_channel_pause_columns_added_and_default_to_unpaused(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """#42: a legacy channel-link table gains the round counter + pause deadline.
+
+    Existing links must read as "never paused, zero rounds" — the four-round rule starts
+    everyone from a clean slate rather than inheriting whatever the in-memory back-off
+    happened to hold at upgrade time.
+    """
+    from core.migration_steps_channel_pause import _add_campaign_channel_pause  # noqa: PLC0415
+
+    engine = legacy_engine("legacy-pause.db")
+    now = "2026-01-01T00:00:00+00:00"
+    with engine.begin() as connection:
+        connection.exec_driver_sql(
+            "CREATE TABLE neurocomment_campaign_channels ("
+            "id INTEGER PRIMARY KEY AUTOINCREMENT, campaign_id VARCHAR NOT NULL, "
+            "channel VARCHAR NOT NULL, active INTEGER NOT NULL, created_at VARCHAR NOT NULL)",
+        )
+        connection.exec_driver_sql(
+            "INSERT INTO neurocomment_campaign_channels "
+            "(campaign_id, channel, active, created_at) VALUES ('c1', '@news', 1, ?)",
+            (now,),
+        )
+        _add_campaign_channel_pause(connection)
+        _add_campaign_channel_pause(connection)  # idempotent — must not raise.
+
+    with engine.connect() as connection:
+        rounds, until = connection.exec_driver_sql(
+            "SELECT pause_rounds, paused_until FROM neurocomment_campaign_channels",
+        ).one()
+    assert (int(rounds), until) == (0, None)
+
+
+def test_campaign_channel_pause_migration_skips_missing_table(
+    legacy_engine: _EngineFactory,
+) -> None:
+    """The #42 body is a no-op when the channel-link table does not exist yet."""
+    from core.migration_steps_channel_pause import _add_campaign_channel_pause  # noqa: PLC0415
+
+    engine = legacy_engine("empty-pause.db")
+    with engine.begin() as connection:
+        _add_campaign_channel_pause(connection)  # no table → returns, no raise.
+
+
 def test_append_only_versions_are_unique() -> None:
     """Two migrations sharing the same version would silently mask each other."""
     versions = [v for v, _name, _fn in MIGRATIONS]

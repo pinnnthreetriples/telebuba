@@ -16,6 +16,7 @@ import pytest
 from core.config import settings
 from core.db import (
     assign_account_to_campaign,
+    bump_channel_pause,
     claim_comment,
     configure_database,
     create_account,
@@ -47,7 +48,7 @@ def _isolate(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     configure_database(tmp_path / "telebuba.db")
     monkeypatch.setattr(settings.logging, "path", tmp_path / "debug.log")
     monkeypatch.setattr(settings.logging, "sentry_dsn", "")
-    _state.reset_for_tests()  # challenge back-off is module-global; isolate per test
+    _state.reset_for_tests()  # the in-memory channel state is module-global; isolate per test
     reset_logging_for_tests()
     setup_logging()
 
@@ -332,21 +333,20 @@ async def test_channel_status_bot_challenge_when_challenge_row_exists() -> None:
 
 
 @pytest.mark.asyncio
-async def test_channel_status_bot_challenge_backoff() -> None:
-    # Ф2 #147: a channel in challenge back-off shows bot_challenge_backoff (paused),
-    # taking precedence over readiness.
+async def test_channel_status_channel_paused() -> None:
+    # Ф2 #147: a channel serving out a "will not let us write" round shows channel_paused,
+    # taking precedence over readiness. The board reads the deadline off the channel link
+    # it already lists — no extra query per rendered row.
     campaign = await create_campaign(CampaignCreate(name="C", prompt="p"))
     await create_account(AccountCreate(account_id="acc-1"))
     await assign_account_to_campaign(campaign.campaign_id, "acc-1")
     await link_channel_to_campaign(campaign.campaign_id, "@chan")
-    _state.register_challenge_failure(
-        "@chan", datetime.now(UTC), min_failures=1, base_seconds=3600, max_seconds=86400
-    )
+    await bump_channel_pause("@chan", (datetime.now(UTC) + timedelta(hours=24)).isoformat())
 
     board = await load_neurocomment_board(campaign.campaign_id)
 
     assert board is not None
-    assert board.channels[0].status == "bot_challenge_backoff"
+    assert board.channels[0].status == "channel_paused"
 
 
 @pytest.mark.asyncio
