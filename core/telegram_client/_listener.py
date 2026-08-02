@@ -126,7 +126,7 @@ async def subscribe_posts(
         # watch EVERY chat. An empty whitelist must mean "listen to nothing".
         return resolved
 
-    handler = _make_handler(channel_by_peer_id, on_post)
+    handler = _make_handler(account_id, channel_by_peer_id, on_post)
     event_filter = events.NewMessage(chats=resolved)
     client.add_event_handler(handler, event_filter)
     _HANDLERS[account_id] = handler
@@ -166,6 +166,7 @@ async def stop_post_listener(account_id: str) -> None:
 
 
 def _make_handler(
+    account_id: str,
     channel_by_peer_id: dict[int, str],
     on_post: Callable[[NewPostEvent], Awaitable[None]],
 ) -> _EventHandler:
@@ -189,6 +190,7 @@ def _make_handler(
             await log_event(
                 "ERROR",
                 "neurocomment_listener_callback_failed",
+                account_id=account_id,
                 extra={"channel": channel, "error_type": type(exc).__name__},
             )
 

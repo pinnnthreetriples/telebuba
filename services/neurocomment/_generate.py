@@ -361,7 +361,7 @@ async def _classify_post(
         # pending challenge resolved left a channel that issues none unparked: live DB
         # had one forbid writes to all six accounts, 16 times, re-onboarded and re-gated
         # forever, paying for a generation each round. Onboarding honours this back-off.
-        await _register_challenge_failure(event.channel, cause="gate")
+        await _register_challenge_failure(event.channel, account_id, cause="gate")
         event_name = "neurocomment_post_gated"
     else:
         # A class fix, not a per-error fix: ``core.telegram_client._actions`` funnels every
@@ -399,12 +399,17 @@ async def _apply_cooldown(
     await _state.set_cooldown(account_id, datetime.now(UTC) + timedelta(seconds=seconds), channel)
 
 
-async def _register_challenge_failure(channel: str, *, cause: str = "challenge") -> None:
+async def _register_challenge_failure(channel: str, account_id: str, *, cause: str) -> None:
     """Count a write failure on ``channel``; WARN once when it trips the back-off (#147).
 
     ``cause`` names what fed the counter — a solver click-failure or a write gate —
     so the operator can tell a captcha the solver lost from a channel that forbids
-    comments outright.
+    comments outright. Required, not defaulted: every caller knows which one it is,
+    and a default would silently mislabel the next path added here.
+
+    The counter is per-CHANNEL, but ``account_id`` is the account whose failure tripped
+    it: the neurocomment feed is read one line per account action, and a row with no
+    account is the one an operator can't act on.
     """
     nc = settings.neurocomment
     cooldown = _state.register_challenge_failure(
@@ -418,5 +423,6 @@ async def _register_challenge_failure(channel: str, *, cause: str = "challenge")
         await log_event(
             "WARNING",
             "neurocomment_challenge_backoff",
+            account_id=account_id,
             extra={"channel": channel, "cooldown_seconds": cooldown, "cause": cause},
         )

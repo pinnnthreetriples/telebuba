@@ -470,6 +470,18 @@ async def test_failed_resolution_is_not_cached(monkeypatch: pytest.MonkeyPatch) 
 async def test_callback_error_is_swallowed(monkeypatch: pytest.MonkeyPatch) -> None:
     client = FakeClient()
     _patch_client(monkeypatch, client)
+    logged: list[dict[str, object]] = []
+
+    async def fake_log_event(
+        level: str,
+        event: str,
+        *,
+        account_id: str | None = None,
+        extra: dict[str, object] | None = None,
+    ) -> None:
+        logged.append({"level": level, "event": event, "account_id": account_id, "extra": extra})
+
+    monkeypatch.setattr("core.telegram_client._listener.log_event", fake_log_event)
 
     async def boom(_event: NewPostEvent) -> None:
         msg = "callback exploded"
@@ -480,3 +492,9 @@ async def test_callback_error_is_swallowed(monkeypatch: pytest.MonkeyPatch) -> N
 
     # A raising callback must NOT propagate out of the handler (would kill the loop).
     await callback(_make_event(chat_id=-100, post_id=1, text="x", media=None, post=True))
+
+    # ...and it must say WHICH listener broke: the neurocomment feed shows one line per
+    # account action, so an unattributed row is the one the operator cannot act on.
+    assert [(row["event"], row["account_id"]) for row in logged] == [
+        ("neurocomment_listener_callback_failed", "listener-9"),
+    ]
