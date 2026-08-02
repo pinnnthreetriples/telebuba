@@ -798,7 +798,7 @@
     "neurocomment_comment_deleted": "The channel removed our comment — moderation or a ban. Check the channel/account.",
     "neurocomment_post_cooldown": "Telegram pause (flood control) — the account is briefly not commenting.",
     "neurocomment_post_gated": "A captcha/unblock is required to post in this channel.",
-    "neurocomment_account_banned": "The account is banned in this channel — the bot stops trying to post there. Cleared once \"Check channels\" shows the account can post again.",
+    "neurocomment_account_banned": "The channel banned this account personally — the bot left the chat and stops posting there. \"Check channels\" can no longer clear it: we are not a member any more. Only the per-pair retry brings it back.",
     "neurocomment_group_ban_account_limited": "Telegram blocked the write, but @SpamBot reports the account limited across all groups — this channel did not ban it. Fix the account; the channel is fine.",
     "neurocomment_channel_all_accounts_banned": "Every account serving this channel is now banned in its chat, so the channel was unlinked from the campaign and the listener stopped watching it. Link it again after adding an account that can post there.",
     "neurocomment_post_access_lost": "The account can no longer reach this channel's discussion chat — kicked, or the group went private. The pair is parked and the next onboarding pass re-joins the chat.",
