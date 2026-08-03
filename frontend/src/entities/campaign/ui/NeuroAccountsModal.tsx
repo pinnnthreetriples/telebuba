@@ -176,6 +176,9 @@ function AccountRow({
         <div
           role="listbox"
           aria-multiselectable
+          // .tb-dd collapses visually only; without this every channel option of
+          // every linked row kept its tab stop while closed. See the note in LogsPage.
+          inert={!open}
           className={`tb-dd ${open ? 'open mt-2 rounded-[10px] border border-line bg-white p-1' : ''}`}
         >
           <button
@@ -256,7 +259,12 @@ export function NeuroAccountsModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} z={72} className="w-[560px]">
+    <Modal
+      onClose={onClose}
+      z={72}
+      className="w-[560px]"
+      label={t('neurocomment.modal.neuroAccounts.title')}
+    >
       <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-primary-tint text-primary">
           <svg

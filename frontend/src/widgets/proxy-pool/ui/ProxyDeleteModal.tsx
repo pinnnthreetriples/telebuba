@@ -17,7 +17,12 @@ export function ProxyDeleteModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} z={70} className="w-[420px]">
+    <Modal
+      onClose={onClose}
+      z={70}
+      className="w-[420px]"
+      label={t('accounts.proxyDeleteModal.title')}
+    >
       <div className="p-6">
         <div className="mb-2 text-[16px] font-bold">
           {t('accounts.proxyDeleteModal.title', { endpoint })}

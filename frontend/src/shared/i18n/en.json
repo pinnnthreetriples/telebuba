@@ -504,7 +504,8 @@
     "logout": "Log out",
     "avatarFallback": "OP",
     "fatalError": "Something went wrong.",
-    "mutationError": "Something went wrong. Please try again."
+    "mutationError": "Something went wrong. Please try again.",
+    "sessionError": "Could not verify your session. Check the connection and reload the page."
   },
   "settings": {
     "title": "Settings",

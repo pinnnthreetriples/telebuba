@@ -15,8 +15,10 @@ function asEnvelope(error: unknown): ErrorEnvelope['error'] | null {
   return detail as ErrorEnvelope['error'];
 }
 
-// "unauthorized" means the session is gone, so send the user to /login.
-function isUnauthorized(error: unknown): boolean {
+// "unauthorized" means the session is gone, so send the user to /login. Anything
+// else (500, a dropped connection, a timeout) is NOT a logout — exported so the
+// route guard can tell the two apart instead of bouncing every failure to /login.
+export function isUnauthorized(error: unknown): boolean {
   return asEnvelope(error)?.code === 'unauthorized';
 }
 

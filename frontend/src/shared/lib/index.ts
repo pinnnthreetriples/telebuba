@@ -2,7 +2,7 @@ export { cn } from './cn';
 export { eventLabel } from './eventLabel';
 export { logSeverity } from './eventSeverity';
 export { formatLocalTime } from './formatTime';
-export { queryClient } from './query-client';
+export { isUnauthorized, queryClient } from './query-client';
 export { useLogEventStream } from './useLogEventStream';
 export type { SseStatus } from './useLogEventStream';
 export { useClearedTimeouts, useTransientFeedback } from './useTransientFeedback';

@@ -29,6 +29,26 @@ test('opens the dropdown, picks an option, saves with swap and closes', async ()
   });
 });
 
+// .tb-dd collapses VISUALLY only (max-height:0 + opacity:0), so the options are
+// rendered whether the list is open or not — `inert` is the only thing keeping a
+// keyboard operator out of a closed one. happy-dom honours inert for focus, which
+// is exactly the property under test (it does not filter the a11y tree, so the
+// option is still findable — that is the limitation, not the app's behaviour).
+test('a closed dropdown takes no focus, an open one does', async () => {
+  render(
+    <ListenerEditModal options={OPTIONS} selected={null} onClose={vi.fn()} onSave={vi.fn()} />,
+  );
+
+  const closed = screen.getByRole('button', { name: 'Maria Sidorova' });
+  closed.focus();
+  expect(closed).not.toHaveFocus();
+
+  await userEvent.click(screen.getByText('Выберите аккаунт…'));
+  const open = screen.getByRole('button', { name: 'Maria Sidorova' });
+  open.focus();
+  expect(open).toHaveFocus();
+});
+
 test('cancel closes without saving', async () => {
   const onClose = vi.fn();
   const onSave = vi.fn();

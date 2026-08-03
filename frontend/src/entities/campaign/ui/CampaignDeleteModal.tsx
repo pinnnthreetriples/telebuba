@@ -14,7 +14,11 @@ export function CampaignDeleteModal({
 }) {
   const { t } = useTranslation();
   return (
-    <Modal onClose={onClose} className="w-[420px]">
+    <Modal
+      onClose={onClose}
+      className="w-[420px]"
+      label={t('neurocomment.modal.campaignDelete.title', { name })}
+    >
       <div className="p-6">
         <div className="mb-2 text-[16px] font-bold">
           {t('neurocomment.modal.campaignDelete.title', { name })}

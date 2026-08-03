@@ -1,5 +1,5 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -95,6 +95,13 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
   const [from, setFrom] = useState('23:00');
   const [to, setTo] = useState('08:00');
 
+  // On a cold cache the first render has no settings, so the lazy initial state is
+  // the hardcoded fallback above — and a Save from that state writes those
+  // fallbacks over the stored row. Re-seed once the real row lands.
+  useEffect(() => {
+    if (settings) setToggles(initialToggles(settings));
+  }, [settings]);
+
   const flip = (key: keyof Toggles) => {
     setToggles((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -108,11 +115,20 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
           inter_account_chat: toggles.inter_account_chat,
           enforce_readiness: toggles.enforce_readiness,
           gemini_model: settings?.gemini_model,
+          // A PUT is a full replacement, and unlike the key/model/provider fields
+          // these two have no keep-semantics on the write path: omitting them
+          // resets the settings page's Gemini rate-limit knobs to 1 and 0.0. Echo
+          // the stored values, exactly as gemini_model above does.
+          gemini_max_retries: settings?.gemini_max_retries,
+          gemini_min_interval_seconds: settings?.gemini_min_interval_seconds,
           gemini_api_key: null,
           clear_gemini_key: false,
         },
       },
       {
+        // Close on success ONLY: onSettled fires on failure too, which closed the
+        // dialog over a rejected PUT and lost the operator's input.
+        onSuccess: onClose,
         onSettled: () => {
           // What this write actually touches: the settings row, and the warming
           // board — whose read model embeds those same settings
@@ -123,14 +139,13 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             queryKey: warmingSettingsQueryOptions().queryKey,
           });
           void queryClient.invalidateQueries({ queryKey: warmingBoardQueryOptions().queryKey });
-          onClose();
         },
       },
     );
   };
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[540px]">
+    <Modal onClose={onClose} z={72} className="w-[540px]" label={t('warming.cfg.title')}>
       <div className="flex items-center gap-[11px] border-b border-[#f0eeeb] px-6 pb-[15px] pt-5">
         <span className="flex h-[34px] w-[34px] shrink-0 items-center justify-center rounded-[10px] bg-[#eef4ff] text-primary">
           <svg
@@ -255,10 +270,15 @@ export function WarmConfigModal({ phone, onClose }: { phone: string; onClose: ()
             {t('warming.cfg.scopeOneNote')}
           </div>
         ) : null}
+        {save.isError ? (
+          <div role="alert" className="mb-[12px] text-[11.5px] leading-[1.45] text-danger">
+            {t('shell.mutationError')}
+          </div>
+        ) : null}
         <div className="flex gap-2">
           <button
             type="button"
-            disabled={save.isPending || scope === 'one'}
+            disabled={save.isPending || scope === 'one' || !settings}
             onClick={onSave}
             className="flex-1 rounded-full bg-primary px-[14px] py-[10px] text-[13px] font-semibold text-white transition-colors hover:bg-[#0057db] disabled:opacity-50"
           >

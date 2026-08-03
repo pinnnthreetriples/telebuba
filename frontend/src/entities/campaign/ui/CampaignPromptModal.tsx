@@ -40,7 +40,11 @@ export function CampaignPromptModal({
   };
 
   return (
-    <Modal onClose={onClose} className="w-[480px]">
+    <Modal
+      onClose={onClose}
+      className="w-[480px]"
+      label={t('neurocomment.modal.campaignPrompt.title')}
+    >
       <div className="p-6">
         <div className="mb-[6px] flex items-center justify-between">
           <span className="text-[16px] font-bold">
@@ -166,6 +170,7 @@ export function CampaignPromptModal({
           }}
           z={80}
           className="w-[380px]"
+          label={t('neurocomment.modal.campaignPrompt.removeTitle')}
         >
           <div className="p-6">
             <div className="mb-2 text-[16px] font-bold">

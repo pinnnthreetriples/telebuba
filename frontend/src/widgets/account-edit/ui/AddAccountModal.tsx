@@ -262,7 +262,7 @@ export function AddAccountModal({
   };
 
   return (
-    <Modal onClose={onClose} z={70} className="w-[480px]">
+    <Modal onClose={onClose} z={70} className="w-[480px]" label={t('accounts.addWizard.title')}>
       <div className="px-6 pb-5 pt-[22px]">
         <div className="mb-4 flex items-start justify-between">
           <div>

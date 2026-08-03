@@ -40,7 +40,7 @@ export function ConfirmModal({
   };
 
   return (
-    <Modal onClose={onClose} z={80} className="w-[420px]">
+    <Modal onClose={onClose} z={80} className="w-[420px]" label={title}>
       <div className="p-6">
         <div className="mb-2 text-[16px] font-bold">{title}</div>
         <div className="mb-[22px] text-[13px] leading-[1.5] text-ink-muted">{body}</div>

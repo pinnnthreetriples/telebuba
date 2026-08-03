@@ -15,24 +15,48 @@ const SETTINGS = {
   enforce_readiness: true,
   has_gemini_key: false,
   gemini_model: 'gemini-2.5-flash',
+  // Operator-set on the settings page. A PUT is a full replacement and these two
+  // columns have no keep-semantics on the write path, so whatever this modal omits
+  // is reset to the schema defaults (1 and 0.0).
+  gemini_max_retries: 4,
+  gemini_min_interval_seconds: 2.5,
   updated_at: 'now',
 };
 
-function jsonResponse(body: unknown): Response {
+function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
-    status: 200,
+    status,
     headers: { 'Content-Type': 'application/json' },
   });
 }
 
-function routeApi() {
+function routeApi(settings: unknown = SETTINGS, putStatus = 200) {
   vi.mocked(fetch).mockImplementation((input) => {
     const request = input as Request;
     if (new URL(request.url).pathname === '/api/v1/warming/settings') {
-      return Promise.resolve(jsonResponse(SETTINGS));
+      if (request.method === 'PUT' && putStatus !== 200) {
+        return Promise.resolve(jsonResponse({ error: { code: 'internal_error' } }, putStatus));
+      }
+      return Promise.resolve(jsonResponse(settings));
     }
     return Promise.resolve(jsonResponse({}));
   });
+}
+
+// The body of the PUT the modal sent.
+async function savedBody(): Promise<Record<string, unknown>> {
+  let call: [unknown, ...unknown[]] | undefined;
+  await waitFor(() => {
+    call = vi
+      .mocked(fetch)
+      .mock.calls.find(
+        ([input]) =>
+          new URL((input as Request).url).pathname === '/api/v1/warming/settings' &&
+          (input as Request).method === 'PUT',
+      );
+    expect(call).toBeDefined();
+  });
+  return (await (call![0] as Request).clone().json()) as Record<string, unknown>;
 }
 
 function renderWithClient(ui: ReactElement) {
@@ -44,6 +68,8 @@ test('renders the design sections, toggles and scope tabs', async () => {
   routeApi();
   renderWithClient(<WarmConfigModal phone="+79991234567" onClose={vi.fn()} />);
 
+  // The dialog's accessible name, not just the visible heading.
+  expect(screen.getByRole('dialog', { name: 'Настройки прогрева' })).toBeInTheDocument();
   expect(screen.getByText('Настройки прогрева')).toBeInTheDocument();
   expect(screen.getByText('+79991234567')).toBeInTheDocument();
   // Both sections
@@ -128,6 +154,64 @@ test('saving invalidates the settings and the board, not the whole cache', async
   for (const [filters] of invalidate.mock.calls) {
     expect(filters?.queryKey).toBeDefined();
   }
+});
+
+test('save carries the settings-page Gemini knobs instead of resetting them', async () => {
+  routeApi();
+  renderWithClient(<WarmConfigModal phone="+79991234567" onClose={vi.fn()} />);
+
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  // Omitting them made every Save from this modal reset the operator's retry
+  // count and call spacing to the schema defaults 1 and 0.0.
+  const body = await savedBody();
+  expect(body.gemini_max_retries).toBe(4);
+  expect(body.gemini_min_interval_seconds).toBe(2.5);
+});
+
+test('a cold cache saves the stored toggles, not the hardcoded fallbacks', async () => {
+  // Reactions off + mutual chat on is the exact inverse of the fallbacks the modal
+  // renders before the row arrives, so a state left on those cannot pass by accident.
+  routeApi({ ...SETTINGS, reactions_enabled: false, inter_account_chat: true });
+  renderWithClient(<WarmConfigModal phone="+79991234567" onClose={vi.fn()} />);
+
+  await waitFor(() => {
+    expect(screen.getByRole('switch', { name: 'Реакции' })).toHaveAttribute(
+      'aria-checked',
+      'false',
+    );
+  });
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  const body = await savedBody();
+  expect(body.reactions_enabled).toBe(false);
+  expect(body.inter_account_chat).toBe(true);
+});
+
+test('a rejected save keeps the dialog open with the operator input', async () => {
+  routeApi(SETTINGS, 500);
+  const onClose = vi.fn();
+  renderWithClient(<WarmConfigModal phone="+79991234567" onClose={onClose} />);
+
+  await waitFor(() => {
+    expect(screen.getByText('Сохранить')).toBeEnabled();
+  });
+  await userEvent.click(screen.getByRole('switch', { name: 'Взаимный чат' }));
+  await userEvent.click(screen.getByText('Сохранить'));
+
+  // onSettled fires on failure too, so closing there threw away the whole form
+  // over a failed PUT.
+  await waitFor(() => {
+    expect(screen.getByRole('alert')).toBeInTheDocument();
+  });
+  expect(onClose).not.toHaveBeenCalled();
+  expect(screen.getByRole('switch', { name: 'Взаимный чат' })).toHaveAttribute(
+    'aria-checked',
+    'true',
+  );
 });
 
 test('the per-account scope is disabled (not yet persisted)', async () => {

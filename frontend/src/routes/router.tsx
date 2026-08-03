@@ -8,7 +8,8 @@ import {
 } from '@tanstack/react-router';
 
 import { meQueryOptions } from '@/shared/auth';
-import { queryClient } from '@/shared/lib';
+import { i18n } from '@/shared/i18n';
+import { isUnauthorized, queryClient } from '@/shared/lib';
 import { AppShell } from '@/widgets/nav';
 
 // Each page is code-split: a dynamic import per route so the login screen (and
@@ -22,17 +23,30 @@ const loginRoute = createRoute({
   component: lazyRouteComponent(() => import('@/pages/login'), 'LoginPage'),
 });
 
+// Resolve the session for the guard. Only a real "unauthorized" envelope means the
+// session is gone; a 500, a dropped connection or a timeout used to redirect too,
+// so a backend hiccup was indistinguishable from a logout — and /login has nothing
+// to say about it. Those rethrow and land in `errorComponent` below instead.
+// Exported for the guard's own test (the router itself is not unit-testable here).
+export async function ensureSession(): Promise<void> {
+  try {
+    await queryClient.ensureQueryData(meQueryOptions());
+  } catch (error) {
+    if (isUnauthorized(error)) throw redirect({ to: '/login' });
+    throw error;
+  }
+}
+
 // Pathless layout that gates every child on a valid session + renders the nav shell.
 const protectedRoute = createRoute({
   getParentRoute: () => rootRoute,
   id: 'protected',
-  beforeLoad: async () => {
-    try {
-      await queryClient.ensureQueryData(meQueryOptions());
-    } catch {
-      throw redirect({ to: '/login' });
-    }
-  },
+  beforeLoad: ensureSession,
+  errorComponent: () => (
+    <p role="alert" className="p-8">
+      {i18n.t('shell.sessionError')}
+    </p>
+  ),
   component: AppShell,
 });
 

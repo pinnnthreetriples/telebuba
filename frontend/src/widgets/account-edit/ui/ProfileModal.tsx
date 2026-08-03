@@ -627,7 +627,7 @@ export function ProfileModal({ account, onClose }: { account: AccountRead; onClo
 
   return (
     <>
-      <Modal onClose={requestClose} z={70} className="w-[580px]">
+      <Modal onClose={requestClose} z={70} className="w-[580px]" label={fullName}>
         <div className="flex max-h-[88dvh] flex-col overflow-hidden">
           {/* header */}
           <div className="flex items-center gap-[14px] border-b border-[#f0eeeb] px-5 py-[18px]">

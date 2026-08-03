@@ -61,7 +61,7 @@ export function WarmDaysModal({
   };
 
   return (
-    <Modal onClose={onClose} z={72} className="w-[440px]">
+    <Modal onClose={onClose} z={72} className="w-[440px]" label={t('warming.days.title')}>
       <div className="p-6">
         <div className="mb-1 flex items-start gap-[10px]">
           <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[10px] bg-[#e8f0ff] text-primary">

@@ -134,7 +134,13 @@ export function ChannelEditModal({
 
   return (
     <>
-      <Modal onClose={requestClose} z={75} backdrop={0.45} className="w-[560px]">
+      <Modal
+        onClose={requestClose}
+        z={75}
+        backdrop={0.45}
+        className="w-[560px]"
+        label={detail.data?.title ?? t('accounts.channel.loading')}
+      >
         <div className="tb-scroll max-h-[88dvh] overflow-y-auto px-6 py-[22px]">
           <div className="mb-4 flex items-center justify-between gap-3">
             <div className="min-w-0">

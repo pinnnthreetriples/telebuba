@@ -66,9 +66,10 @@ export function Modal({
   children: ReactNode;
   className?: string;
   variant?: keyof typeof SHELL;
-  // Accessible name for the dialog. Without it a screen reader announces only
-  // "dialog"; pass one wherever the surrounding heading isn't the whole story.
-  label?: string;
+  // Accessible name for the dialog — REQUIRED, not optional: while it was
+  // optional 20 of the 21 call sites left it out and a screen reader announced a
+  // nameless "dialog". Every one of them already renders a title; pass that.
+  label: string;
   z?: number;
   backdrop?: number;
 }) {
