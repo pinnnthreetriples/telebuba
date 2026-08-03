@@ -6,6 +6,8 @@ keeps working unchanged.
 
 from __future__ import annotations
 
+from typing import Annotated
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -251,7 +253,11 @@ class WarmingSettings(BaseSettings):
     # action, and joins/reads take the rest). ``intro`` at 3 hit both: no first DM
     # before the account left ``intro``, and a half-day gap between cycles. At 15 it
     # affords 3 sessions ≈ a 5h gap, matching ``cold_start_spread_hours``.
-    phase_daily_cap: dict[str, int] = Field(
+    # ``ge=1`` per value: a cap of 0 (or below) makes ``effective_cap <= 0``, which
+    # switches off BOTH the daily gate and the pre-cycle budget reservation, so an
+    # .env override of 0 would silently reopen the respend defect (#208) for every
+    # account in that phase instead of throttling it.
+    phase_daily_cap: dict[str, Annotated[int, Field(ge=1)]] = Field(
         default_factory=lambda: {
             # ``settling`` follows ``intro`` up: the cap must never drop as an
             # account ages (property test ``test_compute_intensity_monotonic_in_age``),

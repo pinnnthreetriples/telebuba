@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 from pydantic import ValidationError
 
-from core.config import ApiSettings, AuthSettings, NeurocommentSettings
+from core.config import ApiSettings, AuthSettings, NeurocommentSettings, WarmingSettings
 
 
 def test_reply_delay_min_must_not_exceed_max() -> None:
@@ -64,3 +64,9 @@ def test_cors_explicit_origins_with_credentials_is_accepted() -> None:
 def test_cors_wildcard_without_credentials_is_accepted() -> None:
     api = ApiSettings(cors_origins=["*"], cors_allow_credentials=False)
     assert api.cors_origins == ["*"]
+
+
+def test_phase_daily_cap_rejects_a_cap_of_zero() -> None:
+    """A cap of 0 switches off the daily gate AND the pre-cycle reservation (#208)."""
+    with pytest.raises(ValidationError):
+        WarmingSettings(phase_daily_cap={"intro": 0})

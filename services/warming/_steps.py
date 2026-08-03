@@ -161,20 +161,6 @@ class _ChannelTally:
     flooded: bool = False
     peer_flooded: bool = False
 
-    def merge_channel_pass(self, other: _ChannelTally) -> None:
-        """Fold a channel-loop pass into this cycle tally (counts add, flood/last-* overwrite)."""
-        self.joined += other.joined
-        self.reads += other.reads
-        self.reactions += other.reactions
-        self.failures += other.failures
-        self.attempts += other.attempts
-        self.flood_seconds = other.flood_seconds
-        self.flood_until = other.flood_until
-        self.last_failed_action = other.last_failed_action
-        self.last_failed_channel = other.last_failed_channel
-        self.flooded = other.flooded
-        self.peer_flooded = other.peer_flooded
-
 
 def _apply_join_result(tally: _ChannelTally, result: ActionResult, channel: str) -> bool:
     """Fold a join result into the tally. Returns True if the cycle should stop."""
@@ -220,21 +206,27 @@ def _apply_read_result(tally: _ChannelTally, outcome: _ReadReactOutcome, channel
 
 async def _run_channel_loop(  # noqa: PLR0913, C901
     data: WarmingCycleRequest,
+    tally: _ChannelTally,
     chosen: list[WarmingChannel],
     secret: WarmingSettingsSecret,
     reaction_probability: float,
-    attempts_so_far: int,
     on_step: _OnStep | None = None,
-) -> _ChannelTally:
+) -> None:
+    """Walk the chosen channels, folding every outcome into the caller's ``tally``.
+
+    The tally belongs to the caller (rather than being built here and merged on
+    return) so the running ``attempts`` count is readable while the walk is still
+    in flight: the loop reconciles its daily-budget reservation from it when a
+    cycle is cancelled or raises mid-channel (#208).
+    """
     warm = settings.warming
     account_id = data.account_id
     remaining_actions = data.remaining_actions
-    tally = _ChannelTally()
 
     def _can_attempt() -> bool:
         if remaining_actions is None:
             return True
-        return (attempts_so_far + tally.attempts) < remaining_actions
+        return tally.attempts < remaining_actions
 
     for channel in chosen:
         if not _can_attempt():
@@ -255,7 +247,7 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
             channel.channel,
             reactions_enabled=secret.reactions_enabled,
             reaction_probability=reaction_probability,
-            attempts_so_far=attempts_so_far + tally.attempts,
+            attempts_so_far=tally.attempts,
             remaining_actions=remaining_actions,
         )
         if outcome.reads:
@@ -265,4 +257,3 @@ async def _run_channel_loop(  # noqa: PLR0913, C901
         if _apply_read_result(tally, outcome, channel.channel):
             break
         await _human_pause(warm.action_delay_min_seconds, warm.action_delay_max_seconds)
-    return tally

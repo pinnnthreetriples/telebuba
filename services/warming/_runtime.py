@@ -175,8 +175,8 @@ async def _cancel_existing_task(account_id: str) -> None:
 
     F2: the task may still be inside the inter-cycle
     ``asyncio.sleep(_loop_sleep_seconds(...))`` from the *previous* ``next_run_at``.
-    We just cleared that schedule, so cancel-and-replace is the only way to honour
-    the operator's "start now".
+    Clearing that schedule cannot wake a sleeping task, so cancel-and-replace is
+    the only way to honour the operator's "start now".
     """
     existing = _RUNTIME.pop(account_id, None)
     if existing is not None and not existing.done():
@@ -200,6 +200,12 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
         if await get_listener_running() and await get_listener_account_id() == data.account_id:
             raise AccountIsListenerError(data.account_id)
         await _enforce_start_readiness(data.account_id, account)
+        # Cancel the previous generation BEFORE the new run_id is stamped: the dying
+        # cycle reconciles its daily-budget reservation on the way out, and that
+        # write is CAS-guarded on the OLD run_id (#208). Cancelling after the write
+        # below would have the CAS refuse it, so the fresh stint would inherit the
+        # whole reserved budget and park itself on a phantom "daily limit".
+        await _cancel_existing_task(data.account_id)
         # P1.2: stamp a fresh generation marker so an in-flight cycle from
         # the previous run can detect and refuse to write through.
         run_id = uuid.uuid4().hex
@@ -235,7 +241,6 @@ async def start_warming(data: StartWarmingRequest) -> WarmingAccountState:
             target_days=stint.target_days,
             activity_persona=stint.activity_persona,
         )
-        await _cancel_existing_task(data.account_id)
         await _refresh_dialogue_pairs()
         _RUNTIME[data.account_id] = asyncio.create_task(
             _warming_loop(data.account_id, run_id=run_id),
