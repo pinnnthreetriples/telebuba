@@ -9,6 +9,7 @@ sized from config so the ``asyncio.to_thread`` executor cannot oversubscribe it.
 from __future__ import annotations
 
 import asyncio
+from contextlib import suppress
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
@@ -73,16 +74,18 @@ def test_maintenance_prunes_to_backup_keep(
     backup_dir = tmp_path / "backups"
     monkeypatch.setattr(settings.db, "backup_enabled", True)
     monkeypatch.setattr(settings.db, "backup_dir", backup_dir)
-    monkeypatch.setattr(settings.db, "backup_keep", 2)
+    # keep > 2 on purpose: with keep=2 the buggy `excess = len - keep` (no
+    # max(0, ...)) happens to prune correctly, so that value proves nothing.
+    monkeypatch.setattr(settings.db, "backup_keep", 4)
 
-    for index in range(4):
+    for index in range(6):
         run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
 
     remaining = sorted(backup_dir.glob("telebuba-*.db"))
-    assert len(remaining) == 2  # oldest two pruned
-    # The kept ones are the two most recent (lexicographic == chronological):
-    # the clock advanced the seconds field, so 000002/000003 survive over 0/1.
-    assert "T000003" in remaining[-1].name
+    assert len(remaining) == 4  # oldest two pruned, never more
+    # The kept ones are the four most recent (lexicographic == chronological):
+    # the clock advanced the seconds field, so 000002..000005 survive over 0/1.
+    assert "T000005" in remaining[-1].name
     assert "T000002" in remaining[0].name
 
 
@@ -96,6 +99,32 @@ async def test_maintenance_loop_cancels_cleanly(monkeypatch: pytest.MonkeyPatch)
     with pytest.raises(asyncio.CancelledError):
         await task
     assert task.cancelled()
+
+
+@pytest.mark.asyncio
+async def test_maintenance_loop_survives_a_failed_run(monkeypatch: pytest.MonkeyPatch) -> None:
+    """A raising run must not end maintenance for the rest of the process."""
+    monkeypatch.setattr(settings.db, "backup_interval_hours", 0.0)
+    calls = 0
+    ran_again = asyncio.Event()
+
+    def _flaky() -> None:
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            msg = "no space left on device"
+            raise OSError(msg)
+        ran_again.set()
+
+    monkeypatch.setattr("core.db.run_db_maintenance", _flaky)
+    task = asyncio.create_task(run_db_maintenance_loop())
+    try:
+        await asyncio.wait_for(ran_again.wait(), timeout=5)
+    finally:
+        task.cancel()
+        with suppress(asyncio.CancelledError):
+            await task
+    assert calls >= 2
 
 
 def test_engine_uses_configured_pool_sizing(monkeypatch: pytest.MonkeyPatch) -> None:

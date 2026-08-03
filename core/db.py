@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import asyncio
 import atexit
+import logging
 import threading
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING, Any, cast
@@ -50,6 +51,8 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from sqlalchemy.engine import Engine
+
+logger = logging.getLogger(__name__)
 
 
 class _DatabaseState:
@@ -127,7 +130,9 @@ def run_db_maintenance(*, clock: Callable[[], datetime] = _default_backup_clock)
 
 def _prune_backups(backup_dir: Path) -> None:
     backups = sorted(backup_dir.glob(f"{_BACKUP_STEM}-*{_BACKUP_SUFFIX}"))
-    excess = len(backups) - settings.db.backup_keep
+    # max(0, ...): a negative count is not "delete nothing" in a slice, it means
+    # "all but the last N" — under the limit that deleted the oldest backups.
+    excess = max(0, len(backups) - settings.db.backup_keep)
     for stale in backups[:excess]:
         stale.unlink(missing_ok=True)
 
@@ -137,7 +142,10 @@ async def run_db_maintenance_loop() -> None:
     interval_seconds = settings.db.backup_interval_hours * 3600.0
     while True:
         await asyncio.sleep(interval_seconds)
-        await asyncio.to_thread(run_db_maintenance)
+        try:
+            await asyncio.to_thread(run_db_maintenance)
+        except Exception:  # one bad run must not end maintenance for the process.
+            logger.exception("db maintenance run failed; retrying next interval")
 
 
 # Guards the lazy build below. Every DB call runs in its own ``asyncio.to_thread``

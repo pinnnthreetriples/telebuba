@@ -42,8 +42,22 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          # gitleaks needs history to scan the full diff on push
+          # Full history for the gitleaks step below: `detect` scans every commit,
+          # not a diff. The pre-commit gitleaks hook does NOT use it (see below).
           fetch-depth: 0
+
+      # The pre-commit gitleaks hook cannot do this in CI: upstream pins
+      # `gitleaks protect --staged` with pass_filenames: false, and after
+      # actions/checkout the index is empty — it reports "0 commits scanned" and
+      # always passes. So secrets are gated here instead, with `detect` over the
+      # full history fetched above, pinned to the same version as the hook rev.
+      # --redact keeps a finding's value out of this public log; the safe.directory
+      # env is required because the container user does not own the mounted repo.
+      - name: Scan git history for secrets (gitleaks detect)
+        run: |
+          docker run --rm -v "$PWD:/repo" -w /repo \
+            -e GIT_CONFIG_COUNT=1 -e GIT_CONFIG_KEY_0=safe.directory -e GIT_CONFIG_VALUE_0=/repo \
+            zricethezav/gitleaks:v8.21.2 detect --redact --no-banner --exit-code 1
 
       - name: Install uv
         uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
