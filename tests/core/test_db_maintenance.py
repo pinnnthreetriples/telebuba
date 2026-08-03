@@ -19,8 +19,10 @@ from sqlalchemy.pool import QueuePool
 from core.config import settings
 from core.db import (
     _get_engine,  # type: ignore[attr-defined]
-    _vacuum_into,  # type: ignore[attr-defined]
     configure_database,
+)
+from core.db_maintenance import (
+    _vacuum_into,  # type: ignore[attr-defined]
     run_db_maintenance,
     run_db_maintenance_loop,
 )
@@ -118,13 +120,13 @@ def test_partial_backup_never_takes_a_keep_slot_from_a_good_one(
         msg = "no space left on device"
         raise OSError(msg)
 
-    monkeypatch.setattr("core.db._vacuum_into", _partial_then_enospc)
+    monkeypatch.setattr("core.db_maintenance._vacuum_into", _partial_then_enospc)
     with pytest.raises(OSError, match="no space left"):
         run_db_maintenance(clock=lambda: _fixed_clock(9))
     # The failed run left nothing the pruner will rank as a backup.
     assert sorted(backup_dir.glob("telebuba-*.db")) == good
 
-    monkeypatch.setattr("core.db._vacuum_into", _vacuum_into)
+    monkeypatch.setattr("core.db_maintenance._vacuum_into", _vacuum_into)
     run_db_maintenance(clock=lambda: _fixed_clock(10))
 
     remaining = sorted(backup_dir.glob("telebuba-*.db"))
@@ -154,7 +156,7 @@ def test_chronic_failure_leaves_at_most_one_partial(
         msg = "no space left on device"
         raise OSError(msg)
 
-    monkeypatch.setattr("core.db._vacuum_into", _partial_then_enospc)
+    monkeypatch.setattr("core.db_maintenance._vacuum_into", _partial_then_enospc)
     for index in range(5):
         with pytest.raises(OSError, match="no space left"):
             run_db_maintenance(clock=lambda index=index: _fixed_clock(index))
@@ -259,7 +261,7 @@ async def test_maintenance_loop_survives_a_failed_run(monkeypatch: pytest.Monkey
             raise OSError(msg)
         ran_again.set()
 
-    monkeypatch.setattr("core.db.run_db_maintenance", _flaky)
+    monkeypatch.setattr("core.db_maintenance.run_db_maintenance", _flaky)
     task = asyncio.create_task(run_db_maintenance_loop())
     try:
         # Only the second call sets the event, so reaching it IS the assertion.
@@ -296,10 +298,10 @@ async def test_maintenance_loop_reports_failure_to_the_operator(
         msg = "no space left on device"
         raise OSError(msg)
 
-    # core.db imports log_event inside the handler (import cycle), so patching the
+    # core.db_maintenance imports log_event inside the handler (import cycle), so patching the
     # owning module is what the call site actually resolves.
     monkeypatch.setattr("core.logging.log_event", _capture)
-    monkeypatch.setattr("core.db.run_db_maintenance", _always_fails)
+    monkeypatch.setattr("core.db_maintenance.run_db_maintenance", _always_fails)
     task = asyncio.create_task(run_db_maintenance_loop())
     try:
         await asyncio.wait_for(reported.wait(), timeout=5)
